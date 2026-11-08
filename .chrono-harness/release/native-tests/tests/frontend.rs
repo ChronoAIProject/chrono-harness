@@ -32,11 +32,12 @@ impl Fixture {
             .prefix("source-")
             .tempdir_in(case.path())
             .unwrap();
+        host.config["tools"]["probe"] = json!("/bin/echo");
         host.save();
         let root = host.root();
         fs::write(
             root.join(".gitignore"),
-            "/.chrono-harness/bin/\n/.chrono-harness/state/\n/frontend/\n",
+            "/.chrono-harness/bin/\n/.chrono-harness/state/\n/frontend/\n/handoffs/\n/consumer/\n",
         )
         .unwrap();
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
@@ -172,6 +173,10 @@ impl Fixture {
             .env("CHRONO_RELEASE_RUN", "1234")
             .env("CHRONO_RELEASE_ATTEMPT", "1")
             .env("CHRONO_RELEASE_JOB", "native_frontend");
+        self.capture(command)
+    }
+
+    fn capture(&self, mut command: Command) -> std::process::Output {
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output = command.output().unwrap();
         let index = self.calls.get();
@@ -200,7 +205,7 @@ impl Fixture {
     }
 
     fn exported(&self) -> std::path::PathBuf {
-        let directory = self.output.path().join("export");
+        let directory = self.host.root().join("frontend");
         let out = self.export(&directory);
         assert!(
             out.status.success(),
@@ -216,6 +221,15 @@ impl Fixture {
             .unpack(directory.join("chrono-host-release"))
             .unwrap();
         directory
+    }
+
+    fn unit(&self, executable: &Path) -> std::process::Output {
+        let mut command = Command::new(executable);
+        command.arg(self.host.root()).arg(self.host.root().join("handoffs/none")).args(["--unit","test_none"])
+            .env_remove("CHRONO_RELEASE_LOCAL")
+            .env("CHRONO_RELEASE_RUN","1234").env("CHRONO_RELEASE_ATTEMPT","2").env("CHRONO_RELEASE_JOB","native_test_none")
+            .env("CHRONO_RELEASE_DEPENDENCIES",serde_json::to_string(&json!({"native_frontend":{"result":"success","outputs":{"artifact_id":"98765","run_id":"1234","attempt":"1"}}})).unwrap());
+        self.capture(command)
     }
 
     fn selected(&self) -> chrono_host_release::receipt::Selection {
@@ -467,4 +481,36 @@ fn collector_rejects_archive_content_substitution_even_with_recomputed_transport
     manifest["archive"]["size"] = json!(size);
     recipe::write(&directory, "frontend.json", &manifest);
     assert!(f.validate(&directory, &f.selected(), None).is_err());
+}
+
+#[test]
+fn actual_native_unit_retains_original_frontend_metadata_for_the_collector() {
+    use chrono_host_release::{receipt::{self,Kind,Lineage,Selection},recipe::Loaded};
+    let f=Fixture::new();
+    let directory=f.exported();
+    let out=f.unit(&directory.join("chrono-host-release"));
+    assert!(out.status.success(),"stderr={}",String::from_utf8_lossy(&out.stderr));
+    let handoff=f.host.root().join("handoffs/none");
+    let report:Value=serde_json::from_slice(&fs::read(handoff.join("receipt.json")).unwrap()).unwrap();
+    assert_eq!(report["status"],"passed");
+    assert_eq!(report["frontend_input"]["path"],"frontend/frontend.json");
+    assert_eq!(fs::read(handoff.join("frontend/bootstrap.json")).unwrap(),fs::read(directory.join("bootstrap.json")).unwrap());
+    assert!(!handoff.join("frontend/executable.tar").exists());
+    assert!(!handoff.join("frontend/chrono-host-release").exists());
+    let loaded=Loaded::load(f.host.root()).unwrap();
+    let parent=Lineage{kind:Kind::Github,run_id:"1234".into(),attempt:"2".into(),job:"native_collect".into()};
+    let selected=Selection{job:"native_test_none".into(),run_id:"1234".into(),attempt:"2".into(),artifact_id:"8765".into()};
+    let verify=||receipt::read(&loaded,f.host.root(),&report["context"],&parent,loaded.unit("test_none").unwrap(),&selected);
+    assert!(verify().is_ok(),"{:?}",verify().unwrap_err());
+    fs::write(handoff.join("frontend/.chrono-harness/state/frontend.stderr"),b"changed original build stream").unwrap();
+    assert!(verify().is_err());
+}
+
+#[test]
+fn native_unit_rejects_an_identical_frontend_executed_outside_the_selected_artifact() {
+    let f=Fixture::new();
+    f.exported();
+    let out=f.unit(&f.host.root().join(".chrono-harness/bin/chrono-host-release"));
+    assert_eq!(out.status.code(),Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("frontend"));
 }
