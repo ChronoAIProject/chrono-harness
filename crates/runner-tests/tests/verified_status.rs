@@ -18,6 +18,8 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 #[cfg(verus_keep_ghost)]
+use vstd::std_specs::cmp::OrdSpec;
+#[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
 verus! {
@@ -1045,6 +1047,226 @@ fn git_tree_insert_keeps_full_path_identity_and_exact_duplicate_state() {
     git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("", "a");
     git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("a", "a\0");
     git_tree_insert_preserves_other_paths_and_rejects_every_duplicate("目录/é", "目录/e\u{301}");
+}
+
+// 独立 fixture 明确列出字段及分隔位置；不调用生产解析来生成预期。
+proof fn tree_fixture_row(raw: &str, path: &str)
+    requires
+        vstd::string::is_ascii(raw), vstd::string::is_ascii(path),
+        raw@ == "100644 blob 0000000000000000000000000000000000000001\t"@ + path@,
+    ensures policy::git_tree_row_spec(raw.spec_bytes()) ==
+        if policy::paths::relative_path(path.spec_bytes()) {
+            Ok((path.spec_bytes(), "100644".spec_bytes(),
+                "0000000000000000000000000000000000000001".spec_bytes(), "blob".spec_bytes()))
+        } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
+{
+    let meta = "100644 blob 0000000000000000000000000000000000000001";
+    let tail = "blob 0000000000000000000000000000000000000001";
+    let oid = "0000000000000000000000000000000000000001";
+    reveal_strlit("100644 blob 0000000000000000000000000000000000000001\t");
+    reveal_strlit("100644 blob 0000000000000000000000000000000000000001");
+    reveal_strlit("blob 0000000000000000000000000000000000000001");
+    reveal_strlit("0000000000000000000000000000000000000001");
+    reveal_strlit("100644"); reveal_strlit("blob");
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    assert(vstd::string::is_ascii(meta) && vstd::string::is_ascii(tail)
+        && vstd::string::is_ascii(oid) && vstd::string::is_ascii("100644")
+        && vstd::string::is_ascii("blob"));
+    scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 52);
+    assert(raw.spec_bytes().take(52) =~= meta.spec_bytes());
+    assert(raw.spec_bytes().skip(53) =~= path.spec_bytes());
+    scope_text::ascii_separator_end_is(meta.spec_bytes(), 32, 6);
+    scope_text::ascii_separator_end_is(tail.spec_bytes(), 32, 4);
+    scope_text::ascii_separator_end_is(oid.spec_bytes(), 32, 40);
+    assert(meta.spec_bytes().take(6) =~= "100644".spec_bytes());
+    assert(meta.spec_bytes().skip(7) =~= tail.spec_bytes());
+    assert(tail.spec_bytes().take(4) =~= "blob".spec_bytes());
+    assert(tail.spec_bytes().skip(5) =~= oid.spec_bytes());
+    assert(oid.spec_bytes().take(40) =~= oid.spec_bytes());
+    reveal_with_fuel(scope_text::ascii_split_records, 4);
+    assert(scope_text::ascii_split_records(meta.spec_bytes(), 32, true)
+        =~= seq!["100644".spec_bytes(), "blob".spec_bytes(), oid.spec_bytes()]);
+    assert(scope_text::oid(oid.spec_bytes()));
+}
+
+fn expect_tree_parse_error(rows: &[&str], expected: &str)
+    requires exists|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
+        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::Message(expected@)),
+{
+    let ghost i = choose|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
+        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::Message(expected@));
+    proof { policy::git_tree_error_blocks_prefix(rows@, i,
+        policy::GitTreeErrorView::Message(expected@), rows.len() as int); }
+    match policy::parse_git_tree_rows(rows) {
+        Err(error) => {
+            proof {
+                let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
+                    && policy::git_tree_error_at(rows@, j, error.view());
+                policy::git_tree_first_error_unique(rows@, i,
+                    policy::GitTreeErrorView::Message(expected@), j, error.view());
+            }
+            match error {
+                policy::GitTreeError::Message(message) => expect_status_text(message.as_str(), expected),
+                _ => { panic!(); },
+            }
+        },
+        Ok(_) => { panic!(); },
+    }
+}
+
+fn expect_tree_path_error(rows: &[&str], expected: &str)
+    requires exists|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
+        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::InvalidPath(expected.spec_bytes())),
+{
+    let ghost i = choose|i: int| 0 <= i < rows.len() && policy::git_tree_prefix_valid(rows@, i)
+        && policy::git_tree_error_at(rows@, i, policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()));
+    proof { policy::git_tree_error_blocks_prefix(rows@, i,
+        policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), rows.len() as int); }
+    match policy::parse_git_tree_rows(rows) {
+        Err(error) => {
+            proof {
+                let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
+                    && policy::git_tree_error_at(rows@, j, error.view());
+                policy::git_tree_first_error_unique(rows@, i,
+                    policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), j, error.view());
+            }
+            match error {
+                policy::GitTreeError::InvalidPath(path) => {
+                    proof {
+                        vstd::utf8::encode_utf8_decode_utf8(path@);
+                        vstd::utf8::encode_utf8_decode_utf8(expected@);
+                    }
+                    expect_status_text(path, expected);
+                },
+                _ => { panic!(); },
+            }
+        },
+        Ok(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_parser_keeps_first_error_and_exact_path() {
+    let good = "100644 blob 0000000000000000000000000000000000000001\ta";
+    let bad_path = "100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail";
+    proof {
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta/../b\0tail");
+        reveal_strlit("a"); reveal_strlit("a/../b\0tail"); reveal_strlit("missing");
+        reveal_strlit("bad\t"); reveal_strlit("bad"); reveal_strlit("");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(good) && vstd::string::is_ascii(bad_path)
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("a/../b\0tail")
+            && vstd::string::is_ascii("missing") && vstd::string::is_ascii("bad\t")
+            && vstd::string::is_ascii("bad") && vstd::string::is_ascii(""));
+        tree_fixture_row(good, "a"); tree_fixture_row(bad_path, "a/../b\0tail");
+        scope_text::ascii_separator_end_is("missing".spec_bytes(), 9, 7);
+        scope_text::ascii_separator_end_is("bad\t".spec_bytes(), 9, 3);
+        scope_text::ascii_separator_end_is("bad".spec_bytes(), 32, 3);
+        assert("bad\t".spec_bytes().take(3) =~= "bad".spec_bytes());
+        assert("bad\t".spec_bytes().skip(4) =~= "".spec_bytes());
+        assert("bad".spec_bytes().take(3) =~= "bad".spec_bytes());
+        assert(scope_text::ascii_split_records("bad".spec_bytes(), 32, true).len() == 1);
+        assert(policy::paths::relative_path("a".spec_bytes()));
+        assert(!policy::paths::relative_path("a/../b\0tail".spec_bytes()));
+    }
+    expect_tree_parse_error(&[good, "missing", bad_path], "invalid Git tree row");
+    expect_tree_parse_error(&["bad\t", "missing"], "invalid Git tree metadata");
+    expect_tree_path_error(&[good, bad_path, "missing"], "a/../b\0tail");
+    expect_tree_parse_error(&[good, good, "missing"], "duplicate Git tree path");
+    expect_tree_parse_error(&[good, "missing", good], "invalid Git tree row");
+}
+
+fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
+    requires exists|key: policy::TreePath| tree@.contains_key(key) && key@ == path@
+        && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
+            "0000000000000000000000000000000000000001"@, "blob"@),
+{
+    proof { policy::tree_path_obeys_cmp(); }
+    let mut iterator = tree.iter();
+    let ghost all = iterator@.1;
+    let mut found = false;
+    loop
+        invariant
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            all.to_set() == tree@.kv_pairs(),
+            vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0)),
+            found == (exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@),
+        decreases all.len() - iterator@.0,
+    {
+        match iterator.next() {
+            None => { expect_status_true(found); return; },
+            Some((key, entry)) => {
+                if scope_text::equal_text(key.as_str(), path) {
+                    // 所有同路径键属于实际唯一键；预期完整字段独立写在此处。
+                    proof {
+                        let expected = choose|key: policy::TreePath| tree@.contains_key(key)
+                            && key@ == path@ && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
+                                "0000000000000000000000000000000000000001"@, "blob"@);
+                        let j = choose|j: int| 0 <= j < all.len() && all[j] == (expected, tree@[expected]);
+                        let k = iterator@.0 - 1;
+                        let keys = all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0);
+                        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
+                        if j < k { assert(keys[j].cmp_spec(&keys[k]) is Less); }
+                        if k < j { assert(keys[k].cmp_spec(&keys[j]) is Less); }
+                    }
+                    expect_status_text(entry.mode.as_str(), "100644");
+                    expect_status_text(entry.oid.as_str(), "0000000000000000000000000000000000000001");
+                    expect_status_text(entry.kind.as_str(), "blob");
+                    found = true;
+                }
+            },
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
+    let a = "100644 blob 0000000000000000000000000000000000000001\ta";
+    let b = "100644 blob 0000000000000000000000000000000000000001\ta//./b/";
+    proof {
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
+        reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta//./b/");
+        reveal_strlit("a"); reveal_strlit("a//./b/");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(a) && vstd::string::is_ascii(b)
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("a//./b/"));
+        tree_fixture_row(a, "a"); tree_fixture_row(b, "a//./b/");
+        assert(policy::paths::relative_path("a".spec_bytes()));
+        assert(policy::paths::relative_path("a//./b/".spec_bytes()));
+    }
+    let rows = [b, a];
+    match policy::parse_git_tree_rows(&rows) {
+        Ok(tree) => {
+            expect_status_true(tree.len() == 2);
+            proof {
+                assert forall|i: int| 0 <= i < rows.len() implies exists|key: policy::TreePath|
+                    tree@.contains_key(key) && key@ == (if i == 0 { "a//./b/"@ } else { "a"@ })
+                        && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
+                            "0000000000000000000000000000000000000001"@, "blob"@) by {
+                    let key = choose|key: policy::TreePath| tree@.contains_key(key)
+                        && policy::git_tree_entry_matches(key, tree@[key],
+                            policy::git_tree_row_at(rows@, i).get_Ok_0());
+                    vstd::utf8::encode_utf8_decode_utf8(key@);
+                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].mode@);
+                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].oid@);
+                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].kind@);
+                    vstd::utf8::encode_utf8_decode_utf8("a//./b/"@);
+                    vstd::utf8::encode_utf8_decode_utf8("a"@);
+                    vstd::utf8::encode_utf8_decode_utf8("100644"@);
+                    vstd::utf8::encode_utf8_decode_utf8("0000000000000000000000000000000000000001"@);
+                    vstd::utf8::encode_utf8_decode_utf8("blob"@);
+                }
+            }
+            expect_fixture_tree_member(&tree, "a");
+            expect_fixture_tree_member(&tree, "a//./b/");
+        },
+        Err(_) => { panic!(); },
+    }
+    match policy::parse_git_tree_rows(&[]) {
+        Ok(tree) => expect_status_true(tree.len() == 0),
+        Err(_) => { panic!(); },
+    }
 }
 
 fn tree_path_keeps_full_content(text: &str) {
