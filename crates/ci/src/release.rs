@@ -270,6 +270,20 @@ pub fn render(c: &Config) -> Result<String, String> {
                 None,
                 Some("Preserve original release artifacts"),
             )?);
+            if c.persistent_cache
+                .as_ref()
+                .is_some_and(|cache| cache.jobs.contains_key(&job.id))
+            {
+                output.push_str(&format!(
+                    "      - name: Preserve failed cache diagnostics\n        if: ${{{{ failure() }}}}\n        uses: {}\n        with:\n          name: {}\n          path: .chrono-harness/state/\n          if-no-files-found: error\n{}",
+                    c.upload_artifact_action,
+                    scalar(&format!(
+                        "diagnostics-{}-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}",
+                        job.artifact_name
+                    )),
+                    super::artifact_hidden_files(true)
+                ));
+            }
             continue;
         }
         output.push_str(&format!(

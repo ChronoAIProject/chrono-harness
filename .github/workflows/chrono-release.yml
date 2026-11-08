@@ -84,13 +84,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_runner/plan.json' --report-directory '.chrono-harness/cache/release-results/build_runner/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -98,6 +91,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_runner/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_instructions:
@@ -172,13 +173,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_instructions/plan.json' --report-directory '.chrono-harness/cache/release-results/build_instructions/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -186,6 +180,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_instructions/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_ci:
@@ -260,13 +262,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -274,6 +269,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_ci/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_ci:
@@ -348,13 +351,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -362,6 +358,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_ci/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_registration:
@@ -436,13 +440,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_registration/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_registration/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -450,6 +447,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_registration/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_filemap:
@@ -524,13 +529,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_filemap/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_filemap/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -538,6 +536,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_filemap/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_routes:
@@ -612,13 +618,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_routes/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_routes/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -626,6 +625,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_routes/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_projects:
@@ -700,13 +707,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_projects/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_projects/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -714,6 +714,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_projects/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_cost:
@@ -788,13 +796,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_cost/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_cost/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -802,6 +803,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cost/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_mixed:
@@ -876,13 +885,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_mixed/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_mixed/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -890,6 +892,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_mixed/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_workflow:
@@ -964,13 +974,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_workflow/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_workflow/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -978,6 +981,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_workflow/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_inputs:
@@ -1052,13 +1063,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_inputs/plan.json' --report-directory '.chrono-harness/cache/release-results/build_inputs/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1066,6 +1070,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_inputs/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_distribution:
@@ -1140,13 +1152,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_distribution/plan.json' --report-directory '.chrono-harness/cache/release-results/build_distribution/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1154,6 +1159,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_distribution/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_cargo:
@@ -1228,13 +1241,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_judge_cargo/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_cargo/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1242,6 +1248,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cargo/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_build_worktree:
@@ -1316,13 +1330,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_worktree/plan.json' --report-directory '.chrono-harness/cache/release-results/build_worktree/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1330,6 +1337,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_worktree/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_distribution_tests:
@@ -1413,13 +1428,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_distribution_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1427,6 +1435,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_distribution_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_worktree_tests:
@@ -1526,13 +1542,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_worktree_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1540,6 +1549,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_worktree_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_runner_tests:
@@ -1616,13 +1633,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_runner_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_runner_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1630,6 +1640,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_runner_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_inputs_tests:
@@ -1770,13 +1788,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_inputs_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1784,6 +1795,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_inputs_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_ci_tests:
@@ -1871,13 +1890,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1885,6 +1897,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_ci_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_ci_tests:
@@ -1962,13 +1982,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -1976,6 +1989,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_ci_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_registration_tests:
@@ -2053,13 +2074,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_registration_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2067,6 +2081,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_registration_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_projects_tests:
@@ -2149,13 +2171,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_projects_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2163,6 +2178,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_projects_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_workflow_tests:
@@ -2249,13 +2272,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_workflow_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2263,6 +2279,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_workflow_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_cargo_tests:
@@ -2355,13 +2379,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_cargo_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_cargo_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2369,6 +2386,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cargo_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_instructions_tests:
@@ -2443,13 +2468,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_instructions_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2457,6 +2475,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_instructions_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_filemap_tests:
@@ -2537,13 +2563,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_filemap_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2551,6 +2570,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_filemap_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_routes_tests:
@@ -2625,13 +2652,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_routes_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2639,6 +2659,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_routes_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_cost_tests:
@@ -2718,13 +2746,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_cost_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2732,6 +2753,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cost_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_mixed_tests:
@@ -2812,13 +2841,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_judge_mixed_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2826,6 +2848,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_mixed_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_package:
@@ -3128,13 +3158,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_runner/plan.json' --report-directory '.chrono-harness/cache/release-results/build_runner/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3142,6 +3165,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_runner/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_runner-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_instructions:
@@ -3216,13 +3247,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_instructions/plan.json' --report-directory '.chrono-harness/cache/release-results/build_instructions/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3230,6 +3254,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_instructions/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_instructions-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_ci:
@@ -3304,13 +3336,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3318,6 +3343,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_ci/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_ci:
@@ -3392,13 +3425,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_ci/plan.json' --report-directory '.chrono-harness/cache/release-results/build_ci/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3406,6 +3432,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_ci/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_ci-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_registration:
@@ -3480,13 +3514,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_registration/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_registration/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3494,6 +3521,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_registration/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_registration-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_filemap:
@@ -3568,13 +3603,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_filemap/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_filemap/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3582,6 +3610,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_filemap/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_filemap-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_routes:
@@ -3656,13 +3692,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_routes/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_routes/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3670,6 +3699,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_routes/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_routes-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_projects:
@@ -3744,13 +3781,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_projects/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_projects/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3758,6 +3788,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_projects/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_projects-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_cost:
@@ -3832,13 +3870,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_cost/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_cost/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3846,6 +3877,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cost/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_cost-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_mixed:
@@ -3920,13 +3959,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_mixed/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_mixed/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -3934,6 +3966,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_mixed/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_mixed-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_workflow:
@@ -4008,13 +4048,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_workflow/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_workflow/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4022,6 +4055,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_workflow/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_workflow-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_inputs:
@@ -4096,13 +4137,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_inputs/plan.json' --report-directory '.chrono-harness/cache/release-results/build_inputs/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4110,6 +4144,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_inputs/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_inputs-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_distribution:
@@ -4184,13 +4226,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_distribution/plan.json' --report-directory '.chrono-harness/cache/release-results/build_distribution/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4198,6 +4233,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_distribution/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_distribution-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_cargo:
@@ -4272,13 +4315,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_judge_cargo/plan.json' --report-directory '.chrono-harness/cache/release-results/build_judge_cargo/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4286,6 +4322,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_judge_cargo/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_judge_cargo-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_worktree:
@@ -4360,13 +4404,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_worktree/plan.json' --report-directory '.chrono-harness/cache/release-results/build_worktree/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4374,6 +4411,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_worktree/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_worktree-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_distribution_tests:
@@ -4457,13 +4502,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_distribution_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_distribution_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4471,6 +4509,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_distribution_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_distribution_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_worktree_tests:
@@ -4570,13 +4616,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_worktree_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_worktree_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4584,6 +4623,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_worktree_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_worktree_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_runner_tests:
@@ -4660,13 +4707,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_runner_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_runner_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4674,6 +4714,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_runner_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_runner_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_inputs_tests:
@@ -4814,13 +4862,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_inputs_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_inputs_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4828,6 +4869,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_inputs_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_inputs_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_ci_tests:
@@ -4915,13 +4964,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -4929,6 +4971,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_ci_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_ci_tests:
@@ -5006,13 +5056,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_ci_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_ci_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5020,6 +5063,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_ci_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_ci_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_registration_tests:
@@ -5097,13 +5148,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_registration_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_registration_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5111,6 +5155,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_registration_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_registration_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_projects_tests:
@@ -5193,13 +5245,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_projects_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_projects_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5207,6 +5252,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_projects_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_projects_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_workflow_tests:
@@ -5293,13 +5346,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_workflow_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_workflow_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5307,6 +5353,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_workflow_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_workflow_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_cargo_tests:
@@ -5399,13 +5453,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_cargo_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_cargo_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5413,6 +5460,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cargo_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_cargo_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_instructions_tests:
@@ -5487,13 +5542,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_instructions_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_instructions_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5501,6 +5549,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_instructions_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_instructions_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_filemap_tests:
@@ -5581,13 +5637,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_filemap_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_filemap_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5595,6 +5644,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_filemap_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_filemap_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_routes_tests:
@@ -5669,13 +5726,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_routes_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_routes_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5683,6 +5733,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_routes_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_routes_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_cost_tests:
@@ -5762,13 +5820,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_cost_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_cost_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5776,6 +5827,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_cost_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_cost_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_mixed_tests:
@@ -5856,13 +5915,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_judge_mixed_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_judge_mixed_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5870,6 +5922,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_judge_mixed_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_judge_mixed_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_package:
@@ -6346,13 +6406,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_diagnostics_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6360,6 +6413,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_diagnostics_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_diagnostics_tests:
@@ -6434,13 +6495,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_diagnostics_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_diagnostics_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6448,6 +6502,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_diagnostics_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_diagnostics_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_tests:
@@ -6612,13 +6674,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_build_cache/plan.json' --report-directory '.chrono-harness/cache/release-results/build_cache/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6626,6 +6681,14 @@ jobs:
         with:
           name: "chrono-release-linux-build_cache-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_cache/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-build_cache-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_cache_tests:
@@ -6702,13 +6765,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.linux_verify_cache_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_cache_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6716,6 +6772,14 @@ jobs:
         with:
           name: "chrono-release-linux-verify_cache_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_cache_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-linux-verify_cache_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_build_cache:
@@ -6790,13 +6854,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_build_cache/plan.json' --report-directory '.chrono-harness/cache/release-results/build_cache/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6804,6 +6861,14 @@ jobs:
         with:
           name: "chrono-release-macos-build_cache-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/build_cache/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-build_cache-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_cache_tests:
@@ -6880,13 +6945,6 @@ jobs:
         with:
           key: ${{ steps.chrono_cache_plan.outputs.cache_0_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
-      - name: Record original cache transport observations
-        if: ${{ always() && steps.chrono_cache_plan.outcome == 'success' }}
-        shell: bash
-        env:
-          CHRONO_CACHE_STEPS: ${{ toJSON(steps) }}
-        run: |
-          '.chrono-harness/bin/chrono-cache' report --host-root . --plan '.chrono-harness/state/cache/release.macos_verify_cache_tests/plan.json' --report-directory '.chrono-harness/cache/release-results/verify_cache_tests/cache-observations/' --steps-env CHRONO_CACHE_STEPS --work 'chrono_cache_work'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6894,6 +6952,14 @@ jobs:
         with:
           name: "chrono-release-macos-verify_cache_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_cache_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+      - name: Preserve failed cache diagnostics
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "diagnostics-chrono-release-macos-verify_cache_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: .chrono-harness/state/
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_native_tests:
