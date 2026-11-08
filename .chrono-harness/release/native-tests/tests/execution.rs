@@ -345,14 +345,14 @@ fn local_driver_publishes_real_release_from_isolated_roots_with_registered_worke
         if workers != 2 {
             f.git(&["add", "--all"]);
             f.git(&[
-            "-c",
-            "user.name=Release test",
-            "-c",
-            "user.email=release-test@example.invalid",
-            "commit",
-            "--quiet",
-            "-m",
-            "local worker selection",
+                "-c",
+                "user.name=Release test",
+                "-c",
+                "user.email=release-test@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "local worker selection",
             ]);
         }
         let output = f.outputs.path().join("local");
