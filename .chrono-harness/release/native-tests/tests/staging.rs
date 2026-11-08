@@ -4,7 +4,10 @@ use chrono_host_release::{recipe::Loaded, staging::Staging};
 use serde_json::{Value, json};
 use std::{
     fs,
-    os::unix::{fs::{MetadataExt, PermissionsExt, symlink}, process::ExitStatusExt},
+    os::unix::{
+        fs::{MetadataExt, PermissionsExt, symlink},
+        process::ExitStatusExt,
+    },
     path::Path,
     process::{Command, Output},
 };
@@ -15,12 +18,21 @@ impl Drop for CacheCase {
     fn drop(&mut self) {
         if std::thread::panicking() {
             let path = self.0.take().unwrap().keep();
-            eprintln!("original release cache regression evidence: {}", path.display());
+            eprintln!(
+                "original release cache regression evidence: {}",
+                path.display()
+            );
         }
     }
 }
 
-fn cache_process(root: &Path, index: &mut usize, program: &Path, args: &[&str], steps: Option<&Value>) -> Output {
+fn cache_process(
+    root: &Path,
+    index: &mut usize,
+    program: &Path,
+    args: &[&str],
+    steps: Option<&Value>,
+) -> Output {
     let mut command = Command::new(program);
     command.args(args).current_dir(root);
     if let Some(steps) = steps {
@@ -30,26 +42,47 @@ fn cache_process(root: &Path, index: &mut usize, program: &Path, args: &[&str], 
     let output = command.output().unwrap();
     let directory = root.join("original-processes");
     fs::create_dir_all(&directory).unwrap();
-    let streams: Vec<_> = [("stdout", &output.stdout), ("stderr", &output.stderr)].into_iter().map(|(name, bytes)| {
-        let path = format!("{index}.{name}");
-        fs::write(directory.join(&path), bytes).unwrap();
-        json!({"path":path,"size":bytes.len(),"sha256":chrono_harness::sha256(bytes)})
-    }).collect();
-    fixture::write(&directory, &format!("{index}.json"), &json!({
-        "program":program,"argv":args,"cwd":root,"exit_code":output.status.code(),
-        "signal":output.status.signal(),"stdout":streams[0],"stderr":streams[1]
-    }));
+    let streams: Vec<_> = [("stdout", &output.stdout), ("stderr", &output.stderr)]
+        .into_iter()
+        .map(|(name, bytes)| {
+            let path = format!("{index}.{name}");
+            fs::write(directory.join(&path), bytes).unwrap();
+            json!({"path":path,"size":bytes.len(),"sha256":chrono_harness::sha256(bytes)})
+        })
+        .collect();
+    fixture::write(
+        &directory,
+        &format!("{index}.json"),
+        &json!({
+            "program":program,"argv":args,"cwd":root,"exit_code":output.status.code(),
+            "signal":output.status.signal(),"stdout":streams[0],"stderr":streams[1]
+        }),
+    );
     *index += 1;
-    assert!(output.status.success(), "{} {args:?}: {:?}: {}", program.display(), output.status, String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{} {args:?}: {:?}: {}",
+        program.display(),
+        output.status,
+        String::from_utf8_lossy(&output.stderr)
+    );
     output
 }
 
 #[test]
 fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_inode() {
-    let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..").canonicalize().unwrap();
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../..")
+        .canonicalize()
+        .unwrap();
     let state = repository.join(".chrono-harness/state/release-test-failures");
     fs::create_dir_all(&state).unwrap();
-    let case = CacheCase(Some(tempfile::Builder::new().prefix("rust-release-cache-").tempdir_in(state).unwrap()));
+    let case = CacheCase(Some(
+        tempfile::Builder::new()
+            .prefix("rust-release-cache-")
+            .tempdir_in(state)
+            .unwrap(),
+    ));
     let root = case.0.as_ref().unwrap().path();
     let read = |relative: &str| -> Value {
         serde_json::from_slice(&fs::read(repository.join(relative)).unwrap()).unwrap()
@@ -60,13 +93,22 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
     let host_path = config["consumer_staging"]["host_config"].as_str().unwrap();
     let projects_path = config["projects"].as_str().unwrap();
     let plan = read(plan_path);
-    for (relative, value) in [(config_path, &config), (plan_path, &plan), (host_path, &read(host_path)), (projects_path, &read(projects_path))] {
+    for (relative, value) in [
+        (config_path, &config),
+        (plan_path, &plan),
+        (host_path, &read(host_path)),
+        (projects_path, &read(projects_path)),
+    ] {
         fixture::write(root, relative, value);
     }
     let bootstrap = read(".chrono-harness/ci/bootstrap-cache.json");
     let asset = plan["assets"]["chrono-cache"].as_str().unwrap();
     let source = repository.join(bootstrap["install"][0]["source"].as_str().unwrap());
-    assert!(source.is_file(), "build.cache must produce the registered real cache CLI before this test: {}", source.display());
+    assert!(
+        source.is_file(),
+        "build.cache must produce the registered real cache CLI before this test: {}",
+        source.display()
+    );
     fs::create_dir_all(root.join(asset).parent().unwrap()).unwrap();
     fs::copy(source, root.join(asset)).unwrap();
     let transport = root.join(bootstrap["install"][0]["destination"].as_str().unwrap());
@@ -74,27 +116,70 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
     fs::copy(root.join(asset), &transport).unwrap();
     let identity = |path: &Path| {
         let metadata = fs::metadata(path).unwrap();
-        (metadata.dev(), metadata.ino(), chrono_harness::file_identity(path).unwrap().0)
+        (
+            metadata.dev(),
+            metadata.ino(),
+            chrono_harness::file_identity(path).unwrap().0,
+        )
     };
     let original = identity(&transport);
-    fixture::write(root, ".chrono-harness/cache.json", &json!({
-        "schema":"chrono-cache/v2","namespace":"release-regression","artifact_registry":host_path,
-        "inputs":{"profile":{"kind":"literal","value":"fixture"},"source":{"kind":"literal","value":"fixed-source"}},
-        "artifacts":{"target":{"owner":"cache-tests","path":"crates/cache-tests/target/"}},
-        "caches":{"tests":{"owner":"cache-tests","producer":"test.cache-tests","consumers":["release.verify"],
-            "artifacts":["target"],"compatibility_inputs":["profile"],"source_inputs":["source"],"restore":"compatible"}},
-        "consumer_operations":{"release.verify":[{"registry":config_path,"pointer":"/verification_operations"}]},
-        "require_primary_checkout":true,"recover_failed_restores":true
-    }));
+    fixture::write(
+        root,
+        ".chrono-harness/cache.json",
+        &json!({
+            "schema":"chrono-cache/v2","namespace":"release-regression","artifact_registry":host_path,
+            "inputs":{"profile":{"kind":"literal","value":"fixture"},"source":{"kind":"literal","value":"fixed-source"}},
+            "artifacts":{"target":{"owner":"cache-tests","path":"crates/cache-tests/target/"}},
+            "caches":{"tests":{"owner":"cache-tests","producer":"test.cache-tests","consumers":["release.verify"],
+                "artifacts":["target"],"compatibility_inputs":["profile"],"source_inputs":["source"],"restore":"compatible"}},
+            "consumer_operations":{"release.verify":[{"registry":config_path,"pointer":"/verification_operations"}]},
+            "require_primary_checkout":true,"recover_failed_restores":true
+        }),
+    );
     let mut index = 0;
-    cache_process(root, &mut index, &chrono_harness::resolve_program(&repository, config["tools"]["git"].as_str().unwrap(), None).unwrap(), &["init", "-q", "."], None);
+    cache_process(
+        root,
+        &mut index,
+        &chrono_harness::resolve_program(
+            &repository,
+            config["tools"]["git"].as_str().unwrap(),
+            None,
+        )
+        .unwrap(),
+        &["init", "-q", "."],
+        None,
+    );
     let root_text = root.to_str().unwrap();
-    let args = ["plan", "--host-root", root_text, "--config", ".chrono-harness/cache.json", "--consumer", "release.verify"];
+    let args = [
+        "plan",
+        "--host-root",
+        root_text,
+        "--config",
+        ".chrono-harness/cache.json",
+        "--consumer",
+        "release.verify",
+    ];
     let planned = cache_process(root, &mut index, &transport, &args, None);
     let prepared: Value = serde_json::from_slice(&planned.stdout).unwrap();
     fixture::write(root, ".chrono-harness/state/cache/plan.json", &prepared);
     let steps = json!({"cache_0_restore":{"outcome":"success","outputs":{}},"cache_0_save":{"outcome":"skipped","outputs":{}},"work":{"outcome":"success"}});
-    let recovered = cache_process(root, &mut index, &transport, &["recover", "--host-root", root_text, "--config", ".chrono-harness/cache.json", "--plan", ".chrono-harness/state/cache/plan.json", "--steps-env", "CHRONO_RELEASE_REGRESSION_STEPS"], Some(&steps));
+    let recovered = cache_process(
+        root,
+        &mut index,
+        &transport,
+        &[
+            "recover",
+            "--host-root",
+            root_text,
+            "--config",
+            ".chrono-harness/cache.json",
+            "--plan",
+            ".chrono-harness/state/cache/plan.json",
+            "--steps-env",
+            "CHRONO_RELEASE_REGRESSION_STEPS",
+        ],
+        Some(&steps),
+    );
     let recovered: Value = serde_json::from_slice(&recovered.stdout).unwrap();
     let reference = &recovered["report"];
     let raw = fs::read(root.join(reference["path"].as_str().unwrap())).unwrap();
@@ -104,8 +189,15 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
     assert_eq!(original_recovery["status"], "recovered");
     let loaded = Loaded::load(root).unwrap();
     let observed = chrono_host_release::transport::observe(root, asset).unwrap();
-    let mut staging = Staging::selected(&loaded, &json!({"chrono-cache":{"identity":observed.receipt(asset)}})).unwrap();
-    assert_eq!(staging.destinations(), ["crates/cache/target/debug/chrono-cache"]);
+    let mut staging = Staging::selected(
+        &loaded,
+        &json!({"chrono-cache":{"identity":observed.receipt(asset)}}),
+    )
+    .unwrap();
+    assert_eq!(
+        staging.destinations(),
+        ["crates/cache/target/debug/chrono-cache"]
+    );
     staging.copy(root).unwrap();
     assert!(staging.observe(root, "staged", None));
     let consumer = root.join("crates/cache/target/debug/chrono-cache");
@@ -115,7 +207,11 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
     let replanned = cache_process(root, &mut index, &transport, &args, None);
     let replanned: Value = serde_json::from_slice(&replanned.stdout).unwrap();
     assert_eq!(replanned["planner"], prepared["planner"]);
-    assert_eq!(identity(&transport), original, "release staging replaced the outer cache transport");
+    assert_eq!(
+        identity(&transport),
+        original,
+        "release staging replaced the outer cache transport"
+    );
     assert!(staging.observe(root, "after-verification", None));
     fixture::write(root, "staging.json", &staging.receipt());
 }
