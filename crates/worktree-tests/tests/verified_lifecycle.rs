@@ -20,6 +20,19 @@ fn expect(actual: bool)
     if !actual { panic!(); }
 }
 
+fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)
+    requires actual == expected,
+{
+    use policy::CleanupStage::*;
+    let equal = match (actual, expected) {
+        (Pending, Pending) | (InProgress, InProgress)
+        | (WaitingForConsumers, WaitingForConsumers) | (Retained, Retained)
+        | (Failed, Failed) | (CachesReleased, CachesReleased) | (Disposed, Disposed) => true,
+        _ => false,
+    };
+    expect(equal);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_and_released_retained_work_remain_discoverable() {
     proof { reveal_strlit("terminal"); reveal_strlit("retained"); }
@@ -64,12 +77,12 @@ fn only_a_successful_original_with_absence_verification_establishes_disposal() {
     let retained = policy::cleanup_result(false, "cleaned", "preserved");
     let missing = policy::cleanup_result(false, "cleaned", "");
     let cache = policy::cleanup_result(true, "cleaned", "verified-absent");
-    expect(removed == policy::CleanupStage::Disposed);
-    expect(recovered == policy::CleanupStage::Disposed);
-    expect(failed == policy::CleanupStage::Failed);
-    expect(retained == policy::CleanupStage::Retained);
-    expect(missing == policy::CleanupStage::Retained);
-    expect(cache == policy::CleanupStage::CachesReleased);
+    expect_stage(removed, policy::CleanupStage::Disposed);
+    expect_stage(recovered, policy::CleanupStage::Disposed);
+    expect_stage(failed, policy::CleanupStage::Failed);
+    expect_stage(retained, policy::CleanupStage::Retained);
+    expect_stage(missing, policy::CleanupStage::Retained);
+    expect_stage(cache, policy::CleanupStage::CachesReleased);
 }
 
 }
