@@ -535,13 +535,19 @@ fn assert_no_local_build(fixture: &Fixture) {
 fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without_local_build() {
     for exit in [0, 7] {
         let fixture = participating_fixture();
+        let reminder = b"W_WORKTREE_ATTENTION: agent work remains\0\xfe\n";
         let report = json!({
             "status":if exit == 0 {"used"} else {"failed"},
             "managed_command_failed":exit != 0,
             "managed_process":original_child(&fixture, exit),
             "report_path":".chrono-harness/state/worktrees/original.json"
         });
-        mock_participation(&fixture, &serde_json::to_vec(&report).unwrap(), b"", exit);
+        mock_participation(
+            &fixture,
+            &serde_json::to_vec(&report).unwrap(),
+            reminder,
+            exit,
+        );
         let output = Staged::invoke(
             &fixture,
             &[".", ".chrono-harness/ci/build.json"],
@@ -550,7 +556,8 @@ fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without
         );
         assert_eq!(output.status.code(), Some(i32::from(exit)), "{output:?}");
         assert_eq!(output.stdout, [0, 255, 10]);
-        assert!(output.stderr.starts_with(&[254, 0, 10]), "{output:?}");
+        let expected_stderr = [&[254, 0, 10][..], reminder].concat();
+        assert!(output.stderr.starts_with(&expected_stderr), "{output:?}");
         assert!(String::from_utf8_lossy(&output.stderr).contains("worktrees/original.json"));
         assert_no_local_build(&fixture);
     }
