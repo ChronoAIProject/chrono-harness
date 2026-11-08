@@ -32,11 +32,11 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 
 这里同时增加了产品的一致性规则和本仓对一条已有链的采用。验证成本包括额外读取固定输入、回归测试和运行已登记的证据测试；完整构建／CI／存储成本未知。程序不能证明需求有价值或实现忠于需求，这仍需要工程判断。外部和全部消费者采用、完整调用路径检查及全部 SPEC 启用仍未完成。
 
-已有 Darwin 观察来自 macos-26：生产 `72b1d08` 的运行 `39690377913/1`，以及场景 `c515cd05` 的运行 `39695762671/1`。它们导入当前 detector 清单和绑定干净源码的 cache／core 原始报告，`unit_runner` 安装并核验工具，标准 runner 单元通过，汇总核验原报告。场景的启动产物 `12391076536`、runner 产物 `12390726564` 和汇总产物 `12391598633` 保留真实生产者、尝试次数及匹配的清单／工具身份。这只证明该内部链在 Darwin 上的上述观察。
+该内部启动链已有 Darwin 上的有限原生观察；适用输入、产物及原件直接查[原运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在本文维护运行和产物清单。它不能证明 Linux 或全部使用方已采用。
 
 真实 CI 交接沿用指向 dev 的 PR 和 macos-26 父工作流：先取得 detector 当前共享产物、干净生产者的原报告和清单，再实际执行 `unit_runner` 安装／验证与 `.chrono-harness/bin/chrono-harness check --unit runner`，最后走已有汇总。
 
-必须保留启动绑定、精确产物 ID、实际生产 run／attempt、`startup-install.json`、导入的 bootstrap 来源、清单及文件身份、封存的标准请求／报告、原 stdout／stderr 和上传单元产物绑定。各处检出的 PR head 必须匹配，事件 merge SHA 另有用途。重跑时，沿用的 detector 结果要追溯到原生产者和产物 attempt，不能假定来自当前 attempt。
+必须保留启动绑定、精确产物 ID、实际生产 run／attempt、`startup-install.json`、导入的 bootstrap 来源、清单及文件身份、封存的标准请求／报告、原 stdout／stderr 和上传单元产物绑定。各处检出同一个固定 PR 合并提交，GitHub 运行归属另按事件 head 核对，具体绑定见[合并方案](merging.md#检查与落地)。重跑时，沿用的 detector 结果要追溯到原生产者和产物 attempt，不能假定来自当前 attempt。
 
 汇总必须读取实际选中单元的原件和成功业务响应。本地测试样本或生成工作流不能代替远端观察。产物沿用 provider 已有的有限保留期限；调用方须先等待消费者完成、收取必需证据，再走受保护的生命周期清理。
 
