@@ -2892,16 +2892,6 @@
             "aggregate"
           ]
         },
-        "owner-verify": {
-          "operation": "host.bootstrap-owner-verify",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap.py",
-            ".",
-            ".chrono-harness/ci/bootstrap-owner-verification.json"
-          ]
-        },
         "unit": {
           "operation": "host.bootstrap-unit",
           "tool": "python3",
@@ -3007,16 +2997,6 @@
           "argv": [
             "-B",
             ".chrono-harness/ci/provision_tests.py"
-          ]
-        },
-        "owner": {
-          "operation": "host.bootstrap-owner-tests",
-          "tool": "python3",
-          "argv": [
-            "-B",
-            ".chrono-harness/ci/bootstrap-tests.py",
-            "--lifecycle-program",
-            "crates/worktree/target/debug/chrono-worktree"
           ]
         }
       }
