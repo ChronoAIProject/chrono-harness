@@ -100,8 +100,14 @@ fn deadline_keeps_bytes_actually_observed_and_actual_termination_signal() {
     assert_eq!(live_stdout, captured.stdout.bytes);
     assert_eq!(live_stderr, captured.stderr.bytes);
     for stream in [&captured.stdout, &captured.stderr] {
-        assert_eq!(fs::read(output.path().join(stream.path.as_ref().unwrap())).unwrap(), stream.bytes);
-        assert_eq!(stream.receipt()["sha256"], chrono_harness::sha256(&stream.bytes));
+        assert_eq!(
+            fs::read(output.path().join(stream.path.as_ref().unwrap())).unwrap(),
+            stream.bytes
+        );
+        assert_eq!(
+            stream.receipt()["sha256"],
+            chrono_harness::sha256(&stream.bytes)
+        );
     }
     assert!(!source.path().join("too-late").exists());
     assert_eq!(captured.observation["exit_signal"], 9);
