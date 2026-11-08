@@ -342,9 +342,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.distribution": [
-        "distribution"
-      ],
       "fmt.worktree": [
         "worktree",
         "worktree-adoption"
