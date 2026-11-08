@@ -175,8 +175,13 @@
         "assets/distribution/bootstrap.sh",
         ".chrono-harness/release/plan.json",
         ".chrono-harness/release/build.json",
-        ".chrono-harness/release/build.py",
-        ".github/workflows/chrono-release.yml"
+        ".github/workflows/chrono-release.yml",
+        ".chrono-harness/release/native.sh",
+        ".chrono-harness/release/consume.sh",
+        ".chrono-harness/release/native/src/execution.rs",
+        ".chrono-harness/release/native/src/recipe.rs",
+        ".chrono-harness/release/native/src/receipt.rs",
+        ".chrono-harness/release/native/src/frontend.rs"
       ],
       "tests": [
         "distribution-tests"
@@ -370,6 +375,10 @@
       "reason": "Rust 专属测试承接配置、SDK 调用、构建安装、原报告、共享产物、所有者资格和生命周期交接的当前合同。Python 导入／字节码及旧测试保管实现的专属断言随实现退役；工作树保护由 Rust 工作树测试负责，不声称逐条保留已退役实现的断言。"
     }
   ],
-  "migrations": [],
-  "historical_profiles": []
+  "migrations": [
+
+  ],
+  "historical_profiles": [
+
+  ]
 }

@@ -193,16 +193,9 @@
       },
       "release-build": {
         "tests": [
-          "test:release-build-tests",
           "test:host-release-native-tests"
         ],
         "report_path": ".chrono-harness/state/units/release-build/check.json"
-      },
-      "release-build-integration": {
-        "tests": [
-          "test:release-build-integration"
-        ],
-        "report_path": ".chrono-harness/state/units/release-build-integration/check.json"
       },
       "worktree-adoption": {
         "tests": [
@@ -350,8 +343,7 @@
         "judge-workflow-units"
       ],
       "build.distribution": [
-        "distribution",
-        "release-build-integration"
+        "distribution"
       ],
       "fmt.worktree": [
         "worktree",
@@ -367,7 +359,7 @@
       ],
       "build.cache": [
         "cache",
-        "release-build-integration"
+        "release-build"
       ]
     },
     "facts_config": ".chrono-harness/config.json",

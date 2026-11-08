@@ -276,7 +276,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     let selected = [
         "test:host-bootstrap-native-tests",
         "test:distribution-tests",
-        "test:release-build-integration",
+        "test:host-release-native-tests",
     ]
     .into_iter()
     .map(str::to_owned)
@@ -292,7 +292,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     for (operation, timeout) in [
         ("build.distribution", 600),
         ("test.distribution-tests", 600),
-        ("release.tests.integration", 600),
+        ("test.host-release-native-tests", 900),
     ]
     .into_iter()
     .chain(startup_operations.iter().map(|op| (op.as_str(), 900)))
@@ -314,8 +314,8 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         plans["test:host-bootstrap-native-tests"].timeout_seconds,
         900
     );
-    for test in ["test:distribution-tests", "test:release-build-integration"] {
-        assert_eq!(plans[test].timeout_seconds, 600);
+    for test in ["test:distribution-tests", "test:host-release-native-tests"] {
+        assert_eq!(plans[test].timeout_seconds, if test == "test:host-release-native-tests" { 900 } else { 600 });
         assert!(plans[test].operation_bounds.is_empty());
     }
     plans

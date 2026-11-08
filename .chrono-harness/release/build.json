@@ -43,13 +43,12 @@
     "test.judge-routes-tests",
     "test.judge-cost-tests",
     "test.judge-mixed-tests",
-    "release.tests.units",
-    "release.tests.integration",
     "test.diagnostics-tests",
     "test.cache-tests",
     "test.host-bootstrap-native-tests",
     "test.host-bootstrap-launcher-tests",
-    "test.pr-tests"
+    "test.pr-tests",
+    "test.host-release-native-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -499,25 +498,14 @@
       "rust_toolchain": true
     },
     {
-      "id": "verify_release_build_tests",
+      "id": "verify_host_release_native_tests",
       "kind": "verify",
-      "operation": "release.tests.units",
+      "operation": "test.host-release-native-tests",
       "needs": [
-
-      ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_tests",
-      "rust_toolchain": false
-    },
-    {
-      "id": "verify_release_build_integration",
-      "kind": "verify",
-      "operation": "release.tests.integration",
-      "needs": [
-        "build_distribution",
         "build_cache"
       ],
-      "handoff": ".chrono-harness/cache/release-handoffs/verify_release_build_integration",
-      "rust_toolchain": false
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_host_release_native_tests",
+      "rust_toolchain": true
     },
     {
       "id": "verify_diagnostics_tests",
@@ -612,14 +600,13 @@
       "verify_judge_routes_tests",
       "verify_judge_cost_tests",
       "verify_judge_mixed_tests",
-      "verify_release_build_tests",
-      "verify_release_build_integration",
       "verify_diagnostics_tests",
       "build_cache",
       "verify_cache_tests",
       "verify_host_bootstrap_native_tests",
       "verify_host_bootstrap_launcher_tests",
-      "verify_pr_tests"
+      "verify_pr_tests",
+      "verify_host_release_native_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -656,15 +643,14 @@
       "verify_judge_cost_tests": "linux_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "linux_verify_judge_mixed_tests",
       "package": "linux_package",
-      "verify_release_build_tests": "linux_verify_release_build_tests",
-      "verify_release_build_integration": "linux_verify_release_build_integration",
       "verify_diagnostics_tests": "linux_verify_diagnostics_tests",
       "build_cache": "linux_build_cache",
       "verify_cache_tests": "linux_verify_cache_tests",
       "verify_host_bootstrap_native_tests": "linux_verify_host_bootstrap_native_tests",
       "verify_host_bootstrap_launcher_tests": "linux_verify_host_bootstrap_launcher_tests",
       "verify_pr_tests": "linux_verify_pr_tests",
-      "verify_identifiers_tests": "linux_verify_identifiers_tests"
+      "verify_identifiers_tests": "linux_verify_identifiers_tests",
+      "verify_host_release_native_tests": "linux_verify_host_release_native_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -696,15 +682,14 @@
       "verify_judge_cost_tests": "macos_verify_judge_cost_tests",
       "verify_judge_mixed_tests": "macos_verify_judge_mixed_tests",
       "package": "macos_package",
-      "verify_release_build_tests": "macos_verify_release_build_tests",
-      "verify_release_build_integration": "macos_verify_release_build_integration",
       "verify_diagnostics_tests": "macos_verify_diagnostics_tests",
       "build_cache": "macos_build_cache",
       "verify_cache_tests": "macos_verify_cache_tests",
       "verify_host_bootstrap_native_tests": "macos_verify_host_bootstrap_native_tests",
       "verify_host_bootstrap_launcher_tests": "macos_verify_host_bootstrap_launcher_tests",
       "verify_pr_tests": "macos_verify_pr_tests",
-      "verify_identifiers_tests": "macos_verify_identifiers_tests"
+      "verify_identifiers_tests": "macos_verify_identifiers_tests",
+      "verify_host_release_native_tests": "macos_verify_host_release_native_tests"
     }
   },
   "unit_costs": {
@@ -737,15 +722,14 @@
     "verify_judge_cost_tests": "unmeasured",
     "verify_judge_mixed_tests": "unmeasured",
     "package": "unmeasured",
-    "verify_release_build_tests": "unmeasured",
-    "verify_release_build_integration": "unmeasured",
     "verify_diagnostics_tests": "unmeasured",
     "build_cache": "unmeasured",
     "verify_cache_tests": "unmeasured",
     "verify_host_bootstrap_native_tests": "unmeasured",
     "verify_host_bootstrap_launcher_tests": "unmeasured",
     "verify_pr_tests": "unmeasured",
-    "verify_identifiers_tests": "unmeasured"
+    "verify_identifiers_tests": "unmeasured",
+    "verify_host_release_native_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -764,7 +748,7 @@
     "test.judge-workflow-tests": [
       ".chrono-harness/state/workflow-test-failures/"
     ],
-    "release.tests.integration": [
+    "test.host-release-native-tests": [
       ".chrono-harness/state/release-test-failures/"
     ]
   },
@@ -896,19 +880,6 @@
         "chrono-judge-mixed"
       ]
     },
-    "verify_release_build_integration": {
-      "need": "The release.tests.integration group in .chrono-harness/release/build-tests.py invokes the released distribution binary to pack a real test release and checks its manifest, packaged bytes and producer identity. Its Python cache regression consumes the selected chrono-cache asset at the declared Cargo test destination and runs real plan/recover around the release staging owner.",
-      "release_assets": [
-        "chrono-distribution",
-        "chrono-cache"
-      ]
-    },
-    "verify_release_build_tests": {
-      "need": "The original release.tests.units Python action checks the release recipe, handoff contracts, failures and host projection with synthetic tools and receipts; real packaging belongs to the separate integration group.",
-      "release_assets": [
-
-      ]
-    },
     "verify_diagnostics_tests": {
       "need": "The original test.diagnostics-tests Cargo action directly consumes the diagnostics Rust library to verify structured errors and logging; it calls no released production executable.",
       "release_assets": [
@@ -943,6 +914,12 @@
       "need": "身份库专属项目执行从 runner 迁移的全部八项原边界测试，直接消费 runner 依赖的同一身份判断库；不消费发布二进制。",
       "release_assets": [
 
+      ]
+    },
+    "verify_host_release_native_tests": {
+      "need": "The original Rust test.host-release-native-tests action exercises recipe validation, real CLI units, frontend originals, receipt collection, transport, process failures and local scheduling. Its distribution alias is compiled by the test crate; only the real cache plan/recover/staging regression consumes a released asset at crates/cache/target/debug/chrono-cache.",
+      "release_assets": [
+        "chrono-cache"
       ]
     }
   },
