@@ -42,11 +42,9 @@
 
 程序只解析配置 Git 一次，观察并绑定实际字节，之后每次 Git 操作都使用它。可选预期摘要／版本不符就拒绝；null 不作预期身份保证。只继承声明环境，明确值覆盖继承值。
 
-当前采用 `chrono-worktree-config/v3`，保留 v2 必需 `check_inputs`，新增非空 `git.identities`。每行给同一个 `git.program` 声明 `sha256`／`expected_version`。主摘要／版本仍必需，主项和备选摘要均有效且唯一，版本非空。v1／v2 拒绝 identities，包括 null。
+本宿主采用 `chrono-worktree-config/v2`，保留必需 `check_inputs`，Git 预期摘要／版本为 null。创建、恢复和清理需要在一次运行中使用同一个实际 Git；既有观察与逐命令摘要检查已满足这个要求。没有当前使用方要求工作树按主机摘要白名单准入，因此退役额外的 v3 多身份选择、专属测试和宿主摘要副本。
 
-版本探测前先读解析后程序字节，精确选择主项或登记备选，无匹配就拒绝准入。之后由已有进程所有者核所选版本／摘要。回执保留真实工具和原完整政策摘要，不改变源码／获取端／协调者的已提交政策相等要求，也不改 v2 自动清理所有权。旧二进制拒绝该版本政策。
-
-本宿主保留原主身份，另登记实测 macOS 27 身份，与 [Git 事实选择器](git-facts.md#exact-host-executable-selection)一致。原生 macOS-26 验收和真实协调者切换仍归调用方。
+自有回执保留实际 Git、版本及原政策摘要，未建立预期身份或跨环境同判保证。可选单一摘要仍在版本探测前核对，不符拒绝执行。源码／获取端／协调者的已提交政策相等、v2 自动清理和显式 migrate 合同保留；候选测试不能代替存活协调者的部署验收。独立的 [Git 事实选择器](git-facts.md#exact-host-executable-selection)仍按其现役合同准入，本批未改变它。
 
 读取未跟踪清单时，子进程环境明确关闭 Git 全局 literal／glob／noglob／大小写折叠 pathspec 模式，排除参数自身是区分大小写的字面值。原进程记录这些范围内覆盖。拒绝仓库重定向变量，不证明 Git 配置、凭据 helper、hook 输入完整。不改全局配置，新分支明确关闭自动 tracking。
 
@@ -596,11 +594,11 @@ v2 使用 `chrono-worktree-automatic-cleanup/v2`，保留原政策字段，另�
 
 调用方负责分阶段验证和切换。先在独立、干净 Git main clone 用正式 bootstrap／短检查验证精确已提交候选。当前 scoped 本地生产者为 `full_context: None`，无需伪造 linked origin 回执。main-only bootstrap 可初始化缺失所有者工具；这只验候选，不验存活协调者或完整／原生义务。
 
-存活协调者固定 Git 不能在新支持宿主运行时，也只用这一登记适配路径：独立 main clone 从最新 dev 建 fresh integration，在原 Git／worktree 所有者登记精确新增身份，提交干净候选后运行正式 bootstrap／短检查。
+存活协调者的 Git 合同阻止候选准备时，也只用这一登记适配路径：独立 main clone 从最新 dev 建 fresh integration，在负责处审计并修正实际合同，提交干净候选后运行正式 bootstrap／短检查。
 
 若仅为修复前失败探测在此临时克隆初始化过所有者二进制，须先等待全部自有任务，核工具身份及无消费者，再保留到安装位置外，让同一 main-only bootstrap 初始化候选所有者。
 
-这不允许替换活的／外来协调者、验证中改预期摘要、伪造 linked 回执或跳过政策相等。仍须观察原生 macOS-26 Git 身份、验精确候选，再部署匹配的已提交政策／参与声明，之后通过普通 start 创建三份真实 linked 工作树。
+这不允许替换活的／外来协调者、验证中改预期摘要、伪造 linked 回执或跳过政策相等。仍须用原生 macOS-26 验精确候选，核实际 Git 观察，再部署匹配的已提交政策／参与声明，之后通过普通 start 创建三份真实 linked 工作树。
 
 真实切换时，等待／排除不兼容生产者、保留 v1 状态，在存活 main 协调者装兼容工具，提交并部署匹配 v2 worktree／cleanup 政策、所选宿主配置和 participation，再开始 v2 linked 工作。
 
@@ -684,7 +682,7 @@ CI 复制宿主断言复用专属测试独立 receipt 所有者及明确平台 G
 
 ### 在生成前登记 fixture 的保管范围
 
-**产品与宿主政策曾同步修改：**已有保留生产者模块增加 `TemporaryHost`，cleanup.json 增加五个有限 fixture 生产者。工具及协调者／生产者已提交政策须一起部署。Git 配置 v2 身份选择、worktree v3 身份声明含义不变，未知身份仍在执行前失败。历史存储和未确认释放迁移保持保护；实现、验证、存储、迁移成本未知。
+**产品与宿主政策曾同步修改：**已有保留生产者模块增加 `TemporaryHost`，cleanup.json 增加五个有限 fixture 生产者。工具及协调者／生产者已提交政策须一起部署。Git facts 的身份选择和工作树的运行内字节绑定各归其当前合同。历史存储和未确认释放迁移保持保护；实现、验证、存储、迁移成本未知。
 
 `TemporaryHost::registered_store` 与 RetainedArtifact 共用只读已提交政策／Git main 协调者解析，另要求所选生产者明确采用生成前临时保管。分配在产物生成前发布 intent，列精确生成目录和声明 Git 源码根。
 

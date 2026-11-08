@@ -1232,94 +1232,6 @@ fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
 }
 
 #[test]
-fn registered_git_alternative_creates_from_latest_and_unregistered_bytes_refuse() {
-    for case in ["primary", "alternative", "unknown", "wrong-version"] {
-        let h = Host::new("payload");
-        let program = fixture_git();
-        let version = Command::new(&program).arg("--version").output().unwrap();
-        let hash = sha256(&fs::read(&program).unwrap());
-        let version_text = String::from_utf8_lossy(&version.stdout);
-        h.policy(|p| {
-            p["schema"] = value!("chrono-worktree-config/v3");
-            p["check_inputs"] = value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}});
-            p["git"]["expected_version"] = value!("not selected");
-            p["git"]["sha256"] = value!(if case == "primary" {hash.clone()} else {"0".repeat(64)});
-            if case == "primary" {
-                p["git"]["expected_version"] = value!(version_text.trim());
-            }
-            p["git"]["identities"] = value!([{"sha256":if matches!(case, "alternative" | "wrong-version") {hash.clone()} else {"1".repeat(64)},
-                "expected_version":if case == "wrong-version" {"wrong version"} else {version_text.trim()}}]);
-        });
-        let target = h.parent.join("target");
-        let (code, report, error) = h.invoke("integration", "identity", &target);
-        if matches!(case, "primary" | "alternative") {
-            assert_eq!(code, 0, "{report} {error}");
-            assert_eq!(report["tool"]["sha256"], hash);
-            assert_eq!(
-                git(&target, &["rev-parse", "HEAD"]),
-                git(&h.root, &["rev-parse", "HEAD"])
-            );
-        } else {
-            assert_ne!(code, 0);
-            if case == "unknown" {
-                assert!(error.contains("before version probe"), "{error}");
-            } else {
-                assert!(
-                    report["error"]
-                        .as_str()
-                        .unwrap()
-                        .contains("Git version mismatch"),
-                    "{report} {error}"
-                );
-            }
-            assert!(!target.exists());
-        }
-    }
-}
-
-#[test]
-fn git_identity_contract_rejects_legacy_null_duplicates_and_missing_pins() {
-    for case in [
-        "v1",
-        "v2-null",
-        "duplicate",
-        "missing-pin",
-        "empty",
-        "invalid-hash",
-    ] {
-        let h = Host::new("payload");
-        h.policy(|p| {
-            p["schema"] = value!("chrono-worktree-config/v3");
-            p["check_inputs"] = value!({"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"integration"}});
-            p["git"]["sha256"] = value!("0".repeat(64));
-            p["git"]["expected_version"] = value!("registered version");
-            p["git"]["identities"] = value!([{"sha256":"1".repeat(64),"expected_version":"registered alternative"}]);
-            match case {
-                "v1" => p["schema"] = value!("chrono-worktree-config/v1"),
-                "v2-null" => {p["schema"] = value!("chrono-worktree-config/v2"); p["git"]["identities"] = Value::Null;},
-                "duplicate" => p["git"]["identities"][0]["sha256"] = value!("0".repeat(64)),
-                "missing-pin" => p["git"]["sha256"] = Value::Null,
-                "empty" => p["git"]["identities"] = value!([]),
-                "invalid-hash" => p["git"]["identities"][0]["sha256"] = value!("invalid"),
-                _ => unreachable!(),
-            }
-        });
-        let target = h.parent.join("target");
-        let (code, _, error) = h.invoke("integration", "invalid", &target);
-        assert_ne!(code, 0, "{case}");
-        assert!(
-            error.contains(if matches!(case, "v1" | "v2-null") {
-                "Git identities require"
-            } else {
-                "worktree v3 requires"
-            }),
-            "{case}: {error}"
-        );
-        assert!(!target.exists(), "{case}: {error}");
-    }
-}
-
-#[test]
 fn adopted_policy_runs_the_actual_creation_consumer() {
     let h = Host::new("host files/no-language-contract.data");
     let adopted_bytes = fs::read(source().join(POLICY)).unwrap();
@@ -1344,26 +1256,15 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
         fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
     }
     h.policy(|p| {
-        // This independent host binds its own declared Git, not the product host's bytes.
+        // Keep the adopted null expectations; observe this fixture's actual Git independently.
         let git =
             chrono_harness::resolve_program(&h.root, p["git"]["program"].as_str().unwrap(), None)
                 .unwrap();
-        let version = Command::new(&git).arg("--version").output().unwrap();
-        assert!(version.status.success());
         let environment = p["environment"].clone();
         *p = adopted;
         p["remote"] = value!("warehouse");
         p["environment"] = environment;
         p["git"]["program"] = value!(git);
-        p["git"]["expected_version"] = value!(String::from_utf8(version.stdout).unwrap().trim());
-        p["git"]["sha256"] = value!(sha256(&fs::read(&git).unwrap()));
-        // Promoting an admitted alternate to the fixture's primary identity
-        // must preserve the unique-identity contract.
-        let primary = p["git"]["sha256"].clone();
-        p["git"]["identities"]
-            .as_array_mut()
-            .unwrap()
-            .retain(|identity| identity["sha256"] != primary);
     });
     let policy = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
     assert_eq!(
@@ -1374,11 +1275,17 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
     let (code, report, error) = h.invoke("integration", "adopted", &target);
     assert_eq!(code, 0, "{report} {error}");
     assert_eq!(report["tool"]["path"], policy["git"]["program"]);
-    assert_eq!(report["tool"]["sha256"], policy["git"]["sha256"]);
+    let program = Path::new(policy["git"]["program"].as_str().unwrap());
+    assert_eq!(
+        report["tool"]["sha256"],
+        sha256(&fs::read(program).unwrap())
+    );
+    let version = Command::new(program).arg("--version").output().unwrap();
+    assert!(version.status.success());
     assert_eq!(report["tool"]["version"]["exit_code"], 0);
     assert_eq!(
-        report["tool"]["version"]["stdout"].as_str().unwrap().trim(),
-        policy["git"]["expected_version"].as_str().unwrap()
+        report["tool"]["version"]["stdout"].as_str().unwrap(),
+        String::from_utf8(version.stdout).unwrap()
     );
     assert_eq!(
         git(&target, &["rev-parse", "HEAD"]),

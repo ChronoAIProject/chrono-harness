@@ -619,7 +619,7 @@ pub(crate) fn with_report(
 pub(crate) fn with_report_for_consumer(
     root: &Path,
     config_path: &str,
-    mut config: Config,
+    config: Config,
     bytes: &[u8],
     operation: &str,
     success: &str,
@@ -679,17 +679,7 @@ pub(crate) fn with_report_for_consumer(
         )?;
         let observed = chrono_harness::file_identity(&path)?.0;
         if config.git.sha256.as_deref() != Some(observed.as_str()) {
-            if let Some(identity) = config
-                .git
-                .identities
-                .as_ref()
-                .and_then(|rows| rows.iter().find(|row| row.sha256 == observed))
-            {
-                config.git.sha256 = Some(identity.sha256.clone());
-                config.git.expected_version = Some(identity.expected_version.clone());
-            } else {
-                return Err("Git executable digest mismatch before version probe".into());
-            }
+            return Err("Git executable digest mismatch before version probe".into());
         }
     }
     // Tool observation retains a failed version process instead of converting it into a success.
