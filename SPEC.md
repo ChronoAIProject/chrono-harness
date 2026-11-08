@@ -1074,6 +1074,8 @@ Git 跟踪边界在清理前就生效：`state`、CI artifact、runner 快照、
 
 §1.1 的全对象必要性审计，以及 §2.3、§7.4、§10.2 的迁移和行为验收尚未完成。本次明确全局必要性链、仓库源数据／在线事实边界、宿主／调用方的任务加入与等待责任，以及现有生命周期／操作所有者的兼容复用、协作范围和交接义务，不变更当前 schema、CLI 或运行时。已有进程回执、受保护消费与 worktree 恢复仅证明各自已测试范围；它们不证明所有对象已有当前必要性终点、已迁移现存 host snapshot、任务级唯一完成通道、丢失通道恢复、全部自有任务加入或完整协作检出合同已实现。当前跟踪的 host／Cargo JSON 仍须按 §2.3 和 §1.1 审计；在逐项迁移和实际消费者验证完成前，不得把文档规则当作已完成清理。后续实现须在相应自然所有者补齐实际消费者和行为验收，覆盖表保持 pending，不以文档检查通过更新实现状态。
 
+本仓旧输入分支的原生初始盘点已退役：当前检查和发布没有消费其全工具安装及主机／SDK／Python／配置盘点输出。删除对应工作流、转发与探测脚本、宿主观察声明、专属动作及测试；普通 core／所有者 bootstrap 的实际 fetch、构建和安装保留。不将旧盘点列为待激活义务；仍有用途的历史原件按现有保管合同处理，退役不证明输入齐全或历史验收通过。
+
 §2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓已采用 v2，示例的 v2 采用、helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
 
 §4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。
@@ -1114,7 +1116,7 @@ context 可通过 retained_inputs 引用两固定端点的外部文件原字节�
 
 旧 scoped provider v1／v2／v3 已退役；v4 可明确加入 initial 清单投影，不会推断。固定旧发布包的登记不产生当前源码的兼容义务。绑定不证明网络／凭据／Git 配置完整或当前候选的原生采用，见 [CI 说明](docs/ci.md)。
 
-CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。PR 以同次运行固定 workflow merge commit 的第一父提交为基线、事件 head 为候选；必须恰有两个父提交且第二父提交与 head 完整身份相等，否则失败。事件载荷中较早的 base SHA 不决定选测，依赖 job 消费 detector 已固定的两端。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
+CI 事件准备允许明确 `push_baselines` 前缀及 origin 基线 ref：匹配的 integration 创建／修复 push，以完整候选对比固定观察 dev 顶端；未配置 push 仍用 before／after，见 docs/ci.md。PR 以同次运行固定 workflow merge commit 的第一父提交为基线、该合并提交为候选；必须恰有两个父提交且第二父提交与事件 head 完整身份相等，否则失败。事件载荷中较早的 base SHA 不决定选测，依赖 job 消费 detector 已固定的两端。准备不认证 workflow 义务。workflow 用真实观察和完成报告核有限分支、integration、退役、迁移合同，见 [workflow 说明](docs/workflow.md)。
 
 完整 Cargo／SDK／外部输入、超出明确根清单 profile 的 initial 采用／bootstrap 来源、原生 full CI／同判、AI 协调与陈旧重建全流程、PR／merge／落地及最终完整 SPEC 审计仍未完成。单个执行者的本地行为检查不证明独立评审、原生 CI 或落地；指令生成的平台／崩溃／并发限制仍有效。原编号要求和每项验收目标全部保留。
 

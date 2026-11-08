@@ -147,21 +147,13 @@ Cargo 保护保留有关联的已声明缺失，并在真实操作后复核。ab
 
 目录观察可生成 `chrono-input-directory/v3` 原件，保存精确子项，包括根 `.`、空目录和只有别名的目录。Cargo 保护读取原拓扑，并在真实消费后重核。按标准目标观察文件会保留走过的别名身份，不放宽普通输入路径校验。配置／凭据存在性观察只留身份或缺失，不留凭据内容。
 
-Python 辅助程序归宿主 bootstrap，明确选择 stdlib、platstdlib、扩展、运行时镜像和配置位置，不声称整个 Python 基目录都是输入。
+本仓已退役只向旧输入分支上传主机盘点的原生初始获取链：当前检查和发布没有消费其全工具安装及编译器／SDK／Python／配置盘点输出。对应工作流、转发脚本、宿主观察声明、探测 helper、acquire／observe／metadata 操作和专属测试一同移除；不另建替代盘点入口，也不把这项退役列为待激活义务。
 
-登记的原生来源链为：`host.acquire-native-{macos,linux}` → 所选 bootstrap-acquire 配置中的安装工具 → `inputs.acquire-PLATFORM` → `inputs.provision-native` → 明确登记的 fetch → `inputs.observe-PLATFORM`。工具和 fetch／metadata 操作的实际集合归[项目登记](../.chrono-harness/projects.json)及其所选声明，不另维护计数。
-
-原 macOS／Linux 编译器、SDK／完整 Developer、运行时／配置和失败别名范围仍保留。只有配置操作成功后才安装，获取失败不能推定二进制已经安装。构建前存活的协调所有者是另一个参与者，仍须实际源码／政策／工具链／安装身份和受保护关联工作树使用。bootstrap 在 stderr 转交原所有者报告路径；该保留报告才是受管理进程和租约的依据。
-
-本机 runner／diagnostics 的额外 guard 及专属 fetch／vendor 准备入口已退役；普通构建继续使用各自登记的锁定 Cargo 操作。通用输入观察及原生获取只服务各自明确消费者，不因本次退役自动移除。
-
-获取参与仍保留当前根 worktree v3 政策。这些来源声明没有采用 Linux 关联／协调政策或完整 Linux 宿主配置，真实平台采用仍待完成。
-
-原生获取工作流按[自身声明](../.github/workflows/chrono-native-acquisition.yml)选择输入集成分支并传递登记配置。原事件、参数、输出、退出、run／attempt、工作流修订和安装目的随获取原件保存。工作流 job 键不等于远端数字 job ID，须从原运行解析真实 job、artifact 和生产 attempt。提交工作流不代表已经运行、已消费安装工具或已落地。
+普通构建继续使用登记的锁定 Cargo 操作；core／所有者 bootstrap 仍实际调用的 fetch 保留。安装工具与原件由当前生产者按自己的实际使用方保管，不为历史盘点重建主机快照。通用输入观察、快照与传输产品保持各自合同；其余采用仍须核对当前使用方，不能由测试或声明存在证明必要。
 
 根 `chrono-git-configs/v3` 及 worktree v3 的实际身份归各自登记，未知字节仍失败。格式与不可变数据范围见[Git 选择](git-facts.md#exact-host-executable-selection)。
 
-旧原生 config／runner 样本及过时比较、FILEMAP 项已经移除，固定来源仍在 Git。当前获取测试直接读取现役观察声明；保留的遗漏和原件不同的纠正见[输入来源保管](input-source-custody.md)。全面启用、输入齐全、固定两端原件、真实 CI 验收和同判仍未完成。
+旧样本、声明和比较归 Git 历史；仍有用途的缺失原件与独有工作由[输入保管者](input-source-custody.md)负责。退役不补齐历史观察，也不证明完整输入、固定两端原件、full CI 验收或同判。
 
 ### 工具链入口与本机路径
 
@@ -180,7 +172,7 @@ Cargo／rustc；编译器、wrapper 和实际路径观察沿该生产者报告�
 
 diagnostics 的路径依赖使用方会自行编译源码，不消费独立受保护构建的产物。当前没有额外环境保护的必要验收终点；本仓恢复普通锁定 Cargo 构建，退役专属观察、私有 Cargo home 准备、vendor 目录来源、主机快照、配置级输入和启动 profile。实际修改与保留边界见 [Cargo 所有者](cargo-projects.md#本仓已退役的额外保护链)。
 
-当前安装身份由 bootstrap／检查原件提供；普通输入按显式摘要、端点快照及实际消费前的字节检查处理，diagnostics 格式、构建和未过滤测试仍执行。其余 native 和 acquisition 声明仍须分别核对实际必要性，现有引用不证明永久保留。输入闭包继续 incomplete，完整同判未建立，成本收益未知；历史原件按真实调试／验收义务保管。
+当前安装身份由 bootstrap／检查原件提供；普通输入按显式摘要、端点快照及实际消费前的字节检查处理，diagnostics 格式、构建和未过滤测试仍执行。其余输入采用仍须分别核对实际必要性，现有引用不证明永久保留。输入闭包继续 incomplete，完整同判未建立，成本收益未知；历史原件按真实调试／验收义务保管。
 
 <a id="native-diagnostics-originals-before-guard-adoption"></a>
 
