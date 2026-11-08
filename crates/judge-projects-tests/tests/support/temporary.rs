@@ -1,5 +1,5 @@
 //! Selected projects/workflow fixture publishers share the existing custody owner.
-use chrono_worktree::{RetainedArtifact, TemporaryHost};
+use chrono_worktree::TemporaryHost;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -50,7 +50,8 @@ impl FixtureDirectory {
         TemporaryHost::capture_bound_input(self.host.path(), command, input)
     }
     pub fn retain_diagnostic(&self, reason: &str) -> Result<(), String> {
-        retain_diagnostic(self.host.path(), reason)
+        let _ = reason;
+        self.host.retain_diagnostic()
     }
     pub fn make_checkout_unavailable(&self) -> std::io::Result<PathBuf> {
         let retained = self.host.path().join("retained-offline-checkout");
@@ -87,6 +88,10 @@ impl Drop for FixtureDirectory {
                 );
             }
         }
+        match self.host.finish(std::thread::panicking()) {
+            Ok(result) if result["status"] == "finished" => (),
+            result => eprintln!("fixture handoff failed; allocation preserved: {result:?}"),
+        }
     }
 }
 pub fn fixture_directory(prefix: &str) -> FixtureDirectory {
@@ -96,8 +101,19 @@ pub fn tool_directory(prefix: &str) -> FixtureDirectory {
     allocate("workflow-test-tools", prefix)
 }
 fn allocate(producer: &'static str, prefix: &str) -> FixtureDirectory {
-    let (directory, outputs) = store(producer);
-    let host = TemporaryHost::allocate(directory, producer, outputs, prefix).unwrap();
+    store(producer);
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap();
+    let host = TemporaryHost::registered_allocate(
+        source,
+        ".chrono-harness/worktree.json",
+        producer,
+        prefix,
+    )
+    .unwrap();
     let root = host.path().join("fixture");
     fs::create_dir(&root).unwrap();
     FixtureDirectory {
@@ -140,7 +156,7 @@ pub fn copied_fixture_input(root: &Path, source: &Path, destination: &Path) {
     .unwrap();
 }
 
-pub fn retain_diagnostic(path: &Path, reason: &str) -> Result<(), String> {
+pub fn retain_diagnostic(path: &Path, _reason: &str) -> Result<(), String> {
     let (producer, directory) = binding(path)?;
     let relative = path
         .strip_prefix(directory)
@@ -149,8 +165,11 @@ pub fn retain_diagnostic(path: &Path, reason: &str) -> Result<(), String> {
         .components()
         .next()
         .ok_or("diagnostic allocation missing")?;
-    RetainedArtifact::resume(directory, producer, &directory.join(allocation.as_os_str()))?
-        .acquire("fixture-diagnostic", reason)
+    TemporaryHost::retain_registered_diagnostic(
+        directory,
+        producer,
+        &directory.join(allocation.as_os_str()),
+    )
 }
 
 // Consult only stores actually initialized by these explicit publishers. The

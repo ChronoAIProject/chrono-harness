@@ -86,10 +86,14 @@ pub fn write_event_facts(root: &Path) {
 
 /// Only explicitly selected executing fixtures use the retained producer.
 pub fn temporary_host(prefix: &str) -> FixtureDirectory {
-    let (directory, outputs) = temporary_store();
     FixtureDirectory::Retained(
-        chrono_worktree::TemporaryHost::allocate(directory, "ci-test-host", outputs, prefix)
-            .unwrap(),
+        chrono_worktree::TemporaryHost::registered_allocate(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            ".chrono-harness/worktree.json",
+            "ci-test-host",
+            prefix,
+        )
+        .unwrap(),
     )
 }
 fn temporary_store() -> &'static (PathBuf, Vec<String>) {
@@ -143,16 +147,18 @@ impl FixtureDirectory {
     }
     pub fn retain_diagnostic(&self) -> Result<(), String> {
         if let Self::Retained(host) = self {
-            chrono_worktree::RetainedArtifact::resume(
-                host.path().parent().unwrap(),
-                "ci-test-host",
-                host.path(),
-            )?
-            .acquire(
-                "fixture-diagnostic",
-                "actual failed short fixture diagnostics remain to be consumed",
-            )?;
+            host.retain_diagnostic()?;
         }
         Ok(())
+    }
+}
+impl Drop for FixtureDirectory {
+    fn drop(&mut self) {
+        if let Self::Retained(host) = self {
+            match host.finish(std::thread::panicking()) {
+                Ok(result) if result["status"] == "finished" => (),
+                result => eprintln!("CI fixture handoff failed; allocation preserved: {result:?}"),
+            }
+        }
     }
 }

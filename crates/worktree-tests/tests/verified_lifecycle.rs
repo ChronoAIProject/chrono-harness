@@ -75,6 +75,25 @@ fn only_actual_unreleased_evidence_blocks_checkout_removal() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn whole_directory_requires_owned_lifetime_and_consumer_exclusion() {
+    expect(policy::rolling_disposal(true, true, true, true));
+    expect(!policy::rolling_disposal(false, true, true, true));
+    expect(!policy::rolling_disposal(true, false, true, true));
+    expect(!policy::rolling_disposal(true, true, false, true));
+    expect(!policy::rolling_disposal(true, true, true, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn rolling_windows_distinguish_failure_diagnostics_and_unknown_outcomes() {
+    expect(policy::rolling_keep(true, false, false, 0, 86400, 3600) == 0);
+    expect(policy::rolling_keep(true, true, false, 0, 86400, 3600) == 86400);
+    expect(policy::rolling_keep(true, false, true, 0, 86400, 3600) == 86400);
+    expect(policy::rolling_keep(false, false, false, 0, 86400, 3600) == 3600);
+    expect(policy::rolling_keep(false, true, true, 0, 86400, 3600) == 3600);
+    expect(policy::rolling_keep(true, true, true, u64::MAX, 0, u64::MAX) == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn explicit_import_preserves_external_branch_names_and_birth_keeps_its_rule() {
     broadcast use vstd::string::group_string_axioms;
     proof {
