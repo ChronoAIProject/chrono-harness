@@ -12,7 +12,6 @@ fn bind_installed_planner(plan: &mut Value) {
 
 fn recovery_host() -> (Host, Value, Value) {
     let (root, mut config) = fixture();
-    adopt_consumer_contract(root.path(), &mut config);
     fs::create_dir(root.path().join(".git")).unwrap();
     config["require_primary_checkout"] = json!(true);
     let before = plan(root.path(), &config, "check.one").unwrap();

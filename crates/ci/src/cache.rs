@@ -120,11 +120,10 @@ pub(crate) fn validate_registry(root: &Path, c: Option<&Config>) -> Result<(), S
     };
     let registry: Value =
         decode(&fs::read(no_symlink_parents(root, &c.config)?).map_err(|e| e.to_string())?)?;
-    if !matches!(
+    if !crate::verified_literals::valid_cache_registry(
         registry["schema"].as_str(),
-        Some("chrono-cache/v1" | "chrono-cache/v2")
-    ) || registry["require_primary_checkout"] != true
-    {
+        registry["require_primary_checkout"] == true,
+    ) {
         return Err(
             "native persistent cache needs the planner schema and explicit primary-checkout guard"
                 .into(),
