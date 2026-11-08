@@ -701,6 +701,169 @@ fn automatic_birth_enrollment_and_active_retained_checkout_survives_start() {
     assert!(first.join("output λ/data").exists());
 }
 
+fn attention_row<'a>(report: &'a Value, path: &Path) -> &'a Value {
+    report["worktree_status"]["worktrees"]
+        .as_array()
+        .expect("persistent lifecycle status must be observable")
+        .iter()
+        .find(|row| row["path"] == value!(path))
+        .expect("status must include the addressed worktree")
+}
+
+#[test]
+fn automatic_attention_persists_across_commands_and_stops_after_verified_removal() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    native_consumer(&h, "finished");
+    let target = h.parent.join("attention active");
+    let (code, birth, stderr) = h.invoke("integration", "attention", &target);
+    assert_eq!(code, 0, "{birth} {stderr}");
+    assert_eq!(attention_row(&birth, &target)["work_state"], "active");
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    assert_eq!(attention_row(&status, &target)["attention_required"], true);
+    assert_eq!(attention_row(&status, &h.root)["attention_required"], false);
+    let (code, used, stderr) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {stderr}");
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+    let (code, finished, stderr) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--dispose-evidence"],
+    );
+    assert_eq!(code, 0, "{finished} {stderr}");
+    assert!(!target.exists());
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    let row = attention_row(&status, &target);
+    assert_eq!(row["cleanup_state"], "disposed");
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["attention_required"], false);
+    assert!(!stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+}
+
+#[test]
+fn automatic_attention_linked_query_publishes_its_original_at_the_coordinator() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let target = h.parent.join("linked status");
+    assert_eq!(h.invoke("feature", "linked-status", &target).0, 0);
+    let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+    command
+        .current_dir(&target)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .args([
+            "status",
+            "--host-root",
+            target.to_str().unwrap(),
+            "--config",
+            POLICY,
+        ]);
+    // received checks exact stdout against the original at source_root/report_path.
+    let output = h.native_output(&mut command);
+    let (code, report, stderr) = h.received(output);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(report["source_root"], value!(h.root));
+    assert_eq!(attention_row(&report, &target)["attention_required"], true);
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+}
+
+#[test]
+fn automatic_attention_preserves_unregistered_dirty_and_corrupt_worktrees() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let healthy = h.parent.join("healthy");
+    let corrupt = h.parent.join("corrupt");
+    assert_eq!(h.invoke("feature", "healthy", &healthy).0, 0);
+    assert_eq!(h.invoke("feature", "corrupt", &corrupt).0, 0);
+    let unknown = h.parent.join("unknown");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            unknown.to_str().unwrap(),
+            "HEAD",
+        ],
+    );
+    fs::write(unknown.join("unique-work"), "keep this source").unwrap();
+    fs::write(h.ledger_path(&corrupt), b"broken original ledger").unwrap();
+    let (code, status, stderr) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{status} {stderr}");
+    assert_eq!(attention_row(&status, &healthy)["work_state"], "active");
+    assert_eq!(attention_row(&status, &corrupt)["work_state"], "unknown");
+    assert_eq!(
+        attention_row(&status, &unknown)["work_state"],
+        "unregistered"
+    );
+    assert_eq!(
+        fs::read(unknown.join("unique-work")).unwrap(),
+        b"keep this source"
+    );
+    assert_eq!(
+        fs::read(h.ledger_path(&corrupt)).unwrap(),
+        b"broken original ledger"
+    );
+    assert!(
+        !h.ledger_path(&unknown).exists(),
+        "observation must not import work"
+    );
+}
+
+#[test]
+fn automatic_attention_keeps_retained_terminal_work_visible_and_scopes_ordinary_commands() {
+    let h = Host::new("input.custom");
+    h.automatic("evidence-retain");
+    let target = h.parent.join("retained");
+    let other = h.parent.join("other");
+    assert_eq!(h.invoke("feature", "retained", &target).0, 0);
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    fs::write(
+        target.join(".chrono-harness/state/evidence"),
+        "required evidence",
+    )
+    .unwrap();
+    let (code, report, stderr) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert!(target.exists());
+    let row = attention_row(&report, &target);
+    assert_eq!(row["work_state"], "terminal");
+    assert_eq!(row["cleanup_state"], "retained");
+    assert_eq!(row["attention_required"], true);
+    assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+    let (code, report, stderr) = h.invoke("feature", "other", &other);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(
+        report["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(attention_row(&report, &other)["work_state"], "active");
+    let (code, report, stderr) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {stderr}");
+    assert_eq!(
+        report["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(attention_row(&report, &target)["attention_required"], true);
+}
+
 #[test]
 fn automatic_finish_absent_evidence_does_not_retain_the_whole_checkout() {
     let h = Host::new("payload");
@@ -1093,6 +1256,95 @@ fn automatic_cache_only_preserves_evidence_dirty_and_unretained_work() {
 }
 
 #[test]
+fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_birth() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("client-checkout");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "-b",
+            "client/current-work",
+            target.to_str().unwrap(),
+            "dev",
+        ],
+    );
+    let original_head = git(&target, &["rev-parse", "HEAD"]);
+    let original_source = fs::read(target.join("payload")).unwrap();
+
+    let (code, explicit, error) = h.maintain(
+        "cleanup",
+        value!({"schema":"chrono-worktree-maintenance/v1","operation":"cleanup",
+            "path":target,"branch":"client/current-work","head":original_head,
+            "retained_ref":"refs/heads/dev","retained_commit":git(&h.root,&["rev-parse","dev"]),
+            "retention":"ancestor","discard_artifacts":[],"remove_branch":false,
+            "allow_absent_worktree":false}),
+    );
+    assert_ne!(code, 0, "{explicit} {error}");
+    assert!(
+        explicit["error"]
+            .as_str()
+            .unwrap()
+            .contains("registered work prefix")
+    );
+    assert!(target.exists());
+
+    let (code, observation, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{observation} {error}");
+    let missing = observation["worktree_inventory"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == target.to_str().unwrap())
+        .unwrap();
+    assert_eq!(missing["enrollment_match"], false);
+    assert!(
+        missing["preserved_reason"]
+            .as_str()
+            .unwrap()
+            .contains("explicit import")
+    );
+    assert!(target.exists());
+
+    // A refused command leaves an address record; an empty ledger is still unowned.
+    assert_ne!(h.auto("finish", &["--path", target.to_str().unwrap()]).0, 0);
+    let empty = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
+    assert!(empty["entries"].as_array().unwrap().is_empty());
+    let (code, observation, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{observation} {error}");
+    let empty = observation["worktree_inventory"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == target.to_str().unwrap())
+        .unwrap();
+    assert_eq!(empty["enrollment_match"], false);
+    assert!(target.exists());
+
+    let (code, imported, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{imported} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["branch"], "client/current-work");
+    assert_eq!(entry["status"], "active");
+    assert_eq!(entry["enrollment"]["kind"], "import");
+    assert_eq!(
+        entry["enrollment"]["receipt"]["historical_birth"],
+        "not-claimed"
+    );
+    assert!(entry["terminal"].is_null());
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), original_head);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), original_source);
+
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
+    assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
+}
+
+#[test]
 fn automatic_import_is_explicit_and_not_a_historical_birth() {
     let h = Host::new("payload");
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
@@ -1364,6 +1616,14 @@ pub(super) fn native_consumer_actions(h: &Host, mode: &str, test_mode: &str) {
         "id":"consumer", "program":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),
         "resolution":"PATH-once", "version_argv":["--version"], "expected_version":"fixture"
     }));
+    if matches!(mode, "bounded-cargo" | "cargo-run") {
+        // Capture the actual Cargo selection before auto_command clears its environment.
+        for name in ["HOME", "RUSTUP_HOME", "RUSTUP_TOOLCHAIN"] {
+            if let Ok(value) = std::env::var(name) {
+                config["environment"]["values"][name] = value!(value);
+            }
+        }
+    }
     fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
     consuming_scripts(
         h,

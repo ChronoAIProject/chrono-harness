@@ -86,6 +86,24 @@ OID 必须恰为 40 或 64 个小写十六进制字节，且不全为零；ID �
 没有新增仓内受信函数、操作、依赖或证明预算。`units::id` 继续消费同一字节判断。
 最多扫描 64 字节，拒绝时构造固定长度的原诊断；完整构建、证明及 CI 成本未测。
 
+同根的 `git_inventory_termination`、`git_inventory_text`、`git_inventory_row`、
+`git_tree_metadata` 和 `git_index_metadata` 拥有 Git 库存的局部准入和错误分类。
+`checkout::tree`／`changes` 直接调用它们：空输入或末字节 NUL 才通过终止检查；
+UTF-8 解码失败、缺 TAB、字段数错误和非法 stage 保持原完整错误。
+终止检查仍先于解码，字段判断仍先于路径／OID；tree 恰三字段，index 还要求
+stage 恰为单字节 `0`–`3`，不加强其余字段内容或丢失空字段。
+解码和行拆分成功时证明完整文本及两字段原文保留。
+独立 Verus 预期核空／内嵌 NUL／末尾非 NUL、任意完整文本和字段、缺行、
+0／2／3／4 字段以及精确 stage／相邻非法字节／尾随 NUL 和 LF；同一预期进入普通 Rust。
+复用现有两项标识符整 crate 证明、FILEMAP 源码边及原未过滤 runner 测试，
+无新增工具、操作、信任函数、依赖或证明预算。
+外围明确使用标准 `str::from_utf8`／`Result::ok`、`str::split('\0')`／`filter`、
+`str::split_once('\t')`、`str::split(' ')`／`collect::<Vec<_>>`，再直接传入实际结果；
+Verus 内使用固定 vstd 的切片、`str::as_bytes`、Option／Result 和 `ToString` 合同。
+完整拆分循环及外围调用组合、重复检查与文件系统比较仍待证明，不把局部准入当完整解析证明。
+新增判断读取末字节、字段数和至多一个 stage 字节，使用常量额外状态，
+拒绝时构造原诊断；完整构建、证明、CI 与存储成本未测。
+
 原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
 以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，
 保持全部记录、顺序和重复，不删 CR、NUL、非 UTF-8 字节或空后缀，也不读取正文中的 parent。
@@ -456,7 +474,13 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 
 `crates/worktree/src/verified_lifecycle.rs` 直接供自动清理所有者调用：终态进入清理，活跃记录仅在有缓存责任时进入，等待整树回收的保留项仅由显式维护重试；指定 artifacts-only 的已完成处置不重试。证据阻挡要求实际存在且未经释放。清理原结果失败时记失败，缓存成功仅记缓存释放，整树成功还须有 `verified-absent` 或 `already-absent` 才记移除。
 
-`verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
+`verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 使用现役固定版本和严格参数验证整 crate。独立边界包含活跃、未知、已处置记录不获工作终态，证据存在／缺失／释放，以及失败或缺少移除结果不能声明整树移除。现有分支的显式 import 与新建 birth 的分支规则由同一源码区分：import 不要求创建前缀，birth 仍要求已登记前缀，未知活动拒绝。已登记 import 的自动清理消费原 enrollment kind 和身份 guard；直接 cleanup 的前缀边界另有同源独立预期。普通 Cargo 同时执行这些独立预期和真实 Git 行为回归。文件存在性、JSON、内核租约、Git 和物理删除仍由原适配器负责，这些判断不证明完整事务及全部历史状态已形式化。
+
+## 本地工作树提醒
+
+`crates/worktree/src/verified_attention.rs` 是本地提醒分类的唯一判断实现。`automatic.rs` 把现役账本状态、终态交接有无、可读性、Git 登记、物理路径及已观察附件匹配交给该函数，并直接消费分类与提醒判断。正常协调者无需终结；任务 active、终态清理待办、retained、未登记和 unknown 均需关注。只有 disposed、已有终态交接且两处都已缺失才取消清理提醒；单凭 disposed 字符串不够。
+
+生产根及独立边界根通过登记的 `verify.worktree-attention`／`verify.worktree-attention-tests` 整 crate 证明并编译，版本及参数归 projects.json。独立边界核活跃／保留／待清理、只缺一处、缺终态、未知附件和协调者；Cargo 行为测试继续消费同一源码，核真实跨命令状态、原报告一致、损坏项隔离与原件保全。OS／Git 观察、JSON 编解码、namespace 枚举及已有账本读取是外部接口；此局部分类证明不证明它们的事务性、完整迁移或全仓状态逻辑。
 
 ## 所有者可执行文件发布
 
@@ -619,13 +643,13 @@ registration 专属计划的必需前置，独立预期和 Rust 测试编译同�
 
 ## 固定执行入口
 
-宿主 bootstrap 的 Rust 迁移正在实施。公开 core／shared 仍保留 Python 入口，
-所有者阶段 profile 已选择薄 shell 和 Rust 生产者。
+宿主 bootstrap 的 core、Verus 准备及所有者阶段已采用薄 shell 入口和 Rust 生产者；
+共享安装的编排仍使用 Python，迁移与实际使用验收分别完成。
 `.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
-以及环境名／值、宿主路径、私有 homes、default profile、SDK 探测分支和进程退出状态。
+以及环境名／值、宿主路径、共享目录排斥、工具探测分支和进程退出状态。
 版本前缀另要求完整空格分隔；Cargo 可接受精确版本字符串，rustc 必须保留版本后的空格。
-私有 SDK 探测失败必须拒绝，只有普通环境选择 minimal 安装或补充 rustfmt；
+Cargo 不可用时选择 minimal 安装，缺少 rustfmt 时只补该组件；
 退出状态保留原退出码，缺退出码时仅把正信号转换为负数，无有效终态时返回缺失。
 同一根还拥有实际源码观察的四种状态与报告投影。任一观察失败优先为 unavailable，
 字段改变为 changed，相同脏树为 dirty；只有相同 clean 观察向报告提供 commit／tree。
@@ -651,7 +675,7 @@ Rust 回归另核真实 Cargo／rustc 的身份、环境选择、安装器退出
 缺执行／安装不发布成功，以及报告 IO 失败时仍保留原安装器退出码。
 临时目录复用本仓已有版本的 tempfile，原目录回收仍归宿主生命周期所有者；
 没有增加独立清理账本或调度协议。JSON、文件与进程 IO、报告字段投影和完整外层组合仍未证明，
-这些模块已接通所有者阶段的登记入口；外层 core／shared 的迁移和实际消费者验收仍分别完成。
+这些模块已接通 core、Verus 准备及所有者阶段的登记入口；共享安装编排的迁移和实际使用验收仍分别完成。
 新增构建、验证、CI 和存储成本未测。
 
 原生 `original.rs` 校验固定 producer 的原始源码、登记、SDK 选择、操作和两条原字节流。

@@ -424,11 +424,9 @@ fn host_paths_require_the_declared_prefix_and_exact_normal_components() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn private_homes_compare_full_components_and_default_profile_is_exact() {
+fn host_paths_compare_full_components_and_host_variables_are_exact() {
     proof {
-        reveal_strlit("default"); reveal_strlit("minimal");
         reveal_strlit("HOME"); reveal_strlit("TMPDIR"); reveal_strlit("CARGO_HOME"); reveal_strlit("RUSTUP_HOME");
-        assert("default"@[0] != "minimal"@[0]);
         assert("RUSTUP_HOME"@.len() != "HOME"@.len());
         assert("RUSTUP_HOME"@.len() != "TMPDIR"@.len());
         assert("RUSTUP_HOME"@.len() != "CARGO_HOME"@.len());
@@ -438,29 +436,22 @@ fn private_homes_compare_full_components_and_default_profile_is_exact() {
     let same = policy::disjoint_homes(&[97u8], &[97u8]);
     let child = policy::disjoint_homes(&[97u8], &[97u8, 47, 98]);
     let parent = policy::disjoint_homes(&[97u8, 47, 98], &[97u8]);
-    let profile = policy::default_profile("default");
-    let minimal = policy::default_profile("minimal");
     let home = policy::host_variable("HOME");
     let cargo = policy::host_variable("CARGO_HOME");
     let temp = policy::host_variable("TMPDIR");
     let rustup = policy::host_variable("RUSTUP_HOME");
     assert(separate && neighbor && !same && !child && !parent);
-    assert(profile && !minimal && home && cargo && temp && !rustup);
+    assert(home && cargo && temp && !rustup);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn private_probe_failures_refuse_and_only_ordinary_probes_choose_repairs() {
-    let private_cargo = policy::probe_action(true, false, true);
-    let private_format = policy::probe_action(true, false, false);
-    let ordinary_cargo = policy::probe_action(false, false, true);
-    let ordinary_format = policy::probe_action(false, false, false);
-    let ready_pc = policy::probe_action(true, true, true);
-    let ready_pf = policy::probe_action(true, true, false);
-    let ready_oc = policy::probe_action(false, true, true);
-    let ready_of = policy::probe_action(false, true, false);
-    assert(private_cargo is Refuse && private_format is Refuse);
+fn toolchain_probes_choose_only_the_required_repairs() {
+    let ordinary_cargo = policy::probe_action(false, true);
+    let ordinary_format = policy::probe_action(false, false);
+    let ready_cargo = policy::probe_action(true, true);
+    let ready_format = policy::probe_action(true, false);
     assert(ordinary_cargo is InstallMinimal && ordinary_format is AddFormat);
-    assert(ready_pc is Ready && ready_pf is Ready && ready_oc is Ready && ready_of is Ready);
+    assert(ready_cargo is Ready && ready_format is Ready);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
