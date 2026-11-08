@@ -128,6 +128,12 @@ fn main() -> ExitCode {
             wait("release");
             print!("completed");
         }
+        ".chrono-harness/ci/bootstrap-installed.sh" => {
+            mark("python-wrapper", std::process::id().to_string());
+            let mut bootstrap = Command::new("/bin/bash");
+            bootstrap.args(std::env::args_os().skip(1));
+            exec(bootstrap);
+        }
         "python-consumer" => {
             let config: serde_json::Value = serde_json::from_slice(
                 &fs::read(Path::new(STATE).join("python-consumer.json")).unwrap(),
