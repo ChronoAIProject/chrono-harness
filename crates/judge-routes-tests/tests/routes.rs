@@ -315,7 +315,14 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         900
     );
     for test in ["test:distribution-tests", "test:host-release-native-tests"] {
-        assert_eq!(plans[test].timeout_seconds, if test == "test:host-release-native-tests" { 900 } else { 600 });
+        assert_eq!(
+            plans[test].timeout_seconds,
+            if test == "test:host-release-native-tests" {
+                900
+            } else {
+                600
+            }
+        );
         assert!(plans[test].operation_bounds.is_empty());
     }
     plans
