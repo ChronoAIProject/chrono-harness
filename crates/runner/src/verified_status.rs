@@ -505,6 +505,31 @@ pub open spec fn tree_entry_fields(entry: &TreeEntry) -> TreeEntryFields {
     (entry.mode@, entry.oid@, entry.kind@)
 }
 
+/// Git tree 的实际插入状态：完整构造条目，原路径已存在时保留原重复诊断。
+/// 沿用原 insert 的更新顺序；失败时该路径也已替换，调用方丢弃整棵候选树。
+pub fn insert_git_tree_entry(
+    tree: &mut Tree, path: TreePath, mode: &str, oid: &str, kind: &str,
+) -> (out: Result<(), String>)
+    ensures
+        tree@.contains_key(path),
+        tree@ == old(tree)@.insert(path, tree@[path]),
+        tree_entry_fields(&tree@[path]) == (mode@, oid@, kind@),
+        out.is_ok() == !old(tree)@.contains_key(path),
+        match out {
+            Ok(()) => true,
+            Err(message) => message@ == "duplicate Git tree path"@,
+        },
+{
+    proof { tree_path_obeys_cmp(); }
+    let entry = TreeEntry {
+        mode: mode.to_owned(), oid: oid.to_owned(), kind: kind.to_owned(),
+    };
+    match tree.insert(path, entry) {
+        Some(_) => Err("duplicate Git tree path".to_owned()),
+        None => Ok(()),
+    }
+}
+
 pub open spec fn optional_entry_fields(entry: Option<&TreeEntry>) -> Option<TreeEntryFields> {
     match entry { None => None, Some(entry) => Some(tree_entry_fields(entry)) }
 }

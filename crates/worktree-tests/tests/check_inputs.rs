@@ -827,7 +827,16 @@ fn reconstructed_destination_publishes_its_real_new_birth_association() {
 }
 
 fn published_full_report(root: &Path, directory: &str, out: &std::process::Output) -> Value {
-    let bytes = fs::read(root.join(format!("{directory}report.json"))).unwrap();
+    let path = root.join(format!("{directory}report.json"));
+    let bytes = fs::read(&path).unwrap_or_else(|error| {
+        panic!(
+            "missing full-check report {}: {error}; exit={:?}; stdout={}; stderr={}",
+            path.display(),
+            out.status.code(),
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        )
+    });
     let report = json(&bytes).unwrap();
     let original = report["report_path"].as_str().unwrap();
     assert_eq!(fs::read(root.join(original)).unwrap(), bytes);
