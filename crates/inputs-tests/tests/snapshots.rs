@@ -34,6 +34,23 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
     (d, f, v, commit)
 }
 #[test]
+fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
+    for options in [
+        vec!["--base", "base"],
+        vec!["--candidate", "candidate"],
+        vec!["--base", "base", "--candidate", "candidate"],
+    ] {
+        let args: Vec<String> = std::iter::once("capture")
+            .chain(options)
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(
+            chrono_inputs::run(Path::new("."), &args).unwrap_err(),
+            "E_USAGE: unknown or duplicate option"
+        );
+    }
+}
+#[test]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
     let (d, _f, mut v, _) = fixture();
     let path_dir = tempfile::tempdir().unwrap();

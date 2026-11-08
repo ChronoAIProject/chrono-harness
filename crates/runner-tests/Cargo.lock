@@ -55,6 +55,7 @@ name = "chrono-harness"
 version = "0.1.0"
 dependencies = [
  "chrono-diagnostics",
+ "chrono-identifiers",
  "libc",
  "miniz_oxide",
  "serde",
@@ -76,6 +77,13 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempfile",
+ "verus_builtin_macros",
+]
+
+[[package]]
+name = "chrono-identifiers"
+version = "0.1.0"
+dependencies = [
  "verus_builtin_macros",
 ]
 

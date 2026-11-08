@@ -89,7 +89,7 @@ AI 开始和交接本仓工作时运行 status，关注本地未终结、未知�
 
 显式维护遇到无关登记项清理失败时，保留原回执和 `cleanup_failures`，继续执行合法目标；目标身份、政策、所有权或协调状态写入失败，仍会阻断。显式 maintain 仍报告失败。未封口 birth 只有在实际排除旧使用方，并核对原附件和政策后才能恢复；原来缺失或部分完成的结果继续保留。已发布缓存尝试后出现新使用时，开启新代际，不覆盖旧 intent／result。命令原 stdout、stderr 和退出码都保留；stderr 非空不等于生命周期失败。
 
-兼容二进制必须与两端已提交的 policy／config／participation 配套。调用方负责等待或排除旧程序、保留 v1 状态、有序部署并核对实际切换。只升级二进制或关联检出政策时应拒绝；旧版或归属未知的对象继续保留。migrate 不清理，也不宣称完成。[v2 切换和租约限制](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)仍要求提交候选、支持平台和真实协调宿主验收。宿主 Git 身份阻断 bootstrap 时，唯一已登记适配是该节规定的“独立干净 Git main clone／最新 dev integration 候选”路径。main-only seed 不能代替真实协调者部署和后续 canonical start。
+二进制必须理解当前已采用的 policy／config／participation。各工作树分别绑定自己的已提交政策，共享状态只核所有权协议、物理协调者和状态目录；清理选择无需与协调者逐字相同。共享保留生产者仍使用其物理存储所有者的政策。调用方负责等待或排除旧程序、保留原状态、有序部署并核对切换；未知归属继续保护。migrate 采用目标自己的已提交输入，不清理，也不宣称完成。[v2 切换和租约限制](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)仍要求候选、支持平台和真实宿主验收。
 
 输出保留采用 retention/v2。每个输出和真实使用方各有独立声明；普通发布、读取和完成不取得全库准入锁，也不扫描总清单。512 上限只约束实际关系集合，已删除全库数量和总字节准入；单输出及每轮节点、字节、25 ms 上限继续生效。显式维护以非阻塞方式处理实际关联对象；局部繁忙或损坏时保留错误，继续处理同级对象。没有遍历或无法计数时报告 unknown。
 

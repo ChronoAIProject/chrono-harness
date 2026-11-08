@@ -2299,7 +2299,8 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let allocation = h._dir.path().to_owned();
     let coordinator = source();
     let maintain_allocation = || {
-        let mut command = Command::new(coordinator.join(".chrono-harness/bin/chrono-worktree"));
+        let mut command =
+            Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output =
@@ -2656,7 +2657,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     assert_eq!(refused_check.status.code(), Some(2), "{refused_check:?}");
     assert!(
         String::from_utf8_lossy(&refused_check.stderr)
-            .contains("coordinator policy/configuration identity mismatch")
+            .contains("coordinator policy/configuration ownership namespace mismatch")
     );
     fs::remove_file(target.join(".chrono-harness/state/bootstrap-holder")).unwrap();
     let refused_bootstrap = Command::new("/usr/bin/python3")
@@ -2671,7 +2672,7 @@ fn standalone_adopted_bootstrap_uses_coordinator_before_any_build_effect() {
     );
     assert!(
         String::from_utf8_lossy(&refused_bootstrap.stderr)
-            .contains("coordinator policy/configuration identity mismatch")
+            .contains("coordinator policy/configuration ownership namespace mismatch")
     );
     assert!(
         !target

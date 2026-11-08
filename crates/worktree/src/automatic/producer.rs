@@ -771,7 +771,7 @@ impl RetainedArtifact {
                 let inputs = PolicyInputs::load(r, &root, config_path, &bytes)?
                     .ok_or("retained producer owner is not opted in")?;
                 let declaration = inputs
-                    .policy
+                    .anchor_policy
                     .retained_producers
                     .iter()
                     .find(|p| p.id == producer)
@@ -780,7 +780,7 @@ impl RetainedArtifact {
                     return Err("temporary producer is not prospectively adopted".into());
                 }
                 let directory = declaration.directory(&inputs.policy.coordinator_root)?;
-                inputs.stable(r)?;
+                inputs.anchor_stable(r)?;
                 report["producer"] = value!(producer);
                 report["coordinator_root"] = value!(inputs.policy.coordinator_root);
                 report["directory"] = value!(directory);
@@ -1625,7 +1625,7 @@ impl ProducerPolicy {
                         &value!({
                             "schema":"chrono-retained-artifact-cleanup-intent/v1","path":object.path,
                             "identity":object.identity,"producer_intent":object.intent,"generated":object.generated,
-                            "policy_sha256":sha256(&inputs.policy_bytes),"released_consumers":object.consumers,
+                            "policy_sha256":sha256(&inputs.anchor_policy_bytes),"released_consumers":object.consumers,
                             "cache_lease":object.cache_lease,"prospective_outputs":prospective,
                             "producer_outcome":"not-established-by-cache-recovery"
                         }),
@@ -1633,7 +1633,7 @@ impl ProducerPolicy {
                     let mut attempt = value!({"automatic_cleanup":true,"intent":intent,"artifact_disposals":[],"status":"failed"});
                     let outcome =
                         artifact_disposal::dispose(root, &names, &paths, &mut attempt, || {
-                            inputs.stable(r)?;
+                            inputs.anchor_stable(r)?;
                             Store::stable_in(&directory, &self.id, &registry_id, object)?;
                             if let Some(lease) = &cache_guard {
                                 lease.stable()?;
