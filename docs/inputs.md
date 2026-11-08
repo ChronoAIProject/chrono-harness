@@ -115,7 +115,7 @@ v2 采集生成 `chrono-input-snapshot/v2`，普通文件仍用 blob，实际缺
 
 入口是平台选择器时，生成 `chrono-input-snapshot/v3`。`config_path` 仍为调用方入口，`effective_config_path`、`selection` 绑定选中的直接政策。结构选择绑定 `chrono-registry-selection/v1` 含入口、目标、平台；选择器摘要仍在固定登记字节中。registration 按固定端点核绑定，并按真实路径保存 selector／目标。直接 v1／v2／v3 配置继续使用原快照格式。
 
-`capture` 只按当前检出端和可选 `--unit ID` 采集输入。随已退役原生准备扩展加入、没有现役调用方的 `capture --base／--candidate` 及专属接口已移除。registration 的两端输入验证仍由现役检查消费；`pair`、`compose` 继续核对各自的明确端点和原件。
+采集各端时，`--unit ID` 使用该端登记的单元名。单元改名后分别用旧名和新名采集，再用 `pair` 配对原快照。registration 按候选单元的计划验证两端输入，`pair`、`compose` 继续核对明确端点和原件。
 
 ## 离线组合已有原件
 
