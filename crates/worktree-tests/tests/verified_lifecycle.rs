@@ -35,6 +35,7 @@ fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_and_released_retained_work_remain_discoverable() {
+    broadcast use vstd::string::group_string_axioms;
     proof { reveal_strlit("terminal"); reveal_strlit("retained"); }
     let terminal = policy::select_cleanup("terminal", false, false);
     let retry = policy::select_cleanup("retained", false, true);
@@ -44,6 +45,7 @@ fn terminal_and_released_retained_work_remain_discoverable() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn active_unknown_and_disposed_work_never_gain_terminal_authority() {
+    broadcast use vstd::string::group_string_axioms;
     proof {
         reveal_strlit("active"); reveal_strlit("unknown");
         reveal_strlit("disposed"); reveal_strlit("terminal"); reveal_strlit("retained");
@@ -66,6 +68,7 @@ fn only_actual_unreleased_evidence_blocks_checkout_removal() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn only_a_successful_original_with_absence_verification_establishes_disposal() {
+    broadcast use vstd::string::group_string_axioms;
     proof {
         reveal_strlit("cleaned"); reveal_strlit("failed");
         reveal_strlit("verified-absent"); reveal_strlit("already-absent");
