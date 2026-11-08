@@ -400,6 +400,15 @@ fn directory_cleanup_policy_does_not_reclassify_existing_source_directories() {
 
 #[test]
 fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_intent() {
+    directory_custody_with_metadata(true);
+}
+
+#[test]
+fn directory_cleanup_custodian_adopts_flat_historical_metadata() {
+    directory_custody_with_metadata(false);
+}
+
+fn directory_custody_with_metadata(separate_metadata: bool) {
     let h = host();
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     let (store, outputs) =
@@ -422,6 +431,40 @@ fn directory_cleanup_custodian_adopts_one_old_directory_without_rewriting_its_in
         .unwrap();
     drop(allocation);
     let record = producer_record_path(&store, &root);
+    if !separate_metadata {
+        // Model the actual pre-metadata allocation format. Only this synthetic
+        // fixture is rewritten; production migration must consume its original.
+        let mut registration = json(&fs::read(&record).unwrap()).unwrap();
+        let object = &mut registration["object"];
+        let metadata = object["metadata_directory"].as_str().unwrap().to_owned();
+        for entry in fs::read_dir(store.join(&metadata)).unwrap() {
+            let entry = entry.unwrap();
+            fs::rename(entry.path(), store.join(entry.file_name())).unwrap();
+        }
+        fs::remove_dir(store.join(&metadata)).unwrap();
+        fn flatten(value: &mut Value, prefix: &str) {
+            match value {
+                Value::String(path) if path.starts_with(prefix) => {
+                    *path = path[prefix.len()..].to_owned();
+                }
+                Value::Array(values) => values.iter_mut().for_each(|v| flatten(v, prefix)),
+                Value::Object(values) => values.values_mut().for_each(|v| flatten(v, prefix)),
+                _ => (),
+            }
+        }
+        flatten(object, &format!("{metadata}/"));
+        object["metadata_directory"] = Value::Null;
+        object["metadata_identity"] = Value::Null;
+        let old_intent = store.join(object["intent"]["path"].as_str().unwrap());
+        let mut intent = json(&fs::read(&old_intent).unwrap()).unwrap();
+        intent.as_object_mut().unwrap().remove("metadata_directory");
+        let bytes = serde_json::to_vec(&intent).unwrap();
+        let name = format!("producer-intent-{}.json", sha256(&bytes));
+        fs::write(store.join(&name), &bytes).unwrap();
+        fs::remove_file(old_intent).unwrap();
+        object["intent"] = value!({"path":name,"sha256":sha256(&bytes)});
+        fs::write(&record, serde_json::to_vec(&registration).unwrap()).unwrap();
+    }
     let object = json(&fs::read(&record).unwrap()).unwrap()["object"].clone();
     let intent = store.join(object["intent"]["path"].as_str().unwrap());
     let original = fs::read(&intent).unwrap();
