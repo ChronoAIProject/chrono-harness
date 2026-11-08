@@ -9,6 +9,160 @@ use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
+/// 第一个分隔字节，或输入末尾；分隔符之后的字节不参与选择。
+pub open spec fn first_ascii_separator(raw: Seq<u8>, separator: u8, end: int) -> bool {
+    0 <= end <= raw.len() && (end == raw.len() || raw[end] == separator)
+        && forall|i: int| 0 <= i < end ==> raw[i] != separator
+}
+
+pub open spec fn ascii_separator_end(raw: Seq<u8>, separator: u8) -> int {
+    choose|end: int| first_ascii_separator(raw, separator, end)
+}
+
+pub proof fn ascii_separator_end_is(raw: Seq<u8>, separator: u8, end: int)
+    requires first_ascii_separator(raw, separator, end),
+    ensures ascii_separator_end(raw, separator) == end,
+{
+    assert(exists|stop: int| first_ascii_separator(raw, separator, stop));
+    let selected = ascii_separator_end(raw, separator);
+    if selected < end { assert(raw[selected] == separator && raw[selected] != separator); }
+    if end < selected { assert(raw[end] == separator && raw[end] != separator); }
+}
+
+/// 规格保留每项完整原字节；keep_empty 决定空字段是否保留。
+pub open spec fn ascii_split_records(raw: Seq<u8>, separator: u8, keep_empty: bool)
+    -> Seq<Seq<u8>>
+    decreases raw.len(),
+{
+    let end = ascii_separator_end(raw, separator);
+    if !(0 <= end <= raw.len()) { seq![] }
+    else {
+        let head = if keep_empty || end > 0 { seq![raw.take(end)] } else { seq![] };
+        head + if end < raw.len() {
+            ascii_split_records(raw.skip(end + 1), separator, keep_empty)
+        } else { seq![] }
+    }
+}
+
+pub open spec fn inventory_record_views(records: Seq<&str>) -> Seq<Seq<u8>> {
+    records.map(|i: int, text: &str| text.spec_bytes())
+}
+
+/// ASCII 分隔字节一定是 UTF-8 边界，之后恰可安全跳过一个字节。
+fn ascii_split_head(text: &str, separator: u8) -> (out: (&str, Option<&str>))
+    requires separator < 128,
+    ensures ({
+        let end = ascii_separator_end(text.spec_bytes(), separator);
+        first_ascii_separator(text.spec_bytes(), separator, end)
+            && out.0.spec_bytes() == text.spec_bytes().take(end)
+            && match out.1 {
+                Some(tail) => end < text.spec_bytes().len()
+                    && tail.spec_bytes() == text.spec_bytes().skip(end + 1),
+                None => end == text.spec_bytes().len(),
+            }
+    }),
+{
+    let bytes = text.as_bytes();
+    let mut end = 0usize;
+    while end < bytes.len() && bytes[end] != separator
+        invariant end <= bytes.len(),
+            forall|i: int| 0 <= i < end ==> bytes@[i] != separator,
+        decreases bytes.len() - end,
+    { end += 1; }
+    proof { ascii_separator_end_is(bytes@, separator, end as int); }
+    if end == bytes.len() { return (text, None); }
+    proof {
+        vstd::utf8::encode_utf8_valid_utf8(text@);
+        vstd::utf8::is_char_boundary_iff_not_is_continuation_byte(bytes@, end as int);
+        assert(!vstd::utf8::is_continuation_byte(bytes@[end as int]));
+    }
+    let (head, rest) = text.split_at(end);
+    proof {
+        vstd::utf8::encode_utf8_valid_utf8(rest@);
+        assert(rest.spec_bytes()[0] == separator);
+        assert(vstd::utf8::length_of_first_scalar(rest.spec_bytes()) == 1);
+        reveal_with_fuel(vstd::utf8::is_char_boundary, 2);
+        assert(vstd::utf8::is_char_boundary(rest.spec_bytes(), 1));
+    }
+    let (_, tail) = rest.split_at(1);
+    proof { assert(tail.spec_bytes() =~= text.spec_bytes().skip(end as int + 1)); }
+    (head, Some(tail))
+}
+
+fn ascii_split(text: &str, separator: u8, keep_empty: bool) -> (out: Vec<&str>)
+    requires separator < 128,
+    ensures inventory_record_views(out@)
+        == ascii_split_records(text.spec_bytes(), separator, keep_empty),
+        out.len() == ascii_split_records(text.spec_bytes(), separator, keep_empty).len(),
+        forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i]).spec_bytes()
+            == ascii_split_records(text.spec_bytes(), separator, keep_empty)[i],
+{
+    let mut remaining = text;
+    let mut out: Vec<&str> = Vec::new();
+    loop
+        invariant separator < 128,
+            inventory_record_views(out@)
+            + ascii_split_records(remaining.spec_bytes(), separator, keep_empty)
+            == ascii_split_records(text.spec_bytes(), separator, keep_empty),
+        decreases remaining.spec_bytes().len(),
+    {
+        let ghost previous = inventory_record_views(out@);
+        let (head, rest) = ascii_split_head(remaining, separator);
+        proof {
+            reveal_with_fuel(ascii_split_records, 1);
+            assert(ascii_split_records(remaining.spec_bytes(), separator, keep_empty)
+                == (if keep_empty || head.spec_bytes().len() > 0 {
+                    seq![head.spec_bytes()]
+                } else { seq![] })
+                    + match rest {
+                        Some(tail) => ascii_split_records(tail.spec_bytes(), separator, keep_empty),
+                        None => seq![],
+                    });
+        }
+        if keep_empty || head.as_bytes().len() > 0 {
+            out.push(head);
+            proof { assert(inventory_record_views(out@) =~= previous + seq![head.spec_bytes()]); }
+        }
+        match rest {
+            None => {
+                proof {
+                    assert(inventory_record_views(out@)
+                        == ascii_split_records(text.spec_bytes(), separator, keep_empty));
+                }
+                return out;
+            },
+            Some(tail) => {
+                proof {
+                    assert(inventory_record_views(out@)
+                        + ascii_split_records(tail.spec_bytes(), separator, keep_empty)
+                        == ascii_split_records(text.spec_bytes(), separator, keep_empty));
+                }
+                remaining = tail;
+            },
+        }
+    }
+}
+
+/// NUL 记录忽略空项，保持所有非空记录的顺序、重复和完整 UTF-8 字节。
+pub fn git_inventory_records(text: &str) -> (out: Vec<&str>)
+    ensures inventory_record_views(out@) == ascii_split_records(text.spec_bytes(), 0, false),
+        out.len() == ascii_split_records(text.spec_bytes(), 0, false).len(),
+        forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i]).spec_bytes()
+            == ascii_split_records(text.spec_bytes(), 0, false)[i],
+{
+    ascii_split(text, 0, false)
+}
+
+/// metadata 仅按 ASCII 空格拆分，首尾及重复空格产生的空字段完整保留。
+pub fn git_inventory_fields(text: &str) -> (out: Vec<&str>)
+    ensures inventory_record_views(out@) == ascii_split_records(text.spec_bytes(), 32, true),
+        out.len() == ascii_split_records(text.spec_bytes(), 32, true).len(),
+        forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i]).spec_bytes()
+            == ascii_split_records(text.spec_bytes(), 32, true)[i],
+{
+    ascii_split(text, 32, true)
+}
+
 pub open spec fn git_inventory_complete(raw: Seq<u8>) -> bool {
     raw.len() == 0 || raw[raw.len() - 1] == 0
 }
@@ -41,19 +195,24 @@ pub fn git_inventory_text(decoded: Option<&str>) -> (out: Result<&str, String>)
     }
 }
 
-/// 消费实际首 TAB 拆分结果；两份完整字段或调用方的完整原错误。
+/// 首 TAB 之前为 metadata，其后完整保留为路径；缺失时返回完整原错误。
 pub fn git_inventory_row<'a>(
-    parts: Option<(&'a str, &'a str)>, missing_message: &str,
+    row: &'a str, missing_message: &str,
 ) -> (out: Result<(&'a str, &'a str), String>)
-    ensures match (parts, out) {
-        (Some((meta, path)), Ok((actual_meta, actual_path))) =>
-            actual_meta@ == meta@ && actual_path@ == path@,
-        (None, Err(message)) => message@ == missing_message@,
-        _ => false,
-    },
+    ensures ({
+        let end = ascii_separator_end(row.spec_bytes(), 9);
+        first_ascii_separator(row.spec_bytes(), 9, end)
+            && match out {
+                Ok((meta, path)) => end < row.spec_bytes().len()
+                    && meta.spec_bytes() == row.spec_bytes().take(end)
+                    && path.spec_bytes() == row.spec_bytes().skip(end + 1),
+                Err(message) => end == row.spec_bytes().len() && message@ == missing_message@,
+            }
+    }),
 {
-    match parts {
-        Some(row) => Ok(row),
+    let (meta, rest) = ascii_split_head(row, 9);
+    match rest {
+        Some(path) => Ok((meta, path)),
         None => Err(missing_message.to_string()),
     }
 }
