@@ -1580,7 +1580,6 @@
 
         ]
       },
-      "recover.identifiers-proof": {"resources":[],"outputs":["crates/runner/target/"]},
       "verify.bootstrap-cargo-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.bootstrap-bindings-tests": {
         "resources": [
