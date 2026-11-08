@@ -99,21 +99,45 @@ fn ascii_split(text: &str, separator: u8, keep_empty: bool) -> (out: Vec<&str>)
     let mut remaining = text;
     let mut out: Vec<&str> = Vec::new();
     loop
-        invariant inventory_record_views(out@)
+        invariant separator < 128,
+            inventory_record_views(out@)
             + ascii_split_records(remaining.spec_bytes(), separator, keep_empty)
             == ascii_split_records(text.spec_bytes(), separator, keep_empty),
         decreases remaining.len(),
     {
+        let ghost previous = inventory_record_views(out@);
         let (head, rest) = ascii_split_head(remaining, separator);
-        proof { reveal_with_fuel(ascii_split_records, 1); }
+        proof {
+            reveal_with_fuel(ascii_split_records, 1);
+            assert(ascii_split_records(remaining.spec_bytes(), separator, keep_empty)
+                == (if keep_empty || head.spec_bytes().len() > 0 {
+                    seq![head.spec_bytes()]
+                } else { seq![] })
+                    + match rest {
+                        Some(tail) => ascii_split_records(tail.spec_bytes(), separator, keep_empty),
+                        None => seq![],
+                    });
+        }
         if keep_empty || head.len() > 0 {
-            let ghost previous = inventory_record_views(out@);
             out.push(head);
             proof { assert(inventory_record_views(out@) =~= previous + seq![head.spec_bytes()]); }
         }
         match rest {
-            None => return out,
-            Some(tail) => { remaining = tail; },
+            None => {
+                proof {
+                    assert(inventory_record_views(out@)
+                        == ascii_split_records(text.spec_bytes(), separator, keep_empty));
+                }
+                return out;
+            },
+            Some(tail) => {
+                proof {
+                    assert(inventory_record_views(out@)
+                        + ascii_split_records(tail.spec_bytes(), separator, keep_empty)
+                        == ascii_split_records(text.spec_bytes(), separator, keep_empty));
+                }
+                remaining = tail;
+            },
         }
     }
 }
