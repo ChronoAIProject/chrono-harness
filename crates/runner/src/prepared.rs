@@ -396,6 +396,8 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
         Some(stderr) => stderr,
         None => return Err(original_failure("check process stderr".into())),
     };
+    let owner_stderr = std::str::from_utf8(&process.stderr_bytes)
+        .map_err(|e| original_failure(format!("check lifecycle stderr UTF-8: {e}")))?;
     let exit_code = match u8::try_from(exit) {
         Ok(exit) => exit,
         Err(_) => return Err(original_failure("check process exit out of range".into())),
@@ -403,7 +405,7 @@ pub(crate) fn participate(root: &Path, args: &[&str]) -> Result<Option<crate::Cl
     Ok(Some(crate::CliOutput {
         exit_code,
         stdout: stdout.into(),
-        stderr: stderr.into(),
+        stderr: format!("{stderr}{owner_stderr}"),
     }))
 }
 /// Acquisition credentials are declared in the existing environment policy and never forwarded to judges.

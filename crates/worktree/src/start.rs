@@ -727,6 +727,7 @@ pub(crate) fn with_report_for_consumer(
     let mut tool_record = value!(&tool);
     tool_record["version"] = chrono_harness::full::compact_process(&tool_record["version"])?;
     let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool_record,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
+    report["agent"] = crate::AgentIdentity::context(&config);
     let version_error = tool.version.failure.clone().or_else(|| {
         if tool.version.exit_code != 0 {
             Some(format!(

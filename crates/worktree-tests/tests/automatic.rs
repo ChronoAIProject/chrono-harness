@@ -933,6 +933,377 @@ fn automatic_maintenance_resumes_retained_checkout_after_evidence_release() {
 }
 
 #[test]
+fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_released() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    adopt_lifecycle_retention(&h);
+    // Retention itself owns metadata under state/. The fixture consumer owns
+    // this separate evidence path and can release all of it without deleting
+    // another producer's metadata or weakening the original-receipt assertion.
+    // Target-local retention metadata has no retained caller after cleanup; the
+    // ordinary disposal owner must verify its release before removing the tree.
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    for artifact in policy["artifacts"].as_array_mut().unwrap() {
+        if artifact["path"] == ".chrono-harness/state/" {
+            artifact["disposition"] = value!("dispose");
+        }
+    }
+    policy["artifacts"].as_array_mut().unwrap().push(value!({
+        "path":"consumer-evidence/", "disposition":"evidence-retain"
+    }));
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
+    config["artifacts"].as_array_mut().unwrap().push(value!({
+        "path":"consumer-evidence/", "owner":"host", "kind":"evidence", "tracked":false
+    }));
+    fs::write(h.root.join(CONFIG), serde_json::to_vec(&config).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("retained-original");
+    let (code, created, error) = h.invoke("integration", "retained-original", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let evidence = target.join("consumer-evidence");
+    fs::create_dir_all(&evidence).unwrap();
+    fs::write(
+        evidence.join("needed"),
+        "consumer has not released this original",
+    )
+    .unwrap();
+    output(&target);
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(entry["status"], "retained");
+    assert_eq!(entry["cleanup"]["stage"], "retained");
+    let receipt = &entry["attempts"][0]["receipt"];
+    let path = h.root.join(receipt["path"].as_str().unwrap());
+    let original = fs::read(&path).unwrap();
+    assert_eq!(receipt["sha256"], sha256(&original));
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    let maintenance = inventory.maintain().unwrap();
+    assert!(
+        path.is_file(),
+        "an unresolved checkout still consumes its original cleanup result: {maintenance}"
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert!(target.join("payload").is_file());
+    assert_eq!(h.ledger()["entries"][0], entry);
+    // The sole fixture consumer now releases the evidence; the next entry must
+    // be able to read the preserved result and finish the physical cleanup.
+    fs::remove_file(evidence.join("needed")).unwrap();
+    fs::remove_dir(&evidence).unwrap();
+    let (code, resumed, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{resumed} {error}");
+    assert!(!target.exists(), "{resumed} {error}");
+    assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
+    assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
+}
+
+#[test]
+fn creator_agent_and_pending_reminders_follow_the_original_creator() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    h.policy(|policy| {
+        policy["agent_identity_env"] = value!("CHRONO_TEST_AGENT_ID");
+        policy["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!("CHRONO_TEST_AGENT_ID"));
+    });
+    let invoke = |operation: &str, extra: &[&str], agent: Option<&str>| {
+        let mut command = h.auto_command(operation, extra);
+        if let Some(agent) = agent {
+            command.env("CHRONO_TEST_AGENT_ID", agent);
+        }
+        let output = h._dir.capture_bound(&mut command);
+        h.received(output)
+    };
+    let a = h.parent.join("agent-a-work");
+    let b = h.parent.join("agent-b-work");
+    let unknown = h.parent.join("unknown-agent-work");
+    for (name, path, agent) in [
+        ("agent-a", &a, Some("agent-A")),
+        ("agent-b", &b, Some("agent-B")),
+        ("unknown-agent", &unknown, None),
+    ] {
+        let (code, created, error) = invoke(
+            "start",
+            &[
+                "--kind",
+                "integration",
+                "--name",
+                name,
+                "--path",
+                path.to_str().unwrap(),
+            ],
+            agent,
+        );
+        assert_eq!(code, 0, "{created} {error}");
+        if let Some(agent) = agent {
+            assert_eq!(created["agent"]["identity"]["id"], agent);
+            let intent = json(
+                &fs::read(
+                    h.root
+                        .join(created["recovery_intent"]["path"].as_str().unwrap()),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert_eq!(intent["creator_agent"]["id"], agent);
+        } else {
+            assert_eq!(created["agent"]["status"], "unknown");
+        }
+    }
+    let a_entry = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(a))
+        .unwrap()
+        .clone();
+    assert_eq!(a_entry["creator_agent"]["id"], "agent-A");
+    let imported = h.parent.join("imported-agent-work");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "-qb",
+            "external-agent-work",
+            imported.to_str().unwrap(),
+            "dev",
+        ],
+    );
+    let (code, imported_report, error) = invoke(
+        "import",
+        &["--path", imported.to_str().unwrap()],
+        Some("agent-B"),
+    );
+    assert_eq!(code, 0, "{imported_report} {error}");
+    let imported_entry = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(imported))
+        .unwrap()
+        .clone();
+    assert!(imported_entry["creator_agent"].is_null());
+    assert_eq!(imported_entry["custodian_agent"]["id"], "agent-B");
+    let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
+    assert_eq!(code, 0, "{maintained} {error}");
+    let reminders: Vec<_> = maintained["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|row| row["agent_attention_required"] == true)
+        .collect();
+    assert_eq!(reminders.len(), 1, "{maintained}");
+    assert_eq!(reminders[0]["path"], value!(a));
+    assert_eq!(reminders[0]["work_state"], "active");
+    assert!(error.contains(a.to_str().unwrap()), "{error}");
+    assert!(!error.contains(b.to_str().unwrap()), "{error}");
+    assert!(
+        maintained["worktree_status"]["unknown_creator_records"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
+    let unregistered = h.parent.join("agent-unregistered");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            unregistered.to_str().unwrap(),
+            "dev",
+        ],
+    );
+    // A related operation on B must also remind A about its own outstanding A.
+    // Git addresses without any enrollment keep the observation incomplete.
+    let (code, scoped, error) = invoke("status", &["--path", b.to_str().unwrap()], Some("agent-A"));
+    assert_eq!(code, 0, "{scoped} {error}");
+    assert_eq!(attention_row(&scoped, &a)["agent_attention_required"], true);
+    assert_eq!(
+        attention_row(&scoped, &b)["agent_attention_required"],
+        false
+    );
+    assert!(error.contains(a.to_str().unwrap()), "{error}");
+    assert!(!error.contains(b.to_str().unwrap()), "{error}");
+    assert_eq!(
+        scoped["worktree_status"]["agent_observation_complete"],
+        false
+    );
+    assert_eq!(
+        scoped["worktree_status"]["unknown_creator_records"]
+            .as_u64()
+            .unwrap(),
+        maintained["worktree_status"]["unknown_creator_records"]
+            .as_u64()
+            .unwrap()
+            + 1
+    );
+    let (code, unknown_scope, error) = invoke("status", &["--path", b.to_str().unwrap()], None);
+    assert_eq!(code, 0, "{unknown_scope} {error}");
+    assert_eq!(
+        unknown_scope["worktree_status"]["agent"]["status"],
+        "unknown"
+    );
+    assert!(error.contains("W_WORKTREE_AGENT_SCOPE"), "{error}");
+    let (code, finished, error) =
+        invoke("finish", &["--path", a.to_str().unwrap()], Some("agent-B"));
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!a.exists());
+    let a_entry = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(a))
+        .unwrap()
+        .clone();
+    assert_eq!(a_entry["creator_agent"]["id"], "agent-A");
+    let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(
+        maintained["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row["agent_attention_required"] != true)
+    );
+    assert!(b.join("payload").is_file());
+    assert!(unknown.join("payload").is_file());
+}
+
+#[test]
+fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_records() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":2,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let active = h.parent.join("still-active");
+    let target = h.parent.join("rotating-history");
+    let (code, created, error) = h.invoke("integration", "still-active", &active);
+    assert_eq!(code, 0, "{created} {error}");
+    let active_entry = h.ledger()["entries"][0].clone();
+    let (code, created, error) = h.invoke("integration", "rotating-history", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists());
+    let disposed = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(target))
+        .unwrap()
+        .clone();
+    assert_eq!(disposed["status"], "disposed");
+    assert!(disposed["disposed_at"].as_u64().is_some());
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let remaining = h.ledger();
+    assert_eq!(remaining["entries"].as_array().unwrap().len(), 1);
+    assert_eq!(remaining["entries"][0]["path"], active_entry["path"]);
+    assert_eq!(
+        remaining["entries"][0]["attachment"],
+        active_entry["attachment"]
+    );
+    assert_eq!(remaining["entries"][0]["status"], "active");
+    assert!(remaining["entries"][0]["terminal"].is_null());
+    assert!(active.join("payload").is_file());
+    assert!(!target.exists());
+    assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
+    let (code, again, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{again} {error}");
+    assert_eq!(h.ledger()["entries"].as_array().unwrap().len(), 1);
+}
+
+#[test]
+fn terminal_history_count_and_byte_limits_release_verified_generations_before_the_ttl() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let set_history = |bytes| {
+        let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+        policy["terminal_history"] =
+            value!({"keep_seconds":86400,"max_entries":1,"max_bytes":bytes});
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+        git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    };
+    set_history(1048576);
+    let target = h.parent.join("reused-history-address");
+    for name in ["history-first", "history-second"] {
+        let (code, created, error) = h.invoke("integration", name, &target);
+        assert_eq!(code, 0, "{created} {error}");
+        let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+        assert_eq!(code, 0, "{finished} {error}");
+        assert!(!target.exists());
+    }
+    assert_eq!(h.ledger()["entries"].as_array().unwrap().len(), 2);
+    let newest = h.ledger()["entries"][1].clone();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert_eq!(h.ledger()["entries"], value!([newest]));
+    set_history(1);
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+    assert!(!target.exists());
+    assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/history-first"));
+    assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/history-second"));
+}
+
+#[test]
+fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let policy_path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["terminal_history"] = value!({"keep_seconds":0,"max_entries":1,"max_bytes":1048576});
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("protected-history");
+    assert_eq!(h.invoke("integration", "protected-history", &target).0, 0);
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    let entry = h.ledger()["entries"][0].clone();
+    let lease = chrono_harness::ownership::Lease::acquire(
+        &h.root.join(entry["ownership"]["path"].as_str().unwrap()),
+        Some(entry["ownership"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{maintained} {error}");
+    assert_eq!(h.ledger()["entries"], value!([entry.clone()]));
+    drop(lease);
+    let original_path = h
+        .root
+        .join(entry["attempts"][0]["receipt"]["path"].as_str().unwrap());
+    let original = fs::read(&original_path).unwrap();
+    fs::write(&original_path, b"changed original cleanup report").unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{maintained} {error}");
+    assert_eq!(h.ledger()["entries"], value!([entry]));
+    fs::write(&original_path, original).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
+}
+
+#[test]
 fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");

@@ -58,6 +58,22 @@ pub fn retain_evidence(disposal_authorized: bool, evidence_present: bool) -> (re
     !disposal_authorized && evidence_present
 }
 
+pub fn rolling_disposal(owned: bool, expired: bool, released: bool, exclusive: bool) -> (allowed: bool)
+    ensures allowed <==> (owned && expired && released && exclusive),
+{
+    owned && expired && released && exclusive
+}
+
+pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
+    success: u64, failure: u64, interrupted: u64) -> (seconds: u64)
+    ensures
+        !finished ==> seconds == interrupted,
+        finished && (failed || diagnostics) ==> seconds == failure,
+        finished && !failed && !diagnostics ==> seconds == success,
+{
+    if !finished { interrupted } else if failed || diagnostics { failure } else { success }
+}
+
 pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: bool)
     ensures accepted <==> (kind@ == "import"@
         || (kind@ == "birth"@ && registered)),
@@ -69,6 +85,21 @@ pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
     ensures accepted <==> (kind@ == "import"@ || registered),
 {
     equal_text(kind, "import") || registered
+}
+
+
+pub fn retire_history(disposed: bool, consumers_released: bool,
+    confirmed_at: Option<u64>, observed: u64, keep_seconds: u64, over_limit: bool) -> (retire: bool)
+    ensures retire <==> (disposed && consumers_released
+        && confirmed_at.is_some()
+        && confirmed_at.unwrap() <= observed
+        && (over_limit || observed - confirmed_at.unwrap() >= keep_seconds)),
+{
+    match confirmed_at {
+        Some(confirmed) => disposed && consumers_released
+            && confirmed <= observed && (over_limit || observed - confirmed >= keep_seconds),
+        None => false,
+    }
 }
 
 }

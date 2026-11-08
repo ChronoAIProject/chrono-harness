@@ -3,8 +3,8 @@ use crate::{
     facts::{Entry, Tree, TreePath, full_oid},
     relative_path,
     verified_identifiers::{
-        git_index_metadata, git_inventory_row, git_inventory_termination, git_inventory_text,
-        git_tree_metadata,
+        git_index_metadata, git_inventory_fields, git_inventory_records, git_inventory_row,
+        git_inventory_termination, git_inventory_text, git_tree_metadata,
     },
 };
 use sha1::Sha1;
@@ -20,18 +20,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
-fn rows(raw: &[u8]) -> Result<impl Iterator<Item = &str>, String> {
+fn rows(raw: &[u8]) -> Result<Vec<&str>, String> {
     git_inventory_termination(raw)?;
-    Ok(git_inventory_text(std::str::from_utf8(raw).ok())?
-        .split('\0')
-        .filter(|r| !r.is_empty()))
+    Ok(git_inventory_records(git_inventory_text(
+        std::str::from_utf8(raw).ok(),
+    )?))
 }
 
 pub fn tree(raw: &[u8]) -> Result<Tree, String> {
     let mut result = Tree::new();
     for row in rows(raw)? {
-        let (meta, path) = git_inventory_row(row.split_once('\t'), "invalid Git tree row")?;
-        let fields: Vec<_> = meta.split(' ').collect();
+        let (meta, path) = git_inventory_row(row, "invalid Git tree row")?;
+        let fields = git_inventory_fields(meta);
         git_tree_metadata(&fields)?;
         relative_path(path)?;
         full_oid(fields[2])?;
@@ -52,8 +52,8 @@ pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>
     let mut changed = BTreeSet::new();
     let mut stages = BTreeMap::new();
     for row in rows(index)? {
-        let (meta, path) = git_inventory_row(row.split_once('\t'), "invalid Git index row")?;
-        let fields: Vec<_> = meta.split(' ').collect();
+        let (meta, path) = git_inventory_row(row, "invalid Git index row")?;
+        let fields = git_inventory_fields(meta);
         git_index_metadata(&fields)?;
         relative_path(path)?;
         full_oid(fields[1])?;

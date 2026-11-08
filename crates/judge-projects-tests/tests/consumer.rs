@@ -1349,6 +1349,9 @@ fn offline_source_and_declared_external_input_survive_the_old_checkout_path() {
     );
     assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
     assert_eq!(fs::read(&external).unwrap(), b"bounded input\n");
+    // These assertions deliberately consume the fixture after its host handle
+    // closes. Declare the finite diagnostic window before handing it off.
+    host::retain_diagnostic(&retained, "post-handoff offline input assertions").unwrap();
     drop(h);
     assert!(!old_root.exists());
     assert_eq!(fs::read(external).unwrap(), b"bounded input\n");
