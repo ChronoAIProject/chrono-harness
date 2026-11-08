@@ -13,6 +13,9 @@ pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 
+#[path = "verified_scope.rs"]
+pub mod scopes;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]

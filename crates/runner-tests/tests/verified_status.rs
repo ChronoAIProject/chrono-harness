@@ -7,6 +7,10 @@ mod policy;
 use chrono_harness::verified_status as policy;
 use core::cmp::Ordering;
 use policy::{Status, WireStatus};
+#[cfg(verus_keep_ghost)]
+use policy::identifiers as scope_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as scope_text;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -15,6 +19,77 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+// 这些分支在普通 Rust 测试中也执行；证明不能替代真实调用的断言。
+fn expect_scope_true(actual: bool)
+    requires actual,
+{
+    if !actual {
+        panic!("independent Scope expectation failed");
+    }
+}
+
+fn scope_preserves_full_text(text: &str) {
+    let unit = policy::scopes::Scope::Unit { unit: text.to_owned() };
+    let collect = policy::scopes::Scope::Collect { manifest: text.to_owned() };
+    let cloned_unit = unit.clone();
+    let cloned_collect = collect.clone();
+    expect_scope_true(cloned_unit.eq(&unit));
+    expect_scope_true(cloned_collect.eq(&collect));
+    expect_scope_true(!unit.eq(&collect));
+    expect_scope_true(!collect.eq(&unit));
+
+    let short_unit = unit.short_argv();
+    let full_unit = unit.argv();
+    let short_collect = collect.short_argv();
+    let full_collect = collect.argv();
+    expect_scope_true(short_unit.len() == 2);
+    expect_scope_true(scope_text::equal_text(short_unit[0].as_str(), "--unit"));
+    expect_scope_true(scope_text::equal_text(short_unit[1].as_str(), text));
+    expect_scope_true(scope_text::equal_text(full_unit[0].as_str(), "--unit"));
+    expect_scope_true(scope_text::equal_text(full_unit[1].as_str(), text));
+    expect_scope_true(short_collect.len() == 1);
+    expect_scope_true(scope_text::equal_text(short_collect[0].as_str(), "--collect"));
+    expect_scope_true(scope_text::equal_text(full_collect[0].as_str(), "--collect"));
+    expect_scope_true(scope_text::equal_text(full_collect[1].as_str(), text));
+}
+
+fn distinct_scope_texts(first: &str, second: &str)
+    requires first@ != second@,
+{
+    let a = policy::scopes::Scope::Unit { unit: first.to_owned() };
+    let b = policy::scopes::Scope::Unit { unit: second.to_owned() };
+    let c = policy::scopes::Scope::Collect { manifest: first.to_owned() };
+    let d = policy::scopes::Scope::Collect { manifest: second.to_owned() };
+    expect_scope_true(!a.eq(&b));
+    expect_scope_true(!b.eq(&a));
+    expect_scope_true(!c.eq(&d));
+    expect_scope_true(!d.eq(&c));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn scope_arguments_and_cloning_keep_complete_text_and_variant() {
+    scope_preserves_full_text("");
+    scope_preserves_full_text("runner");
+    scope_preserves_full_text(".chrono-harness/state/with spaces/清单.json");
+    scope_preserves_full_text("--collect\0\n\r");
+    scope_preserves_full_text("é");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn scope_equality_rejects_prefix_case_and_unicode_normalization() {
+    proof {
+        reveal_strlit("unit"); reveal_strlit("unit\0");
+        reveal_strlit("é"); reveal_strlit("e\u{301}");
+        reveal_strlit("A"); reveal_strlit("a");
+        assert("unit"@.len() == 4 && "unit\0"@.len() == 5);
+        assert("é"@.len() == 1 && "e\u{301}"@.len() == 2);
+        assert("A"@[0] != "a"@[0]);
+    }
+    distinct_scope_texts("unit", "unit\0");
+    distinct_scope_texts("é", "e\u{301}");
+    distinct_scope_texts("A", "a");
+}
 
 fn expect(a: &Status, b: &Status, expected: bool)
     requires expected == (*a == *b),
