@@ -2513,11 +2513,21 @@ pub proof fn predecessor_chain_complete(rows: Seq<Predecessor>, node: Seq<u8>, p
     ensures predecessor_chain(rows, node, budget) == Some(path.reverse()),
     decreases path.len(),
 {
+    hide(predecessor_at);
     if path.len() > 0 {
         predecessor_path_prefix(rows, node, path);
-        predecessor_chain_complete(rows, path.last().0, path.drop_last(), (budget - 1) as nat);
+        let last = path.last();
+        let prefix = path.drop_last();
+        assert(prefix.len() == path.len() - 1);
+        assert(prefix.len() < budget - 1);
+        predecessor_chain_complete(rows, last.0, prefix, (budget - 1) as nat);
+        let row = predecessor_at(rows, node).unwrap();
+        let edge = row.parent.unwrap();
+        assert(edge.key() == last);
+        assert(last.2 == node);
         reveal(predecessor_chain);
-        assert(path.reverse() =~= seq![path.last()] + path.drop_last().reverse());
+        assert(predecessor_chain(rows, edge.from_bytes(), (budget - 1) as nat) == Some(prefix.reverse()));
+        assert(path.reverse() =~= seq![last] + prefix.reverse());
     } else {
         reveal(predecessor_chain);
     }
