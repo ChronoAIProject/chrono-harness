@@ -38,7 +38,11 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
             let entry = h.ledger()["entries"][0].clone();
             let attempt = entry["cache_attempts"][0].clone();
             assert!(attempt["completed_at"].as_u64().is_some());
-            assert!(h.root.join(attempt["intent"]["path"].as_str().unwrap()).is_file());
+            assert!(
+                h.root
+                    .join(attempt["intent"]["path"].as_str().unwrap())
+                    .is_file()
+            );
             old = Some(attempt);
         }
     }
@@ -54,13 +58,25 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     let state = retention_state::snapshot(&h.root);
     if let Some(original) = state["outputs"]
-            .as_array().unwrap().iter()
-            .find(|o| o["path"] == old["intent"]["path"])
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == old["intent"]["path"])
     {
-        inventory.maintain_originals(&[original["id"].as_str().unwrap().to_owned()]).unwrap();
+        inventory
+            .maintain_originals(&[original["id"].as_str().unwrap().to_owned()])
+            .unwrap();
     }
-    assert!(!h.root.join(old["intent"]["path"].as_str().unwrap()).exists());
-    assert!(h.root.join(attempts[0]["intent"]["path"].as_str().unwrap()).exists());
+    assert!(
+        !h.root
+            .join(old["intent"]["path"].as_str().unwrap())
+            .exists()
+    );
+    assert!(
+        h.root
+            .join(attempts[0]["intent"]["path"].as_str().unwrap())
+            .exists()
+    );
     assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
     assert_eq!(git(&h.root, &["show-ref"]), refs);
     assert!(h.root.join("payload").is_file());
@@ -75,7 +91,13 @@ fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     }
     assert_eq!(h.auto("maintain", &[]).0, 0);
     let mut ledger = h.ledger();
-    assert_eq!(ledger["entries"][0]["cache_attempts"].as_array().unwrap().len(), 3);
+    assert_eq!(
+        ledger["entries"][0]["cache_attempts"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
     // Capacity pressure cannot retire an unknown completion time or bypass a
     // live capability. These are explicit fault inputs, never inferred mtimes.
     ledger["entries"][0]["cache_attempts"][0]["completed_at"] = Value::Null;
@@ -90,17 +112,32 @@ fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     let entry = h.ledger()["entries"][0].clone();
     let lease = chrono_harness::ownership::Lease::acquire(
         &h.root.join(entry["ownership"]["path"].as_str().unwrap()),
-        Some(entry["ownership"]["id"].as_str().unwrap()), false, false, None,
-    ).unwrap().unwrap();
+        Some(entry["ownership"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
     let (_, _, _) = h.auto("maintain", &[]);
-    assert_eq!(h.ledger()["entries"][0]["cache_attempts"], entry["cache_attempts"]);
+    assert_eq!(
+        h.ledger()["entries"][0]["cache_attempts"],
+        entry["cache_attempts"]
+    );
     drop(lease);
-    let result_path = h.root.join(entry["cache_attempts"][1]["receipt"]["path"].as_str().unwrap());
+    let result_path = h.root.join(
+        entry["cache_attempts"][1]["receipt"]["path"]
+            .as_str()
+            .unwrap(),
+    );
     let original = fs::read(&result_path).unwrap();
     fs::write(&result_path, b"changed cache cleanup original").unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{maintained} {error}");
-    assert_eq!(h.ledger()["entries"][0]["cache_attempts"], entry["cache_attempts"]);
+    assert_eq!(
+        h.ledger()["entries"][0]["cache_attempts"],
+        entry["cache_attempts"]
+    );
     fs::write(&result_path, original).unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");

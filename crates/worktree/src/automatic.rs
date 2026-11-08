@@ -574,7 +574,10 @@ fn parse_policy(r: &mut Runner, root: &Path, policy_bytes: &[u8]) -> Result<Poli
     if !p.retained_producers.is_empty() && p.schema != "chrono-worktree-automatic-cleanup/v2" {
         return Err("retained producer references require kernel cleanup v2".into());
     }
-    for history in [&p.terminal_history, &p.cache_history].into_iter().flatten() {
+    for history in [&p.terminal_history, &p.cache_history]
+        .into_iter()
+        .flatten()
+    {
         if p.schema != "chrono-worktree-automatic-cleanup/v2"
             || history.max_entries == 0
             || history.max_bytes == 0
@@ -1789,25 +1792,31 @@ impl Manager {
         let target = no_symlink_parents(&self.inputs.policy.coordinator_root, &path)?;
         let root = &self.inputs.policy.coordinator_root;
         let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?;
-        let b = if let Some(inventory) = inventory
-            .filter(|inventory| inventory.accepts("lifecycle-state-original", &path))
+        let b = if let Some(inventory) =
+            inventory.filter(|inventory| inventory.accepts("lifecycle-state-original", &path))
         {
             let mut bytes = serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?;
             bytes.push(b'\n');
             let outcome = value!({"kind":"lifecycle-state-original","publication":"published"});
             let publication = inventory.plan(
-                "lifecycle-state-original", &path, false,
+                "lifecycle-state-original",
+                &path,
+                false,
                 value!({"publication":"started","outcome":"not-established"}),
             )?;
             publication.materialize()?;
             publication.replace_file(&target, &bytes)?;
-            let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
-                .ok_or("lifecycle state retention policy disappeared")?;
+            let inventory =
+                chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+                    .ok_or("lifecycle state retention policy disappeared")?;
             let mut paths = self.original_paths(&self.ledger)?;
             paths.insert(path.clone());
             // Hold the new inode until the enrollment has custody. Publication
             // failure retains the old ledger's complete input closure.
-            inventory.reference_paths(&self.original_role()?, &paths.into_iter().collect::<Vec<_>>())?;
+            inventory.reference_paths(
+                &self.original_role()?,
+                &paths.into_iter().collect::<Vec<_>>(),
+            )?;
             publication.complete(outcome)?;
             inventory.retain_diagnostic_path(&path)?;
             bytes
@@ -2629,7 +2638,11 @@ impl Manager {
         let mut failures = vec![];
         for i in 0..self.ledger.entries.len() {
             let entry = self.ledger.entries[i].clone();
-            let Some(owner) = entry.ownership.as_ref().filter(|_| entry.status == "active") else {
+            let Some(owner) = entry
+                .ownership
+                .as_ref()
+                .filter(|_| entry.status == "active")
+            else {
                 continue;
             };
             if !entry.uses.is_empty() || entry.cache_attempts.is_empty() {
@@ -2639,22 +2652,35 @@ impl Manager {
                 continue;
             };
             let mut count = entry.cache_attempts.len();
-            let sizes = entry.cache_attempts.iter()
+            let sizes = entry
+                .cache_attempts
+                .iter()
                 .map(|attempt| serde_json::to_vec(attempt).map(|bytes| bytes.len() as u64))
-                .collect::<Result<Vec<_>, _>>().map_err(|error| error.to_string())?;
-            let mut bytes = sizes.iter().try_fold(0u64, |sum, size| sum.checked_add(*size))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|error| error.to_string())?;
+            let mut bytes = sizes
+                .iter()
+                .try_fold(0u64, |sum, size| sum.checked_add(*size))
                 .ok_or("cache history byte count overflow")?;
             let mut removed = BTreeSet::new();
             for (index, attempt) in entry.cache_attempts.iter().enumerate() {
                 if !crate::verified_lifecycle::retire_cache_history(
-                    attempt.receipt.is_some(), attempt.generation, owner.generation, true,
-                    attempt.completed_at, observed, history.keep_seconds,
+                    attempt.receipt.is_some(),
+                    attempt.generation,
+                    owner.generation,
+                    true,
+                    attempt.completed_at,
+                    observed,
+                    history.keep_seconds,
                     count > history.max_entries || bytes > history.max_bytes,
                 ) {
                     continue;
                 }
                 let verified = (|| {
-                    let receipt = attempt.receipt.as_ref().ok_or("cache history result missing")?;
+                    let receipt = attempt
+                        .receipt
+                        .as_ref()
+                        .ok_or("cache history result missing")?;
                     let result = json(&self.receipt(receipt)?)?;
                     let intent = json(&self.receipt(&attempt.intent)?)?;
                     if receipt.path != attempt.path
@@ -2667,7 +2693,9 @@ impl Manager {
                         || intent["binding"]["generation"] != attempt.generation
                         || intent["binding"]["lease_id"] != owner.id
                     {
-                        return Err("cache history original does not establish completed generation".into());
+                        return Err(
+                            "cache history original does not establish completed generation".into(),
+                        );
                     }
                     self.stable(r)?;
                     lease.stable()
@@ -2695,7 +2723,8 @@ impl Manager {
             if report["cache_history_rotation"].is_null() {
                 report["cache_history_rotation"] = value!([]);
             }
-            report["cache_history_rotation"].as_array_mut()
+            report["cache_history_rotation"]
+                .as_array_mut()
                 .ok_or("cache history rotation report is not an array")?
                 .push(value!({"path":entry.path,"removed_records":removed.len(),
                     "remaining_records":count,"remaining_bytes":bytes,
