@@ -1339,12 +1339,34 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
     inventory
         .reference_paths("fixture-finish-consumer", &[])
         .unwrap();
-    inventory.maintain().unwrap();
+    maintain_original_until_absent(&inventory, &h.root.join(&terminal));
     assert!(
         !h.root.join(&terminal).exists(),
         "released terminal original must be reclaimed"
     );
     assert!(git(&h.root, &["show-ref"]).contains("refs/heads/integration/finite-originals"));
+}
+
+fn maintain_original_until_absent(
+    inventory: &chrono_harness::retained_artifacts::retention::Inventory,
+    path: &Path,
+) {
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        let round = inventory.maintain().unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        rounds.push(round);
+        if !path.exists() {
+            return;
+        }
+    }
+    panic!(
+        "bounded original disposal did not finish: {} {rounds:?}",
+        path.display()
+    );
 }
 
 #[test]
@@ -1391,6 +1413,12 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     let report_path = h.root.join(used["report_path"].as_str().unwrap());
     let report_bytes = fs::read(&report_path).unwrap();
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.maintain().unwrap();
+    assert_eq!(
+        fs::read(&report_path).unwrap(),
+        report_bytes,
+        "the pending handoff still consumes its final report before the next worktree command"
+    );
     inventory
         .reference_paths(
             "fixture-use-report",
@@ -1456,7 +1484,7 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     inventory
         .reference_paths("fixture-use-report", &[])
         .unwrap();
-    inventory.maintain().unwrap();
+    maintain_original_until_absent(&inventory, &raw_path);
     assert!(
         !raw_path.exists(),
         "successful report handoff must not create permanent roots"

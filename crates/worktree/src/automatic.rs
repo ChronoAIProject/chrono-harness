@@ -1015,7 +1015,6 @@ impl Manager {
         };
         manager.restore_absent_policy(r)?;
         manager.protect_originals()?;
-        manager.reconcile_published_results()?;
         Ok(Some(manager))
     }
     /// The enrollment is an actual durable consumer, independently of any
@@ -2516,6 +2515,7 @@ impl Manager {
         report: &mut Value,
         maintenance: bool,
     ) -> Result<Vec<String>, String> {
+        self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
         for i in 0..self.ledger.entries.len() {
             let e = self.ledger.entries[i].clone();
@@ -3580,7 +3580,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     values["--stage-sha256"],
                     report,
                 ),
-                "status" => manager.observe_attention(r, report, target.is_none()),
+                "status" => {
+                    manager.reconcile_published_results()?;
+                    manager.observe_attention(r, report, target.is_none())
+                }
                 "maintain" => {
                     let result = manager.drain(r, &[invoking.clone()], report, true);
                     manager.observe_attention(r, report, true)?;

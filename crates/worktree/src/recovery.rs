@@ -511,6 +511,14 @@ pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>,
             originals.push(path.into());
         }
     }
+    if matches!(
+        report["schema"].as_str(),
+        Some("chrono-worktree-managed-use-result/v1" | "chrono-main-cache-release/v1")
+    ) {
+        if let Some(path) = report["report_path"].as_str() {
+            originals.push(path.into());
+        }
+    }
     for pass in [report, &report["post_use_cleanup"]] {
         for field in ["drain", "producer_drains"] {
             for item in pass[field].as_array().into_iter().flatten() {
@@ -535,6 +543,30 @@ pub(crate) fn bind_report_inputs(root: &Path, report: &Value) -> Result<(), Stri
             .as_str()
             .ok_or("lifecycle result path")?;
         inventory.dependencies_paths(path, &original_paths(root, report)?)?;
+        bind_result_handoffs(&inventory, root, report)?;
+    }
+    Ok(())
+}
+
+/// The pending result is the ledger's actual reader of its final report.
+/// Retention already collects unrooted cycles: neither direction is a root.
+fn bind_result_handoffs(
+    inventory: &chrono_harness::retained_artifacts::retention::Inventory,
+    root: &Path,
+    report: &Value,
+) -> Result<(), String> {
+    for binding in ["managed_use_receipt", "main_cache_release"] {
+        if let Some(path) = report[binding]["path"].as_str() {
+            let bytes = state_bytes(root, path)?;
+            if report[binding]["sha256"] != sha256(&bytes) {
+                return Err("pending report handoff original changed".into());
+            }
+            let original = json(&bytes)?;
+            if original["report_path"] != report["report_path"] {
+                return Err("pending result names another final report".into());
+            }
+            inventory.dependencies_paths(path, &original_paths(root, &original)?)?;
+        }
     }
     Ok(())
 }
@@ -551,6 +583,7 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
         .ok_or("lifecycle result path")?;
     let originals = original_paths(root, report)?;
     inventory.dependencies_paths(path, &originals)?;
+    bind_result_handoffs(&inventory, root, report)?;
     if report["status"] == "failed" {
         inventory.protect_path_consumer(
             &format!("lifecycle-recheck:{}", sha256(path.as_bytes())),
