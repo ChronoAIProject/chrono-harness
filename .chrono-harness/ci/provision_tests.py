@@ -159,11 +159,11 @@ class NativeCargoDomains(unittest.TestCase):
 
     def test_ordinary_native_consumers_keep_the_ordinary_locked_domain(self):
         config = self.native_config(".chrono-harness/config.json")
-        self.assertNotIn("CARGO_NET_OFFLINE", config["environment"]["inherit"])
-        environment = self.selected_environment(config["environment"]["values"])
+        inherited = dict(self.base_environment, CARGO_NET_OFFLINE="true")
+        environment = self.selected_environment(config["environment"]["values"], inherited)
         cargo_home = ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
         self.assertEqual(environment["CARGO_HOME"], cargo_home)
-        self.assertNotEqual(environment.get("CARGO_NET_OFFLINE"), "true")
+        self.assertEqual(environment.get("CARGO_NET_OFFLINE"), "false")
         # Exercise distinct current consumers with their original locked manifests.
         for operation in ("build.runner", "build.cache", "build.distribution",
                           "build.instructions", "build.judge-routes"):
