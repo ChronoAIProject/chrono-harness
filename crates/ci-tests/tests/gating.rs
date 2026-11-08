@@ -696,9 +696,6 @@ fn parent_collection_transports_report_references_and_rejects_damaged_originals(
     }
 }
 
-#[path = "resources.rs"]
-mod resources;
-
 #[test]
 fn parent_collection_requires_transported_streams_without_local_fallback_or_business_reruns() {
     let mut h = GatedHost::new();
