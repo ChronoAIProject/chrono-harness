@@ -69,7 +69,7 @@ fn original_parent_exit_does_not_leave_a_descendant_running_into_the_next_phase(
 }
 
 #[test]
-fn deadline_keeps_original_prefix_and_actual_termination_signal() {
+fn deadline_keeps_bytes_actually_observed_and_actual_termination_signal() {
     let source = tempfile::tempdir().unwrap();
     let output = tempfile::tempdir().unwrap();
     let command = command(
@@ -79,21 +79,30 @@ fn deadline_keeps_original_prefix_and_actual_termination_signal() {
             {"Create":{"path":"too-late","bytes":[1]}}
         ]),
     );
+    let mut live_stdout = Vec::new();
+    let mut live_stderr = Vec::new();
     let captured = execute(
         source.path(),
         &command,
         output.path(),
         0,
         Duration::from_millis(250),
-        io::sink(),
-        io::sink(),
+        &mut live_stdout,
+        &mut live_stderr,
     )
     .unwrap();
     assert!(!captured.passed());
     assert_eq!(captured.child_exit, Some(-9));
     assert!(captured.failures.iter().any(|s| s.contains("timed out")));
-    assert_eq!(captured.stdout.bytes, [0, 255, 10]);
-    assert_eq!(captured.stderr.bytes, [254, 0, 10]);
+    // The deadline includes real startup; bytes not reached before cancellation stay absent.
+    assert!([0, 255, 10].starts_with(&captured.stdout.bytes));
+    assert!([254, 0, 10].starts_with(&captured.stderr.bytes));
+    assert_eq!(live_stdout, captured.stdout.bytes);
+    assert_eq!(live_stderr, captured.stderr.bytes);
+    for stream in [&captured.stdout, &captured.stderr] {
+        assert_eq!(fs::read(output.path().join(stream.path.as_ref().unwrap())).unwrap(), stream.bytes);
+        assert_eq!(stream.receipt()["sha256"], chrono_harness::sha256(&stream.bytes));
+    }
     assert!(!source.path().join("too-late").exists());
     assert_eq!(captured.observation["exit_signal"], 9);
     assert_eq!(captured.observation["timeout_ns"], 250_000_000);
