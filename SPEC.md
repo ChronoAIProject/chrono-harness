@@ -1154,7 +1154,7 @@ init/generate 只接受当前 schema 2 / atomic-rules/relative-alias/v3 manifest
 
 完整 schema、组合配方、CLI、所有权与恢复合同由 [docs/instructions.md](docs/instructions.md) 单一维护。
 
-[来源说明](docs/methodology-extraction.md) 和 [逐条处置表](docs/methodology-clause-map.md) 记录固定来源 918 行、12 章、102 节的义务与例外处置；它们及 [来源许可](docs/licenses/methodology-attribution.md) 是可选来源资料，不是运行时输入或政策权威。派生内容经过修改、泛化和翻译；机械覆盖不证明语义完整，独立内容审计不能由生成替代。
+[来源与采用说明](docs/methodology-extraction.md) 和 [来源许可](docs/licenses/methodology-attribution.md) 保留固定来源、修改声明、当前所有者及分发义务，不是运行时输入或政策权威。历史逐条迁移、审读与统计归 Git／PR，不在当前树维护副本。派生内容经过修改、泛化和翻译；生成只校验内容传递，不能证明语义完整或替代适用的内容核验。
 
 自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
 
