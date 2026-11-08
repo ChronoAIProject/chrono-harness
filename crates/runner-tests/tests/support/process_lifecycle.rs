@@ -152,11 +152,35 @@ fn controller(case: &str) {
     await_file("ready", 5.0, 5);
     let launcher: serde_json::Value =
         serde_json::from_slice(&fs::read("launcher").unwrap()).unwrap();
-    let started = launcher["started"].as_f64().unwrap();
     let launcher_pid: libc::pid_t = launcher["pid"].as_i64().unwrap().try_into().unwrap();
     let pid = fs::read_to_string("ready").unwrap().parse().unwrap();
     let exit = Exit::register(pid);
-    thread::sleep(Duration::from_millis(150));
+    // Observe the real monitor after its deadline is established. Startup and
+    // executable hashing cannot be charged to this one-second experiment.
+    let preparing = now();
+    let monitor = loop {
+        let raw = match fs::read(".chrono-harness/state/monitor/runtime.jsonl") {
+            Ok(raw) => raw,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+            Err(error) => panic!("monitor original: {error}"),
+        };
+        let observed = raw
+            .split_inclusive(|byte| *byte == b'\n')
+            .filter(|line| line.ends_with(b"\n"))
+            .map(|line| serde_json::from_slice::<serde_json::Value>(line).unwrap())
+            .find(|record| {
+                record["event"] == "process.monitor_wait"
+                    && record["context"]["child_pid"] == pid
+            });
+        if let Some(observed) = observed {
+            break observed;
+        }
+        assert!(now() - preparing < 5.0, "monitor did not become ready");
+        thread::sleep(Duration::from_millis(5));
+    };
+    assert_eq!(monitor["fields"]["monitor_timeout_millis"], 1000);
+    let deadline = monitor["fields"]["terminal_deadline_ns"].as_u64().unwrap();
+    let started = deadline.checked_sub(1_000_000_000).unwrap() as f64 / 1e9;
     let stopped = now();
     // Setup uses the original one-second deadline. Each case separately checks
     // the child's terminal timing after the launcher is suspended.

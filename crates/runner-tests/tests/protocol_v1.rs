@@ -2595,32 +2595,32 @@ fn delayed_monitor_helper() {
     assert!(ready.failure.is_none(), "{ready:?}");
     assert!(ready.stdout_bytes.is_empty(), "{ready:?}");
     assert!(ready.stderr_bytes.is_empty(), "{ready:?}");
-    let mut now: libc::timespec = unsafe { std::mem::zeroed() };
-    #[cfg(target_vendor = "apple")]
-    let clock = libc::CLOCK_UPTIME_RAW;
-    #[cfg(not(target_vendor = "apple"))]
-    let clock = libc::CLOCK_MONOTONIC;
-    assert_eq!(unsafe { libc::clock_gettime(clock, &mut now) }, 0);
     fs::write(
         root.join("launcher"),
         serde_json::to_vec(&value!({
             "pid": std::process::id(),
-            "started": now.tv_sec as f64 + now.tv_nsec as f64 / 1e9,
         }))
         .unwrap(),
     )
     .unwrap();
-    let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
-    fs::write(
-        root.join("result.json"),
-        serde_json::to_vec(&result).unwrap(),
-    )
-    .unwrap();
+    assert_eq!(chrono_harness::logged_main_at(root, "delayed-monitor", "child", || {
+        let result = chrono_harness::run_process_observed(root, &spec, &[], &digest).unwrap();
+        fs::write(root.join("result.json"), serde_json::to_vec(&result).unwrap()).unwrap();
+        0
+    }), 0);
 }
 
 #[cfg(unix)]
 fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
-    let root = tempfile::tempdir().unwrap();
+    let mut root = tempfile::tempdir().unwrap();
+    root.disable_cleanup(true);
+    eprintln!("delayed monitor originals ({case}): {}", root.path().display());
+    fs::create_dir(root.path().join(".chrono-harness")).unwrap();
+    fs::write(root.path().join(".chrono-harness/logging.json"), serde_json::to_vec(&value!({
+        "schema":"chrono-runtime-logging/v1", "level":"debug",
+        "directory":".chrono-harness/state/monitor/", "max_bytes":65536,
+        "max_files":1, "stderr":false,
+    })).unwrap()).unwrap();
     let exe = std::env::current_exe().unwrap();
     let digest = sha256(&fs::read(&exe).unwrap());
     // Only the nested launcher is suspended. The child and independent kernel
@@ -2633,8 +2633,8 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .unwrap();
-    // The independent observer publishes readiness before the timed launch.
-    // The launcher timestamp conservatively precedes the actual timer start.
+    // The independent observer publishes readiness before the timed launch and
+    // reads that launch's actual monitor deadline from the existing debug sink.
     let preparing = std::time::Instant::now();
     while !root.path().join("controller-ready").exists() {
         if preparing.elapsed() >= std::time::Duration::from_secs(5)
@@ -2688,6 +2688,7 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
         assert!(result.stdout_bytes.is_empty());
     }
     assert!(result.stderr_bytes.is_empty());
+    root.disable_cleanup(false);
     result
 }
 
