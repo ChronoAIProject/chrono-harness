@@ -17,6 +17,8 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
 
@@ -25,7 +27,7 @@ fn expect_scope_true(actual: bool)
     requires actual,
 {
     if !actual {
-        panic!("independent Scope expectation failed");
+        panic!();
     }
 }
 
