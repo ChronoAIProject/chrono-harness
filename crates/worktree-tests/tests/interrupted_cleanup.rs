@@ -2303,9 +2303,9 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
             Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        let output =
-            chrono_worktree::TemporaryHost::capture_bound_output(&allocation, &mut command)
-                .unwrap();
+        // Maintenance already publishes its original at the surviving owner.
+        // Capturing here must not recreate the allocation after its handoff.
+        let output = command.output().unwrap();
         let report = json(&output.stdout).unwrap();
         let failures = report["cleanup_failures"].as_array().unwrap();
         assert_eq!(
