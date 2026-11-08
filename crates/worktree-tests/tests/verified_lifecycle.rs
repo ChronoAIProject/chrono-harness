@@ -36,7 +36,10 @@ fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_and_released_retained_work_remain_discoverable() {
     broadcast use vstd::string::group_string_axioms;
-    proof { reveal_strlit("terminal"); reveal_strlit("retained"); }
+    proof {
+        reveal_strlit("terminal"); reveal_strlit("retained");
+        assert("terminal"@[0] != "retained"@[0]);
+    }
     let terminal = policy::select_cleanup("terminal", false, false);
     let retry = policy::select_cleanup("retained", false, true);
     let ordinary = policy::select_cleanup("retained", false, false);
@@ -49,6 +52,10 @@ fn active_unknown_and_disposed_work_never_gain_terminal_authority() {
     proof {
         reveal_strlit("active"); reveal_strlit("unknown");
         reveal_strlit("disposed"); reveal_strlit("terminal"); reveal_strlit("retained");
+        assert("active"@.len() == 6 && "unknown"@.len() == 7);
+        assert("disposed"@.len() == 8 && "terminal"@.len() == 8 && "retained"@.len() == 8);
+        assert("disposed"@[0] != "terminal"@[0]);
+        assert("disposed"@[0] != "retained"@[0]);
     }
     let active = policy::select_cleanup("active", false, true);
     let cache = policy::select_cleanup("active", true, false);
@@ -73,6 +80,9 @@ fn only_a_successful_original_with_absence_verification_establishes_disposal() {
         reveal_strlit("cleaned"); reveal_strlit("failed");
         reveal_strlit("verified-absent"); reveal_strlit("already-absent");
         reveal_strlit("preserved"); reveal_strlit("");
+        assert("cleaned"@.len() == 7 && "failed"@.len() == 6);
+        assert("preserved"@.len() == 9 && "verified-absent"@.len() == 15
+            && "already-absent"@.len() == 14 && ""@.len() == 0);
     }
     let removed = policy::cleanup_result(false, "cleaned", "verified-absent");
     let recovered = policy::cleanup_result(false, "cleaned", "already-absent");
