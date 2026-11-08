@@ -412,7 +412,7 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
     assert!(
         report
             .to_string()
-            .contains("enrollment branch is not a registered work branch")
+            .contains("only an existing linked worktree can enroll")
     );
 }
 

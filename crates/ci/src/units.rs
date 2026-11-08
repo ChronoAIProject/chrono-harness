@@ -512,45 +512,6 @@ fn prepare_scope(
     payload: &Value,
     revision: &str,
 ) -> Result<Value, String> {
-    prepare_scope_inner(root, path, c, unit, scope, event, payload, revision, true)
-}
-/// Existing event preparation before exact full-context loading, for the registered seed producer.
-pub fn prepare_endpoints(
-    root: &Path,
-    path: &str,
-    c: &Config,
-    unit: Option<&str>,
-    event: &str,
-    payload: &Value,
-    revision: &str,
-) -> Result<Value, String> {
-    if c.schema != FULL_SCHEMA {
-        return Err("early endpoints require a full unit provider".into());
-    }
-    prepare_scope_inner(
-        root,
-        path,
-        c,
-        unit,
-        Some(c.scope(unit)),
-        event,
-        payload,
-        revision,
-        false,
-    )
-}
-#[allow(clippy::too_many_arguments)]
-fn prepare_scope_inner(
-    root: &Path,
-    path: &str,
-    c: &Config,
-    unit: Option<&str>,
-    scope: Option<Scope>,
-    event: &str,
-    payload: &Value,
-    revision: &str,
-    load_full_context: bool,
-) -> Result<Value, String> {
     generate(root, path, c, true)?;
     let profile = profile(root, c)?;
     let w = c.workflow(unit)?;
@@ -572,10 +533,8 @@ fn prepare_scope_inner(
     )?;
     if let Some(detection) = detection {
         context["detection"] = detection;
-        if load_full_context || std::env::var("GITHUB_JOB").as_deref() != Ok("detect") {
-            context["native_run"] = serde_json::to_value(super::gating::native_run(unit)?)
-                .map_err(|e| e.to_string())?;
-        }
+        context["native_run"] =
+            serde_json::to_value(super::gating::native_run(unit)?).map_err(|e| e.to_string())?;
     }
     let argv = context["canonical_argv"]
         .as_array_mut()
@@ -613,7 +572,7 @@ fn prepare_scope_inner(
         super::full::executable_pins(root, &w.check_config, &w.runner)?
     };
     context["executables"] = pins;
-    if load_full_context && let Some(contexts) = &c.full_contexts {
+    if let Some(contexts) = &c.full_contexts {
         let path = match unit {
             Some(unit) => &contexts.units[unit],
             None => &contexts.collection,

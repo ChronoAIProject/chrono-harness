@@ -48,7 +48,8 @@
     "host.bootstrap-tests",
     "test.cache-tests",
     "test.host-bootstrap-native-tests",
-    "test.host-bootstrap-launcher-tests"
+    "test.host-bootstrap-launcher-tests",
+    "test.pr-tests"
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
@@ -526,6 +527,14 @@
       "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_host_bootstrap_launcher_tests",
       "rust_toolchain": false
+    },
+    {
+      "id": "verify_pr_tests",
+      "kind": "verify",
+      "operation": "test.pr-tests",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/verify_pr_tests",
+      "rust_toolchain": true
     }
   ],
   "collector": {
@@ -566,7 +575,8 @@
       "build_cache",
       "verify_cache_tests",
       "verify_host_bootstrap_native_tests",
-      "verify_host_bootstrap_launcher_tests"
+      "verify_host_bootstrap_launcher_tests",
+      "verify_pr_tests"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -610,7 +620,8 @@
       "build_cache": "linux_build_cache",
       "verify_cache_tests": "linux_verify_cache_tests",
       "verify_host_bootstrap_native_tests": "linux_verify_host_bootstrap_native_tests",
-      "verify_host_bootstrap_launcher_tests": "linux_verify_host_bootstrap_launcher_tests"
+      "verify_host_bootstrap_launcher_tests": "linux_verify_host_bootstrap_launcher_tests",
+      "verify_pr_tests": "linux_verify_pr_tests"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -649,7 +660,8 @@
       "build_cache": "macos_build_cache",
       "verify_cache_tests": "macos_verify_cache_tests",
       "verify_host_bootstrap_native_tests": "macos_verify_host_bootstrap_native_tests",
-      "verify_host_bootstrap_launcher_tests": "macos_verify_host_bootstrap_launcher_tests"
+      "verify_host_bootstrap_launcher_tests": "macos_verify_host_bootstrap_launcher_tests",
+      "verify_pr_tests": "macos_verify_pr_tests"
     }
   },
   "unit_costs": {
@@ -689,7 +701,8 @@
     "build_cache": "unmeasured",
     "verify_cache_tests": "unmeasured",
     "verify_host_bootstrap_native_tests": "unmeasured",
-    "verify_host_bootstrap_launcher_tests": "unmeasured"
+    "verify_host_bootstrap_launcher_tests": "unmeasured",
+    "verify_pr_tests": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
@@ -873,6 +886,10 @@
     },
     "verify_host_bootstrap_launcher_tests": {
       "need": "原始未过滤的 shell 启动入口测试使用独立登记的 shell 命令替身，验证保护准入、协调者委托、参数与原退出传递；不编译 Rust 工具，也不调用发布二进制。",
+      "release_assets": []
+    },
+    "verify_pr_tests": {
+      "need": "pr-tests 通过独立 Rust CLI 和 gh 替身验证 PR 身份、检查状态、原生等待后的回读及原始进程输出；Cargo 从源码编译产品库，不调用发布资产。",
       "release_assets": []
     }
   },
