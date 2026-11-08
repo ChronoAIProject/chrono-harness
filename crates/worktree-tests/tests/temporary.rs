@@ -87,6 +87,28 @@ fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_fail
 }
 
 #[test]
+fn rolling_directory_ambiguous_operation_owner_refuses_before_launch() {
+    let h = rolling_host(0);
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["retained_producers"][0]["operations"] = value!(["use.consumer"]);
+    let mut duplicate = policy["retained_producers"][0].clone();
+    duplicate["id"] = value!("another-owner");
+    duplicate["directory"] = value!(".chrono-harness/state/another-run/");
+    policy["retained_producers"]
+        .as_array_mut()
+        .unwrap()
+        .push(duplicate);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
+    assert_eq!(code, 2, "{report} {error}");
+    assert!(format!("{report} {error}").contains("artifact operation requires one exact producer"));
+    assert!(report["managed_process"].is_null());
+    assert!(!h.root.join(".chrono-harness/state/another-run").exists());
+}
+
+#[test]
 fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
     let h = rolling_host(0);
     let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
