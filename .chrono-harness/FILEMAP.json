@@ -533,6 +533,8 @@
   ],
   "project_edges": [
     {"from":"project:identifiers","kind":"compile","to":"project:runner"},
+    {"from":"project:identifiers","kind":"compile","to":"project:worktree"},
+    {"from":"project:identifiers","kind":"compile","to":"project:worktree-tests"},
     {"from":"project:identifiers","kind":"compile","to":"project:identifiers-tests"},
     {"from":"project:identifiers","kind":"test-execution","to":"test:identifiers-tests"},
     {"from":"project:identifiers-tests","kind":"test-execution","to":"test:identifiers-tests"},
