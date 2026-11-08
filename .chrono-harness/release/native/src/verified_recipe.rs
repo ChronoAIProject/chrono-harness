@@ -57,6 +57,40 @@ pub fn result_exit(child: Option<i32>, auxiliary_failed: bool) -> (exit: i32)
 
 pub enum DependencyResult { Success, Failure, Cancelled, Skipped }
 
+pub fn executable_file(regular: bool, mode: u32) -> (valid: bool)
+    ensures valid == (regular && mode <= 4095 && mode & 73 != 0),
+{
+    regular && mode <= 4095 && mode & 73 != 0
+}
+
+pub fn same_content(hash: &str, size: u64, expected_hash: &str, expected_size: u64) -> (same: bool)
+    ensures same == (hash@ == expected_hash@ && size == expected_size),
+{
+    identifiers::equal_text(hash, expected_hash) && size == expected_size
+}
+
+pub fn same_executable(
+    hash: &str, size: u64, mode: u32,
+    expected_hash: &str, expected_size: u64, expected_mode: u32,
+) -> (same: bool)
+    ensures same == (hash@ == expected_hash@ && size == expected_size && mode == expected_mode),
+{
+    same_content(hash, size, expected_hash, expected_size) && mode == expected_mode
+}
+
+/// tar 解码只提供原字段；成员必须是唯一的字面 executable 普通文件。
+pub fn executable_entry(
+    name: &[u8], regular: bool, size: u64, mode: u32,
+    expected_size: u64, expected_mode: u32,
+) -> (valid: bool)
+    ensures valid == (regular
+        && name@ == seq![101u8,120,101,99,117,116,97,98,108,101]
+        && size == expected_size && mode == expected_mode),
+{
+    regular && identifiers::equal_bytes(name, &[101u8,120,101,99,117,116,97,98,108,101])
+        && size == expected_size && mode == expected_mode
+}
+
 /// 先核当前 needs 的结果，再接受同一 run 的原生产 attempt。
 /// 旧成功原件不能覆盖当前 failure／cancelled／skipped。
 pub fn selected_producer(

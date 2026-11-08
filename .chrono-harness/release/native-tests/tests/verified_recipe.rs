@@ -39,6 +39,46 @@ fn build_and_explicit_verification_require_rust() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn executable_modes_require_a_regular_file_and_an_execute_bit() {
+    let normal = policy::executable_file(true, 493);
+    let data = policy::executable_file(true, 420);
+    let directory = policy::executable_file(false, 493);
+    let lowest = policy::executable_file(true, 1);
+    let special = policy::executable_file(true, 4095);
+    let unknown = policy::executable_file(true, 4096);
+    expect_recipe(normal && !data && !directory && lowest && special && !unknown);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn executable_identity_requires_the_full_digest_size_and_mode() {
+    proof {
+        reveal_strlit("hash"); reveal_strlit("hashx"); reveal_strlit("Hash");
+        assert("hash"@.len() != "hashx"@.len());
+        assert("hash"@[0] != "Hash"@[0]);
+    }
+    let same = policy::same_executable("hash", 7, 489, "hash", 7, 489);
+    let digest = policy::same_executable("Hash", 7, 489, "hash", 7, 489);
+    let prefix = policy::same_executable("hashx", 7, 489, "hash", 7, 489);
+    let size = policy::same_executable("hash", 8, 489, "hash", 7, 489);
+    let mode = policy::same_executable("hash", 7, 493, "hash", 7, 489);
+    expect_recipe(same && !digest && !prefix && !size && !mode);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tar_entry_requires_the_exact_regular_name_size_and_mode() {
+    let name = [101u8,120,101,99,117,116,97,98,108,101];
+    let same = policy::executable_entry(&name, true, 7, 489, 7, 489);
+    let link = policy::executable_entry(&name, false, 7, 489, 7, 489);
+    let size = policy::executable_entry(&name, true, 8, 489, 7, 489);
+    let mode = policy::executable_entry(&name, true, 7, 493, 7, 489);
+    let traversal = [46u8,46,47,101,120,101,99,117,116,97,98,108,101];
+    let path = policy::executable_entry(&traversal, true, 7, 489, 7, 489);
+    let empty: [u8; 0] = [];
+    let absent = policy::executable_entry(&empty, true, 7, 489, 7, 489);
+    expect_recipe(same && !link && !size && !mode && !path && !absent);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn child_failure_wins_over_forwarding_retention_and_receipt_failures() {
     let ordinary = policy::result_exit(Some(41), false);
     let auxiliary = policy::result_exit(Some(41), true);
