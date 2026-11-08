@@ -2648,8 +2648,13 @@ impl Manager {
             if !entry.uses.is_empty() || entry.cache_attempts.is_empty() {
                 continue;
             }
-            let Some(lease) = self.lease(&entry, true)? else {
-                continue;
+            let lease = match self.lease(&entry, true) {
+                Ok(Some(lease)) => lease,
+                Ok(None) => continue,
+                Err(error) => {
+                    failures.push(format!("{}: {error}", entry.path.display()));
+                    continue;
+                }
             };
             let mut count = entry.cache_attempts.len();
             let sizes = entry
