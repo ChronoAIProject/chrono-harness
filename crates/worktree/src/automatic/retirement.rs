@@ -125,7 +125,7 @@ impl Manager {
         while index < self.ledger.retired_leases.len() {
             let pending = self.ledger.retired_leases[index].clone();
             let owner = &pending.ownership;
-            let result = (|| {
+            let result: Result<&str, String> = (|| {
                 let suffix = owner
                     .path
                     .strip_prefix(&format!(
