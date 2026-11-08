@@ -9,6 +9,8 @@ use chrono_harness::verified_paths as policy;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
 
@@ -16,14 +18,18 @@ fn expect(path: &[u8], expected: bool)
     requires expected == policy::relative_path(path@),
 {
     let actual = policy::valid_relative_path(path);
-    assert(actual == expected);
+    if actual != expected {
+        panic!();
+    }
 }
 
 fn expect_state(path: &[u8], expected: bool)
     requires expected == policy::host_state_path(path@),
 {
     let actual = policy::valid_host_state_path(path);
-    assert(actual == expected);
+    if actual != expected {
+        panic!();
+    }
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
