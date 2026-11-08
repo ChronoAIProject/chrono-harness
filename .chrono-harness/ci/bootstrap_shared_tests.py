@@ -621,6 +621,9 @@ class RealAttempt:
         if completion.exists():
             cls.require_consumer_completion(evidence, result)
             return
+        if result["status"] == "failed" and len(result["commands"]) == 1 and result["commands"][0]["name"] == "clone":
+            cls.require_failed_clone(evidence, result)
+            return
         for descriptor in custody.get("required_originals", []):
             cls.original(descriptor)
         reports = {}
@@ -652,6 +655,27 @@ class RealAttempt:
         # Release only the cache-attempt admission slot after exclusive disposal.
         # Failed originals and their consumers keep their outcomes and identities.
         cls.verify_disposal(root, custody["declared_outputs"], json.loads(released))
+
+    @classmethod
+    def require_failed_clone(cls, evidence, result):
+        """A joined clone failure produced no managed output to release.
+
+        Keep the failed result, streams and partial source in place. This only
+        settles admission; it claims neither cache disposal nor task success.
+        """
+        command, custody = result["commands"][0], result["custody"]
+        root, argv = Path(result["fixture"]), command["argv"]
+        if (any(key in custody for key in ("owner_executable", "managed_report", "declared_outputs", "release_report"))
+                or type(command["exit_code"]) is not int or command["exit_code"] <= 0 or command["status"] != "failed"
+                or result["source"].get("dirty") is not False or result["source"].get("error") is not None
+                or root != evidence / "fixture" or root.is_symlink() or root.resolve() != root
+                or len(argv) != 9 or not Path(argv[0]).is_absolute()
+                or argv[1:7] != ["clone", "--no-local", "-q", "--depth=1", "--single-branch", "--no-tags"]
+                or argv[7:] != [command["cwd"], str(root)] or not Path(command["cwd"]).is_absolute()
+                or custody["disposal"] != "not-requested" or custody["descendants_quiescent"] is not None):
+            raise ValueError("failed clone has no unambiguous joined pre-management original")
+        cls.original(command["stdout"])
+        cls.original(command["stderr"])
 
     @classmethod
     def require_consumer_completion(cls, evidence, result):
@@ -1108,6 +1132,56 @@ class RealAttempt:
 
 
 class AttemptCustody(unittest.TestCase):
+    def failed_clone(self, directory):
+        source = Path(directory).resolve()
+        observed = {"commit": "a" * 40, "tree": "b" * 40, "dirty": False, "error": None}
+        attempt = RealAttempt(source / "evidence", observed, time.monotonic() + 10, 1048576)
+        root = Path(attempt.result["fixture"])
+        root.mkdir()
+        (root / "partial-source").write_bytes(b"preserve partial clone")
+        with self.assertRaisesRegex(AssertionError, "clone: exit_code=128"):
+            attempt.run("clone", ["/usr/bin/git", "clone", "--no-local", "-q", "--depth=1",
+                        "--single-branch", "--no-tags", str(source), str(root)], source, dict(os.environ))
+        attempt.finish("failed", "joined clone failure")
+        return attempt
+
+    def test_joined_failed_clone_retains_source_and_failure_before_next_attempt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            attempt = self.failed_clone(directory)
+            original = (attempt.evidence / "result.json").read_bytes()
+            RealAttempt.require_settled(attempt.evidence)
+            next_attempt = RealAttempt(attempt.evidence.parent, {}, time.monotonic() + 10, 1048576)
+            self.assertNotEqual(next_attempt.evidence, attempt.evidence)
+            self.assertEqual((attempt.evidence / "result.json").read_bytes(), original)
+            self.assertEqual((Path(attempt.result["fixture"]) / "partial-source").read_bytes(), b"preserve partial clone")
+            self.assertEqual(attempt.result["custody"]["disposal"], "not-requested")
+            self.assertIsNone(attempt.result["custody"]["descendants_quiescent"])
+
+    def test_failed_clone_admission_refuses_unknown_outcomes_management_and_changed_originals(self):
+        for mode in ("timeout", "signal", "managed", "extra-command", "other-command", "argv", "fixture", "stream"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
+                attempt = self.failed_clone(directory)
+                command = attempt.result["commands"][0]
+                if mode == "timeout":
+                    command.update(status="timeout", exit_code=None)
+                elif mode == "signal":
+                    command["exit_code"] = -9
+                elif mode == "managed":
+                    attempt.result["custody"]["owner_executable"] = {"path": "owner"}
+                elif mode == "extra-command":
+                    attempt.result["commands"].append(dict(command, name="managed-use"))
+                elif mode == "other-command":
+                    command["name"] = "managed-use"
+                elif mode == "argv":
+                    command["argv"][1] = "checkout"
+                elif mode == "fixture":
+                    attempt.result["fixture"] = str(attempt.evidence.parent)
+                else:
+                    Path(command["stderr"]["path"]).write_bytes(b"changed")
+                attempt.publish()
+                with self.assertRaises((ValueError, OSError, KeyError, TypeError)):
+                    RealAttempt.require_settled(attempt.evidence)
+
     def test_terminal_success_failure_and_timeout_keep_originals_and_refuse_accumulation(self):
         for mode, code, status in [("fail", "0", "passed"), ("fail", "7", "failed"),
                                    ("timeout", "0", "timeout")]:
@@ -1683,56 +1757,83 @@ class ManagedAttemptCustody(unittest.TestCase):
         pending.finish("failed", "unowned pre-existing output refused")
 
 
-class RealSharedStartup(unittest.TestCase):
-    """Explicit native acceptance mode; the ordinary fixture suite stays small."""
+class BootstrapCommandMocks(unittest.TestCase):
+    """Test producer orchestration with the external command boundary mocked."""
 
-    def test_registered_core_shared_and_runner_consumer(self):
-        source_root = SOURCE.parents[1]
-        sys.path.insert(0, str(SOURCE))
-        import bootstrap
-        observed = bootstrap.observe_source(source_root)
-        self.assertIsNone(observed["error"])
-        self.assertIs(observed["dirty"], False, "real consumption requires committed clean candidate source")
-        filemap = json.loads((source_root / ".chrono-harness/FILEMAP.json").read_bytes())
-        bounds = filemap["execution_plans"]["test:host-bootstrap-tests"]
-        deadline = time.monotonic() + bounds["timeout_seconds"]
-        # Qualify the installed producer before reserving/cloning an attempt.
-        installed = json.loads((source_root / ".chrono-harness/state/bootstrap.json").read_bytes())
-        self.assertEqual(installed["source"]["after"], observed)
-        owner = source_root / ".chrono-harness/bin/chrono-worktree"
-        record = next(row for row in installed["installed"] if row["path"] == ".chrono-harness/bin/chrono-worktree")
-        self.assertEqual(bootstrap.file_digest(owner), record["sha256"])
-        environment = dict(os.environ)
-        for key in ("CHRONO_WORKTREE_BOOTSTRAP", "CHRONO_WORKTREE_CHECK", "CHRONO_CHECK_SOURCE"):
-            environment.pop(key, None)
-        with RealAttempt(source_root / ".chrono-harness/state/bootstrap-real", observed,
-                         deadline, bounds["output_limit_bytes"], owner, environment) as attempt:
-            evidence, root = attempt.evidence, Path(attempt.result["fixture"])
-            environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
-            host = fixture_host_config(source_root)
-            tools = {row["id"]: row["program"] for row in host["tools"]}
+    def setUp(self):
+        import bootstrap_shared
+        self.shared = bootstrap_shared
+        self.temporary = tempfile.TemporaryDirectory(prefix="bootstrap command mocks ")
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.observed = {"commit": "a" * 40, "dirty": False, "error": None}
+        self.output = self.root / "github-output"
+        self.profile = {"entrypoint": {"tool": "bash", "script": ".chrono-harness/ci/bootstrap-native.sh"},
+                        "tools": {"bash": "/registered/bash"},
+                        "install": [{"destination": ".chrono-harness/bin/tool"}]}
+        self.config = {"directory": ".chrono-harness/startup/", "profiles": {
+            "core": {"config": ".chrono-harness/ci/bootstrap-core.json", "build": True},
+            "cache": {"config": ".chrono-harness/ci/bootstrap-cache.json", "build": False}}}
+        self.profiles = {"core": (self.profile, "b" * 64), "cache": ({"install": []}, "c" * 64)}
+        self.argv = ["/registered/bash", str(self.root / self.profile["entrypoint"]["script"]),
+                     str(self.root), self.config["profiles"]["core"]["config"]]
+        self.command = self.patch(self.shared.subprocess, "run")
+        self.patch(self.shared, "source", return_value=self.observed)
+        self.patch(self.shared, "native_platform", return_value={"os": "mock", "arch": "mock"})
+        self.original = self.patch(self.shared, "original_report", return_value=b'{"operations":[]}')
+        environment = fixture.mock.patch.dict(os.environ, {"GITHUB_OUTPUT": str(self.output)})
+        environment.start()
+        self.addCleanup(environment.stop)
 
-            def run(name, argv, cwd):
-                attempt.run(name, argv, cwd, environment)
-                return (evidence / (name + ".stdout")).read_bytes()
+    def patch(self, *args, **kwargs):
+        patcher = fixture.mock.patch.object(*args, **kwargs)
+        result = patcher.start()
+        self.addCleanup(patcher.stop)
+        return result
 
-            print("real bootstrap consumer originals: " + str(evidence), flush=True)
-            acquire_parent_source(source_root, root, tools["git"], run)
-            self.assertEqual(bootstrap.observe_source(root), observed)
-            attempt.manage(root, owner, environment)
-            # 父任务保留包引用；只有取得所有权保护的 fixture 子任务才能写缓存。
-            archive = source_root / ".chrono-harness/bin/verus.zip"
-            attempt.result["verus_archive"] = {"path": str(archive), "sha256": bootstrap.file_digest(archive),
-                                               "size": archive.stat().st_size}
-            attempt.publish()
-            try:
-                attempt.managed("host.bootstrap-real-fixture")
-            finally:
-                original = root / ".chrono-harness/state/bootstrap-real-consumption/pending-attempt/result.json"
-                if original.is_file():
-                    attempt.result["consumer_result"] = {"path": str(original), "sha256": bootstrap.file_digest(original),
-                                                         "size": original.stat().st_size}
-                    attempt.publish()
+    def produce(self):
+        return self.shared.produce(self.root, CONFIG, self.config, self.profiles, "d" * 64)
+
+    def test_registered_command_success_exports_mock_producer_bytes(self):
+        def installed(*args, **kwargs):
+            tool = self.root / ".chrono-harness/bin/tool"
+            tool.parent.mkdir(parents=True)
+            tool.write_bytes(b"mock producer output")
+            tool.chmod(0o755)
+        self.command.side_effect = installed
+        self.produce()
+        self.command.assert_called_once_with(self.argv, check=True, pass_fds=fixture.PASS_FDS)
+        transfer = self.root / self.config["directory"]
+        raw = (transfer / "manifest.json").read_bytes()
+        self.assertEqual(self.output.read_text(), "binding=" + hashlib.sha256(raw).hexdigest() + "\n")
+        manifest = json.loads(raw)
+        self.assertEqual(manifest["source"], self.observed)
+        item = manifest["profiles"]["core"]["files"][0]
+        self.assertEqual((transfer / item["path"]).read_bytes(), b"mock producer output")
+        self.assertEqual(manifest["profiles"]["cache"]["files"], [])
+
+    def test_command_failure_prevents_export_and_preserves_original_exception(self):
+        failures = [subprocess.CalledProcessError(17, self.argv, output=b"partial", stderr=b"mock failure"),
+                    subprocess.TimeoutExpired(self.argv, 3, output=b"partial", stderr=b"mock timeout")]
+        for failure in failures:
+            with self.subTest(failure=type(failure).__name__):
+                self.command.reset_mock()
+                self.command.side_effect = failure
+                with self.assertRaises(type(failure)) as caught:
+                    self.produce()
+                self.assertIs(caught.exception, failure)
+                self.command.assert_called_once_with(self.argv, check=True, pass_fds=fixture.PASS_FDS)
+                self.original.assert_not_called()
+                self.assertFalse((self.root / self.config["directory"]).exists())
+                self.assertFalse(self.output.exists())
+
+    def test_source_change_after_command_prevents_export(self):
+        self.patch(self.shared, "source", side_effect=[self.observed, dict(self.observed, dirty=True)])
+        with self.assertRaisesRegex(ValueError, "source changed during production"):
+            self.produce()
+        self.command.assert_called_once_with(self.argv, check=True, pass_fds=fixture.PASS_FDS)
+        self.original.assert_not_called()
+        self.assertFalse(self.output.exists())
 
 
 def runner_execution_process(evidence, row):
@@ -1909,90 +2010,6 @@ class RunnerConsumption(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "independent runner tests did not pass"):
             self.consume()
         self.assertEqual(self.attempt.result["commands"][0]["exit_code"], 0)
-
-
-class RealFixtureStartup(unittest.TestCase):
-    """All fixture production and assertions share one existing owner lease."""
-
-    def test_consume(self):
-        import bootstrap
-        root = SOURCE.parents[1]
-        observed = bootstrap.observe_source(root)
-        parent = json.loads((root.parent / "result.json").read_bytes())
-        self.assertEqual(parent["fixture"], str(root))
-        self.assertEqual(parent["source"], observed)
-        self.assertTrue(fixture.PASS_FDS, "real fixture requires inherited owner protection")
-        bounds = json.loads((root / ".chrono-harness/FILEMAP.json").read_bytes())["execution_plans"]["test:host-bootstrap-tests"]
-        with RealAttempt(root / ".chrono-harness/state/bootstrap-real-consumption", observed,
-                         time.monotonic() + bounds["timeout_seconds"] - 30, bounds["output_limit_bytes"]) as attempt:
-            evidence = attempt.evidence
-            attempt.result["custody"] = {"status": "managed-by-parent", "owner_result": str(root.parent / "result.json")}
-            attempt.publish()
-            environment = dict(os.environ)
-            environment["GITHUB_OUTPUT"] = str(evidence / "github-output")
-            host = fixture_host_config(root)
-            tools = {row["id"]: row["program"] for row in host["tools"]}
-            def run(name, argv, cwd):
-                attempt.run(name, argv, cwd, environment)
-            registry = json.loads((root / ".chrono-harness/projects.json").read_bytes())
-            actions = bootstrap.registered_operations(registry)
-
-            def registered(operation):
-                action = actions[operation]
-                run(operation, [tools[action["tool"]], *action["argv"]], root)
-                return attempt.result["commands"][-1]
-
-            # 此处已继承父所有者租约；正式下载动作仍按现役声明独立核对 SHA256。
-            archive = root / ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
-            archive.parent.mkdir(parents=True, exist_ok=True)
-            archive.write_bytes(RealAttempt.original(parent["verus_archive"]))
-            registered("host.bootstrap-cache")
-            try:
-                registered("host.bootstrap-shared-produce")
-            finally:
-                # The producer retains the exact descriptor before publication,
-                # even when publication/consumer commands later fail.
-                shared = json.loads((root / CONFIG).read_bytes())
-                manifest_path = root / shared["directory"] / "manifest.json"
-                if manifest_path.is_file():
-                    raw = manifest_path.read_bytes()
-                    sha = hashlib.sha256(raw).hexdigest()
-                    retained = root / (".chrono-harness/state/startup-originals/manifest-" + sha + ".json")
-                    attempt.result["startup_manifest"] = {"path": str(retained), "sha256": sha, "size": len(raw)}
-                    attempt.publish()
-                    self.assertEqual(retained.read_bytes(), raw)
-                    self.assertEqual(json.loads(raw)["source"], observed)
-            binding = (evidence / "github-output").read_text().strip().split("=", 1)[1]
-            attempt.result["binding"] = binding
-            environment["CHRONO_STARTUP_BINDING"] = binding
-            registered("host.bootstrap-shared-install-unit_runner")
-            units = json.loads((root / ".chrono-harness/ci/units.json").read_bytes())
-            run("runner-startup", units["units"]["runner"]["bootstrap"], root)
-            run("runner-check", [*host["canonical_check"]["argv"], "--unit", "runner"], root)
-
-            def original(descriptor):
-                raw = (root / descriptor["path"]).read_bytes()
-                self.assertEqual(hashlib.sha256(raw).hexdigest(), descriptor["sha256"])
-                return raw
-
-            check_config = json.loads((root / ".chrono-harness/ci/check.json").read_bytes())
-            reference = json.loads((root / check_config["policy"]["units"]["runner"]["report_path"]).read_bytes())
-            report = json.loads(original(reference["original"]))
-            self.assertEqual(report["judge"]["exit_code"], 0)
-            self.assertIsNone(report["judge"]["failure"])
-            response = json.loads(original(report["judge"]["stdout_original"]))
-            original(report["judge"]["stderr_original"])
-            # Originals remain at their original paths. No copied reports, forged
-            # lifecycle enrollment, or unchecked recursive fixture deletion.
-            attempt.result["runner_report"] = reference["original"]
-            attempt.publish()
-            self.assertEqual(bootstrap.observe_source(root), observed)
-            # The explicit acceptance action uses the same registered argv and
-            # scoped toolchain environment, within this fixture's remaining bound.
-            environment.update(check_config["policy"]["environment"])
-            attempt.result["runner_consumption"] = consume_runner_operation(response, observed["commit"], registered)
-            self.assertEqual(bootstrap.observe_source(root), observed)
-
 
 
 if __name__ == "__main__":

@@ -522,10 +522,11 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
             .is_some_and(|p| p.operations.contains(&c.evidence.operation))
         || s.filemap["execution_scheduling"]["claims"][&c.evidence.operation]["outputs"]
             .as_array()
-            .is_none_or(|v| v.is_empty())
+            .is_none()
     {
         return Err(
-            "missing/misbound required real-consumer evidence operation/plan/output".into(),
+            "missing/misbound required consumption evidence operation/plan/output declaration"
+                .into(),
         );
     }
     Ok(())

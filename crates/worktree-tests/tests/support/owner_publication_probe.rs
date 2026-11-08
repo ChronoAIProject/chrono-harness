@@ -1,4 +1,4 @@
-//! Real external interpreter adapter; all fixture assertions are Rust.
+//! Declared construction entrypoint adapter; all fixture assertions are Rust.
 use std::{
     io::{self, Read, Write},
     path::Path,
@@ -33,10 +33,10 @@ fn main() -> ExitCode {
         .join(".chrono-harness/state/owner-probe-unavailable")
         .exists()
     {
-        eprintln!("construction interpreter unavailable");
+        eprintln!("construction entrypoint unavailable");
         return ExitCode::from(42);
     }
-    let mut child = Command::new("/usr/bin/python3");
+    let mut child = Command::new("/bin/sh");
     child.args(&args);
     chrono_harness::process_fds::forward_command(&mut child, &[]).unwrap();
     let status = child.status().unwrap();
