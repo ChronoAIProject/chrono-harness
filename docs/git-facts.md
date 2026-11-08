@@ -8,7 +8,7 @@
 
 runner 获取 Git 事实前先读所选候选配置，在版本探测之前就核摘要，再用已绑定 Git 将配置原字节与固定候选 blob 比较。候选工具读取两端，包括历史格式数据；不执行基线二进制。
 
-完整 registration、FILEMAP、routes、projects、cost、mixed、workflow 和可选 Cargo 检查都使用请求绑定的读取器。初始清单和 `chrono-inputs capture` 也使用候选配置绑定。
+完整 registration、FILEMAP、routes、projects、cost、mixed 和 workflow 检查都使用请求绑定的读取器。初始清单和 `chrono-inputs capture` 也使用候选配置绑定。
 
 进程环境只含明确继承和配置的值。未继承到的变量保持缺失，配置值覆盖继承。裸工具名须登记 PATH，包括明确为空的 PATH，环境中其他 Git 不能代替它提供事实。显式提供 `GIT_DIR`、`GIT_WORK_TREE`、`GIT_INDEX_FILE` 会因重定向工作树而被拒绝；原 no-replace-objects／no-optional-locks 参数保留。
 
