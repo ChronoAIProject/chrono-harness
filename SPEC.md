@@ -499,10 +499,15 @@ Rust 的登记编译操作必须启用增量编译，并将各项目实际使用
 
 DELTA 是 base tree 到 candidate tree 的集合差，包含路径、blob OID 和 mode。
 按字节稳定排序路径，用 Git `--no-renames` 的含 NUL 输出或等价库接口读取事实。
-增加 A：base 不存在、candidate 存在；修改 M：内容或 mode 不同；删除 D：仅 base 存在。
+增加 A：base 不存在、candidate 存在；修改 M：两端均存在，blob OID、mode 或 Git 对象 kind 不同；删除 D：仅 base 存在。
 重命名规范化为 D(old)+A(new)，不依赖 Git 相似度阈值；展示可附 rename 提示，不改变裁决。
 同内容改名仍须检查旧归属、旧消费者、旧测试和新路径登记。
 二进制文件也按 blob 比较；没有文本 diff 不等于没有 DELTA。
+
+逐路径条目判断由 `verified_status.rs::delta_for_entry` 直接读取实际两端 `TreeEntry` 并证明；
+`facts::Entry` 重导出同一类型，完整文本比较 mode、oid、kind。两端均缺失或三字段全部相同不产生记录，
+kind 单独变化也产生 M；产生记录时精确保留原路径和旧新 blob／mode，缺失端为 None，存在但为空的字段仍为 Some("")。
+外层路径并集、排序、Git／JSON 获取及完整 DELTA 组合仍有各自未完成的证明义务。
 
 第 1 步：读取 B/C 两份登记，解析变更文件及变更的记录 ID、字段和边。第 2 步：建立 `G = G_base ∪ G_candidate`，保留每条边来源 base/candidate/both。第 3 步：变更文件、已登记有效输入的两端变化为种子；登记变化另把变更记录目标加入种子；有类型边的增加、删除或改接必须把两端节点加入种子。例如只删除 `runner → runner-tests` 测试边，也把 runner 与旧测试作为影响种子。
 

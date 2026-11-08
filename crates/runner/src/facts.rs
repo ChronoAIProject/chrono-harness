@@ -1,26 +1,20 @@
 //! Immutable Git facts. Admissibility belongs to the consuming judge.
+pub use crate::facts_binding::{
+    OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
+    declaration as git_declaration,
+};
 pub use crate::facts_configs::Identity as ConfigIdentity;
+pub use crate::verified_status::TreeEntry as Entry;
 use crate::{
     json, no_symlink_parents, relative_path,
     wire::{Checkout, Delta, IndexFlag},
 };
-use serde::{Deserialize, Serialize};
 use serde_json::{Value, json as value};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
     process::Command,
-};
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Entry {
-    pub mode: String,
-    pub oid: String,
-    pub kind: String,
-}
-pub use crate::facts_binding::{
-    OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
-    declaration as git_declaration,
 };
 
 pub type Tree = BTreeMap<String, Entry>;
@@ -136,26 +130,7 @@ pub fn delta(a: &Tree, b: &Tree) -> Vec<Delta> {
         .chain(b.keys())
         .collect::<BTreeSet<_>>()
         .into_iter()
-        .filter(|p| a.get(*p) != b.get(*p))
-        .map(|p| {
-            let old = a.get(p);
-            let new = b.get(p);
-            Delta {
-                kind: if old.is_none() {
-                    "A"
-                } else if new.is_none() {
-                    "D"
-                } else {
-                    "M"
-                }
-                .into(),
-                path: p.clone(),
-                old_blob: old.map(|e| e.oid.clone()),
-                new_blob: new.map(|e| e.oid.clone()),
-                old_mode: old.map(|e| e.mode.clone()),
-                new_mode: new.map(|e| e.mode.clone()),
-            }
-        })
+        .filter_map(|p| crate::verified_status::delta_for_entry(p.as_str(), a.get(p), b.get(p)))
         .collect()
 }
 fn paths(raw: Vec<u8>) -> Result<Vec<String>, String> {

@@ -726,6 +726,102 @@ fn finding_reference_list_checks_every_position_and_preserves_duplicates() {
     let fields = policy::valid_finding_fields(&empty); assert(!fields);
 }
 
+fn tree_entry(mode: &str, oid: &str, kind: &str) -> (out: policy::TreeEntry)
+    ensures out.mode@ == mode@, out.oid@ == oid@, out.kind@ == kind@,
+{
+    policy::TreeEntry { mode: mode.to_owned(), oid: oid.to_owned(), kind: kind.to_owned() }
+}
+
+fn unchanged_entries_have_no_delta(path: &str, mode: &str, oid: &str, kind: &str) {
+    let absent = policy::delta_for_entry(path, None, None);
+    assert(absent.is_none());
+    let old = tree_entry(mode, oid, kind);
+    let new = tree_entry(mode, oid, kind);
+    let equal = old.eq(&new);
+    assert(equal);
+    let copied = old.clone();
+    assert(copied.mode@ == mode@ && copied.oid@ == oid@ && copied.kind@ == kind@);
+    let unchanged = policy::delta_for_entry(path, Some(&old), Some(&new));
+    assert(unchanged.is_none());
+}
+
+fn additions_and_deletions_preserve_fields(path: &str, mode: &str, oid: &str, kind: &str) {
+    let entry = tree_entry(mode, oid, kind);
+    let added = policy::delta_for_entry(path, None, Some(&entry));
+    match added {
+        None => { assert(false); },
+        Some(change) => {
+            assert(change.kind@ == "A"@ && change.path@ == path@);
+            assert(change.old_blob.is_none() && change.old_mode.is_none());
+            assert(policy::optional_text(&change.new_blob) == Some(oid@));
+            assert(policy::optional_text(&change.new_mode) == Some(mode@));
+        },
+    }
+    let deleted = policy::delta_for_entry(path, Some(&entry), None);
+    match deleted {
+        None => { assert(false); },
+        Some(change) => {
+            assert(change.kind@ == "D"@ && change.path@ == path@);
+            assert(policy::optional_text(&change.old_blob) == Some(oid@));
+            assert(policy::optional_text(&change.old_mode) == Some(mode@));
+            assert(change.new_blob.is_none() && change.new_mode.is_none());
+        },
+    }
+}
+
+fn modified_entries_preserve_both_sides(path: &str, old: &policy::TreeEntry, new: &policy::TreeEntry)
+    requires old.mode@ != new.mode@ || old.oid@ != new.oid@ || old.kind@ != new.kind@,
+{
+    let changed = policy::delta_for_entry(path, Some(old), Some(new));
+    match changed {
+        None => { assert(false); },
+        Some(change) => {
+            assert(change.kind@ == "M"@ && change.path@ == path@);
+            assert(policy::optional_text(&change.old_blob) == Some(old.oid@));
+            assert(policy::optional_text(&change.new_blob) == Some(new.oid@));
+            assert(policy::optional_text(&change.old_mode) == Some(old.mode@));
+            assert(policy::optional_text(&change.new_mode) == Some(new.mode@));
+        },
+    }
+}
+
+fn each_tree_field_changes_identity(path: &str, left: &str, right: &str)
+    requires left@ != right@,
+{
+    let old = tree_entry(left, left, left);
+    let mode = tree_entry(right, left, left);
+    let oid = tree_entry(left, right, left);
+    let kind = tree_entry(left, left, right);
+    let equal = old.eq(&mode); assert(!equal);
+    let equal = old.eq(&oid); assert(!equal);
+    let equal = old.eq(&kind); assert(!equal);
+    modified_entries_preserve_both_sides(path, &old, &mode);
+    modified_entries_preserve_both_sides(path, &old, &oid);
+    modified_entries_preserve_both_sides(path, &old, &kind);
+    modified_entries_preserve_both_sides(path, &mode, &old);
+    modified_entries_preserve_both_sides(path, &oid, &old);
+    modified_entries_preserve_both_sides(path, &kind, &old);
+    let all = tree_entry(right, right, right);
+    modified_entries_preserve_both_sides(path, &old, &all);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_delta_preserves_absence_empty_fields_and_arbitrary_text() {
+    unchanged_entries_have_no_delta("", "", "", "");
+    unchanged_entries_have_no_delta("目录/é\0", "100644", "object\0", "blob");
+    additions_and_deletions_preserve_fields("", "", "", "");
+    additions_and_deletions_preserve_fields("目录/é\0", "mode\0", "对象\0", "任意\0");
+    proof {
+        reveal_strlit(""); reveal_strlit("x"); reveal_strlit("x\0");
+        reveal_strlit("é"); reveal_strlit("e\u{301}");
+        assert(""@.len() == 0 && "x"@.len() == 1 && "x\0"@.len() == 2);
+        assert("é"@.len() == 1 && "e\u{301}"@.len() == 2);
+    }
+    each_tree_field_changes_identity("", "", "x");
+    each_tree_field_changes_identity("a/b", "x", "x\0");
+    each_tree_field_changes_identity("目录/é\0", "é", "e\u{301}");
+}
+
 fn complete_finding(level: &str, reference: &str) -> (out: policy::Finding)
     ensures out.level@ == level@, out.code@ == "fixture"@,
         out.message@ == "independent expectation"@,
