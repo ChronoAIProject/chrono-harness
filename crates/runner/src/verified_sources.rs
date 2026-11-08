@@ -986,6 +986,90 @@ pub open spec fn dependency_content_matches(
         && checksum_trailer(input.skip(header.len() as int), sources, 0, true)
 }
 
+pub open spec fn cargo_target_rules(targets: Seq<Vec<u8>>, sources: Seq<SourceBinding>) -> Seq<u8>
+    decreases targets.len(),
+{
+    if targets.len() == 0 { Seq::empty() }
+    else { cargo_target_rules(targets.drop_last(), sources)
+        + dependency_escape(targets.last()@) + seq![58u8, 32u8]
+        + dependency_encoding(source_paths(sources)) + seq![10u8, 10u8] }
+}
+
+/// Cargo 编译器记录可以有多个明确目标，源码和二进制输入仍逐项核对。
+pub fn cargo_header_bytes(targets: &Vec<Vec<u8>>, sources: &Vec<SourceBinding>) -> (header: Vec<u8>)
+    ensures header@ == cargo_target_rules(targets@, sources@) + phony_rules(sources@),
+{
+    let mut list = Vec::new();
+    let mut i = 0;
+    assert(source_paths(sources@.take(0)) =~= Seq::<Seq<u8>>::empty());
+    while i < sources.len()
+        invariant 0 <= i <= sources.len(),
+            list@ == dependency_encoding(source_paths(sources@.take(i as int))),
+        decreases sources.len() - i,
+    {
+        let ghost previous = source_paths(sources@.take(i as int));
+        let path = encode_path(sources[i].path.as_slice());
+        if i > 0 { list.push(32u8); }
+        append_bytes(&mut list, path.as_slice());
+        assert(source_paths(sources@.take(i + 1)) =~= previous.push(sources@[i as int].path@));
+        assert(previous.push(sources@[i as int].path@).drop_last() =~= previous);
+        i += 1;
+    }
+    assert(sources@.take(i as int) =~= sources@);
+    let mut header = Vec::new();
+    i = 0;
+    while i < targets.len()
+        invariant 0 <= i <= targets.len(),
+            header@ == cargo_target_rules(targets@.take(i as int), sources@),
+            list@ == dependency_encoding(source_paths(sources@)),
+        decreases targets.len() - i,
+    {
+        let target = encode_path(targets[i].as_slice());
+        append_bytes(&mut header, target.as_slice());
+        append_bytes(&mut header, &[58u8, 32u8]);
+        append_bytes(&mut header, list.as_slice());
+        append_bytes(&mut header, &[10u8, 10u8]);
+        assert(targets@.take(i + 1).drop_last() =~= targets@.take(i as int));
+        i += 1;
+    }
+    assert(targets@.take(i as int) =~= targets@);
+    let ghost rules = header@;
+    assert(phony_rules(sources@.take(0)) == Seq::<u8>::empty());
+    i = 0;
+    while i < sources.len()
+        invariant 0 <= i <= sources.len(),
+            header@ == rules + phony_rules(sources@.take(i as int)),
+        decreases sources.len() - i,
+    {
+        let path = encode_path(sources[i].path.as_slice());
+        append_bytes(&mut header, path.as_slice());
+        append_bytes(&mut header, &[58u8, 10u8]);
+        assert(sources@.take(i + 1).drop_last() =~= sources@.take(i as int));
+        i += 1;
+    }
+    assert(sources@.take(i as int) =~= sources@);
+    header
+}
+
+pub open spec fn cargo_dependency_matches(
+    input: Seq<u8>, targets: Seq<Vec<u8>>, sources: Seq<SourceBinding>,
+) -> bool {
+    let header = cargo_target_rules(targets, sources) + phony_rules(sources);
+    targets.len() > 0 && sources.len() > 0 && prefix_at(input, 0, header)
+        && checksum_trailer(input.skip(header.len() as int), sources, 0, true)
+}
+
+pub fn matches_cargo_dependency(
+    input: &[u8], targets: &Vec<Vec<u8>>, sources: &Vec<SourceBinding>,
+) -> (matched: bool)
+    ensures matched <==> cargo_dependency_matches(input@, targets@, sources@),
+{
+    if targets.len() == 0 || sources.len() == 0 { return false; }
+    let header = cargo_header_bytes(targets, sources);
+    if !matches_at(input, 0, header.as_slice()) { return false; }
+    matches_checksum_suffix(input, header.len(), sources)
+}
+
 /// 按预期源码元数据精确核对完整有序内容；调用方仍须把每个预期路径、摘要和
 /// 长度绑定到固定源码字节，单独通过此函数不建立该来源关系。
 pub fn matches_dependency_content(input: &[u8], output: &[u8], sources: &Vec<SourceBinding>) -> (matched: bool)
@@ -994,16 +1078,22 @@ pub fn matches_dependency_content(input: &[u8], output: &[u8], sources: &Vec<Sou
     if sources.len() == 0 { return false; }
     let header = dependency_header_bytes(output, sources);
     if !matches_at(input, 0, header.as_slice()) { return false; }
-    let mut position = header.len();
+    matches_checksum_suffix(input, header.len(), sources)
+}
+
+/// 两种当前编译入口共用同一完整 checksum 尾部，不扫描成功子串。
+pub fn matches_checksum_suffix(input: &[u8], start: usize, sources: &Vec<SourceBinding>) -> (matched: bool)
+    requires start <= input.len(), sources.len() > 0,
+    ensures matched <==> checksum_trailer(input@.skip(start as int), sources@, 0, true),
+{
+    let mut position = start;
     let mut index = 0;
     let mut before_checksums = true;
-    assert(input@.skip(position as int) == input@.skip(header.len() as int));
     while position < input.len()
         invariant
-            header.len() <= position <= input.len(), 0 <= index <= sources.len(),
-            sources.len() > 0, prefix_at(input@, 0, header@),
-            header@ == dependency_header(output@, sources@),
-            checksum_trailer(input@.skip(header.len() as int), sources@, 0, true)
+            start <= position <= input.len(), 0 <= index <= sources.len(),
+            sources.len() > 0,
+            checksum_trailer(input@.skip(start as int), sources@, 0, true)
                 == checksum_trailer(input@.skip(position as int), sources@, index as int, before_checksums),
         decreases input.len() - position,
     {
