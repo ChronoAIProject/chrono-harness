@@ -182,7 +182,9 @@ fn main() -> ExitCode {
         "cargo-prepare" | "cargo-run" => {
             let root = std::env::current_dir().unwrap();
             let fixture = Path::new(STATE).join("cargo-case");
-            let mut cargo = Command::new("cargo");
+            let cargo_program = Path::new(env!("CARGO"));
+            let mut cargo = Command::new(cargo_program);
+            cargo.env("RUSTC", cargo_program.with_file_name("rustc"));
             // This fixture owns one native library test. Compile/list/run that
             // target without starting unrelated library or documentation builds.
             // Keep compiler and linker stages in the original bounded stderr.
