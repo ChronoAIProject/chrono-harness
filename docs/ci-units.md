@@ -20,7 +20,7 @@ chrono-ci test-inventory --host-root HOST --config CONFIG
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
-worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四项宿主入口集成测试：参与式检查、脱离父进程的 Rust 消费者、短检查、原生 Cargo 子进程。核心组排除同样四个名称。旧 Python bootstrap 组合及独立入口测试随实现退役；当前 bootstrap 委托与拒绝边界归 Rust bootstrap 专属测试。两组和发布用的未过滤 action 均显式采用 2 个 libtest 线程，避免测试内部并发脱离宿主 cap=2；当前测试和期限保留。既有单线程探测 action 保留原设置。
+worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四项宿主入口集成测试：参与式检查、脱离父进程的 Rust 消费者、短检查、原生 Cargo 子进程。核心组排除同样四个名称。旧 Python bootstrap 组合及独立入口测试随实现退役；当前 bootstrap 委托与拒绝边界归 Rust bootstrap 专属测试。两组和发布用的未过滤 action 均显式采用 8 个 libtest 线程，限制单个测试进程内部的并发；宿主操作仍按 cap=2 调度。当前测试和期限保留，既有单线程探测 action 保留原设置。
 
 `worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
