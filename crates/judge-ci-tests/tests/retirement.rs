@@ -95,9 +95,12 @@ fn registered_profile_removes_a_stale_duplicate_tool_table() {
 fn registered_tool_change_reexecutes_its_binding_without_a_profile_copy_change() {
     let h = host();
     let base = h.head();
-    let alternate = h.root().join(".chrono-harness/bin/alternate-tool");
-    fs::create_dir_all(alternate.parent().unwrap()).unwrap();
-    fs::copy(OPERATION_TOOL, &alternate).unwrap();
+    let tool = Path::new(OPERATION_TOOL);
+    let alternate = format!(
+        "{}/./{}",
+        tool.parent().unwrap().display(),
+        tool.file_name().unwrap().to_str().unwrap()
+    );
     h.change_registry(REGISTRATION, |v| {
         v["tools"][0]["program"] = json!(alternate);
     });
