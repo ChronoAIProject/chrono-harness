@@ -611,6 +611,7 @@ impl Inventory {
         maintenance: bool,
         wait: bool,
     ) -> Result<Gate, String> {
+        let discover_under_lease = maintenance && !wait && birth.is_none();
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
@@ -641,15 +642,25 @@ impl Inventory {
         let mut observed = BTreeMap::new();
         let mut observed_roles = BTreeMap::<String, Option<Role>>::new();
         let mut wanted_roles: BTreeSet<String> = roles.iter().cloned().collect();
-        // Discover only declared relationships before taking metadata locks.
-        // Recheck the closed set under exclusion below; drift refuses this
-        // activity rather than silently inspecting an unlocked dependency.
+        // Nonblocking maintenance can hold each declaration while discovering
+        // its edges. A busy metadata or path lease refuses the activity, so this
+        // order never waits behind an ordinary publisher holding path locks.
+        // Waiting activities retain their path/role/object order and recheck
+        // the discovered closure under exclusion below.
         loop {
             let next_role = wanted_roles
                 .iter()
                 .find(|role| !observed_roles.contains_key(*role))
                 .cloned();
             if let Some(role) = next_role {
+                if discover_under_lease {
+                    let directory = self.role_directory(&role)?;
+                    fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+                    leases.push(
+                        DirectoryLease::acquire(&directory, true, None)?
+                            .ok_or("retention consumer metadata is busy")?,
+                    );
+                }
                 let record = self.read_role(&role)?;
                 // Maintenance needs the consumer's membership of the actual
                 // reference component, not every independent output sharing
@@ -673,6 +684,12 @@ impl Inventory {
             let Some(id) = next else {
                 break;
             };
+            if discover_under_lease {
+                leases.push(
+                    DirectoryLease::acquire(&self.object_directory(&id)?, true, None)?
+                        .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
+                );
+            }
             let record = self.read_object(&id)?;
             if let Some(output) = &record.output {
                 selected.extend(output.references.iter().cloned());
@@ -695,19 +712,24 @@ impl Inventory {
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
             let directory = self.role_directory(&role)?;
-            fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-            leases.push(
-                DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
-                    .ok_or("retention consumer metadata is busy")?,
-            );
-            let actual = self.read_role(&role)?;
-            if actual.as_ref().map(|r| (&r.ids, &r.attached))
-                != expected.as_ref().map(|r| (&r.ids, &r.attached))
-            {
-                return Err(
-                    "addressed consumer changed during exclusion; retry this activity".into(),
+            let actual = if discover_under_lease {
+                expected
+            } else {
+                fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+                leases.push(
+                    DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
+                        .ok_or("retention consumer metadata is busy")?,
                 );
-            }
+                let actual = self.read_role(&role)?;
+                if actual.as_ref().map(|r| (&r.ids, &r.attached))
+                    != expected.as_ref().map(|r| (&r.ids, &r.attached))
+                {
+                    return Err(
+                        "addressed consumer changed during exclusion; retry this activity".into(),
+                    );
+                }
+                actual
+            };
             let fresh = actual.is_none();
             let record = actual.unwrap_or(Role {
                 schema: "chrono-retained-role/v2".into(),
@@ -730,10 +752,12 @@ impl Inventory {
             if fresh {
                 fs::create_dir(&directory).map_err(|e| format!("retention output birth: {e}"))?;
             }
-            leases.push(
-                DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
-                    .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
-            );
+            if !discover_under_lease {
+                leases.push(
+                    DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
+                        .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
+                );
+            }
             let record = if let Some((_, path)) = birth.as_ref().filter(|b| b.0 == id) {
                 Object {
                     schema: "chrono-retained-output/v2".into(),
@@ -750,6 +774,8 @@ impl Inventory {
                     metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
                     prune_path: Some(path.clone()),
                 }
+            } else if discover_under_lease {
+                observed.remove(&id).ok_or("excluded output was not read")?
             } else {
                 self.read_object(&id)?
             };
