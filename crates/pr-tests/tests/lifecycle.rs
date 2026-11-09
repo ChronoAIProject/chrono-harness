@@ -733,6 +733,13 @@ fn continuation_releases_only_its_prior_record_after_a_durable_handoff() {
     assert_eq!(code, 0, "{prior}");
     let (code, independent) = h.status();
     assert_eq!(code, 0, "{independent}");
+    let owner = Inventory::adopted(h.root.path()).unwrap().unwrap();
+    owner
+        .reference_paths(
+            "actual-independent-review",
+            &[independent["operation"].as_str().unwrap().into()],
+        )
+        .unwrap();
     let previous = prior["operation"].as_str().unwrap();
     let (code, current) = h.run(&[
         "pr-status",
@@ -830,6 +837,16 @@ fn continuation_releases_only_its_prior_record_after_a_durable_handoff() {
             .exists()
     );
     assert_eq!(h.calls().len(), 4);
+    owner
+        .reference_paths("actual-independent-review", &[])
+        .unwrap();
+    maintain_after_diagnostics(&h);
+    assert!(
+        !h.root
+            .path()
+            .join(independent["operation"].as_str().unwrap())
+            .exists()
+    );
 }
 
 #[test]
@@ -882,23 +899,29 @@ fn continuation_rejects_missing_changed_or_mismatched_originals_before_dispatch(
 }
 
 #[test]
-fn failed_continuation_preserves_both_recovery_roots() {
-    if !isolated_capability_test("failed_continuation_preserves_both_recovery_roots") {
+fn failed_continuation_separates_auth_publication_and_actual_closed_object() {
+    if !isolated_capability_test(
+        "failed_continuation_separates_auth_publication_and_actual_closed_object",
+    ) {
         return;
     }
     let mut stale = snapshot();
     stale["data"]["repository"]["pullRequest"]["headRefOid"] = json!(OTHER);
     stale["data"]["repository"]["pullRequest"]["state"] = json!("CLOSED");
-    for (step, expected_exit) in [
+    for (step, expected_exit, keep_prior, keep_current) in [
         (
             json!({"prefix":["api","graphql"],"stdout":"offline","exit":2}),
             2,
+            true,
+            false,
         ),
         (
             json!({"prefix":["api","graphql"],"stdout":snapshot().to_string(),"block_result":true}),
             2,
+            true,
+            true,
         ),
-        (api(stale), 4),
+        (api(stale), 4, false, false),
     ] {
         let h = Host::new(vec![api(snapshot()), step]);
         let (code, prior) = h.status();
@@ -915,16 +938,29 @@ fn failed_continuation_preserves_both_recovery_roots() {
             previous,
         ]);
         assert_eq!(code, expected_exit, "{result}");
-        maintain_after_diagnostics(&h);
         assert_eq!(
             fs::read(h.root.path().join(previous).join("result.json")).unwrap(),
             original
         );
-        assert!(
+        maintain_after_diagnostics(&h);
+        assert_eq!(
+            h.root.path().join(previous).exists(),
+            keep_prior,
+            "{result}"
+        );
+        if keep_prior {
+            assert_eq!(
+                fs::read(h.root.path().join(previous).join("result.json")).unwrap(),
+                original
+            );
+        }
+        assert_eq!(
             h.root
                 .path()
                 .join(result["operation"].as_str().unwrap())
-                .exists()
+                .exists(),
+            keep_current,
+            "{result}"
         );
         assert_eq!(h.calls().len(), 2);
     }
@@ -1033,7 +1069,7 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
     step["stdout"] = json!("x".repeat(2 * 1024 * 1024));
     step["stderr"] = json!("original partial diagnostic\n");
     step["wait_for_interruption"] = json!(true);
-    let h = Host::new(vec![step]);
+    let h = Host::new(vec![step, api(snapshot())]);
     let config_path = h.root.path().join(".chrono-harness/pr.json");
     let mut config: Value = serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
     config["output_limit_bytes"] = json!(4 * 1024 * 1024);
@@ -1117,6 +1153,10 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
         assert_eq!(joined.exit_signal, Some(libc::SIGKILL));
         (operation, originals)
     });
+    // A successful independent observation cannot complete this interrupted task.
+    let (code, current) = h.status();
+    assert_eq!(code, 0, "{current}");
+    assert_eq!(current["pr_state"], "OPEN");
     // Caller has joined its enclosing owned process. A later query still cannot
     // manufacture the missing original PR terminal receipt or release its root.
     maintain_after_diagnostics(&h);
@@ -1142,8 +1182,8 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
     assert_eq!(code, 2, "{result}");
     assert_eq!(
         h.calls().len(),
-        1,
-        "unknown attempt must not be recreated or replaced by a successful query"
+        2,
+        "unknown continuation never dispatches; independent observation does not replace its task"
     );
 }
 
@@ -1303,4 +1343,469 @@ fn continuation_can_recheck_a_terminal_operation_after_its_original_handoff() {
     assert_eq!(current["pr_state"], "MERGED");
     assert_eq!(current["merge_commit"], OTHER);
     assert_eq!(h.calls().len(), 2);
+}
+
+#[test]
+fn object_custody_moves_across_head_changes_and_keeps_another_pr() {
+    if !isolated_capability_test("object_custody_moves_across_head_changes_and_keeps_another_pr") {
+        return;
+    }
+    let mut other = snapshot();
+    other["data"]["repository"]["pullRequest"]["number"] = json!(43);
+    other["data"]["repository"]["pullRequest"]["url"] =
+        json!("https://github.com/example/host/pull/43");
+    let newer: Value = serde_json::from_str(&snapshot().to_string().replace(HEAD, OTHER)).unwrap();
+    let h = Host::new(vec![api(snapshot()), api(other), api(newer)]);
+    let (code, old) = h.status();
+    assert_eq!(code, 0, "{old}");
+    let (code, independent) = h.run(&["pr-status", "--pr", "43", "--head-sha", HEAD]);
+    assert_eq!(code, 0, "{independent}");
+    let (code, current) = h.run(&["pr-status", "--pr", "42", "--head-sha", OTHER]);
+    assert_eq!(code, 0, "{current}");
+    assert_eq!(current["observed_head"], OTHER);
+    let old_path = h.root.path().join(old["operation"].as_str().unwrap());
+    let saved = fs::read(old_path.join("result.json")).unwrap();
+    assert_eq!(serde_json::from_slice::<Value>(&saved).unwrap(), old);
+    maintain_after_diagnostics(&h);
+    assert!(
+        !old_path.exists(),
+        "completed old query can roll when the same PR advances to another head"
+    );
+    for result in [&current, &independent] {
+        assert_eq!(
+            serde_json::from_slice::<Value>(
+                &fs::read(
+                    h.root
+                        .path()
+                        .join(result["operation"].as_str().unwrap())
+                        .join("result.json")
+                )
+                .unwrap()
+            )
+            .unwrap(),
+            *result
+        );
+    }
+    for receipt in old["receipts"].as_array().unwrap() {
+        for field in ["stdout_original", "stderr_original", "launch_original"] {
+            assert!(
+                !h.root
+                    .path()
+                    .join(receipt[field]["path"].as_str().unwrap())
+                    .exists(),
+                "superseded process input rolls: {field}"
+            );
+        }
+    }
+    assert_eq!(h.calls().len(), 3);
+    let (code, missing) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        old["operation"].as_str().unwrap(),
+    ]);
+    assert_eq!(code, 2, "{missing}");
+    assert_eq!(h.calls().len(), 3);
+}
+
+#[test]
+fn object_custody_preserves_a_real_reader_then_rolls_after_release() {
+    if !isolated_capability_test("object_custody_preserves_a_real_reader_then_rolls_after_release")
+    {
+        return;
+    }
+    let h = Host::new(vec![api(snapshot()), api(snapshot())]);
+    let (code, old) = h.status();
+    assert_eq!(code, 0, "{old}");
+    let old_path = old["operation"].as_str().unwrap().to_owned();
+    let inventory = Inventory::adopted(h.root.path()).unwrap().unwrap();
+    inventory
+        .reference_paths("actual-review-consumer", &[old_path.clone()])
+        .unwrap();
+    let reader =
+        chrono_harness::retained_artifacts::retention::read_guard(h.root.path(), &old_path)
+            .unwrap()
+            .unwrap();
+    let original = fs::read(h.root.path().join(&old_path).join("result.json")).unwrap();
+    let (code, current) = h.status();
+    assert_eq!(code, 0, "{current}");
+    maintain_after_diagnostics(&h);
+    assert_eq!(
+        fs::read(h.root.path().join(&old_path).join("result.json")).unwrap(),
+        original
+    );
+    drop(reader);
+    inventory
+        .reference_paths("actual-review-consumer", &[])
+        .unwrap();
+    maintain_after_diagnostics(&h);
+    assert!(
+        !h.root.path().join(&old_path).exists(),
+        "completed history rolls only after the actual consumer ends"
+    );
+    assert!(
+        h.root
+            .path()
+            .join(current["operation"].as_str().unwrap())
+            .join("result.json")
+            .exists()
+    );
+    assert_eq!(h.calls().len(), 2);
+}
+
+#[cfg(unix)]
+#[test]
+fn object_custody_does_not_regress_when_an_older_query_returns_last() {
+    if !isolated_capability_test("object_custody_does_not_regress_when_an_older_query_returns_last")
+    {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::unix::net::{UnixListener, UnixStream},
+    };
+    let mut deferred = api(snapshot());
+    deferred["pause_before_response"] = json!(true);
+    let newer: Value = serde_json::from_str(&snapshot().to_string().replace(HEAD, OTHER)).unwrap();
+    let h = Host::new(vec![deferred, api(newer)]);
+    let listener = UnixListener::bind(h.root.path().join("response.sock")).unwrap();
+    let (old, current) = std::thread::scope(|scope| {
+        let task = scope.spawn(|| {
+            let result = h.status();
+            if let Ok(mut ready) = UnixStream::connect(h.root.path().join("response.sock")) {
+                let bytes =
+                    serde_json::to_vec(&json!({"completed_before_handshake":result})).unwrap();
+                let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
+                let _ = ready.write_all(&bytes);
+            }
+            result
+        });
+        let (mut ready, _) = listener.accept().unwrap();
+        let mut length = [0; 4];
+        ready.read_exact(&mut length).unwrap();
+        let mut bytes = vec![0; u32::from_be_bytes(length) as usize];
+        ready.read_exact(&mut bytes).unwrap();
+        let started: Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(
+            started.get("completed_before_handshake").is_none(),
+            "{started}"
+        );
+        assert!(
+            !h.root
+                .path()
+                .join(started["operation"].as_str().unwrap())
+                .join("result.json")
+                .exists()
+        );
+        let (code, current) = h.run(&["pr-status", "--pr", "42", "--head-sha", OTHER]);
+        ready.write_all(&[1]).unwrap();
+        let (old_code, old) = task.join().unwrap();
+        assert_eq!(code, 0, "{current}");
+        assert_eq!(old_code, 0, "{old}");
+        assert_eq!(old["operation"], started["operation"]);
+        (old, current)
+    });
+    maintain_after_diagnostics(&h);
+    assert!(
+        !h.root
+            .path()
+            .join(old["operation"].as_str().unwrap())
+            .exists(),
+        "older completed query must not replace newer same-object custody"
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(
+            &fs::read(
+                h.root
+                    .path()
+                    .join(current["operation"].as_str().unwrap())
+                    .join("result.json")
+            )
+            .unwrap()
+        )
+        .unwrap(),
+        current
+    );
+    assert_eq!(current["observed_head"], OTHER);
+    assert_eq!(h.calls().len(), 2);
+}
+
+#[test]
+fn object_custody_failed_complete_query_rolls_without_ending_the_open_pr() {
+    if !isolated_capability_test(
+        "object_custody_failed_complete_query_rolls_without_ending_the_open_pr",
+    ) {
+        return;
+    }
+    let h = Host::new(vec![
+        api(snapshot()),
+        json!({"prefix":["api","graphql"],"stdout":"native authentication refusal","exit":2}),
+    ]);
+    let (code, prior) = h.status();
+    assert_eq!(code, 0, "{prior}");
+    let previous = prior["operation"].as_str().unwrap();
+    let original = fs::read(h.root.path().join(previous).join("result.json")).unwrap();
+    let (code, failure) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        previous,
+    ]);
+    assert_eq!(code, 2, "{failure}");
+    assert_eq!(failure["operation_state"], "completed");
+    assert!(failure["error"].is_string());
+    assert_eq!(failure["receipts"][0]["exit_code"], 2);
+    let path = h.root.path().join(failure["operation"].as_str().unwrap());
+    assert_eq!(
+        serde_json::from_slice::<Value>(&fs::read(path.join("result.json")).unwrap()).unwrap(),
+        failure
+    );
+    maintain_after_diagnostics(&h);
+    assert_eq!(
+        fs::read(h.root.path().join(previous).join("result.json")).unwrap(),
+        original,
+        "a failed query cannot end the current OPEN object custody"
+    );
+    assert!(
+        !path.exists(),
+        "known failed command with sealed originals and no remaining consumer is terminal and can roll"
+    );
+    for receipt in failure["receipts"].as_array().unwrap() {
+        for field in ["stdout_original", "stderr_original", "launch_original"] {
+            assert!(
+                !h.root
+                    .path()
+                    .join(receipt[field]["path"].as_str().unwrap())
+                    .exists()
+            );
+        }
+    }
+    assert_eq!(h.calls().len(), 2);
+}
+
+#[test]
+fn object_custody_failed_publication_stays_unknown_after_a_new_complete_observation() {
+    if !isolated_capability_test(
+        "object_custody_failed_publication_stays_unknown_after_a_new_complete_observation",
+    ) {
+        return;
+    }
+    let mut broken = api(snapshot());
+    broken["block_result"] = json!(true);
+    let h = Host::new(vec![api(snapshot()), broken, api(snapshot())]);
+    let (code, prior) = h.status();
+    assert_eq!(code, 0, "{prior}");
+    let (code, failure) = h.status();
+    assert_eq!(code, 2, "{failure}");
+    assert!(!failure["storage_error"].is_null(), "{failure}");
+    let unknown = h.root.path().join(failure["operation"].as_str().unwrap());
+    assert!(
+        unknown.join("result.json").is_dir(),
+        "the actual publication failure remains unsealed"
+    );
+    let (code, current) = h.status();
+    assert_eq!(code, 0, "{current}");
+    maintain_after_diagnostics(&h);
+    assert!(
+        unknown.join("result.json").is_dir(),
+        "a later successful query does not repair or complete the failed publication"
+    );
+    for receipt in failure["receipts"].as_array().unwrap() {
+        for field in ["stdout_original", "stderr_original", "launch_original"] {
+            assert!(
+                h.root
+                    .path()
+                    .join(receipt[field]["path"].as_str().unwrap())
+                    .exists(),
+                "unknown publication keeps its actual original: {field}"
+            );
+        }
+    }
+    assert!(
+        !h.root
+            .path()
+            .join(prior["operation"].as_str().unwrap())
+            .exists(),
+        "the known old command can roll independently of another unknown publication"
+    );
+    assert_eq!(
+        serde_json::from_slice::<Value>(
+            &fs::read(
+                h.root
+                    .path()
+                    .join(current["operation"].as_str().unwrap())
+                    .join("result.json")
+            )
+            .unwrap()
+        )
+        .unwrap(),
+        current
+    );
+    assert_eq!(h.calls().len(), 3);
+}
+
+#[test]
+fn watch_final_api_failure_keeps_the_valid_open_fact_until_newer_custody() {
+    if !isolated_capability_test(
+        "watch_final_api_failure_keeps_the_valid_open_fact_until_newer_custody",
+    ) {
+        return;
+    }
+    let h = Host::new(vec![
+        api(pending()),
+        watch(0),
+        json!({"prefix":["api","graphql"],"exit":2,"stderr":"final authentication refusal"}),
+        api(snapshot()),
+    ]);
+    let (code, failed) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
+    assert_eq!(code, 2, "{failed}");
+    assert_eq!(failed["operation_state"], "completed");
+    assert_eq!(failed["pr_state"], "OPEN");
+    let path = h.root.path().join(failed["operation"].as_str().unwrap());
+    maintain_after_diagnostics(&h);
+    assert!(
+        path.join("result.json").exists(),
+        "last valid OPEN observation survives later API failure"
+    );
+    let (code, current) = h.status();
+    assert_eq!(code, 0, "{current}");
+    maintain_after_diagnostics(&h);
+    assert!(
+        !path.exists(),
+        "returned failed watch rolls after newer successful custody"
+    );
+    assert!(
+        h.root
+            .path()
+            .join(current["operation"].as_str().unwrap())
+            .exists()
+    );
+    assert_eq!(h.calls().len(), 4);
+}
+
+#[cfg(unix)]
+#[test]
+fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
+    if !isolated_capability_test(
+        "watch_final_query_is_ordered_after_a_query_during_its_native_wait",
+    ) {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::unix::net::{UnixListener, UnixStream},
+    };
+    let mut native = watch(0);
+    native["pause_before_response"] = json!(true);
+    let mut terminal = snapshot();
+    terminal["data"]["repository"]["pullRequest"]["headRefOid"] = json!(OTHER);
+    terminal["data"]["repository"]["pullRequest"]["state"] = json!("CLOSED");
+    let h = Host::new(vec![api(pending()), native, api(snapshot()), api(terminal)]);
+    let listener = UnixListener::bind(h.root.path().join("response.sock")).unwrap();
+    let (watched, intermediate) = std::thread::scope(|scope| {
+        let task = scope.spawn(|| {
+            let result = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
+            if let Ok(mut ready) = UnixStream::connect(h.root.path().join("response.sock")) {
+                let bytes =
+                    serde_json::to_vec(&json!({"completed_before_handshake":result})).unwrap();
+                let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
+                let _ = ready.write_all(&bytes);
+            }
+            result
+        });
+        let (mut ready, _) = listener.accept().unwrap();
+        let mut length = [0; 4];
+        ready.read_exact(&mut length).unwrap();
+        let mut bytes = vec![0; u32::from_be_bytes(length) as usize];
+        ready.read_exact(&mut bytes).unwrap();
+        let started: Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(
+            started.get("completed_before_handshake").is_none(),
+            "{started}"
+        );
+        assert_eq!(started["call"], 2);
+        let (code, intermediate) = h.status();
+        ready.write_all(&[1]).unwrap();
+        let (watch_code, watched) = task.join().unwrap();
+        assert_eq!(code, 0, "{intermediate}");
+        assert_eq!(watch_code, 4, "{watched}");
+        assert_eq!(watched["pr_state"], "CLOSED");
+        assert_eq!(watched["observed_head"], OTHER);
+        assert_eq!(watched["receipts"].as_array().unwrap().len(), 3);
+        (watched, intermediate)
+    });
+    maintain_after_diagnostics(&h);
+    for result in [&watched, &intermediate] {
+        assert!(
+            !h.root
+                .path()
+                .join(result["operation"].as_str().unwrap())
+                .exists(),
+            "actual terminal PR fact releases object custody despite stale command head"
+        );
+    }
+    assert_eq!(
+        h.calls().len(),
+        4,
+        "one native watcher and actual final query"
+    );
+}
+
+#[test]
+fn unverified_create_keeps_unknown_originals_after_an_independent_observation() {
+    if !isolated_capability_test(
+        "unverified_create_keeps_unknown_originals_after_an_independent_observation",
+    ) {
+        return;
+    }
+    let h = Host::new(vec![
+        resolve(),
+        list(json!([])),
+        json!({"prefix":["pr","create"],"stdout":"https://github.com/example/host/pull/42\n"}),
+        json!({"prefix":["api","graphql"],"exit":2}),
+        api(snapshot()),
+    ]);
+    let (code, original) = h.run(&open_args());
+    assert_eq!(code, 2, "{original}");
+    assert_eq!(original["operation_state"], "unknown");
+    let path = original["operation"].as_str().unwrap();
+    let saved = fs::read(h.root.path().join(path).join("result.json")).unwrap();
+    let (code, current) = h.status();
+    assert_eq!(code, 0, "{current}");
+    maintain_after_diagnostics(&h);
+    assert_eq!(
+        fs::read(h.root.path().join(path).join("result.json")).unwrap(),
+        saved
+    );
+    for receipt in original["receipts"].as_array().unwrap() {
+        for field in ["stdout_original", "stderr_original", "launch_original"] {
+            assert!(
+                h.root
+                    .path()
+                    .join(receipt[field]["path"].as_str().unwrap())
+                    .exists()
+            );
+        }
+    }
+    let (code, continued) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        path,
+    ]);
+    assert_eq!(code, 2, "{continued}");
+    assert_eq!(
+        h.calls().len(),
+        5,
+        "unknown write cannot be completed or recreated by another query"
+    );
 }

@@ -24,6 +24,7 @@ pub(super) struct Object {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Role {
+    observation: Option<ObservationOrder>,
     schema: String,
     directory_identity: String,
     role: String,
@@ -32,6 +33,24 @@ struct Role {
     metadata_expires: u64,
     #[serde(deserialize_with = "strict_summaries")]
     summaries: Vec<Value>,
+}
+/// One actual request, qualified by its enrolled producer output rather than a clock.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ObservationToken {
+    pub role: String,
+    pub epoch: String,
+    pub serial: u64,
+    pub attempt: u64,
+    pub original: OriginalIdentity,
+}
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ObservationOrder {
+    epoch: String,
+    issued: u64,
+    accepted: u64,
+    current: Option<String>,
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -55,6 +74,169 @@ impl Gate {
     }
 }
 impl Inventory {
+    /// Reserve one request under only this object's existing consumer metadata.
+    /// Membership protects the actual pending output, including unknown tasks.
+    pub fn reserve_observation(
+        &self,
+        role: &str,
+        path: &str,
+        attempt: u64,
+    ) -> Result<ObservationToken, String> {
+        if role.trim().is_empty() || role.len() > 256 || attempt == 0 {
+            return Err("invalid observation role/attempt".into());
+        }
+        let gate = self.addressed_gate(&[], &[path.into()], &[role.into()], None, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter()
+            .find(|o| o.path == path)
+            .ok_or("observation producer is not enrolled")?;
+        if !output.tree
+            || output.phase != "publishing"
+            || identity(&no_symlink_parents(&self.root, path)?)? != output.identity
+        {
+            return Err("observation requires the actual publishing producer tree".into());
+        }
+        let original = OriginalIdentity {
+            id: output.id.clone(),
+            path: path.into(),
+            identity: output.identity.clone(),
+        };
+        let record = gate
+            .roles
+            .borrow()
+            .get(role)
+            .cloned()
+            .ok_or("observation role is not excluded")?;
+        if record.observation.is_none() && (!record.ids.is_empty() || !record.attached.is_empty()) {
+            return Err("ordinary consumer cannot become an observation owner".into());
+        }
+        let mut order = record.observation.unwrap_or(ObservationOrder {
+            epoch: sha256(
+                &serde_json::to_vec(&(role, &original, attempt)).map_err(|e| e.to_string())?,
+            ),
+            issued: 0,
+            accepted: 0,
+            current: None,
+        });
+        order.issued = order
+            .issued
+            .checked_add(1)
+            .ok_or("observation sequence exhausted")?;
+        let mut ids = record.ids;
+        if !ids.contains(&original.id) {
+            ids.push(original.id.clone());
+        }
+        self.reference_locked(&mut ledger, role, &ids)?;
+        let token = ObservationToken {
+            role: role.into(),
+            epoch: order.epoch.clone(),
+            serial: order.issued,
+            attempt,
+            original,
+        };
+        self.stable(&gate)?;
+        self.partition_save_observation(&ledger, &gate, Some((role, order)))?;
+        Ok(token)
+    }
+
+    /// The domain owner has joined the command, sealed its result and handed off
+    /// all inputs. Accept its last valid observation, independently of its exit.
+    /// A missing result must never call this method.
+    pub fn settle_observation(
+        &self,
+        request: &ObservationToken,
+        observed: Option<(&ObservationToken, bool)>,
+    ) -> Result<(), String> {
+        if request.role.trim().is_empty()
+            || request.role.len() > 256
+            || request.serial == 0
+            || request.attempt == 0
+        {
+            return Err("invalid observation token".into());
+        }
+        let gate = self.addressed_gate(
+            &[request.original.id.clone()],
+            &[request.original.path.clone()],
+            &[request.role.clone()],
+            None,
+            false,
+            true,
+        )?;
+        let mut ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter()
+            .find(|o| o.id == request.original.id)
+            .ok_or("observation result is unavailable")?;
+        if output.path != request.original.path
+            || output.identity != request.original.identity
+            || !output.tree
+            || output.phase != "released"
+            || !output.manifest.sealed
+            || identity(&no_symlink_parents(&self.root, &output.path)?)? != output.identity
+        {
+            return Err("observation result is unsealed or replaced".into());
+        }
+        let record = gate
+            .roles
+            .borrow()
+            .get(&request.role)
+            .cloned()
+            .ok_or("observation role is not excluded")?;
+        let Some(mut order) = record.observation else {
+            // An already empty, expired role may have been reclaimed. This never
+            // creates a new root or sequence from an old completed operation.
+            if record.ids.is_empty() && record.attached.is_empty() {
+                return Ok(());
+            }
+            return Err("observation owner is not registered".into());
+        };
+        if let Some((observation, _)) = observed {
+            if observation.role != request.role
+                || observation.epoch != request.epoch
+                || observation.original != request.original
+                || observation.serial == 0
+                || observation.serial > request.serial
+                || observation.attempt == 0
+                || observation.attempt > request.attempt
+            {
+                return Err("observation does not belong to this returned request".into());
+            }
+        }
+        if !record.ids.contains(&request.original.id) {
+            return Ok(());
+        }
+        // Completed output is no longer a member, even after empty metadata
+        // expires and another epoch starts. Only a real pending/current member
+        // can make a transition, and it must qualify that current epoch.
+        if order.epoch != request.epoch || request.serial > order.issued {
+            return Err("observation epoch/sequence differs".into());
+        }
+        let mut ids = record.ids;
+        if order.current.as_ref() != Some(&request.original.id) {
+            ids.retain(|id| *id != request.original.id);
+        }
+        if let Some((observation, active)) = observed.filter(|(o, _)| o.serial > order.accepted) {
+            if let Some(current) = order.current.take() {
+                ids.retain(|id| *id != current);
+            }
+            order.accepted = observation.serial;
+            if active {
+                order.current = Some(request.original.id.clone());
+                if !ids.contains(&request.original.id) {
+                    ids.push(request.original.id.clone());
+                }
+            } else {
+                ids.retain(|id| *id != request.original.id);
+            }
+        }
+        self.reference_locked(&mut ledger, &request.role, &ids)?;
+        self.stable(&gate)?;
+        self.partition_save_observation(&ledger, &gate, Some((&request.role, order)))
+    }
+
     fn remove_metadata_directory(
         &self,
         directory: &Path,
@@ -493,6 +675,12 @@ impl Inventory {
                 || r.role != role
                 || r.ids.len() > self.policy.max_related_outputs
                 || r.summaries.len() > self.policy.max_summaries
+                || r.observation.as_ref().is_some_and(|o| {
+                    o.epoch.len() != 64
+                        || o.issued == 0
+                        || o.accepted > o.issued
+                        || o.current.as_ref().is_some_and(|id| !r.ids.contains(id))
+                })
                 || identity(&directory).as_ref() != Ok(&r.directory_identity)
         }) {
             return Err("retained consumer declaration changed".into());
@@ -701,8 +889,12 @@ impl Inventory {
                     .ok_or("retention consumer metadata is busy")?,
             );
             let actual = self.read_role(&role)?;
-            if actual.as_ref().map(|r| (&r.ids, &r.attached))
-                != expected.as_ref().map(|r| (&r.ids, &r.attached))
+            if actual
+                .as_ref()
+                .map(|r| (&r.ids, &r.attached, &r.observation))
+                != expected
+                    .as_ref()
+                    .map(|r| (&r.ids, &r.attached, &r.observation))
             {
                 return Err(
                     "addressed consumer changed during exclusion; retry this activity".into(),
@@ -710,6 +902,7 @@ impl Inventory {
             }
             let fresh = actual.is_none();
             let record = actual.unwrap_or(Role {
+                observation: None,
                 schema: "chrono-retained-role/v2".into(),
                 directory_identity: identity(&directory)?,
                 role: role.clone(),
@@ -871,6 +1064,14 @@ impl Inventory {
         Ok(())
     }
     pub(super) fn partition_save(&self, ledger: &Ledger, gate: &Gate) -> Result<(), String> {
+        self.partition_save_observation(ledger, gate, None)
+    }
+    fn partition_save_observation(
+        &self,
+        ledger: &Ledger,
+        gate: &Gate,
+        observation: Option<(&str, ObservationOrder)>,
+    ) -> Result<(), String> {
         gate.stable()?;
         let mut objects = gate.objects.borrow_mut();
         let mut roles = gate.roles.borrow_mut();
@@ -891,6 +1092,22 @@ impl Inventory {
             );
         }
 
+        for role in roles.values() {
+            if role.observation.is_some()
+                && observation
+                    .as_ref()
+                    .is_none_or(|(name, _)| *name != role.role)
+                && ledger.roots.get(&role.role).cloned().unwrap_or_default()
+                    != role
+                        .ids
+                        .iter()
+                        .filter(|id| !gate.maintenance || objects.contains_key(*id))
+                        .cloned()
+                        .collect::<Vec<_>>()
+            {
+                return Err("observation membership requires its domain transition".into());
+            }
+        }
         // Publish the path's reservation before any output/source attachment.
         // An interrupted birth remains discoverable by the next same-path user.
         for output in &ledger.outputs {
@@ -1046,6 +1263,13 @@ impl Inventory {
                 role.metadata_expires = now()?.saturating_add(self.policy.metadata_keep_seconds);
             }
             role.ids = next;
+            // Sequence and roots change in the same atomic role replacement,
+            // after the persisted-byte snapshot and conservative backreferences.
+            if let Some((name, order)) = &observation {
+                if *name == role.role {
+                    role.observation = Some(order.clone());
+                }
+            }
             role.summaries = ledger
                 .summaries
                 .iter()
