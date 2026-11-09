@@ -21,6 +21,13 @@ impl EnrollmentOriginalsFixture {
         fs::create_dir(root.join(".git")).unwrap();
         let fixture = root.join("git-fixture.json");
         let mut registered = values();
+        for value in registered.values_mut() {
+            value["status"] = value!("proposed");
+        }
+        registered.get_mut(CONFIG).unwrap()["enforcement"] = value!("not-implemented");
+        registered.get_mut(CONFIG).unwrap()["input_closure"] = value!({
+            "status":"incomplete","unresolved":["mock lifecycle fixture does not certify complete host inputs"]
+        });
         registered.get_mut(CONFIG).unwrap()["schema_version"] = value!(4);
         registered.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] =
             value!([".chrono-harness/bin/chrono-harness", "check"]);
