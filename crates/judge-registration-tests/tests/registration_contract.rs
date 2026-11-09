@@ -2014,10 +2014,12 @@ fn tracked_sources_accept_contracts_and_require_explicit_projection_sources() {
     let mut projection = source.clone();
     projection.get_mut(support::FM).unwrap()["files"][0]["provenance"] =
         json!("deterministic-projection");
-    projection.get_mut(support::FM).unwrap()["files"][0]["projection"] = json!({"sources":["source.json"],
-        "producer":"project:generator","scope":"whole-file"});
+    projection.get_mut(support::FM).unwrap()["files"][0]["projection"] = json!({"sources":["doc.txt"],
+        "producer":"project:p","scope":"whole-file"});
     assert!(Registrations::load(&projection, support::CONFIG).is_ok());
 
+    let mut empty_sources = projection.clone();
+    empty_sources.get_mut(support::FM).unwrap()["files"][0]["projection"]["sources"] = json!([]);
     let mut missing_generator = projection.clone();
     missing_generator.get_mut(support::FM).unwrap()["files"][0]
         .as_object_mut()
@@ -2027,7 +2029,7 @@ fn tracked_sources_accept_contracts_and_require_explicit_projection_sources() {
     mislabeled.get_mut(support::FM).unwrap()["files"][0]["provenance"] = json!("portable-contract");
     let mut runtime = source.clone();
     runtime.get_mut(support::FM).unwrap()["files"][0]["provenance"] = json!("runtime-fact");
-    for invalid in [missing_generator, mislabeled, runtime] {
+    for invalid in [missing_generator, mislabeled, runtime, empty_sources] {
         assert!(
             Registrations::load(&invalid, support::CONFIG)
                 .err()

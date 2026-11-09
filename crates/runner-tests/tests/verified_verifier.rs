@@ -622,6 +622,23 @@ fn explicit_program_specification_and_data_have_distinct_root_obligations() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn tracked_provenance_has_independent_expectations_for_all_six_combinations() {
+    use policy::sources::{SourceProvenance, valid_tracked_provenance};
+    let portable = valid_tracked_provenance(&SourceProvenance::PortableContract, false);
+    let portable_projection = valid_tracked_provenance(&SourceProvenance::PortableContract, true);
+    let missing_projection = valid_tracked_provenance(&SourceProvenance::DeterministicProjection, false);
+    let projection = valid_tracked_provenance(&SourceProvenance::DeterministicProjection, true);
+    let runtime = valid_tracked_provenance(&SourceProvenance::RuntimeFact, false);
+    let runtime_projection = valid_tracked_provenance(&SourceProvenance::RuntimeFact, true);
+    expect_verifier_true(portable);
+    expect_verifier_true(!portable_projection);
+    expect_verifier_true(!missing_projection);
+    expect_verifier_true(projection);
+    expect_verifier_true(!runtime);
+    expect_verifier_true(!runtime_projection);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn declared_roots_require_canonical_paths_and_nonempty_operation_text() {
     proof {
         reveal(policy::sources::source_declaration_valid);

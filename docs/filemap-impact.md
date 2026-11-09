@@ -6,6 +6,22 @@
 
 编译依赖方向是 `judge-ci → judge-filemap → judge-mixed → judge-registration → runner`，需要 Git 事实或传输的项目也直接依赖 runner。filemap 的测试项目独立拥有清单、锁文件和构建目录，没有根 workspace 或通用登记项目。
 
+## 跟踪文件的来源
+
+FILEMAP 文件行的 `provenance` 声明数据为什么属于源码。它与 `surface` 的影响分类、`verification` 的证明角色各自独立。
+
+| 声明 | 当前登记检查 | 实际用途 |
+| --- | --- | --- |
+| `portable-contract` | 不得同时声明 `projection` | 维护者编辑的源码、政策、接口和合成测试输入 |
+| `deterministic-projection` | 必须有 `projection`，沿用来源、生产者和范围登记；来源列表不能为空 | GitHub 等使用方必须直接读取的生成文件 |
+| `runtime-fact` | 不能作为本表的跟踪文件行 | 本轮观察归 state／线上 CI artifact，由现有产物保管者管理 |
+
+registration 实际加载 FILEMAP 时调用 runner 的同源 Verus 判法；来源错配或运行事实报 `E_DATA_PROVENANCE`，未知值和类型错误也拒绝。独立证明预期覆盖三种来源与有／无投影的全部六种组合，普通 Rust 回归另核真实登记加载和空来源。此判断只核声明一致性，不证明文件内容、消费者或必要性真实。
+
+本仓先采用已审计的48份 JSON 源和4条已有投影。官方组件版本／摘要供 bootstrap 下载校验；合成 PR／落地样本供协议测试，均是可移植输入。产品默认与宿主 catalog 各有独立选择及维护者。生成工作流由 GitHub 直接消费，不能因体积大而删去；本轮主机路径、安装清单及运行结果不成为跟踪政策。
+
+**产品与宿主政策同时修改：**登记格式和52行宿主声明一起迁移，沿用已有所有者、依赖边、成本及证明操作，不新增清单、判官或证明进程。缺少 `provenance` 暂为未分类，不构成完整 SPEC §8 验收；其余文件、来源的真实性、消费者必要性、有限预算和释放条件仍须继续审计。构建、CI、存储及维护总成本未测。
+
 ## 按配置选择依赖边
 
 FILEMAP v2 可以通过 `configuration_edges` 选择启用 `chrono-filemap-configuration-edges/v1`，并提供非空 `configurations` 数组。每条记录以 `config` 点名一个已登记的直接政策文件，以非空 `edges` 列出已有格式的依赖边。

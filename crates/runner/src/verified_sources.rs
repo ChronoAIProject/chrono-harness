@@ -564,6 +564,34 @@ pub struct SourceFile {
     pub verification: Option<SourceVerification>,
 }
 
+/// 跟踪文件的来源声明；运行事实由 state／CI artifact 保管。
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+pub enum SourceProvenance {
+    PortableContract,
+    DeterministicProjection,
+    RuntimeFact,
+}
+
+pub open spec fn tracked_provenance_valid(kind: &SourceProvenance, has_projection: bool) -> bool {
+    match kind {
+        SourceProvenance::PortableContract => !has_projection,
+        SourceProvenance::DeterministicProjection => has_projection,
+        SourceProvenance::RuntimeFact => false,
+    }
+}
+
+/// registration 复用此判法；声明一致不证明内容的真实来源或完整必要性。
+pub fn valid_tracked_provenance(kind: &SourceProvenance, has_projection: bool) -> (valid: bool)
+    ensures valid == tracked_provenance_valid(kind, has_projection),
+{
+    match kind {
+        SourceProvenance::PortableContract => !has_projection,
+        SourceProvenance::DeterministicProjection => has_projection,
+        SourceProvenance::RuntimeFact => false,
+    }
+}
+
 /// 缺少声明仍是未知覆盖；数据声明不授予任何仓内函数受信例外。
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]

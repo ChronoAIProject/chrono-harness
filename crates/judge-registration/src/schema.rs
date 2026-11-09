@@ -536,8 +536,22 @@ pub fn filemap(v: &Value) -> Result {
         object(
             f,
             &["path", "owner", "surface", "cost", "edges"],
-            &["symlink", "projection", "verification"],
+            &["symlink", "projection", "verification", "provenance"],
         )?;
+        if let Some(kind) = f.get("provenance") {
+            let kind: chrono_harness::verified_verifier::sources::SourceProvenance =
+                serde_json::from_value(kind.clone())
+                    .map_err(|e| format!("{}: E_DATA_PROVENANCE: {e}", f["path"]))?;
+            if !chrono_harness::verified_verifier::sources::valid_tracked_provenance(
+                &kind,
+                f.get("projection").is_some(),
+            ) {
+                return Err(format!(
+                    "{}: E_DATA_PROVENANCE: tracked source kind conflicts with projection or names a runtime fact",
+                    f["path"]
+                ));
+            }
+        }
         let source: chrono_harness::verified_verifier::sources::SourceFile =
             serde_json::from_value(f.clone()).map_err(|e| e.to_string())?;
         chrono_harness::verified_verifier::sources::validate_source_declaration(&source)
@@ -578,6 +592,9 @@ pub fn filemap(v: &Value) -> Result {
         if let Some(p) = f.get("projection") {
             object(p, &["sources", "producer", "scope"], &[])?;
             paths(&p["sources"])?;
+            if array(&p["sources"])?.is_empty() {
+                return Err("E_DATA_PROVENANCE: projection requires source files".into());
+            }
             string(&p["producer"])?;
             choice(&p["scope"], &["managed-block", "whole-file"])?;
         }
