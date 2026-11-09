@@ -1007,8 +1007,8 @@ fn explicit_alias_repair_can_keep_the_alias_and_replace_the_obsolete_method() {
     h.values.get_mut(WORKFLOW).unwrap()["schema_version"] = 2.into();
     h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([]);
     let mut projects = values()[PROJECTS]["projects"].clone();
-    projects[0]["actions"] = json!({"build":{"operation":"old.build","tool":"fixture","argv":["-c","raise RuntimeError('obsolete build')"]}});
-    projects[1]["actions"] = json!({"execute":{"operation":"old.test","tool":"fixture","argv":["-c","raise RuntimeError('obsolete test')"]}});
+    projects[0]["actions"] = json!({"build":{"operation":"old.build","tool":"fixture","argv":["run",json!([{"Exit":9}]).to_string()]}});
+    projects[1]["actions"] = json!({"execute":{"operation":"old.test","tool":"fixture","argv":["run",json!([{"Exit":9}]).to_string()]}});
     h.values.get_mut(PROJECTS).unwrap()["projects"] = projects;
     h.save();
     h.base = h.candidate.clone();
