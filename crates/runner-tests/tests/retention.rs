@@ -75,6 +75,120 @@ fn ledger(root: &Path) -> Value {
 }
 
 #[test]
+#[cfg(unix)]
+fn path_declaration_rejects_special_files_without_blocking_or_disposing_originals() {
+    use std::os::unix::fs::{MetadataExt, symlink};
+    if !isolated_capability_test(
+        "path_declaration_rejects_special_files_without_blocking_or_disposing_originals",
+    ) {
+        return;
+    }
+    for kind in [
+        "fifo",
+        "symlink",
+        "dangling",
+        "symlink-fifo",
+        "directory",
+        "oversized",
+    ] {
+        let h = host(256, 16);
+        let path = tree(h.path(), "original");
+        let original = h.path().join(&path).join("failure");
+        fs::write(&original, b"necessary original failure").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(json!({"exit":7})).unwrap();
+        let mut directory = h
+            .path()
+            .join(".chrono-harness/state/output-retention-v1/paths");
+        for component in path.split('/') {
+            directory.push(chrono_harness::sha256(component.as_bytes()));
+        }
+        let marker = directory.join("address.json");
+        let saved = directory.join("saved-address.json");
+        let target = directory.join("fifo-target");
+        fs::rename(&marker, &saved).unwrap();
+        let fifo = |path: &Path| {
+            use std::os::unix::ffi::OsStrExt;
+            let path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+            assert_eq!(unsafe { libc::mkfifo(path.as_ptr(), 0o600) }, 0);
+        };
+        match kind {
+            "fifo" => fifo(&marker),
+            "symlink" => symlink(&saved, &marker).unwrap(),
+            "dangling" => symlink(directory.join("absent"), &marker).unwrap(),
+            "symlink-fifo" => {
+                fifo(&target);
+                symlink(&target, &marker).unwrap();
+            }
+            "directory" => fs::create_dir(&marker).unwrap(),
+            "oversized" => fs::File::create(&marker)
+                .unwrap()
+                .set_len(8 * 1024 * 1024 + 1)
+                .unwrap(),
+            _ => unreachable!(),
+        }
+        let before = fs::symlink_metadata(&marker).unwrap();
+        fs::write(
+            h.path().join("maintain.json"),
+            serde_json::to_vec(&json!({
+                "operation":"maintain", "originals":[id]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        // The managed real child is joined even if an unsafe FIFO open blocks.
+        let result = chrono_harness::run_process(
+            h.path(),
+            &chrono_harness::CommandSpec {
+                program: env!("CARGO_BIN_EXE_chrono-test-retention-child").into(),
+                args: vec![
+                    "dispatch".into(),
+                    "retention".into(),
+                    "--host-root".into(),
+                    h.path().to_str().unwrap().into(),
+                    "--request".into(),
+                    "maintain.json".into(),
+                ],
+                env: Default::default(),
+                timeout_seconds: 5,
+                output_limit_bytes: 65536,
+            },
+            b"",
+        )
+        .unwrap();
+        assert!(result.failure.is_none(), "{kind}: {result:?}");
+        assert_eq!(result.exit_code, 0, "{kind}: {result:?}");
+        let round: Value = serde_json::from_str(&result.stdout).unwrap();
+        assert!(
+            !round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{kind}: {round}"
+        );
+        assert_eq!(round["removed_logical_bytes"], 0, "{kind}: {round}");
+        assert_eq!(fs::read(&original).unwrap(), b"necessary original failure");
+        let after = fs::symlink_metadata(&marker).unwrap();
+        assert_eq!(
+            (after.dev(), after.ino(), after.mode(), after.len()),
+            (before.dev(), before.ino(), before.mode(), before.len()),
+            "{kind}"
+        );
+        if kind == "directory" {
+            fs::remove_dir(&marker).unwrap();
+        } else {
+            fs::remove_file(&marker).unwrap();
+        }
+        if kind == "symlink-fifo" {
+            fs::remove_file(&target).unwrap();
+        }
+        fs::rename(&saved, &marker).unwrap();
+        assert_eq!(maintain_fixture_to(h.path(), 0), 0, "{kind}");
+        assert!(!original.exists(), "{kind}");
+    }
+}
+
+#[test]
 fn executable_output_requires_an_explicit_subdirectory_and_preserves_selected_binary() {
     if !isolated_capability_test(
         "executable_output_requires_an_explicit_subdirectory_and_preserves_selected_binary",
@@ -110,6 +224,91 @@ fn executable_output_requires_an_explicit_subdirectory_and_preserves_selected_bi
         fs::read(&selected).unwrap(),
         b"current installed executable"
     );
+}
+
+#[test]
+fn maintenance_locks_ancestors_without_consuming_their_unrelated_address_records() {
+    if !isolated_capability_test(
+        "maintenance_locks_ancestors_without_consuming_their_unrelated_address_records",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/exclusion-only-original";
+    fs::write(h.path().join(path), b"original failure bytes").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit":7})).unwrap();
+    let ancestor = ".chrono-harness/state/fixtures";
+    let mut directory = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in ancestor.split('/') {
+        directory.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    let marker = directory.join("address.json");
+    let original_marker = fs::read(&marker).unwrap();
+    let excluded = chrono_harness::ownership::DirectoryLease::acquire(&directory, true, None)
+        .unwrap()
+        .unwrap();
+    let busy = inventory(h.path())
+        .maintain_originals(&[id.clone()])
+        .unwrap();
+    assert!(
+        busy["accounting_errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error["reason"]
+                .as_str()
+                .unwrap()
+                .contains("retention path is busy")),
+        "{busy}"
+    );
+    assert_eq!(busy["removed_logical_bytes"], 0, "{busy}");
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"original failure bytes"
+    );
+    drop(excluded);
+
+    // The original's own address remains valid. This ancestor record is not an
+    // input to its physical disposal, but the directory must still be excluded.
+    fs::write(&marker, b"unrelated malformed ancestor address").unwrap();
+    let round = inventory(h.path()).maintain_originals(&[id]).unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert_eq!(round["removed_logical_bytes"], 22, "{round}");
+    assert!(!h.path().join(path).exists());
+    assert_eq!(
+        fs::read(&marker).unwrap(),
+        b"unrelated malformed ancestor address"
+    );
+
+    // Publication still consumes ancestor mappings to detect overlapping
+    // reservations. Maintenance must not weaken that separate activity.
+    let next = ".chrono-harness/state/fixtures/new-original";
+    fs::write(h.path().join(next), b"next original").unwrap();
+    assert!(
+        inventory(h.path())
+            .begin("fixture", next, json!(null))
+            .is_err()
+    );
+    assert_eq!(
+        fs::read(&marker).unwrap(),
+        b"unrelated malformed ancestor address"
+    );
+    fs::write(&marker, &original_marker).unwrap();
+    inventory(h.path())
+        .begin("fixture", next, json!(null))
+        .unwrap()
+        .complete(json!({"exit":9}))
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
 }
 
 #[test]
