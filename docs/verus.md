@@ -452,7 +452,7 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 实际启动准备判定也使用同源 `verified_consumption::matches_preparation`，证明命令、宿主配置、
 唯一先行 verifier、执行工具和项目登记必须精确对应。消费关系判官读取显式 preparation，
 再核原共享 core 合同；解码和外层组合仍待证明。独立根与 Rust 回归核缺前置、重复、
-把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 原计划增加两项整 crate 证明。
+把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 已登记三项整 crate 证明。
 
 ## 协议状态与 finding
 
@@ -796,9 +796,9 @@ testing `python`；不归一化、不从扩展名推断，也不扩大 Python �
 存在继承变量时，必须提供与所选端点全文精确相等的 commit。没有这些义务的旧格式
 保留原有可选绑定语义；不额外增加 OID 形状或非空限制。实际快照消费者直接调用该判断。
 独立根核三个单独前提、缺值、数量上界、空文本、前缀、NUL、Unicode 规范化差异，
-并对任意文本和数量证明绑定条件。复用现有两项整 crate 前置，没有新增验证入口。
+并对任意文本和数量证明绑定条件。复用现有 registration 整 crate 前置，没有新增验证入口。
 
-**产品与宿主政策同时变更：**生产调用替换原有普通 Rust 比较；两项整 crate 证明作为
+**产品与宿主政策同时变更：**生产调用替换原有普通 Rust 比较；三项整 crate 证明作为
 registration 专属计划的必需前置，独立预期和 Rust 测试编译同一生产源。
 沿用固定 Verus、完整验证参数和原错误码 `E_ACTIVATION`／`E_EVIDENCE_UNRESOLVED`。
 新增依赖为零，验证与存储总成本未测；JSON 解析、错误记录、其余准备判断及 full 启用仍待完成。
