@@ -10,6 +10,24 @@ use vstd::prelude::*;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registered_action_references_require_the_real_tool_with_no_profile_fallback() {
+    let missing = policy::action_tool_allowed(true, false, false);
+    let stale_copy = policy::action_tool_allowed(true, false, true);
+    let registered_only = policy::action_tool_allowed(true, true, false);
+    let both = policy::action_tool_allowed(true, true, true);
+    assert(!missing && !stale_copy && registered_only && both);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn standalone_action_references_use_the_explicit_profile_tools() {
+    let missing = policy::action_tool_allowed(false, false, false);
+    let unrelated_registration = policy::action_tool_allowed(false, true, false);
+    let profile_only = policy::action_tool_allowed(false, false, true);
+    let both = policy::action_tool_allowed(false, true, true);
+    assert(!missing && !unrelated_registration && profile_only && both);
+}
+
 fn expect_operation(
     state: &str, error: &Option<String>, exit: Option<i32>,
     expected_state: Status, expected_exit: Option<i32>,

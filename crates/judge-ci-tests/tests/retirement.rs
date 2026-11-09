@@ -60,6 +60,7 @@ fn host() -> Host {
     }));
     h.change_registry(CONFIG, |v| {
         v["policy"]["registration_config"] = json!(REGISTRATION);
+        v["policy"].as_object_mut().unwrap().remove("tools");
         v["policy"]["bindings"]["test:suite"] = json!(["build.lib", "test.suite"]);
     });
     h.commit();
@@ -73,6 +74,64 @@ fn check(h: &Host, base: &str, candidate: &str) -> Response {
         "cwd":h.root()
     }});
     judge(&request)
+}
+
+#[test]
+fn registered_profile_removes_a_stale_duplicate_tool_table() {
+    let h = host();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["tools"]["fixture"] = json!("unused-stale-program");
+    });
+    let base = h.commit();
+    h.change_registry(CONFIG, |v| {
+        v["policy"].as_object_mut().unwrap().remove("tools");
+    });
+    h.write("src.txt", "changed\n");
+    let candidate = h.commit();
+    pass(&check(&h, &base, &candidate));
+    assert_eq!(h.calls(), 1, "the registered tool must execute the test");
+}
+
+#[test]
+fn registered_tool_change_reexecutes_its_binding_without_a_profile_copy_change() {
+    let h = host();
+    let base = h.head();
+    let tool = Path::new(OPERATION_TOOL);
+    let alternate = format!(
+        "{}/./{}",
+        tool.parent().unwrap().display(),
+        tool.file_name().unwrap().to_str().unwrap()
+    );
+    h.change_registry(REGISTRATION, |v| {
+        v["tools"][0]["program"] = json!(alternate);
+    });
+    let candidate = h.commit();
+    let result = check(&h, &base, &candidate);
+    pass(&result);
+    assert_eq!(
+        h.calls(),
+        1,
+        "changing the actual tool must select its test"
+    );
+}
+
+#[test]
+fn registered_action_cannot_fall_back_to_a_duplicate_tool_table() {
+    let h = host();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["tools"] = json!({"fixture": OPERATION_TOOL});
+    });
+    let base = h.commit();
+    h.change_registry(REGISTRATION, |v| v["tools"] = json!([]));
+    h.write("src.txt", "changed\n");
+    let candidate = h.commit();
+    let result = check(&h, &base, &candidate);
+    assert_eq!(result.status, Status::Failed);
+    assert_eq!(
+        h.calls(),
+        0,
+        "missing registered tools must block execution"
+    );
 }
 
 fn remove_pair(h: &Host, remove_producer: bool) {

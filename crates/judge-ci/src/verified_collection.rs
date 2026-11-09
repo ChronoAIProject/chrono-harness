@@ -20,6 +20,23 @@ use result_types::{CheckResult, Status};
 
 verus! {
 
+/// Registered hosts admit action references only from their full configuration.
+pub open spec fn authoritative_tool_present(
+    registered: bool, registration_contains: bool, profile_contains: bool,
+) -> bool {
+    if registered { registration_contains } else { profile_contains }
+}
+
+pub fn action_tool_allowed(
+    registered: bool, registration_contains: bool, profile_contains: bool,
+) -> (allowed: bool)
+    ensures allowed == authoritative_tool_present(
+        registered, registration_contains, profile_contains,
+    ),
+{
+    if registered { registration_contains } else { profile_contains }
+}
+
 pub open spec fn operation_status(state: Seq<char>) -> Status {
     if state == "passed"@ { Status::Passed }
     else if state == "blocked"@ { Status::Blocked }
