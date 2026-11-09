@@ -445,7 +445,26 @@
       "owner": "pr-tests",
       "kind": "cargo-output",
       "tracked": false
-    }
+    },
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/host-bootstrap-native/","owner":"host-bootstrap-native","kind":"cargo-output","tracked":false},
+    {"path":".chrono-harness/cache/host-bootstrap-native-tests/","owner":"host-bootstrap-native-tests","kind":"cargo-output","tracked":false},
+    {"path":".chrono-harness/cache/identifiers/","owner":"identifiers","kind":"cargo-output","tracked":false},
+    {"path":".chrono-harness/cache/identifiers-tests/","owner":"identifiers-tests","kind":"cargo-output","tracked":false},
+    {"path":".chrono-harness/cache/release/","owner":"release-build","kind":"build-cache","tracked":false},
+    {"path":".chrono-harness/cache/release-dependencies/","owner":"release-build","kind":"build-cache","tracked":false},
+    {"path":".chrono-harness/cache/release-handoffs/","owner":"release-build","kind":"build-cache","tracked":false},
+    {"path":".chrono-harness/cache/release-results/","owner":"release-build","kind":"build-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/cargo/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/rustup/","owner":"repository","kind":"download-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/home/","owner":"host-bootstrap","kind":"build-cache","tracked":false},
+    {"path":".chrono-harness/cache/bootstrap-owner-tooling/tmp/","owner":"host-bootstrap","kind":"build-cache","tracked":false}
   ],
   "environment": {
     "credential_environment": [

@@ -89,11 +89,36 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     inventory()
         .reference_paths("external-cache-diagnostic", &[])
         .unwrap();
-    inventory().maintain_originals(&ids).unwrap();
+    // Releasing the last consumer makes these originals eligible; one bounded
+    // maintenance round does not promise to finish their physical disposal.
+    let mut rounds = Vec::new();
+    for _ in 0..8 {
+        let round = inventory().maintain_originals(&ids).unwrap();
+        for error in round["accounting_errors"].as_array().unwrap() {
+            assert!(
+                error["reason"].as_str().is_some_and(|reason| {
+                    reason.starts_with("retention output metadata is busy: output-")
+                }),
+                "{round}"
+            );
+        }
+        rounds.push(round);
+        if [&old["intent"]["path"], &old["path"]]
+            .iter()
+            .all(|path| !h.root.join(path.as_str().unwrap()).exists())
+        {
+            break;
+        }
+    }
     assert!(
         !h.root
             .join(old["intent"]["path"].as_str().unwrap())
-            .exists()
+            .exists(),
+        "old cache intent remains after bounded maintenance: {rounds:?}"
+    );
+    assert!(
+        !h.root.join(old["path"].as_str().unwrap()).exists(),
+        "old cache report remains after bounded maintenance: {rounds:?}"
     );
     assert!(
         h.root
