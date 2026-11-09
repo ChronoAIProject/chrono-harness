@@ -1,5 +1,5 @@
 //! 同一次发布的版本、固定源码及原 CI 身份；不读取会漂移的分支。
-use crate::execution::Environment;
+use crate::{execution::Environment, verified_recipe::delivery as policy};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 
@@ -41,7 +41,7 @@ fn text<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, String>
 
 fn positive(environment: &Environment, name: &str) -> Result<u64, String> {
     let value = text(environment, name)?;
-    if value.is_empty() || value.starts_with('0') || !value.bytes().all(|v| v.is_ascii_digit()) {
+    if !policy::decimal_text(value.as_bytes(), false) {
         return Err(error(format!("{name} must be a positive decimal identity")));
     }
     value.parse().map_err(error)
@@ -50,13 +50,7 @@ fn positive(environment: &Environment, name: &str) -> Result<u64, String> {
 fn core(version: &str) -> Result<&str, String> {
     let core = version.split('-').next().unwrap_or("");
     let numbers: Vec<_> = core.strip_prefix('v').unwrap_or("").split('.').collect();
-    if numbers.len() != 3
-        || numbers.iter().any(|v| {
-            v.is_empty()
-                || (v.len() > 1 && v.starts_with('0'))
-                || !v.bytes().all(|b| b.is_ascii_digit())
-        })
-    {
+    if !policy::version_numbers(&numbers) {
         return Err(error(
             "release plan needs a vMAJOR.MINOR.PATCH version core",
         ));
@@ -77,10 +71,11 @@ pub fn resolve(
             "source observation must contain complete lowercase commit/tree OIDs",
         ));
     }
-    let channel = match text(environment, "CHRONO_RELEASE_CHANNEL")? {
-        "" | "build" => Channel::Build,
-        "preview" => Channel::Preview,
-        "stable" => Channel::Stable,
+    let selected_channel = policy::channel(text(environment, "CHRONO_RELEASE_CHANNEL")?);
+    let channel = match selected_channel {
+        0 => Channel::Build,
+        1 => Channel::Preview,
+        2 => Channel::Stable,
         _ => return Err(error("unknown release channel")),
     };
     let mut identity = Identity {
@@ -93,7 +88,10 @@ pub fn resolve(
     if identity.channel == Channel::Build {
         return Ok(identity);
     }
-    if text(environment, "CHRONO_RELEASE_SOURCE")? != source_commit {
+    if !policy::text_fields(&[(
+        Some(text(environment, "CHRONO_RELEASE_SOURCE")?),
+        source_commit,
+    )]) {
         return Err(error(
             "requested source differs from the observed fixed commit",
         ));
@@ -106,7 +104,12 @@ pub fn resolve(
     let requested_version = text(environment, "CHRONO_RELEASE_VERSION")?;
     match identity.channel {
         Channel::Preview => {
-            if !requested_version.is_empty() {
+            if !policy::requested_version(
+                selected_channel,
+                requested_version,
+                version_core,
+                planned_version,
+            ) {
                 return Err(error(
                     "preview version is derived from its CI and source identities",
                 ));
@@ -117,7 +120,12 @@ pub fn resolve(
             );
         }
         Channel::Stable => {
-            if version_core != planned_version || requested_version != planned_version {
+            if !policy::requested_version(
+                selected_channel,
+                requested_version,
+                version_core,
+                planned_version,
+            ) {
                 return Err(error(
                     "stable delivery needs an explicit final version matching the fixed plan",
                 ));

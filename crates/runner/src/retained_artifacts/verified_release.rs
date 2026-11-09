@@ -154,4 +154,182 @@ pub fn global_maintenance(originals: Option<&[String]>) -> (global: bool)
     match originals { None => true, Some(_) => false }
 }
 
+
+pub fn observation_role(trimmed_role: &str, role_bytes: usize, attempt: u64) -> (ok: bool)
+    ensures ok == (0 < trimmed_role@.len() && role_bytes <= 256 && attempt > 0),
+{ !trimmed_role.is_empty() && role_bytes <= 256 && attempt > 0 }
+
+pub fn observation_token(trimmed_role: &str, role_bytes: usize, serial: u64, attempt: u64) -> (ok: bool)
+    ensures ok == (0 < trimmed_role@.len() && role_bytes <= 256 && serial > 0 && attempt > 0),
+{ observation_role(trimmed_role, role_bytes, attempt) && serial > 0 }
+
+pub fn observation_producer(tree: bool, publishing: bool, physical: bool) -> (ok: bool)
+    ensures ok == (tree && publishing && physical),
+{ tree && publishing && physical }
+
+pub fn observation_owner(ordered: bool, empty: bool, unattached: bool) -> (ok: bool)
+    ensures ok == (ordered || (empty && unattached)),
+{ ordered || (empty && unattached) }
+
+pub fn next_observation(issued: u64) -> (next: Option<u64>)
+    ensures next == if issued < u64::MAX { Some((issued + 1) as u64) } else { None },
+{
+    if issued == u64::MAX { None } else { Some(issued + 1) }
+}
+
+pub fn observation_order(epoch_bytes: usize, issued: u64, accepted: u64,
+    has_current: bool, current_member: bool) -> (ok: bool)
+    ensures ok == (epoch_bytes == 64 && issued > 0 && accepted <= issued && (!has_current || current_member)),
+{ epoch_bytes == 64 && issued > 0 && accepted <= issued && (!has_current || current_member) }
+
+pub fn observation_result(tree: bool, released: bool, sealed: bool,
+    address: bool, physical: bool) -> (ok: bool)
+    ensures ok == (tree && released && sealed && address && physical),
+{ tree && released && sealed && address && physical }
+
+pub struct ObservationBinding<'a> {
+    pub role: &'a str, pub epoch: &'a str, pub id: &'a str,
+    pub path: &'a str, pub physical: &'a str, pub serial: u64, pub attempt: u64,
+}
+
+pub fn matching_observation(request: &ObservationBinding, observed: &ObservationBinding) -> (ok: bool)
+    ensures ok == (request.role@ == observed.role@ && request.epoch@ == observed.epoch@
+        && request.id@ == observed.id@ && request.path@ == observed.path@
+        && request.physical@ == observed.physical@ && 0 < observed.serial <= request.serial
+        && 0 < observed.attempt <= request.attempt),
+{
+    identifiers::equal_text(request.role, observed.role)
+        && identifiers::equal_text(request.epoch, observed.epoch)
+        && identifiers::equal_text(request.id, observed.id)
+        && identifiers::equal_text(request.path, observed.path)
+        && identifiers::equal_text(request.physical, observed.physical)
+        && observed.serial > 0 && observed.serial <= request.serial
+        && observed.attempt > 0 && observed.attempt <= request.attempt
+}
+
+pub fn observation_epoch(member: bool, same_epoch: bool, serial: u64, issued: u64) -> (ok: bool)
+    ensures ok == (!member || (same_epoch && serial <= issued)),
+{ !member || (same_epoch && serial <= issued) }
+
+pub fn observation_edit(ordered: bool, owns_update: bool, same_members: bool) -> (ok: bool)
+    ensures ok == (!ordered || owns_update || same_members),
+{ !ordered || owns_update || same_members }
+
+pub fn unknown_pr_operation(unreturned: bool, unresolved_create: bool) -> (unknown: bool)
+    ensures unknown == (unreturned || unresolved_create),
+{ unreturned || unresolved_create }
+
+pub fn settled_pr_command(unreturned: bool, unresolved_create: bool, originals_complete: bool) -> (ok: bool)
+    ensures ok == (!unreturned && !unresolved_create && originals_complete),
+{ !unreturned && !unresolved_create && originals_complete }
+
+pub fn continued_pr_handoff(complete: bool, no_error: bool, observed: bool, matching_head: bool) -> (ok: bool)
+    ensures ok == (complete && no_error && observed && matching_head),
+{ complete && no_error && observed && matching_head }
+
+pub fn open_pr(state: &str) -> (active: bool)
+    ensures active == (state@ == "OPEN"@),
+{ proof { reveal_strlit("OPEN"); } identifiers::equal_text(state, "OPEN") }
+
+pub fn observed_pr(state: &str, active: bool) -> (ok: bool)
+    ensures ok == ((state@ == "OPEN"@ && active)
+        || ((state@ == "CLOSED"@ || state@ == "MERGED"@) && !active)),
+{
+    proof {
+        reveal_strlit("OPEN"); reveal_strlit("CLOSED"); reveal_strlit("MERGED");
+        assert("OPEN"@[0] != "CLOSED"@[0] && "OPEN"@[0] != "MERGED"@[0]);
+    }
+    if open_pr(state) { active }
+    else { !active && (identifiers::equal_text(state, "CLOSED") || identifiers::equal_text(state, "MERGED")) }
+}
+
+pub fn creating_pr(command: &str, action: &str) -> (create: bool)
+    ensures create == (command@ == "pr"@ && action@ == "create"@),
+{ proof { reveal_strlit("pr"); reveal_strlit("create"); }
+    identifiers::equal_text(command, "pr") && identifiers::equal_text(action, "create") }
+
+pub fn continued_observation(request: &ObservationBinding, role: &str, path: &str) -> (ok: bool)
+    ensures ok == (request.role@ == role@ && request.path@ == path@
+        && request.serial > 0 && request.attempt > 0),
+{ identifiers::equal_text(request.role, role) && identifiers::equal_text(request.path, path)
+    && request.serial > 0 && request.attempt > 0 }
+
+pub fn object_state(schema: &str, unresolved_create: bool) -> (ok: bool)
+    ensures ok == (schema@ == "chrono-pr-object-state/v1"@ && !unresolved_create),
+{ identifiers::equal_text(schema, "chrono-pr-object-state/v1") && !unresolved_create }
+
+pub open spec fn current_value(current: Option<String>) -> Option<Seq<char>> {
+    match current { Some(id) => Some(id@), None => None }
+}
+pub open spec fn pending_removed(values: Seq<String>, id: String, current: Option<String>) -> Seq<String> {
+    if current_value(current) == Some(id@) { values } else { removed(values, id@) }
+}
+pub open spec fn old_current_removed(values: Seq<String>, current: Option<String>) -> Seq<String> {
+    match current { Some(id) => removed(values, id@), None => values }
+}
+pub open spec fn observation_members(values: Seq<String>, id: String, current: Option<String>, accepted: u64, observed: Option<(u64,bool)>) -> Seq<String> {
+    let pending = pending_removed(values, id, current);
+    match observed {
+        Some((serial,active)) if serial > accepted => {
+            let next = old_current_removed(pending,current);
+            if active {
+                if present(next,id@) { next } else { next.push(id) }
+            } else { removed(next,id@) }
+        },
+        _ => pending,
+    }
+}
+pub open spec fn observation_accepted(accepted: u64, observed: Option<(u64,bool)>) -> u64 {
+    match observed { Some((serial,_)) if serial > accepted => serial, _ => accepted }
+}
+pub open spec fn observation_current(id: String, current: Option<String>, accepted: u64, observed: Option<(u64,bool)>) -> Option<Seq<char>> {
+    match observed {
+        Some((serial,active)) if serial > accepted => if active { Some(id@) } else { None },
+        _ => current_value(current),
+    }
+}
+pub struct ObservationSettlement {
+    pub members: Vec<String>, pub accepted: u64, pub current: Option<String>,
+}
+/// The one production member transition. It preserves every unrelated pending
+/// output; only the returned command and the superseded current observation move.
+pub fn settle_observation_members(values: &[String], id: &String, current: &Option<String>, accepted: u64, observed: Option<(u64,bool)>) -> (out: ObservationSettlement)
+    ensures out.members@ == observation_members(values@,*id,*current,accepted,observed),
+        out.accepted == observation_accepted(accepted,observed), out.accepted >= accepted,
+        current_value(out.current) == observation_current(*id,*current,accepted,observed),
+{
+    let own_current = match current {
+        Some(value) => identifiers::equal_text(value.as_str(),id.as_str()), None => false,
+    };
+    let mut next = Vec::new();
+    if own_current {
+        let mut at = 0;
+        while at < values.len()
+            invariant at <= values.len(), next@ == values@.take(at as int),
+            decreases values.len() - at,
+        {
+            next.push(values[at].clone());
+            assert(values@.take(at as int + 1) =~= values@.take(at as int).push(values@[at as int]));
+            at += 1;
+        }
+        assert(values@.take(at as int) =~= values@);
+    } else { next = without(values,id.as_str()); }
+    match observed {
+        Some((serial,active)) if serial > accepted => {
+            match current { Some(value) => { next = without(&next,value.as_str()); }, None => {} }
+            if active {
+                if !contains(&next,id.as_str()) { next.push(id.clone()); }
+                ObservationSettlement { members: next, accepted: serial, current: Some(id.clone()) }
+            } else {
+                next = without(&next,id.as_str());
+                ObservationSettlement { members: next, accepted: serial, current: None }
+            }
+        },
+        _ => {
+            let kept = match current { Some(value) => Some(value.clone()), None => None };
+            ObservationSettlement { members: next, accepted, current: kept }
+        },
+    }
+}
+
 }

@@ -177,7 +177,7 @@ fn scoped_observation_keeps_explicit_expectations_and_full_input_requirements() 
 #[test]
 fn actual_registry_test_inputs_have_explicit_runner_test_consumers() {
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let path = ".chrono-harness/git/pinned-macos.json";
+    let path = ".chrono-harness/git/macos-27.json";
     let config: Value = serde_json::from_slice(&fs::read(product.join(path)).unwrap()).unwrap();
     let filemap: Value =
         serde_json::from_slice(&fs::read(product.join(".chrono-harness/FILEMAP.json")).unwrap())
@@ -270,7 +270,7 @@ fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
     let mut h = Host::new(json!({"mode":"passthrough"}));
     // The registered macOS declaration is fixture data on every test platform.
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let original = fs::read(product.join(".chrono-harness/git/pinned-macos.json")).unwrap();
+    let original = fs::read(product.join(".chrono-harness/git/macos-27.json")).unwrap();
     let path = ".chrono-harness/registry-source.json";
     let config: Value = serde_json::from_slice(&original).unwrap();
     let mut originals = std::collections::BTreeMap::new();

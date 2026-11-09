@@ -1043,7 +1043,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         if input["path"] != ".chrono-harness/ci/check.json"
             && input["path"] != ".chrono-harness/ci/bootstrap-core.json"
             && input["path"] != ".chrono-harness/projects.json"
-            && input["path"] != ".chrono-harness/git/pinned-macos.json"
+            && input["path"] != ".chrono-harness/git/macos-27.json"
         {
             *input = json!({"kind":"literal","value":{"fixed_input":id}});
         }
@@ -1066,7 +1066,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         ".chrono-harness/ci/check.json".to_string(),
         ".chrono-harness/ci/bootstrap-core.json".to_string(),
         ".chrono-harness/projects.json".to_string(),
-        ".chrono-harness/git/pinned-macos.json".to_string(),
+        ".chrono-harness/git/macos-27.json".to_string(),
     ]);
     for refs in config["consumer_operations"].as_object().unwrap().values() {
         for source in refs.as_array().unwrap() {

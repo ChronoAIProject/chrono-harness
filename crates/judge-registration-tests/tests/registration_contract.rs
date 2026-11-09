@@ -1681,7 +1681,7 @@ fn actual_host_registries_cannot_pass_full_governance() {
             .unwrap();
     for name in ["config", "projects", "FILEMAP", "workflow"] {
         let source_path = if name == "config" {
-            ".chrono-harness/git/pinned-macos.json".to_owned()
+            ".chrono-harness/git/macos-27.json".to_owned()
         } else {
             format!(".chrono-harness/{name}.json")
         };
