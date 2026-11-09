@@ -227,6 +227,91 @@ fn executable_output_requires_an_explicit_subdirectory_and_preserves_selected_bi
 }
 
 #[test]
+fn maintenance_locks_ancestors_without_consuming_their_unrelated_address_records() {
+    if !isolated_capability_test(
+        "maintenance_locks_ancestors_without_consuming_their_unrelated_address_records",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/exclusion-only-original";
+    fs::write(h.path().join(path), b"original failure bytes").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", path, json!(null))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit":7})).unwrap();
+    let ancestor = ".chrono-harness/state/fixtures";
+    let mut directory = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in ancestor.split('/') {
+        directory.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    let marker = directory.join("address.json");
+    let original_marker = fs::read(&marker).unwrap();
+    let excluded = chrono_harness::ownership::DirectoryLease::acquire(&directory, true, None)
+        .unwrap()
+        .unwrap();
+    let busy = inventory(h.path())
+        .maintain_originals(&[id.clone()])
+        .unwrap();
+    assert!(
+        busy["accounting_errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| error["reason"]
+                .as_str()
+                .unwrap()
+                .contains("retention path is busy")),
+        "{busy}"
+    );
+    assert_eq!(busy["removed_logical_bytes"], 0, "{busy}");
+    assert_eq!(
+        fs::read(h.path().join(path)).unwrap(),
+        b"original failure bytes"
+    );
+    drop(excluded);
+
+    // The original's own address remains valid. This ancestor record is not an
+    // input to its physical disposal, but the directory must still be excluded.
+    fs::write(&marker, b"unrelated malformed ancestor address").unwrap();
+    let round = inventory(h.path()).maintain_originals(&[id]).unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert_eq!(round["removed_logical_bytes"], 22, "{round}");
+    assert!(!h.path().join(path).exists());
+    assert_eq!(
+        fs::read(&marker).unwrap(),
+        b"unrelated malformed ancestor address"
+    );
+
+    // Publication still consumes ancestor mappings to detect overlapping
+    // reservations. Maintenance must not weaken that separate activity.
+    let next = ".chrono-harness/state/fixtures/new-original";
+    fs::write(h.path().join(next), b"next original").unwrap();
+    assert!(
+        inventory(h.path())
+            .begin("fixture", next, json!(null))
+            .is_err()
+    );
+    assert_eq!(
+        fs::read(&marker).unwrap(),
+        b"unrelated malformed ancestor address"
+    );
+    fs::write(&marker, &original_marker).unwrap();
+    inventory(h.path())
+        .begin("fixture", next, json!(null))
+        .unwrap()
+        .complete(json!({"exit":9}))
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+}
+
+#[test]
 fn unfinished_directory_resumes_after_accounting_and_seals_only_after_actual_publication() {
     if !isolated_capability_test(
         "unfinished_directory_resumes_after_accounting_and_seals_only_after_actual_publication",
