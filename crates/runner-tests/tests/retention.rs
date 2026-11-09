@@ -1564,6 +1564,78 @@ fn identity_drift_and_changed_policy_preserve_original_evidence() {
     );
 }
 #[test]
+fn bounded_metadata_capacity_still_allows_reference_component_disposal() {
+    if !isolated_capability_test(
+        "bounded_metadata_capacity_still_allows_reference_component_disposal",
+    ) {
+        return;
+    }
+    let h = host(2, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(512);
+    policy["max_metadata_bytes_per_round"] = json!(24 * 1024 * 1024);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let report_path = tree(h.path(), "obsolete-report");
+    let report = inventory(h.path())
+        .begin("fixture", &report_path, json!(null))
+        .unwrap();
+    let report_id = report.id().to_owned();
+    for n in 0..4 {
+        fs::write(h.path().join(&report_path).join(n.to_string()), [7; 32]).unwrap();
+    }
+    let outcome = json!({"exit": 7, "diagnostic": "x".repeat(16300)});
+    let mut originals = Vec::new();
+    for n in 0..256 {
+        let path = format!(".chrono-harness/state/fixtures/required-{n}");
+        fs::write(h.path().join(&path), b"current original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(outcome.clone()).unwrap();
+        originals.push((id, path));
+    }
+    let ids: Vec<_> = originals.iter().map(|(id, _)| id.clone()).collect();
+    inventory(h.path())
+        .reference("current-recheck", &ids)
+        .unwrap();
+    inventory(h.path()).dependencies(&report_id, &ids).unwrap();
+    report.complete(json!({"exit": 17})).unwrap();
+    let role_path = retention_state::role_path(h.path(), "current-recheck");
+    let role_before = fs::read(&role_path).unwrap();
+
+    // Every declaration and outcome comes from the real producer. With the
+    // smallest valid metadata capacity, preparing this closed component must
+    // leave enough capacity to carry out the requested two disposal steps.
+    let round = inventory(h.path())
+        .maintain_originals(&[report_id.clone()])
+        .unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert_eq!(round["nodes"], 2, "{round}");
+    assert_eq!(round["removed_logical_bytes"], 32, "{round}");
+    assert!(round["metadata_bytes"].as_u64().unwrap() <= 24 * 1024 * 1024);
+    assert!(h.path().join(&report_path).is_dir());
+    assert_eq!(fs::read(role_path).unwrap(), role_before);
+    for (id, path) in originals {
+        assert_eq!(fs::read(h.path().join(path)).unwrap(), b"current original");
+        let record: Value =
+            serde_json::from_slice(&fs::read(retention_state::object_path(h.path(), &id)).unwrap())
+                .unwrap();
+        assert_eq!(record["output"]["outcome"], outcome);
+        assert_eq!(record["roles"], json!(["current-recheck"]));
+    }
+    let report: Value = serde_json::from_slice(
+        &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(report["output"]["outcome"], json!({"exit": 17}));
+}
+
+#[test]
 fn bounded_disposal_does_not_rewrite_unchanged_dependency_declarations() {
     if !isolated_capability_test(
         "bounded_disposal_does_not_rewrite_unchanged_dependency_declarations",
