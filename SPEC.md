@@ -1311,6 +1311,8 @@ v2 可显式登记创建年龄政策：严格超过复用阈值时保全当前�
 
 所有者升级允许保留完全缺失且已排除消费者的已登记工作树：原路径、原 Git metadata 及 inventory 的路径／分支关联均缺失，原独占租约、空 use、适用的有效 birth／政策回执与账本字节须贯穿发布并重验。报告明确当前 HEAD 未知；不退役该记录、不改分支或任务状态，后续本地状态继续提醒处理。部分附件、未知所有权和活消费者仍拒绝升级。
 
+显式生产者登记迁移须支持仍有实际消费者的旧分页 v2 数据，保留绑定的 owner／逐项原字节和原消费者状态，在持续排除原写入者后启用当前登记。不释放诊断、不宣称历史完成，不把旧保管声明变成新的整目录删除资格；准备／归档中断可重入，未知与漂移拒绝，普通入口只读当前格式。
+
 Git main 的已登记历史可重建产物可经同一生命周期所有者 `migrate --path <main> --adopt-cache <state-input>` 接管当前 custody。`chrono-main-cache-custody/v1` 输入显式绑定物理 main、当前完整 HEAD、逐项 dispose 路径、`current_consumers_released:true` 与当前工程原因；操作方须实际加入或排除旧的未登记消费者，不据目录、年龄或静默猜 release。
 
 目标 metadata／附件独占租约保护 active main；源码、index、bin／证据、未知路径及活的已采用消费者仍拒绝。不可覆盖的独立接管回执保留原声明、附件与所有权 DELTA，历史 producer outcome 保持 unknown，原 producer／disposal outcome 保留，不制造 terminal。现有 `reconcile_uses` 可追加中断消费历史并移除过期 token，mutable enrollment／uses 不保证字节不变。

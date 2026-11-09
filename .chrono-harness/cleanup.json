@@ -6,6 +6,11 @@
   "retention": "same-tree",
   "remove_branch": false,
   "allow_evidence_disposal": false,
+  "age_policy": {
+    "reuse_after_seconds": 7200,
+    "delete_after_seconds": 14400,
+    "preserved_branch_prefix": "cleanup-preserved/automatic/"
+  },
   "terminal_history": {
     "keep_seconds": 86400,
     "max_entries": 64,
@@ -167,6 +172,10 @@
     },
     {
       "path": ".chrono-harness/cache/bootstrap-verus/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/verus/",
       "disposition": "retain"
     },
     {
