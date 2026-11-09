@@ -192,7 +192,7 @@ Cargo 下载内容由其已有自动清理管理；CI 的工具链目录随隔�
 
 计划保留 planner 的执行路径、实测文件摘要及版本。首次恢复按保留输入重核登记、宿主和所选观察，沿用原 planner 身份；封存另核当前执行物与原 planner 一致。独立 bootstrap 记录安装二进制摘要及源码身份。文件摘要不证明编译器输入完整或内存加载身份；bootstrap 证据缺失或源码不干净，不能证明绑定到干净源码。
 
-detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
+detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存从检查配置选择 `/policy/environment`，并复用 `cache.cargo-registration` 读取现役完整登记的 Cargo 声明；单元成员、报告位置和已移除的 profile 工具副本不改这些键，环境或真实 Cargo 声明变化会改键。兼容键来源随之变化，旧缓存不会继续命中；完整迁移成本未测。
 
 本仓编译缓存的生产者使用专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。bootstrap 配方、检查政策和发布源中的缓存生产命令明确选择这个仓库相对目录；发布命令用已有 `/usr/bin/env` 转交变量，不新增调度入口。Cargo 子进程的工作目录是实际检出根，独立检出各自拥有该缓存。
 
