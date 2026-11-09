@@ -61,4 +61,18 @@ pub fn commit_count_within_limit(behind: usize, max_behind: usize) -> (allowed: 
     behind <= max_behind
 }
 
+/// An observed non-negative age is admissible when it is at or below the
+/// normalized nanosecond threshold supplied by the external-input adapter.
+pub open spec fn age_limit(age_ns: u64, max_age_ns: u64) -> bool {
+    age_ns <= max_age_ns
+}
+
+/// The production adapter owns time parsing and threshold normalization; the
+/// freshness decision is owned by this proved predicate.
+pub fn age_within_limit(age_ns: u64, max_age_ns: u64) -> (allowed: bool)
+    ensures allowed == age_limit(age_ns, max_age_ns),
+{
+    age_ns <= max_age_ns
+}
+
 }
