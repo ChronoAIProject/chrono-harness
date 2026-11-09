@@ -34,6 +34,15 @@ pub struct Config {
     pub frontend: String,
     pub tools: BTreeMap<String, String>,
     pub curl: String,
+    pub installation: Installation,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Installation {
+    pub publisher: String,
+    pub directory: String,
+    pub shell: String,
 }
 
 fn error(message: impl std::fmt::Display) -> String {
@@ -477,7 +486,9 @@ pub fn run(
         tools,
         started: Instant::now(),
         seconds: loaded.recipe.limits.unit_seconds,
-        report: json!({"schema":"chrono-release-publication/v1","status":"failed","processes":[]}),
+        report: json!({"schema":"chrono-release-publication/v1","status":"failed","processes":[],
+            "lineage":{"kind":"github","run_id":env(environment,"CHRONO_RELEASE_RUN")?,
+                "attempt":env(environment,"CHRONO_RELEASE_ATTEMPT")?,"job":env(environment,"CHRONO_RELEASE_JOB")?}}),
         bodies: 0,
     };
     let outcome = perform(&root, &output, &config, &loaded, environment, &mut executor);
@@ -492,6 +503,308 @@ pub fn run(
     }
     fs::write(
         output.join("receipt.json"),
+        serde_json::to_vec_pretty(&executor.report).map_err(error)?,
+    )
+    .map_err(error)?;
+    outcome.map(|_| 0)
+}
+
+/// 安装使用原发布产物；命令边界在测试中模拟，安装结果由实际安装器产生。
+pub fn install_release(
+    publication: &Path,
+    host: &Path,
+    identity: &identity::Identity,
+    platform: &str,
+    members: &BTreeSet<String>,
+    shell: &str,
+    curl: &str,
+    public_launcher: &str,
+    commands: &mut impl Commands,
+) -> Result<Value, String> {
+    let published = recipe::read_json(publication, "receipt.json")?;
+    if published["schema"] != "chrono-release-publication/v1"
+        || published["status"] != "passed"
+        || published["identity"] != serde_json::to_value(identity).map_err(error)?
+        || (identity.channel == identity::Channel::Build && published["result"]["mode"] != "build")
+        || (identity.channel != identity::Channel::Build
+            && (published["result"]["release"]["draft"] != false
+                || published["result"]["release"]["tag_name"] != identity.version))
+    {
+        return Err(error(
+            "installation needs the matching successful publication",
+        ));
+    }
+    for process in published["processes"]
+        .as_array()
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| error("missing original publication processes"))?
+    {
+        if process["exit_code"] != 0 {
+            return Err(error("failed original publication process"));
+        }
+        for stream in ["stdout", "stderr"] {
+            receipt::original(publication, &process[stream])?;
+        }
+    }
+    let directory = no_symlink_parents(publication, "release")?;
+    let release = recipe::read_json(&directory, "release.json")?;
+    let tools = release["platforms"][platform]
+        .as_object()
+        .ok_or_else(|| error("installation platform missing"))?;
+    if release["schema"] != "chrono-release/v1"
+        || release["version"] != identity.version
+        || release["source_commit"] != identity.source_commit
+        || release["source_tree"] != identity.source_tree
+        || tools.keys().cloned().collect::<BTreeSet<_>>() != *members
+        || !members.contains("chrono-distribution")
+    {
+        return Err(error("installation manifest or membership mismatch"));
+    }
+    let mut names = vec!["release.json".to_owned(), "install.sh".to_owned()];
+    for (name, asset) in tools {
+        let file = format!("{name}-{platform}");
+        if asset["file"] != file {
+            return Err(error("installation asset filename mismatch"));
+        }
+        names.push(file);
+    }
+    for name in &names {
+        let asset = &published["result"]["assets"][name];
+        receipt::original(
+            &directory,
+            &json!({"path":name,"sha256":asset["sha256"],"size":asset["size"]}),
+        )?;
+    }
+    // create_dir 拒绝已有宿主及链接；不覆盖其它宿主的采用或安装。
+    fs::create_dir(host).map_err(error)?;
+    if identity.channel == identity::Channel::Build {
+        let program = no_symlink_parents(&directory, &format!("chrono-distribution-{platform}"))?;
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755)).map_err(error)?;
+        let mut args = vec![
+            "adopt".into(),
+            "--host-root".into(),
+            host.to_str().ok_or("invalid install host")?.into(),
+            "--manifest".into(),
+            directory
+                .join("release.json")
+                .to_str()
+                .ok_or("invalid manifest path")?
+                .into(),
+            "--source-dir".into(),
+            directory.to_str().ok_or("invalid release path")?.into(),
+        ];
+        for name in members {
+            args.extend(["--tool".into(), name.clone()]);
+        }
+        checked(
+            commands,
+            program.to_str().ok_or("invalid installer path")?,
+            &args,
+        )?;
+    }
+    let launcher = if identity.channel == identity::Channel::Build {
+        host.join(".chrono-harness/install.sh")
+    } else {
+        let downloaded = host.join("install.sh");
+        checked(
+            commands,
+            curl,
+            &[
+                "--disable".into(),
+                "--proto".into(),
+                "=https".into(),
+                "--proto-redir".into(),
+                "=https".into(),
+                "--fail".into(),
+                "--show-error".into(),
+                "--location".into(),
+                "--output".into(),
+                downloaded
+                    .to_str()
+                    .ok_or("invalid launcher download")?
+                    .into(),
+                public_launcher.into(),
+            ],
+        )?;
+        let asset = &published["result"]["assets"]["install.sh"];
+        receipt::original(
+            host,
+            &json!({"path":"install.sh","sha256":asset["sha256"],"size":asset["size"]}),
+        )?;
+        downloaded
+    };
+    checked(
+        commands,
+        shell,
+        &[
+            launcher.to_str().ok_or("invalid launcher path")?.into(),
+            "--host-root".into(),
+            host.to_str().ok_or("invalid install host")?.into(),
+        ],
+    )?;
+    let installed = recipe::read_json(host, ".chrono-harness/state/distribution.json")?;
+    let rows = installed["installed"]
+        .as_array()
+        .ok_or("missing installed members")?;
+    if installed["schema"] != "chrono-install-result/v1"
+        || installed["version"] != identity.version
+        || installed["source_commit"] != identity.source_commit
+        || installed["source_tree"] != identity.source_tree
+        || installed["platform"] != platform
+        || rows.len() != members.len()
+        || rows
+            .iter()
+            .filter_map(|row| row["name"].as_str())
+            .collect::<BTreeSet<_>>()
+            != members.iter().map(String::as_str).collect()
+    {
+        return Err(error("actual installation receipt differs"));
+    }
+    for row in rows {
+        let name = text(row, "name")?;
+        let path = format!(".chrono-harness/bin/{name}");
+        let actual = no_symlink_parents(host, &path)?;
+        let (sha, size) = file_identity(&actual)?;
+        if row["path"] != path
+            || row["sha256"] != sha
+            || row["size"] != size
+            || tools[name]["sha256"] != sha
+            || tools[name]["size"] != size
+            || fs::metadata(actual).map_err(error)?.permissions().mode() & 0o111 == 0
+        {
+            return Err(error(format!("installed member differs: {name}")));
+        }
+    }
+    Ok(installed)
+}
+
+pub fn install(
+    root: &Path,
+    output: &Path,
+    config_path: &str,
+    native: &str,
+    environment: &Environment,
+) -> Result<i32, String> {
+    let root = fs::canonicalize(root).map_err(error)?;
+    let loaded = Loaded::load(&root)?;
+    let config: Config =
+        serde_json::from_value(recipe::read_json(&root, config_path)?).map_err(error)?;
+    if config.schema != "chrono-release-delivery/v1" {
+        return Err(error("unknown installation delivery configuration"));
+    }
+    let output = if output.is_absolute() {
+        output.to_owned()
+    } else {
+        std::env::current_dir().map_err(error)?.join(output)
+    };
+    fs::create_dir_all(output.parent().ok_or("missing install output parent")?).map_err(error)?;
+    fs::create_dir(&output).map_err(error)?;
+    let report = output.join("report");
+    fs::create_dir(&report).map_err(error)?;
+    let search = env(environment, "PATH")?;
+    let tools = config
+        .tools
+        .iter()
+        .filter(|(name, _)| name.as_str() == "git")
+        .map(|(name, program)| {
+            Ok((
+                name.clone(),
+                chrono_harness::resolve_program(&root, program, Some(search))?,
+            ))
+        })
+        .collect::<Result<_, String>>()?;
+    let mut executor = Executor {
+        root: &root,
+        output: &report,
+        environment,
+        tools,
+        started: Instant::now(),
+        seconds: loaded.recipe.limits.unit_seconds,
+        bodies: 0,
+        report: json!({"schema":"chrono-release-installation/v1","status":"failed","processes":[]}),
+    };
+    let outcome = (|| {
+        let (commit, tree) = source(&mut executor)?;
+        let identity = identity::resolve(&loaded.plan.version, &commit, &tree, environment)?;
+        executor.report["identity"] = serde_json::to_value(&identity).map_err(error)?;
+        let needs =
+            chrono_harness::json(env(environment, "CHRONO_RELEASE_DEPENDENCIES")?.as_bytes())?;
+        let run = env(environment, "CHRONO_RELEASE_RUN")?;
+        let attempt = env(environment, "CHRONO_RELEASE_ATTEMPT")?;
+        let selected = select(&config.installation.publisher, &needs, run, attempt)?;
+        let publication = no_symlink_parents(&root, &config.installation.directory)?;
+        let published = recipe::read_json(&publication, "receipt.json")?;
+        let lineage: receipt::Lineage =
+            serde_json::from_value(published["lineage"].clone()).map_err(error)?;
+        if lineage
+            != (receipt::Lineage {
+                kind: receipt::Kind::Github,
+                run_id: selected.run_id,
+                attempt: selected.attempt,
+                job: selected.job,
+            })
+        {
+            return Err(error("selected publication lineage differs"));
+        }
+        let declared = loaded
+            .recipe
+            .native_frontends
+            .get(native)
+            .ok_or("unknown installation frontend")?;
+        let selected = select(&declared.job, &needs, run, attempt)?;
+        crate::frontend::validate(
+            &root,
+            &no_symlink_parents(&root, &declared.directory)?,
+            declared,
+            &chrono_host_bootstrap::bindings::native_platform()?,
+            &chrono_host_bootstrap::source::SourceObservation {
+                commit: Some(commit.clone()),
+                tree: Some(tree.clone()),
+                dirty: Some(false),
+                error: None,
+            },
+            &selected,
+            Some(&std::env::current_exe().map_err(error)?),
+        )?;
+        let platform = &config
+            .packages
+            .get(native)
+            .ok_or("unknown installation platform")?
+            .platform;
+        let shell =
+            chrono_harness::resolve_program(&root, &config.installation.shell, Some(search))?;
+        let curl = chrono_harness::resolve_program(&root, &config.curl, Some(search))?;
+        let public_launcher = format!(
+            "https://github.com/{}/releases/download/{}/install.sh",
+            config.publication.repository, identity.version
+        );
+        let installed = install_release(
+            &publication,
+            &output.join("host"),
+            &identity,
+            platform,
+            &loaded.plan.assets.keys().cloned().collect(),
+            shell.to_str().ok_or("invalid shell path")?,
+            curl.to_str().ok_or("invalid curl path")?,
+            &public_launcher,
+            &mut executor,
+        )?;
+        if source(&mut executor)? != (commit, tree) {
+            return Err(error("source changed during installation"));
+        }
+        Ok(installed)
+    })();
+    match &outcome {
+        Ok(result) => {
+            executor.report["status"] = json!("passed");
+            executor.report["result"] = result.clone();
+        }
+        Err(error) => {
+            executor.report["failure"] = json!(error);
+        }
+    }
+    fs::write(
+        report.join("receipt.json"),
         serde_json::to_vec_pretty(&executor.report).map_err(error)?,
     )
     .map_err(error)?;

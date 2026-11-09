@@ -2835,6 +2835,32 @@
             "--deliver",
             ".chrono-harness/release/delivery.json"
           ]
+        },
+        "install_linux": {
+          "operation": "release.install-linux",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/release/consume.sh",
+            ".",
+            ".chrono-harness/cache/release-frontend",
+            ".chrono-harness/cache/release-install-linux",
+            "--install",
+            ".chrono-harness/release/delivery.json",
+            "linux"
+          ]
+        },
+        "install_macos": {
+          "operation": "release.install-macos",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/release/consume.sh",
+            ".",
+            ".chrono-harness/cache/release-frontend",
+            ".chrono-harness/cache/release-install-macos",
+            "--install",
+            ".chrono-harness/release/delivery.json",
+            "macos"
+          ]
         }
       },
       "test_project": "host-release-native-tests"
