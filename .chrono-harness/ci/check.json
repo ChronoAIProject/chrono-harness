@@ -12,15 +12,6 @@
   "policy": {
     "filemap": ".chrono-harness/FILEMAP.json",
     "projects": ".chrono-harness/projects.json",
-    "tools": {
-      "cargo": "cargo",
-      "chrono-ci": ".chrono-harness/bin/chrono-ci",
-      "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
-      "bash": "/bin/bash",
-      "verus": ".chrono-harness/bin/verus/verus",
-      "tar": "/usr/bin/tar",
-      "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
-    },
     "artifacts": [
       ".chrono-harness/bin/",
       ".chrono-harness/state/",

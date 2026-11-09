@@ -27,6 +27,8 @@ filemap 图内核及其独立预期也分别注册 `verify.ci-literals`、
 `verify.project-languages`、`verify.filemap-graph` 及对应测试操作，均保留原真实生产调用。
 仍不代表全仓覆盖完成。
 
+CI 判官的同一 collection 证明根还定义 action 工具引用的来源准入：采用完整登记时，工具必须存在于有效配置，profile 副本不能补齐缺失；独立 scoped 宿主继续使用其明确工具表。实际 snapshot 校验调用该 Verus 函数，独立预期覆盖两种来源的全部存在／缺失组合。工具声明解码、两端变化传播及实际进程由相应行为测试与正式检查验证，不由这个局部谓词证明；沿用现有两项整 crate 证明操作。
+
 本批把已有整 crate Verus 根补入 FILEMAP 的同源绑定：`chrono-identifiers` 的
 `verify.identifiers`／`verify.identifiers-tests`，runner 的
 `verify.retention-release`／`verify.retention-release-tests` 与
@@ -726,6 +728,8 @@ retain 不选，evidence-retain 只由证据权限选择。主检出释放请求
 过去或未来代际不能授权当前删除。独立预期覆盖普通／完成／证据权限组合、无请求、
 旧／未来代际与 u64 最大值。真实回归另核跨操作保留、主检出失败后恢复、新消费、
 独立工作树 finish 及原年龄回收；JSON、原件引用和物理删除仍属适配器验收范围。
+
+分支采用的待办判断也由同一源码负责：取得原独占租约后，仅活跃且没有终态、未交接 use 和待交接结果的记录可以采用分支。上次清理的进度不参与这个判断，也不被迁移改写。独立预期核每项阻断条件及状态全文边界；真实生命周期回归核等待租约和缓存回收后复用同一检出，并保留清理原件及缓存历史。
 
 整体临时分配的回收另要求已声明所有权、保留窗口届满、实际消费者释放和独占内核凭据四项同时成立。
 成功、失败／诊断和中断的窗口选择也由此同源根负责；中断过期不授予任务成功状态。

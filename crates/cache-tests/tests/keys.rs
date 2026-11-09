@@ -1158,24 +1158,40 @@ fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() 
     let consumers = ["check.unit_runner", "check.unit_ci"];
     let (root, config) = host_cache_fixture(&consumers);
     let checks = root.path().join(".chrono-harness/ci/check.json");
+    let registration = root.path().join(".chrono-harness/git/macos-27.json");
     let original: Value = serde_json::from_slice(&fs::read(&checks).unwrap()).unwrap();
+    let registered: Value = serde_json::from_slice(&fs::read(&registration).unwrap()).unwrap();
     for consumer in consumers {
         fs::write(&checks, serde_json::to_vec(&original).unwrap()).unwrap();
+        fs::write(&registration, serde_json::to_vec(&registered).unwrap()).unwrap();
         let first = plan(root.path(), &config, consumer).unwrap();
         let mut metadata = original.clone();
         metadata["policy"]["units"]["locality-fixture"] = json!({"tests":["test:fixture"]});
+        metadata["policy"]["tools"] = json!({"cargo":"obsolete-profile-copy"});
         fs::write(&checks, serde_json::to_vec(&metadata).unwrap()).unwrap();
         assert_eq!(
             first["caches"],
             plan(root.path(), &config, consumer).unwrap()["caches"]
         );
-        for (pointer, value) in [
-            ("/policy/environment/CARGO_INCREMENTAL", json!("0")),
-            ("/policy/tools/cargo", json!("declared-other-cargo")),
+        for (path, source, pointer, value) in [
+            (
+                &checks,
+                &original,
+                "/policy/environment/CARGO_INCREMENTAL",
+                json!("0"),
+            ),
+            (
+                &registration,
+                &registered,
+                "/tools/0/program",
+                json!("declared-other-cargo"),
+            ),
         ] {
-            let mut changed = original.clone();
+            fs::write(&checks, serde_json::to_vec(&original).unwrap()).unwrap();
+            fs::write(&registration, serde_json::to_vec(&registered).unwrap()).unwrap();
+            let mut changed = source.clone();
             *changed.pointer_mut(pointer).unwrap() = value;
-            fs::write(&checks, serde_json::to_vec(&changed).unwrap()).unwrap();
+            fs::write(path, serde_json::to_vec(&changed).unwrap()).unwrap();
             let after = plan(root.path(), &config, consumer).unwrap();
             for (id, cache) in first["caches"].as_object().unwrap() {
                 assert_ne!(

@@ -856,11 +856,6 @@
       "path": ".chrono-harness/ci/check.json",
       "pointer": "/policy/environment"
     },
-    "check.cargo-tool": {
-      "kind": "json-value",
-      "path": ".chrono-harness/ci/check.json",
-      "pointer": "/policy/tools/cargo"
-    },
     "bootstrap.toolchains": {
       "kind": "file",
       "path": ".chrono-harness/ci/bootstrap-toolchains.json",
@@ -1079,7 +1074,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1139,7 +1134,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1198,7 +1193,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1263,7 +1258,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1311,7 +1306,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1355,7 +1350,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1401,7 +1396,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1461,7 +1456,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1523,7 +1518,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1580,7 +1575,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1630,7 +1625,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1689,7 +1684,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1743,7 +1738,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1804,7 +1799,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1864,7 +1859,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1920,7 +1915,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -1978,7 +1973,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2037,7 +2032,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2093,7 +2088,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2147,7 +2142,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2203,7 +2198,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2262,7 +2257,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2323,7 +2318,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2383,7 +2378,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2441,7 +2436,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2489,7 +2484,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2539,7 +2534,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2601,7 +2596,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2647,7 +2642,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -2695,10 +2690,9 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains",
-        "cache.producer",
-        "cache.cargo-registration"
+        "cache.producer"
       ],
       "source_inputs": [
         "cache.sources"
@@ -2748,10 +2742,9 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains",
-        "cache-tests.producer",
-        "cache.cargo-registration"
+        "cache-tests.producer"
       ],
       "source_inputs": [
         "cache-tests.sources"
@@ -5922,7 +5915,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -5982,7 +5975,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
@@ -6044,7 +6037,7 @@
         "bootstrap.script",
         "bootstrap.config",
         "check.environment",
-        "check.cargo-tool",
+        "cache.cargo-registration",
         "bootstrap.toolchains"
       ],
       "source_inputs": [
