@@ -226,7 +226,7 @@ tool 的 program 按已声明 PATH 或显式路径解析，input.location 必须
 
 每次进程使用清空后重建的登记环境及 protocol 的时间／输出上限；显式 GIT_DIR、GIT_WORK_TREE、GIT_INDEX_FILE 因重定向 checkout 而拒绝。进程前后核配置、绑定路径与执行物摘要，保留原始输出字节、摘要、退出和边界失败。完整请求及消费者报告通过 `git_facts` 传递观察结果；下游核对绑定和环境，缺失或不符不得回退 环境中的未绑定 Git。执行前的失败以 `E_GIT_FACTS` 携观察返回；尚未启动的进程不伪造回执。
 
-完整调用、initial inventory 和输入 capture 共用该读取器；initial 仍不裁决 DELTA。Config v1/v2、旧 library facts API、scoped CI 与旧版事件准备保持各自旧合同。详见 [Git 事实绑定](docs/git-facts.md)。此绑定不证明 Git 配置、解释器、动态库、OS、委托工具及其它实际输入已完整登记，也不证明无并发瞬时变化或本地/CI 同判。
+完整调用、initial inventory 和输入 capture 共用该读取器；initial 仍不裁决 DELTA。Config v1/v2、仍有使用方的未绑定 library facts API、scoped CI 与旧版事件准备保持各自合同。库中的索引标记由 `Reader::index_flags` 读取，快照统一通过 `Reader::export_limited` 导出，调用方明确传入容量上限。详见 [Git 事实绑定](docs/git-facts.md)。此绑定不证明 Git 配置、解释器、动态库、OS、委托工具及其它实际输入已完整登记，也不证明无并发瞬时变化或本地/CI 同判。
 
 独立 `facts_config`、完整 `--config`、initial `Profile.host_config`、输入 capture、
 scoped 的可选 `registration_config` 及 full-CI `check_config` 均可显式指向

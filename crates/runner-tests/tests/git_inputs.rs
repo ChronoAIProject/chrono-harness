@@ -1059,7 +1059,9 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
     reader.blob(&h.root, &oid, first).unwrap();
     let before = processes(&reader);
     let dest = tempfile::tempdir().unwrap();
-    reader.export(&h.root, &oid, &tree, dest.path()).unwrap();
+    reader
+        .export_limited(&h.root, &oid, &tree, dest.path(), u64::MAX)
+        .unwrap();
     for (path, bytes) in &originals {
         assert_eq!(fs::read(dest.path().join(path)).unwrap(), *bytes);
         assert!(
@@ -1090,7 +1092,9 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
         chrono_harness::observation::process_success(&process).unwrap();
     }
     let next = tempfile::tempdir().unwrap();
-    reader.export(&h.root, &oid, &tree, next.path()).unwrap();
+    reader
+        .export_limited(&h.root, &oid, &tree, next.path(), u64::MAX)
+        .unwrap();
     assert_eq!(
         expanded_observation(&reader),
         observed,
@@ -1100,7 +1104,7 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
     let rejected = tempfile::tempdir().unwrap();
     assert!(
         reader
-            .export(&h.root, &oid, &tree, rejected.path())
+            .export_limited(&h.root, &oid, &tree, rejected.path(), u64::MAX)
             .is_err()
     );
     assert_eq!(
@@ -1118,7 +1122,7 @@ fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
     let tree = reader.tree(&h.root, &oid).unwrap();
     let dest = tempfile::tempdir().unwrap();
     let error = reader
-        .export(&h.root, &oid, &tree, dest.path())
+        .export_limited(&h.root, &oid, &tree, dest.path(), u64::MAX)
         .unwrap_err();
     assert!(error.contains("Git facts process exit 17"), "{error}");
     let observed = expanded_observation(&reader);
@@ -1127,7 +1131,9 @@ fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
     assert_eq!(failure["stdout_sha256"], sha256(b"original partial"));
     assert_eq!(failure["stderr_sha256"], sha256(b"original error"));
     fs::write(h.root.join("retry-ready"), b"").unwrap();
-    reader.export(&h.root, &oid, &tree, dest.path()).unwrap();
+    reader
+        .export_limited(&h.root, &oid, &tree, dest.path(), u64::MAX)
+        .unwrap();
     assert!(processes(&reader) > observed["processes"].as_array().unwrap().len());
     for (path, bytes) in originals {
         assert_eq!(fs::read(dest.path().join(path)).unwrap(), bytes);
