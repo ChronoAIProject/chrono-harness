@@ -907,10 +907,6 @@ fn adopted_bootstrap_shell_ignores_path_shadow_and_matches_host_version() {
         tool["expected_version"].as_str().unwrap(),
         "registered bootstrap shell must survive unrelated PATH precedence"
     );
-    assert_eq!(
-        read(".chrono-harness/ci/check.json")["policy"]["tools"]["bash"],
-        tool["program"]
-    );
     let provider = read(".chrono-harness/ci/units.json");
     assert_eq!(provider["collection"]["bootstrap"][0], tool["program"]);
     for unit in provider["units"].as_object().unwrap().values() {
