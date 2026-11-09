@@ -625,7 +625,9 @@ impl Inventory {
             return Err("retention declaration byte bound".into());
         }
         self.charge_metadata(raw.len() as u64)?;
-        decode(&raw).map(Some)
+        serde_json::from_slice(&raw)
+            .map(Some)
+            .map_err(|error| error.to_string())
     }
     fn persist_change<T: Serialize>(
         &self,
