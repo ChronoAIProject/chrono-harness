@@ -182,6 +182,71 @@ fn aged_busy_consumer_defers_and_independent_expired_checkout_advances() {
 }
 
 #[test]
+fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches() {
+    let h = Host::new("payload");
+    policy(&h, 1, 3, "dispose");
+    native_consumer(&h, "ordinary");
+    let target = h.parent.join("detached aged checkout");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            target.to_str().unwrap(),
+            "dev",
+        ],
+    );
+    let head = git(&target, &["rev-parse", "HEAD"]);
+    let dev = git(&h.root, &["rev-parse", "dev"]);
+    let (code, imported, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{imported} {error}");
+    fs::write(target.join("payload"), "original staged source").unwrap();
+    git(&target, &["add", "payload"]);
+    fs::write(target.join("payload"), "current detached source").unwrap();
+    output(&target);
+    older_than(&target, 1);
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    let saved = &used["age_reuse"]["source_preservation"];
+    assert_eq!(saved["original_head"], head);
+    assert_ne!(saved["head"], head);
+    let show = |reference: &Value| {
+        git(
+            &h.root,
+            &["show", &format!("{}:payload", reference.as_str().unwrap())],
+        )
+    };
+    assert_eq!(show(&saved["index_ref"]), "original staged source");
+    assert_eq!(show(&saved["retained_ref"]), "current detached source");
+    assert_eq!(git(&h.root, &["rev-parse", "dev"]), dev);
+    assert_eq!(git(&target, &["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD");
+    assert_eq!(
+        git(&target, &["rev-parse", "HEAD"]),
+        saved["head"].as_str().unwrap()
+    );
+    assert_eq!(
+        fs::read_to_string(target.join("payload")).unwrap(),
+        "current detached source"
+    );
+    assert!(!target.join("output λ").exists());
+    older_than(&target, 3);
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists(), "{finished}");
+    assert_eq!(git(&h.root, &["rev-parse", "dev"]), dev);
+    assert_eq!(show(&saved["retained_ref"]), "current detached source");
+}
+
+#[test]
 fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     let h = Host::new("payload");
     policy(&h, 30, 40, "evidence-retain");

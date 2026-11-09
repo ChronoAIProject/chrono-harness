@@ -2086,6 +2086,143 @@ fn automatic_import_is_explicit_and_not_a_historical_birth() {
     assert!(!target.exists());
 }
 
+#[test]
+fn detached_import_preserves_unresolved_index_and_reports_unfinished_work() {
+    let h = Host::new("base\n");
+    h.kernel_cleanup();
+    let base = git(&h.root, &["rev-parse", "HEAD"]);
+    git(&h.root, &["checkout", "-b", "client/other-side"]);
+    fs::write(h.root.join("payload"), "other side\n").unwrap();
+    let other = commit(&h.root);
+    git(&h.root, &["checkout", "dev"]);
+    fs::write(h.root.join("payload"), "current side\n").unwrap();
+    let head = commit(&h.root);
+    let target = h.parent.join("detached unresolved checkout");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            target.to_str().unwrap(),
+            &head,
+        ],
+    );
+    git(&target, &["read-tree", "-m", &base, &head, &other]);
+    assert!(!git(&target, &["ls-files", "--unmerged"]).is_empty());
+    let metadata = PathBuf::from(git(&target, &["rev-parse", "--absolute-git-dir"]));
+    let original = [
+        target.join(".git"),
+        metadata.join("HEAD"),
+        metadata.join("index"),
+        target.join("payload"),
+    ]
+    .map(|path| {
+        let bytes = fs::read(&path).unwrap();
+        (path, bytes)
+    });
+
+    let (code, report, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    let (code, migrated, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{migrated} {error}");
+    let (code, status, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{status} {error}");
+    let row = status["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .unwrap();
+    assert_eq!(row["branch"], "HEAD");
+    assert_eq!(row["work_state"], "active");
+    assert_eq!(row["attention_required"], true);
+    assert_eq!(row["next_action"], "complete-work-and-finish");
+    let ledger = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
+    assert!(ledger["entries"][0]["terminal"].is_null());
+    for (path, bytes) in original {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    assert!(!git(&target, &["ls-files", "--unmerged"]).is_empty());
+}
+
+#[test]
+fn detached_finish_removes_only_the_enrolled_checkout_and_keeps_all_branches() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let path = h.root.join(AUTO_POLICY);
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["remove_branch"] = value!(true);
+    fs::write(path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let target = h.parent.join("detached finished checkout");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            target.to_str().unwrap(),
+            "dev",
+        ],
+    );
+    let branches = git(&h.root, &["for-each-ref", "refs/heads/"]);
+    let (code, report, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    output(&target);
+    let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.exists(), "{finished}");
+    assert_eq!(git(&h.root, &["for-each-ref", "refs/heads/"]), branches);
+    let row = finished["drain"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .unwrap();
+    let cleanup = drain_report(row);
+    assert_eq!(cleanup["branch_removal"], "not-applicable-detached");
+    assert_eq!(cleanup["branch_removed"], false);
+    assert_eq!(cleanup["worktree_removal"], "verified-absent");
+}
+
+#[test]
+fn detached_enrollment_rejects_later_branch_attachment_without_changing_work() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("changed detached checkout");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            target.to_str().unwrap(),
+            "dev",
+        ],
+    );
+    let (code, report, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    git(&target, &["checkout", "-b", "client/reattached"]);
+    let metadata = PathBuf::from(git(&target, &["rev-parse", "--absolute-git-dir"]));
+    let index = fs::read(metadata.join("index")).unwrap();
+    let branches = git(&h.root, &["for-each-ref", "refs/heads/"]);
+    let (code, refused, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+    assert_ne!(code, 0, "{refused} {error}");
+    assert!(
+        refused["error"]
+            .as_str()
+            .unwrap()
+            .contains("identity or ownership lock mismatch")
+    );
+    assert!(target.is_dir());
+    assert_eq!(fs::read(metadata.join("index")).unwrap(), index);
+    assert_eq!(git(&h.root, &["for-each-ref", "refs/heads/"]), branches);
+    let ledger = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
+    assert!(ledger["entries"][0]["terminal"].is_null());
+}
+
 fn blocked_remove(h: &Host, after_effect: bool) {
     native_git(h, "automatic-remove", value!({"after_effect":after_effect}));
 }

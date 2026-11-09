@@ -215,7 +215,7 @@ impl Manager {
                 &[
                     "update-ref",
                     "--no-deref",
-                    &format!("refs/heads/{}", e.branch),
+                    &maintenance::checkout_reference(&e.branch),
                     &saved,
                     &head,
                 ],

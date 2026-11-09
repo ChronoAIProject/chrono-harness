@@ -749,9 +749,10 @@ impl Manager {
                 entry.path.display()
             ));
         }
-        let branch = format!("refs/heads/{}", entry.branch);
+        let branch = maintenance::checkout_reference(&entry.branch);
         if inventory.iter().any(|row| {
-            Path::new(&row["worktree"]) == entry.path || row.get("branch") == Some(&branch)
+            Path::new(&row["worktree"]) == entry.path
+                || (branch != "HEAD" && row.get("branch") == Some(&branch))
         }) {
             return Err("owner deployment missing enrollment has another Git attachment; preserve selected bytes".into());
         }

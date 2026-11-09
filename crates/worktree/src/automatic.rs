@@ -146,7 +146,7 @@ impl EvidenceExclusion {
         let branch = if e.cache_only {
             observed.branch.clone()
         } else {
-            format!("refs/heads/{}", e.branch)
+            maintenance::checkout_reference(&e.branch)
         };
         for lock in [
             observed.metadata.join("index.lock"),
@@ -1563,7 +1563,10 @@ impl Manager {
         match main_branch {
             Some("HEAD") => (), // Detached main has no branch-removal authority.
             Some(reference) => references.push(reference.into()),
-            None => references.push(format!("refs/heads/{}", e.branch)),
+            None if e.branch != "HEAD" => {
+                references.push(maintenance::checkout_reference(&e.branch))
+            }
+            None => (),
         }
         for reference in references {
             relative_path(&reference)?;
@@ -1621,11 +1624,14 @@ impl Manager {
         let target = absolute(target, false)?;
         self.enrollment_available(&target)?;
         let cache_only = kind == "main-cache";
-        let branch = if cache_only {
-            r.checkout_identity(&target)?.branch
+        let observed = r.checkout_identity(&target)?;
+        let branch = if cache_only || (kind == "import" && observed.branch == "HEAD") {
+            observed.branch
         } else {
-            r.text(&target, &["symbolic-ref", "--short", "HEAD"])?
-                .trim()
+            observed
+                .branch
+                .strip_prefix("refs/heads/")
+                .ok_or("enrollment requires a local branch or explicit detached import")?
                 .to_owned()
         };
         if cache_only
@@ -3578,7 +3584,7 @@ impl Manager {
                     r,
                     &manager.inputs.policy.coordinator_root,
                     path,
-                    &format!("refs/heads/{}", e.branch),
+                    &maintenance::checkout_reference(&e.branch),
                     &t.head,
                 )?;
                 manager.check_entry(r, &e, &t.head, None)?;
