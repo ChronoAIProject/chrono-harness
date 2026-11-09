@@ -20,8 +20,8 @@ fn only_complete_ascii_status_tokens_are_accepted() {
     let wrong_prefix = policy::http_status(&[104u8, 84, 84, 80, 32, 53, 48, 51, 58]);
     let not_a_digit = policy::http_status(&[72u8, 84, 84, 80, 32, 53, 255, 51, 58]);
     let wrong_suffix = policy::http_status(&[72u8, 84, 84, 80, 32, 53, 48, 51, 59]);
-    assert(empty == None && short == None && valid == Some(503)
-        && wrong_prefix == None && not_a_digit == None && wrong_suffix == None);
+    assert(empty == None::<u16> && short == None::<u16> && valid == Some(503u16)
+        && wrong_prefix == None::<u16> && not_a_digit == None::<u16> && wrong_suffix == None::<u16>);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -36,7 +36,8 @@ fn repeated_statuses_are_unambiguous_but_conflicting_statuses_are_rejected() {
     ]);
     let embedded = policy::http_status(&[255u8, 72, 84, 84, 80, 32, 48, 48, 48, 58, 0]);
     let maximum = policy::http_status(&[72u8, 84, 84, 80, 32, 57, 57, 57, 58]);
-    assert(repeated == Some(503) && conflict == None && embedded == Some(0) && maximum == Some(999));
+    assert(repeated == Some(503u16) && conflict == None::<u16>
+        && embedded == Some(0u16) && maximum == Some(999u16));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
