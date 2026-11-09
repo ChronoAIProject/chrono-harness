@@ -1278,6 +1278,14 @@ fn migration_local_short_lane() -> (Host, host::FixtureDirectory, std::path::Pat
         &python,
         &["judge:projects"],
     );
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_TRANSITION_TRACE",
+        &tools.path().join("business-launches"),
+        &["judge:registration", "judge:projects"],
+    );
+    native_tools::bind_input(&mut h, "tool:transition-decoder", &["judge:registration"]);
+    native_tools::bind_input(&mut h, "tool:transition-checks", &["judge:projects"]);
     h.tool = wrapper.clone();
     let cfg = h.values.get_mut(CONFIG).unwrap();
     cfg["tools"]
@@ -1345,7 +1353,12 @@ fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conve
         originals.push((path.clone(), fs::read(path).unwrap()));
     }
     let before = marker(tools.path());
-    // No decoder/version or business execution is available to the collector.
+    assert!(before.contains("decoder\n"), "conversion trace is missing");
+    assert!(
+        before.contains("decoder-tests\n"),
+        "compatibility trace is missing"
+    );
+    // Collection must reuse originals without invoking the retained tools.
     fs::remove_file(tools.path().join("python-migration")).unwrap();
     let report = repair_collected(&lane, "q1-collect", "original conversion bootstrap binding");
     assert_eq!(marker(tools.path()), before);
