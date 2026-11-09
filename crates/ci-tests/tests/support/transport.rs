@@ -310,9 +310,9 @@ fn inventory_listing() {
 fn main() {
     if let Ok(provider) = std::env::var("CHRONO_CI_TEST_PROVIDER") {
         match provider.as_str() {
-            "units" => {
+            "parent" => {
                 provider_observation("entered");
-                provider::units(&std::env::args().skip(1).collect::<Vec<_>>());
+                provider::parent(&std::env::args().skip(1).collect::<Vec<_>>());
                 provider_observation("returned");
                 return;
             }

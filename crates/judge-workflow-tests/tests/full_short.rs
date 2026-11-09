@@ -77,6 +77,23 @@ fn adopt_short_host(
                 "judge:registration",
             ));
         }
+        // Native job metadata belongs to acquisition, while the full business
+        // environment must agree across independent producer and collector jobs.
+        // The registered fixture adapter delegates to the real CI input producer
+        // and retains the exact native-only values alongside its original output.
+        let adapter = root.join(".chrono-harness/bin/native-inputs");
+        native_tools::install(&root, &adapter);
+        cfg["canonical_check"]["inputs"]["ci"]["tool"] = json!("native-inputs");
+        cfg["tools"].as_array_mut().unwrap().push(json!({"id":"native-inputs","program":".chrono-harness/bin/native-inputs","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-workflow-native-inputs 1"}));
+        cfg["input_closure"]["bindings"][0]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("tool:native-inputs"));
+        added_edges.push(edge(
+            "tool:native-inputs",
+            "runtime-input",
+            "judge:registration",
+        ));
     }
     h.values.get_mut(FM).unwrap()["project_edges"]
         .as_array_mut()
@@ -102,9 +119,10 @@ fn adopt_short_host(
         ));
     let worktree = json!({"schema":"chrono-worktree-config/v2","host_config":CONFIG,"remote":"origin","git":{"program":git_bin,"expected_version":null,"sha256":sha256(&fs::read(&git_bin).unwrap())},"environment":{"inherit":["HOME"],"values":{"PATH":h.values[CONFIG]["environment"]["values"]["PATH"],"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"}},"timeout_seconds":30,"output_limit_bytes":1048576,"report_directory":".chrono-harness/state/worktrees/","check_inputs":{"origin_path":".chrono-harness/state/origin.json","context_path":".chrono-harness/state/local/context.json","collection_manifest":".chrono-harness/state/collection/manifest.json","roles":{"integration":"integration","feature":"delivery"}}});
     let common = json!({"schema":"chrono-github-ci/v4","workflow_path":".github/workflows/collection.yml","name":"Full collection","runs_on":"fixture-native","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["/bin/true"],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":CONFIG,"facts_config":CONFIG,"context_path":".chrono-harness/state/collection/event.json","artifact_directory":".chrono-harness/state/collection/"});
-    let mut provider = json!({"schema":"chrono-github-units/v2","collection":common,"units":{},"full_contexts":{"collection":".chrono-harness/state/collection/full.json","units":{}},"gather":{"program":tools.path().join("mock-gh"),"inherit_environment":[],"credential_environment":[],"environment":{},"timeout_seconds":30,"output_limit_bytes":1048576,"wait_seconds":1,"poll_seconds":1,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}});
+    let mut provider = json!({"schema":"chrono-github-units/v2","collection":common,"units":{},"full_contexts":{"collection":".chrono-harness/state/collection/full.json","units":{}},"gather":{"program":tools.path().join("mock-gh"),"inherit_environment":[],"credential_environment":[],"environment":{},"timeout_seconds":30,"output_limit_bytes":1048576,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}});
+    provider["job_gating"] = json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"fixture-native","timeout_minutes":20,"bootstrap":["/bin/true"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}});
     for id in ["one", "two"] {
-        provider["units"][id] = json!({"workflow_path":format!(".github/workflows/{id}.yml"),"name":format!("Full {id}"),"runs_on":"fixture-native","timeout_minutes":20,"bootstrap":["/bin/true"],"context_path":format!(".chrono-harness/state/{id}/event.json"),"artifact_directory":format!(".chrono-harness/state/{id}/")});
+        provider["units"][id] = json!({"name":format!("Full {id}"),"runs_on":"fixture-native","timeout_minutes":20,"bootstrap":["/bin/true"],"context_path":format!(".chrono-harness/state/{id}/event.json"),"artifact_directory":format!(".chrono-harness/state/{id}/")});
         provider["full_contexts"]["units"][id] =
             json!(format!(".chrono-harness/state/{id}/full.json"));
     }
@@ -130,7 +148,7 @@ fn adopt_short_host(
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
-    for id in ["one", "two", "collection"] {
+    for id in ["collection"] {
         let mut f = file(&format!(".github/workflows/{id}.yml"), json!([]));
         f["surface"] = json!("documentation");
         h.values.get_mut(FM).unwrap()["files"]
@@ -372,7 +390,7 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
     let (h, tools) = short_host(false);
     let root = h.root();
     let config = fs::read(root.join(CONFIG)).unwrap();
-    let workflows: Vec<_> = ["one", "two", "collection"]
+    let workflows: Vec<_> = ["collection"]
         .into_iter()
         .map(|id| {
             let path = root.join(format!(".github/workflows/{id}.yml"));
@@ -875,42 +893,140 @@ fn local_collection_retry_preserves_observation_and_expires_older_producer() {
         );
     }
 }
-fn native_command(root: &Path, id: &str, candidate: &str, payload: &Path) -> (i32, Value) {
-    let workflow = fs::read_to_string(root.join(format!(".github/workflows/{id}.yml"))).unwrap();
+fn native_environment(command: &mut Command, candidate: &str, payload: &Path, job: &str) {
+    command
+        .env("CHRONO_CHECK_SOURCE", "ci")
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_EVENT_PATH", payload)
+        .env("CHRONO_WORKFLOW_REVISION", candidate)
+        .env("GITHUB_REPOSITORY", "fixture/full")
+        .env("GITHUB_RUN_ID", "101")
+        .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("GITHUB_JOB", job)
+        .env("DECLARED_EMPTY", "")
+        .env_remove("DECLARED_ABSENT");
+}
+fn native_detection(root: &Path, candidate: &str, payload: &Path) -> Value {
+    let mut command = Command::new(root.join(".chrono-harness/bin/chrono-ci"));
+    command.current_dir(root).args([
+        "detect",
+        "--host-root",
+        ".",
+        "--config",
+        PROVIDER,
+        "--github-output",
+        ".chrono-harness/state/detector-output",
+    ]);
+    native_environment(&mut command, candidate, payload, "detect");
+    let out = host::capture_native(root, &mut command);
+    assert!(
+        out.status.success(),
+        "{} {}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    chrono_harness::json(&out.stdout).unwrap()["detection"].clone()
+}
+fn native_command(
+    root: &Path,
+    id: &str,
+    candidate: &str,
+    payload: &Path,
+    detection: &Value,
+    needs: &Value,
+) -> (i32, Value) {
+    let workflow = fs::read_to_string(root.join(".github/workflows/collection.yml")).unwrap();
+    let argv = if id == "collection" {
+        vec!["check", "--collect"]
+    } else {
+        vec!["check", "--unit", id]
+    };
+    let expected = argv
+        .iter()
+        .map(|arg| format!("'{arg}'"))
+        .collect::<Vec<_>>()
+        .join(" ");
     let command = workflow
         .lines()
         .find(|line| {
             line.trim_start()
-                .starts_with("'.chrono-harness/bin/chrono-harness' 'check'")
+                .starts_with(&format!("'.chrono-harness/bin/chrono-harness' {expected}"))
         })
         .expect("generated short command")
         .trim();
-    let out = host::capture_native(
-        root,
-        Command::new("/bin/sh")
-            .current_dir(root)
-            .args(["-c", command])
-            .env("CHRONO_CHECK_SOURCE", "ci")
-            .env("GITHUB_EVENT_NAME", "push")
-            .env("GITHUB_EVENT_PATH", payload)
-            .env("CHRONO_WORKFLOW_REVISION", candidate)
-            .env("GITHUB_REPOSITORY", "fixture/full")
-            .env("DECLARED_EMPTY", "")
-            .env_remove("DECLARED_ABSENT"),
-    );
+    let job = if id == "collection" {
+        "aggregate".to_owned()
+    } else {
+        fixture_job_id(id)
+    };
+    fs::write(
+        root.join(".chrono-harness/state/native-transport.json"),
+        serde_json::to_vec(&json!({
+            "GITHUB_RUN_ID":"101","GITHUB_RUN_ATTEMPT":"1","GITHUB_JOB":job,
+            "CHRONO_CI_DETECTION":detection.to_string(),"CHRONO_CI_NEEDS":needs.to_string()
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut process = Command::new("/bin/sh");
+    process.current_dir(root).args(["-c", command]);
+    native_environment(&mut process, candidate, payload, &job);
+    process
+        .env("CHRONO_CI_DETECTION", detection.to_string())
+        .env("CHRONO_CI_NEEDS", needs.to_string());
+    let out = host::capture_native(root, &mut process);
     if !out.status.success() {
         println!("GENERATED_FAILURE {}", String::from_utf8_lossy(&out.stderr));
     }
-    println!(
-        "GENERATED {id} exit={} bytes={}",
-        out.status.code().unwrap(),
-        out.stdout.len()
-    );
-    let report = if id == "collection" {
-        short_report(root, &["check", "--collect"], &out, Some("ci"))
-    } else {
-        short_report(root, &["check", "--unit", id], &out, Some("ci"))
-    };
+    let report = short_report(root, &argv, &out, Some("ci"));
+    if out.status.success() {
+        for key in ["GITHUB_JOB", "CHRONO_CI_NEEDS"] {
+            assert!(report["environment"]["inherited"].get(key).is_none());
+            assert!(report["environment"]["effective"].get(key).is_none());
+        }
+        let native = fs::read(root.join(".chrono-harness/state/native-transport.json")).unwrap();
+        let original = report["preparation"]["result"]["originals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|original| original["sha256"] == sha256(&native))
+            .expect("actual native-only acquisition values retained");
+        assert_eq!(
+            fs::read(root.join(original["path"].as_str().unwrap())).unwrap(),
+            native
+        );
+        let producer = &report["preparation"]["result"]["evidence"];
+        let raw = fs::read(root.join(producer["report_path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&raw), producer["report_sha256"]);
+        let original: Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(original["native_run"]["job"], job);
+    }
+    if out.status.success() && id != "collection" {
+        let mut production = Command::new(root.join(".chrono-harness/bin/chrono-ci"));
+        production.current_dir(root).args([
+            "production",
+            "--host-root",
+            ".",
+            "--config",
+            PROVIDER,
+            "--unit",
+            id,
+            "--github-output",
+            ".chrono-harness/state/production-output",
+        ]);
+        native_environment(&mut production, candidate, payload, &job);
+        let output = host::capture_native(root, &mut production);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        fs::write(
+            root.join(format!(".chrono-harness/state/production-{id}")),
+            output.stdout,
+        )
+        .unwrap();
+    }
     (out.status.code().unwrap(), report)
 }
 #[test]
@@ -940,14 +1056,24 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, &context).unwrap();
     }
+    let detection = native_detection(&root, &h.candidate, &payload);
     let one = clone_host(&h);
     let two = clone_host(&h);
     let collector = clone_host(&h);
+    let mut needs = json!({"detect":{"result":"success","outputs":{"detection":detection.to_string(),"unit_one":"true","unit_two":"true"}}});
+    let mut productions = json!({});
     let mut failed = Vec::new();
     for (id, unit_root) in [("one", one.path()), ("two", two.path())] {
         if id == "two" {
             fs::write(unit_root.join(".chrono-harness/state/fail"), "").unwrap();
-            let (exit, report) = native_command(unit_root, id, &h.candidate, &payload);
+            let (exit, report) = native_command(
+                unit_root,
+                id,
+                &h.candidate,
+                &payload,
+                &detection,
+                &Value::Null,
+            );
             assert_ne!(exit, 0);
             failed =
                 fs::read(unit_root.join(format!(".chrono-harness/state/{id}/check.json"))).unwrap();
@@ -955,7 +1081,14 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
             fs::remove_file(unit_root.join(".chrono-harness/state/fail")).unwrap();
         }
         let before = marker(tools.path());
-        let (exit, report) = native_command(unit_root, id, &h.candidate, &payload);
+        let (exit, report) = native_command(
+            unit_root,
+            id,
+            &h.candidate,
+            &payload,
+            &detection,
+            &Value::Null,
+        );
         passed(exit, &report);
         assert_eq!(report["judges"].as_array().unwrap().len(), 7);
         assert_eq!(report["request"]["scope"], json!({"kind":"unit","unit":id}));
@@ -965,6 +1098,12 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
             "p/Cargo.toml"
         };
         assert!(!marker(tools.path())[before.len()..].contains(other));
+        let production =
+            fs::read_to_string(unit_root.join(format!(".chrono-harness/state/production-{id}")))
+                .unwrap();
+        needs[fixture_job_id(id)] =
+            json!({"result":"success","outputs":{"production":production.trim()}});
+        productions[id] = chrono_harness::json(production.as_bytes()).unwrap();
         copy_tree(
             &unit_root.join(format!(".chrono-harness/state/{id}")),
             &tools.path().join(format!("uploads/{id}")),
@@ -982,13 +1121,20 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
     }
     let mock = tools.path().join("mock-gh");
     let data = tools.path().join("full-units-api.json");
-    fs::write(&data,serde_json::to_vec(&json!({"profile":"full-units","candidate":h.candidate,"uploads":tools.path().join("uploads"),"workflow_root":collector.path()})).unwrap()).unwrap();
+    fs::write(&data,serde_json::to_vec(&json!({"profile":"full-units","candidate":h.candidate,"productions":productions,"uploads":tools.path().join("uploads"),"workflow_root":collector.path()})).unwrap()).unwrap();
     native_tools::install(tools.path(), &mock);
     one.close().unwrap();
     two.close().unwrap();
     fs::remove_file(tools.path().join("cargo-fixture")).unwrap();
     let before = marker(tools.path());
-    let (exit, collected) = native_command(collector.path(), "collection", &h.candidate, &payload);
+    let (exit, collected) = native_command(
+        collector.path(),
+        "collection",
+        &h.candidate,
+        &payload,
+        &detection,
+        &needs,
+    );
     passed(exit, &collected);
     assert_eq!(marker(tools.path()), before);
     assert_eq!(collected["tests"]["executed"], json!([]));
@@ -1021,7 +1167,14 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
         .unwrap();
     fs::write(source.join(pointer), b"changed original acquisition").unwrap();
     let before = marker(tools.path());
-    let (exit, report) = native_command(collector.path(), "collection", &h.candidate, &payload);
+    let (exit, report) = native_command(
+        collector.path(),
+        "collection",
+        &h.candidate,
+        &payload,
+        &detection,
+        &needs,
+    );
     assert_ne!(exit, 0, "{}", report["findings"]);
     assert_eq!(marker(tools.path()), before);
 }

@@ -363,7 +363,7 @@ GitHub bootstrap 要求自托管 runner 上明确配置的工具目录；托管 
 
 当前宿主在一个父工作流内生成明确 detector、按条件运行的独立单元 job、始终运行的汇总。分支保护只要求汇总。选择来自完整 Git 事件 DELTA，不用工作流 paths 过滤器或 API 文件列表。
 
-真实原生检查保持固定短入口 `check`、`check --unit ID`、`check --collect`。provider 未明确采用 `job_gating` 时，保留原独立工作流。登记、原件收集、重跑、迁移及完整调度边界见 [CI 单元](ci-units.md)。
+真实原生检查保持固定短入口 `check`、`check --unit ID`、`check --collect`。单元 provider 必须明确登记 `job_gating`，生成一个父工作流。登记、原件收集、重跑、迁移及完整调度边界见 [CI 单元](ci-units.md)。
 
 <a id="standalone-initial-host-transition"></a>
 

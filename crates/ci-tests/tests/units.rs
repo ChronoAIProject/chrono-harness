@@ -7,11 +7,14 @@ const UNIT_TOOL: &str = env!("CARGO_BIN_EXE_chrono-ci-test-transport");
 fn config_value() -> Value {
     let mut common = serde_json::to_value(config()).unwrap();
     common["workflow_path"] = json!(".github/workflows/collection.yml");
+    common["schema"] = json!("chrono-github-ci/v4");
+    common["facts_config"] = json!(".chrono-harness/config.json");
     json!({"schema":"chrono-github-units/v1","collection":common,
+        "job_gating":{"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}},
         "units":{
-            "alpha":{"workflow_path":".github/workflows/alpha.yml","name":"alpha check","runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["sh","explicit-a.sh"],"context_path":".chrono-harness/state/alpha/context.json","artifact_directory":".chrono-harness/state/"},
-            "beta":{"workflow_path":".github/workflows/beta.yml","name":"beta check","runs_on":"macos-14","timeout_minutes":12,"bootstrap":["sh","explicit-b.sh"],"context_path":".chrono-harness/state/beta/context.json","artifact_directory":".chrono-harness/state/"}},
-        "gather":{"program":"gh","inherit_environment":["PATH","HOME","GH_TOKEN"],"credential_environment":["GH_TOKEN"],"environment":{"GH_PROMPT_DISABLED":"1"},"timeout_seconds":30,"output_limit_bytes":1048576,"wait_seconds":600,"poll_seconds":15,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}})
+            "alpha":{"name":"alpha check","runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["sh","explicit-a.sh"],"context_path":".chrono-harness/state/alpha/context.json","artifact_directory":".chrono-harness/state/"},
+            "beta":{"name":"beta check","runs_on":"macos-14","timeout_minutes":12,"bootstrap":["sh","explicit-b.sh"],"context_path":".chrono-harness/state/beta/context.json","artifact_directory":".chrono-harness/state/"}},
+        "gather":{"program":"gh","inherit_environment":["PATH","HOME","GH_TOKEN"],"credential_environment":["GH_TOKEN"],"environment":{"GH_PROMPT_DISABLED":"1"},"timeout_seconds":30,"output_limit_bytes":1048576,"manifest_path":".chrono-harness/state/collection/manifest.json","download_directory":".chrono-harness/state/collection/downloads/","report_path":".chrono-harness/state/collection/gather.json"}})
 }
 
 fn fixture() -> tempfile::TempDir {
@@ -99,25 +102,40 @@ fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
 }
 
 #[test]
-fn generator_projects_independent_workflows_with_exact_scoped_commands() {
+fn parent_provider_has_no_independent_workflow_or_polling_inputs() {
+    let current = config_value();
+    let c: chrono_ci::units::Config = serde_json::from_value(current.clone()).unwrap();
+    chrono_ci::units::validate(&c).unwrap();
+    for (pointer, value) in [
+        (
+            "/units/alpha/workflow_path",
+            json!(".github/workflows/alpha.yml"),
+        ),
+        ("/gather/wait_seconds", json!(600)),
+        ("/gather/poll_seconds", json!(15)),
+        ("/job_gating", Value::Null),
+    ] {
+        let mut invalid = current.clone();
+        let (parent, key) = pointer.rsplit_once('/').unwrap();
+        invalid.pointer_mut(parent).unwrap()[key] = value;
+        assert!(
+            serde_json::from_value::<chrono_ci::units::Config>(invalid).is_err(),
+            "{pointer}"
+        );
+    }
+    let mut missing = current;
+    missing.as_object_mut().unwrap().remove("job_gating");
+    assert!(serde_json::from_value::<chrono_ci::units::Config>(missing).is_err());
     let d = fixture();
-    assert!(generate(d.path(), ".chrono-harness/ci/units.json", false).unwrap());
-    assert!(!generate(d.path(), ".chrono-harness/ci/units.json", true).unwrap());
-    let a = fs::read_to_string(d.path().join(".github/workflows/alpha.yml")).unwrap();
-    let b = fs::read_to_string(d.path().join(".github/workflows/beta.yml")).unwrap();
-    let summary = fs::read_to_string(d.path().join(".github/workflows/collection.yml")).unwrap();
-    assert!(a.contains("'--unit' 'alpha'"));
-    assert!(b.contains("'--unit' 'beta'"));
-    assert!(a.contains("'explicit-a.sh'"));
-    assert!(!a.contains("explicit-b.sh"));
-    assert!(b.contains("'explicit-b.sh'"));
-    assert!(!b.contains("explicit-a.sh"));
-    assert!(!a.contains("needs:"));
-    assert!(!b.contains("needs:"));
-    assert!(summary.contains("'check' '--collect'\n"));
-    assert!(!summary.contains(" gather "));
-    assert!(!a.contains("--base"));
-    assert!(summary.contains("actions: read"));
+    generate(d.path(), ".chrono-harness/ci/units.json", false).unwrap();
+    let parent = fs::read_to_string(d.path().join(".github/workflows/collection.yml")).unwrap();
+    assert!(parent.contains("'check' '--unit' 'alpha'"));
+    assert!(parent.contains("'check' '--unit' 'beta'"));
+    assert!(parent.contains("'explicit-a.sh'"));
+    assert!(parent.contains("'explicit-b.sh'"));
+    assert!(parent.contains("'check' '--collect'"));
+    assert!(!d.path().join(".github/workflows/alpha.yml").exists());
+    assert!(!d.path().join(".github/workflows/beta.yml").exists());
 }
 
 #[test]
@@ -127,7 +145,6 @@ fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
     raw["collection"]["facts_config"] = json!(".chrono-harness/config.json");
     raw["collection"]["failure_artifact_directory"] = json!(".chrono-harness/state/");
     let mut extra = raw["units"]["alpha"].clone();
-    extra["workflow_path"] = json!(".github/workflows/alpha-diagnostics.yml");
     extra["name"] = json!("alpha diagnostics check");
     raw["units"]["alpha-diagnostics"] = extra;
     for id in ["alpha", "beta", "alpha-diagnostics"] {
@@ -163,17 +180,24 @@ fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
 }
 
 #[test]
-fn generator_preflights_all_outputs_before_any_unit_write() {
+fn generator_preserves_unowned_parent_before_any_write() {
     let d = fixture();
     fs::create_dir_all(d.path().join(".github/workflows")).unwrap();
-    fs::write(d.path().join(".github/workflows/beta.yml"), "host-owned\n").unwrap();
+    fs::write(
+        d.path().join(".github/workflows/collection.yml"),
+        "host-owned\n",
+    )
+    .unwrap();
     assert!(
         generate(d.path(), ".chrono-harness/ci/units.json", false)
             .unwrap_err()
             .contains("collision")
     );
     assert!(!d.path().join(".github/workflows/alpha.yml").exists());
-    assert!(!d.path().join(".github/workflows/collection.yml").exists());
+    assert_eq!(
+        fs::read(d.path().join(".github/workflows/collection.yml")).unwrap(),
+        b"host-owned\n"
+    );
 }
 
 fn json_file(root: &Path, path: &str, value: &Value) {
@@ -367,8 +391,6 @@ fn consumer_source() -> (tempfile::TempDir, String, String) {
         ".chrono-harness/FILEMAP.json",
         path,
         ".chrono-harness/ci/units.json",
-        ".github/workflows/alpha.yml",
-        ".github/workflows/beta.yml",
         ".github/workflows/collection.yml",
     ] {
         let edges = match path {
@@ -397,25 +419,9 @@ fn consumer_source() -> (tempfile::TempDir, String, String) {
     (d, b, c)
 }
 
-fn unit_context(root: &Path, b: &str, c: &str, unit: Option<&str>) -> Value {
-    let config: chrono_ci::units::Config =
-        serde_json::from_slice(&fs::read(root.join(".chrono-harness/ci/units.json")).unwrap())
-            .unwrap();
-    chrono_ci::units::prepare(
-        root,
-        ".chrono-harness/ci/units.json",
-        &config,
-        unit,
-        "push",
-        &json!({"ref":"refs/heads/dev","before":b,"after":c}),
-        c,
-    )
-    .unwrap()
-}
-
 #[test]
 fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
-    let (host, b, c) = consumer();
+    let (host, _, _) = consumer();
     let mut copies = vec![];
     for _ in 0..2 {
         let copy = tempfile::Builder::new()
@@ -441,12 +447,7 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
         let workers: Vec<_> = copies
             .iter()
             .zip(["alpha", "beta"])
-            .map(|(copy, unit)| {
-                let (b, c) = (&b, &c);
-                threads.spawn(move || {
-                    execute_context(copy.path(), &unit_context(copy.path(), b, c, Some(unit)), 0)
-                })
-            })
+            .map(|(copy, unit)| threads.spawn(move || execute_context(copy.path(), Some(unit), 0)))
             .collect();
         workers
             .into_iter()
@@ -479,7 +480,7 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
             &host.path().join(".chrono-harness/state/worktrees"),
         );
     }
-    let report = execute_context(host.path(), &unit_context(host.path(), &b, &c, None), 0);
+    let report = execute_context(host.path(), None, 0);
     assert_eq!(
         report["response"]["evidence"]["reports"]
             .as_array()
@@ -492,45 +493,14 @@ fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
     assert!(!host.path().join(".chrono-harness/state/calls-b").exists());
 }
 
-fn configure_mock_transport(config: &mut Value) {
-    config["gather"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-ci-test-transport"));
-    config["gather"]["environment"]["CHRONO_CI_TEST_PROVIDER"] = json!("units");
-}
-
-fn install_mock_transport(root: &Path, mode: &str, c: &str) {
-    json_file(
-        root,
-        ".chrono-harness/state/mock.json",
-        &json!({"candidate":c,"mode":mode}),
-    );
-    // Establish the external fixture's readiness before measuring transport
-    // deadlines. The probe has no artifact-download or failure-injection effects.
-    let args = vec![
-        env!("CARGO_BIN_EXE_chrono-ci-test-transport").to_string(),
-        "--version".to_string(),
-    ];
-    let ready = Command::new(&args[0])
-        .arg(&args[1])
-        .current_dir(root)
-        .env_clear()
-        .env("CHRONO_CI_TEST_PROVIDER", "units")
-        .output()
-        .unwrap();
-    if !ready.status.success() || ready.stdout != b"chrono-ci-test-provider/v1\n" {
-        retain_command_result(root, &args, &json!({"fixture":"provider-ready"}), &ready);
-    }
-    assert!(ready.status.success(), "{:?}", ready.stderr);
-    assert_eq!(ready.stdout, b"chrono-ci-test-provider/v1\n");
-}
-
-fn gather_host(mode: &str) -> (short::ShortHost, String, String) {
+fn gather_host(mode: &str) -> (short::gating::GatedHost, String, String) {
     gather_host_config(mode, |_| {})
 }
 
 fn gather_host_config(
     mode: &str,
     configure: impl FnOnce(&mut Value),
-) -> (short::ShortHost, String, String) {
+) -> (short::gating::GatedHost, String, String) {
     gather_host_config_and_retention(mode, configure, None)
 }
 
@@ -538,22 +508,12 @@ fn gather_host_config_and_retention(
     mode: &str,
     configure: impl FnOnce(&mut Value),
     retention: Option<Value>,
-) -> (short::ShortHost, String, String) {
-    let (mut host, b, _) = consumer();
+) -> (short::gating::GatedHost, String, String) {
+    let mut host = short::gating::GatedHost::new();
     let root = host.path();
-    let policy = ".chrono-harness/config.json";
-    let mut cfg: Value = serde_json::from_slice(&fs::read(root.join(policy)).unwrap()).unwrap();
-    cfg["environment"]["inherit"]
-        .as_array_mut()
-        .unwrap()
-        .push(json!("GH_TOKEN"));
-    cfg["environment"]["credential_environment"] = json!(["GH_TOKEN"]);
-    json_file(root, policy, &cfg);
     let mut cfg: Value =
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/ci/units.json")).unwrap())
             .unwrap();
-    cfg["gather"]["wait_seconds"] = json!(15);
-    configure_mock_transport(&mut cfg);
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
     if let Some(policy) = retention {
@@ -568,58 +528,33 @@ fn gather_host_config_and_retention(
         json_file(root, path, &filemap);
     }
     generate(root, ".chrono-harness/ci/units.json", false).unwrap();
-    git(root, &["add", "."]);
-    git(root, &["commit", "-qm", "transport fixture"]);
-    let c = git(root, &["rev-parse", "HEAD"]);
-    host.candidate = c.clone();
-    let root = host.path();
-    install_mock_transport(root, mode, &c);
-    json_file(
-        root,
-        ".chrono-harness/state/event.json",
-        &json!({"ref":"refs/heads/dev","before":b,"after":c,"created":false,"deleted":false}),
-    );
-    for unit in ["alpha", "beta"] {
-        let result = native_check(&host, &["check", "--unit", unit])
-            .output()
-            .unwrap();
-        assert!(result.status.success(), "{result:?}");
-        short::copy_artifacts(
-            &root.join(format!(".chrono-harness/state/{unit}")),
-            &root.join(format!(".chrono-harness/state/mock-artifacts/{unit}")),
-        );
-        if mode == "stale-context" {
-            let path = format!(".chrono-harness/state/mock-artifacts/{unit}/context.json");
-            let mut context: Value =
-                serde_json::from_slice(&fs::read(root.join(&path)).unwrap()).unwrap();
-            context["base"] = json!(c);
-            json_file(root, &path, &context);
-        }
+    host.change(&["a.txt", "b.txt"]);
+    let d = host.detection();
+    host.units(&d);
+    host.mock(&d, mode);
+    json_file(host.path(), ".chrono-harness/state/mock.json", &json!({}));
+    if mode == "stale-context" {
+        let path = ".chrono-harness/state/mock-artifacts/alpha/context.json";
+        let mut context: Value =
+            serde_json::from_slice(&fs::read(host.path().join(path)).unwrap()).unwrap();
+        context["base"] = json!(host.candidate);
+        json_file(host.path(), path, &context);
     }
-    json_file(
-        root,
-        ".chrono-harness/state/context.json",
-        &unit_context(root, &b, &c, None),
-    );
-    (host, b, c)
+    let (base, candidate) = (host.base.clone(), host.candidate.clone());
+    (host, base, candidate)
 }
 
-fn native_check(host: &short::ShortHost, args: &[&str]) -> Command {
-    let mut command = host.command(args);
-    command
-        .env(chrono_harness::prepared::SOURCE, "ci")
-        .env("GITHUB_EVENT_NAME", "push")
-        .env(
-            "GITHUB_EVENT_PATH",
-            host.path().join(".chrono-harness/state/event.json"),
-        )
-        .env("CHRONO_WORKFLOW_REVISION", &host.candidate)
-        .env("GITHUB_REPOSITORY", "owner/host")
-        .env("GH_TOKEN", "fixture-credential-must-not-be-persisted");
-    command
+fn native_check(host: &short::gating::GatedHost, args: &[&str]) -> Command {
+    let data: Value = serde_json::from_slice(
+        &fs::read(host.path().join(".chrono-harness/state/parent-data.json")).unwrap(),
+    )
+    .unwrap();
+    let detection = &data["detection"];
+    let needs = short::gating::needs(host, detection);
+    host.command(args, detection, &needs)
 }
 
-fn collect_cli(host: &short::ShortHost) -> std::process::Output {
+fn collect_cli(host: &short::gating::GatedHost) -> std::process::Output {
     native_check(host, &["check", "--collect"])
         .output()
         .unwrap()
@@ -629,7 +564,7 @@ fn collect_cli(host: &short::ShortHost) -> std::process::Output {
 fn standalone_gather_is_rejected_without_transport_or_publication() {
     let (host, _, _) = gather_host("success");
     let root = host.path();
-    let launches = root.join(".chrono-harness/state/mock-launches.jsonl");
+    let launches = root.join(".chrono-harness/state/parent-calls");
     let before = fs::read(&launches).ok();
     let result = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(root)
@@ -642,7 +577,7 @@ fn standalone_gather_is_rejected_without_transport_or_publication() {
             "--repository",
             "owner/host",
         ])
-        .env("GH_TOKEN", "fixture-credential-must-not-be-persisted")
+        .env("GH_TOKEN", "fixture-parent-secret")
         .output()
         .unwrap();
     assert_eq!(result.status.code(), Some(1), "{result:?}");
@@ -682,7 +617,13 @@ fn alpha_downloads(report: &Value) -> Vec<&Value> {
         .as_array()
         .unwrap()
         .iter()
-        .filter(|p| p["argv"][1] == "run" && p["argv"][3] == "101")
+        .filter(|p| {
+            p["argv"][1] == "run"
+                && p["argv"].as_array().unwrap().iter().any(|v| {
+                    v.as_str()
+                        .is_some_and(|v| v.starts_with("chrono-unit-alpha-"))
+                })
+        })
         .collect()
 }
 
@@ -829,7 +770,10 @@ fn download_recovery_shares_original_time_and_output_budgets() {
         let mut data: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         match mode {
             "deadline" => data["download_pause_ms"] = json!(1500),
-            "output" => data["download_padding"] = json!(900),
+            // The parent artifact listing also consumes the cumulative stream
+            // budget. Keep the first failed download below its remaining bound;
+            // the second must exhaust the same 1024-byte stderr allowance.
+            "output" => data["download_padding"] = json!(460),
             _ => data["second_http_status"] = json!(401),
         }
         fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
@@ -901,7 +845,7 @@ fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
             .join(".chrono-harness/state/collection/gather.json"),
     )
     .unwrap();
-    assert!(!String::from_utf8_lossy(&bytes).contains("fixture-credential-must-not-be-persisted"));
+    assert!(!String::from_utf8_lossy(&bytes).contains("fixture-parent-secret"));
     let gather: Value = serde_json::from_slice(&bytes).unwrap();
     assert_eq!(gather["result"]["status"], "gathered-unjudged");
     assert_eq!(gather["result"]["units"].as_array().unwrap().len(), 2);
@@ -926,10 +870,10 @@ fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
 #[test]
 fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
     for (mode, needle) in [
-        ("duplicate", "ambiguous"),
-        ("stale-context", "context disagrees"),
+        ("artifact-ambiguous-last", "ambiguous"),
+        ("stale-context", "artifact differs"),
         ("wrong-source", "different workflow source"),
-        ("changed-attempt", "run changed"),
+        ("changed-attempt", "parent"),
     ] {
         let (host, _, _) = gather_host_config_and_retention(
             mode,
@@ -1016,7 +960,7 @@ fn unit_init_preserves_host_customization_across_generation() {
     assert!(!init(root, &incoming).unwrap());
     assert_eq!(fs::read(root.join(source)).unwrap(), original);
     assert!(!generate(root, source, true).unwrap());
-    let output = fs::read_to_string(root.join(".github/workflows/alpha.yml")).unwrap();
+    let output = fs::read_to_string(root.join(".github/workflows/collection.yml")).unwrap();
     assert!(output.contains("'host-bootstrap' 'space value' '$literal'"));
     assert!(output.contains("self-hosted-custom"));
     assert!(output.contains("timeout-minutes: 37"));
@@ -1070,14 +1014,14 @@ fn migration_adopts_units_preserving_custom_source_and_unrelated_workflow() {
     );
     assert!(!generate(root, ".chrono-harness/ci/units.json", true).unwrap());
     assert!(
-        fs::read_to_string(root.join(".github/workflows/alpha.yml"))
+        fs::read_to_string(root.join(".github/workflows/collection.yml"))
             .unwrap()
             .contains("'my-custom-entry' '--literal' 'a b'")
     );
 }
 
 #[test]
-fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
+fn migration_retires_renamed_parent_and_rejects_host_edits_before_writes() {
     for conflict in ["none", "old-edit", "new-collision"] {
         let d = fixture();
         let root = d.path();
@@ -1087,15 +1031,14 @@ fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
         fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
         fs::copy(root.join(source), root.join(prior)).unwrap();
         let mut next = config_value();
-        next["units"]["alpha"]["workflow_path"] = json!(".github/workflows/renamed.yml");
+        next["collection"]["workflow_path"] = json!(".github/workflows/renamed.yml");
         next["units"]["beta"]["timeout_minutes"] = json!(23);
         json_file(root, source, &next);
         let source_bytes = fs::read(root.join(source)).unwrap();
-        let beta = fs::read(root.join(".github/workflows/beta.yml")).unwrap();
-        let alpha = fs::read(root.join(".github/workflows/alpha.yml")).unwrap();
+        let parent = fs::read(root.join(".github/workflows/collection.yml")).unwrap();
         if conflict == "old-edit" {
             fs::write(
-                root.join(".github/workflows/alpha.yml"),
+                root.join(".github/workflows/collection.yml"),
                 "host-edited original\n",
             )
             .unwrap();
@@ -1114,7 +1057,7 @@ fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
                 assert!(error.contains("previous projection differs"));
                 assert!(!root.join(".github/workflows/renamed.yml").exists());
                 assert_eq!(
-                    fs::read_to_string(root.join(".github/workflows/alpha.yml")).unwrap(),
+                    fs::read_to_string(root.join(".github/workflows/collection.yml")).unwrap(),
                     "host-edited original\n"
                 );
             } else {
@@ -1124,22 +1067,18 @@ fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
                     "host-owned target\n"
                 );
                 assert_eq!(
-                    fs::read(root.join(".github/workflows/alpha.yml")).unwrap(),
-                    alpha
+                    fs::read(root.join(".github/workflows/collection.yml")).unwrap(),
+                    parent
                 );
             }
-            assert_eq!(
-                fs::read(root.join(".github/workflows/beta.yml")).unwrap(),
-                beta
-            );
         } else {
             let report: Value = serde_json::from_str(&result.unwrap()).unwrap();
             assert_eq!(
                 report["retired_workflows"],
-                json!([".github/workflows/alpha.yml"])
+                json!([".github/workflows/collection.yml"])
             );
             assert!(report["retired_source"].is_null());
-            assert!(!root.join(".github/workflows/alpha.yml").exists());
+            assert!(!root.join(".github/workflows/collection.yml").exists());
             assert!(!generate(root, source, true).unwrap());
         }
         assert_eq!(fs::read(root.join(source)).unwrap(), source_bytes);
@@ -1147,11 +1086,19 @@ fn migration_retires_renamed_units_and_rejects_host_edits_before_writes() {
     }
 }
 
-fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
+fn execute_context(root: &Path, unit: Option<&str>, expected_exit: i32) -> Value {
     // A copied-host fixture owns its receipt policy too. The source checkout's
     // deployed Git binding is host policy, not a native test-platform input.
     let owner = retained_receipts::Owner::new();
-    let argv: Vec<String> = serde_json::from_value(context["canonical_argv"].clone()).unwrap();
+    let mut argv = vec![
+        ".chrono-harness/bin/chrono-harness".to_owned(),
+        "check".to_owned(),
+    ];
+    if let Some(unit) = unit {
+        argv.extend(["--unit".into(), unit.into()]);
+    } else {
+        argv.push("--collect".into());
+    }
     assert_eq!(argv[1], "check");
     let output = Command::new(root.join(&argv[0]))
         .args(&argv[1..])
@@ -1164,7 +1111,7 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
         &owner.root,
         root,
         &argv,
-        context,
+        &json!({"unit":unit}),
         &output,
         Some(expected_exit),
     );
@@ -1177,7 +1124,6 @@ fn execute_context(root: &Path, context: &Value, expected_exit: i32) -> Value {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let unit = context["scope"]["unit"].as_str();
     let report = short::published_report(root, unit, &output);
     assert!(report.get("transport_failure").is_none(), "{report}");
     if let Some(receipt) = receipt {

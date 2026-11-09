@@ -175,7 +175,7 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
         None,
         Some("Preserve actual check evidence"),
     )?;
-    if let Some(startup) = c.job_gating.as_ref().and_then(|g| g.startup.as_ref()) {
+    if let Some(startup) = c.job_gating.startup.as_ref() {
         let job = unit.map(job_id).unwrap_or("aggregate".into());
         let before = if c
             .persistent_cache
@@ -194,7 +194,7 @@ fn job(c: &units::Config, path: &str, unit: Option<&str>) -> Result<String, Stri
     ))
 }
 pub(crate) fn render(c: &units::Config, path: &str) -> Result<BTreeMap<String, String>, String> {
-    let g = c.job_gating.as_ref().ok_or("job gating missing")?;
+    let g = &c.job_gating;
     let prefix = super::render_header(&c.collection, Some(&c.scope(None)), true, MARKER);
     // Replace superseded PR work, while each push keeps its complete before/after
     // obligation. Grouping pushes by branch would discard queued DELTAs.
@@ -371,9 +371,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let Projection::Units(c) = load_projection(&no_symlink_parents(root, path)?)? else {
         return Err("detect requires registered unit provider".into());
     };
-    c.job_gating
-        .as_ref()
-        .ok_or("detect requires explicit job_gating registration")?;
     units::generate(root, path, &c, true)?;
     if env("GITHUB_JOB")? != "detect" {
         return Err("detector job identity mismatch".into());
@@ -572,9 +569,6 @@ pub(crate) fn production(args: &[String]) -> Result<String, String> {
     let Projection::Units(c) = load_projection(&no_symlink_parents(root, path)?)? else {
         return Err("production requires units".into());
     };
-    if c.job_gating.is_none() {
-        return Err("production requires job gating".into());
-    }
     let units = units::profile(root, &c)?.units;
     let w = c.workflow(Some(unit))?;
     let context_raw =
