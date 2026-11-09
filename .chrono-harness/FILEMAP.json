@@ -2146,7 +2146,7 @@
       },
       "verify.cache-planner": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.cache-planner-tests": {"resources":[],"outputs":[".chrono-harness/state/"]}
-    ,"fmt.pr":{"resources":[],"outputs":[]},"fmt.pr-tests":{"resources":[],"outputs":[]},"build.pr":{"resources":[],"outputs":["crates/pr/target/"]},"test.pr-tests":{"resources":[],"outputs":["crates/pr-tests/target/"]}
+    ,"fmt.pr":{"resources":[],"outputs":[]},"fmt.pr-tests":{"resources":[],"outputs":[]},"build.pr":{"resources":[],"outputs":["crates/pr/target/"]},"test.pr-tests":{"resources":["worktree-test-inventory"],"outputs":["crates/pr-tests/target/"]}
     }
   },
   "configuration_edges": {
