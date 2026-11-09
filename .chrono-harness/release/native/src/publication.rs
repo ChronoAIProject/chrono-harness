@@ -1,5 +1,5 @@
 //! GitHub 发布状态机。命令边界可替换；同一版本只续传相同资产。
-use crate::identity::{Channel, Identity};
+use crate::{identity::{Channel, Identity}, verified_recipe::delivery as policy};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -37,11 +37,7 @@ fn error(message: impl std::fmt::Display) -> String {
 }
 
 fn name(s: &str) -> bool {
-    !s.is_empty()
-        && s != "."
-        && s != ".."
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    policy::name(s.as_bytes())
 }
 
 impl Config {
@@ -74,11 +70,10 @@ fn api(
     }
     let reply = commands.execute("gh", &args)?;
     let value: Value = chrono_harness::json(&reply.stdout)?;
-    if reply.exit == 0 {
-        return Ok(Some(value));
-    }
-    if absent && reply.exit == 1 && value["status"] == "404" && value["message"] == "Not Found" {
-        return Ok(None);
+    match policy::api_outcome(reply.exit, value["status"].as_str(), value["message"].as_str(), absent) {
+        0 => return Ok(Some(value)),
+        1 => return Ok(None),
+        _ => {},
     }
     Err(error(format!(
         "original GitHub API exited {}: {}",
@@ -107,16 +102,19 @@ pub fn verify_ci(
         false,
     )?
     .ok_or("missing CI run")?;
-    if run["id"] != ci.run_id
-        || run["run_attempt"] != ci.attempt
-        || run["workflow_id"] != config.workflow_id
-        || run["path"] != config.workflow_path
-        || run["event"] != "push"
-        || run["head_branch"] != config.branch
-        || run["head_sha"] != identity.source_commit
-        || run["status"] != "completed"
-        || run["conclusion"] != "success"
-        || run["repository"]["full_name"] != config.repository
+    if !policy::number_fields(&[
+        (run["id"].as_u64(), ci.run_id),
+        (run["run_attempt"].as_u64(), ci.attempt),
+        (run["workflow_id"].as_u64(), config.workflow_id),
+    ]) || !policy::text_fields(&[
+        (run["path"].as_str(), &config.workflow_path),
+        (run["event"].as_str(), "push"),
+        (run["head_branch"].as_str(), &config.branch),
+        (run["head_sha"].as_str(), &identity.source_commit),
+        (run["status"].as_str(), "completed"),
+        (run["conclusion"].as_str(), "success"),
+        (run["repository"]["full_name"].as_str(), &config.repository),
+    ])
     {
         return Err(error(
             "original landing CI does not qualify this fixed source",
@@ -127,16 +125,17 @@ pub fn verify_ci(
 
 fn release_header(release: &Value, identity: &Identity) -> Result<u64, String> {
     let preview = identity.channel == Channel::Preview;
-    if release["tag_name"] != identity.version
-        || release["target_commitish"] != identity.source_commit
-        || release["prerelease"] != preview
-        || !release["draft"].is_boolean()
+    if !policy::text_fields(&[
+        (release["tag_name"].as_str(), &identity.version),
+        (release["target_commitish"].as_str(), &identity.source_commit),
+    ]) || !policy::boolean_fields(&[(release["prerelease"].as_bool(), preview)])
+        || policy::draft_state(release["draft"].as_bool(), 0) == 2
     {
         return Err(error("existing release has another source, tag or channel"));
     }
     release["id"]
         .as_u64()
-        .filter(|v| *v > 0)
+        .filter(|v| policy::positive(Some(*v)))
         .ok_or_else(|| error("missing release ID"))
 }
 
@@ -172,9 +171,10 @@ fn remote_assets(
             .get(name)
             .ok_or_else(|| error(format!("unexpected remote asset {name}")))?;
         if !remaining.remove(name)
-            || asset["state"] != "uploaded"
-            || asset["size"] != expected.size
-            || asset["digest"] != format!("sha256:{}", expected.sha256)
+            || !policy::text_fields(&[
+                (asset["state"].as_str(), "uploaded"),
+                (asset["digest"].as_str(), &format!("sha256:{}", expected.sha256)),
+            ]) || !policy::number_fields(&[(asset["size"].as_u64(), expected.size)])
         {
             return Err(error(format!("remote asset identity conflicts: {name}")));
         }
@@ -268,12 +268,13 @@ pub fn publish(
     };
     let id = release_header(&release, identity)?;
     let missing = remote_assets(config, id, assets, commands)?;
-    if release["draft"] == false && !missing.is_empty() {
+    let action = policy::draft_state(release["draft"].as_bool(), missing.len());
+    if action == 2 {
         return Err(error(
             "published version has missing assets; cannot repair a public version",
         ));
     }
-    if release["draft"] == true {
+    if action == 1 {
         for name in missing {
             let reply = commands.execute(
                 "gh",
@@ -302,8 +303,7 @@ pub fn publish(
     // 重新读取实际公开状态；PATCH 成功不能代替落地核验。
     let observed = api(commands, "GET", endpoint, None, false)?.ok_or("missing public release")?;
     if release_header(&observed, identity)? != id
-        || release["draft"] != false
-        || observed["draft"] != false
+        || !policy::boolean_fields(&[(release["draft"].as_bool(), false), (observed["draft"].as_bool(), false)])
         || !remote_assets(config, id, assets, commands)?.is_empty()
     {
         return Err(error("public release verification failed"));

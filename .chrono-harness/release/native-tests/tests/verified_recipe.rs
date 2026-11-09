@@ -6,6 +6,7 @@ mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_host_release::verified_recipe as policy;
 use policy::{DependencyResult, Invocation};
+use policy::delivery;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -22,6 +23,84 @@ fn expect_recipe(actual: bool)
     if !actual {
         panic!();
     }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_missing_fields_are_not_empty_or_zero_values() {
+    proof { reveal_strlit(""); }
+    let text = delivery::text_fields(&[(None, "")]);
+    let number = delivery::number_fields(&[(None, 0)]);
+    let boolean = delivery::boolean_fields(&[(None, false)]);
+    let complete = delivery::number_fields(&[(Some(0), 0), (Some(u64::MAX), u64::MAX)]);
+    let changed = delivery::number_fields(&[(Some(0), 0), (Some(1), u64::MAX)]);
+    expect_recipe(!text && !number && !boolean && complete && !changed);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_requires_all_full_text_fields() {
+    proof { reveal_strlit("source"); reveal_strlit("source-extra"); }
+    let exact = delivery::text_fields(&[(Some("source"), "source")]);
+    let prefix = delivery::text_fields(&[(Some("source-extra"), "source")]);
+    let missing = delivery::text_fields(&[(Some("source"), "source"), (None, "source")]);
+    expect_recipe(exact && !prefix && !missing);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_decimal_ids_reject_zero_leading_zero_and_non_digits() {
+    let positive = delivery::decimal_text(&[49u8,50], false);
+    let component = delivery::decimal_text(&[48u8], true);
+    let zero_id = delivery::decimal_text(&[48u8], false);
+    let leading = delivery::decimal_text(&[48u8,49], true);
+    let sign = delivery::decimal_text(&[45u8,49], false);
+    let suffix = delivery::decimal_text(&[49u8,120], false);
+    expect_recipe(positive && component && !zero_id && !leading && !sign && !suffix);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_public_versions_require_a_complete_draft_or_exact_existing_assets() {
+    let draft = delivery::draft_state(Some(true), 99);
+    let complete = delivery::draft_state(Some(false), 0);
+    let incomplete = delivery::draft_state(Some(false), 1);
+    let unknown = delivery::draft_state(None, 0);
+    let zero = delivery::positive(Some(0));
+    let maximum = delivery::positive(Some(u64::MAX));
+    expect_recipe(draft == 1 && complete == 0 && incomplete == 2 && unknown == 2 && !zero && maximum);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_only_treats_the_original_explicit_404_as_absent() {
+    proof { reveal_strlit("404"); reveal_strlit("Not Found"); reveal_strlit("403"); }
+    let success = delivery::api_outcome(0, None, None, false);
+    let absent = delivery::api_outcome(1, Some("404"), Some("Not Found"), true);
+    let denied = delivery::api_outcome(1, Some("403"), Some("Not Found"), true);
+    let forbidden_absence = delivery::api_outcome(1, Some("404"), Some("Not Found"), false);
+    let failed = delivery::api_outcome(2, Some("404"), Some("Not Found"), true);
+    expect_recipe(success == 0 && absent == 1 && denied == 2 && forbidden_absence == 2 && failed == 2);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_asset_names_do_not_allow_paths_or_parent_components() {
+    let valid = delivery::name(&[97u8,45,49,46,95]);
+    let parent = delivery::name(&[46u8,46]);
+    let current = delivery::name(&[46u8]);
+    let path = delivery::name(&[97u8,47,98]);
+    let newline = delivery::name(&[97u8,10]);
+    expect_recipe(valid && !parent && !current && !path && !newline);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_channel_and_requested_version_are_exact() {
+    proof { reveal_strlit(""); reveal_strlit("build"); reveal_strlit("preview"); reveal_strlit("stable"); reveal_strlit("Preview"); reveal_strlit("v1.2.3"); reveal_strlit("v1.2.3-beta.1"); }
+    let build = delivery::channel("");
+    let preview = delivery::channel("preview");
+    let stable = delivery::channel("stable");
+    let unknown = delivery::channel("Preview");
+    let derived = delivery::requested_version(1, "", "v1.2.3", "v1.2.3-beta.1");
+    let override_version = delivery::requested_version(1, "v1.2.3", "v1.2.3", "v1.2.3");
+    let final_version = delivery::requested_version(2, "v1.2.3", "v1.2.3", "v1.2.3");
+    let prerelease = delivery::requested_version(2, "v1.2.3-beta.1", "v1.2.3", "v1.2.3-beta.1");
+    expect_recipe(build == 0 && preview == 1 && stable == 2 && unknown == 3
+        && derived && !override_version && final_version && !prerelease);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

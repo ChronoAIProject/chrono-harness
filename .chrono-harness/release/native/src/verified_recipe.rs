@@ -10,6 +10,9 @@ mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_identifiers as identifiers;
 
+#[path = "verified_delivery.rs"]
+pub mod delivery;
+
 verus! {
 
 /// 调用者显式提供角色与选择；不根据项目语言、命令或资产数推断 SDK。
