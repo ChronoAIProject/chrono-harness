@@ -1545,7 +1545,6 @@
       "operations": [
         "fmt.pr",
         "fmt.pr-tests",
-        "build.pr",
         "test.pr-tests"
       ],
       "timeout_seconds": 600,
@@ -2183,7 +2182,6 @@
       "verify.judge-workflow-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "fmt.pr":{"resources":[],"outputs":[]},
       "fmt.pr-tests":{"resources":[],"outputs":[]},
-      "build.pr":{"resources":[],"outputs":["crates/pr/target/"]},
       "test.pr-tests":{"resources":["worktree-test-inventory"],"outputs":["crates/pr-tests/target/"]}
     }
   },

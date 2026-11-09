@@ -43,15 +43,22 @@ fn age_at(ctx: &Value, w: &Value, observed: OffsetDateTime) -> Result<time::Dura
     if age.is_negative() {
         return Err("E_BRANCH_CONTEXT: negative age".into());
     }
+    let age_ns = u64::try_from(age.whole_nanoseconds())
+        .map_err(|_| "E_BRANCH_CONTEXT: age exceeds supported range".to_string())?;
     let hours = w["staleness"]["max_age_hours"]
         .as_f64()
         .filter(|v| v.is_finite() && *v >= 0.0)
         .ok_or("E_BRANCH_CONTEXT: invalid age threshold")?;
-    if age.whole_nanoseconds() > (hours * 3_600_000_000_000.0) as i128 {
-        return Err(format!(
-            "E_BRANCH_STALE: age_ns={}",
-            age.whole_nanoseconds()
-        ));
+    let threshold_ns = hours * 3_600_000_000_000.0;
+    // The JSON number is an external input. Normalize it once at the adapter
+    // boundary; the admission decision itself is the proved Verus predicate.
+    let max_age_ns = if threshold_ns >= u64::MAX as f64 {
+        u64::MAX
+    } else {
+        threshold_ns as u64
+    };
+    if !verified_branch::age_within_limit(age_ns, max_age_ns) {
+        return Err(format!("E_BRANCH_STALE: age_ns={}", age_ns));
     }
     Ok(age)
 }
