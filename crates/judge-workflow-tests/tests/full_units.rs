@@ -18,7 +18,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     h.tool = wrapper.clone();
     let cfg = h.values.get_mut(CONFIG).unwrap();
     for t in cfg["tools"].as_array_mut().unwrap() {
-        if t["id"] == "python" {
+        if t["id"] == "fixture" {
             t["program"] = json!(wrapper);
         }
         if t["id"] == "facts-git" {
@@ -61,7 +61,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
             json!("environment:RUSTUP_TOOLCHAIN"),
         ]);
     for i in cfg["environment"]["inputs"].as_array_mut().unwrap() {
-        if i["id"] == "interpreter" {
+        if i["id"] == "execution-tool" {
             i["location"] = json!(wrapper);
             i["sha256"] = json!(sha256(&fs::read(&wrapper).unwrap()));
         }
@@ -94,13 +94,13 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     projects["projects"] = json!([]);
     for (prod, test) in [("p", "t"), ("p2", "t2")] {
         let mut production = project(prod, "production", test);
-        production["actions"] = json!({"build":{"operation":format!("build.{prod}"),"tool":"python","argv":["build","--manifest-path",format!("{prod}/Cargo.toml"),"--locked","--offline"]}});
+        production["actions"] = json!({"build":{"operation":format!("build.{prod}"),"tool":"fixture","argv":["build","--manifest-path",format!("{prod}/Cargo.toml"),"--locked","--offline"]}});
         if prod == "p2" {
             production["actions"]["check"] =
-                json!({"operation":"shared.prepare","tool":"python","argv":["fixture-prepare"]});
+                json!({"operation":"shared.prepare","tool":"fixture","argv":["fixture-prepare"]});
         }
         let mut testing = project(test, "test", prod);
-        testing["actions"] = json!({"execute":{"operation":format!("execute.{test}"),"tool":"python","argv":["test","--manifest-path",format!("{test}/Cargo.toml"),"--locked","--offline"]}});
+        testing["actions"] = json!({"execute":{"operation":format!("execute.{test}"),"tool":"fixture","argv":["test","--manifest-path",format!("{test}/Cargo.toml"),"--locked","--offline"]}});
         projects["projects"]
             .as_array_mut()
             .unwrap()
@@ -204,7 +204,7 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
     ]);
     fs::write(root.join(".gitignore"),".chrono-harness/bin/\n.chrono-harness/state/\np/target/\nt/target/\np2/target/\nt2/target/\n").unwrap();
     // Replace the old script fixture completely before fixing the Rust baseline.
-    for path in ["p/product.py", "p/prepare.py", "t/check.py"] {
+    for path in ["p/product.case", "p/prepare.case", "t/check.case"] {
         fs::remove_file(root.join(path)).unwrap();
     }
     h.save();
@@ -387,7 +387,7 @@ fn invalid_unit_input_preserves_original_failure_and_retained_report_without_bus
     let root = h.root();
     let path = root.join(".chrono-harness/state/inputs.json");
     let mut inputs: Value = chrono_harness::json(&fs::read(&path).unwrap()).unwrap();
-    inputs["base"]["files"]["interpreter"]["blob"] = json!("/outside");
+    inputs["base"]["files"]["execution-tool"]["blob"] = json!("/outside");
     fs::write(path, serde_json::to_vec(&inputs).unwrap()).unwrap();
 
     let (exit, report) = launch(&root, &h, &["--unit", "one"]);
@@ -561,7 +561,7 @@ fn independent_rust_pairs_retry_offline_collection_and_delivery() {
     .unwrap();
     // Restore the explicit business tool only for the delivery's direct run.
     let request: Request = serde_json::from_value(one["request"].clone()).unwrap();
-    let file = &request.observations["retained"]["candidate"]["files"]["interpreter"];
+    let file = &request.observations["retained"]["candidate"]["files"]["execution-tool"];
     let bytes = chrono_harness::retained_artifacts::bytes(
         collector.path(),
         &one["artifacts"],
@@ -907,7 +907,7 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
             }
             "wrong-version" => {
                 let version = &mut report["judges"][ri]["response"]["outputs"]["execution_plan"]["tools"]
-                    ["python"]["version"];
+                    ["fixture"]["version"];
                 let bytes = b"different version\n".to_vec();
                 version["stdout_bytes"] = json!(bytes);
                 version["stdout"] = json!("different version\n");
@@ -925,7 +925,7 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
                 reseal(&mut report);
             }
             "wrong-tool" => {
-                report["judges"][ri]["response"]["outputs"]["execution_plan"]["tools"]["python"]
+                report["judges"][ri]["response"]["outputs"]["execution_plan"]["tools"]["fixture"]
                     ["program"] = "/different/tool".into();
                 reseal_plan(&mut report);
                 reseal(&mut report);
@@ -998,7 +998,7 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
             }
             "missing-artifact" => report["artifacts"].as_object_mut().unwrap().clear(),
             "replaced-artifact" => {
-                let address=report["request"]["observations"]["retained"]["candidate"]["files"]["interpreter"]["blob"].as_str().unwrap().to_owned();
+                let address=report["request"]["observations"]["retained"]["candidate"]["files"]["execution-tool"]["blob"].as_str().unwrap().to_owned();
                 report["artifacts"][&address] =
                     chrono_harness::full::artifact(b"different executable");
             }
@@ -1340,13 +1340,13 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
     h.base = baseline;
     let tools = host::tool_directory("workflow native tools λ ");
     let tool_root = fs::canonicalize(tools.path()).unwrap();
-    let wrapper = tool_root.join("python-migration");
-    let python = fs::canonicalize(&h.tool).unwrap();
+    let wrapper = tool_root.join("execution-migration");
+    let execution = fs::canonicalize(&h.tool).unwrap();
     native_tools::install(&tool_root, &wrapper);
     native_tools::bind(
         &mut h,
-        "CHRONO_WORKFLOW_REAL_PYTHON",
-        &python,
+        "CHRONO_WORKFLOW_REAL_EXECUTION",
+        &execution,
         &["judge:projects"],
     );
     native_tools::bind(
@@ -1362,13 +1362,13 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|t| t["id"] == "python")
+        .find(|t| t["id"] == "fixture")
         .unwrap()["program"] = json!(wrapper);
     let input = h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|i| i["id"] == "interpreter")
+        .find(|i| i["id"] == "execution-tool")
         .unwrap();
     input["location"] = json!(wrapper);
     input["sha256"] = json!(sha256(&fs::read(&wrapper).unwrap()));
@@ -2288,11 +2288,11 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
         &fs::read(collector.path().join(".chrono-harness/state/inputs.json")).unwrap(),
     )
     .unwrap();
-    let interpreter = input_pair["candidate"]["files"]["interpreter"]["blob"]
+    let executable = input_pair["candidate"]["files"]["execution-tool"]["blob"]
         .as_str()
         .unwrap();
     let bytes =
-        chrono_harness::retained_artifacts::bytes(collector.path(), &nested, interpreter, None)
+        chrono_harness::retained_artifacts::bytes(collector.path(), &nested, executable, None)
             .unwrap();
     fs::write(tools.path().join("cargo-fixture"), bytes).unwrap();
     fs::set_permissions(

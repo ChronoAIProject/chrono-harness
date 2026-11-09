@@ -96,6 +96,7 @@ dependencies = [
  "chrono-inputs",
  "chrono-judge-registration",
  "chrono-worktree",
+ "serde",
  "serde_json",
  "tempfile",
 ]

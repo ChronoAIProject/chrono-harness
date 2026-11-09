@@ -168,7 +168,7 @@ fn main() -> ExitCode {
         "selected Git λ" => ("CHRONO_WORKFLOW_REAL_GIT", Some("git-trace")),
         "facts-git" => ("CHRONO_WORKFLOW_REAL_GIT", None),
         "cargo-fixture" => ("CHRONO_WORKFLOW_REAL_CARGO", Some("business-launches")),
-        "python-migration" => ("CHRONO_WORKFLOW_REAL_PYTHON", Some("business-launches")),
+        "execution-migration" => ("CHRONO_WORKFLOW_REAL_EXECUTION", Some("business-launches")),
         other => panic!("unknown registered test tool: {other}"),
     };
     if variable == "CHRONO_WORKFLOW_REAL_GIT"

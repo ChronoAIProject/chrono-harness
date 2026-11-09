@@ -1,12 +1,23 @@
 #![allow(dead_code)]
+#[path = "execution_fixture.rs"]
+mod execution_fixture;
 #[path = "temporary.rs"]
 mod temporary;
 use super::support::*;
 use chrono_harness::sha256;
+pub use execution_fixture::{Product, Step};
 use serde_json::{Value, json};
 use std::{cell::RefCell, fs, path::Path, process::Command};
 pub use temporary::{FixtureDirectory, fixture_directory, tool_directory};
 pub use temporary::{capture_native, copied_fixture_input, retain_diagnostic};
+
+pub fn write_steps(root: &Path, path: &str, steps: &[Step]) {
+    fs::write(root.join(path), serde_json::to_vec(steps).unwrap()).unwrap();
+}
+
+pub fn write_product(root: &Path, path: &str, product: Product) {
+    fs::write(root.join(path), serde_json::to_vec(&product).unwrap()).unwrap();
+}
 
 pub enum FixtureProbe {
     Version,
@@ -139,7 +150,7 @@ impl Host {
                 judges.push(row);
             }
         }
-        let tool = chrono_harness::resolve_program(&root, "python3", None).unwrap();
+        let tool = fs::canonicalize(env!("CARGO_BIN_EXE_chrono-test-project-execution")).unwrap();
         let version = capture_native(&root, Command::new(&tool).arg("--version"));
         let input_directory = dir.temporary_path().join("fixture-inputs");
         fs::create_dir(&input_directory).unwrap();
@@ -160,21 +171,22 @@ impl Host {
             "--context",
             ".chrono-harness/state/context.json"
         ]);
-        v.get_mut(CONFIG).unwrap()["tools"] = json!([{"id":"python","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}]);
+        v.get_mut(CONFIG).unwrap()["tools"] = json!([{"id":"fixture","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}]);
         v.get_mut(CONFIG).unwrap()["protocol"]["stdout_limit_bytes"] = json!(67108864);
-        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":""},"inputs":[{"id":"interpreter","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
+        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":""},"inputs":[{"id":"execution-tool","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
         v.get_mut(FM).unwrap()["schema_version"] = json!(2);
         v.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["prepare.p","execute.t"],"timeout_seconds":15,"output_limit_bytes":4096}});
-        let pre = json!({"operation":"prepare.p","tool":"python","argv":["-B","p/prepare.py"]});
-        let run = json!({"operation":"execute.t","tool":"python","argv":["-B","t/check.py","$HOME `literal` <tag>","","line\nnext"]});
+        let pre =
+            json!({"operation":"prepare.p","tool":"fixture","argv":["file","p/prepare.case"]});
+        let run = json!({"operation":"execute.t","tool":"fixture","argv":["file","t/check.case","$HOME `literal` <tag>","","line\nnext"]});
         if script {
             v.get_mut(PROJECTS).unwrap()["projects"] = json!([]);
-            v.get_mut(PROJECTS).unwrap()["scripts"] = json!([{"id":"p","path":"p/product.py","test_script":"t","actions":{"execute":pre}},{"id":"t","path":"t/check.py","tests_for":"p","actions":{"execute":run}}]);
+            v.get_mut(PROJECTS).unwrap()["scripts"] = json!([{"id":"p","path":"p/product.case","test_script":"t","actions":{"execute":pre}},{"id":"t","path":"t/check.case","tests_for":"p","actions":{"execute":run}}]);
             v.get_mut(FM).unwrap()["project_edges"] = json!([
                 edge("script:p", "test-execution", "test:t"),
                 edge("script:t", "test-execution", "test:t"),
                 edge("input:data", "runtime-input", "script:p"),
-                edge("input:interpreter", "runtime-input", "script:p")
+                edge("input:execution-tool", "runtime-input", "script:p")
             ]);
         } else {
             v.get_mut(PROJECTS).unwrap()["projects"][0]["actions"] = json!({"build":pre});
@@ -184,7 +196,7 @@ impl Host {
                 edge("project:p", "test-execution", "test:t"),
                 edge("project:t", "test-execution", "test:t"),
                 edge("input:data", "runtime-input", "project:p"),
-                edge("input:interpreter", "runtime-input", "project:p")
+                edge("input:execution-tool", "runtime-input", "project:p")
             ]);
             for id in ["p", "t"] {
                 v.get_mut(CONFIG).unwrap()["artifacts"].as_array_mut().unwrap().push(json!({"path":format!("{id}/target/"),"owner":id,"kind":"cargo-output","tracked":false}));
@@ -203,9 +215,9 @@ impl Host {
             }
         }
         for (path, owner) in [
-            ("p/product.py", "p"),
-            ("t/check.py", "t"),
-            ("p/prepare.py", "p"),
+            ("p/product.case", "p"),
+            ("t/check.case", "t"),
+            ("p/prepare.case", "p"),
         ] {
             let mut f = file(
                 path,
@@ -237,28 +249,38 @@ impl Host {
             "[package]\nname='t'\nversion='0.1.0'\n[dev-dependencies]\np={path='../p'}\n",
         )
         .unwrap();
-        fs::write(
-            root.join("p/prepare.py"),
-            include_str!("../fixtures/execution-prepare.py"),
-        )
-        .unwrap();
-        fs::write(
-            root.join("p/product.py"),
-            include_str!("../fixtures/execution-product-base.py"),
-        )
-        .unwrap();
-        fs::write(
-            root.join("t/check.py"),
-            include_str!("../fixtures/execution-check.py"),
-        )
-        .unwrap();
+        write_steps(
+            &root,
+            "p/prepare.case",
+            &[Step::Append {
+                path: ".chrono-harness/state/order".into(),
+                bytes: b"p".to_vec(),
+            }],
+        );
+        write_product(&root, "p/product.case", Product::DoubleMultiply);
+        write_steps(
+            &root,
+            "t/check.case",
+            &[
+                Step::CheckProduct {
+                    path: "p/product.case".into(),
+                    input: 21,
+                    expected: 42,
+                },
+                Step::RequireSuffix {
+                    path: ".chrono-harness/state/order".into(),
+                    bytes: b"p".to_vec(),
+                },
+                Step::ObserveProcess,
+                Step::Append {
+                    path: ".chrono-harness/state/order".into(),
+                    bytes: b"t".to_vec(),
+                },
+            ],
+        );
         write_values(&root, &v);
         let base = commit(&root);
-        fs::write(
-            root.join("p/product.py"),
-            include_str!("../fixtures/execution-product-candidate.py"),
-        )
-        .unwrap();
+        write_product(&root, "p/product.case", Product::DoubleAdd);
         let candidate = commit(&root);
         Self {
             dir,
@@ -290,11 +312,11 @@ impl Host {
     ) {
         let root = self.root();
         fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
-        let interpreter = fs::read(&self.tool).unwrap();
-        let digest = sha256(&interpreter);
-        let blob = format!(".chrono-harness/state/interpreter-{digest}");
-        fs::write(root.join(&blob), &interpreter).unwrap();
-        let files = json!({"interpreter":{"blob":blob,"sha256":digest,"length":interpreter.len()},"data":{"bytes":b"bounded input\n".to_vec()}});
+        let executable = fs::read(&self.tool).unwrap();
+        let digest = sha256(&executable);
+        let blob = format!(".chrono-harness/state/execution-tool-{digest}");
+        fs::write(root.join(&blob), &executable).unwrap();
+        let files = json!({"execution-tool":{"blob":blob,"sha256":digest,"length":executable.len()},"data":{"bytes":b"bounded input\n".to_vec()}});
         let mut inputs = json!({"base":{"commit":self.base,"environment":{"DECLARED_EMPTY":"","DECLARED_ABSENT":null},"files":files},"candidate":{"commit":self.candidate,"environment":{"DECLARED_EMPTY":"","DECLARED_ABSENT":null},"files":files}});
         edit(&mut inputs);
         fs::write(

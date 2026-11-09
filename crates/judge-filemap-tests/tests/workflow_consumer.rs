@@ -87,13 +87,13 @@ fn add_extra_pair(h: &mut Host) {
         .unwrap()
         .extend([json!("extra"), json!("extra-tests")]);
     p["scripts"].as_array_mut().unwrap().extend([
-        json!({"id":"extra","path":"extra/product.py","test_script":"extra-tests","actions":{"execute":{"operation":"extra.product","tool":"python","argv":["-B","extra/product.py"]}}}),
-        json!({"id":"extra-tests","path":"extra/test.py","tests_for":"extra","actions":{"execute":{"operation":"extra.test","tool":"python","argv":["-B","extra/test.py"]}}})]);
+        json!({"id":"extra","path":"extra/product.case","test_script":"extra-tests","actions":{"execute":{"operation":"extra.product","tool":"fixture","argv":["run",json!([{"CheckProduct":{"path":"extra/product.case","input":21,"expected":42}}]).to_string()]}}}),
+        json!({"id":"extra-tests","path":"extra/test.case","tests_for":"extra","actions":{"execute":{"operation":"extra.test","tool":"fixture","argv":["file","extra/test.case"]}}})]);
     let fm = h.values.get_mut(FM).unwrap();
     for (path, owner) in [
-        ("extra/product.py", "extra"),
-        ("extra/test.py", "extra-tests"),
-        ("p/prepare-changed.py", "p"),
+        ("extra/product.case", "extra"),
+        ("extra/test.case", "extra-tests"),
+        ("p/prepare-changed.case", "p"),
     ] {
         let mut f = file(
             path,
@@ -105,8 +105,12 @@ fn add_extra_pair(h: &mut Host) {
     fm["project_edges"].as_array_mut().unwrap().extend([
         edge("script:extra", "test-execution", "test:extra-tests"),
         edge("script:extra-tests", "test-execution", "test:extra-tests"),
-        edge("input:interpreter", "runtime-input", "script:extra"),
-        edge("input:interpreter", "runtime-input", "script:extra-tests"),
+        edge("input:execution-tool", "runtime-input", "script:extra"),
+        edge(
+            "input:execution-tool",
+            "runtime-input",
+            "script:extra-tests",
+        ),
     ]);
     fm["test_costs"]
         .as_array_mut()
@@ -114,21 +118,35 @@ fn add_extra_pair(h: &mut Host) {
         .push(json!({"test":"extra-tests","cost":"unknown"}));
     fm["execution_plans"]["test:extra-tests"] = json!({"operations":["prepare.p","extra.test"],"timeout_seconds":15,"output_limit_bytes":4096});
     fs::create_dir(h.root().join("extra")).unwrap();
-    fs::write(
-        h.root().join("extra/product.py"),
-        include_str!("fixtures/workflow-extra-product.py"),
-    )
-    .unwrap();
-    fs::write(
-        h.root().join("extra/test.py"),
-        include_str!("fixtures/workflow-extra-test.py"),
-    )
-    .unwrap();
-    fs::write(
-        h.root().join("p/prepare-changed.py"),
-        include_str!("fixtures/workflow-changed-prepare.py"),
-    )
-    .unwrap();
+    host::write_product(&h.root(), "extra/product.case", host::Product::Answer);
+    host::write_steps(
+        &h.root(),
+        "extra/test.case",
+        &[
+            host::Step::CheckProduct {
+                path: "extra/product.case".into(),
+                input: 21,
+                expected: 42,
+            },
+            host::Step::RequireCount {
+                path: ".chrono-harness/state/order".into(),
+                byte: b'p',
+                count: 1,
+            },
+            host::Step::Write {
+                path: ".chrono-harness/state/extra".into(),
+                bytes: b"passed".to_vec(),
+            },
+        ],
+    );
+    host::write_steps(
+        &h.root(),
+        "p/prepare-changed.case",
+        &[host::Step::Append {
+            path: ".chrono-harness/state/order".into(),
+            bytes: b"p".to_vec(),
+        }],
+    );
 }
 
 #[test]
@@ -149,7 +167,7 @@ fn actual_semantic_change_runs_additional_declared_suite_with_one_shared_prerequ
     h.save();
     h.base = h.candidate.clone();
     h.values.get_mut(PROJECTS).unwrap()["scripts"][0]["actions"]["execute"]["argv"] =
-        json!(["-B", "p/prepare-changed.py"]);
+        json!(["file", "p/prepare-changed.case"]);
     h.save();
     let (code, r) = h.run(|_| {});
     assert_eq!(code, 0, "{}", r["findings"]);

@@ -53,11 +53,7 @@ fn fixture() -> Host {
     w["integration"]["tests"] = json!(["t"]);
     h.save();
     h.base = h.candidate.clone();
-    fs::write(
-        h.root().join("p/product.py"),
-        include_str!("fixtures/product-double.py"),
-    )
-    .unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleMultiply);
     h.save();
     h
 }
@@ -76,14 +72,14 @@ fn native_v3(h: &mut Host) {
     cfg["tools"].as_array_mut().unwrap().push(json!({"id":"git","program":git,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}));
     cfg["environment"]["inputs"].as_array_mut().unwrap().push(json!({"id":"git-bytes","location":git,"presence":"present","sha256":sha256(&fs::read(&git).unwrap())}));
     cfg["environment"]["values"]["FACTS_GIT"] = json!(git);
-    // The actual script test below consumes the declared Git, Python and data
+    // The actual fixture below consumes the declared Git, Rust tool and data
     // observations. Use admissible runtime-input edges to that script, not
     // environment/input/tool-to-judge edges (which FILEMAP does not permit).
     let inputs = json!([
         "tool:git",
         "input:git-bytes",
-        "tool:python",
-        "input:interpreter",
+        "tool:fixture",
+        "input:execution-tool",
         "input:data",
         "environment:FACTS_GIT",
         "environment:DECLARED_EMPTY",
@@ -102,13 +98,12 @@ fn native_v3(h: &mut Host) {
                 .iter()
                 .map(|input| edge(input.as_str().unwrap(), "runtime-input", "script:t")),
         );
-    let test = h.root().join("t/check.py");
-    let mut code = fs::read_to_string(&test).unwrap();
-    code.push_str(&include_str!("fixtures/native-input-check.py").replace(
-        "__EXTERNAL_INPUT__",
-        &format!("{:?}", h.external.path().to_str().unwrap()),
-    ));
-    fs::write(test, code).unwrap();
+    let test = h.root().join("t/check.case");
+    let mut steps: Vec<host::Step> = serde_json::from_slice(&fs::read(test).unwrap()).unwrap();
+    steps.push(host::Step::CheckNativeInputs {
+        path: h.external.path().to_str().unwrap().into(),
+    });
+    host::write_steps(&h.root(), "t/check.case", &steps);
 }
 
 fn select_config(h: &mut Host, target: &str) {
@@ -219,7 +214,11 @@ fn check(h: &Host, pair: &Value) -> (i32, Value) {
 fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_bytes() {
     let h = fixture();
     let pair = snapshots(&h);
-    assert!(pair["base"]["files"]["interpreter"].get("bytes").is_none());
+    assert!(
+        pair["base"]["files"]["execution-tool"]
+            .get("bytes")
+            .is_none()
+    );
     let (exit, r) = check(&h, &pair);
     assert_eq!(exit, 0, "{}", r["findings"]);
     assert_eq!(r["tests"]["tests"]["test:t"], "passed");
@@ -230,9 +229,9 @@ fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_by
     );
     let (exit, inline) = h.run_with_context(
         |inputs| {
-            let interpreter = json!({"bytes":fs::read(&h.tool).unwrap()});
+            let executable = json!({"bytes":fs::read(&h.tool).unwrap()});
             for endpoint in ["base", "candidate"] {
-                inputs[endpoint]["files"]["interpreter"] = interpreter.clone();
+                inputs[endpoint]["files"]["execution-tool"] = executable.clone();
             }
         },
         |ctx| {
@@ -317,11 +316,7 @@ fn input_larger_than_judge_json_bound_remains_a_small_request_and_is_actually_va
     h.values.get_mut(CONFIG).unwrap()["protocol"]["timeout_seconds"] = 120.into();
     h.save();
     h.base = h.candidate.clone();
-    fs::write(
-        h.root().join("p/product.py"),
-        include_str!("fixtures/product-sum.py"),
-    )
-    .unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleAdd);
     h.save();
     let pair = snapshots(&h);
     assert_eq!(pair["base"]["files"]["data"]["length"], length);
@@ -465,11 +460,7 @@ fn retained_absence_mismatch_missing_snapshot_and_v1_downgrade_fail_before_opera
     h.save();
     h.base = h.candidate.clone();
     let a = capture(&h, "before");
-    fs::write(
-        h.root().join("p/product.py"),
-        include_str!("fixtures/product-sum.py"),
-    )
-    .unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleAdd);
     h.save();
     let b = capture(&h, "after");
     let pair = json!({"base":a,"candidate":b});
@@ -524,21 +515,20 @@ fn operation_creating_an_absent_input_fails_post_execution_validation() {
     let mut h = fixture();
     v2(&mut h);
     data_state(&mut h, true);
-    fs::write(
-        h.root().join("t/check.py"),
-        include_str!("fixtures/create-absent-input.py"),
-    )
-    .unwrap();
+    host::write_steps(
+        &h.root(),
+        "t/check.case",
+        &[host::Step::Write {
+            path: h.external.path().to_str().unwrap().into(),
+            bytes: b"created".to_vec(),
+        }],
+    );
     h.values.get_mut(PROJECTS).unwrap()["scripts"][1]["actions"]["execute"]["argv"] =
-        json!(["-B", "t/check.py", h.external.path().to_str().unwrap()]);
+        json!(["file", "t/check.case"]);
     h.save();
     h.base = h.candidate.clone();
     let a = capture(&h, "before");
-    fs::write(
-        h.root().join("p/product.py"),
-        include_str!("fixtures/product-sum.py"),
-    )
-    .unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleAdd);
     h.save();
     let b = capture(&h, "after");
     let (exit, r) = check(&h, &json!({"base":a,"candidate":b}));

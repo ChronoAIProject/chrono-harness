@@ -1552,6 +1552,18 @@
             "--manifest-path",
             "crates/judge-projects-tests/Cargo.toml"
           ]
+        },
+        "execution_contract": {
+          "operation": "test.project-execution-contract",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/judge-projects-tests/Cargo.toml",
+            "--test",
+            "execution_contract"
+          ]
         }
       },
       "language": "rust"

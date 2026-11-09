@@ -153,10 +153,10 @@ fn pair_edge_ownership_and_route_counterexamples_launch_nothing() {
                     .as_array_mut()
                     .unwrap()
                     .iter_mut()
-                    .find(|f| f["path"] == "p/product.py")
+                    .find(|f| f["path"] == "p/product.case")
                     .unwrap()["owner"] = json!("t");
                 h.values.get_mut(PROJECTS).unwrap()["projects"][0]["manifest"] =
-                    json!("p/product.py");
+                    json!("p/product.case");
             }
             3 => {
                 h.values.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]["execute"] =
@@ -187,15 +187,15 @@ fn pair_edge_ownership_and_route_counterexamples_launch_nothing() {
 fn failed_test_and_candidate_mutation_are_visible() {
     for mutation in [false, true] {
         let mut h = Host::new(true);
-        fs::write(
-            h.root().join("t/check.py"),
-            if mutation {
-                "open('doc.txt','w').write('mutation')\n"
-            } else {
-                "print('PASS')\nraise SystemExit(9)\n"
-            },
-        )
-        .unwrap();
+        let steps = if mutation {
+            vec![host::Step::Write {
+                path: "doc.txt".into(),
+                bytes: b"mutation".to_vec(),
+            }]
+        } else {
+            vec![host::Step::Stdout(b"PASS\n".to_vec()), host::Step::Exit(9)]
+        };
+        host::write_steps(&h.root(), "t/check.case", &steps);
         h.candidate = commit(&h.root());
         let (code, v) = h.run(|_| {});
         assert_ne!(code, 0);
@@ -216,7 +216,9 @@ fn failed_test_and_candidate_mutation_are_visible() {
 #[test]
 fn resource_failure_is_infrastructure_error_with_observed_output() {
     let mut h = Host::new(true);
-    fs::write(h.root().join("t/check.py"), "print('x'*8000)\n").unwrap();
+    let mut output = vec![b'x'; 8000];
+    output.push(b'\n');
+    host::write_steps(&h.root(), "t/check.case", &[host::Step::Stdout(output)]);
     h.candidate = commit(&h.root());
     let (code, v) = h.run(|_| {});
     assert_eq!(
@@ -286,7 +288,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         .iter()
         .map(|a| a["path"].clone())
         .collect();
-    let mut config = json!({"schema":"chrono-ci-check/v1","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":30,"output_limit_bytes":1048576},"report_path":".chrono-harness/state/scoped.json","policy":{"filemap":FM,"projects":PROJECTS,"registration_config":CONFIG,"tools":{"python":h.tool},"artifacts":artifacts,"required_inputs":[profile],"operation_timeout_seconds":15,"operation_output_limit_bytes":4096,"environment":{}}});
+    let mut config = json!({"schema":"chrono-ci-check/v1","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":30,"output_limit_bytes":1048576},"report_path":".chrono-harness/state/scoped.json","policy":{"filemap":FM,"projects":PROJECTS,"registration_config":CONFIG,"tools":{"fixture":h.tool},"artifacts":artifacts,"required_inputs":[profile],"operation_timeout_seconds":15,"operation_output_limit_bytes":4096,"environment":{}}});
     let trace = root.join(".chrono-harness/state/scoped-git.trace");
     let shadow = root.join(".chrono-harness/state/shadow");
     if bound {
@@ -347,7 +349,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
             input["presence"] = json!("present");
         }
         // The full registration owns tool binding and environment for operations.
-        config["policy"]["tools"]["python"] = json!("/missing/scoped-fallback");
+        config["policy"]["tools"]["fixture"] = json!("/missing/scoped-fallback");
         if selected {
             let cfg = h.values.remove(CONFIG).unwrap();
             h.values.insert(target.into(), cfg);
@@ -365,7 +367,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         .push(file(profile, json!([])));
     h.save();
     h.base = h.candidate.clone();
-    fs::write(root.join("p/product.py"), "def double(n): return 2*n\n").unwrap();
+    host::write_product(&root, "p/product.case", host::Product::DoubleMultiply);
     h.candidate = commit(&root);
     fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
     let call = |h: &Host, reordered: bool| {
@@ -588,29 +590,34 @@ fn mapped_removed_obligation_executes_current_replacement_without_old_methods() 
 fn finite_old_ambiguity_mapping_reaches_real_execution_without_dropping_either_method() {
     let mut h = Host::new(false);
     h.values.get_mut(PROJECTS).unwrap()["scripts"] = json!([
-      {"id":"s","path":"s.py","test_script":"t","actions":{"execute":{"operation":"script.s","tool":"python","argv":["-B","s.py"]}}},
-      {"id":"t","path":"st.py","tests_for":"s","actions":{"execute":{"operation":"script.st","tool":"python","argv":["-B","st.py"]}}}
+      {"id":"s","path":"s.case","test_script":"t","actions":{"execute":{"operation":"script.s","tool":"fixture","argv":["run",json!([{"CheckProduct":{"path":"s.case","input":21,"expected":42}}]).to_string()]}}},
+      {"id":"t","path":"st.case","tests_for":"s","actions":{"execute":{"operation":"script.st","tool":"fixture","argv":["file","st.case"]}}}
     ]);
     h.values.get_mut(PROJECTS).unwrap()["owners"]
         .as_array_mut()
         .unwrap()
         .push(json!("s"));
-    for (path, owner, code) in [
-        ("s.py", "s", "def value(): return 42\n"),
-        (
-            "st.py",
-            "t",
-            "import runpy\nassert runpy.run_path('s.py')['value']()==42\nprint('old script obligation executed')\n",
-        ),
-    ] {
+    for (path, owner) in [("s.case", "s"), ("st.case", "t")] {
         let mut f = file(path, json!([]));
         f["owner"] = json!(owner);
         h.values.get_mut(FM).unwrap()["files"]
             .as_array_mut()
             .unwrap()
             .push(f);
-        fs::write(h.root().join(path), code).unwrap();
     }
+    host::write_product(&h.root(), "s.case", host::Product::Answer);
+    host::write_steps(
+        &h.root(),
+        "st.case",
+        &[
+            host::Step::CheckProduct {
+                path: "s.case".into(),
+                input: 21,
+                expected: 42,
+            },
+            host::Step::Stdout(b"old script obligation executed\n".to_vec()),
+        ],
+    );
     h.values.get_mut(FM).unwrap()["project_edges"]
         .as_array_mut()
         .unwrap()
@@ -627,7 +634,7 @@ fn finite_old_ambiguity_mapping_reaches_real_execution_without_dropping_either_m
         .as_array_mut()
         .unwrap()
     {
-        if f["path"] == "st.py" {
+        if f["path"] == "st.case" {
             f["owner"] = json!("st");
         }
     }
@@ -676,14 +683,14 @@ fn finite_old_ambiguity_mapping_reaches_real_execution_without_dropping_either_m
 #[test]
 fn operation_mutating_external_input_is_rejected_after_receipt() {
     let mut h = Host::new(true);
-    fs::write(
-        h.root().join("t/check.py"),
-        format!(
-            "open({:?},'w').write('changed external input')\n",
-            h.external.path().to_str().unwrap()
-        ),
-    )
-    .unwrap();
+    host::write_steps(
+        &h.root(),
+        "t/check.case",
+        &[host::Step::Write {
+            path: h.external.path().to_str().unwrap().into(),
+            bytes: b"changed external input".to_vec(),
+        }],
+    );
     h.candidate = commit(&h.root());
     let (code, v) = h.run(|_| {});
     assert_ne!(code, 0);
@@ -715,7 +722,20 @@ fn environment_host(connected: bool, overriding: bool) -> Host {
         h.values.get_mut(CONFIG).unwrap()["environment"]["values"]["DECLARED_ABSENT"] =
             json!("fixed");
     }
-    fs::write(h.root().join("t/check.py"), "import os\nopen('.chrono-harness/state/order','a').write('t')\nprint(repr((os.environ.get('DECLARED_ABSENT'),os.environ.get('DECLARED_EMPTY'))))\nraise SystemExit(9)\n").unwrap();
+    host::write_steps(
+        &h.root(),
+        "t/check.case",
+        &[
+            host::Step::Append {
+                path: ".chrono-harness/state/order".into(),
+                bytes: b"t".to_vec(),
+            },
+            host::Step::ObserveEnvironment {
+                names: vec!["DECLARED_ABSENT".into(), "DECLARED_EMPTY".into()],
+            },
+            host::Step::Exit(9),
+        ],
+    );
     h.save();
     h.base = h.candidate.clone();
     fs::write(h.root().join("doc.txt"), "environment comparison only\n").unwrap();
@@ -900,8 +920,8 @@ fn manifest_free_projects_custom_operations_and_arbitrary_paths_execute_full_cha
         .unwrap()
         .retain(|a| a["owner"] != "p" && a["owner"] != "t");
     for (old, new) in [
-        ("p/product.py", "different shelf/value.data"),
-        ("t/check.py", "assays/contract.verify"),
+        ("p/product.case", "different shelf/value.data"),
+        ("t/check.case", "assays/contract.verify"),
     ] {
         fs::create_dir_all(root.join(new).parent().unwrap()).unwrap();
         fs::rename(root.join(old), root.join(new)).unwrap();
@@ -916,7 +936,7 @@ fn manifest_free_projects_custom_operations_and_arbitrary_paths_execute_full_cha
     }
     let test = fs::read_to_string(root.join("assays/contract.verify"))
         .unwrap()
-        .replace("p/product.py", "different shelf/value.data");
+        .replace("p/product.case", "different shelf/value.data");
     fs::write(root.join("assays/contract.verify"), test).unwrap();
     h.values.get_mut(PROJECTS).unwrap()["projects"][1]["actions"]["execute"]["argv"][1] =
         json!("assays/contract.verify");
@@ -1170,7 +1190,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
     let profile = json!({"schema":"chrono-ci-check/v3", "judge":{"program":source().join("crates/judge-ci/target/debug/chrono-judge-ci"),"args":[],"timeout_seconds":120,"output_limit_bytes":8388608},
         "report_path":".chrono-harness/state/scoped.json", "policy":{
         "filemap":FM,"projects":PROJECTS,"registration_config":scoped_registration,
-        "tools":{"cargo":cargo,"python":h.tool},
+        "tools":{"cargo":cargo,"fixture":h.tool},
         "environment":h.values[CONFIG]["environment"]["values"],
         "artifacts":[".chrono-harness/state/",".chrono-harness/bin/","p/target/","t/target/"],
         "required_inputs":[],"adoption_base":null,"operation_timeout_seconds":30,"operation_output_limit_bytes":65536,
@@ -1338,13 +1358,13 @@ fn full_route_retains_registered_policy_and_rejects_incomplete_claims_before_eff
 fn offline_source_and_declared_external_input_survive_the_old_checkout_path() {
     let h = Host::new(true);
     let old_root = h.root();
-    let source_bytes = fs::read(old_root.join("p/product.py")).unwrap();
+    let source_bytes = fs::read(old_root.join("p/product.case")).unwrap();
     let head = git(&old_root, &["rev-parse", "HEAD"]);
     let external = h.external.path().to_owned();
     let retained = h.make_checkout_unavailable();
     assert!(!old_root.exists());
     assert_eq!(
-        fs::read(retained.join("p/product.py")).unwrap(),
+        fs::read(retained.join("p/product.case")).unwrap(),
         source_bytes
     );
     assert_eq!(git(&retained, &["rev-parse", "HEAD"]), head);
