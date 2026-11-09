@@ -49,6 +49,12 @@ pub fn native_job_state(
         reveal_strlit("waiting");
         reveal_strlit("pending");
         reveal_strlit("requested");
+        assert("completed"@.len() != "queued"@.len());
+        assert("completed"@.len() != "in_progress"@.len());
+        assert("completed"@.len() != "waiting"@.len());
+        assert("completed"@.len() != "pending"@.len());
+        assert("completed"@[0] != "requested"@[0]);
+        assert(optional_text_is(status,"completed") ==> !nonterminal(status));
     }
     if text_is(status,"completed") {
         if text_is(conclusion,"success") { NativeJobState::Succeeded }
