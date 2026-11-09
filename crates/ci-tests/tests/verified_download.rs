@@ -50,7 +50,12 @@ fn expect(bytes: &[u8], expected: Option<u16>)
 fn only_complete_ascii_status_tokens_are_accepted() {
     expect(&[], None);
     expect(&[72u8, 84, 84, 80, 32, 53, 48, 51], None);
-    expect(&[72u8, 84, 84, 80, 32, 53, 48, 51, 58], Some(503));
+    let valid: &[u8] = &[72u8, 84, 84, 80, 32, 53, 48, 51, 58];
+    proof {
+        assert(policy::token_at(valid@, 0));
+        assert(policy::code_at(valid@, 0) == 503);
+    }
+    expect(valid, Some(503));
     expect(&[104u8, 84, 84, 80, 32, 53, 48, 51, 58], None);
     expect(&[72u8, 84, 84, 80, 32, 53, 255, 51, 58], None);
     expect(&[72u8, 84, 84, 80, 32, 53, 48, 51, 59], None);
@@ -58,16 +63,38 @@ fn only_complete_ascii_status_tokens_are_accepted() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn repeated_statuses_are_unambiguous_but_conflicting_statuses_are_rejected() {
-    expect(&[
+    let repeated: &[u8] = &[
         72u8, 84, 84, 80, 32, 53, 48, 51, 58,
         72, 84, 84, 80, 32, 53, 48, 51, 58,
-    ], Some(503));
-    expect(&[
+    ];
+    proof {
+        assert(policy::token_at(repeated@, 0) && policy::token_at(repeated@, 9));
+        assert(policy::code_at(repeated@, 0) == 503 && policy::code_at(repeated@, 9) == 503);
+        assert forall|i: int| policy::token_at(repeated@, i) implies i == 0 || i == 9 by {}
+    }
+    expect(repeated, Some(503));
+    let conflict: &[u8] = &[
         72u8, 84, 84, 80, 32, 53, 48, 51, 58,
         72, 84, 84, 80, 32, 52, 48, 49, 58,
-    ], None);
-    expect(&[255u8, 72, 84, 84, 80, 32, 48, 48, 48, 58, 0], Some(0));
-    expect(&[72u8, 84, 84, 80, 32, 57, 57, 57, 58], Some(999));
+    ];
+    proof {
+        assert(policy::token_at(conflict@, 0) && policy::token_at(conflict@, 9));
+        assert(policy::code_at(conflict@, 0) == 503 && policy::code_at(conflict@, 9) == 401);
+    }
+    expect(conflict, None);
+    let embedded: &[u8] = &[255u8, 72, 84, 84, 80, 32, 48, 48, 48, 58, 0];
+    proof {
+        assert(policy::token_at(embedded@, 1));
+        assert(policy::code_at(embedded@, 1) == 0);
+        assert forall|i: int| policy::token_at(embedded@, i) implies i == 1 by {}
+    }
+    expect(embedded, Some(0));
+    let maximum: &[u8] = &[72u8, 84, 84, 80, 32, 57, 57, 57, 58];
+    proof {
+        assert(policy::token_at(maximum@, 0));
+        assert(policy::code_at(maximum@, 0) == 999);
+    }
+    expect(maximum, Some(999));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
