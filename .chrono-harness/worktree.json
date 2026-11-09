@@ -1,5 +1,6 @@
 {
   "schema": "chrono-worktree-config/v2",
+  "agent_identity_env": "HECA_AGENT_ID",
   "host_config": ".chrono-harness/config.json",
   "remote": "origin",
   "git": {

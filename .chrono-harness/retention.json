@@ -11,9 +11,6 @@
     "ci-fixture": [
       ".chrono-harness/state/ci-test-failures/"
     ],
-    "migration-fixture": [
-      ".chrono-harness/state/migration-tests/"
-    ],
     "check-original": [
       ".chrono-harness/state/"
     ],
@@ -21,18 +18,15 @@
       ".chrono-harness/state/"
     ],
     "lifecycle-original": [
-      ".chrono-harness/state/worktrees/"
+      ".chrono-harness/state/worktrees/",
+      ".chrono-harness/state/automatic-cleanup-v2/"
     ],
-    "fixture-retirement": [
-      ".chrono-harness/state/ci-test-failures/",
-      ".chrono-harness/state/temporary-hosts/worktree/",
-      ".chrono-harness/state/temporary-hosts/ci/",
-      ".chrono-harness/state/temporary-hosts/projects/",
-      ".chrono-harness/state/temporary-hosts/workflow-tools/",
-      ".chrono-harness/state/temporary-hosts/migration/"
+    "lifecycle-state-original": [
+      ".chrono-harness/state/automatic-cleanup-v2/"
     ]
   },
   "keep_seconds": 0,
+  "diagnostic_keep_seconds": 86400,
   "max_related_outputs": 512,
   "max_summaries": 128,
   "max_nodes_per_round": 256,
