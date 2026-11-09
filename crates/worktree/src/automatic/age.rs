@@ -215,7 +215,7 @@ impl Manager {
                 &[
                     "update-ref",
                     "--no-deref",
-                    &maintenance::checkout_reference(&e.branch),
+                    &maintenance::checkout_reference(e.current_branch()),
                     &saved,
                     &head,
                 ],
@@ -382,7 +382,7 @@ impl Manager {
             .collect();
         Cleanup {
             path: e.path.clone(),
-            branch: e.branch.clone(),
+            branch: e.current_branch().into(),
             head: head.into(),
             retained_ref: reference.into(),
             retained_commit: head.into(),

@@ -749,7 +749,7 @@ impl Manager {
                 entry.path.display()
             ));
         }
-        let branch = maintenance::checkout_reference(&entry.branch);
+        let branch = maintenance::checkout_reference(entry.current_branch());
         if inventory.iter().any(|row| {
             Path::new(&row["worktree"]) == entry.path
                 || (branch != "HEAD" && row.get("branch") == Some(&branch))
@@ -886,10 +886,12 @@ impl Manager {
                         // attachment or its lease. Observe this checkout only for
                         // deployment; cleanup still uses the unmodified entry.
                         let mut current = Entry::clone(entry);
-                        current.branch = reference
-                            .strip_prefix("refs/heads/")
-                            .unwrap_or(reference)
-                            .to_owned();
+                        current.checkout_branch = Some(
+                            reference
+                                .strip_prefix("refs/heads/")
+                                .unwrap_or(reference)
+                                .to_owned(),
+                        );
                         self.check_attachment(r, &current, head, None)?;
                     }
                     None => self.check_absent_enrollment(entry, &inventory)?,

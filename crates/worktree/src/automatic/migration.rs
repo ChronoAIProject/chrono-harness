@@ -1,4 +1,4 @@
-//! Explicit policy adoption preserves the original enrollment and its evidence.
+//! Explicit policy and checkout adoption preserve original enrollment evidence.
 use super::*;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
@@ -86,8 +86,54 @@ impl Manager {
             .lease(&e, true)?
             .ok_or("worktree has live registered consumers; preserve it")?;
         let head = r.oid(&target, "HEAD")?;
-        self.check_attachment(r, &e, &head, None)?;
+        let mut current = e.clone();
+        if !e.cache_only {
+            let observed = r.checkout_identity(&target)?;
+            let branch = if observed.branch == "HEAD" {
+                "HEAD"
+            } else {
+                observed.branch.strip_prefix("refs/heads/").ok_or(
+                    "checkout migration requires a local branch or explicit imported checkout",
+                )?
+            };
+            if branch != e.current_branch() {
+                if e.status != "active"
+                    || e.terminal.is_some()
+                    || e.cleanup.is_some()
+                    || !e.uses.is_empty()
+                    || e.report_handoff_pending()
+                {
+                    return Err("checkout migration preserves pending work; reconcile its use, result or terminal handoff first".into());
+                }
+                if (branch == "HEAD" && e.enrollment["kind"] != "import")
+                    || !crate::verified_lifecycle::accepts_enrollment_branch(
+                        e.enrollment["kind"].as_str().unwrap_or(""),
+                        ["feature_prefix", "integration_prefix"].iter().any(|key| {
+                            self.inputs.registrations.workflow()[key]
+                                .as_str()
+                                .is_some_and(|prefix| branch.starts_with(prefix))
+                        }),
+                    )
+                {
+                    return Err("checkout migration requires a registered local work branch or explicit imported checkout".into());
+                }
+                current.checkout_branch = (branch != e.branch).then(|| branch.to_owned());
+            }
+        }
+        let checkout_changed = current.current_branch() != e.current_branch();
+        // The original exclusive lease excludes registered descendants. The
+        // ordinary attachment check still verifies inventory, HEAD and Git locks
+        // against this exact candidate; ordinary use never follows a new branch.
+        self.check_attachment(r, &current, &head, None)?;
         self.birth_ready(&e)?;
+        let checkout_report = (!e.cache_only).then(|| {
+            value!({
+                "status":if checkout_changed {"adopted"} else {"already-current"},
+                "path":target,"previous_branch":e.current_branch(),
+                "branch":current.current_branch(),"head":head,
+                "terminal_handoff":"not-claimed","disposal":"not-performed"
+            })
+        });
         let previous = self.policy_binding(&e)?;
         let next = PolicyBinding {
             policy_sha256: sha256(&self.inputs.policy_bytes),
@@ -129,38 +175,49 @@ impl Manager {
         for path in next.inputs.keys() {
             start::registered_policy(&target_regs, path, &self.inputs.policy.state_directory)?;
         }
-        if previous.policy_sha256 == next.policy_sha256 && previous.inputs == next.inputs {
+        let policy_changed =
+            previous.policy_sha256 != next.policy_sha256 || previous.inputs != next.inputs;
+        if !policy_changed && !checkout_changed {
             self.check_entry(r, &e, &head, None)?;
             lease.stable()?;
+            if let Some(checkout_report) = checkout_report {
+                report["checkout_migration"] = checkout_report;
+            }
             report["policy_migration"] = value!({"status":"already-current","path":target,
                 "terminal_handoff":"not-claimed","disposal":"not-performed"});
             return Ok(());
         }
-        // The old Git snapshot supplies old bytes; the current snapshot supplies
-        // new bytes. Neither snapshot executes a historical lifecycle program.
-        let mut inputs = self.migration_inputs(r, &target, &previous, "previous")?;
-        inputs.extend(self.migration_inputs(r, &target, &next, "next")?);
-        let record = value!({"schema":"chrono-worktree-policy-migration/v1",
-            "binding":Self::birth_binding(&e),"previous":previous,"next":next,
-            "coordinator_commit":self.inputs.anchor_head,
-            "policy_source_root":self.inputs.source_root,
-            "policy_source_commit":self.inputs.source_head,"migration_inputs":inputs,
-            "terminal_handoff":"not-claimed","disposal":"not-performed"});
-        let name = format!(
-            "policy-migration-{}.json",
-            chrono_harness::wire::digest(&record)?
-        );
-        let receipt = self.immutable_reconciled(&name, &record)?;
+        let receipt = if policy_changed {
+            // Both snapshots supply fixed data, never historical programs.
+            let mut inputs = self.migration_inputs(r, &target, &previous, "previous")?;
+            inputs.extend(self.migration_inputs(r, &target, &next, "next")?);
+            let record = value!({"schema":"chrono-worktree-policy-migration/v1",
+                "binding":Self::birth_binding(&e),"previous":previous,"next":next,
+                "coordinator_commit":self.inputs.anchor_head,
+                "policy_source_root":self.inputs.source_root,
+                "policy_source_commit":self.inputs.source_head,"migration_inputs":inputs,
+                "terminal_handoff":"not-claimed","disposal":"not-performed"});
+            let name = format!(
+                "policy-migration-{}.json",
+                chrono_harness::wire::digest(&record)?
+            );
+            Some(self.immutable_reconciled(&name, &record)?)
+        } else {
+            None
+        };
         // A published receipt alone is not adoption. Admission and the original
         // lease remain held until the ledger references the complete transition.
-        self.check_attachment(r, &e, &head, None)?;
+        self.check_attachment(r, &current, &head, None)?;
         if self.target_policy_inputs(r, &target, &head)? != next.inputs {
             return Err("migration target policy changed before adoption".into());
         }
         lease.stable()?;
         self.reconcile_uses(i, &lease)?;
         let mut updated = self.ledger.entries[i].clone();
-        updated.policy_migrations.push(receipt.clone());
+        updated.checkout_branch = current.checkout_branch;
+        if let Some(receipt) = &receipt {
+            updated.policy_migrations.push(receipt.clone());
+        }
         let owner = updated
             .ownership
             .as_mut()
@@ -174,8 +231,15 @@ impl Manager {
         lease.stable()?;
         self.ledger.entries[i] = updated;
         self.save()?;
-        report["policy_migration"] = value!({"status":"adopted","path":target,
-            "receipt":receipt,"terminal_handoff":"not-claimed","disposal":"not-performed"});
+        if let Some(checkout_report) = checkout_report {
+            report["checkout_migration"] = checkout_report;
+        }
+        report["policy_migration"] = value!({
+            "status":if policy_changed {"adopted"} else {"already-current"},"path":target,
+            "terminal_handoff":"not-claimed","disposal":"not-performed"});
+        if let Some(receipt) = receipt {
+            report["policy_migration"]["receipt"] = value!(receipt);
+        }
         Ok(())
     }
 }
