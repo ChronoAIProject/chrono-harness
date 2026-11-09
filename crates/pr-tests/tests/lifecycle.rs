@@ -32,9 +32,14 @@ impl Host {
             root: tempfile::tempdir().unwrap(),
         };
         fs::create_dir(host.root.path().join(".chrono-harness")).unwrap();
-        host.write_config(json!({"schema":"chrono-pr-config/v1","repository":"example/host","base":"dev",
+        fs::write(host.root.path().join(".chrono-harness/retention.json"), json!({
+            "schema":"chrono-output-retention/v2", "producers":{"pr-original":[".chrono-harness/state/pr-operations/"]},
+            "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_related_outputs":32,"max_summaries":32,
+            "max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000
+        }).to_string()).unwrap();
+        host.write_config(json!({"schema":"chrono-pr-config/v2","repository":"example/host","base":"dev",
             "gh":env!("CARGO_BIN_EXE_chrono-pr-test-gh"),"required_checks":["chrono / collection"],
-            "api_timeout_seconds":5,"watch_timeout_seconds":5,"watch_interval_seconds":60,"output_limit_bytes":1048576}));
+            "api_timeout_seconds":5,"watch_timeout_seconds":5,"watch_interval_seconds":60,"output_limit_bytes":1048576,"state_directory":".chrono-harness/state/pr-operations","state_producer":"pr-original"}));
         fs::write(
             host.root.path().join("steps.json"),
             json!(steps).to_string(),
@@ -60,6 +65,7 @@ impl Host {
             .arg("--host-root")
             .arg(self.root.path())
             .current_dir("/")
+            .env("GH_TOKEN", "fixture-secret-never-retain")
             .output()
             .unwrap();
         assert!(
@@ -68,7 +74,7 @@ impl Host {
             String::from_utf8_lossy(&output.stderr)
         );
         let result: Value = serde_json::from_slice(&output.stdout).unwrap();
-        assert_eq!(result["schema"], "chrono-pr-result/v1");
+        assert_eq!(result["schema"], "chrono-pr-result/v2");
         (output.status.code().unwrap(), result)
     }
     fn status(&self) -> (i32, Value) {
@@ -314,8 +320,15 @@ fn api_failure_retains_original_output_without_retry() {
     assert_eq!(r["outcome"], "unknown");
     assert_eq!(h.calls().len(), 1);
     assert_eq!(
-        r["receipts"][0]["stderr_bytes"],
-        json!(b"HTTP 403\n".to_vec())
+        fs::read(
+            h.root.path().join(
+                r["receipts"][0]["stderr_original"]["path"]
+                    .as_str()
+                    .unwrap()
+            )
+        )
+        .unwrap(),
+        b"HTTP 403\n"
     );
     let h = Host::new(vec![json!({"prefix":["api","graphql"],"stdout":"{broken"})]);
     assert_eq!(h.status().0, 2);
@@ -464,4 +477,165 @@ fn timeout_and_output_limits_preserve_the_original_local_receipt() {
     c["output_limit_bytes"] = json!(4096);
     h.write_config(c);
     assert_eq!(h.status().0, 2);
+}
+
+#[test]
+fn completed_command_keeps_durable_intent_originals_and_open_object_state() {
+    let h = Host::new(vec![api(snapshot())]);
+    let (code, result) = h.status();
+    assert_eq!(code, 0, "{result}");
+    let operation = result["operation"]
+        .as_str()
+        .expect("durable operation identity");
+    let directory = h.root.path().join(operation);
+    let intent: Value =
+        serde_json::from_slice(&fs::read(directory.join("intent.json")).unwrap()).unwrap();
+    assert_eq!(intent["command"], "pr-status");
+    assert_eq!(intent["object"]["repository"], "example/host");
+    assert_eq!(intent["object"]["pr"], 42);
+    assert_eq!(intent["object"]["expected_head"], HEAD);
+    let saved: Value =
+        serde_json::from_slice(&fs::read(directory.join("result.json")).unwrap()).unwrap();
+    assert_eq!(saved, result);
+    assert_eq!(saved["operation_state"], "completed");
+    assert_eq!(saved["pr_state"], "OPEN");
+    assert_eq!(saved["merge_commit"], Value::Null);
+    let call: Value =
+        serde_json::from_slice(&fs::read(directory.join("call-1.intent.json")).unwrap()).unwrap();
+    assert_eq!(call["result"], Value::Null);
+    assert_eq!(call["handle"], Value::Null);
+    assert_eq!(call["state"], "intent");
+    assert!(call.get("environment").is_none());
+    let receipt = &saved["receipts"][0];
+    let original = &receipt["stdout_original"];
+    assert_eq!(
+        fs::read(h.root.path().join(original["path"].as_str().unwrap())).unwrap(),
+        snapshot().to_string().as_bytes()
+    );
+    assert!(receipt.get("stdout_bytes").is_none());
+    for file in [
+        "intent.json",
+        "config.json",
+        "call-1.intent.json",
+        "call-1.result.json",
+        "result.json",
+    ] {
+        let bytes = fs::read(directory.join(file)).unwrap();
+        assert!(
+            !bytes
+                .windows(b"fixture-secret-never-retain".len())
+                .any(|w| w == b"fixture-secret-never-retain")
+        );
+    }
+}
+
+#[test]
+fn absent_or_unregistered_state_never_dispatches() {
+    for failure in [
+        "missing-policy",
+        "unregistered-producer",
+        "old-config",
+        "blocked-state",
+    ] {
+        let h = Host::new(vec![api(snapshot())]);
+        match failure {
+            "missing-policy" => {
+                fs::remove_file(h.root.path().join(".chrono-harness/retention.json")).unwrap()
+            }
+            "blocked-state" => {
+                fs::write(h.root.path().join(".chrono-harness/state"), b"block").unwrap()
+            }
+            _ => {
+                let mut config: Value = serde_json::from_slice(
+                    &fs::read(h.root.path().join(".chrono-harness/pr.json")).unwrap(),
+                )
+                .unwrap();
+                if failure == "old-config" {
+                    config["schema"] = json!("chrono-pr-config/v1");
+                } else {
+                    config["state_producer"] = json!("unregistered");
+                }
+                h.write_config(config);
+            }
+        }
+        let (code, result) = h.status();
+        assert_eq!(code, 2, "{failure}: {result}");
+        assert!(
+            h.calls().is_empty(),
+            "{failure}: dispatched despite missing durable state"
+        );
+    }
+}
+
+#[test]
+fn final_publication_failure_keeps_original_process_but_cannot_pass() {
+    let mut step = api(snapshot());
+    step["block_result"] = json!(true);
+    let h = Host::new(vec![step]);
+    let (code, result) = h.status();
+    assert_eq!(code, 2, "{result}");
+    assert_eq!(result["outcome"], "unknown");
+    assert_eq!(result["operation_state"], "unknown");
+    assert!(result["storage_error"].is_string());
+    assert_eq!(h.calls().len(), 1);
+    assert_eq!(result["receipts"][0]["exit_code"], 0);
+    let path = result["operation"].as_str().unwrap();
+    let receipt: Value = serde_json::from_slice(
+        &fs::read(h.root.path().join(path).join("call-1.result.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(receipt, result["receipts"][0]);
+    assert_eq!(
+        fs::read(
+            h.root
+                .path()
+                .join(receipt["stdout_original"]["path"].as_str().unwrap())
+        )
+        .unwrap(),
+        snapshot().to_string().as_bytes()
+    );
+}
+
+#[test]
+fn merged_state_requires_and_retains_the_actual_merge_identity() {
+    let mut merged = snapshot();
+    merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
+    merged["data"]["repository"]["pullRequest"]["mergeCommit"] = json!({"oid":OTHER});
+    let h = Host::new(vec![api(merged.clone())]);
+    let (code, result) = h.status();
+    assert_eq!(code, 0, "{result}");
+    assert_eq!(result["pr_state"], "MERGED");
+    assert_eq!(result["merge_commit"], OTHER);
+    for value in [Value::Null, json!({"oid":"invalid"})] {
+        merged["data"]["repository"]["pullRequest"]["mergeCommit"] = value;
+        assert_eq!(Host::new(vec![api(merged.clone())]).status().0, 2);
+    }
+}
+
+#[test]
+fn stream_publication_failure_returns_the_actual_unsaved_bytes() {
+    let mut step = api(snapshot());
+    step["block_receipt"] = json!(true);
+    let h = Host::new(vec![step]);
+    let (code, result) = h.status();
+    assert_eq!(code, 2, "{result}");
+    assert_eq!(result["outcome"], "unknown");
+    assert!(result["receipts"][0]["storage_error"].is_string());
+    assert_eq!(result["receipts"][0]["exit_code"], 0);
+    assert_eq!(
+        result["receipts"][0]["stdout_bytes"],
+        json!(snapshot().to_string().into_bytes())
+    );
+    assert!(result["receipts"][0].get("stdout_original").is_none());
+    let saved: Value = serde_json::from_slice(
+        &fs::read(
+            h.root
+                .path()
+                .join(result["operation"].as_str().unwrap())
+                .join("result.json"),
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(saved, result);
 }

@@ -65,6 +65,7 @@ pub(crate) struct Snapshot {
     pub branch: String,
     pub state: String,
     pub draft: bool,
+    pub merge_commit: Option<String>,
     pub checks: Vec<Value>,
     pub outcome: &'static str,
 }
@@ -98,12 +99,25 @@ pub(crate) fn parse(
     if url != expected_url {
         return Err("PR URL mismatch (only github.com is supported)".into());
     }
+    let merge_commit = if state == "MERGED" {
+        let oid = field(pr, "/mergeCommit/oid")?;
+        if !sha(oid) {
+            return Err("invalid actual merge commit".into());
+        }
+        Some(oid.to_owned())
+    } else {
+        if !pr.get("mergeCommit").is_some_and(Value::is_null) {
+            return Err("unmerged PR has a merge commit".into());
+        }
+        None
+    };
     let mut result = Snapshot {
         number,
         url: url.into(),
         head: observed.into(),
         branch: field(pr, "/headRefName")?.into(),
         state: state.into(),
+        merge_commit,
         draft: pr["isDraft"].as_bool().ok_or("invalid draft state")?,
         checks: vec![],
         outcome: "pending",
