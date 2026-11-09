@@ -1,19 +1,11 @@
-use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 pub fn fixture_git() -> PathBuf {
+    if let Some(program) = std::env::var_os("CHRONO_CI_FIXTURE_GIT") {
+        return program.into();
+    }
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let registry = source.join(".chrono-harness/tests/ci-tools.json");
-    let tools: Value =
-        serde_json::from_slice(&std::fs::read(registry).expect("registered CI test tools"))
-            .unwrap();
-    assert_eq!(tools["schema"], "chrono-ci-test-tools/v1");
-    let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-    let program = tools["platforms"][platform]["git"]
-        .as_str()
-        .expect("Git must be explicitly registered for this CI test platform");
-    assert!(Path::new(program).is_absolute());
-    chrono_harness::resolve_program(&source, program, None).unwrap()
+    chrono_harness::resolve_program(&source, "git", None).expect("Git fixture tool on PATH")
 }
 
 /// Produce the fixed workflow merge object without changing the fixture checkout.

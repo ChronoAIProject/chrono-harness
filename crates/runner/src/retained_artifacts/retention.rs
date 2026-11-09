@@ -1208,6 +1208,14 @@ impl Inventory {
     /// Transfer an actual caller's root to its already protected output before
     /// releasing the producer handoff. No historical consumer is inferred.
     pub fn transfer_consumer(&self, consumer: &Consumer, destination: &str) -> Result<(), String> {
+        self.transfer_consumer_to(consumer, destination, None)
+    }
+    fn transfer_consumer_to(
+        &self,
+        consumer: &Consumer,
+        destination: &str,
+        publication: Option<&Publication>,
+    ) -> Result<(), String> {
         if consumer.schema != "chrono-retention-consumer/v1" || consumer.purpose.trim().is_empty() {
             return Err("invalid caller original handoff".into());
         }
@@ -1231,12 +1239,22 @@ impl Inventory {
             .iter()
             .position(|o| o.path == destination && o.phase != "disposing")
             .ok_or("caller handoff destination unavailable")?;
-        if ids.contains(&l.outputs[target].id)
-            || !l
-                .roots
-                .values()
-                .any(|roots| roots.contains(&l.outputs[target].id))
-        {
+        let output = &l.outputs[target];
+        let protected = if let Some(publication) = publication {
+            publication.lease.stable()?;
+            if output.id != publication.id
+                || output.identity != *publication.identity.borrow()
+                || output.lease != publication.initial.lease
+                || output.lease_id != publication.lease.id()
+                || identity(&self.root.join(destination))? != output.identity
+            {
+                return Err("caller handoff publication binding changed".into());
+            }
+            true
+        } else {
+            l.roots.values().any(|roots| roots.contains(&output.id))
+        };
+        if ids.contains(&output.id) || !protected {
             return Err("caller handoff requires a distinct protected destination".into());
         }
         let references: BTreeSet<_> = l.outputs[target]
@@ -2531,6 +2549,14 @@ impl Publication {
         self.inventory
             .protect_consumer(consumer, &[original.clone()])?;
         Ok(original)
+    }
+    /// A live producer accepts the caller's exact originals as dependencies.
+    /// Its real capability protects the destination without a durable root
+    /// that would otherwise survive an interrupted producer indefinitely.
+    pub fn accept_consumer(&self, consumer: &Consumer) -> Result<(), String> {
+        self.lease.stable()?;
+        self.inventory
+            .transfer_consumer_to(consumer, &self.path, Some(self))
     }
     /// Keep producer status distinct from storage status; no synthetic success on interruption.
     pub fn complete(self, outcome: Value) -> Result<(), String> {
