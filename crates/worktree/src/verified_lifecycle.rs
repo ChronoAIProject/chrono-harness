@@ -12,6 +12,43 @@ use identifiers::equal_text;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, PartialEq, Eq, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+pub enum Disposition {
+    Dispose,
+    FinishDispose,
+    Retain,
+    EvidenceRetain,
+}
+
+pub fn select_artifact(disposition: &Disposition, release_reusable: bool,
+    release_evidence: bool) -> (selected: bool)
+    ensures selected <==> match *disposition {
+        Disposition::Dispose => true,
+        Disposition::FinishDispose => release_reusable,
+        Disposition::Retain => false,
+        Disposition::EvidenceRetain => release_evidence,
+    },
+{
+    match disposition {
+        Disposition::Dispose => true,
+        Disposition::FinishDispose => release_reusable,
+        Disposition::Retain => false,
+        Disposition::EvidenceRetain => release_evidence,
+    }
+}
+
+pub fn reusable_release(age_eligible: bool, generation: u64,
+    requested_generation: Option<u64>) -> (release: bool)
+    ensures release <==> (age_eligible || (requested_generation.is_some()
+        && requested_generation.unwrap() == generation)),
+{
+    age_eligible || match requested_generation {
+        Some(requested) => requested == generation,
+        None => false,
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
 pub enum CleanupStage {

@@ -254,7 +254,7 @@ impl Manager {
                 .policy
                 .artifacts
                 .iter()
-                .filter(|a| a.disposition == Disposition::Dispose)
+                .filter(|a| select_artifact(&a.disposition, true, false))
                 .map(|a| a.path.clone())
                 .collect();
             let host_config = r.config.host_config.clone();
@@ -301,7 +301,7 @@ impl Manager {
             .ok_or("age cache generation overflow")?;
         owner.cache_pending = true;
         self.save()?;
-        self.execute_cache(r, i, token, report)?;
+        self.execute_cache(r, i, token, report, true)?;
         report["age_outcome"] = value!("reusable-source-preserved-caches-reclaimed");
         Ok(())
     }
@@ -377,7 +377,7 @@ impl Manager {
             .policy
             .artifacts
             .iter()
-            .filter(|a| a.disposition == Disposition::Dispose)
+            .filter(|a| select_artifact(&a.disposition, true, false))
             .map(|a| a.path.clone())
             .collect();
         Cleanup {

@@ -4,6 +4,113 @@ fn main_host() -> Host {
     main_host_mode("rebuild-evidence")
 }
 
+#[test]
+fn reusable_cache_survives_separate_operations_until_explicit_release() {
+    let h = main_host();
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["artifacts"][0]["disposition"] = value!("finish-dispose");
+    fs::write(path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    for _ in 0..2 {
+        let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
+        assert_eq!(code, 0, "{used} {error}");
+        assert_eq!(fs::read(h.root.join("output λ/cache")).unwrap(), b"rebuilt");
+        assert!(!h.root.join("nested/cache").exists());
+        fs::create_dir_all(h.root.join("nested/cache")).unwrap();
+        fs::write(h.root.join("nested/cache/temporary"), b"disposable").unwrap();
+    }
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(h.root.join("output λ/cache").is_file());
+    let e = h.ledger()["entries"][0].clone();
+    let lease = chrono_harness::ownership::Lease::acquire(
+        &h.root.join(e["ownership"]["path"].as_str().unwrap()),
+        Some(e["ownership"]["id"].as_str().unwrap()),
+        false,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    assert_ne!(h.auto("finish", &[]).0, 0);
+    assert!(h.root.join("output λ/cache").is_file());
+    drop(lease);
+    let outside = h.parent.join("outside-cache");
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(outside.join("keep"), b"external").unwrap();
+    if let Err(error) = fs::remove_dir_all(h.root.join("nested/cache")) {
+        assert_eq!(error.kind(), std::io::ErrorKind::NotFound);
+    }
+    fs::create_dir_all(h.root.join("nested")).unwrap();
+    std::os::unix::fs::symlink(&outside, h.root.join("nested/cache")).unwrap();
+    let (code, failed, _) = h.auto("finish", &[]);
+    assert_ne!(code, 0, "{failed}");
+    assert!(h.root.join("output λ/cache").is_file());
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["cache_release"],
+        failed["main_cache_release"]
+    );
+    let release = h
+        .root
+        .join(failed["main_cache_release"]["path"].as_str().unwrap());
+    let original = fs::read(&release).unwrap();
+    fs::remove_file(h.root.join("nested/cache")).unwrap();
+    let (code, released, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{released} {error}");
+    assert!(h.ledger()["entries"][0]["enrollment"]["cache_release"].is_null());
+    assert_eq!(fs::read(release).unwrap(), original);
+    assert_eq!(fs::read(outside.join("keep")).unwrap(), b"external");
+    assert!(!h.root.join("output λ").exists());
+    assert!(!h.root.join("nested/cache").exists());
+    assert!(h.root.join("payload").is_file());
+    assert!(h.root.join(".chrono-harness/state/evidence").is_file());
+    assert!(h.ledger()["entries"][0]["terminal"].is_null());
+    let (code, reused, error) = h.auto("use", &["--operation", "use.consumer"]);
+    assert_eq!(code, 0, "{reused} {error}");
+    assert!(
+        h.root.join("output λ/cache").is_file(),
+        "an old finish cannot release a new generation"
+    );
+    assert_eq!(h.auto("finish", &[]).0, 0);
+    assert!(!h.root.join("output λ").exists());
+}
+
+#[test]
+fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    super::automatic::native_consumer(&h, "rebuild-evidence");
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["artifacts"][0]["disposition"] = value!("finish-dispose");
+    fs::write(path, serde_json::to_vec_pretty(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("reusable-linked");
+    assert_eq!(h.invoke("integration", "reusable-linked", &target).0, 0);
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert!(target.join("output λ/cache").is_file());
+    let (code, finished, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--artifacts-only"],
+    );
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(!target.join("output λ").exists());
+    assert!(target.join("payload").is_file());
+    assert!(target.join(".chrono-harness/state/evidence").is_file());
+}
+
 fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
     let h = main_host();
     adopt_lifecycle_retention(&h);
@@ -598,7 +705,7 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
     let release = json(&raw).unwrap();
     assert_eq!(release["path"], value!(h.root));
     assert_eq!(release["task_completion"], "not-claimed");
-    assert_eq!(released["drain"], value!([]));
+    assert_eq!(released["drain"].as_array().unwrap().len(), 1);
     assert!(!h.root.join("output λ").exists());
     assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
     assert_eq!(git(&h.root, &["show-ref"]), refs);

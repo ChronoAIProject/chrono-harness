@@ -443,6 +443,13 @@ chrono-worktree resume-rebind --host-root ROOT --config .chrono-harness/worktree
 
 cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任何目录前先核全部所选项：两端登记未跟踪产物、不含候选已跟踪路径、缺失或无符号链接祖先的物理目录。原保存工作、分支、检出、未知文件、嵌套工作树检查继续适用。
 
+产物处置明确区分时机：`dispose` 在消费者释放后的普通缓存回收中可删除；
+`finish-dispose` 用于跨操作复用的缓存，普通 bootstrap／check／use 返回及 maintain 保留，
+在明确 finish 或符合已登记年龄条件的回收中才选择。`retain` 保留，
+`evidence-retain` 仍须符合原证据释放条件。所有时机都须核原所有权和活消费者。
+主检出的 finish 持久记录缓存释放代际，中断后由同一维护入口恢复；新消费开启新代际，
+旧释放不会授权删除后来复用的缓存。
+
 处置在自有 worktree 锁下运行，解锁／Git 移除前再核字面检出和保留。计划不发现可删目录。`artifact_disposals` 逐项记 `already-absent`、`attempted-unverified`、`verified-absent`。
 
 文件系统阶段归调用方宿主 job 生命周期，不继承 Git 子进程期限。失败可能已部分删除授权产物但保留锁；解决原因后，用已有回执／intent 恢复，再明确重试。之后 Git 失败仍保留原进程及已完成产物效果，均不改写为检出移除成功。
@@ -466,7 +473,7 @@ cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任�
 | `retained_ref`、`retention` | 一个直接本地分支，使用原 ancestor 或精确 same-tree 保留含义 |
 | `remove_branch` | 明确选择；本仓保留分支 |
 | `allow_evidence_disposal` | 是否允许终态所有者另选证据处置；本仓禁用 |
-| `artifacts` | 精确 config.artifacts 目录，各选 dispose／retain／evidence-retain，不按 kind 名或布局解释；未列路径继续保留 |
+| `artifacts` | 精确 config.artifacts 目录，各选 dispose／finish-dispose／retain／evidence-retain，不按 kind 名或布局解释；未列路径继续保留 |
 
 调用宿主和协调者分别核对自己的已提交政策与配置，不要求两份文件逐字相同。共享状态只要求所有权协议、物理协调者和状态目录相同；每个工作树的清理选择、保留条件和实际产物登记归自身负责。共享保留生产者仍由其物理存储所在的协调者政策负责，linked 工作树不能改写该权限。本仓保留 bin 和 state，因此普通 finish 回收缓存、保留检出。整检出移除前，证据所有者须明确改政策并迁移登记项；改政策不会静默重释旧项。
 
@@ -546,7 +553,7 @@ finish 是调用方等待全部自有 job、确认完成／落地后的明确终
 
 历史输出可由同一所有者明确接管当前保管：`migrate --path /exact/main --adopt-cache STATE_PATH`。登记状态下严格 `chrono-main-cache-custody/v1` 声明含物理 main path、完整当前 head、精确 artifacts、`current_consumers_released: true`、非空 reason。
 
-当前操作者须真实等待或排除旧未受管消费者，再声明当前保管决定。这是工程切换，不声称过去生产者已完成、成功、封存或释放。只有 active 已采用 main 项及登记 dispose 输出可接管；源码／index、bin／证据、未知路径、活的已采用消费者都拒绝。未选历史对象继续保护，不否决合格兄弟项。
+当前操作者须真实等待或排除旧未受管消费者，再声明当前保管决定。这是工程切换，不声称过去生产者已完成、成功、封存或释放。只有 active 已采用 main 项及登记 dispose／finish-dispose 输出可接管；源码／index、bin／证据、未知路径、活的已采用消费者都拒绝。未选历史对象继续保护，不否决合格兄弟项。
 
 切换由准入和原独占登记租约保护，独立不可变回执保留原声明／关联、记录所有权变化，历史生产结果仍 unknown。历史生产／处置结果保留。已有 reconcile_uses 可追加中断历史、去掉失效 use token，因此可变登记／uses 不保证逐字不变。
 
