@@ -140,6 +140,8 @@ GitHub [原生路径过滤](https://docs.github.com/en/actions/reference/workflo
 
 Rust provider 拒绝检测失败／取消／缺失，以及任一选中单元失败、取消、缺失或意外跳过。只有 detector 声明非必需的跳过可接受。gather 核精确父 run／仓库／当前 attempt／事件／工作流源码，依赖完成后分页读 job 历史，不轮询其他工作流，也不等自己的父运行结束。
 
+原生 needs 已确认成功，但完整 job 列表中的唯一最新执行仍是已知非终态且 conclusion 为 null 时，gather 只额外读取一次该精确 job ID 的详情。详情须保持 id／run_id／run_attempt／head_sha／name 不变，并实际为 completed／success；仍未完成、失败、身份变化或传输失败都拒绝。已终结的列表结果保持原判定，不通过重读掩盖失败。两次响应沿现有 transport 保留；正常终态列表不增加 IO，无轮询或预算调整，额外读取的总成本未知。
+
 独立重试保留原 detector 及成功前置 attempt。非必需跳过由 `needs` 绑定，无需 job 执行 metadata 或产物。每个选中单元须在同一父 run 有成功的最新 API 状态；生成 `production` 输出寻址真实原 artifact、上下文摘要、报告摘要及生产 attempt。
 
 API job 身份和 `run_attempt` 可能描述沿用工作，不能据此造产物名。gather 将原 context／run／attempt／job 和两个摘要与 production 输出核对。后续失败／跳过不能用早先成功替代；父 attempt 漂移、产物不符／缺失均失败。原进程字节、源码 SHA／revision、事件／端点、报告摘要、执行物身份及上传／来源根映射继续绑定并判断。
