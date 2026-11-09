@@ -27,7 +27,7 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 [发布源](../.chrono-harness/ci/release.json)明确列出 macOS 和 Linux。早期 v1 每平台一个 job，执行同一顺序入口；当前采用 v2。完整本地入口仍为：
 
 ```sh
-python3 .chrono-harness/release/build.py . .chrono-harness/cache/release-platform
+/bin/bash .chrono-harness/release/native.sh . .chrono-harness/ci/bootstrap-release-frontend.json .chrono-harness/cache/release-platform
 ```
 
 本仓原生 CI 中订阅编译缓存的发布命令明确传入 `CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与缓存探测及配置文件缺失声明使用同一目录。变量由现有 `/usr/bin/env` 转交给原调度入口，参数、单元及依赖不变；工作目录仍为各实际检出根。普通本地入口继续继承调用环境，不据此宣称与 CI 同判。具体缓存合同见[缓存归属](ci-cache.md#本仓的缓存归属)。
@@ -36,7 +36,7 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 真实 CLI 和 shell 使用方测试覆盖字面参数、失败原件、定制保留、无写入复用、漂移、错误登记和输出归属。历史原生构建与公开包结果归[原运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944)及[发布](distribution.md)，不在这里维护测试数量或安装记录。每次交付须核所选候选、平台和实际使用方；旧结果不能证明当前候选、其他宿主、full 工作流执行、完整输入或确定性同判。
 
-当前本宿主采用 `chrono-github-release/v2` 和 `chrono-release-build/v5`：每平台的 build、verification 和 `always()` collector/package 均逐项登记。每个 job 和整个平台均受登记的 45 分钟时限约束。Rust 验证仍跑原始未过滤操作；测试清单与原生输入适配的验证归 Rust `ci-tests`，宿主 bootstrap、配方单元测试和真实打包集成测试继续各自登记。
+当前本宿主采用 `chrono-github-release/v2` 和 `chrono-release-build/v5`：每平台的 build、verification 和 `always()` collector/package 均逐项登记。每个 job 和整个平台均受登记的 45 分钟时限约束。Rust 验证仍跑原始未过滤操作；测试清单与原生输入适配的验证归 Rust `ci-tests`，宿主 bootstrap 与 Rust 发布测试继续各自登记，真实打包和 cache 消费回归由同一未过滤发布测试操作覆盖。
 
 每个验证只登记实际消费的构建子集。instructions、routes、diagnostics 不消费发布二进制，`needs` 为空且 `rust_toolchain=true`，可独立启动。原生输入准备的行为验证归 Rust `ci-tests`，随原始未过滤 `test.ci-tests` 执行，复用其既有构建和发布资产依赖，不再单独启动 Python 验证 job。原 IO、执行物解析、凭据省略、纳秒时间顺序和有界失败回执均在 Rust 配对测试中核对；完整种子和转发链仍由 workflow 测试验证。新增验证／传输成本未测，原生两平台验收和公开发行须核对应候选的实际结果。
 
@@ -54,13 +54,15 @@ v1 输出和无依赖行为保留。v2 增加固定提交的 `download_artifact_
 
 ## v5 构建配方
 
-宿主唯一调度入口是 `.chrono-harness/release/build.py`。`build.json` 管理 unit ID、manifest／asset 或原始 operation、依赖、handoff 目录、成本、原生 job 对应、局部并发和时限。`projects.json` 独自管理原测试 argv，`plan.json` 独自管理资产源路径，`consumer_staging` 列全部保留目的路径；不扫描目录、名称或测试正文找单元。
+宿主唯一完整发布入口是 `.chrono-harness/release/native.sh`，它委托现有 Rust bootstrap 构建并安装 `chrono-host-release`，再直接运行该程序。配方解析、调度、状态与原件核验均由 `.chrono-harness/release/native/` 的 Rust 项目负责。`build.json` 管理 unit ID、manifest／asset 或原始 operation、依赖、handoff 目录、成本、原生 job 对应、局部并发和时限。`projects.json` 独自管理原测试 argv，`plan.json` 独自管理资产源路径，`consumer_staging` 列全部保留目的路径；不扫描目录、名称或测试正文找单元。
 
 ```sh
-python3 .chrono-harness/release/build.py ROOT ABSENT_OUTPUT
-python3 .chrono-harness/release/build.py ROOT ABSENT_OUTPUT --unit ID
-python3 .chrono-harness/release/build.py ROOT ABSENT_OUTPUT --collect
+/bin/bash .chrono-harness/release/native.sh ROOT .chrono-harness/ci/bootstrap-release-frontend.json ABSENT_OUTPUT
 ```
+
+原生发布每平台先由登记的 frontend job 执行同一薄入口，并以 `--export-frontend` 导出工具。所有业务单元与 collector 都显式依赖、下载该 job 的原 artifact ID，再通过 `.chrono-harness/release/consume.sh ROOT FRONTEND_DIRECTORY ABSENT_OUTPUT --unit ID` 或同一入口的 `--collect` 模式运行。薄 shell 只从 tar 恢复固定执行物及其权限；Rust 在业务执行前核对源码、当前依赖、工具路径与字节、原 bootstrap 报告、原操作和两条输出流。非 Rust 业务单元和 collector 无需编译器。
+
+单元回执保留原 frontend 元数据；collector 核该单元实际使用的生产 attempt，并收取原元数据，不为每个单元重复复制工具或归档。frontend 失败或下载／原件不匹配时，不能执行原业务。新增构建、下载及元数据核验的总成本未测；本地回归、两平台原生运行、公开发行与宿主采用分别验收。
 
 只接受 `chrono-release-build/v5`，旧格式在启动工具或创建输出前拒绝。完整本地入口要求固定 HEAD 且检出干净，以有限并发跑同一批登记单元。每单元使用独立临时 clone、固定 OID 和声明 handoff；输出保留原单元证据及本地驱动进程。只删本次创建的临时根，不改源检出。通过后，平台清单和[计划](../.chrono-harness/release/plan.json)全部资产位于 ABSENT_OUTPUT，原 receipt、逐单元过程及完整驱动状态一同保留。已有输出（含 symlink）在子进程前拒绝，结构预检失败不制造成功报告。
 
@@ -68,7 +70,7 @@ build 单元只构建声明 manifest 一次，传输一个执行物及原 receip
 
 每个 verification 必须声明布尔 `rust_toolchain`。true 安装并核登记 Rust 工具链；false 只绑定 Git 和实际操作工具，不探测／安装 Rust，也不覆盖继承的 Rust 环境变量。选择不能从语言、命令名或依赖数量推断。消费 Rust 二进制不要求 Rust 编译器。Rust 验证须匹配所选构建工具链；无 Rust 验证只记录实际工具和过程，不能冒领编译器观察。collector 逐单元按声明核证据。
 
-本地调度只等待显式前置，并受 `local_workers` 限制；无依赖验证可与构建同时就绪。前置失败保留真实失败结果，collector 仍要求全部登记单元成功。stdout／stderr 保为原文件，receipt 记录字节数／摘要、原 argv、cwd、退出码、工具身份和时间，不虚构相同环境或完整输入。
+本地调度只等待显式前置，并受 `local_workers` 限制；无依赖验证可与构建同时就绪。前置失败保留真实失败结果，collector 仍要求全部登记单元成功。stdout／stderr 分流实时转交并保为原文件，每条流以 64 MiB 为上限；超限记录为失败并保留已收取原字节。receipt 记录字节数／摘要、原 argv、cwd、退出码、工具身份和时间，不虚构相同环境或完整输入。
 
 ## 汇总与失败证据
 
@@ -88,13 +90,13 @@ v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、�
 
 缓存传输的 bootstrap 安装路径和发布验证的 staging 路径用途不同。`chrono-cache` 发布资产只暂存到 `crates/cache/target/debug/chrono-cache`，原 cache-tests 在那里调用；`.chrono-harness/bin/chrono-cache` 归 bootstrap，供外层 plan／recover 使用，发布 staging 不再替换它。源资产、摘要、生产者及前后观察仍按 v5 核验。
 
-Python 发布 integration 组保留真实 distribution pack，并加入真实 cache CLI 的 plan→recover→stage→consumer→plan 回归。该组明确增加 `build_cache`，本地 FILEMAP、shared_operations、两原生 job 的 needs／downloads 同步登记，未新增独立单元。回归用同字节真实 CLI 检出 inode 替换，核传输摘要、恢复原件及重新规划的执行物身份；它不模拟原生后端、不同编译配置或完整外围 workflow。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures；原生 collector 仍要求全部真实单元成功。新增构建、下载、回归成本应分别实测，其他登记成本仍为 unmeasured。
+Rust `test.host-release-native-tests` 运行全部发布行为测试。真实 distribution pack 使用测试 crate 自行编译的 distribution alias；真实 cache 回归消费暂存到 `crates/cache/target/debug/chrono-cache` 的选中发布资产，并执行 plan→recover→stage→consumer→plan。因此发布验证只依赖 `build_cache`，不依赖发布版 distribution。本地 FILEMAP、shared_operations 和两平台 needs／downloads 同步登记；原两组 Python 验证由这一未过滤 Rust 操作替代。回归核传输摘要、恢复原件及重新规划的执行物身份，不能代替不同编译配置或完整外围 workflow 的验收。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures，collector 仍要求全部真实单元成功。
 
 发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。Git 按所选政策一次解析并固定本轮实际身份；显式配置版本或摘要预期时，不符仍在执行前拒绝。运行读数归 state／线上原件，候选是否可用仍须实际验证。
 
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
 
-Linux 发行政策保留工作树所有者读取登记所需的完整结构；发布编排及仍使用 Python 的测试工具槽按当前使用方保留，未知 Python 版本仍为 `null`。该登记不声称完成 Linux canonical/full 采用。
+Linux 发行政策保留工作树所有者读取登记所需的完整结构；发布编排使用 Rust，仍使用 Python 的测试工具槽按当前使用方保留，未知 Python 版本仍为 `null`。该登记不声称完成 Linux canonical/full 采用。
 
 Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。旧 Python custody 测试的发布采集声明随生产者退役；已保留失败原件仍按原使用方的诊断和验收期限保护，不因删除源码或声明而删除。
 

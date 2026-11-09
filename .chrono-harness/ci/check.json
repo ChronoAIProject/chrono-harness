@@ -2,7 +2,9 @@
   "schema": "chrono-ci-check/v3",
   "judge": {
     "program": ".chrono-harness/bin/chrono-judge-ci",
-    "args": [],
+    "args": [
+
+    ],
     "timeout_seconds": 2400,
     "output_limit_bytes": 8388608
   },
@@ -190,15 +192,9 @@
       },
       "release-build": {
         "tests": [
-          "test:release-build-tests"
+          "test:host-release-native-tests"
         ],
         "report_path": ".chrono-harness/state/units/release-build/check.json"
-      },
-      "release-build-integration": {
-        "tests": [
-          "test:release-build-integration"
-        ],
-        "report_path": ".chrono-harness/state/units/release-build-integration/check.json"
       },
       "worktree-adoption": {
         "tests": [
@@ -345,10 +341,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.distribution": [
-        "distribution",
-        "release-build-integration"
-      ],
       "fmt.worktree": [
         "worktree",
         "worktree-adoption"
@@ -363,7 +355,7 @@
       ],
       "build.cache": [
         "cache",
-        "release-build-integration"
+        "release-build"
       ]
     },
     "facts_config": ".chrono-harness/config.json",
