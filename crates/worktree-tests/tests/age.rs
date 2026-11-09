@@ -14,6 +14,7 @@ fn policy(h: &Host, reuse: u64, delete: u64, evidence: &str) {
     p["schema"] = value!("chrono-worktree-automatic-cleanup/v2");
     p["age_policy"] = value!({"reuse_after_seconds":reuse,"delete_after_seconds":delete,
         "preserved_branch_prefix":"preserved/age/"});
+    p["artifacts"][0]["disposition"] = value!("finish-dispose");
     fs::write(path, serde_json::to_vec_pretty(&p).unwrap()).unwrap();
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);

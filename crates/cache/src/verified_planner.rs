@@ -13,6 +13,12 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
+pub fn refresh_sources(enabled: bool, reason: &str) -> (refresh: bool)
+    ensures refresh <==> (enabled && reason@ == "compatible"@),
+{
+    enabled && identifiers::equal_text(reason, "compatible")
+}
+
 pub fn current_registration(schema: &str) -> (valid: bool)
     ensures valid <==> schema@ == "chrono-cache/v2"@,
 {

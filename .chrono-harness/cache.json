@@ -1097,7 +1097,8 @@
       "source_inputs": [
         "ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-ci": {
       "owner": "judge-ci",
@@ -1156,7 +1157,8 @@
       "source_inputs": [
         "judge-ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.runner": {
       "owner": "runner",
@@ -1214,7 +1216,8 @@
       "source_inputs": [
         "runner.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.worktree": {
       "owner": "worktree",
@@ -1278,7 +1281,8 @@
       "source_inputs": [
         "worktree.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.runner-tests": {
       "owner": "runner-tests",
@@ -1325,7 +1329,8 @@
       "source_inputs": [
         "runner-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.instructions": {
       "owner": "instructions",
@@ -1368,7 +1373,8 @@
       "source_inputs": [
         "instructions.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.instructions-tests": {
       "owner": "instructions-tests",
@@ -1413,7 +1419,8 @@
       "source_inputs": [
         "instructions-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-ci-tests": {
       "owner": "judge-ci-tests",
@@ -1472,7 +1479,8 @@
       "source_inputs": [
         "judge-ci-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.ci-tests": {
       "owner": "ci-tests",
@@ -1533,7 +1541,8 @@
       "source_inputs": [
         "ci-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-registration": {
       "owner": "judge-registration",
@@ -1589,7 +1598,8 @@
       "source_inputs": [
         "judge-registration.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-registration-tests": {
       "owner": "judge-registration-tests",
@@ -1638,7 +1648,8 @@
       "source_inputs": [
         "judge-registration-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-filemap": {
       "owner": "judge-filemap",
@@ -1696,7 +1707,8 @@
       "source_inputs": [
         "judge-filemap.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-filemap-tests": {
       "owner": "judge-filemap-tests",
@@ -1749,7 +1761,8 @@
       "source_inputs": [
         "judge-filemap-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-projects": {
       "owner": "judge-projects",
@@ -1809,7 +1822,8 @@
       "source_inputs": [
         "judge-projects.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-routes": {
       "owner": "judge-routes",
@@ -1868,7 +1882,8 @@
       "source_inputs": [
         "judge-routes.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-routes-tests": {
       "owner": "judge-routes-tests",
@@ -1923,7 +1938,8 @@
       "source_inputs": [
         "judge-routes-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-projects-tests": {
       "owner": "judge-projects-tests",
@@ -1980,7 +1996,8 @@
       "source_inputs": [
         "judge-projects-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-cost": {
       "owner": "judge-cost",
@@ -2038,7 +2055,8 @@
       "source_inputs": [
         "judge-cost.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-cost-tests": {
       "owner": "judge-cost-tests",
@@ -2093,7 +2111,8 @@
       "source_inputs": [
         "judge-cost-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-mixed": {
       "owner": "judge-mixed",
@@ -2146,7 +2165,8 @@
       "source_inputs": [
         "judge-mixed.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-mixed-tests": {
       "owner": "judge-mixed-tests",
@@ -2201,7 +2221,8 @@
       "source_inputs": [
         "judge-mixed-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.inputs": {
       "owner": "inputs",
@@ -2259,7 +2280,8 @@
       "source_inputs": [
         "inputs.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-workflow": {
       "owner": "judge-workflow",
@@ -2319,7 +2341,8 @@
       "source_inputs": [
         "judge-workflow.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-workflow-tests": {
       "owner": "judge-workflow-tests",
@@ -2378,7 +2401,8 @@
       "source_inputs": [
         "judge-workflow-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.inputs-tests": {
       "owner": "inputs-tests",
@@ -2435,7 +2459,8 @@
       "source_inputs": [
         "inputs-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.distribution": {
       "owner": "distribution",
@@ -2482,7 +2507,8 @@
       "source_inputs": [
         "distribution.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.distribution-tests": {
       "owner": "distribution-tests",
@@ -2531,7 +2557,8 @@
       "source_inputs": [
         "distribution-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.worktree-tests": {
       "owner": "worktree-tests",
@@ -2592,7 +2619,8 @@
       "source_inputs": [
         "worktree-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.diagnostics": {
       "owner": "diagnostics",
@@ -2635,7 +2663,8 @@
       "source_inputs": [
         "diagnostics.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.diagnostics-tests": {
       "owner": "diagnostics-tests",
@@ -2680,7 +2709,8 @@
       "source_inputs": [
         "diagnostics-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.cache": {
       "owner": "cache",
@@ -2730,7 +2760,8 @@
         "cache.sources"
       ],
       "restore": "compatible",
-      "verify_contents": true
+      "verify_contents": true,
+      "refresh_sources": true
     },
     "check.cache-tests": {
       "owner": "cache-tests",
@@ -2782,7 +2813,8 @@
         "cache-tests.sources"
       ],
       "restore": "compatible",
-      "verify_contents": true
+      "verify_contents": true,
+      "refresh_sources": true
     },
     "release.linux.release.runner": {
       "owner": "runner",
@@ -2823,7 +2855,8 @@
       "source_inputs": [
         "runner.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.instructions": {
       "owner": "instructions",
@@ -2862,7 +2895,8 @@
       "source_inputs": [
         "instructions.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-ci": {
       "owner": "judge-ci",
@@ -2915,7 +2949,8 @@
       "source_inputs": [
         "judge-ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.ci": {
       "owner": "ci",
@@ -2970,7 +3005,8 @@
       "source_inputs": [
         "ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-registration": {
       "owner": "judge-registration",
@@ -3013,7 +3049,8 @@
       "source_inputs": [
         "judge-registration.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-filemap": {
       "owner": "judge-filemap",
@@ -3060,7 +3097,8 @@
       "source_inputs": [
         "judge-filemap.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-routes": {
       "owner": "judge-routes",
@@ -3109,7 +3147,8 @@
       "source_inputs": [
         "judge-routes.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-projects": {
       "owner": "judge-projects",
@@ -3160,7 +3199,8 @@
       "source_inputs": [
         "judge-projects.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-cost": {
       "owner": "judge-cost",
@@ -3209,7 +3249,8 @@
       "source_inputs": [
         "judge-cost.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-mixed": {
       "owner": "judge-mixed",
@@ -3254,7 +3295,8 @@
       "source_inputs": [
         "judge-mixed.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.judge-workflow": {
       "owner": "judge-workflow",
@@ -3307,7 +3349,8 @@
       "source_inputs": [
         "judge-workflow.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.inputs": {
       "owner": "inputs",
@@ -3358,7 +3401,8 @@
       "source_inputs": [
         "inputs.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.distribution": {
       "owner": "distribution",
@@ -3401,7 +3445,8 @@
       "source_inputs": [
         "distribution.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.worktree": {
       "owner": "worktree",
@@ -3456,7 +3501,8 @@
       "source_inputs": [
         "worktree.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.distribution-tests": {
       "owner": "distribution-tests",
@@ -3501,7 +3547,8 @@
       "source_inputs": [
         "distribution-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.worktree-tests": {
       "owner": "worktree-tests",
@@ -3558,7 +3605,8 @@
       "source_inputs": [
         "worktree-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.runner-tests": {
       "owner": "runner-tests",
@@ -3601,7 +3649,8 @@
       "source_inputs": [
         "runner-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.inputs-tests": {
       "owner": "inputs-tests",
@@ -3654,7 +3703,8 @@
       "source_inputs": [
         "inputs-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.ci-tests": {
       "owner": "ci-tests",
@@ -3711,7 +3761,8 @@
       "source_inputs": [
         "ci-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-ci-tests": {
       "owner": "judge-ci-tests",
@@ -3766,7 +3817,8 @@
       "source_inputs": [
         "judge-ci-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-registration-tests": {
       "owner": "judge-registration-tests",
@@ -3811,7 +3863,8 @@
       "source_inputs": [
         "judge-registration-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-projects-tests": {
       "owner": "judge-projects-tests",
@@ -3864,7 +3917,8 @@
       "source_inputs": [
         "judge-projects-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-workflow-tests": {
       "owner": "judge-workflow-tests",
@@ -3919,7 +3973,8 @@
       "source_inputs": [
         "judge-workflow-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.instructions-tests": {
       "owner": "instructions-tests",
@@ -3960,7 +4015,8 @@
       "source_inputs": [
         "instructions-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-filemap-tests": {
       "owner": "judge-filemap-tests",
@@ -4009,7 +4065,8 @@
       "source_inputs": [
         "judge-filemap-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-routes-tests": {
       "owner": "judge-routes-tests",
@@ -4060,7 +4117,8 @@
       "source_inputs": [
         "judge-routes-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-cost-tests": {
       "owner": "judge-cost-tests",
@@ -4111,7 +4169,8 @@
       "source_inputs": [
         "judge-cost-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.judge-mixed-tests": {
       "owner": "judge-mixed-tests",
@@ -4162,7 +4221,8 @@
       "source_inputs": [
         "judge-mixed-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.diagnostics-tests": {
       "owner": "diagnostics-tests",
@@ -4203,7 +4263,8 @@
       "source_inputs": [
         "diagnostics-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.release.cache": {
       "owner": "cache",
@@ -4246,7 +4307,8 @@
       "source_inputs": [
         "cache.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.linux.verify.cache-tests": {
       "owner": "cache-tests",
@@ -4291,7 +4353,8 @@
       "source_inputs": [
         "cache-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.runner": {
       "owner": "runner",
@@ -4333,7 +4396,8 @@
       "source_inputs": [
         "runner.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.instructions": {
       "owner": "instructions",
@@ -4373,7 +4437,8 @@
       "source_inputs": [
         "instructions.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-ci": {
       "owner": "judge-ci",
@@ -4427,7 +4492,8 @@
       "source_inputs": [
         "judge-ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.ci": {
       "owner": "ci",
@@ -4483,7 +4549,8 @@
       "source_inputs": [
         "ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-registration": {
       "owner": "judge-registration",
@@ -4527,7 +4594,8 @@
       "source_inputs": [
         "judge-registration.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-filemap": {
       "owner": "judge-filemap",
@@ -4575,7 +4643,8 @@
       "source_inputs": [
         "judge-filemap.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-routes": {
       "owner": "judge-routes",
@@ -4625,7 +4694,8 @@
       "source_inputs": [
         "judge-routes.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-projects": {
       "owner": "judge-projects",
@@ -4677,7 +4747,8 @@
       "source_inputs": [
         "judge-projects.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-cost": {
       "owner": "judge-cost",
@@ -4727,7 +4798,8 @@
       "source_inputs": [
         "judge-cost.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-mixed": {
       "owner": "judge-mixed",
@@ -4773,7 +4845,8 @@
       "source_inputs": [
         "judge-mixed.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.judge-workflow": {
       "owner": "judge-workflow",
@@ -4827,7 +4900,8 @@
       "source_inputs": [
         "judge-workflow.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.inputs": {
       "owner": "inputs",
@@ -4879,7 +4953,8 @@
       "source_inputs": [
         "inputs.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.distribution": {
       "owner": "distribution",
@@ -4923,7 +4998,8 @@
       "source_inputs": [
         "distribution.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.worktree": {
       "owner": "worktree",
@@ -4979,7 +5055,8 @@
       "source_inputs": [
         "worktree.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.distribution-tests": {
       "owner": "distribution-tests",
@@ -5025,7 +5102,8 @@
       "source_inputs": [
         "distribution-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.worktree-tests": {
       "owner": "worktree-tests",
@@ -5083,7 +5161,8 @@
       "source_inputs": [
         "worktree-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.runner-tests": {
       "owner": "runner-tests",
@@ -5127,7 +5206,8 @@
       "source_inputs": [
         "runner-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.inputs-tests": {
       "owner": "inputs-tests",
@@ -5181,7 +5261,8 @@
       "source_inputs": [
         "inputs-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.ci-tests": {
       "owner": "ci-tests",
@@ -5239,7 +5320,8 @@
       "source_inputs": [
         "ci-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-ci-tests": {
       "owner": "judge-ci-tests",
@@ -5295,7 +5377,8 @@
       "source_inputs": [
         "judge-ci-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-registration-tests": {
       "owner": "judge-registration-tests",
@@ -5341,7 +5424,8 @@
       "source_inputs": [
         "judge-registration-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-projects-tests": {
       "owner": "judge-projects-tests",
@@ -5395,7 +5479,8 @@
       "source_inputs": [
         "judge-projects-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-workflow-tests": {
       "owner": "judge-workflow-tests",
@@ -5451,7 +5536,8 @@
       "source_inputs": [
         "judge-workflow-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.instructions-tests": {
       "owner": "instructions-tests",
@@ -5493,7 +5579,8 @@
       "source_inputs": [
         "instructions-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-filemap-tests": {
       "owner": "judge-filemap-tests",
@@ -5543,7 +5630,8 @@
       "source_inputs": [
         "judge-filemap-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-routes-tests": {
       "owner": "judge-routes-tests",
@@ -5595,7 +5683,8 @@
       "source_inputs": [
         "judge-routes-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-cost-tests": {
       "owner": "judge-cost-tests",
@@ -5647,7 +5736,8 @@
       "source_inputs": [
         "judge-cost-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.judge-mixed-tests": {
       "owner": "judge-mixed-tests",
@@ -5699,7 +5789,8 @@
       "source_inputs": [
         "judge-mixed-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.diagnostics-tests": {
       "owner": "diagnostics-tests",
@@ -5741,7 +5832,8 @@
       "source_inputs": [
         "diagnostics-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.release.cache": {
       "owner": "cache",
@@ -5785,7 +5877,8 @@
       "source_inputs": [
         "cache.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "release.macos.verify.cache-tests": {
       "owner": "cache-tests",
@@ -5831,7 +5924,8 @@
       "source_inputs": [
         "cache-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-workflow-tests.judge-workflow-units": {
       "owner": "judge-workflow-tests",
@@ -5890,7 +5984,8 @@
       "source_inputs": [
         "judge-workflow-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.judge-workflow-tests.judge-workflow-short": {
       "owner": "judge-workflow-tests",
@@ -5949,7 +6044,8 @@
       "source_inputs": [
         "judge-workflow-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "check.worktree-tests.worktree-adoption": {
       "owner": "worktree-tests",
@@ -6010,7 +6106,8 @@
       "source_inputs": [
         "worktree-tests.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "detect.ci": {
       "owner": "ci",
@@ -6067,7 +6164,8 @@
       "source_inputs": [
         "ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "detect.runner": {
       "owner": "runner",
@@ -6110,7 +6208,8 @@
       "source_inputs": [
         "runner.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "detect.judge-ci": {
       "owner": "judge-ci",
@@ -6165,7 +6264,8 @@
       "source_inputs": [
         "judge-ci.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "detect.worktree": {
       "owner": "worktree",
@@ -6222,7 +6322,8 @@
       "source_inputs": [
         "worktree.sources"
       ],
-      "restore": "compatible"
+      "restore": "compatible",
+      "refresh_sources": true
     },
     "verus.archive": {
       "owner": "repository",

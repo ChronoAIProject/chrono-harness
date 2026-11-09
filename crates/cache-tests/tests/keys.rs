@@ -317,6 +317,7 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
     config["recover_unconfirmed_restores"] = json!(false);
     for cache in config["caches"].as_object_mut().unwrap().values_mut() {
         cache["verify_contents"] = json!(false);
+        cache["refresh_sources"] = json!(false);
     }
     for input in config["inputs"].as_object_mut().unwrap().values_mut() {
         *input = json!({"kind":"literal","value":"fixture-only input observation"});
@@ -1034,6 +1035,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     config["recover_unconfirmed_restores"] = json!(false);
     for cache in config["caches"].as_object_mut().unwrap().values_mut() {
         cache["verify_contents"] = json!(false);
+        cache["refresh_sources"] = json!(false);
     }
     // Vary actual host policy files while keeping unrelated compiler/source
     // observations fixed; this contract fixture needs no compiler or SDK probes.
@@ -1308,6 +1310,11 @@ fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality(
 #[test]
 fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_domain() {
     let (root, mut config) = host_cache_fixture(&["check.unit_cache"]);
+    fs::create_dir_all(root.path().join(".git")).unwrap();
+    config["require_primary_checkout"] = json!(true);
+    config["recover_failed_restores"] = json!(true);
+    config["recover_unconfirmed_restores"] = json!(true);
+    config["caches"]["check.cache"]["refresh_sources"] = json!(true);
     let project = root.path().join("crates/cache");
     fs::create_dir_all(project.join("src")).unwrap();
     fs::write(project.join("Cargo.toml"), "[package]\nname = \"cache-compiler-acceptance\"\nversion = \"0.1.0\"\nedition = \"2024\"\n").unwrap();
@@ -1363,11 +1370,19 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
     .unwrap();
     let before = plan(root.path(), &config, "check.unit_cache").unwrap();
     assert_eq!(build(), b"original\n");
+    let incremental = project.join("target/debug/incremental/retained-input");
+    fs::write(&incremental, b"retain incremental state").unwrap();
     fs::write(
         project.join("src/main.rs"),
         "fn main() { println!(\"candidate-output\"); }\n",
     )
     .unwrap();
+    // A restored build can be newer than the checkout's changed source.
+    // Cargo's timestamp shortcut must not leave the old program in use.
+    fs::File::open(project.join("src/main.rs"))
+        .unwrap()
+        .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1))
+        .unwrap();
     let after = plan(root.path(), &config, "check.unit_cache").unwrap();
     assert_ne!(
         before["caches"]["check.cache"]["key"],
@@ -1377,7 +1392,35 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         before["caches"]["check.cache"]["restore_keys"],
         after["caches"]["check.cache"]["restore_keys"]
     );
+    fs::create_dir_all(root.path().join(".chrono-harness/state/restore")).unwrap();
+    for (path, value) in [
+        (".chrono-harness/cache.json", &config),
+        (".chrono-harness/state/restore/plan.json", &after),
+    ] {
+        fs::write(root.path().join(path), serde_json::to_vec(value).unwrap()).unwrap();
+    }
+    let steps: serde_json::Map<String, Value> = after["caches"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .enumerate()
+        .map(|(index, id)| {
+            let restore = if id == "check.cache" {
+                json!({"outcome":"success","outputs":{"cache-matched-key":before["caches"][id]["key"]}})
+            } else {
+                json!({"outcome":"skipped"})
+            };
+            (format!("cache_{index}_restore"), restore)
+        })
+        .collect();
+    let restored = recovery::recover(root.path(), &json!(steps));
+    assert!(
+        restored.status.success(),
+        "{}",
+        String::from_utf8_lossy(&restored.stderr)
+    );
     assert_eq!(build(), b"candidate-output\n");
+    assert_eq!(fs::read(incremental).unwrap(), b"retain incremental state");
     assert!(
         fs::read_dir(project.join("target/debug/incremental"))
             .unwrap()

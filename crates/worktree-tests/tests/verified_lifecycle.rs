@@ -20,6 +20,32 @@ fn expect(actual: bool)
     if !actual { panic!(); }
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn reusable_outputs_wait_for_release_and_evidence_keeps_its_own_permission() {
+    use policy::Disposition::*;
+    expect(policy::select_artifact(&Dispose, false, false));
+    expect(policy::select_artifact(&Dispose, true, true));
+    expect(!policy::select_artifact(&FinishDispose, false, false));
+    expect(!policy::select_artifact(&FinishDispose, false, true));
+    expect(policy::select_artifact(&FinishDispose, true, false));
+    expect(policy::select_artifact(&FinishDispose, true, true));
+    expect(!policy::select_artifact(&Retain, false, false));
+    expect(!policy::select_artifact(&Retain, true, true));
+    expect(!policy::select_artifact(&EvidenceRetain, true, false));
+    expect(policy::select_artifact(&EvidenceRetain, false, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_requests_bind_only_the_requested_cache_generation() {
+    expect(!policy::reusable_release(false, 7, None));
+    expect(policy::reusable_release(false, 7, Some(7)));
+    expect(!policy::reusable_release(false, 8, Some(7)));
+    expect(!policy::reusable_release(false, 7, Some(8)));
+    expect(policy::reusable_release(true, 7, None));
+    expect(policy::reusable_release(true, 8, Some(7)));
+    expect(policy::reusable_release(false, u64::MAX, Some(u64::MAX)));
+}
+
 fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)
     requires actual == expected,
 {
