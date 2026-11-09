@@ -2156,6 +2156,21 @@
       "lockfile": "crates/worktree-tests/Cargo.lock",
       "root": "crates/worktree-tests",
       "actions": {
+        "execute_enrollment_originals": {
+          "operation": "test.worktree.enrollment-originals",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--test",
+            "creation",
+            "automatic::enrollment_originals_",
+            "--",
+            "--test-threads=1"
+          ]
+        },
         "format_check": {
           "operation": "fmt.worktree-tests",
           "tool": "cargo",

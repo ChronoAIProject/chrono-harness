@@ -21,6 +21,18 @@ impl EnrollmentOriginalsFixture {
         fs::create_dir(root.join(".git")).unwrap();
         let fixture = root.join("git-fixture.json");
         let mut registered = values();
+        registered.get_mut(CONFIG).unwrap()["schema_version"] = value!(4);
+        registered.get_mut(CONFIG).unwrap()["facts_git"] = value!({"tool":"git"});
+        registered.get_mut(CONFIG).unwrap()["tools"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!({
+                "id":"git","program":env!("CARGO_BIN_EXE_chrono-worktree-test-git"),
+                "resolution":"PATH-once","version_argv":["--version"],"expected_version":null
+            }));
+        registered.get_mut(CONFIG).unwrap()["environment"]["values"] = value!({
+            "HOME":root,"CHRONO_TEST_GIT_FIXTURE":fixture
+        });
         registered.get_mut(PROJECTS).unwrap()["owners"] = value!(["host"]);
         registered.get_mut(PROJECTS).unwrap()["projects"] = value!([]);
         registered.get_mut(FM).unwrap()["project_edges"] = value!([]);

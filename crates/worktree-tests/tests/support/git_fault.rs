@@ -763,6 +763,10 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
             );
         }
         ["show", spec] => io::stdout().write_all(&blob(spec)).unwrap(),
+        ["--literal-pathspecs", "ls-files", "-z", "--", path]
+        | ["--literal-pathspecs", "ls-tree", "-rz", "HEAD", "--", path] => {
+            assert!(path.starts_with(".chrono-harness/state/"));
+        }
         ["cat-file", mode @ ("--batch-check" | "--batch")] => {
             let mut input = String::new();
             io::stdin().read_to_string(&mut input).unwrap();
