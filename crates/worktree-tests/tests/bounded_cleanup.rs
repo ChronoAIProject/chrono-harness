@@ -95,12 +95,18 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     for _ in 0..8 {
         let round = inventory().maintain_originals(&ids).unwrap();
         for error in round["accounting_errors"].as_array().unwrap() {
-            assert!(
-                error["reason"].as_str().is_some_and(|reason| {
-                    reason.starts_with("retention output metadata is busy: output-")
-                }),
-                "{round}"
-            );
+            let reason = error["reason"].as_str().unwrap();
+            let busy_metadata = reason
+                .strip_prefix("retention output metadata is busy: ")
+                .is_some_and(|id| ids.iter().any(|expected| expected == id));
+            let busy_path = reason
+                .strip_prefix("retention path is busy: ")
+                .is_some_and(|path| {
+                    [&old["intent"]["path"], &old["path"]]
+                        .iter()
+                        .any(|expected| expected.as_str() == Some(path))
+                });
+            assert!(busy_metadata || busy_path, "{round}");
         }
         rounds.push(round);
         if [&old["intent"]["path"], &old["path"]]
