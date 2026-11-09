@@ -266,7 +266,7 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `check.*`。detector 兼容输入不含自身 bootstrap 不消费的检查政策。导入 startup 验证不是编译生产者，不能取得 `save_after_bootstrap` 资格。各消费者证据保留原生产报告和明确导入来源；startup 二进制不进入证据上传。传输成本单独测量，绑定源码的产物不证明构建输入来源完整。
 
-发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Python 发布集成回归覆盖真实 CLI 的 plan／recover／staging，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
+发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Rust 发布集成回归覆盖真实 CLI 的 plan／recover／staging，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
 
 <a id="retired-remote-acceptance-controls"></a>
 
@@ -276,8 +276,6 @@ detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `che
 
 已有 `check.unit_cache` 仍计划、恢复两项登记编译归档，核 `producer-manifest/v1` 内容，通过普通恢复丢弃不可用宿主输出，执行原候选构建／测试，封存成功生产输出并经原生 action 保存。保存仍受必需生产者／封存 outcome 限制。原生 action 日志及恢复原件保留实际结果和原失败，其他构建／发布缓存行为不变。
 
-历史证据仍绑定精确 source／run／attempt。Variables GET／list HTTP 403 是真实历史失败。后续有限 C1 观察记录两项坏内容保存／恢复／拒绝、重建和替换缓存，但原兼容范围健康精确命中未达成：所选 rustup 身份改变，最新 collection 返回 HTTP 502。
-
-这些只是部分观察；删除控制层不会重跑或完成验收。原记录、输出、提交和证据继续由原保管者保留。旧 fixture 及有限调用步骤可从保留源码 `f52442addfa3079f644cc7be59809a4ca6e756d5` 复现，但不是现役指令。
+删除控制层不代表缓存验收完成。修复后在原兼容范围健康精确命中仍未完整验收；当前缺口见[覆盖表](spec-coverage.md)。历史过程从 Git、原 PR／CI 查询，不在当前说明维护运行状态或旧测试入口；原记录、输出和必要证据继续按其保管者的保留政策处理。
 
 普通执行不再需要激活进程／API 请求。删除该层移除读取器、fixture、响应／intent 证据 IO 及专用测试；原生耗时、传输、存储和总生命周期收益未测。现有同语言内容／恢复、无效输入、provider 回归，以及按登记变更范围选择的标准检查仍为必需。原生验收、并发、其他消费者采用、完整输入、同判和实际交付仍分别未完成。
