@@ -107,17 +107,9 @@ fn copy_tree(source: &Path, destination: &Path) {
 }
 
 fn full_units_api(data: &Value, args: &[std::ffi::OsString]) -> ExitCode {
-    let run = |unit: &str| {
-        json!({"id":if unit == "one" {1} else {2},"run_attempt":1,
-            "status":"completed","conclusion":"success","head_sha":data["candidate"],
-            "event":"push","path":format!(".github/workflows/{unit}.yml")})
-    };
     if args[0] == "api" {
         let endpoint = args[1].to_str().unwrap();
-        if let Some((_, address)) = endpoint.split_once("/actions/workflows/") {
-            let unit = address.split(".yml").next().unwrap();
-            emit(&json!([{"workflow_runs":[run(unit)]}]));
-        } else if let Some((_, address)) = endpoint.split_once("/contents/") {
+        if let Some((_, address)) = endpoint.split_once("/contents/") {
             let path = address.split('?').next().unwrap();
             io::stdout()
                 .write_all(
@@ -125,15 +117,29 @@ fn full_units_api(data: &Value, args: &[std::ffi::OsString]) -> ExitCode {
                         .unwrap(),
                 )
                 .unwrap();
+        } else if endpoint.contains("/jobs?") {
+            let mut rows = vec![
+                json!({"id":200,"run_id":101,"run_attempt":1,"name":"Detect registered DELTA","status":"completed","conclusion":"success","head_sha":data["candidate"]}),
+            ];
+            for (index, id) in ["one", "two"].iter().enumerate() {
+                rows.push(json!({"id":201+index,"run_id":101,"run_attempt":1,"name":format!("Full {id}"),"status":"completed","conclusion":"success","head_sha":data["candidate"]}));
+            }
+            emit(&json!([{"jobs":rows}]));
+        } else if endpoint.contains("/artifacts?") {
+            let rows: Vec<_> = ["one","two"].iter().enumerate().map(|(i,id)| json!({"id":300+i,"name":data["productions"][*id]["artifact"],"expired":false,"workflow_run":{"id":101,"head_sha":data["candidate"]},"archive_download_url":format!("https://api.github.com/repos/fixture/full/actions/artifacts/{}/zip",300+i)})).collect();
+            emit(&json!([{"artifacts":rows}]));
         } else {
-            emit(&run(if endpoint.ends_with("/1") {
-                "one"
-            } else {
-                "two"
-            }));
+            emit(
+                &json!({"id":101,"run_attempt":1,"head_sha":data["candidate"],"event":"push","path":".github/workflows/collection.yml","repository":{"full_name":"fixture/full"}}),
+            );
         }
     } else {
-        let unit = if args[2] == "1" { "one" } else { "two" };
+        let at = args.iter().position(|arg| arg == "--name").unwrap();
+        let name = args[at + 1].to_str().unwrap();
+        let unit = ["one", "two"]
+            .into_iter()
+            .find(|id| data["productions"][*id]["artifact"] == name)
+            .unwrap();
         let position = args.iter().position(|arg| arg == "--dir").unwrap();
         copy_tree(
             &Path::new(data["uploads"].as_str().unwrap()).join(unit),

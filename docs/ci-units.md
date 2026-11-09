@@ -1,6 +1,6 @@
 # 独立 CI 单元
 
-`chrono-ci-check/v3` 明确把每个登记测试计划分配给一个单元。按范围 `chrono-github-units/v1` 和完整 `/v2` 可明确选择 `job_gating`。本产品宿主已采用：一个父工作流内运行一个检测 job、按需运行的独立单元 job、始终运行的汇总。各单元仍有独立检出、名称、runner、bootstrap、超时、上下文、上传和重跑；产品不解释宿主语言或布局。
+`chrono-ci-check/v3` 明确把每个登记测试计划分配给一个单元。按范围 `chrono-github-units/v1` 和完整 `/v2` 必须明确登记 `job_gating`：一个父工作流内运行一个检测 job、按需运行的独立单元 job、始终运行的汇总。各单元仍有独立检出、名称、runner、bootstrap、超时、上下文、上传和重跑；产品不解释宿主语言或布局。
 
 ## 显式测试清单
 
@@ -28,7 +28,7 @@ projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。�
 
 CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
 
-未选 `job_gating` 的 provider 保留原独立工作流及证据合同。安装二进制或 init 不自动采用。此源码修正不宣称已公开发布或通过真实 Actions；早期 beta.12–19 证据保留原范围。
+现役单元 provider 只生成父工作流。独立工作流拓扑及其虚拟单元地址、等待／轮询参数已退役。外部旧示例仍绑定旧发布；它们的运行事实直接查原提交与 CI，不要求现役源码继续支持旧拓扑。缺少调度声明或带已退役字段的配置会在写入输出前拒绝。公开新版本和宿主升级仍须分别验收。
 
 ## 短命令与单元输入
 
@@ -92,7 +92,7 @@ registration／input 统一负责真实单元验证、`chrono-inputs capture --u
 
 `detect` 为每个登记单元输出布尔值。单元 `needs: detect`，在 job 层 `if` 判断该值；无关 job 不分配 runner，也不 bootstrap 或准备 SDK。`aggregate` 使用 `if: always()`，依赖 detector 和全部单元。不生成工作流级 `paths`／`paths-ignore`，也不用 matrix fail-fast 联动单元失败。
 
-provider 的可选 `job_gating` 字段登记 detector 的平台、时限、bootstrap 和源码获取范围。本仓的当前声明见 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json)，沿已登记的 Rust bootstrap 启动，不在本文维护第二份配方。
+provider 的必需 `job_gating` 字段登记 detector 的平台、时限、bootstrap 和源码获取范围。本仓的当前声明见 [.chrono-harness/ci/units.json](../.chrono-harness/ci/units.json)，沿已登记的 Rust bootstrap 启动，不在本文维护第二份配方。
 
 此形式要求 collection provider v4。内部生成命令 `chrono-ci detect --host-root . --config SOURCE --github-output "$GITHUB_OUTPUT"` 自读事件及原生绑定，不加日常标志或手动准备。实际检查仍为 `chrono-harness check`、`check --unit ID`、`check --collect`。
 
@@ -144,7 +144,7 @@ Rust provider 拒绝检测失败／取消／缺失，以及任一选中单元失
 
 API job 身份和 `run_attempt` 可能描述沿用工作，不能据此造产物名。gather 将原 context／run／attempt／job 和两个摘要与 production 输出核对。后续失败／跳过不能用早先成功替代；父 attempt 漂移、产物不符／缺失均失败。原进程字节、源码 SHA／revision、事件／端点、报告摘要、执行物身份及上传／来源根映射继续绑定并判断。
 
-同一父运行的一次 gather 只读取一份完整分页产物清单，以及该固定 revision 的工作流原字节；逐个单元仍核唯一产物、仓库／run／candidate、生产 attempt、上下文和报告摘要。观察只保存在本次调用内，不跨运行共享。全部下载与原件检查结束后、发布 manifest 前，重新核父运行身份和 attempt；该核验仍计入末个产物原有的累计期限与流上限。没有选中单元时不读取产物清单或源码。独立工作流继续分别绑定其运行和源码。
+同一父运行的一次 gather 只读取一份完整分页产物清单，以及该固定 revision 的工作流原字节；逐个单元仍核唯一产物、仓库／run／candidate、生产 attempt、上下文和报告摘要。观察只保存在本次调用内，不跨运行共享。全部下载与原件检查结束后、发布 manifest 前，重新核父运行身份和 attempt；该核验仍计入末个产物原有的累计期限与流上限。没有选中单元时不读取产物清单或源码。
 
 Rust 行为回归验证单／多／零单元及重复汇总的请求次数，跨页末个产物缺失、歧义或错误绑定，以及最后下载后父 attempt 漂移时拒绝发布，并保留已下载报告原字节。这里只约束显式启动的传输进程；CLI 内部网络请求、完整执行耗时和计费成本仍需实际观察。
 
@@ -162,7 +162,7 @@ full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语�
 
 拓扑变更用已有明确 `migrate`，提供精确旧 provider 快照和新来源。写入前核旧生成结果／新冲突，保留定制，只退役旧快照拥有的输出，同时更新宿主 FILEMAP 和明确消费者。
 
-采用 `job_gating` 时，准备／源码检查绑定 `collection.workflow_path`，单独声明的单元地址不使普通生成器拥有未启用工作流。gather wait／poll 设置保留独立工作流含义，此父工作流传输不轮询，不用它们。
+准备和源码检查只绑定真实的 `collection.workflow_path`。单元配置没有独立工作流地址，gather 没有等待／轮询参数；汇总在原生 needs 完成后取得原报告，不等待自身所属的父运行结束。
 
 这样去掉重复迁移逻辑，以及普通生成时额外渲染／读取旧拓扑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。旧 ci-host 和已发布 Go／TS／mix provider 在公开二进制可用、调用方明确迁移前保留历史形式。
 
@@ -298,8 +298,8 @@ v2 的 `report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总�
 | 部分 | 声明内容 |
 | --- | --- |
 | `collection` | 当前 `chrono-github-ci/v4` provider，含共同事件、action、runner、generator、检查 profile，以及汇总的路径／名称／bootstrap／runner／产物 |
-| `units` | 键与检查 profile 完全相同；每项声明 `workflow_path`、`name`、`runs_on`、`timeout_minutes`、`bootstrap`、`context_path`、`artifact_directory` |
-| `gather` | GitHub CLI `program`、`inherit_environment`、`credential_environment`、字面 `environment`、进程 `timeout_seconds`／`output_limit_bytes`、总体 `wait_seconds`／`poll_seconds`，以及明确 `manifest_path`／`download_directory`／`report_path` |
+| `units` | 键与检查 profile 完全相同；每项声明 `name`、`runs_on`、`timeout_minutes`、`bootstrap`、`context_path`、`artifact_directory` |
+| `gather` | GitHub CLI `program`、`inherit_environment`、`credential_environment`、字面 `environment`、进程 `timeout_seconds`／`output_limit_bytes`，以及明确 `manifest_path`／`download_directory`／`report_path` |
 
 ### 可选下载重试
 
@@ -333,9 +333,9 @@ GitHub 当前 attempt 的 API 视图可能含沿用结果，新 job ID 不证明
 
 汇总检查仍取得并保留实际用于运行归属、job、artifact 和报告核验的原响应。只退役额外的资源投影，不以成本观察替代原生失败、传输准入或最终判词。
 
-### 配置、凭据与独立工作流
+### 配置、凭据与父工作流
 
-bootstrap 列表为字面 argv，只登记单元所需工具，生成器不推断包、语言准备或构建依赖。报告／上下文须在本单元上传目录，工作流路径和名称唯一。生成前预检全部输出，不覆盖无所有权文件。文件系统失败如实报告，不声称多文件事务。移除路径须由宿主与登记一起明确退役。
+bootstrap 列表为字面 argv，只登记单元所需工具，生成器不推断包、语言准备或构建依赖。报告／上下文须在本单元上传目录，父工作流路径明确，各 job 名称唯一。生成前预检输出，不覆盖无所有权文件。文件系统失败如实报告，不声称多文件事务。移除路径须由宿主与登记一起明确退役。
 
 ```sh
 chrono-ci init --host-root . --config /path/to/units.json
@@ -347,11 +347,11 @@ init 使用 `.chrono-harness/ci/units.json`，保留已有来源；要求已登�
 
 push／pull_request 准备将生成 provider、工作流、profile 绑定候选，记录精确标准 argv 和执行前 runner／judge 身份。汇总工作流有 `actions: read`，`check --collect` 的原生输入程序在内部收集报告，按登记接收 `GH_TOKEN`；独立 `chrono-ci gather` CLI 已退役。凭据环境键须明确声明，传输报告省略其值，保留非秘密进程原字节、退出／失败和真实环境身份。不得把凭据作为字面传输值。
 
-独立工作流 gather 在登记上限内等待 candidate／event 的每个运行，固定实际 attempt，下载对应产物，核固定上下文和真实工作流源码，再复核 attempt。运行缺失、歧义、变化或失败都使汇总失败，下载原报告保留。manifest 在同一标准 `check --collect` 成功前为 `gathered-unjudged`。
+gather 根据固定 detection 和原生 needs 选择必需单元，核原生产 attempt、父运行和工作流源码，下载原始产物后再核父运行身份。运行缺失、歧义、变化或失败都使汇总失败，下载原报告保留。manifest 在同一标准 `check --collect` 成功前为 `gathered-unjudged`。
 
-单元失败不取消无关工作流，重试单元不重跑其他单元，之后重试汇总收集新固定 attempt。自动汇总当前支持 push／pull_request；单元还支持明确手动输入，手动组合用明确 manifest 和本地汇总命令。汇总不暴露不支持的手动触发。
+单元失败不取消无关 job，重试单元不重跑其他已成功单元，之后重试汇总按原生产声明收集报告。自动汇总支持 push／pull_request。需要本地组合时使用明确 manifest 和本地汇总命令，父工作流不暴露手动触发。
 
-重试不覆盖已有汇总输出，原生重试用新检出。工作流源码／端点不符仍错误，包括移动 integration 基线在不同工作流准备期间变化。
+重试不覆盖已有汇总输出，原生重试用新检出。工作流源码／端点不符仍错误，包括准备时的固定端点与登记不一致。
 
 源码行为测试用独立克隆宿主中的真实候选二进制，覆盖并发、离线汇总、合成 GitHub 响应。公开 Go／TS／mix [示例](examples.md)使用独立原生工作流，已核本地／integration／PR／dev、真实取消及选择性重试、业务失败同时其他单元通过、恢复后零业务选择。首次清单仍是独立合同。
 

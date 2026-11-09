@@ -39,31 +39,7 @@ fn parent_generation_uses_only_current_projection_ownership() {
 }
 
 #[test]
-fn parent_generation_requires_explicit_topology_migration() {
-    let h = ShortHost::new();
-    let paths = [
-        ".github/workflows/collection.yml",
-        ".github/workflows/alpha.yml",
-        ".github/workflows/beta.yml",
-    ];
-    let previous = paths.map(|path| fs::read(h.root.join(path)).unwrap());
-    let mut next: Value =
-        serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
-    next["job_gating"] = gating();
-    json_file(&h.root, PROVIDER, &next);
-    let source = fs::read(h.root.join(PROVIDER)).unwrap();
-
-    for verify in [true, false] {
-        assert!(generate(&h.root, PROVIDER, verify).is_err());
-        for (path, bytes) in paths.iter().zip(&previous) {
-            assert_eq!(fs::read(h.root.join(path)).unwrap(), *bytes);
-        }
-        assert_eq!(fs::read(h.root.join(PROVIDER)).unwrap(), source);
-    }
-}
-
-#[test]
-fn explicit_parent_migration_preserves_unit_settings() {
+fn parent_projection_preserves_unit_settings() {
     let h = ShortHost::new();
     let mut c: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
     c["job_gating"] = gating();
@@ -101,7 +77,7 @@ fn explicit_parent_migration_preserves_unit_settings() {
     assert!(!h.root.join(".github/workflows/beta.yml").exists());
 }
 
-fn install_parent_provider(root: &Path) {
+pub(crate) fn install_parent_provider(root: &Path) {
     let program = root.join(".chrono-harness/bin/parent-gh");
     assert_eq!(
         fs::symlink_metadata(&program).unwrap_err().kind(),
@@ -131,12 +107,23 @@ fn install_parent_provider(root: &Path) {
     assert!(!root.join(".chrono-harness/state/parent-calls").exists());
 }
 
-struct GatedHost {
-    host: ShortHost,
-    payload: Value,
+pub(crate) struct GatedHost {
+    pub(crate) host: ShortHost,
+    pub(crate) payload: Value,
+}
+impl std::ops::Deref for GatedHost {
+    type Target = ShortHost;
+    fn deref(&self) -> &Self::Target {
+        &self.host
+    }
+}
+impl std::ops::DerefMut for GatedHost {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.host
+    }
 }
 impl GatedHost {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         let mut h = ShortHost::new();
         install_parent_provider(&h.root);
         let mut cfg: Value =
@@ -178,7 +165,7 @@ impl GatedHost {
         let payload = json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false});
         Self { host: h, payload }
     }
-    fn change(&mut self, paths: &[&str]) {
+    pub(crate) fn change(&mut self, paths: &[&str]) {
         for path in paths {
             fs::write(
                 self.host.root.join(path),
@@ -189,7 +176,7 @@ impl GatedHost {
         self.host.revise();
         self.payload["after"] = json!(self.host.candidate);
     }
-    fn environment(&self, command: &mut Command) {
+    pub(crate) fn environment(&self, command: &mut Command) {
         json_file(
             &self.host.root,
             ".chrono-harness/state/event.json",
@@ -237,7 +224,7 @@ impl GatedHost {
         c.env("GITHUB_JOB", "detect");
         c.output().unwrap()
     }
-    fn detection(&self) -> Value {
+    pub(crate) fn detection(&self) -> Value {
         let out = self.detect();
         assert!(
             out.status.success(),
@@ -247,7 +234,7 @@ impl GatedHost {
         );
         serde_json::from_slice::<Value>(&out.stdout).unwrap()["detection"].clone()
     }
-    fn command(&self, args: &[&str], d: &Value, needs: &Value) -> Command {
+    pub(crate) fn command(&self, args: &[&str], d: &Value, needs: &Value) -> Command {
         let mut c = self.host.command(args);
         self.environment(&mut c);
         let job = args
@@ -260,14 +247,14 @@ impl GatedHost {
             .env("CHRONO_CI_NEEDS", serde_json::to_string(needs).unwrap());
         c
     }
-    fn mock(&self, d: &Value, mode: &str) {
+    pub(crate) fn mock(&self, d: &Value, mode: &str) {
         json_file(
             &self.host.root,
             ".chrono-harness/state/parent-data.json",
             &json!({"detection":d, "mode":mode}),
         );
     }
-    fn produce(&self, unit: &str) {
+    pub(crate) fn produce(&self, unit: &str) {
         let output = self
             .host
             .root
@@ -318,7 +305,7 @@ impl GatedHost {
         )
         .unwrap();
     }
-    fn units(&self, d: &Value) {
+    pub(crate) fn units(&self, d: &Value) {
         for unit in d["required_units"].as_array().unwrap() {
             let unit = unit.as_str().unwrap();
             let command = self.command(&["check", "--unit", unit], d, &Value::Null);
@@ -365,7 +352,7 @@ impl GatedHost {
         }
     }
 }
-fn needs(h: &GatedHost, d: &Value) -> Value {
+pub(crate) fn needs(h: &GatedHost, d: &Value) -> Value {
     let mut outputs = json!({"detection":serde_json::to_string(d).unwrap()});
     let mut value = json!({"detect":{"result":"success"}});
     let provider: Value =
@@ -1344,7 +1331,7 @@ fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
     incoming["units"]["alpha"]["runs_on"] = json!("host-custom");
     incoming["units"]["alpha"]["timeout_minutes"] = json!(37);
     fs::remove_file(h.root.join(PROVIDER)).unwrap();
-    for name in ["alpha.yml", "beta.yml", "collection.yml"] {
+    for name in ["collection.yml"] {
         fs::remove_file(h.root.join(format!(".github/workflows/{name}"))).unwrap();
     }
     let c = serde_json::from_value(incoming).unwrap();

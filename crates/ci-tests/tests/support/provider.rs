@@ -35,81 +35,6 @@ fn contents(endpoint: &str, wrong_source: bool) {
     io::stdout().write_all(&bytes).unwrap();
 }
 
-pub fn units(args: &[String]) {
-    if args.len() == 1 && args[0] == "--version" {
-        println!("chrono-ci-test-provider/v1");
-        return;
-    }
-    let data = read(".chrono-harness/state/mock.json");
-    let run = |unit: &str| {
-        json!({"id":if unit == "alpha" {101} else {102},"run_attempt":1,
-            "status":"completed","conclusion":"success","head_sha":data["candidate"],
-            "event":"push","path":format!(".github/workflows/{unit}.yml")})
-    };
-    if args[0] == "run" {
-        let unit = if args[2] == "101" { "alpha" } else { "beta" };
-        if unit == "alpha" && data["download_failures"].is_u64() {
-            let counter = ".chrono-harness/state/mock-download-attempts";
-            let attempt = fs::read_to_string(counter)
-                .ok()
-                .map(|s| s.parse::<u64>().unwrap())
-                .unwrap_or(0)
-                + 1;
-            fs::write(counter, attempt.to_string()).unwrap();
-            if attempt <= data["download_failures"].as_u64().unwrap() {
-                let destination = Path::new(option(args, "--dir"));
-                fs::create_dir_all(destination).unwrap();
-                fs::write(destination.join("partial-only"), b"failed original bytes").unwrap();
-                eprintln!(
-                    "error downloading artifact: HTTP {}: fixture transport failure",
-                    data["http_status"]
-                );
-                if let Some(bytes) = data["download_padding"].as_u64() {
-                    io::stderr().write_all(&vec![b'x'; bytes as usize]).unwrap();
-                }
-                if let Some(status) = data["second_http_status"].as_u64() {
-                    eprintln!("HTTP {status}: second status");
-                }
-                if let Some(millis) = data["download_pause_ms"].as_u64() {
-                    std::thread::sleep(std::time::Duration::from_millis(millis));
-                }
-                std::process::exit(23);
-            }
-        }
-        copy_tree(
-            &PathBuf::from(".chrono-harness/state/mock-artifacts").join(unit),
-            Path::new(option(args, "--dir")),
-        );
-    } else if args[1].contains("/actions/workflows/") {
-        let unit = if args[1].contains("/alpha.yml/") {
-            "alpha"
-        } else {
-            "beta"
-        };
-        let mut rows = vec![run(unit)];
-        if data["mode"] == "duplicate" {
-            let mut duplicate = rows[0].clone();
-            duplicate["id"] = json!(201);
-            rows.push(duplicate);
-        }
-        println!("{}", json!([{"workflow_runs":rows}]));
-    } else if args[1].contains("/contents/") {
-        contents(&args[1], data["mode"] == "wrong-source");
-    } else if args[1].contains("/actions/runs/") {
-        let mut item = run(if args[1].ends_with("/101") {
-            "alpha"
-        } else {
-            "beta"
-        });
-        if data["mode"] == "changed-attempt" {
-            item["run_attempt"] = json!(2);
-        }
-        println!("{item}");
-    } else {
-        std::process::exit(7);
-    }
-}
-
 pub fn parent(args: &[String]) {
     if args.len() == 1 && args[0] == "--version" {
         println!("chrono-ci-test-provider/v1");
@@ -138,6 +63,38 @@ pub fn parent(args: &[String]) {
         }
         let artifact = option(args, "--name").split_once("chrono-unit-").unwrap().1;
         let unit = artifact.rsplitn(3, '-').nth(2).unwrap();
+        let failure_data = Path::new(".chrono-harness/state/mock.json");
+        if failure_data.exists() {
+            let data = read(failure_data.to_str().unwrap());
+            if unit == "alpha" && data["download_failures"].is_u64() {
+                let counter = ".chrono-harness/state/mock-download-attempts";
+                let attempt = fs::read_to_string(counter)
+                    .ok()
+                    .map(|s| s.parse::<u64>().unwrap())
+                    .unwrap_or(0)
+                    + 1;
+                fs::write(counter, attempt.to_string()).unwrap();
+                if attempt <= data["download_failures"].as_u64().unwrap() {
+                    let destination = Path::new(option(args, "--dir"));
+                    fs::create_dir_all(destination).unwrap();
+                    fs::write(destination.join("partial-only"), b"failed original bytes").unwrap();
+                    eprintln!(
+                        "error downloading artifact: HTTP {}: fixture transport failure",
+                        data["http_status"]
+                    );
+                    if let Some(bytes) = data["download_padding"].as_u64() {
+                        io::stderr().write_all(&vec![b'x'; bytes as usize]).unwrap();
+                    }
+                    if let Some(status) = data["second_http_status"].as_u64() {
+                        eprintln!("HTTP {status}: second status");
+                    }
+                    if let Some(millis) = data["download_pause_ms"].as_u64() {
+                        std::thread::sleep(std::time::Duration::from_millis(millis));
+                    }
+                    std::process::exit(23);
+                }
+            }
+        }
         if mode == "missing-artifact" {
             std::process::exit(7);
         }
