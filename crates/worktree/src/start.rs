@@ -108,7 +108,11 @@ impl Runner {
         let process = self.command(root, args)?;
         Self::output(process, args)
     }
-    fn literal_inventory(&mut self, root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
+    pub(crate) fn literal_inventory(
+        &mut self,
+        root: &Path,
+        args: &[&str],
+    ) -> Result<Vec<u8>, String> {
         let process = self.observe(root, args, &[], true, None)?;
         Self::output(process, args)
     }

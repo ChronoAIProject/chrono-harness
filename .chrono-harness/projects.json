@@ -2086,6 +2086,19 @@
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
         },
+        "probe_age": {
+          "operation": "test.worktree.age",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "age::",
+            "--",
+            "--test-threads=1"
+          ]
+        },
         "verify_attention": {
           "operation": "verify.worktree-attention",
           "tool": "verus",
