@@ -15,6 +15,8 @@ runner 的编译缓存和原证明也沿同一个登记构建入口复用，损�
 
 本宿主曾由 `cache` 单元消费 `check.cache`、`check.cache-tests`。这两项自缓存运输现已退役：采用普通入口自动清理后，恢复成功且内容匹配的约 1.05 GB 逻辑字节在 bootstrap 结束时被删除，业务编译没有消费命中；业务检查后的新输出也会在封存前清理。真实失败及原件见[落地运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/42561038857)。删除该 job 的恢复、封存和保存投影，同时保留原标准构建、测试及下载缓存。真实 Cargo action 的键绑定与重建验证迁到 `cache-tests` 的独立 JSON 样本，仍读取当前项目 action 并执行实际 Cargo。产品的内容核验、恢复、封存及失败验证继续由现役 Rust 专属测试负责。原两项 `producer-manifest/v1` 缓存的有限历史观察覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
 
+**宿主政策与产品验证同时变更。** 当前 cache job 删除两项编译缓存运输及专属共享 cache CLI 安装；标准构建／测试和仍有使用方的下载缓存继续执行。编译键契约的数据由测试项目独立维护，继续消费当前真实 Cargo action；构建、验证、传输和维护总成本仍未测量。
+
 这些观察只覆盖原候选和登记消费者，不能证明当前候选、其他消费者或完整缓存行为正确。不可用内容恢复、持久修复及修复后在原兼容范围健康精确命中的验收仍未完成；访问失败及部分观察见[退役说明](#retired-remote-acceptance-controls)。实验中的临时优化设置已移除，当前参数以现役登记为准；历史摘要、后端条目、artifact ID 和耗时归原运行。并发、linked 所有权、完整编译器／SDK／输入范围，以及传输、存储和总生命周期成本仍待验收或测量。
 
 planner 准备身份；GitHub provider 在原 bootstrap 和检查／发布命令两侧生成固定版本的原生 restore／save action。本宿主在检查、发布登记中明确采用。计划或工作流生成成功，不代表真实恢复／保存、编译器复用或验收通过。SPEC §4.2 仍要求后端证据、冷／热／源码变化／失败／并发验收和当前执行物验证。

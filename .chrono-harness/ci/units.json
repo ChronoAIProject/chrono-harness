@@ -638,7 +638,7 @@
         },
         "unit_cache": {
           "need": "Run the current candidate canonical check and its registered preparation.",
-          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "output_use": "在原标准检查前验证并安装 detector 的核心启动产物。",
           "install": [
             "/bin/bash",
             ".chrono-harness/ci/bootstrap-native.sh",
