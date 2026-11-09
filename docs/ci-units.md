@@ -22,6 +22,8 @@ chrono-ci test-inventory --host-root HOST --config CONFIG
 
 worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四项宿主入口集成测试：参与式检查、脱离父进程的 Rust 消费者、短检查、原生 Cargo 子进程。核心组排除同样四个名称。旧 Python bootstrap 组合及独立入口测试随实现退役；当前 bootstrap 委托与拒绝边界归 Rust bootstrap 专属测试。两组和发布用的未过滤 action 均显式采用 8 个 libtest 线程，限制单个测试进程内部的并发；宿主操作仍按 cap=2 调度。当前测试和期限保留。
 
+断言失败原件在最后一个使用方退出后即可回收的测试，复用现有 Rust 锁能力隔离工具，在独立测试进程中执行。其他测试的 fork 会短暂继承本进程的文件描述符，包括尚未 exec 关闭的 CLOEXEC 描述符；这段临时继承不能用来判定目标使用方未释放。原件保留、过期后的单轮回收和已有源码保全断言保持，并在回收失败时输出实际维护结果；不增加重试、测试时限或生产权限。
+
 `worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
 projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。固定历史宿主解码器／迁移测试已退役，原 `judge-projects-migration` 和双组清单移除。当前 `consumer`、`execution`、`languages` 二进制保留断言、默认并发及 900 秒上限，新测试二进制由未过滤 action 纳入。CI／发布消费同一 action；旧断言明确退役，不能拿剩余测试证明旧行为。
