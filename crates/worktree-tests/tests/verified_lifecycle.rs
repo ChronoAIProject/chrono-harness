@@ -92,6 +92,28 @@ fn active_unknown_and_disposed_work_never_gain_terminal_authority() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_adoption_requires_active_joined_nonterminal_work() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("active"); reveal_strlit("terminal");
+        reveal_strlit("retained"); reveal_strlit("Active");
+        reveal_strlit("active\0"); reveal_strlit("");
+        assert("active"@[0] != "Active"@[0]);
+        assert("active"@.len() == 6 && "active\0"@.len() == 7 && ""@.len() == 0);
+    }
+    expect(policy::checkout_migration_ready("active", false, false, false));
+    expect(!policy::checkout_migration_ready("active", true, false, false));
+    expect(!policy::checkout_migration_ready("active", false, true, false));
+    expect(!policy::checkout_migration_ready("active", false, false, true));
+    expect(!policy::checkout_migration_ready("active", true, true, true));
+    expect(!policy::checkout_migration_ready("terminal", false, false, false));
+    expect(!policy::checkout_migration_ready("retained", false, false, false));
+    expect(!policy::checkout_migration_ready("Active", false, false, false));
+    expect(!policy::checkout_migration_ready("active\0", false, false, false));
+    expect(!policy::checkout_migration_ready("", false, false, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_actual_unreleased_evidence_blocks_checkout_removal() {
     let needed = policy::retain_evidence(false, true);
     let absent = policy::retain_evidence(false, false);
