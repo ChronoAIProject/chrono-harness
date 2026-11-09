@@ -3191,16 +3191,6 @@
             "https://github.com/verus-lang/verus/releases/download/release/0.2026.04.24.f8e1704/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
           ]
         },
-        "verus-checksum": {
-          "operation": "host.verus-checksum",
-          "tool": "shasum",
-          "argv": [
-            "-a",
-            "256",
-            "-c",
-            ".chrono-harness/ci/verus-macos-arm64.sha256"
-          ]
-        },
         "verus-extract-shared": {
           "operation": "host.verus-extract-shared",
           "tool": "tar",

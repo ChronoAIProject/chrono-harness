@@ -18,7 +18,6 @@
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "bash": "/bin/bash",
       "verus": ".chrono-harness/bin/verus/verus",
-      "shasum": "/usr/bin/shasum",
       "tar": "/usr/bin/tar",
       "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
     },
