@@ -24,6 +24,16 @@ data 不得有根，以及每个登记操作存在于 execution plan。声明只
 `verify.ci-collection`／`verify.ci-collection-tests` 注册其 program 根和独立预期，
 并由本地与离线 collection 的实际汇总消费。仍不代表全仓覆盖完成。
 
+本批把已有整 crate Verus 根补入 FILEMAP 的同源绑定：`chrono-identifiers` 的
+`verify.identifiers`／`verify.identifiers-tests`，runner 的
+`verify.retention-release`／`verify.retention-release-tests` 与
+`verify.runner-git-binding`／`verify.runner-git-binding-tests`，worktree 的
+`verify.owner-publication`、`verify.worktree-lifecycle`、`verify.worktree-attention`
+及其独立预期，以及 cache 的 `verify.cache-planner`／`verify.cache-planner-tests`。
+这些根均已有 execution-plan 操作和真实 Rust 消费者；本批只补齐逐文件的
+`verification` 声明，不新增证明源或重复实现。整 crate 证明、行为测试和实际
+生产调用仍按同次 DELTA 验收，局部结果不能代替全仓覆盖门。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取
