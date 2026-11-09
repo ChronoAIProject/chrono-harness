@@ -7,6 +7,8 @@ fn execute(root: &std::path::Path, program: &Value) -> std::process::Output {
         .current_dir(root)
         .env_clear()
         .env("EMPTY", "")
+        .env("DECLARED_EMPTY", "")
+        .env("FACTS_GIT", env!("CARGO_BIN_EXE_chrono-test-project-execution"))
         .args(["file", "check.case", "$HOME `literal` <tag>", "", "line\nnext"])
         .output()
         .unwrap()
@@ -112,4 +114,26 @@ fn invalid_program_and_product_are_rejected_without_effects() {
         assert!(output.stdout.is_empty());
         assert!(!output.stderr.is_empty());
     }
+}
+
+#[test]
+fn native_input_probe_uses_the_declared_tool_and_observes_actual_absence() {
+    let root = tempfile::tempdir().unwrap();
+    let program = json!([{"CheckNativeInputs":{"path":"external"}}]);
+    let absent = execute(root.path(), &program);
+    assert!(absent.status.success(), "{absent:?}");
+    assert_eq!(absent.stdout, b"data-present False\n");
+    fs::write(root.path().join("external"), b"input").unwrap();
+    let present = execute(root.path(), &program);
+    assert!(present.status.success(), "{present:?}");
+    assert_eq!(present.stdout, b"data-present True\n");
+    let rejected = Command::new(env!("CARGO_BIN_EXE_chrono-test-project-execution"))
+        .current_dir(root.path())
+        .env_clear()
+        .env("FACTS_GIT", env!("CARGO_BIN_EXE_chrono-test-project-execution"))
+        .args(["file", "check.case"])
+        .output()
+        .unwrap();
+    assert!(!rejected.status.success(), "{rejected:?}");
+    assert!(rejected.stdout.is_empty());
 }
