@@ -1025,7 +1025,7 @@
     },
     "verus.archive": {
       "owner": "repository",
-      "path": ".chrono-harness/cache/bootstrap-verus/"
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/verus/"
     }
   },
   "caches": {

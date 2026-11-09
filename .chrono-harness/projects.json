@@ -3223,7 +3223,7 @@
           "argv": [
             "-x",
             "-f",
-            ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/package.zip",
             "-s",
             "|^verus-arm64-macos|.chrono-harness/bin/verus|",
             "--no-same-owner"
