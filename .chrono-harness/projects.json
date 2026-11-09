@@ -2928,17 +2928,6 @@
             "core"
           ]
         },
-        "shared-verify-cache": {
-          "operation": "host.bootstrap-shared-verify-cache",
-          "tool": "bash",
-          "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "verify",
-            "cache"
-          ]
-        },
         "shared-install-unit_runner": {
           "operation": "host.bootstrap-shared-install-unit_runner",
           "tool": "bash",
