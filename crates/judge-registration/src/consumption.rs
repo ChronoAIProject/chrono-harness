@@ -306,13 +306,8 @@ fn validate_chain(s: &Endpoint, c: &Chain) -> Result<(), String> {
         let [tool] = tools.as_slice() else {
             return Err(format!("missing/ambiguous caller tool {}", m.tool));
         };
-        // Python's registered -B flag is interpreter configuration, not an installer argument.
-        let mut args = m.argv.clone();
-        if args.first().is_some_and(|a| a == "-B") {
-            args.remove(0);
-        }
         let mut cmd = vec![nonempty(&tool["program"])?.into()];
-        cmd.extend(args);
+        cmd.extend(m.argv.iter().cloned());
         Ok(cmd)
     };
     let produce = command(&c.producer)?;

@@ -101,13 +101,9 @@ fn startup_commands_preserve_registered_arguments() {
             .as_array_mut()
             .unwrap()
             .insert(0, json!("-B"));
-        let error = consumption::validate_delta(
-            Some(&old),
-            &candidate,
-            &paths(&[CORE]),
-            &BTreeSet::new(),
-        )
-        .unwrap_err();
+        let error =
+            consumption::validate_delta(Some(&old), &candidate, &paths(&[CORE]), &BTreeSet::new())
+                .unwrap_err();
         assert!(
             error.contains("producer/caller invocation mismatch"),
             "{error}"
