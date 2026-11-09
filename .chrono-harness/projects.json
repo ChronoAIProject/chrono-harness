@@ -853,6 +853,17 @@
             ".chrono-harness/ci/units.json"
           ]
         },
+        "verify_job_gating_example": {
+          "operation": "ci.verify-job-gating-example",
+          "tool": "chrono-ci",
+          "argv": [
+            "verify",
+            "--host-root",
+            "examples/ci-host-job-gating",
+            "--config",
+            ".chrono-harness/ci/units.json"
+          ]
+        },
         "format": {
           "operation": "format.ci",
           "tool": "cargo",
