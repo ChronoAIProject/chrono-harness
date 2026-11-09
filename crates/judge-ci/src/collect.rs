@@ -466,6 +466,7 @@ pub(super) fn collect(
             .map(|o| o.method.operation.clone())
             .collect();
         let expected_ids = verified_collection::borrow_texts(&expected_ops);
+        let proof_invocations = source_binding::invocations(&operations);
         let not_required_ids = verified_collection::borrow_texts(&not_required);
         let executed = e["executed"].as_array().ok_or("unit executions missing")?;
         if e["operations"] != object!(expected_ops) || executed.len() != operations.len() {
@@ -485,9 +486,11 @@ pub(super) fn collect(
             original["process"] = chrono_harness::full::expand_process(&original["process"])?;
             let receipt: Receipt = serde_json::from_value(original).map_err(|e| e.to_string())?;
             chrono_judge_routes::compare(&plan, operation, Some(&receipt))?;
-            chrono_harness::verified_verifier::sources::bind_process_sources(
+            source_binding::bind_output(
                 "passed",
-                Some((&receipt.process.argv, &receipt.compiler_dependency)),
+                operation.method.operation.as_str(),
+                &proof_invocations,
+                Some(&receipt),
                 &snapshot.source_registry,
                 &source_io,
             )?;

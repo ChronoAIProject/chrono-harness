@@ -1,5 +1,13 @@
-//! 固定请求的只读获取适配。仓内准入与失败状态由 verified_sources 产生。
-use chrono_harness::{Request, facts::Reader, verified_verifier::sources::CandidateSourceRead};
+//! 固定请求的只读获取适配。仓内准入与失败状态由 Verus 所有者产生。
+use chrono_harness::{
+    Request,
+    facts::Reader,
+    verified_verifier::{
+        CompilerReport, CompilerReportRead, ProofAdmission, ProofInvocation, ProofProcess,
+        sources::{CandidateSourceRead, SourceRegistry},
+    },
+};
+use chrono_judge_routes::{Operation, Receipt};
 use std::collections::BTreeMap;
 
 pub(super) struct CandidateIo<'a> {
@@ -27,4 +35,49 @@ impl CandidateSourceRead for CandidateIo<'_> {
     fn digest(&self, bytes: &[u8]) -> Vec<u8> {
         chrono_harness::sha256(bytes).into_bytes()
     }
+}
+
+impl CompilerReportRead for CandidateIo<'_> {
+    fn decode(&self, bytes: &[u8]) -> Option<CompilerReport> {
+        serde_json::from_slice(bytes).ok()
+    }
+}
+
+/// 只借用现役计划及同一原回执的字段；选择、比较和准入都由 Verus 所有者执行。
+pub(super) fn invocations(operations: &[Operation]) -> Vec<ProofInvocation<'_>> {
+    operations
+        .iter()
+        .map(|operation| ProofInvocation {
+            operation: &operation.method.operation,
+            argv: &operation.method.argv,
+            output_contract: &operation.method.output_contract,
+            output_limit_bytes: operation.output_limit_bytes,
+        })
+        .collect()
+}
+
+pub(super) fn bind_output(
+    state: &str,
+    operation: &str,
+    methods: &Vec<ProofInvocation<'_>>,
+    original: Option<&Receipt>,
+    registry: &Result<SourceRegistry, String>,
+    io: &CandidateIo<'_>,
+) -> Result<Option<ProofAdmission>, String> {
+    chrono_harness::verified_verifier::bind_operation_output(
+        state,
+        operation,
+        methods,
+        original.map(|receipt| ProofProcess {
+            operation: &receipt.operation,
+            argv: &receipt.process.argv,
+            stdout: &receipt.process.stdout_bytes,
+            exit: receipt.process.exit_code,
+            failed: receipt.process.failure.is_some(),
+            dependency: &receipt.compiler_dependency,
+            artifact: &receipt.compiler_artifact,
+        }),
+        registry,
+        io,
+    )
 }

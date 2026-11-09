@@ -64,20 +64,22 @@ pub fn operation_result(
     CheckResult { id: operation.to_string(), status, cause, exit_code }
 }
 
-pub open spec fn source_binding_failed(state: Seq<char>, binding: &Result<(), String>) -> bool {
+pub open spec fn source_binding_failed<T>(state: Seq<char>, binding: &Result<T, String>) -> bool {
     state == "passed"@ && binding.is_err()
 }
 
 /// 源码绑定失败不能沿用原 passed；原进程及其真实零退出仍保留在原回执。
-pub fn operation_result_with_sources(
+pub fn operation_result_with_sources<T>(
     operation: &str, state: &str, error: &Option<String>, observed: Option<i32>,
-    binding: Result<(), String>,
+    binding: Result<T, String>,
 ) -> (row: CheckResult)
     ensures row.id@ == operation@,
         row.status == if source_binding_failed(state@, &binding) { Status::Failed }
             else { operation_status(state@) },
-        row.cause@ == if source_binding_failed(state@, &binding) { binding.unwrap_err()@ }
-            else { operation_cause(error) },
+        row.cause@ == match binding {
+            Err(cause) => if state@ == "passed"@ { cause@ } else { operation_cause(error) },
+            Ok(_) => operation_cause(error),
+        },
         row.exit_code == if source_binding_failed(state@, &binding) {
             operation_exit("failed"@, observed)
         } else { operation_exit(state@, observed) },
@@ -93,7 +95,7 @@ pub fn operation_result_with_sources(
                 operation_result(operation, "failed", &Some(cause), observed)
             } else { operation_result(operation, state, error, observed) }
         },
-        Ok(()) => operation_result(operation, state, error, observed),
+        Ok(_) => operation_result(operation, state, error, observed),
     }
 }
 
