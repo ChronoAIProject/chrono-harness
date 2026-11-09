@@ -78,8 +78,29 @@ pub(super) struct Gate {
     roles: RefCell<BTreeMap<String, Role>>,
     paths: BTreeMap<String, PathBuf>,
     maintenance: bool,
+    retained_dependencies: BTreeSet<String>,
+    unvisited_relations: BTreeSet<String>,
 }
 impl Gate {
+    pub(super) fn retained_dependencies(&self) -> &BTreeSet<String> {
+        &self.retained_dependencies
+    }
+    fn measurements(&self, max_output_bytes: u64) -> BTreeMap<String, [u64; 8]> {
+        self.objects
+            .borrow()
+            .iter()
+            .map(|(id, record)| {
+                (
+                    id.clone(),
+                    retained_measurements(
+                        record.output.as_ref(),
+                        record.retired_leases.len(),
+                        max_output_bytes,
+                    ),
+                )
+            })
+            .collect()
+    }
     pub(super) fn stable(&self) -> Result<(), String> {
         for lease in &self.leases {
             lease.stable()?;
@@ -401,6 +422,8 @@ impl Inventory {
             roles: RefCell::new(BTreeMap::new()),
             paths: directories,
             maintenance: false,
+            retained_dependencies: BTreeSet::new(),
+            unvisited_relations: BTreeSet::new(),
         })
     }
     pub(super) fn partition_ids(&self) -> Result<Vec<String>, String> {
@@ -466,6 +489,8 @@ impl Inventory {
             }
         }
         let mut seen = BTreeSet::new();
+        let mut unvisited_relations = BTreeSet::new();
+        let mut measurements = BTreeMap::new();
         let addresses: Box<dyn Iterator<Item = Result<String, String>> + '_> = match originals {
             Some(originals) => Box::new(originals.iter().cloned().map(Ok)),
             None => Box::new(
@@ -503,25 +528,21 @@ impl Inventory {
                 let gate = self.addressed_gate(&[id.clone()], &[], &[], None, true, false)?;
                 let owned: Vec<_> = gate.objects.borrow().keys().cloned().collect();
                 seen.extend(owned.iter().cloned());
-                self.maintain_locked(observed, &gate)
-                    .map(|round| (round, owned))
+                self.maintain_locked(observed, &gate).map(|round| {
+                    let observations = gate.measurements(self.policy.max_output_bytes);
+                    (round, owned, observations, gate.unvisited_relations.clone())
+                })
             })();
             match attempted {
-                Ok((round, owned)) => {
+                Ok((round, owned, observations, unvisited)) => {
+                    measurements.extend(observations);
+                    unvisited_relations.extend(unvisited);
                     nodes += round["nodes"].as_u64().ok_or("component round nodes")? as usize;
                     for key in [
                         "metadata_inventory_entries",
                         "metadata_graph_edges",
                         "removed_logical_bytes",
                         "verified_bytes",
-                        "remaining_outputs",
-                        "remaining_capability_retirements",
-                        "known_retained_file_logical_bytes",
-                        "known_retained_allocated_bytes",
-                        "unmeasured_allocated_outputs",
-                        "unmeasured_tree_outputs",
-                        "reserved_logical_bytes",
-                        "overflow_outputs",
                     ] {
                         result[key] = json!(
                             result[key].as_u64().unwrap()
@@ -575,6 +596,12 @@ impl Inventory {
                 .push(json!({"scope":"consumer-metadata","reason":error})),
         }
         self.round_verified_left.set(None);
+        for values in measurements.values() {
+            for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(values) {
+                result[*key] = json!(result[*key].as_u64().unwrap() + value);
+            }
+        }
+        complete &= unvisited_relations.iter().all(|id| seen.contains(id));
         result["nodes"] = json!(nodes);
         result["metadata_bytes"] = json!(
             self.policy.max_metadata_bytes_per_round - self.round_metadata.get().unwrap_or(0)
@@ -868,15 +895,23 @@ impl Inventory {
         if let Some((id, _)) = &birth {
             selected.insert(id.clone());
         }
-        let mut observed = BTreeMap::new();
+        let mut observed = BTreeMap::<String, Object>::new();
         let mut observed_roles = BTreeMap::<String, Option<Role>>::new();
         let mut wanted_roles: BTreeSet<String> = roles.iter().cloned().collect();
+        let initial = (discover_under_lease && selected.len() == 1)
+            .then(|| selected.iter().next().unwrap().clone());
+        let mut deferred_initial = false;
+        let mut report_frontier = false;
+        let mut retained_dependencies = BTreeSet::new();
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
         // order never waits behind an ordinary publisher holding path locks.
         // Waiting activities retain their path/role/object order and recheck
         // the discovered closure under exclusion below.
         loop {
+            if selected.len() > self.policy.max_related_outputs {
+                return Err("related retention graph capacity; originals preserved".into());
+            }
             let next_role = wanted_roles
                 .iter()
                 .find(|role| !observed_roles.contains_key(*role))
@@ -904,6 +939,29 @@ impl Inventory {
                 observed_roles.insert(role, record);
                 continue;
             }
+            if deferred_initial {
+                let id = initial.as_ref().unwrap();
+                let record = observed.get(id).ok_or("initial declaration was not read")?;
+                let protected = record.roles.iter().any(|role| {
+                    observed_roles
+                        .get(role)
+                        .is_some_and(|current| current.as_ref().is_none_or(|r| r.ids.contains(id)))
+                });
+                if protected {
+                    // A finalized current root cannot retire. Its other
+                    // referrers are not required to establish that fact.
+                    retained_dependencies.insert(id.clone());
+                } else {
+                    let output = record.output.as_ref().unwrap();
+                    selected.extend(output.references.iter().cloned());
+                    report_frontier = record.incoming.is_empty() && record.roles.is_empty();
+                    if !report_frontier {
+                        selected.extend(record.incoming.iter().cloned());
+                    }
+                }
+                deferred_initial = false;
+                continue;
+            }
             let next = selected
                 .iter()
                 .find(|id| {
@@ -921,6 +979,39 @@ impl Inventory {
                 );
             }
             let record = self.read_object(&id, &directory)?;
+            if initial.as_ref() == Some(&id) && finalized(&record) {
+                wanted_roles.extend(record.roles.iter().cloned());
+                observed.insert(id, record);
+                deferred_initial = true;
+                continue;
+            }
+            if report_frontier && !finalized(&record) {
+                // Unknown or unfinished dependencies need the existing full
+                // closure. Keep every exclusion already acquired while adding
+                // the relations omitted from earlier finalized dependencies.
+                report_frontier = false;
+                for previous in &retained_dependencies {
+                    let record: &Object =
+                        observed.get(previous).ok_or("dependency was not read")?;
+                    selected.extend(record.incoming.iter().cloned());
+                    selected.extend(
+                        record
+                            .output
+                            .iter()
+                            .flat_map(|o| o.references.iter().cloned()),
+                    );
+                }
+                retained_dependencies.clear();
+            }
+            if report_frontier {
+                // Only the released report may retire here. Its finalized
+                // originals remain excluded and retained while their incoming
+                // edge is updated; unrelated referrers are left untouched.
+                retained_dependencies.insert(id.clone());
+                wanted_roles.extend(record.roles.iter().cloned());
+                observed.insert(id, record);
+                continue;
+            }
             if let Some(output) = &record.output {
                 selected.extend(output.references.iter().cloned());
             }
@@ -929,9 +1020,6 @@ impl Inventory {
                 wanted_roles.extend(record.roles.iter().cloned());
             }
             observed.insert(id, record);
-            if selected.len() > self.policy.max_related_outputs {
-                return Err("related retention graph capacity; originals preserved".into());
-            }
         }
         if maintenance {
             let target_paths: Vec<_> = observed.values().map(|r| r.path.clone()).collect();
@@ -1033,16 +1121,17 @@ impl Inventory {
             records.insert(id, record);
         }
         for record in records.values() {
-            if record
-                .output
-                .as_ref()
-                .is_some_and(|o| o.references.iter().any(|id| !records.contains_key(id)))
-                || (maintenance
-                    && (record.incoming.iter().any(|id| !records.contains_key(id))
-                        || record
-                            .roles
-                            .iter()
-                            .any(|role| !role_records.contains_key(role))))
+            if !retained_dependencies.contains(&record.id)
+                && (record
+                    .output
+                    .as_ref()
+                    .is_some_and(|o| o.references.iter().any(|id| !records.contains_key(id)))
+                    || (maintenance
+                        && (record.incoming.iter().any(|id| !records.contains_key(id))
+                            || record
+                                .roles
+                                .iter()
+                                .any(|role| !role_records.contains_key(role)))))
             {
                 return Err(
                     "addressed retention graph changed during exclusion; retry this activity"
@@ -1050,12 +1139,26 @@ impl Inventory {
                 );
             }
         }
+        let unvisited_relations = retained_dependencies
+            .iter()
+            .flat_map(|id| {
+                let record = &records[id];
+                record
+                    .incoming
+                    .iter()
+                    .chain(record.output.iter().flat_map(|o| &o.references))
+                    .filter(|related| !records.contains_key(*related))
+                    .cloned()
+            })
+            .collect();
         Ok(Gate {
             leases,
             objects: RefCell::new(records),
             roles: RefCell::new(role_records),
             paths: path_dirs,
             maintenance,
+            retained_dependencies,
+            unvisited_relations,
         })
     }
     pub(super) fn partition_load(
@@ -1126,7 +1229,10 @@ impl Inventory {
             }
         }
         if gate.maintenance {
-            ledger.cursor = objects.values().next().map_or(0, |o| o.cursor);
+            ledger.cursor = objects
+                .values()
+                .find(|o| !gate.retained_dependencies.contains(&o.id))
+                .map_or(0, |o| o.cursor);
         }
         Ok(ledger)
     }
@@ -1162,7 +1268,12 @@ impl Inventory {
         // original whenever bounded disposal advances the component cursor.
         let cursor_owner = gate
             .maintenance
-            .then(|| objects.keys().next().cloned())
+            .then(|| {
+                objects
+                    .keys()
+                    .find(|id| !gate.retained_dependencies.contains(*id))
+                    .cloned()
+            })
             .flatten();
         // Exact semantic snapshots already read under these directory leases.
         // Only a real durable transition needs another atomic write/fsync.
@@ -1409,6 +1520,12 @@ impl Inventory {
         }
         Ok(())
     }
+}
+fn finalized(record: &Object) -> bool {
+    record.retired_leases.is_empty()
+        && record.output.as_ref().is_some_and(|output| {
+            output.manifest.sealed && matches!(output.phase.as_str(), "released" | "disposing")
+        })
 }
 fn objects_reference(outputs: &[OutputRecord], source: &str, target: &str) -> bool {
     outputs
