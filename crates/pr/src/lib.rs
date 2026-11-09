@@ -394,6 +394,7 @@ impl Client {
     }
 
     fn snapshot(&mut self, number: u64, head: &str) -> Result<snapshot::Snapshot, String> {
+        self.state.reserve_snapshot(number)?;
         let raw = self.graphql(
             snapshot::QUERY,
             vec![("number", number.to_string()), ("head", head.into())],
@@ -406,6 +407,8 @@ impl Client {
             head,
             &self.config.required_checks,
         )?;
+        self.state
+            .observed_snapshot(chrono_harness::verified_release::open_pr(&parsed.state))?;
         self.result["pr"] = json!(parsed.number);
         self.result["url"] = json!(parsed.url);
         self.result["observed_head"] = json!(parsed.head);
@@ -501,6 +504,7 @@ impl Client {
         if parsed.branch != branch {
             return Err("PR head branch mismatch".into());
         }
+        self.state.confirm_create();
         if parsed.outcome == "stale" || parsed.outcome == "closed" {
             return Ok(());
         }
