@@ -372,17 +372,10 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
         let context = prepare(root, &adopted, "push", &json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":candidate,"created":true}), &candidate).unwrap();
         assert_eq!(context["canonical_argv"], json!([c["runner"], "check"]));
         // Exercise the generated inventory profile through its independent explicit runner API.
-        let argv = chrono_harness::canonical_argv(
-            c["runner"].as_str().unwrap(),
-            root.join(c["initial_inventory"]["path"].as_str().unwrap())
-                .to_str()
-                .unwrap(),
-            None,
-            &candidate,
-            true,
-        );
-        let output = Command::new(root.join(&argv[0]))
-            .args(&argv[1..])
+        let output = Command::new(root.join(c["runner"].as_str().unwrap()))
+            .args(["check", "--config"])
+            .arg(root.join(c["initial_inventory"]["path"].as_str().unwrap()))
+            .args(["--candidate", &candidate, "--initial"])
             .current_dir(inputs.path())
             .env_remove("HOME")
             .output()
