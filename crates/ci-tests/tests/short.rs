@@ -1051,15 +1051,10 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
             .len(),
         4
     );
-    for (event_name, payload, expected_base) in [
+    for (event_name, mut payload, expected_base) in [
         (
             "pull_request",
             json!({"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate}}}),
-            h.base.clone(),
-        ),
-        (
-            "workflow_dispatch",
-            json!({"inputs":{"base":h.base,"candidate":h.candidate,"initial":false}}),
             h.base.clone(),
         ),
         (
@@ -1069,19 +1064,19 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
         ),
     ] {
         // The fixture's v4 provider retains its registered push rule when explicitly configured.
-        json_file(&h.root, ".chrono-harness/state/event.json", &payload);
         let revision = if event_name == "pull_request" {
             tools::pr_workflow_merge(&h.root, &h.base, &h.candidate)
         } else {
             h.candidate.clone()
         };
+        if event_name == "pull_request" {
+            payload["pull_request"]["merge_commit_sha"] = json!(revision);
+        }
+        h.payload = payload;
         git(&h.root, &["checkout", "--detach", &revision]);
+        let detection = h.detection();
         let o = h
-            .command(&["check", "--unit", "alpha"])
-            .env(prepared::SOURCE, "ci")
-            .env("GITHUB_EVENT_NAME", event_name)
-            .env("GITHUB_EVENT_PATH", &event)
-            .env("CHRONO_WORKFLOW_REVISION", &revision)
+            .command(&["check", "--unit", "alpha"], &detection, &Value::Null)
             .output()
             .unwrap();
         assert_eq!(
@@ -1096,6 +1091,17 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
             assert_eq!(r["request"]["base"], expected_base);
         }
     }
+    h.payload = json!({"inputs":{"base":h.base,"candidate":h.candidate,"initial":false}});
+    let unsupported = h
+        .command(&["check", "--unit", "alpha"], &detection, &Value::Null)
+        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .output()
+        .unwrap();
+    assert_eq!(
+        unsupported.status.code(),
+        Some(2),
+        "gated parent accepted workflow_dispatch: {unsupported:?}"
+    );
 }
 #[test]
 fn local_collection_rejects_stale_failed_and_wrong_pin_reports_without_execution() {
