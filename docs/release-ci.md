@@ -28,6 +28,8 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 python3 .chrono-harness/release/build.py . .chrono-harness/cache/release-platform
 ```
 
+本仓原生 CI 中订阅编译缓存的发布命令明确传入 `CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo`，与缓存探测及配置文件缺失声明使用同一目录。变量由现有 `/usr/bin/env` 转交给原调度入口，参数、单元及依赖不变；工作目录仍为各实际检出根。普通本地入口继续继承调用环境，不据此宣称与 CI 同判。具体缓存合同见[缓存归属](ci-cache.md#本仓的缓存归属)。
+
 Rust、发布资产和验证操作由该宿主入口及配方管理，生成器不解析它们。`ci.release.verify` 是明确登记的宿主操作，已加入 ci-tests 计划；发布源及输出也连接到 distribution-tests。迁移旧手写工作流时先核固定基线字节，生成器不自动接管其他文件。
 
 真实 CLI 和 shell 使用方测试覆盖字面参数、失败原件、定制保留、无写入复用、漂移、错误登记和输出归属。历史原生构建与公开包结果归[原运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/36472602944)及[发布](distribution.md)，不在这里维护测试数量或安装记录。每次交付须核所选候选、平台和实际使用方；旧结果不能证明当前候选、其他宿主、full 工作流执行、完整输入或确定性同判。
@@ -86,7 +88,7 @@ v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、�
 
 Python 发布 integration 组保留真实 distribution pack，并加入真实 cache CLI 的 plan→recover→stage→consumer→plan 回归。该组明确增加 `build_cache`，本地 FILEMAP、shared_operations、两原生 job 的 needs／downloads 同步登记，未新增独立单元。回归用同字节真实 CLI 检出 inode 替换，核传输摘要、恢复原件及重新规划的执行物身份；它不模拟原生后端、不同编译配置或完整外围 workflow。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures；原生 collector 仍要求全部真实单元成功。新增构建、下载、回归成本应分别实测，其他登记成本仍为 unmeasured。
 
-发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。版本和摘要以该登记及[工作树政策](../.chrono-harness/worktree.json)为准，不在操作说明复制本轮主机读数。未知 Git 字节继续在执行前拒绝，候选是否可用仍须实际验证。
+发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。Git 按所选政策一次解析并固定本轮实际身份；显式配置版本或摘要预期时，不符仍在执行前拒绝。运行读数归 state／线上原件，候选是否可用仍须实际验证。
 
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
 
