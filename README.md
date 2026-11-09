@@ -22,6 +22,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 | 要做的事 | 阅读位置 |
 | --- | --- |
+| 按固定流程开发、自动合并与发布 | [开发、集成与发布流程](docs/development.md) |
 | 生成 AI 工作指南和技能文件 | [指南生成](docs/instructions.md) |
 | 生成 CI、准备事件输入 | [CI 使用说明](docs/ci.md) |
 | 提高合并效率、配置默认合并规则 | [宿主默认合并方案](docs/merging.md) |

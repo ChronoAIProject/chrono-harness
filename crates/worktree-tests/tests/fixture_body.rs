@@ -1279,6 +1279,11 @@ fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing
 
 #[test]
 fn explicit_paged_partition_rejects_prepared_record_drift_before_activation() {
+    if !isolated_capability::isolated_capability_test(
+        "fixture_body::explicit_paged_partition_rejects_prepared_record_drift_before_activation",
+    ) {
+        return;
+    }
     let h = host();
     let (store, allocation, _, owner_bytes, _, _) = paged_producer_fixture(&h);
     let root = allocation.path().to_owned();

@@ -1,17 +1,35 @@
 # chrono-ci: owned github-release/v1
 name: "chrono-release-build"
 on:
+  workflow_run:
+    workflows: ["chrono / collection"]
+    branches: ["dev"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       source:
         description: Source revision to check out
         required: true
         type: string
+      channel:
+        description: Build artifacts or publish a verified source
+        type: choice
+        default: build
+        options: [build, preview, stable]
+      verified_run:
+        description: Successful landing CI run ID
+        type: string
+      verified_attempt:
+        description: Original successful CI attempt
+        type: string
+      version:
+        description: Explicit stable version matching the source plan
+        type: string
 permissions:
   contents: read
 jobs:
   linux_build_runner:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -23,7 +41,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -73,6 +91,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_runner"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Seal producer cache contents
@@ -109,7 +132,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_instructions:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -121,7 +144,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -164,6 +187,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_instructions"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Seal producer cache contents
@@ -200,7 +228,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_ci:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -212,7 +240,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -255,6 +283,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_ci"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Seal producer cache contents
@@ -291,7 +324,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_ci:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -303,7 +336,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -346,6 +379,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_ci"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Seal producer cache contents
@@ -382,7 +420,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_registration:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -394,7 +432,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -437,6 +475,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_registration"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Seal producer cache contents
@@ -473,7 +516,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_filemap:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -485,7 +528,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -528,6 +571,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_filemap"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Seal producer cache contents
@@ -564,7 +612,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_routes:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -576,7 +624,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -619,6 +667,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_routes"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Seal producer cache contents
@@ -655,7 +708,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_projects:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -667,7 +720,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -710,6 +763,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_projects"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Seal producer cache contents
@@ -746,7 +804,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_cost:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -758,7 +816,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -801,6 +859,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_cost"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Seal producer cache contents
@@ -837,7 +900,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_mixed:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -849,7 +912,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -892,6 +955,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_mixed"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Seal producer cache contents
@@ -928,7 +996,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_workflow:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -940,7 +1008,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -983,6 +1051,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_workflow"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Seal producer cache contents
@@ -1019,7 +1092,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_inputs:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1031,7 +1104,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1074,6 +1147,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_inputs"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Seal producer cache contents
@@ -1110,7 +1188,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_distribution:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1122,7 +1200,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1165,6 +1243,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_distribution"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Seal producer cache contents
@@ -1201,7 +1284,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_worktree:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1213,7 +1296,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1256,6 +1339,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_worktree"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Seal producer cache contents
@@ -1292,7 +1380,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_distribution_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_distribution"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1304,7 +1392,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1355,6 +1443,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_distribution_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Seal producer cache contents
@@ -1391,7 +1484,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_worktree_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_ci","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1403,7 +1496,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1470,6 +1563,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_worktree_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Seal producer cache contents
@@ -1506,7 +1604,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_runner_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1518,7 +1616,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1562,6 +1660,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_runner_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Seal producer cache contents
@@ -1598,7 +1701,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_inputs_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1610,7 +1713,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1718,6 +1821,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_inputs_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Seal producer cache contents
@@ -1754,7 +1862,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_ci_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1766,7 +1874,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1821,6 +1929,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_ci_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Seal producer cache contents
@@ -1857,7 +1970,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_ci_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1869,7 +1982,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -1914,6 +2027,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_ci_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Seal producer cache contents
@@ -1950,7 +2068,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_registration_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1962,7 +2080,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2007,6 +2125,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_registration_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Seal producer cache contents
@@ -2043,7 +2166,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_projects_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2055,7 +2178,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2104,6 +2227,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_projects_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Seal producer cache contents
@@ -2140,7 +2268,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_workflow_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2152,7 +2280,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2206,6 +2334,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_workflow_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Seal producer cache contents
@@ -2242,7 +2375,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_instructions_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2254,7 +2387,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2297,6 +2430,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_instructions_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Seal producer cache contents
@@ -2333,7 +2471,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_filemap_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2345,7 +2483,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2393,6 +2531,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_filemap_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Seal producer cache contents
@@ -2429,7 +2572,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_routes_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2441,7 +2584,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2484,6 +2627,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_routes_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Seal producer cache contents
@@ -2520,7 +2668,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_cost_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2532,7 +2680,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2579,6 +2727,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_cost_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Seal producer cache contents
@@ -2615,7 +2768,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_mixed_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost","linux_build_judge_mixed"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2627,7 +2780,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2675,6 +2828,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_mixed_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Seal producer cache contents
@@ -2711,7 +2869,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_package:
-    if: ${{ always() && github.event.deleted != true }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_diagnostics_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests","linux_verify_pr_tests","linux_verify_host_release_native_tests"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2723,7 +2881,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2918,6 +3076,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_package"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p '.chrono-harness/cache'
           printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > '.chrono-harness/cache/release-dependencies.json'
@@ -2932,7 +3095,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_runner:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -2944,7 +3107,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -2994,6 +3157,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_runner"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Seal producer cache contents
@@ -3030,7 +3198,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_instructions:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3042,7 +3210,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3085,6 +3253,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_instructions"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Seal producer cache contents
@@ -3121,7 +3294,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_ci:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3133,7 +3306,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3176,6 +3349,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_ci"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Seal producer cache contents
@@ -3212,7 +3390,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_ci:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3224,7 +3402,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3267,6 +3445,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_ci"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Seal producer cache contents
@@ -3303,7 +3486,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_registration:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3315,7 +3498,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3358,6 +3541,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_registration"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Seal producer cache contents
@@ -3394,7 +3582,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_filemap:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3406,7 +3594,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3449,6 +3637,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_filemap"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Seal producer cache contents
@@ -3485,7 +3678,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_routes:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3497,7 +3690,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3540,6 +3733,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_routes"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Seal producer cache contents
@@ -3576,7 +3774,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_projects:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3588,7 +3786,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3631,6 +3829,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_projects"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Seal producer cache contents
@@ -3667,7 +3870,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_cost:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3679,7 +3882,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3722,6 +3925,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_cost"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Seal producer cache contents
@@ -3758,7 +3966,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_mixed:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3770,7 +3978,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3813,6 +4021,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_mixed"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Seal producer cache contents
@@ -3849,7 +4062,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_workflow:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3861,7 +4074,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3904,6 +4117,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_workflow"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Seal producer cache contents
@@ -3940,7 +4158,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_inputs:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3952,7 +4170,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -3995,6 +4213,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_inputs"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Seal producer cache contents
@@ -4031,7 +4254,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_distribution:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4043,7 +4266,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4086,6 +4309,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_distribution"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Seal producer cache contents
@@ -4122,7 +4350,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_worktree:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4134,7 +4362,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4177,6 +4405,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_worktree"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Seal producer cache contents
@@ -4213,7 +4446,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_distribution_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_distribution"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4225,7 +4458,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4276,6 +4509,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_distribution_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Seal producer cache contents
@@ -4312,7 +4550,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_worktree_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_ci","macos_build_worktree"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4324,7 +4562,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4391,6 +4629,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_worktree_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Seal producer cache contents
@@ -4427,7 +4670,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_runner_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4439,7 +4682,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4483,6 +4726,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_runner_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Seal producer cache contents
@@ -4519,7 +4767,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_inputs_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4531,7 +4779,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4639,6 +4887,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_inputs_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Seal producer cache contents
@@ -4675,7 +4928,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_ci_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_worktree"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4687,7 +4940,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4742,6 +4995,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_ci_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Seal producer cache contents
@@ -4778,7 +5036,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_ci_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4790,7 +5048,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4835,6 +5093,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_ci_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Seal producer cache contents
@@ -4871,7 +5134,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_registration_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4883,7 +5146,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -4928,6 +5191,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_registration_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Seal producer cache contents
@@ -4964,7 +5232,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_projects_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4976,7 +5244,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5025,6 +5293,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_projects_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Seal producer cache contents
@@ -5061,7 +5334,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_workflow_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_worktree"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5073,7 +5346,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5127,6 +5400,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_workflow_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Seal producer cache contents
@@ -5163,7 +5441,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_instructions_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5175,7 +5453,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5218,6 +5496,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_instructions_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Seal producer cache contents
@@ -5254,7 +5537,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_filemap_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5266,7 +5549,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5314,6 +5597,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_filemap_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Seal producer cache contents
@@ -5350,7 +5638,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_routes_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5362,7 +5650,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5405,6 +5693,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_routes_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Seal producer cache contents
@@ -5441,7 +5734,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_cost_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5453,7 +5746,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5500,6 +5793,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_cost_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Seal producer cache contents
@@ -5536,7 +5834,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_mixed_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost","macos_build_judge_mixed"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5548,7 +5846,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5596,6 +5894,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_mixed_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Seal producer cache contents
@@ -5632,7 +5935,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_package:
-    if: ${{ always() && github.event.deleted != true }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_diagnostics_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests","macos_verify_pr_tests","macos_verify_host_release_native_tests"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5644,7 +5947,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5839,6 +6142,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_package"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           mkdir -p '.chrono-harness/cache'
           printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > '.chrono-harness/cache/release-dependencies.json'
@@ -5853,7 +6161,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_diagnostics_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -5865,7 +6173,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5908,6 +6216,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_diagnostics_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Seal producer cache contents
@@ -5944,7 +6257,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_diagnostics_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5956,7 +6269,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -5999,6 +6312,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_diagnostics_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Seal producer cache contents
@@ -6035,7 +6353,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_cache:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6047,7 +6365,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6090,6 +6408,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_cache"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Seal producer cache contents
@@ -6126,7 +6449,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_cache_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_cache"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6138,7 +6461,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6182,6 +6505,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_cache_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Seal producer cache contents
@@ -6218,7 +6546,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_cache:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6230,7 +6558,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6273,6 +6601,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_cache"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Seal producer cache contents
@@ -6309,7 +6642,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_cache_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_cache"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6321,7 +6654,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6365,6 +6698,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_cache_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Seal producer cache contents
@@ -6401,7 +6739,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_native_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6413,7 +6751,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6433,6 +6771,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_bootstrap_native_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
       - name: Preserve original release artifacts
@@ -6445,7 +6788,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_bootstrap_native_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6457,7 +6800,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6477,6 +6820,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_bootstrap_native_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
       - name: Preserve original release artifacts
@@ -6489,7 +6837,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_launcher_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6501,7 +6849,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6521,6 +6869,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_bootstrap_launcher_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
       - name: Preserve original release artifacts
@@ -6533,7 +6886,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_bootstrap_launcher_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6545,7 +6898,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6565,6 +6918,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_bootstrap_launcher_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
       - name: Preserve original release artifacts
@@ -6577,7 +6935,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_pr_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6589,7 +6947,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6609,6 +6967,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_pr_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
       - name: Preserve original release artifacts
@@ -6621,7 +6984,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_pr_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6633,7 +6996,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6653,6 +7016,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_pr_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
       - name: Preserve original release artifacts
@@ -6665,7 +7033,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6677,7 +7045,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6697,6 +7065,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_identifiers_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
       - name: Preserve original release artifacts
@@ -6709,7 +7082,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6721,7 +7094,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6741,6 +7114,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_identifiers_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
       - name: Preserve original release artifacts
@@ -6753,7 +7131,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_release_frontend:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -6764,7 +7142,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6783,6 +7161,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_release_frontend"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
       - name: Preserve original release artifacts
@@ -6795,7 +7178,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_release_native_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["linux_release_frontend","linux_build_cache"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6807,7 +7190,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6828,6 +7211,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_release_native_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
       - name: Preserve original release artifacts
@@ -6840,7 +7228,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_release_frontend:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -6851,7 +7239,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6870,6 +7258,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_release_frontend"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
       - name: Preserve original release artifacts
@@ -6882,7 +7275,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_release_native_tests:
-    if: ${{ github.event.deleted != true }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["macos_release_frontend","macos_build_cache"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6894,7 +7287,7 @@ jobs:
       - name: Check out requested release source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: ${{ inputs.source || github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -6915,6 +7308,11 @@ jobs:
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_release_native_tests"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
       - name: Preserve original release artifacts
@@ -6924,5 +7322,179 @@ jobs:
         with:
           name: "chrono-release-macos-verify_host_release_native_tests-${{ github.run_id }}-${{ github.run_attempt }}"
           path: ".chrono-harness/cache/release-results/verify_host_release_native_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+  publish:
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    permissions:
+      contents: write
+      actions: read
+    needs: ["linux_release_frontend","linux_package","macos_package"]
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
+      - name: Download selected original artifact from linux_package
+        if: ${{ always() && needs.linux_package.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_package.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/linux/"
+      - name: Download selected original artifact from macos_package
+        if: ${{ always() && needs.macos_package.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_package.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-platforms/macos/"
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "publish"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-publication' '--deliver' '.chrono-harness/release/delivery.json'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-publication-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-publication/"
+          if-no-files-found: error
+          include-hidden-files: true
+  linux_install:
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    needs: ["publish","linux_release_frontend"]
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - &chrono_release_download_30
+        name: Download selected original artifact from publish
+        if: ${{ always() && needs.publish.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.publish.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-publication/"
+      - *chrono_release_download_14
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "linux_install"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-install-linux' '--install' '.chrono-harness/release/delivery.json' 'linux'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-linux-installation-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-install-linux/report/"
+          if-no-files-found: error
+          include-hidden-files: true
+  macos_install:
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    needs: ["publish","macos_release_frontend"]
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_30
+      - *chrono_release_download_29
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "macos_install"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-install-macos' '--install' '.chrono-harness/release/delivery.json' 'macos'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-macos-installation-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-install-macos/report/"
           if-no-files-found: error
           include-hidden-files: true
