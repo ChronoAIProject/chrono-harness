@@ -174,7 +174,7 @@ full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语�
 
 这样去掉普通生成时额外渲染／读取旧拓扑的逻辑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。已发布 Go／TS／mix 示例继续绑定其旧二进制；这不形成现役源码的兼容执行义务。
 
-本仓通过 projects.json 的 `ci.generate-job-gating-example` 操作维护该示例的生成工作流，委托同一 Rust 生成器；执行时沿用登记的 `chrono-worktree use` 保护。
+本仓通过 projects.json 的 `ci.generate-job-gating-example` 操作维护该示例的生成工作流；标准 CI 计划通过 `ci.verify-job-gating-example` 调用同一 Rust 生成器，校验已提交投影。执行时沿用登记的 `chrono-worktree use` 保护。
 
 ## 分配与执行
 
