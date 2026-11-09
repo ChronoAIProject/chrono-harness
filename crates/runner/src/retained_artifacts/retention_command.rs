@@ -41,6 +41,7 @@ enum Request {
     },
     MigratePolicy {
         previous_policy: Evidence,
+        originals: Option<Vec<String>>,
     },
     Enroll {
         enrollment: String,
@@ -169,9 +170,10 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
             current_consumers_released,
             &reason,
         ),
-        Request::MigratePolicy { previous_policy } => {
-            inventory.migrate_policy(&evidence(root, &previous_policy)?)
-        }
+        Request::MigratePolicy {
+            previous_policy,
+            originals,
+        } => inventory.migrate_policy(&evidence(root, &previous_policy)?, originals.as_deref()),
         Request::Enroll {
             enrollment,
             expected_identity,

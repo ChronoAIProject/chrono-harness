@@ -833,7 +833,7 @@ fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
         serde_json::to_vec(&policy).unwrap(),
     )
     .unwrap();
-    inventory(h.path()).migrate_policy(&serde_json::to_vec(&json!({"schema":"chrono-output-retention/v2","producers":{"fixture":[".chrono-harness/state/fixtures/"]},"keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap()).unwrap();
+    inventory(h.path()).migrate_policy(&serde_json::to_vec(&json!({"schema":"chrono-output-retention/v2","producers":{"fixture":[".chrono-harness/state/fixtures/"]},"keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap(), None).unwrap();
     let live = inventory(h.path())
         .plan("fixture", path, true, json!(null))
         .unwrap();
@@ -2713,7 +2713,7 @@ fn policy_migration_recovers_interrupted_transactions_and_preserves_live_owners(
             let live = chrono_harness::ownership::DirectoryLease::acquire(&address, true, None)
                 .unwrap()
                 .unwrap();
-            assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+            assert!(inventory(h.path()).migrate_policy(&previous, None).is_err());
             assert_eq!(fs::read(&declaration).unwrap(), interrupted);
             assert_eq!(ledger(h.path()), original);
             drop(live);
@@ -2728,13 +2728,13 @@ fn policy_migration_recovers_interrupted_transactions_and_preserves_live_owners(
                 )
                 .unwrap()
                 .unwrap();
-                assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+                assert!(inventory(h.path()).migrate_policy(&previous, None).is_err());
                 assert_eq!(fs::read(&declaration).unwrap(), interrupted);
                 assert_eq!(ledger(h.path()), original);
                 drop(live);
             }
 
-            let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+            let receipt = inventory(h.path()).migrate_policy(&previous, None).unwrap();
             assert_eq!(receipt["outputs_preserved"], 1);
             assert_eq!(receipt["effects"], "metadata-binding-only");
             assert_eq!(receipt["completion"], "not-established");
@@ -2748,7 +2748,7 @@ fn policy_migration_recovers_interrupted_transactions_and_preserves_live_owners(
                 fs::read(h.path().join(path)).unwrap(),
                 b"original failure bytes"
             );
-            inventory(h.path()).migrate_policy(&previous).unwrap();
+            inventory(h.path()).migrate_policy(&previous, None).unwrap();
         }
     }
 }
@@ -2797,20 +2797,20 @@ fn policy_migration_recovers_empty_transaction_addresses_but_preserves_unknown_r
         let live = chrono_harness::ownership::DirectoryLease::acquire(&address, true, None)
             .unwrap()
             .unwrap();
-        assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+        assert!(inventory(h.path()).migrate_policy(&previous, None).is_err());
         assert!(address.is_dir());
         assert_eq!(ledger(h.path()), original);
         drop(live);
 
         if residue == "empty" {
-            let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+            let receipt = inventory(h.path()).migrate_policy(&previous, None).unwrap();
             assert_eq!(receipt["outputs_preserved"], 1);
             assert!(!address.exists());
             let mut after = ledger(h.path());
             after["policy_sha256"] = original["policy_sha256"].clone();
             assert_eq!(after, original);
         } else {
-            assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+            assert!(inventory(h.path()).migrate_policy(&previous, None).is_err());
             assert!(address.is_dir());
             assert_eq!(ledger(h.path()), original);
             if residue == "capability" {
@@ -2864,7 +2864,7 @@ fn policy_migration_does_not_hold_descriptors_for_unrelated_outputs() {
     // Ownership capabilities deliberately use descriptors starting at 200.
     limit.rlim_cur = limit.rlim_cur.min(256);
     assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
-    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    let receipt = inventory(h.path()).migrate_policy(&previous, None).unwrap();
     assert_eq!(receipt["outputs_preserved"], 80);
     let mut after = ledger(h.path());
     after["policy_sha256"] = original["policy_sha256"].clone();
@@ -2932,7 +2932,7 @@ fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_depende
     policy["producers"]["check-original"] = json!([".chrono-harness/state/preparation/"]);
     let current = serde_json::to_vec(&policy).unwrap();
     fs::write(h.path().join(POLICY_PATH), &current).unwrap();
-    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    let receipt = inventory(h.path()).migrate_policy(&previous, None).unwrap();
     assert_eq!(receipt["outputs_preserved"], 5);
     assert_eq!(receipt["roots_preserved"], 5);
     assert_eq!(receipt["policy_sha256"], chrono_harness::sha256(&current));
@@ -2988,7 +2988,7 @@ fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_mi
     );
     assert!(
         inventory(h.path())
-            .migrate_policy(&previous)
+            .migrate_policy(&previous, None)
             .unwrap_err()
             .contains("live output")
     );
@@ -3003,7 +3003,7 @@ fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_mi
         serde_json::to_vec(&policy).unwrap(),
     )
     .unwrap();
-    assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+    assert!(inventory(h.path()).migrate_policy(&previous, None).is_err());
     assert_eq!(ledger(h.path()), original);
     policy["producers"]["fixture"] = json!([".chrono-harness/state/fixtures/"]);
     fs::write(
@@ -3011,7 +3011,7 @@ fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_mi
         serde_json::to_vec(&policy).unwrap(),
     )
     .unwrap();
-    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    let receipt = inventory(h.path()).migrate_policy(&previous, None).unwrap();
     assert_eq!(receipt["outputs_preserved"], 1);
     let mut after = ledger(h.path());
     after["policy_sha256"] = original["policy_sha256"].clone();
@@ -3055,6 +3055,7 @@ fn declared_policy_migration_isolates_other_bindings_and_protects_forward_depend
         .unwrap();
     let unrelated_id = unrelated.id().to_owned();
     unrelated.complete(json!({"exit":0})).unwrap();
+    let unrelated_reader = inventory(h.path()).consume(&unrelated_id).unwrap();
     policy["keep_seconds"] = json!(7200);
     let current = serde_json::to_vec(&policy).unwrap();
     fs::write(h.path().join(POLICY_PATH), &current).unwrap();
@@ -3066,11 +3067,21 @@ fn declared_policy_migration_isolates_other_bindings_and_protects_forward_depend
     assert!(blocked.stderr.contains("live output"), "{}", blocked.stderr);
     assert_eq!(ledger(h.path()), before);
     drop(dependency_reader);
+    let mut unscoped = request.clone();
+    unscoped.as_object_mut().unwrap().remove("originals");
+    let blocked = consumer_call(h.path(), unscoped);
+    assert_eq!(blocked.exit_code, 2);
+    assert!(
+        blocked.stderr.contains("migration required"),
+        "{}",
+        blocked.stderr
+    );
+    assert_eq!(ledger(h.path()), before);
     for invalid in [
         json!([]),
         json!([originals[1].0, originals[1].0]),
         json!(["missing"]),
-        json!(vec!["missing"; 33]),
+        json!((0..33).map(|n| format!("missing-{n}")).collect::<Vec<_>>()),
     ] {
         request["originals"] = invalid;
         assert_eq!(consumer_call(h.path(), request.clone()).exit_code, 2);
@@ -3137,6 +3148,7 @@ fn declared_policy_migration_isolates_other_bindings_and_protects_forward_depend
         blocked.stderr
     );
     assert_eq!(fs::read(&unrelated_record).unwrap(), unrelated_bytes);
+    drop(unrelated_reader);
 }
 
 #[test]
@@ -3183,7 +3195,9 @@ fn explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion() {
     // publications remain usable before the explicit owner migration.
     assert!(inventory(h.path()).consume(&old_id).is_err());
     let reader = inventory(h.path()).consume(&new_id).unwrap();
-    let blocked = inventory(h.path()).migrate_policy(&previous).unwrap_err();
+    let blocked = inventory(h.path())
+        .migrate_policy(&previous, None)
+        .unwrap_err();
     assert!(blocked.contains("live output"), "{blocked}");
     assert_eq!(ledger(h.path()), original);
     drop(reader);
@@ -3191,7 +3205,7 @@ fn explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion() {
     let mut unknown: Value = serde_json::from_slice(&previous).unwrap();
     unknown["keep_seconds"] = json!(7200);
     let unknown_binding = inventory(h.path())
-        .migrate_policy(&serde_json::to_vec(&unknown).unwrap())
+        .migrate_policy(&serde_json::to_vec(&unknown).unwrap(), None)
         .unwrap_err();
     assert!(
         unknown_binding.contains("migration required"),
@@ -3199,7 +3213,7 @@ fn explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion() {
     );
     assert_eq!(ledger(h.path()), original);
 
-    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    let receipt = inventory(h.path()).migrate_policy(&previous, None).unwrap();
     assert_eq!(receipt["outputs_preserved"], 2);
     assert_eq!(receipt["roots_preserved"], 2);
     assert_eq!(
@@ -3225,7 +3239,7 @@ fn explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion() {
         assert_eq!(record["policy_sha256"], chrono_harness::sha256(&current));
         drop(inventory(h.path()).consume(id).unwrap());
     }
-    inventory(h.path()).migrate_policy(&previous).unwrap();
+    inventory(h.path()).migrate_policy(&previous, None).unwrap();
     let mut repeated = ledger(h.path());
     repeated["policy_sha256"] = original["policy_sha256"].clone();
     assert_eq!(repeated, original);
@@ -4962,7 +4976,7 @@ fn consumer_adoption_keeps_old_inventory_expiry_and_capacity_while_future_entrie
         serde_json::to_vec(&policy).unwrap(),
     )
     .unwrap();
-    let migration = inventory(h.path()).migrate_policy(&previous).unwrap();
+    let migration = inventory(h.path()).migrate_policy(&previous, None).unwrap();
     assert_eq!(migration["effects"], "metadata-binding-only");
     assert_eq!(
         ledger(h.path())["outputs"][0]["expires"],
