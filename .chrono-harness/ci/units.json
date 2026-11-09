@@ -368,7 +368,7 @@
       "evidence_directory": ".chrono-harness/state/"
     },
     "startup": {
-      "schema": "chrono-shared-startup/v1", "directory": ".chrono-harness/startup/", "artifact": "chrono-startup", "download_action": "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0",
+      "schema": "chrono-shared-startup/v1", "directory": ".chrono-harness/startup/", "artifact": "chrono-startup-integration-proof", "download_action": "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0",
       "consumers": {
         "unit_runner": {
           "need": "Run the current candidate canonical check and its registered preparation.",
