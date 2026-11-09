@@ -2,6 +2,8 @@
 
 独立 PR 并行检查，通过必需检查后及时合并；只按实际依赖、冲突和有效输入决定先后。默认不要求分支追平目标，也不按 PR 编号或创建时间排队。
 
+本仓的整体开发方式见[开发、集成与发布流程](development.md)。仓库已允许 GitHub 原生自动合并；调用方在每个就绪 PR 上提前启用，入口归[宿主自动交付授权](../.chrono-harness/instructions/host-context.md#自动交付授权)。必需 CI 和现有保护满足后，GitHub 直接合并。AI 负责修复失败及核对落地结果，不增加合并前放行步骤。
+
 此默认由产品的 `candidate.landing` 原子提供，新宿主运行 `chrono-instructions init` 即采用。现有宿主按[默认采用步骤](instructions.md#新默认的宿主采用边界)保留定制并更新登记源。GitHub CI 由 `chrono-ci init/generate` 生成；生成器不修改远端保护规则或自动取得合并权限。
 
 ## GitHub 配置
@@ -29,7 +31,7 @@ gh api --method PUT repos/ChronoAIProject/chrono-harness/rulesets/24355777 --inp
 
 GitHub 运行、job 和 artifact API 的 `head_sha` 对 PR 指 H，不能拿它代替正在测试的 M。检测结果分别绑定 `candidate=M` 和 `event_head=H`；汇总按 H 核对原生运行归属，按 M 核对实际测试和原始报告。缺失、错配、失败或意外跳过的必需结果继续拒绝，不能只凭同名绿灯合并。
 
-新 feature／integration 仍从创建当时最新 dev 开始。目标分支前移本身不要求重建；实际冲突、必要输入或明确依赖变化时，保全工作并补验受影响范围。依赖 PR 可以先后交付，或在明确 integration 候选中组合验收。规则和稳定性改动继续在 fresh integration 验证。
+新 feature／integration 仍从创建当时最新 dev 开始。目标分支前移本身不要求重建；实际冲突、必要输入或明确依赖变化时，保全工作并补验受影响范围。依赖 PR 可以先后交付，或在明确 integration 候选中组合验收。规则、CI、门控、发布链和稳定性改动先走 feature → 新 integration 的真实 PR，验收并实际合入后再交付 dev；共同合同的冲突表示与局限归[开发流程](development.md#并行改动与真实冲突)。
 
 检查时的 M1 与落地时的 M2 可能不同。这套默认方案通过目标 push 发现新增交互并及时修复，不能声称准入时严格同树。有明确同树要求的发布、信任根或不可逆操作，须由宿主另行登记并验证能构建实际落地树的合并执行方案；未验证的 `merge_group` 或队列名称不构成保证。完整治理的 integration 凭据仍按其明确绑定消费，不能将 M1 的凭据冒用到 M2。
 
