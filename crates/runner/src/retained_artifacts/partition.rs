@@ -875,6 +875,13 @@ impl Inventory {
         let mut objects = gate.objects.borrow_mut();
         let mut roles = gate.roles.borrow_mut();
         let before = objects.clone();
+        // partition_load reads the first addressed declaration's cursor. Keep
+        // that single owner rather than synchronously rewriting every related
+        // original whenever bounded disposal advances the component cursor.
+        let cursor_owner = gate
+            .maintenance
+            .then(|| objects.keys().next().cloned())
+            .flatten();
         // Exact semantic snapshots already read under these directory leases.
         // Only a real durable transition needs another atomic write/fsync.
         let mut persisted = BTreeMap::new();
@@ -995,7 +1002,7 @@ impl Inventory {
                 .len()
                 .saturating_sub(self.policy.max_summaries);
             record.summaries.drain(..excess);
-            if gate.maintenance {
+            if cursor_owner.as_ref() == Some(id) {
                 record.cursor = ledger.cursor;
             }
             self.persist_change(
