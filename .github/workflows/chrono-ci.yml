@@ -3623,7 +3623,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
-          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock') }}"
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', '.chrono-harness/release/native/Cargo.lock', '.chrono-harness/release/native-tests/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
           path: |
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
@@ -3701,6 +3701,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'release-build' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.release-build
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', '.chrono-harness/release/native/Cargo.lock', '.chrono-harness/release/native-tests/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_runner:
     outputs:
       production: ${{ steps.production.outputs.production }}

@@ -76,7 +76,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_runner"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -167,7 +167,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_instructions"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -258,7 +258,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_ci"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -349,7 +349,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_ci"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -440,7 +440,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_registration"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -531,7 +531,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_filemap"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -622,7 +622,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_routes"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -713,7 +713,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_projects"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -804,7 +804,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_cost"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -895,7 +895,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_mixed"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -986,7 +986,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_workflow"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1077,7 +1077,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_inputs"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1168,7 +1168,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_distribution"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1259,7 +1259,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_worktree"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1358,7 +1358,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_distribution_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1473,7 +1473,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_worktree_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1565,7 +1565,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_runner_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1721,7 +1721,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_inputs_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1824,7 +1824,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_ci_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1917,7 +1917,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_ci_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2010,7 +2010,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_registration_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2108,7 +2108,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_projects_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2210,7 +2210,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_workflow_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2301,7 +2301,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_instructions_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2397,7 +2397,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_filemap_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2488,7 +2488,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_routes_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2583,7 +2583,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_cost_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2679,7 +2679,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_mixed_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2924,7 +2924,7 @@ jobs:
         run: |
           mkdir -p '.chrono-harness/cache'
           printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > '.chrono-harness/cache/release-dependencies.json'
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/package' '--collect'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/package' '--collect'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2998,7 +2998,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_runner"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3089,7 +3089,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_instructions"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3180,7 +3180,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_ci"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3271,7 +3271,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_ci"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3362,7 +3362,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_registration"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3453,7 +3453,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_filemap"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3544,7 +3544,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_routes"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3635,7 +3635,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_projects"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3726,7 +3726,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_cost"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3817,7 +3817,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_mixed"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3908,7 +3908,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_workflow"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3999,7 +3999,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_inputs"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4090,7 +4090,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_distribution"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4181,7 +4181,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_worktree"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4280,7 +4280,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_distribution_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4395,7 +4395,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_worktree_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4487,7 +4487,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_runner_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4643,7 +4643,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_inputs_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4746,7 +4746,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_ci_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4839,7 +4839,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_ci_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4932,7 +4932,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_registration_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5030,7 +5030,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_projects_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5132,7 +5132,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_workflow_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5223,7 +5223,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_instructions_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5319,7 +5319,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_filemap_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5410,7 +5410,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_routes_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5505,7 +5505,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_cost_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5601,7 +5601,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_mixed_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5846,7 +5846,7 @@ jobs:
         run: |
           mkdir -p '.chrono-harness/cache'
           printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > '.chrono-harness/cache/release-dependencies.json'
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/package' '--collect'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/package' '--collect'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5913,7 +5913,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_diagnostics_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6004,7 +6004,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_diagnostics_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6095,7 +6095,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_cache"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6187,7 +6187,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_cache_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6278,7 +6278,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_cache"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6370,7 +6370,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_cache_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6438,7 +6438,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_bootstrap_native_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6482,7 +6482,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_bootstrap_native_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6526,7 +6526,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_bootstrap_launcher_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6570,7 +6570,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_bootstrap_launcher_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6614,7 +6614,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_pr_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6658,7 +6658,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_pr_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6702,7 +6702,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_identifiers_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6746,7 +6746,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_identifiers_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6788,7 +6788,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_release_frontend"
         run: |
-          '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6833,7 +6833,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_release_native_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6875,7 +6875,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_release_frontend"
         run: |
-          '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6920,7 +6920,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_release_native_tests"
         run: |
-          '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
