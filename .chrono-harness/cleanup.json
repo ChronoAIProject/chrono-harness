@@ -191,6 +191,30 @@
       "disposition": "dispose"
     },
     {
+      "path": ".chrono-harness/cache/host-release-native/",
+      "disposition": "finish-dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/host-release-native-tests/",
+      "disposition": "finish-dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release/",
+      "disposition": "finish-dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release-publication/",
+      "disposition": "finish-dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release-install-linux/",
+      "disposition": "finish-dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/release-install-macos/",
+      "disposition": "finish-dispose"
+    },
+    {
       "path": ".chrono-harness/cache/release-frontend/",
       "disposition": "dispose"
     },
