@@ -2087,6 +2087,99 @@ fn automatic_import_is_explicit_and_not_a_historical_birth() {
 }
 
 #[test]
+fn observational_import_binds_original_configuration_without_adopting_its_format() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    for detached in [false, true] {
+        let target = h.parent.join(if detached {
+            "retired detached configuration"
+        } else {
+            "retired named configuration"
+        });
+        let mut args = vec!["worktree", "add"];
+        if detached {
+            args.push("--detach");
+        } else {
+            args.extend(["-b", "client/retired-configuration"]);
+        }
+        args.extend([target.to_str().unwrap(), "dev"]);
+        git(&h.root, &args);
+        let config_path = target.join(POLICY);
+        let mut config = json(&fs::read(&config_path).unwrap()).unwrap();
+        config["schema"] = value!("chrono-worktree-config/v3");
+        config["git"]["identities"] = value!([]);
+        let config_bytes = serde_json::to_vec_pretty(&config).unwrap();
+        fs::write(&config_path, &config_bytes).unwrap();
+        let head = commit(&target);
+        fs::write(target.join("payload"), "unfinished source\n").unwrap();
+        output(&target);
+        let metadata = PathBuf::from(git(&target, &["rev-parse", "--absolute-git-dir"]));
+        let originals = [
+            target.join(".git"),
+            metadata.join("HEAD"),
+            metadata.join("index"),
+            target.join("payload"),
+            target.join(AUTO_POLICY),
+        ]
+        .map(|path| {
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        });
+
+        let (code, report, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+        assert_eq!(code, 0, "{report} {error}");
+        fs::write(&config_path, [&config_bytes[..], b"\n"].concat()).unwrap();
+        let (code, refused, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+        assert_ne!(code, 0, "{refused} {error}");
+        assert!(
+            refused["error"]
+                .as_str()
+                .unwrap()
+                .contains("differs from commit")
+        );
+        fs::write(&config_path, &config_bytes).unwrap();
+        let (code, imported, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
+        assert_eq!(code, 0, "{imported} {error}");
+        assert_eq!(imported["policy_source_root"], value!(h.root));
+        let ledger_bytes = fs::read(h.ledger_path(&target)).unwrap();
+        let ledger = json(&ledger_bytes).unwrap();
+        let entry = &ledger["entries"][0];
+        assert_eq!(entry["enrollment"]["observed_head"], head);
+        assert_eq!(
+            entry["enrollment"]["policy_inputs"][POLICY],
+            sha256(&config_bytes)
+        );
+        assert!(entry["terminal"].is_null());
+        let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+        assert_eq!(code, 0, "{observed} {error}");
+        let row = observed["worktree_status"]["worktrees"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["path"] == value!(target))
+            .unwrap();
+        assert_eq!(row["work_state"], "active");
+        assert_eq!(row["attention_required"], true);
+        for operation in ["use", "migrate", "finish"] {
+            let mut args = vec!["--path", target.to_str().unwrap()];
+            if operation == "use" {
+                args.extend(["--operation", "use.consumer"]);
+            }
+            let (code, refused, error) = h.auto(operation, &args);
+            assert_ne!(code, 0, "{operation}: {refused} {error}");
+            assert!(refused["error"].as_str().unwrap().contains("identities"));
+        }
+        assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger_bytes);
+        assert_eq!(fs::read(&config_path).unwrap(), config_bytes);
+        assert!(target.join("output λ/data").is_file());
+        for (path, bytes) in originals {
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+    }
+}
+
+#[test]
 fn detached_import_preserves_unresolved_index_and_reports_unfinished_work() {
     let h = Host::new("payload");
     h.kernel_cleanup();

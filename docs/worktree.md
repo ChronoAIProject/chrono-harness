@@ -486,6 +486,8 @@ chrono-worktree import --path /exact/existing-worktree
 chrono-worktree migrate --path /exact/enrolled-worktree
 ```
 
+显式 `import` 按调用宿主当前已提交的政策接管保管责任，同时逐字核对并绑定目标原提交中的配置与政策输入；不解析目标的退休配置格式，也不改源码、HEAD 或索引。未提交的政策输入仍拒绝导入。目标自己的政策采用归 `migrate`，普通 use／finish／清理继续严格解释现役格式并核对原绑定；导入不授予绕过升级或迁移的权限。`status --path` 同样只观察本地状态，不采用目标政策。
+
 ### 本地状态与 AI 提醒
 
 `status` 从协调者已有的逐工作树账本和 Git inventory 观察本地状态。默认查看该协调者全部登记地址，包括物理检出已缺失的地址；`--path` 只查看指定地址。查询不导入、清理或补写任务终态。结果沿用生命周期报告及其现役保留政策，不另建成员清单或永久快照。

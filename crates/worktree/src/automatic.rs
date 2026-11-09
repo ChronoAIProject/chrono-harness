@@ -1241,7 +1241,7 @@ impl Manager {
         if self.scope == self.inputs.source_root {
             return Ok(());
         }
-        // Import binds an explicitly absent input without synthesizing it.
+        // A target without its own cleanup policy keeps the invoking policy.
         let path = no_symlink_parents(&self.scope, &self.inputs.config_path)?;
         let bytes = match fs::read(path) {
             Ok(bytes) => bytes,
@@ -1620,7 +1620,12 @@ impl Manager {
         kind: &str,
         receipt: Value,
     ) -> Result<(), String> {
-        self.adopt_live_policy(r)?;
+        // Explicit import observes existing work under the invoking host's
+        // current policy. Its original inputs are bound below as raw committed
+        // bytes; adopting the target's policy is a separate migrate operation.
+        if kind != "import" {
+            self.adopt_live_policy(r)?;
+        }
         let target = absolute(target, false)?;
         self.enrollment_available(&target)?;
         let cache_only = kind == "main-cache";
@@ -3849,7 +3854,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             )?
             .ok_or("automatic cleanup is not opted in")?;
             manager.protect_reports(r, &invoking)?;
-            if operation != "maintain" {
+            if !matches!(operation.as_str(), "maintain" | "status" | "import") {
                 manager.adopt_live_policy(r)?;
             }
             report["source_root"] = value!(manager.inputs.policy.coordinator_root);
