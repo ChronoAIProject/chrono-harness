@@ -33,7 +33,7 @@ macOS 27 不把某次源码 bootstrap 的安装摘要作为后续构建的固定
 
 本仓当前 scoped 入口没有调用已安装的 `chrono-inputs`，因此 core 的获取、构建、安装、共享传递及宿主工具声明一同移除。inputs／workflow 测试仍构建并运行项目自身的程序，发布也保留对应资产；这些使用方的计划和缓存继续有效。未来采用完整输入采集时，须由实际入口登记所需安装，不能据此为当前单元预先准备。
 
-macOS 27 不固定 curl、shasum、tar 的系统版本输出；它们使用与 macOS 26 政策相同的 `expected_version: null`，命令和真实下载／校验／解压用途继续登记。Verus 的所选版本、下载地址、摘要和证明结果合同归现役 bootstrap／项目操作。无实际使用方的 `CHRONO_XCODE_CONTENTS` 不进入环境。SDK、开发目录和链接器不覆盖为某一 Xcode 安装的绝对路径；沿已登记变量继承当前选择，未设置时由既有 Rust／Cargo 和 Xcode 工具选择。这些取舍不补齐 full 输入或执行物绑定。
+macOS 27 不固定 shasum、tar 的系统版本输出；二者使用与 macOS 26 政策相同的 `expected_version: null`，校验／解压操作继续登记。Verus 下载由 `host.verus-download` 委托 bootstrap 程序，curl 路径由该操作的参数指定；外层工具表不再重复登记没有直接 action 的 curl。Verus 的所选版本、下载地址、摘要和证明结果合同归现役 bootstrap／项目操作。无实际使用方的 `CHRONO_XCODE_CONTENTS` 不进入环境。SDK、开发目录和链接器不覆盖为某一 Xcode 安装的绝对路径；沿已登记变量继承当前选择，未设置时由既有 Rust／Cargo 和 Xcode 工具选择。这些取舍不补齐 full 输入或执行物绑定。
 
 普通构建与行为测试沿各自登记计划执行。
 
@@ -159,7 +159,8 @@ v2 位置拒绝符号链接路径段，包括悬空链接，以及 `..`。平台
 
 bootstrap 使用已有 profile、`rustup which --toolchain` 与官方组件摘要选择并重核
 Cargo／rustc；编译器、wrapper 和实际路径观察沿该生产者报告消费。完整宿主工具表
-不再重复登记没有直接 action 的 rustc／rustup，相关声明和 FILEMAP 边同步移除。
+不再重复登记没有直接 action 的 rustc／rustup，scoped 检查工具表也移除重复的 rustup。
+发布和缓存仍按各自现役命令登记 rustup，不由检查工具表代管。
 这不改变 bootstrap 的固定版本、组件绑定或失败拒绝，也不建立完整输入或同判。
 
 ### 退役 diagnostics 的专属输入链
