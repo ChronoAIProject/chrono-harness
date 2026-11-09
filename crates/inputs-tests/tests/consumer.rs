@@ -602,6 +602,28 @@ fn config_presence_upgrade_requires_registered_migration_evidence() {
 fn migration_fixture() -> (Host, Value) {
     migration_fixture_mode(false)
 }
+
+fn install_decoder(h: &Host, historical: bool) {
+    let source = if historical {
+        env!("CARGO_BIN_EXE_chrono-inputs-test-historical-decoder")
+    } else {
+        env!("CARGO_BIN_EXE_chrono-inputs-test-decoder")
+    };
+    let target = h.root().join(".chrono-harness/decoder");
+    host::copied_fixture_input(&h.root(), std::path::Path::new(source), &target);
+    fs::copy(source, target).unwrap();
+}
+
+fn decoder_mode(h: &mut Host, script: &str, mode: &str) {
+    let entry = h.values.get_mut(PROJECTS).unwrap()["scripts"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|entry| entry["id"] == script)
+        .unwrap();
+    entry["actions"]["execute"]["argv"] = json!([mode]);
+}
+
 fn migration_fixture_mode(selected: bool) -> (Host, Value) {
     let mut h = fixture();
     v2(&mut h);
@@ -612,33 +634,55 @@ fn migration_fixture_mode(selected: bool) -> (Host, Value) {
     {
         input.as_object_mut().unwrap().remove("presence");
     }
-    let decoder = include_str!("fixtures/direct-decoder.py");
-    let tests = include_str!("fixtures/direct-compatibility.py");
     // Selected targets remain full-v3. The actual selected schema transition
     // is workflow v1 -> v3, certified by the candidate's finite decoder/test.
-    let selected_decoder = include_str!("fixtures/selected-decoder.py");
-    let selected_tests = include_str!("fixtures/selected-compatibility.py");
     let (decoder, tests) = if selected {
         native_v3(&mut h);
-        (selected_decoder, selected_tests)
+        ("selected", "selected-check")
     } else {
-        (decoder, tests)
+        ("direct", "direct-check")
     };
-    for (id, path, code, pair) in [
+    for (id, path, mode, pair) in [
         (
             "decoder",
-            ".chrono-harness/decoder.py",
+            ".chrono-harness/decoder",
             decoder,
             json!({"test_script":"decoder-tests"}),
         ),
         (
             "decoder-tests",
-            ".chrono-harness/decoder-tests.py",
+            ".chrono-harness/decoder-tests",
             tests,
             json!({"tests_for":"decoder"}),
         ),
     ] {
-        fs::write(h.root().join(path), code).unwrap();
+        let source = std::path::Path::new(env!("CARGO_BIN_EXE_chrono-inputs-test-decoder"));
+        let destination = h.root().join(path);
+        host::copied_fixture_input(&h.root(), source, &destination);
+        fs::copy(source, destination).unwrap();
+        let tool = format!("transition-{id}");
+        let cfg = h.values.get_mut(CONFIG).unwrap();
+        cfg["tools"].as_array_mut().unwrap().push(json!({
+            "id":tool,"program":path,"resolution":"PATH-once",
+            "version_argv":["--version"],"expected_version":"chrono-inputs-transition 0.1.0"
+        }));
+        if selected {
+            cfg["input_closure"]["bindings"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!({
+                    "id":format!("{id}-inputs"),"consumer":format!("script:{id}"),
+                    "kind":"execution","inputs":[format!("tool:{tool}")]
+                }));
+        }
+        h.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge(
+                &format!("tool:{tool}"),
+                "runtime-input",
+                &format!("script:{id}"),
+            ));
         let mut f = file(
             path,
             json!([{"kind":"runtime-input","to":format!("script:{id}")}]),
@@ -650,7 +694,7 @@ fn migration_fixture_mode(selected: bool) -> (Host, Value) {
             .push(f);
         let p = h.values.get_mut(PROJECTS).unwrap();
         p["owners"].as_array_mut().unwrap().push(json!(id));
-        let mut script = json!({"id":id,"path":path,"actions":{"execute":{"operation":id,"tool":"python","argv":["-B",path]}}});
+        let mut script = json!({"id":id,"path":path,"language":"rust","actions":{"execute":{"operation":id,"tool":tool,"argv":[mode]}}});
         script
             .as_object_mut()
             .unwrap()
@@ -669,11 +713,7 @@ fn migration_fixture_mode(selected: bool) -> (Host, Value) {
         .as_array_mut()
         .unwrap()
         .push(json!({"test":"decoder-tests","cost":"unknown"}));
-    fs::write(
-        h.root().join(".chrono-harness/decoder.py"),
-        include_str!("fixtures/historical-decoder-rejects.py"),
-    )
-    .unwrap();
+    install_decoder(&h, true);
     if selected {
         select_config(&mut h, OLD_TARGET);
         // Keep an actual downstream request for view-integrity rejection tests.
@@ -694,7 +734,7 @@ fn migration_fixture_mode(selected: bool) -> (Host, Value) {
     h.save();
     h.base = h.candidate.clone();
     let before = capture(&h, "before");
-    fs::write(h.root().join(".chrono-harness/decoder.py"), decoder).unwrap();
+    install_decoder(&h, false);
     if selected {
         select_config(&mut h, NEW_TARGET);
     } else {
@@ -837,8 +877,7 @@ fn version_migration_rejects_ambiguous_incomplete_and_unmatched_selectors() {
 #[test]
 fn version_migration_cannot_rewrite_historical_input_semantics() {
     let (mut h, before) = migration_fixture();
-    let path = h.root().join(".chrono-harness/decoder.py");
-    fs::write(path, include_str!("fixtures/rewrite-direct-input.py")).unwrap();
+    decoder_mode(&mut h, "decoder", "rewrite-direct");
     h.save();
     let (exit, r) = migration_check(&h, &before);
     assert_ne!(exit, 0);
@@ -882,11 +921,7 @@ fn version_migration_requires_its_actual_compatibility_test_and_each_changed_ver
         "{r}"
     );
     h.values.get_mut(WORKFLOW).unwrap()["migrations"] = migrations;
-    fs::write(
-        h.root().join(".chrono-harness/decoder-tests.py"),
-        include_str!("fixtures/direct-compatibility-fails.py"),
-    )
-    .unwrap();
+    decoder_mode(&mut h, "decoder-tests", "direct-compatibility-fails");
     h.save();
     let (exit, r) = migration_check(&h, &before);
     assert_ne!(exit, 0);
@@ -1222,11 +1257,7 @@ fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
     let workflow = h.values[WORKFLOW].clone();
     h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([]);
     // A passing unrelated compatibility command cannot replace conversion.
-    fs::write(
-        h.root().join(".chrono-harness/decoder-tests.py"),
-        include_str!("fixtures/compatibility-without-conversion.py"),
-    )
-    .unwrap();
+    decoder_mode(&mut h, "decoder-tests", "compatibility-without-conversion");
     h.save();
     let (exit, report) = migration_check(&h, &before);
     assert_ne!(exit, 0);
@@ -1239,11 +1270,7 @@ fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
     );
     assert!(conversion(&report).is_null());
     h.values.insert(WORKFLOW.into(), workflow);
-    fs::write(
-        h.root().join(".chrono-harness/decoder-tests.py"),
-        include_str!("fixtures/selected-compatibility-fails.py"),
-    )
-    .unwrap();
+    decoder_mode(&mut h, "decoder-tests", "selected-compatibility-fails");
     h.save();
     let (exit, report) = migration_check(&h, &before);
     assert_ne!(exit, 0);
@@ -1258,8 +1285,7 @@ fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
 #[test]
 fn selected_decoder_cannot_rewrite_original_effective_config() {
     let (mut h, before) = migration_fixture_mode(true);
-    let path = h.root().join(".chrono-harness/decoder.py");
-    fs::write(path, include_str!("fixtures/rewrite-selected-input.py")).unwrap();
+    decoder_mode(&mut h, "decoder", "rewrite-selected");
     h.save();
     let (exit, report) = migration_check(&h, &before);
     assert_ne!(exit, 0);
