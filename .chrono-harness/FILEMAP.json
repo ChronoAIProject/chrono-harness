@@ -244,6 +244,8 @@
     {"path":"crates/inputs-tests/tests/support/record_filemap.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/support/zero.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/consumer.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
+    {"path":"crates/inputs-tests/tests/decoder_contract.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
+    {"path":"crates/inputs-tests/tests/fixtures/transition.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"docs/inputs.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/distribution/Cargo.toml","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/Cargo.lock","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
