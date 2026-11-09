@@ -1,4 +1,8 @@
 use serde_json::{Value, json};
+#[path = "../fixtures/transition_decoder.rs"]
+mod transition_decoder;
+#[path = "../fixtures/transition_decoder_tests.rs"]
+mod transition_decoder_tests;
 use std::{
     env,
     ffi::OsStr,

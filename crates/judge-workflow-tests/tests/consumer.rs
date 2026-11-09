@@ -8,6 +8,10 @@ mod host;
 mod native_tools;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "fixtures/transition_decoder.rs"]
+mod transition_decoder;
+#[path = "fixtures/transition_decoder_tests.rs"]
+mod transition_decoder_tests;
 use chrono_harness::sha256;
 use host::{FixtureProbe, Host, install_program};
 use serde_json::{Value, json};
