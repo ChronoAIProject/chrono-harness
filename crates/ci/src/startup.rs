@@ -32,12 +32,8 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
         || s.directory
             .contains(['\0', '\r', '\n', '*', '?', '[', ']', '!'])
         || s.directory.contains("${{")
-        || s.artifact.is_empty()
         || s.artifact.len() > 128
-        || !s
-            .artifact
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+        || !chrono_harness::verified_identifiers::valid_id(s.artifact.as_bytes())
         || s.consumers.is_empty()
     {
         return Err(
