@@ -27,6 +27,8 @@ filemap 图内核及其独立预期也分别注册 `verify.ci-literals`、
 `verify.project-languages`、`verify.filemap-graph` 及对应测试操作，均保留原真实生产调用。
 仍不代表全仓覆盖完成。
 
+CI 判官的同一 collection 证明根还定义 action 工具引用的来源准入：采用完整登记时，工具必须存在于有效配置，profile 副本不能补齐缺失；独立 scoped 宿主继续使用其明确工具表。实际 snapshot 校验调用该 Verus 函数，独立预期覆盖两种来源的全部存在／缺失组合。工具声明解码、两端变化传播及实际进程由相应行为测试与正式检查验证，不由这个局部谓词证明；沿用现有两项整 crate 证明操作。
+
 本批把已有整 crate Verus 根补入 FILEMAP 的同源绑定：`chrono-identifiers` 的
 `verify.identifiers`／`verify.identifiers-tests`，runner 的
 `verify.retention-release`／`verify.retention-release-tests` 与

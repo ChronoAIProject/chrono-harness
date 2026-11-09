@@ -177,7 +177,7 @@ JSON 解码器拒绝重复成员；profile、provider、command、protocol 类�
 | judge | `{program, args, env?, timeout_seconds, output_limit_bytes}`；明确执行物／解释器及 argv，正上限，每条捕获流最多 64 MiB |
 | report_path | `.chrono-harness/state/` 下安全相对文件，同时位于声明产物目录内 |
 | policy.filemap / projects | 明确相对路径；FILEMAP v1 为历史／v2 为当前，projects v1 为历史／v2 明确语言；不支持在受检查范围两端迁移登记路径 |
-| policy.tools | 工具 ID → 执行路径或 PATH 命令；旧 scoped 解析方式。当前 registration_config 提供真实版本声明，所选工具每计划绑定一次 |
+| policy.tools | 仅未采用 registration_config 的独立 scoped 宿主使用，工具 ID → 执行路径或 PATH 命令。采用完整登记时可省略；固定基线中已有的副本只作旧数据读取，不参与工具准入、选测或执行 |
 | policy.bindings | 仅历史 FILEMAP v1；当前 v2 拒绝重复绑定，消费 FILEMAP.execution_plans |
 | policy.registration_config | 可选完整配置路径；当前宿主用候选解码器解释历史数据及工具声明 |
 | policy.facts_config | scoped v2 必需，`.chrono-harness/` 下字面路径，选择候选 full-v3 Git 绑定；v1 拒绝，包括 null |
@@ -186,6 +186,10 @@ JSON 解码器拒绝重复成员；profile、provider、command、protocol 类�
 | policy.required_inputs | 此 profile 必需的明确普通已跟踪输入 |
 | policy.adoption_base | 省略／null，或明确允许其缺少旧 CI profile 的精确完整 base OID |
 | policy.operation_timeout_seconds / operation_output_limit_bytes | 旧操作进程的正数兜底上限 |
+
+采用 `registration_config` 的宿主从同一份有效配置取得完整工具声明，用于 action 引用校验、两端工具变化选测和实际执行。真实声明缺失时拒绝执行，不从 profile 副本补齐；工具版本、路径或其他声明字段变化会选中其明确绑定的检查。本仓及示例已移除重复工具路径表，完整登记继续维护实际工具版本与安装位置。引用准入直接调用现有 CI 判官证明根中的同源 Verus 函数；JSON 解码、声明运输和外部进程行为仍各自验收。
+
+**产品与宿主政策同时修改：**上述唯一工具来源修正与两份现役 profile 的副本删除一同实施，已迁移登记宿主测试。原独立 scoped 工具合同保留；现有 collection 的整 crate 证明、独立预期及真实消费者行为按同次 DELTA 验收，不增加证明进程或预算。完整构建、CI 和存储成本未测。
 
 采用的 profile 设 `require_tool_bindings: true`，为 `cargo`、`rustc` 声明 `tool_bindings`，含预期路径、SHA-256、精确 `--version` 输出，以及可选 `allow_relocation`，允许等价本地 rustup 安装。登记操作前，生产者解析所选工具链文件，拒绝配置／PATH／编译器选择冲突，报告真实路径及身份。
 
