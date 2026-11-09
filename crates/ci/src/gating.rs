@@ -9,6 +9,63 @@ pub(crate) const MARKER: &str = "# chrono-ci: owned github-job-gating/v1\n";
 pub const DETECTION_ENV: &str = "CHRONO_CI_DETECTION";
 pub const NEEDS_ENV: &str = "CHRONO_CI_NEEDS";
 
+/// 已由 needs 确认成功的依赖，继续核对所选原生执行的终态。
+pub fn completed_native_job(
+    listed: &Value,
+    mut read: impl FnMut(u64) -> Result<Value, String>,
+) -> Result<Value, String> {
+    let failed = || "latest native execution did not uniquely succeed".to_string();
+    use crate::verified_literals::{self as policy, NativeJobState};
+    let id = match policy::native_job_state(
+        listed["status"].as_str(),
+        listed["conclusion"].as_str(),
+        listed.get("conclusion").map(Value::is_null),
+        listed["id"].as_u64(),
+    ) {
+        NativeJobState::Succeeded => return Ok(listed.clone()),
+        NativeJobState::ReadDetail { id } => id,
+        NativeJobState::Rejected => return Err(failed()),
+    };
+    let detail = read(id)?;
+    // JSON is decoded/encoded by the fixed Serde interface. Preserve missing
+    // separately from a present null, and compare the complete original fields.
+    let fields = ["id", "run_id", "run_attempt", "head_sha", "name"]
+        .map(|field| -> Result<_, String> {
+            Ok((
+                detail
+                    .get(field)
+                    .map(serde_json::to_vec)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+                listed
+                    .get(field)
+                    .map(serde_json::to_vec)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+            ))
+        })
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let observed = fields
+        .iter()
+        .map(|(a, b)| (a.as_deref(), b.as_deref()))
+        .collect::<Vec<_>>();
+    if !policy::native_job_binding(&observed)
+        || !matches!(
+            policy::native_job_state(
+                detail["status"].as_str(),
+                detail["conclusion"].as_str(),
+                detail.get("conclusion").map(Value::is_null),
+                detail["id"].as_u64(),
+            ),
+            NativeJobState::Succeeded
+        )
+    {
+        return Err(failed());
+    }
+    Ok(detail)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {

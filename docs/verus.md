@@ -50,6 +50,23 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 `verify.verus-result-tests` 独立预期。三项源码均已有真实 Verus invocation、整 crate
 结果和 Rust 消费者；本批只补 FILEMAP 绑定，不新增证明源或 Python 迁移。
 
+## 发布交付字段判断
+
+发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
+`verify.release-recipe`／`verify.release-recipe-tests` 整 crate 根。
+身份适配器把完整环境文本交给规范十进制、版本分量、channel 和显式版本判断；
+发布适配器把原 GitHub JSON 的可选文本、整数和布尔值直接交给逐字段判断，
+缺失或错型不与空文本、零或 false 混同。API 的原退出和精确 404 字段共同决定缺失，
+公开版本只有在全部声明资产已经存在时才允许沿用；草稿继续上传所缺资产。
+独立根列出缺字段、完整文本、数字、channel、名称和草稿状态边界，普通 Rust
+行为测试继续核实际环境与 mock 命令。这里的局部绑定不代表整个发布编排已证明。
+
+**实现与宿主验证登记同改：**复用固定 Verus、宏和两项现役证明操作，
+不增加安装器、证明过滤、测试时限或预算。采用固定 Rust 的 `str::split`、
+`strip_prefix` 提供原版本分量，`str::parse::<u64>` 对溢出返回错误，
+以及固定 Serde JSON 的字段读取、`as_str`／`as_u64`／`as_bool` 类型观察。
+这些接口只解码实际输入，不供应预先算好的合格标志；仓内字段判断由 Verus 执行。
+比较成本随实际字段字节和数量增长；新增构建、证明、CI 与存储总成本未测。
 本批把 registration 的 input-coverage 行状态准入迁入
 `verified_input_coverage.rs`，由 `verify.registration-input-coverage` 和
 `verify.registration-input-coverage-tests` 分别证明生产谓词及独立边界预期。
@@ -163,6 +180,26 @@ JSON、Unicode trim、原件读取、实际进程终结、租约与多文件发�
 
 ## CI 配置的字面文本
 
+CI 的原生 job 终态选择和发布者准入也直接消费本节的同源根。
+`native_job_state` 保留 completed 的原结论；只有已知非终态、明确存在的 null 结论和正 job ID
+才返回一次精确详情读取。适配器按返回 ID 调用 provider 一次，再由同源判断核成功终态，
+并逐项比较 id、run_id、run_attempt、head_sha、name 五个完整原字段。
+缺字段与存在的 null 分别保留；JSON 字段的原值编码由固定 Serde JSON 接口供应，
+比较由已有 identifiers 字节判断执行，不把字段先折成一个“已合格”标志。
+
+发布登记的 v2／触发方式、非空字段、首个完整 publisher 匹配、必需依赖和权限选择，
+以及 checkout 的固定源码表达式也由同一生产根拥有。独立根核终态失败不重读、
+缺失／非 null／零 ID 不读详情、原字段完整性、首个匹配及发布者依赖边界；
+原 Rust mock 仍核准确调用次数、参数、原错误和每个字段的替换拒绝。
+实际 provider、YAML 执行与整个生成器的原生验收仍须分别完成。
+
+**实现与宿主验证登记同改：**gating／release 的实际使用绑定到现有
+`verify.ci-literals`／`verify.ci-literals-tests`，复用已锁定工具和整 crate 参数。
+没有新 job、工具、预算、重试或审批。固定 Serde JSON 对实际 job 字段提供完整编码，
+标准 Option／Result 的 map、transpose 和错误传播只转发编码结果；
+普通适配器对发布 job 的 ID 数组保留输入顺序，实际搜索由 Verus 完成。
+每个待核 native job 编码五对字段；新增编译、证明、CI、分配与存储成本未测。
+
 `crates/ci/src/verified_literals.rs` 统一负责 full 与 release 的单行文本判断。
 输入为空或含普通 UTF-8 文本时允许；出现 NUL、LF、CR，或任意位置的精确 `${{` 字节序列时拒绝。
 孤立的 `$`、`${`、花括号及 shell 字面文本仍允许。两个现役配置校验保留各自错误信息，
@@ -187,6 +224,23 @@ JSON 解码、文件读取、集合观察和 GitHub 的 `hashFiles`／cache acti
 两项证明的构建、验证、CI、存储及完整运行成本未知。
 本节描述此局部合同；已提交候选的正式检查、原生结果与实际落地仍须各自核验，
 不能据此主张外层配置、YAML、JSON 或完整 SPEC 已证明。
+
+## CI 工件下载的状态与重试
+
+`crates/ci/src/verified_download.rs` 负责现役 gather 使用的完整 `HTTP nnn:` 字节扫描和重试准入。
+它只接受三个 ASCII 数字；完整状态码重复出现可以接纳，任意两处状态码矛盾则返回缺失。
+规格要求返回值覆盖全部输入，并证明字节下标、三位数计算及循环终止。
+重试同时要求命令失败、没有进程传输故障、仍有次数、状态在登记白名单内、两条输出流仍有容量，
+且等待时间严格小于剩余期限。期限与状态白名单由现有适配器观察，不由证明内核推测。
+
+独立根覆盖空／截断输入、完整与畸形状态、重复与矛盾状态、非 UTF-8 字节、数值边界，
+以及每个停止条件。普通 Rust 测试执行同一预期，原 gather 消费测试继续核对恢复、原失败保全、
+不可重试错误、次数耗尽、共享时间／流预算及恢复后仍拒绝无效业务证据。
+
+**程序与宿主登记同时修改：**FILEMAP 登记生产根与独立根，并加入原 ci 测试计划；
+实际传输、报告、保留与原生单元入口继续由现有所有者负责。两项证明沿用固定 Verus 版本、
+无函数过滤、原预算和现有安装，不增加运行时进程。新增验证与完整生命周期成本尚未测量；
+局部证明不证明 GitHub 响应真实、整个采集事务或全部 SPEC 已完成。
 
 ## runner 标识符、路径与结果状态
 

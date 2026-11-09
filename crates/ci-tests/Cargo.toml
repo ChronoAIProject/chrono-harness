@@ -45,6 +45,10 @@ path = "tests/inventory.rs"
 name = "verified_literals"
 path = "tests/verified_literals.rs"
 
+[[test]]
+name = "verified_download"
+path = "tests/verified_download.rs"
+
 [[bin]]
 name = "chrono-ci-test-transport"
 path = "tests/support/transport.rs"

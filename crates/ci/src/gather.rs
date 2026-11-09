@@ -228,19 +228,21 @@ impl<'a> Transport<'a> {
             stdout_remaining = stdout_remaining.saturating_sub(p.stdout_bytes.len());
             stderr_remaining = stderr_remaining.saturating_sub(p.stderr_bytes.len());
             let success = p.failure.is_none() && p.exit_code == 0;
-            let status = download_http_status(&p.stderr_bytes);
+            let status = super::verified_download::http_status(&p.stderr_bytes);
             let delay = policy
                 .as_ref()
                 .map(|p| Duration::from_secs(p.delay_seconds));
-            let retry = !success
-                && p.failure.is_none()
-                && attempt < attempts
-                && policy.as_ref().is_some_and(|policy| {
+            let retry = super::verified_download::retry(
+                p.exit_code == 0,
+                p.failure.is_some(),
+                attempt < attempts,
+                policy.as_ref().is_some_and(|policy| {
                     status.is_some_and(|s| policy.http_statuses.contains(&s))
-                })
-                && stdout_remaining > 0
-                && stderr_remaining > 0
-                && delay.is_some_and(|d| d < deadline.saturating_duration_since(Instant::now()));
+                }),
+                stdout_remaining,
+                stderr_remaining,
+                delay.is_some_and(|d| d < deadline.saturating_duration_since(Instant::now())),
+            );
             if policy.is_some() {
                 self.observations
                     .last_mut()
@@ -268,28 +270,6 @@ impl<'a> Transport<'a> {
         }
         chrono_harness::json(&self.run(&args)?)
     }
-}
-
-/// The registered CLI protocol uses one unambiguous `HTTP nnn:` status in stderr.
-fn download_http_status(stderr: &[u8]) -> Option<u16> {
-    let mut status = None;
-    for token in stderr
-        .windows(9)
-        .filter(|s| s.starts_with(b"HTTP ") && s[8] == b':')
-    {
-        let digits = &token[5..8];
-        if !digits.iter().all(u8::is_ascii_digit) {
-            continue;
-        }
-        let current = digits
-            .iter()
-            .fold(0_u16, |n, digit| n * 10 + u16::from(digit - b'0'));
-        if status.is_some_and(|prior| prior != current) {
-            return None;
-        }
-        status = Some(current);
-    }
-    status
 }
 
 fn parent_run(
@@ -435,14 +415,15 @@ fn parent_units(
             .into_iter()
             .filter(|j| j["run_attempt"] == latest_attempt)
             .collect();
-        if latest.len() != 1
-            || latest[0]["status"] != "completed"
-            || latest[0]["conclusion"] != "success"
-        {
+        if latest.len() != 1 {
             return Err(format!(
                 "unit {unit} latest native execution did not uniquely succeed"
             ));
         }
+        let latest = super::gating::completed_native_job(latest[0], |id| {
+            transport.api(&format!("repos/{repository}/actions/jobs/{id}"), false)
+        })
+        .map_err(|error| format!("unit {unit} {error}"))?;
         // API attempts can describe carried jobs. needs outputs bind the actual
         // producer; API latest status remains a separate necessary predicate.
         let production: super::gating::Production = decode(
@@ -465,8 +446,8 @@ fn parent_units(
             return Err(format!("unit {unit} original producer binding invalid"));
         }
         let mut binding = run.clone();
-        binding["conclusion"] = latest[0]["conclusion"].clone();
-        binding["unit_job_id"] = latest[0]["id"].clone();
+        binding["conclusion"] = latest["conclusion"].clone();
+        binding["unit_job_id"] = latest["id"].clone();
         binding["run_attempt"] = json!(p.run_attempt);
         binding["latest_job_attempt"] = json!(latest_attempt);
         binding["production"] = json!(production);
