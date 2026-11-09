@@ -9,6 +9,21 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+当前覆盖登记批次包括：FILEMAP 的 `crates/runner/src/verified_verifier.rs`、
+`crates/runner/src/verified_sources.rs` 及独立预期
+`crates/runner-tests/tests/verified_verifier.rs`，以及 runner 的
+`verified_paths.rs`、`verified_scope.rs`、`verified_status.rs`、`verified_limits.rs`
+和对应的 `runner-tests` 独立预期。它们均已声明 `program` 角色、唯一
+Verus 根及现役 `verify.verus-result`、`verify.runner-paths`、
+`verify.runner-status`、`verify.runner-limits` 与对应测试操作；`verified_scope.rs`
+沿 status 的真实整 crate 根验证，不另造重复操作。
+同源判断还要求根路径规范化、根路径唯一、program／specification 至少一个根、
+data 不得有根，以及每个登记操作存在于 execution plan。声明只建立待核的绑定关系；
+本批正式 CI 已核整 crate 证明；`crates/judge-ci/src/verified_collection.rs`
+及 `crates/judge-ci-tests/tests/verified_collection.rs` 现在也以
+`verify.ci-collection`／`verify.ci-collection-tests` 注册其 program 根和独立预期，
+并由本地与离线 collection 的实际汇总消费。仍不代表全仓覆盖完成。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取
@@ -453,7 +468,7 @@ Rust 测试不能代替证明。其他 runner 逻辑、调用适配器与完整 
 实际启动准备判定也使用同源 `verified_consumption::matches_preparation`，证明命令、宿主配置、
 唯一先行 verifier、执行工具和项目登记必须精确对应。消费关系判官读取显式 preparation，
 再核原共享 core 合同；解码和外层组合仍待证明。独立根与 Rust 回归核缺前置、重复、
-把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 原计划增加两项整 crate 证明。
+把校验放入普通操作、工具／schema／命令／项目错绑及缺文档。registration 已登记三项整 crate 证明。
 
 ## 协议状态与 finding
 
@@ -663,6 +678,12 @@ link／dep-info／`-o` 输出同源，源码和输出参数非空。额外参数
 普通操作向解码接口传空字节，不解析其业务输出；其既有退出规则由原所有者保留。
 本地 projects 和离线 collection 都消费 routes 的同一准入结果。
 
+本地 judge-ci 和离线 collection 还共用 `bind_operation_output` 的组合准入。
+对声明为 passed 的普通操作，`Ok(None)` 与 `ordinary_output_accepted` 充要相等：
+必须有唯一登记方法、匹配的完整原操作和参数、退出 0 且无失败的原进程，并且没有编译库或依赖观察。
+这个正向成功合同不依赖报告解码成功；独立预期保留无效 UTF-8／NUL 业务 stdout，核合法普通操作仍成功且不产生证明条目。
+唯一方法的独立正例显式给出两种完整名称的不同位置和存在见证，原大小写、后缀与重复拒绝预期保持。
+
 本宿主为各项证明操作逐项登记固定 Verus 版本及 commit；报告准入的两项整 crate 根归
 runner 所有者计划。同次 DELTA 汇总核受影响证明及 registration、routes、judge-ci 和 CI 生成器的实际消费测试。
 未执行的证明、未声明合同的普通操作及现有原件身份核验，不因此取得全仓覆盖保证。
@@ -696,7 +717,22 @@ routes 复用现役 `no_symlink_parents`／`file_identity`，
 **产品与宿主政策同时变更：**routes 专属测试补登记并实际使用写入式 Cargo fmt；
 原格式检查和未过滤测试入口保留。实际证明继续使用原有登记，不增加证明根或工具依赖。
 
-本地 judge-ci 与离线 collection 共用 `bind_process_sources`／`bind_compiler_sources`。
+本地 judge-ci 与离线 collection 共用 `bind_operation_output`，由它调用 `bind_compiler_sources`。
+入口读取现役计划的借用投影和同一原回执，按完整操作文本查找唯一方法；缺失或重复均拒绝。
+实际 argv 去掉执行物后，必须逐项、按序等于该方法的参数，原回执操作名也必须相同，
+原进程必须退出 0 且没有失败。报告、库和依赖先共同准入，再绑定固定候选源码。
+只有明确声明证明合同、且全部准入成功，才返回含原类型化报告和源码绑定的 `ProofAdmission`。
+普通成功、原失败或阻断只返回空条目，不能充当证明。构造器不接收自由的“已通过”布尔值或 token。
+CI 的结果生产者直接接收此类型化结果；准入错误仍使原 passed 变为 Failed，
+保留原进程的实际退出码与失败文本。离线汇总在原 routes 比较后消费同一入口。
+
+`CompilerReportRead::decode` 是标准 serde_json 解码的明确外部接口；其观察模型 `decoded`
+只关联同一输入字节及实际解码结果，不保证报告成功，成功与否仍由 Verus 判断。
+适配器仅把计划及原回执字段交给入口，不负责方法选择、字段准入或错误分类。
+routes 原比较继续保留原结果合同；统一入口另从相同原 stdout 解码，不沿用自由的成功标志。
+两次解码的完整成本未测。每个单元只建立一份 O(M) 方法借用表；每个操作最多比较 M 个方法名，
+另按实际参数与依赖字节计成本。没有新增证明操作、工具、进程、过滤或预算。
+
 实际 argv 去掉执行物后须满足同源规范参数；依赖头须精确绑定实际输出路径。
 每个编译器路径按 POSIX 分量规范化，拒绝绝对、控制字节、反斜杠和越过根的父分量；
 保留空格及 UTF-8 字节，解码后的文本必须重新编码为原规范化字节。
@@ -717,10 +753,13 @@ routes 复用现役 `no_symlink_parents`／`file_identity`，
 | `CandidateSourceRead::mode` | 同一固定请求树的完整路径查询和原模式字段投影；文件模式准入仍由 Verus 比较 |
 | `CandidateSourceRead::blob` | 现役 request-bound `Reader::blob(host_root, candidate, path)` 的固定 Git 字节观察；其现有运输和外层实现仍有未证明义务 |
 | `CandidateSourceRead::digest` | 现役 SHA-256 接口返回实际 blob 的十六进制摘要；Verus 核格式和完整 checksum，不证明密码学算法 |
+| `CompilerReportRead::decode`／`decoded` | judge-ci 的固定 serde_json 类型化解码；只关联点名原字节与完整字段，不作成功判断或从其他报告补齐字段 |
 | FILEMAP／回执编解码 | 固定 serde／serde_json 的字段解码及原字节编码；不授予外层仓内判断 `external_body` 例外 |
 
 独立 Verus 预期覆盖解析、规范化、根缺失、一致／冲突别名、摘要／长度、完整 checksum、原报告与观察的组合、
 上限两端、原失败、真实 argv、缺成功回执，以及源码失败后的终态／原因／退出码保全。
+统一入口的独立 Verus 预期另核方法的缺失、重复、大小写与 NUL 完整身份，
+普通成功不产生证明、失败进程不能取得通过，以及任意实际证明条目的原报告、库、根与候选关联。
 **产品与宿主政策同时变更：**FILEMAP 连接实际新适配器，并把原结果两项整 crate 根加到 projects 测试的必需前置；
 projects 原生单元同步选择现有 Verus bootstrap，先核共享 core 再安装固定证明工具；
 其余实际消费者复用原登记证明。候选正式检查与原生 CI 尚须各自验收。
@@ -773,9 +812,9 @@ testing `python`；不归一化、不从扩展名推断，也不扩大 Python �
 存在继承变量时，必须提供与所选端点全文精确相等的 commit。没有这些义务的旧格式
 保留原有可选绑定语义；不额外增加 OID 形状或非空限制。实际快照消费者直接调用该判断。
 独立根核三个单独前提、缺值、数量上界、空文本、前缀、NUL、Unicode 规范化差异，
-并对任意文本和数量证明绑定条件。复用现有两项整 crate 前置，没有新增验证入口。
+并对任意文本和数量证明绑定条件。复用现有 registration 整 crate 前置，没有新增验证入口。
 
-**产品与宿主政策同时变更：**生产调用替换原有普通 Rust 比较；两项整 crate 证明作为
+**产品与宿主政策同时变更：**生产调用替换原有普通 Rust 比较；三项整 crate 证明作为
 registration 专属计划的必需前置，独立预期和 Rust 测试编译同一生产源。
 沿用固定 Verus、完整验证参数和原错误码 `E_ACTIVATION`／`E_EVIDENCE_UNRESOLVED`。
 新增依赖为零，验证与存储总成本未测；JSON 解析、错误记录、其余准备判断及 full 启用仍待完成。
