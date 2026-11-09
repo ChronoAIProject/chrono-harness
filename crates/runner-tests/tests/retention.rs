@@ -2265,7 +2265,12 @@ fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_depende
     let shared_path = tree(h.path(), "shared-original");
     fs::write(h.path().join(&shared_path).join("original"), b"preserved").unwrap();
     let shared = inventory(h.path())
-        .begin_rooted("fixture", &shared_path, json!({"exit":9}), &["keep-shared".into()])
+        .begin_rooted(
+            "fixture",
+            &shared_path,
+            json!({"exit":9}),
+            &["keep-shared".into()],
+        )
         .unwrap();
     let shared_id = shared.id().to_owned();
     shared.complete(json!({"exit":9})).unwrap();
@@ -2278,7 +2283,9 @@ fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_depende
             .unwrap();
         let id = publication.id().to_owned();
         publication.complete(json!({"exit":0})).unwrap();
-        inventory(h.path()).dependencies(&id, &[shared_id.clone()]).unwrap();
+        inventory(h.path())
+            .dependencies(&id, &[shared_id.clone()])
+            .unwrap();
         paths.push(path);
     }
     let original = ledger(h.path());
@@ -2293,7 +2300,10 @@ fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_depende
     after["policy_sha256"] = original["policy_sha256"].clone();
     assert_eq!(after, original);
     for path in paths {
-        assert_eq!(fs::read(h.path().join(path).join("original")).unwrap(), b"preserved");
+        assert_eq!(
+            fs::read(h.path().join(path).join("original")).unwrap(),
+            b"preserved"
+        );
     }
 }
 
