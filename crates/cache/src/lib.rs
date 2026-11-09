@@ -1,5 +1,6 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
 mod content;
+mod freshness;
 mod probe;
 mod recovery;
 pub mod verified_planner;
@@ -136,6 +137,8 @@ pub struct Cache {
     pub restore: Restore,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub verify_contents: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub refresh_sources: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -295,6 +298,12 @@ pub fn validate(c: &Config) -> Result<(), String> {
         })?;
     }
     for (id, cache) in &c.caches {
+        if cache.refresh_sources && !c.recover_failed_restores {
+            return Err(
+                "E_CACHE_FRESHNESS: source refresh requires primary-checkout restore recovery"
+                    .into(),
+            );
+        }
         if cache.verify_contents && !c.recover_unconfirmed_restores {
             return Err(
                 "E_CACHE_CONTENT: content verification requires primary-checkout restore recovery"
@@ -687,6 +696,9 @@ fn prepare_with_inputs(
         if cache.verify_contents {
             identity["content_verification"] = json!(content::METHOD);
         }
+        if cache.refresh_sources {
+            identity["source_freshness"] = json!(freshness::METHOD);
+        }
         let compatibility = wire::digest(&identity)?;
         let source = wire::digest(&values(&cache.source_inputs))?;
         let prefix = format!("chrono-v2-{compatibility}-");
@@ -699,6 +711,9 @@ fn prepare_with_inputs(
         );
         if cache.verify_contents {
             entries.get_mut(id).unwrap()["content_verification"] = json!(content::METHOD);
+        }
+        if cache.refresh_sources {
+            entries.get_mut(id).unwrap()["source_freshness"] = json!(freshness::METHOD);
         }
     }
     for source in &c.consumer_operations[consumer] {

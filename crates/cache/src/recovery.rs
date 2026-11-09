@@ -168,6 +168,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             .iter()
             .collect();
         let mut paths = vec![];
+        let mut refreshes = vec![];
         for (index, (id, cache)) in caches.into_iter().enumerate() {
             let restore = &steps[format!("cache_{index}_restore")];
             let reason = restore_status(cache, restore);
@@ -211,6 +212,20 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 }
             }
             if !discard {
+                if super::verified_planner::refresh_sources(
+                    config.caches[id].refresh_sources,
+                    reason,
+                ) {
+                    let refresh = super::freshness::prepare(
+                        &root,
+                        &config.caches[id],
+                        cache,
+                        &plan["inputs"],
+                    )?;
+                    report["caches"][id]["source_freshness"] =
+                        json!({"method":super::freshness::METHOD,"status":"pending"});
+                    refreshes.push((id.clone(), refresh));
+                }
                 continue;
             }
             let artifacts: BTreeMap<_, _> = cache["artifacts"]
@@ -275,11 +290,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 cache["status"] = json!("discarded");
             }
         }
+        for (id, refresh) in refreshes {
+            super::freshness::apply(
+                &root,
+                refresh,
+                &mut report["caches"][&id]["source_freshness"],
+            )?;
+            report["caches"][&id]["status"] = json!("source-times-refreshed");
+        }
         if report["caches"]
             .as_object()
             .unwrap()
             .values()
-            .any(|v| v["status"] == "discarded")
+            .any(|v| v["status"] == "discarded" || v["status"] == "source-times-refreshed")
         {
             report["status"] = json!("recovered");
         }

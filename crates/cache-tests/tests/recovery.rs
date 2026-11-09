@@ -37,7 +37,7 @@ fn recovery_host() -> (Host, Value, Value) {
     (root, config, prepared)
 }
 
-fn recover(root: &Path, steps: &Value) -> std::process::Output {
+pub(super) fn recover(root: &Path, steps: &Value) -> std::process::Output {
     Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
         .args([
             "recover",
@@ -56,6 +56,149 @@ fn recover(root: &Path, steps: &Value) -> std::process::Output {
         )
         .output()
         .unwrap()
+}
+
+fn adopt_source_refresh(root: &Path, config: &mut Value) -> Value {
+    config["caches"]["project"]["refresh_sources"] = json!(true);
+    let mut prepared = plan(root, config, "check.one").unwrap();
+    bind_installed_planner(&mut prepared);
+    for (path, value) in [
+        (".chrono-harness/cache.json", config.clone()),
+        (".chrono-harness/state/restore/plan.json", prepared.clone()),
+    ] {
+        fs::write(root.join(path), serde_json::to_vec(&value).unwrap()).unwrap();
+    }
+    prepared
+}
+
+#[test]
+fn source_refresh_is_local_to_compatible_hits_and_replay_keeps_later_timestamps() {
+    use std::time::{Duration, SystemTime};
+    let old = SystemTime::UNIX_EPOCH + Duration::from_secs(1);
+    let future = SystemTime::now() + Duration::from_secs(7200);
+    for reason in ["compatible", "exact", "skipped", "failure"] {
+        let (root, mut config, original) = recovery_host();
+        let prepared = adopt_source_refresh(root.path(), &mut config);
+        assert_ne!(
+            original["caches"]["project"]["restore_keys"],
+            prepared["caches"]["project"]["restore_keys"]
+        );
+        let source = root.path().join("source");
+        fs::File::open(&source).unwrap().set_modified(old).unwrap();
+        fs::File::open(root.path().join("out/project/partial"))
+            .unwrap()
+            .set_modified(future)
+            .unwrap();
+        let compiler = root.path().join("compiler");
+        let unchanged = fs::metadata(&compiler).unwrap().modified().unwrap();
+        let key = if reason == "exact" {
+            prepared["caches"]["project"]["key"]
+                .as_str()
+                .unwrap()
+                .to_owned()
+        } else {
+            format!(
+                "{}another-source",
+                prepared["caches"]["project"]["restore_keys"][0]
+                    .as_str()
+                    .unwrap()
+            )
+        };
+        let outcome = if matches!(reason, "compatible" | "exact") {
+            "success"
+        } else {
+            reason
+        };
+        let steps =
+            json!({"cache_0_restore":{"outcome":outcome,"outputs":{"cache-matched-key":key}}});
+        let output = recover(root.path(), &steps);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let changed = fs::metadata(&source).unwrap().modified().unwrap();
+        if reason == "compatible" {
+            assert!(changed > future);
+            assert!(root.path().join("out/project/partial").exists());
+            assert_eq!(
+                result(root.path())["caches"]["project"]["source_freshness"]["status"],
+                "refreshed"
+            );
+            fs::File::open(&source).unwrap().set_modified(old).unwrap();
+            assert!(recover(root.path(), &steps).status.success());
+            assert_eq!(fs::metadata(&source).unwrap().modified().unwrap(), old);
+        } else {
+            assert_eq!(changed, old, "{reason}");
+        }
+        assert_eq!(fs::read(&source).unwrap(), b"source-one");
+        assert_eq!(
+            fs::metadata(&compiler).unwrap().modified().unwrap(),
+            unchanged
+        );
+        assert_eq!(
+            fs::read(root.path().join("out/other/keep")).unwrap(),
+            b"other consumer"
+        );
+    }
+}
+
+#[test]
+fn registered_source_refresh_rejects_changed_inputs_before_any_mutation() {
+    for changed in [false, true] {
+        let (root, mut config, _) = recovery_host();
+        config["inputs"]["source"] = json!({"kind":"registered-files","registry":".chrono-harness/FILEMAP.json","node":"project:product","edges":["compile"]});
+        fs::write(root.path().join(".chrono-harness/FILEMAP.json"), serde_json::to_vec(&json!({"schema_version":2,"project_edges":[],"files":[{"path":"source","edges":[{"kind":"compile","to":"project:product"}]}]})).unwrap()).unwrap();
+        let prepared = adopt_source_refresh(root.path(), &mut config);
+        if changed {
+            fs::write(root.path().join("source"), b"new input after plan").unwrap();
+        }
+        let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1);
+        fs::File::open(root.path().join("source"))
+            .unwrap()
+            .set_modified(old)
+            .unwrap();
+        let key = format!(
+            "{}older-source",
+            prepared["caches"]["project"]["restore_keys"][0]
+                .as_str()
+                .unwrap()
+        );
+        let output = recover(
+            root.path(),
+            &json!({"cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":key}}}),
+        );
+        assert_eq!(
+            output.status.success(),
+            !changed,
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if changed {
+            assert!(
+                result(root.path())["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("current input differs")
+            );
+            assert_eq!(
+                fs::metadata(root.path().join("source"))
+                    .unwrap()
+                    .modified()
+                    .unwrap(),
+                old
+            );
+        } else {
+            assert!(
+                fs::metadata(root.path().join("source"))
+                    .unwrap()
+                    .modified()
+                    .unwrap()
+                    > old
+            );
+        }
+        assert!(root.path().join("out/project/partial").exists());
+    }
 }
 
 fn result(root: &Path) -> Value {

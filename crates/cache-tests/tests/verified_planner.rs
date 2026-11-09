@@ -14,6 +14,27 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_adopted_compatible_restores_refresh_inputs() {
+    proof {
+        reveal_strlit("compatible"); reveal_strlit("exact");
+        reveal_strlit("error"); reveal_strlit("miss-or-unavailable");
+        reveal_strlit("compatible\n"); reveal_strlit("");
+        assert("compatible"@.len() != "exact"@.len());
+        assert("compatible"@.len() != "error"@.len());
+        assert("compatible"@.len() != "miss-or-unavailable"@.len());
+        assert("compatible"@.len() != "compatible\n"@.len());
+        assert("compatible"@.len() != ""@.len());
+    }
+    expect_cache_true(policy::refresh_sources(true, "compatible"));
+    expect_cache_true(!policy::refresh_sources(false, "compatible"));
+    expect_cache_true(!policy::refresh_sources(true, "exact"));
+    expect_cache_true(!policy::refresh_sources(true, "error"));
+    expect_cache_true(!policy::refresh_sources(true, "miss-or-unavailable"));
+    expect_cache_true(!policy::refresh_sources(true, "compatible\n"));
+    expect_cache_true(!policy::refresh_sources(true, ""));
+}
+
 // 同一预期也在普通 Cargo 中实际执行。
 fn expect_cache_true(actual: bool)
     requires actual,
