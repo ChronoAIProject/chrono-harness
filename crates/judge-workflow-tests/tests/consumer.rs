@@ -751,7 +751,7 @@ fn migration_host() -> Host {
         h.values.get_mut(CONFIG).unwrap()["tools"]
             .as_array_mut()
             .unwrap()
-            .push(json!({"id":id,"program":program,"resolution":"PATH-once",
+            .push(json!({"id":id,"program":path,"resolution":"PATH-once",
                 "version_argv":["--version"],"expected_version":"chrono-workflow-transition 0.1.0"}));
         h.values.get_mut(FM).unwrap()["files"]
             .as_array_mut()
