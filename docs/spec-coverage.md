@@ -40,6 +40,8 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 
 CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份只保存主机路径的 JSON 及其 FILEMAP 输入边已退役。现役 fixture 仍在本轮绑定实际路径、版本和字节，原测试断言及未过滤测试义务保留；这只移除重复的主机选择数据，不证明完整输入、跨平台验收或 §2.2 的外部命令 mock 合同完成。剩余真实 Git fixture 的执行边界迁移仍未完成。
 
+固定 Verus 下载包的候选采用改用 `bootstrap-owner-tooling/verus/package.zip` 单槽，保留当前 checksum、原子发布、失败保全和证明消费者。旧版本目录仅由现有生命周期入口回收，不增加 TTL 或清理器；候选 bootstrap、标准检查、原生消费和真实协调者迁移尚待验收。路径和政策变更本身不证明旧目录已回收。
+
 ## 按 SPEC 章节查看
 
 | SPEC 章节 | 状态 | 生产者与直接证据 | 仍需完成 |
@@ -57,7 +59,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 5.2 从消费者需要出发重构依赖 | 部分 | 已有 DELTA 合并／传递／所有者检查。无独立结构报告或自检，未用 SCC／深度／排名／claim 摘要已退役，循环、类型边、有限见证保留 | 真实消费者重构、适用本地／原生验证及核实落地 |
 | 6 演进与移除 | 部分 | W 实际替换、共同退役、别名修复、候选迁移认证；已退役未接入正式 runner 检查的额外 guard、独占主机输入和观察入口；registration workflow v3 明确选端点版本。自含 fixture 用当前 decoder 确认真实登记数据转换 | 当前 schema 演进消费者验收，只在真实需要处转换数据，完整启用 |
 | 7 协议 | 已实现，有限普通双提交 v1 及明确初始 profile；部分同源 Verus 证明 | runner wire.rs／full.rs／initial.rs、共享进程引擎；独立 chrono-identifiers 库证明实际摘要文本的完整 64 位小写十六进制格式，包含全零及非法字节边界；协议四态身份／顺序／克隆／退出码、实际 finding 克隆及 finding／状态一致性、响应头、finding 字段形状／引用允许条件、DELTA 克隆／完整字段比较与 evidence 身份由 verified_status.rs 证明；普通／初始响应前置及留存头部／状态组合保留完整错误文字与优先级，实际二元状态汇总共用 maximum，独立根核实际边界。负责合同见 [Verus](verus.md#协议状态与-finding)。独立完整 DAG 执行自检，含启动前错误、进程环境、输出回执、伪传输失败、身份／证据变异。R 传输／故障注入，G 真实根消费者 | 登记记录指针语法／目标归属、外层遍历／状态分类、JSON／证据 IO 与完整响应组合仍待证明；bootstrap 来源及启用。初始清单不声称 DELTA 绿；平台仅已测 Unix。自检核一致性，不证明判官语义完整或全部运行错误可发现 |
-| 7.1 标准日志 | 部分：Rust JSONL、运行入口和有界滚动日志 | diagnostics 的 Logger／runtime／RollingFile；本仓 logging.json 采用 10 MiB／份、共 5 份。runner、worktree、CI、cache、inputs、distribution、Rust bootstrap 和判官入口记录开始、返回及现有诊断文本；CI 阶段记录同时进入滚动文件和原 stderr。诊断库测试、runner CLI 回归及 bootstrap 位置参数回归覆盖大小／份数／重启／四进程并发、原始通道／错误链、非法配置、失败输出和明确宿主选择；细节归[诊断说明](diagnostics.md) | 独立 instructions、Python／非 Rust 和其他全部生产者接入，完整领域异常链、子进程上下文及持久证据发布仍缺；本地标准检查和原生 CI／落地分别验收，目的失败不宣称已持久保存 |
+| 7.1 标准日志 | 部分：Rust JSONL、运行入口和有界滚动日志 | diagnostics 的 Logger／runtime／RollingFile；本仓 logging.json 采用 10 MiB／份、共 5 份。instructions、runner、worktree、CI、cache、inputs、distribution、Rust bootstrap 和判官入口记录开始、返回及现有诊断文本；CI 阶段记录同时进入滚动文件和原 stderr。诊断库测试、instructions／runner CLI 回归及 bootstrap 位置参数回归覆盖大小／份数／重启／四进程并发、原始通道／错误链、非法配置、日志失败时的业务结果保持和明确宿主选择；细节归[诊断说明](diagnostics.md) | Python／非 Rust 和其他全部生产者接入，完整领域异常链、子进程上下文及持久证据发布仍缺；本地标准检查和原生 CI／落地分别验收，目的失败不宣称已持久保存 |
 | 7.2 异常链与通用处理 | 部分：原生 IO、真实 judge 启动前／报告有类型传播 | diagnostics::error 包装／导入 chrono-error/v1；NativeIoError 保留原种类／消息／OS 码，LogFailure 共用 IO 模块。Unix 原生 writer 保留只读描述符 EBADF；发布错误保留通道／阶段／原业务、独立次要输出／诊断失败。专属原生／无原生／部分／flush 测试。完整 judge 以 chrono-runner-transport-failure/v1 保留准备原因／码、封存请求／judge／operation，区分未启动，保留子原件，晚期报告发布失败关联原原因。真实 IO、协议／schema／上下文变异、次要发布回归，见[诊断边界](diagnostics.md) | 已有有限 Darwin 原生观察；Linux、其他产品原生适配／类型传播、非 Unix 输出、任意自定义原因序列化、协议采用、持久引用、其他次要失败发布仍缺；完整输入／启用／SPEC 未完成 |
 | 7.3 自我检测 | 部分 | 原接收器描述符耗尽回归保留 spawn 原错／共享观察；资源比较消费登记实测，恢复保留失败／未确认 outcome、逐项清理和原报告。真实文件系统／CLI 回归；最终传输拒绝恢复观察缺失／变化，保留两快照 | 全生产者及历史超时根因；有限故障测试不证明普遍检测 |
 | 7.4 完成归属与等待 | 部分：原生引擎及生命周期等待 | runner 用一个已有内核退出观察器／私有通知。静默期间阻塞到真实事件或原期限，取消／释放／关闭提示沿原 socket；mapping v5 拒绝不兼容嵌套观察器。独立原生计数及原退出／期限／输出／launcher 中断／描述符预算回归 | 外部宿主／调用方通道选择、句柄、丢通道后不重复启动的恢复尚未实现；不控制其他任务，原生 Linux 待验 |
@@ -192,6 +194,8 @@ runner 与 CI 诊断、保留回归中没有现役调用的临时过滤操作已
 core 只准备当前标准入口实际使用的四项启动工具。没有当前调用方的 `chrono-inputs` 预先获取、构建、安装、共享传递及宿主工具声明已移除，专属绑定和 FILEMAP 边同步删除；inputs／workflow 的真实项目测试和公开发布资产保留。当前公开 bootstrap 和 macOS 原生启动链已实际消费这组工具，交付范围与原件见[对应 PR](https://github.com/ChronoAIProject/chrono-harness/pull/419)。总成本收益未测，全对象必要性审计继续保留未验证项。
 
 示例、CI、缓存、发布和指令文档保留当前接入方式、协议、使用方及验证限制；历史 CI 运行、环境摘要、测试数量、报告大小和指令载荷读数归原 PR、发布及线上原件，不另维护运行表。原件缺失仍是未验证，删除文档副本不改变历史失败或尚缺的验收。
+
+工作流退役登记只保留当前固定两端变化与现役迁移需要的声明。已完成、两端都没有原身份和引用的历史条目交还 Git／PR；当前删除、替代测试实际通过和固定旧输入的保护仍由[工作流检查](workflow.md#移除测试或检查程序)负责。本次只清理宿主历史数据，不改生产判法或增加测试／证明入口，适用验收仍须由候选实际执行。
 
 全对象“为什么”链是 AI 对真实使用方、替代方案、失败影响和验收终点负责的方法。产品默认和本宿主指南已呈现该规则；现有判官继续检查明确登记、引用、输入及实际回执。没有独立价值台账或机器价值门，规则文字也不证明全仓审计已经完成。
 

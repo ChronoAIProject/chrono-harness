@@ -77,18 +77,10 @@
       "GITHUB_JOB"
     ],
     "values": {},
-    "inputs": [
-      {
-        "id": "git-executable",
-        "location": "/usr/bin/git",
-        "presence": "present",
-        "sha256": "b8763cf250e607a778bb4603cecb5b90338814d0a3dfcba0d57b1de242f610e9"
-      }
-    ]
+    "inputs": []
   },
   "facts_git": {
-    "tool": "git",
-    "input": "git-executable"
+    "tool": "git"
   },
   "input_closure": {
     "status": "incomplete",
@@ -104,7 +96,7 @@
       "version_argv": [
         "--version"
       ],
-      "expected_version": "Python 3.9.6"
+      "expected_version": null
     },
     {
       "id": "chrono-ci",
@@ -122,7 +114,7 @@
       "version_argv": [
         "--version"
       ],
-      "expected_version": "git version 2.50.1 (Apple Git-155)"
+      "expected_version": null
     },
     {
       "id": "chrono-worktree",

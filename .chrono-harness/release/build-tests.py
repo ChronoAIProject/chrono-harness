@@ -425,6 +425,9 @@ class ReleaseUnits(unittest.TestCase):
                 if owner['language']=='rust':
                     self.assertEqual(action['argv'][:4],['test','--locked','--manifest-path',owner['manifest']])
                     output_arguments=action['argv'][4:]
+                    if owner['id']=='worktree-tests':
+                        self.assertEqual(output_arguments[-2:],['--','--test-threads=2'])
+                        output_arguments=output_arguments[:-2]
                     self.assertTrue(not output_arguments or
                         (len(output_arguments)==2 and output_arguments[0]=='--target-dir' and output_arguments[1]),
                         'unfiltered Rust tests may only select an explicit output directory: '+owner['id'])

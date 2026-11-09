@@ -5,7 +5,7 @@ use std::{
     process::{Command, Output},
 };
 
-const ARCHIVE: &str = ".chrono-harness/cache/bootstrap-verus/package.zip";
+const ARCHIVE: &str = ".chrono-harness/cache/bootstrap-owner-tooling/verus/package.zip";
 const CHECKSUM: &str = ".chrono-harness/ci/package.sha256";
 const HEADERS: &str = ".chrono-harness/state/download.headers";
 const BODY: &[u8] = b"verified archive\x00\xff\n";
@@ -25,7 +25,7 @@ impl Fixture {
         for directory in [
             ".chrono-harness/ci",
             ".chrono-harness/state",
-            ".chrono-harness/cache/bootstrap-verus",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus",
         ] {
             fs::create_dir_all(fixture.0.path().join(directory)).unwrap();
         }

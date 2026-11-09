@@ -172,6 +172,10 @@
     },
     {
       "path": ".chrono-harness/cache/bootstrap-verus/",
+      "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/verus/",
       "disposition": "retain"
     },
     {
