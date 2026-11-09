@@ -34,7 +34,7 @@
 
 CI fixture 用已有 `resolve_program` 从继承的 PATH 解析 Git，不在仓库维护主机路径清单；找不到程序就失败。隔离测试在遮蔽 PATH 前解析真实 Git，并用 `CHRONO_CI_FIXTURE_GIT` 传给自己的子进程；生产调用仍只使用已绑定的工具。准备命令和绑定 Git 消费者使用所选执行物，故障适配器在本轮输入登记保留实际路径、版本和摘要。这不改变消费宿主的 Git 政策，也不证明 Git 输入完整；剩余真实 Git fixture 的命令边界 mock 迁移仍未完成。
 
-从仓库根运行。core、缓存、detector、单元准备、共享启动、Verus 准备和所有者阶段构建由 Rust 执行，统一通过薄 shell 入口启动。首次前端编译需要 Git、rustup 和固定 Rust 1.95.0；已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。所有者资格读取和构建也由该 Rust 实现维护。发布编排与部分 Python 接口测试样本仍需各自登记的解释器，bootstrap 不再要求 Python。
+从仓库根运行。core、缓存、detector、单元准备、共享启动、Verus 准备和所有者阶段构建由 Rust 执行，统一通过薄 shell 入口启动。首次前端编译需要 Git、rustup 和固定 Rust 1.95.0；已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。所有者资格读取和构建也由该 Rust 实现维护。发布编排同样使用 Rust 与薄 shell；部分 Python 接口测试样本仍需各自登记的解释器，bootstrap 不再要求 Python。
 
 没有现役 profile 使用的私有工具链安装分支及专属测试已退役。bootstrap 沿当前工具链选择：Cargo 不可用时安装指定版本的 minimal 加 rustfmt，缺格式化组件时只补该组件；可写构建目录仍由 `host_environment` 的缓存路径声明。工具身份、编译器选择及失败原件继续由原入口核验和保留，不为主机盘点另装完整 SDK。
 

@@ -24,7 +24,7 @@ collector 仍必须收齐全部构建和验证，核对各验证实际消费的�
 
 本地遵守登记的 `local_workers`、单元和平台时限。
 
-独立 Python 发布配方单元测试不依赖产品二进制；Rust diagnostics、instructions 与 routes 专属测试登记为零发布二进制依赖，并明确启用 Rust 工具链。
+Rust diagnostics、instructions 与 routes 专属测试登记为零发布二进制依赖，并明确启用 Rust 工具链。
 
 instructions 测试直接调用库及 dispatch；routes 测试调用库并使用临时测试工具。
 
@@ -178,4 +178,4 @@ Shell 只承担初始下载、字节校验和调用；常规安装语义由 Rust
 
 同一个未过滤 Rust 测试操作覆盖配方、真实 CLI、原件交接、真实打包和 cache 消费。打包使用测试 crate 自行编译的 distribution alias；只有 cache 回归需要发布资产 `chrono-cache`。具体依赖和原生消费边界由[发布说明](release-ci.md#验证单元实际消费什么)维护。
 
-发布配方专属消费者测试通过实际 Python 入口验证显式操作顺序、含空格路径与不同 cwd、参数原样传递、未知／重复／歧义登记在构建前失败、失败阻止打包及保留原始非 UTF-8 输出。这些测试材料验证配方是否正确调用已有操作；真实 Rust 测试与平台行为另由原生发布作业验证。
+发布配方专属消费者测试通过实际 Rust CLI 验证显式操作顺序、含空格路径与不同 cwd、参数原样传递、未知／重复／歧义登记在构建前失败、失败阻止打包及保留原始非 UTF-8 输出。外部命令由 Rust 测试辅助程序模拟；真实工具链与平台行为另由原生发布作业验证。
