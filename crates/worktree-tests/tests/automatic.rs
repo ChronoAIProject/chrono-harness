@@ -22,6 +22,12 @@ impl EnrollmentOriginalsFixture {
         let fixture = root.join("git-fixture.json");
         let mut registered = values();
         registered.get_mut(CONFIG).unwrap()["schema_version"] = value!(4);
+        registered.get_mut(CONFIG).unwrap()["canonical_check"]["argv"] =
+            value!([".chrono-harness/bin/chrono-harness", "check"]);
+        registered.get_mut(CONFIG).unwrap()["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(value!("CHRONO_CHECK_SOURCE"));
         registered.get_mut(CONFIG).unwrap()["canonical_check"]["profile"] =
             value!(".chrono-harness/ci/check.json");
         registered.get_mut(CONFIG).unwrap()["canonical_check"]["inputs"] = value!({
