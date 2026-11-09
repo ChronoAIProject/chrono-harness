@@ -386,6 +386,10 @@ impl<'a> Execution<'a> {
         };
         self.report["execution_tools"] = json!(tools);
         self.report["context"] = json!({"source_commit":source,"source_tree":tree,"system":system,"machine":std::env::consts::ARCH,"recipe":inputs,"producer":producer,"rust_toolchain":self.loaded.recipe.rust_toolchain,"rust_components":self.loaded.recipe.rust_components});
+        self.report["context"]["release_identity"] = serde_json::to_value(
+            crate::identity::resolve(&self.loaded.plan.version, &source, &tree, &self.environment)?,
+        )
+        .map_err(error)?;
         let local = self
             .environment
             .get(std::ffi::OsStr::new("CHRONO_RELEASE_LOCAL"))
@@ -688,7 +692,7 @@ fn package_identity(output: &Path, loaded: &Loaded, report: &Value) -> Result<Va
         std::env::consts::ARCH
     );
     if release["schema"] != "chrono-release/v1"
-        || release["version"] != loaded.plan.version
+        || release["version"] != context["release_identity"]["version"]
         || release["source_commit"] != context["source_commit"]
         || release["source_tree"] != context["source_tree"]
         || release["platforms"]
@@ -925,6 +929,13 @@ fn units(execution: &mut Execution<'_>, lineage: &Lineage) -> Result<(), String>
                 &loaded.plan.assets[&loaded.recipe.collector.package_asset],
             )?;
             let package = execution.output.join("package");
+            let mut plan = loaded.plan.clone();
+            plan.version = execution.report["context"]["release_identity"]["version"]
+                .as_str()
+                .ok_or_else(|| error("missing resolved release version"))?
+                .to_owned();
+            let plan_path = execution.output.join("release-plan.json");
+            write_json(&plan_path, &serde_json::to_value(plan).map_err(error)?)?;
             let result = execution.run(
                 "package",
                 vec![
@@ -933,11 +944,7 @@ fn units(execution: &mut Execution<'_>, lineage: &Lineage) -> Result<(), String>
                     "--root".into(),
                     path_text(&execution.root)?,
                     "--plan".into(),
-                    path_text(
-                        &execution
-                            .root
-                            .join(&loaded.recipe.consumer_staging.release_plan),
-                    )?,
+                    path_text(&plan_path)?,
                     "--output".into(),
                     path_text(&package)?,
                 ],

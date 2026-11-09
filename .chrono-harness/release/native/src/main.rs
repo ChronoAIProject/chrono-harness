@@ -1,4 +1,4 @@
-use chrono_host_release::{execution, frontend, local, recipe::Scope};
+use chrono_host_release::{delivery, execution, frontend, local, recipe::Scope};
 use std::{path::Path, process::ExitCode};
 
 fn run() -> Result<i32, String> {
@@ -10,6 +10,12 @@ fn run() -> Result<i32, String> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     match args.as_slice() {
+        [root, output, flag, config, native] if flag == "--install" => delivery::install(
+            Path::new(root), Path::new(output), config, native, &std::env::vars_os().collect()
+        ),
+        [root, output, flag, config] if flag == "--deliver" => delivery::run(
+            Path::new(root), Path::new(output), config, &std::env::vars_os().collect()
+        ),
         [root, output] => local::run(
             Path::new(root),
             Path::new(output),
@@ -31,7 +37,7 @@ fn run() -> Result<i32, String> {
             frontend::export(Path::new(root), Path::new(output), &std::env::vars_os().collect())?;
             Ok(0)
         },
-        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT [--unit ID | --collect | --export-frontend]".into()),
+        _ => Err("usage: chrono-host-release ROOT ABSENT_OUTPUT [--unit ID | --collect | --export-frontend | --deliver CONFIG | --install CONFIG NATIVE]".into()),
     }
 }
 
