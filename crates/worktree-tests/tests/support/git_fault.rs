@@ -721,7 +721,12 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
         .map(|arg| arg.to_str().unwrap())
         .filter(|arg| *arg != "--no-replace-objects")
         .collect();
-    let head = "a".repeat(40);
+    let head = "a".repeat(64);
+    let object = |bytes: &[u8]| {
+        let mut framed = format!("blob {}\0", bytes.len()).into_bytes();
+        framed.extend_from_slice(bytes);
+        chrono_harness::sha256(&framed)
+    };
     let blob = |spec: &str| {
         let (revision, path) = spec.split_once(':').unwrap();
         if revision != head {
@@ -758,14 +763,28 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
             );
         }
         ["show", spec] => io::stdout().write_all(&blob(spec)).unwrap(),
-        ["cat-file", "--batch"] => {
+        ["cat-file", mode @ ("--batch-check" | "--batch")] => {
             let mut input = String::new();
             io::stdin().read_to_string(&mut input).unwrap();
             for spec in input.lines() {
-                let bytes = blob(spec);
-                println!("{} blob {}", "c".repeat(40), bytes.len());
-                io::stdout().write_all(&bytes).unwrap();
-                println!();
+                let bytes = if *mode == "--batch-check" {
+                    blob(spec)
+                } else {
+                    config["paths"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .find_map(|path| {
+                            let bytes = fs::read(root.join(path.as_str().unwrap())).unwrap();
+                            (object(&bytes) == spec).then_some(bytes)
+                        })
+                        .expect("explicit mocked blob object")
+                };
+                println!("{} blob {}", object(&bytes), bytes.len());
+                if *mode == "--batch" {
+                    io::stdout().write_all(&bytes).unwrap();
+                    println!();
+                }
             }
         }
         _ => panic!("unexpected mocked Git call: {args:?}"),

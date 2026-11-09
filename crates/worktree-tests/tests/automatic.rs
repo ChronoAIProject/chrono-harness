@@ -37,7 +37,7 @@ impl EnrollmentOriginalsFixture {
         };
         write(
             "git-fixture.json",
-            value!({"mode":"enrollment-originals","root":root}),
+            value!({"mode":"enrollment-originals","root":root,"paths":registered.keys().collect::<Vec<_>>()}),
         );
         write(
             POLICY,
@@ -94,7 +94,7 @@ impl EnrollmentOriginalsFixture {
                     "attachment":{"gitfile_sha256":"unknown","gitfile_id":"unknown",
                         "metadata":root.join(".git/worktrees/absent"),"metadata_id":"unknown"},
                     "policy_sha256":"old-policy",
-                    "enrollment":{"kind":"birth","observed_head":"b".repeat(40),
+                "enrollment":{"kind":"birth","observed_head":"b".repeat(64),
                         "policy_inputs":{},"receipt":{"source_root":root,"report_path":original}},
                     "uses":[],"terminal":null,"attempts":[]
                 }]
