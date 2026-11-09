@@ -22,6 +22,11 @@ impl EnrollmentOriginalsFixture {
         let fixture = root.join("git-fixture.json");
         let mut registered = values();
         registered.get_mut(CONFIG).unwrap()["schema_version"] = value!(4);
+        registered.get_mut(CONFIG).unwrap()["canonical_check"]["profile"] =
+            value!(".chrono-harness/ci/check.json");
+        registered.get_mut(CONFIG).unwrap()["canonical_check"]["inputs"] = value!({
+            "local":{"operation":"prepare.fixture","tool":"sh","argv":["unused"]}
+        });
         registered.get_mut(CONFIG).unwrap()["facts_git"] = value!({"tool":"git"});
         registered.get_mut(CONFIG).unwrap()["tools"]
             .as_array_mut()
