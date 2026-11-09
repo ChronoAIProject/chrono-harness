@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
 use tempfile::TempDir;
 
 const METHOD: &str = ".chrono-harness/instructions/methodology.md";
@@ -757,6 +758,152 @@ fn cli_usage_generation_errors_and_success_have_distinct_exit_contracts() {
     let output = dispatch(&generate_args);
     assert_eq!(output.exit_code, 0);
     assert!(output.stdout.contains("0 file(s) changed"));
+}
+
+fn runtime_policy(host: &Host, max_bytes: u64, max_files: usize) {
+    host.write(
+        ".chrono-harness/logging.json",
+        serde_json::to_vec(&serde_json::json!({
+            "schema": "chrono-runtime-logging/v1", "level": "info",
+            "directory": ".chrono-harness/state/logs/", "max_bytes": max_bytes,
+            "max_files": max_files, "stderr": false
+        }))
+        .unwrap(),
+    );
+}
+
+fn run_cli(cwd: &Path, args: &[OsString]) -> (u32, Output) {
+    let child = Command::new(env!("CARGO_BIN_EXE_chrono-test-instructions"))
+        .args(args)
+        .current_dir(cwd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    (pid, child.wait_with_output().unwrap())
+}
+
+fn runtime_records(host: &Host) -> Vec<serde_json::Value> {
+    String::from_utf8(host.read(".chrono-harness/state/logs/runtime.jsonl"))
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect()
+}
+
+#[test]
+fn cli_runtime_logs_success_at_selected_host_and_preserves_machine_output() {
+    let host = Host::new();
+    let other = Host::new();
+    host.init().unwrap();
+    runtime_policy(&host, 8192, 2);
+    runtime_policy(&other, 8192, 2);
+    let args = vec![
+        "generate".into(),
+        "--host-root".into(),
+        host.root.clone().into_os_string(),
+    ];
+    let (pid, output) = run_cli(&other.root, &args);
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    assert_eq!(
+        output.stdout,
+        b"complete: 0 file(s) changed; no judges executed\n"
+    );
+    assert!(output.stderr.is_empty(), "{output:?}");
+    assert!(!other.root.join(".chrono-harness/state/logs").exists());
+    let rows = runtime_records(&host);
+    assert_eq!(rows.len(), 2);
+    for row in &rows {
+        assert_eq!(row["schema"], "chrono-log/v1");
+        assert_eq!(row["producer"], "chrono-instructions");
+        assert_eq!(row["level"], "info");
+        assert_eq!(row["context"]["pid"], pid);
+        assert_eq!(row["context"]["operation"], "generate");
+        assert_eq!(
+            row["context"]["host_root"],
+            fs::canonicalize(&host.root).unwrap().to_str().unwrap()
+        );
+    }
+    assert_eq!(rows[0]["event"], "cli.started");
+    assert_eq!(rows[1]["event"], "cli.finished");
+    assert_eq!(rows[1]["fields"]["exit_code"], 0);
+
+    let (_, version) = run_cli(&host.root, &["--version".into()]);
+    assert_eq!(version.status.code(), Some(0));
+    assert_eq!(version.stdout, b"chrono-instructions 0.1.0\n");
+    assert!(version.stderr.is_empty());
+    let rows = runtime_records(&host);
+    assert_eq!(rows.len(), 4);
+    assert_eq!(rows[2]["context"]["operation"], "--version");
+    assert_eq!(rows[3]["event"], "cli.finished");
+}
+
+#[test]
+fn cli_runtime_logs_original_generation_and_usage_diagnostics() {
+    for (operation, exit) in [("generate", 1), ("unknown", 2)] {
+        let host = Host::new();
+        runtime_policy(&host, 8192, 2);
+        let args = vec![
+            operation.into(),
+            "--host-root".into(),
+            host.root.clone().into_os_string(),
+        ];
+        let expected = dispatch(&args);
+        let (_, output) = run_cli(&host.root, &args);
+        assert_eq!(output.status.code(), Some(exit), "{output:?}");
+        assert_eq!(output.stdout, expected.stdout.as_bytes());
+        assert_eq!(output.stderr, expected.stderr.as_bytes());
+        let rows = runtime_records(&host);
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0]["event"], "cli.started");
+        assert_eq!(rows[1]["event"], "cli.diagnostic");
+        assert_eq!(rows[1]["message"], expected.stderr.trim_end());
+        assert_eq!(rows[1]["level"], "error");
+        assert_eq!(rows[2]["event"], "cli.finished");
+        assert_eq!(rows[2]["level"], "error");
+        assert_eq!(rows[2]["fields"]["exit_code"], exit);
+    }
+}
+
+#[test]
+fn cli_runtime_reports_initialization_and_write_failures_without_losing_business_result() {
+    for invalid_policy in [true, false] {
+        let host = Host::new();
+        if invalid_policy {
+            runtime_policy(&host, 8192, 0);
+        } else {
+            runtime_policy(&host, 1, 2);
+        }
+        let (_, output) = run_cli(
+            &host.root,
+            &[
+                "init".into(),
+                "--host-root".into(),
+                host.root.clone().into_os_string(),
+            ],
+        );
+        assert_eq!(output.status.code(), Some(2), "{output:?}");
+        let diagnostic: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+        assert_eq!(diagnostic["producer"], "chrono-instructions");
+        assert_eq!(diagnostic["event"], "runtime.logging_failed");
+        if invalid_policy {
+            assert!(output.stdout.is_empty());
+            assert!(!host.root.join("CLAUDE.md").exists());
+            assert_eq!(diagnostic["error"]["error"]["code"], "E_LOG_CONFIG");
+        } else {
+            assert!(
+                String::from_utf8(output.stdout)
+                    .unwrap()
+                    .starts_with("complete:")
+            );
+            assert!(host.root.join("CLAUDE.md").is_file());
+            assert_eq!(
+                diagnostic["error"]["error"]["context"]["operation_exit_code"],
+                0
+            );
+        }
+    }
 }
 
 #[cfg(unix)]

@@ -27,7 +27,11 @@ CLI 接受 `init --host-root H [--methodology M] [--host-context C] [--locale L]
 
 对已登记宿主，init 中省略的选项保留原数据。明确指定不同的 context、原始方法或根 locale 会被拒绝，提示编辑源和输出计划后再 generate。已经拆成单条规则的根，不能由原始 methodology 替换。源缺失或登记损坏时，不补默认；没有登记、却已有保留源或控制文件时，拒绝碰撞。公共接口 `init`、`init_with_defaults`、`generate`、`dispatch` 继续可用。
 
-退出码 0 表示完成、无需写入、帮助或版本；2 表示 CLI 用法错误；1 表示输入、生成、IO 或平台错误。成功时报告实际改动数和 `no judges executed`。独立的 `chrono-harness check` 已有 [CI 范围检查](ci.md) 和有限范围的 full 判官链，但完整宿主启用仍未完成。指令生成不能证明 AI 已阅读、遵守、执行判官或通过检查。
+退出码 0 表示完成、无需写入、帮助或版本；2 表示 CLI 用法或日志错误；1 表示输入、生成、业务 IO 或平台错误。成功时报告实际改动数和 `no judges executed`。独立的 `chrono-harness check` 已有 [CI 范围检查](ci.md) 和有限范围的 full 判官链，但完整宿主启用仍未完成。指令生成不能证明 AI 已阅读、遵守、执行判官或通过检查。
+
+CLI 复用标准诊断库，按明确 `--host-root`（省略时为当前目录）读取宿主 `.chrono-harness/logging.json`，记录开始、返回和原诊断文本，stdout 保持原业务输出。日志初始化失败时不启动业务；写入失败时保留业务输出及产物，最终退出 2，并向 stderr 尝试发布日志错误及原业务返回码。日志格式、保留上限和无配置时的行为归[诊断说明](diagnostics.md)，库接口 `dispatch` 仍只返回调用结果。
+
+**产品与宿主登记同步修改：**instructions 入口接入现有 diagnostics，FILEMAP 登记编译及日志输入关系，专属 Rust 测试项目编译真实 main 源码，覆盖显式宿主、成功、生成／用法失败和日志初始化／写入失败。沿用原构建、未过滤测试及 DELTA 检查入口，不增加日志机制或检查路径。局部测试已通过；完整 CI 和生命周期成本仍以实际验收为准。
 
 ## 新默认的宿主采用边界
 
