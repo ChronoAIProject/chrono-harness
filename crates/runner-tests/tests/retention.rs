@@ -4420,6 +4420,71 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
 }
 
 #[test]
+fn several_retirements_count_their_shared_finalized_original_once() {
+    if !isolated_capability_test("several_retirements_count_their_shared_finalized_original_once") {
+        return;
+    }
+    let h = host(256, 128);
+    let original = ".chrono-harness/state/fixtures/shared-count-original";
+    let bytes = b"required original for a real recheck";
+    fs::write(h.path().join(original), bytes).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", original, json!(null))
+        .unwrap();
+    let original_id = publication.id().to_owned();
+    publication.complete(json!({"exit": 7})).unwrap();
+    inventory(h.path())
+        .reference("actual-count-recheck", &[original_id.clone()])
+        .unwrap();
+    let mut ids = Vec::new();
+    let mut paths = Vec::new();
+    for n in 0..3 {
+        let path = format!(".chrono-harness/state/fixtures/shared-count-report-{n}");
+        fs::write(h.path().join(&path), b"obsolete report").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        inventory(h.path())
+            .dependencies(&id, &[original_id.clone()])
+            .unwrap();
+        publication.complete(json!({"exit": 0})).unwrap();
+        ids.push(id);
+        paths.push(path);
+    }
+    let role = retention_state::role_path(h.path(), "actual-count-recheck");
+    let role_before = fs::read(&role).unwrap();
+    let round = inventory(h.path()).maintain_originals(&ids).unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert_eq!(round["scope"]["complete"], true, "{round}");
+    assert_eq!(round["remaining_outputs"], 1, "{round}");
+    assert_eq!(
+        round["known_retained_file_logical_bytes"],
+        bytes.len(),
+        "{round}"
+    );
+    assert_eq!(round["remaining_capability_retirements"], 0, "{round}");
+    assert_eq!(
+        round["removed_logical_bytes"],
+        3 * b"obsolete report".len(),
+        "{round}"
+    );
+    for path in paths {
+        assert!(!h.path().join(path).exists(), "{round}");
+    }
+    assert_eq!(fs::read(h.path().join(original)).unwrap(), bytes);
+    assert_eq!(fs::read(role).unwrap(), role_before);
+    let record: Value = serde_json::from_slice(
+        &fs::read(retention_state::object_path(h.path(), &original_id)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(record["incoming"], json!([]));
+}
+
+#[test]
 fn explicit_maintenance_visits_only_the_named_originals() {
     if !isolated_capability_test("explicit_maintenance_visits_only_the_named_originals") {
         return;

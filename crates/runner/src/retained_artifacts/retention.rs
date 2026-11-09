@@ -25,6 +25,48 @@ pub use partition::ObservationToken;
 pub const POLICY_PATH: &str = ".chrono-harness/retention.json";
 const STATE: &str = ".chrono-harness/state/output-retention-v1";
 const MAX_STATE: u64 = 8 * 1024 * 1024;
+const RETAINED_MEASUREMENT_FIELDS: [&str; 8] = [
+    "remaining_outputs",
+    "remaining_capability_retirements",
+    "known_retained_file_logical_bytes",
+    "known_retained_allocated_bytes",
+    "unmeasured_allocated_outputs",
+    "unmeasured_tree_outputs",
+    "reserved_logical_bytes",
+    "overflow_outputs",
+];
+fn retained_measurements(
+    output: Option<&Output>,
+    retired: usize,
+    max_output_bytes: u64,
+) -> [u64; 8] {
+    [
+        u64::from(output.is_some()),
+        retired as u64,
+        output.and_then(|o| o.length).unwrap_or(0),
+        output.map_or(0, |o| {
+            o.manifest
+                .entries
+                .iter()
+                .filter_map(|e| e.allocated_bytes)
+                .sum()
+        }),
+        u64::from(output.is_some_and(|o| {
+            !o.manifest.sealed
+                || o.manifest
+                    .entries
+                    .iter()
+                    .any(|e| e.allocated_bytes.is_none())
+        })),
+        u64::from(output.is_some_and(|o| !o.manifest.sealed)),
+        output.map_or(0, |o| o.reserved_bytes),
+        u64::from(output.is_some_and(|o| {
+            o.manifest.bytes.saturating_sub(o.removed_logical_bytes)
+                > o.byte_limit.unwrap_or(max_output_bytes)
+        })),
+    ]
+}
+
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Policy {
@@ -1982,6 +2024,13 @@ impl Inventory {
         let mut rooted = BTreeSet::new();
         let mut protection_reasons = BTreeMap::new();
         let mut pending: Vec<_> = l.roots.values().flatten().cloned().collect();
+        for id in gate.retained_dependencies() {
+            pending.push(id.clone());
+            protection_reasons.insert(
+                id.clone(),
+                "finalized original outside this retirement target".into(),
+            );
+        }
         for o in &l.outputs {
             if matches!(o.phase.as_str(), "reserving" | "creating") {
                 pending.push(o.id.clone());
@@ -2402,10 +2451,24 @@ impl Inventory {
             }
         }
         self.save(&l, &gate)?;
-        Ok(
-            json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"remaining_outputs":l.outputs.len(),"remaining_capability_retirements":l.retired_leases.len(),"known_retained_file_logical_bytes":l.outputs.iter().filter_map(|o|o.length).sum::<u64>(),"known_retained_allocated_bytes":l.outputs.iter().flat_map(|o|o.manifest.entries.iter()).filter_map(|e|e.allocated_bytes).sum::<u64>(),"unmeasured_allocated_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed || o.manifest.entries.iter().any(|e|e.allocated_bytes.is_none())).count(),"unmeasured_tree_outputs":l.outputs.iter().filter(|o|!o.manifest.sealed).count(),"reserved_logical_bytes":l.outputs.iter().map(|o|o.reserved_bytes).sum::<u64>(),"overflow_outputs":l.outputs.iter().filter(|o|o.manifest.bytes.saturating_sub(o.removed_logical_bytes)>o.byte_limit.unwrap_or(self.policy.max_output_bytes)).count(),"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_related_outputs,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"}),
-        )
+        let mut measurements = [0u64; 8];
+        for output in &l.outputs {
+            for (total, value) in measurements.iter_mut().zip(retained_measurements(
+                Some(output),
+                0,
+                self.policy.max_output_bytes,
+            )) {
+                *total += value;
+            }
+        }
+        measurements[1] = l.retired_leases.len() as u64;
+        let mut result = json!({"schema":"chrono-output-retention-round/v1","nodes":nodes,"metadata_inventory_entries":count,"accounting_errors":accounting_errors,"metadata_graph_edges":l.outputs.iter().map(|o|o.references.len()).sum::<usize>(),"metadata_read_bound":MAX_STATE,"metadata_bytes":self.policy.max_metadata_bytes_per_round-self.round_metadata.get().unwrap_or(0),"max_metadata_bytes_per_round":self.policy.max_metadata_bytes_per_round,"directory_snapshot_entries_bound":self.policy.max_manifest_nodes,"removed_logical_bytes":bytes,"verified_bytes":verified_bytes,"physical_bytes_reclaimed":null,"max_output_bytes":self.policy.max_output_bytes,"inventory_capacity":self.policy.max_related_outputs,"protected":protected,"disposed":disposed,"legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"});
+        for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(measurements) {
+            result[*key] = json!(value);
+        }
+        Ok(result)
     }
+
     fn recover_creation(
         &self,
         output: &mut Output,
