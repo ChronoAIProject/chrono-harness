@@ -97,12 +97,12 @@ impl Manager {
                 )?
             };
             if branch != e.current_branch() {
-                if e.status != "active"
-                    || e.terminal.is_some()
-                    || e.cleanup.is_some()
-                    || !e.uses.is_empty()
-                    || e.report_handoff_pending()
-                {
+                if !crate::verified_lifecycle::checkout_migration_ready(
+                    &e.status,
+                    e.terminal.is_some(),
+                    !e.uses.is_empty(),
+                    e.report_handoff_pending(),
+                ) {
                     return Err("checkout migration preserves pending work; reconcile its use, result or terminal handoff first".into());
                 }
                 if (branch == "HEAD" && e.enrollment["kind"] != "import")
