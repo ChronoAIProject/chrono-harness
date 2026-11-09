@@ -10,8 +10,12 @@ pub(super) fn install(root: &Path, path: &Path) {
 
 pub(super) fn bind(h: &mut Host, variable: &str, program: &Path, consumers: &[&str]) {
     let node = format!("environment:{variable}");
+    h.values.get_mut(CONFIG).unwrap()["environment"]["values"][variable] = json!(program);
+    bind_input(h, &node, consumers);
+}
+
+pub(super) fn bind_input(h: &mut Host, node: &str, consumers: &[&str]) {
     let cfg = h.values.get_mut(CONFIG).unwrap();
-    cfg["environment"]["values"][variable] = json!(program);
     for consumer in consumers {
         let binding = cfg["input_closure"]["bindings"]
             .as_array_mut()
@@ -28,7 +32,7 @@ pub(super) fn bind(h: &mut Host, variable: &str, program: &Path, consumers: &[&s
         .as_array_mut()
         .unwrap();
     for consumer in consumers {
-        let declaration = edge(&node, "runtime-input", consumer);
+        let declaration = edge(node, "runtime-input", consumer);
         if !edges.contains(&declaration) {
             edges.push(declaration);
         }

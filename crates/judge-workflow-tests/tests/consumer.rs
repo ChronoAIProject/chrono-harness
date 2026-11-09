@@ -8,6 +8,10 @@ mod host;
 mod native_tools;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
+#[path = "fixtures/transition_decoder.rs"]
+mod transition_decoder;
+#[path = "fixtures/transition_decoder_tests.rs"]
+mod transition_decoder_tests;
 use chrono_harness::sha256;
 use host::{FixtureProbe, Host, install_program};
 use serde_json::{Value, json};
@@ -737,11 +741,24 @@ fn changed_base_rejects_old_integration_binding() {
 }
 fn migration_host() -> Host {
     let mut h = host();
-    let decoder = include_bytes!("fixtures/transition_decoder.py").as_slice();
-    let checks = include_bytes!("fixtures/transition_decoder_tests.py").as_slice();
+    let root = h.root();
+    for (path, id) in [
+        (".chrono-harness/decoder", "transition-decoder"),
+        (".chrono-harness/decoder-tests", "transition-checks"),
+    ] {
+        let program = root.join(path);
+        native_tools::install(&root, &program);
+        h.values.get_mut(CONFIG).unwrap()["tools"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id":id,"program":path,"resolution":"PATH-once",
+                "version_argv":["--version"],"expected_version":"chrono-workflow-transition 0.1.0"}));
+        h.values.get_mut(FM).unwrap()["files"]
+            .as_array_mut()
+            .unwrap()
+            .push(file(path, json!([])));
+    }
     for (path, bytes) in [
-        (".chrono-harness/decoder.py", decoder),
-        (".chrono-harness/decoder-tests.py", checks),
         (".chrono-harness/case.json", b"{}".as_slice()),
         (".chrono-harness/profile.json", b"{}".as_slice()),
     ] {
@@ -752,8 +769,8 @@ fn migration_host() -> Host {
             .push(file(path, json!([])));
     }
     for (path, owner) in [
-        (".chrono-harness/decoder.py", "decoder"),
-        (".chrono-harness/decoder-tests.py", "decoder-tests"),
+        (".chrono-harness/decoder", "decoder"),
+        (".chrono-harness/decoder-tests", "decoder-tests"),
     ] {
         let row = h.values.get_mut(FM).unwrap()["files"]
             .as_array_mut()
@@ -769,8 +786,8 @@ fn migration_host() -> Host {
         .unwrap()
         .extend([json!("decoder"), json!("decoder-tests")]);
     p["scripts"].as_array_mut().unwrap().extend([
-        json!({"id":"decoder","path":".chrono-harness/decoder.py","test_script":"decoder-tests","actions":{"execute":{"operation":"decode","tool":"python","argv":["-B",".chrono-harness/decoder.py"]}}}),
-        json!({"id":"decoder-tests","path":".chrono-harness/decoder-tests.py","tests_for":"decoder","actions":{"execute":{"operation":"decode.test","tool":"python","argv":["-B",".chrono-harness/decoder-tests.py"]}}})]);
+        json!({"id":"decoder","path":".chrono-harness/decoder","test_script":"decoder-tests","actions":{"execute":{"operation":"decode","tool":"transition-decoder","argv":[]}}}),
+        json!({"id":"decoder-tests","path":".chrono-harness/decoder-tests","tests_for":"decoder","actions":{"execute":{"operation":"decode.test","tool":"transition-checks","argv":[]}}})]);
     h.values.get_mut(FM).unwrap()["execution_plans"]["test:decoder-tests"] =
         json!({"operations":["decode.test"],"timeout_seconds":15,"output_limit_bytes":4096});
     h.values.get_mut(FM).unwrap()["test_costs"]
@@ -786,7 +803,7 @@ fn migration_host() -> Host {
             "test-execution",
             "test:decoder-tests",
         ));
-    let legacy = json!({"id":"legacy","path":".chrono-harness/legacy.py","actions":{"execute":{"operation":"legacy.old","tool":"python","argv":["-c","raise RuntimeError(\"historical code must not execute\")"]}}});
+    let legacy = json!({"id":"legacy","path":".chrono-harness/legacy","actions":{"execute":{"operation":"legacy.old","tool":"transition-decoder","argv":["--historical-must-not-run"]}}});
     let mappings = json!([{ "from":"script:legacy","to":"script:decoder"},{"from":"test:legacy","to":"test:decoder-tests"},{"from":"owner:legacy","to":"owner:decoder"}]);
     let mut bindings = plans
         .as_object()
@@ -959,15 +976,13 @@ fn migration_artifacts_are_allowed_but_candidate_input_mutations_are_rejected() 
         "doc.txt",
     ] {
         let mut h = migration_host();
-        let decoder_path = h.root().join(".chrono-harness/decoder.py");
-        let decoder = fs::read_to_string(&decoder_path).unwrap();
-        fs::write(
-            &decoder_path,
-            format!(
-                "from pathlib import Path\nPath({path:?}).write_text('decoder output')\n{decoder}"
-            ),
-        )
-        .unwrap();
+        let decoder = h.values.get_mut(PROJECTS).unwrap()["scripts"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|script| script["id"] == "decoder")
+            .unwrap();
+        decoder["actions"]["execute"]["argv"] = json!(["--write", path]);
         h.save();
         let (exit, report) = run(&h, "integration", None, |_| {});
         if path.starts_with(".chrono-harness/state/") {

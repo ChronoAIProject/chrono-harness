@@ -68,6 +68,10 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 这同时修改产品处置判法和宿主政策，增加的保留空间及总生命周期成本仍未测量；
 支持平台、真实缓存封存／保存和宿主采用须分别验证。
 
+FILEMAP 明确连接生命周期工具／cleanup 政策与 cache-tests 使用方，
+让清理时机变化继续选择真实 cache 单元。该单元沿现有入口运行原构建、测试、
+producer manifest 封存及 dev push 保存，不另设验证工作流。
+
 返回 `chrono-cache-plan/v2`，包含所选项及输入观察。状态为 `prepared-unrestored`，执行为 `not-started`，`input_completeness_proven` 为 false。这些只描述计划，不是判断通过、命中、构建成功或同判证据。后端结果、失败链和原报告须由真实生产者提供。
 
 ## 恢复失败后如何清理

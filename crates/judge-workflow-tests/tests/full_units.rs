@@ -1349,6 +1349,14 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         &python,
         &["judge:projects"],
     );
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_TRANSITION_TRACE",
+        &tool_root.join("business-launches"),
+        &["judge:registration", "judge:projects"],
+    );
+    native_tools::bind_input(&mut h, "tool:transition-decoder", &["judge:registration"]);
+    native_tools::bind_input(&mut h, "tool:transition-checks", &["judge:projects"]);
     h.tool = wrapper.clone();
     h.values.get_mut(CONFIG).unwrap()["tools"]
         .as_array_mut()
@@ -1381,6 +1389,15 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         passed(e, &r);
         assert_eq!(workflow(&r)["completion"], "pending collection");
     }
+    let launches = marker(&tool_root);
+    assert!(
+        launches.contains("decoder\n"),
+        "conversion trace is missing"
+    );
+    assert!(
+        launches.contains("decoder-tests\n"),
+        "compatibility trace is missing"
+    );
     manifest(&h.root(), &["one", "two"]);
     fs::remove_file(&wrapper).unwrap();
     let before = marker(&tool_root);
