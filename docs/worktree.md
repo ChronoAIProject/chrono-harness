@@ -596,6 +596,8 @@ Rust `RetainedArtifact` 接纳精确保留对象并发布 intent。采用 wrappe
 
 import 为一个明确已有 linked 工作树登记，核当前登记／关联并绑定原政策输入，含明确缺失。它接受其他客户端已有的本地分支名，也接受 detached HEAD；后者以 Git 保留名 `HEAD` 登记，持续核 inventory 的 detached 标志、当前提交和原物理关联，不获得删除任何本地分支的权限。feature／integration 前缀约束仍用于新建 birth。已导入对象的自动清理消费同一 enrollment 及其物理身份保护；直接 cleanup 计划仍要求登记前缀，不接管未登记的 detached 检出。可导入旧检出而不编辑它，也不假装它采用新自动政策。未解决索引、活使用方及必要证据继续保留；年龄源码保存只更新该 detached 检出的 HEAD，先保全原索引和 reflog 提交，不改其他分支。处置路径须已在两端声明。观察为 import，不声称历史 birth；已有空地址记录也不能充当历史登记或完成证据。
 
+观察登记要求目标原政策输入已提交并有登记；目标无需先采用调用宿主的配置格式或全部产物范围。后续迁移、消费和处置各自重验当前输入，实际处置仍要求路径在两端明确登记。
+
 调用方 Git／GitHub、发布、立即回收旧宿主、证据结算仍不属本生产者。worktree fixture 用已有 `resolve_program` 从继承的 PATH 解析 Git，找不到程序就失败；原绑定在本轮 fixture 内记录实际路径、身份和版本，不在仓库维护主机路径清单。产品宿主的 Git 政策独立；剩余真实 Git fixture 的命令边界 mock 迁移仍未完成。
 
 本地真实 Git fixture 覆盖整检出移除；真实 main finish／落地仍是调用方采用后的验收事件。

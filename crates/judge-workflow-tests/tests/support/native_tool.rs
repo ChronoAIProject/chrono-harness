@@ -10,7 +10,7 @@ use std::{
     io::{self, Read, Write},
     os::unix::{ffi::OsStrExt, process::CommandExt},
     path::Path,
-    process::{Command, ExitCode},
+    process::{Command, ExitCode, Stdio},
 };
 
 fn append(path: &Path, bytes: &[u8]) {
@@ -93,6 +93,53 @@ fn prepared_producer(args: &[std::ffi::OsString]) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+fn native_inputs(args: &[std::ffi::OsString]) -> ExitCode {
+    if args.len() == 1 && args[0] == "--version" {
+        println!("chrono-workflow-native-inputs 1");
+        return ExitCode::SUCCESS;
+    }
+    let mut raw = Vec::new();
+    io::stdin().read_to_end(&mut raw).unwrap();
+    let request: Value = serde_json::from_slice(&raw).unwrap();
+    let native_raw = fs::read(".chrono-harness/state/native-transport.json").unwrap();
+    let native: std::collections::BTreeMap<String, String> =
+        serde_json::from_slice(&native_raw).unwrap();
+    let mut child = Command::new(".chrono-harness/bin/chrono-ci")
+        .args(args)
+        .envs(native)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(&raw).unwrap();
+    let output = child.wait_with_output().unwrap();
+    io::stderr().write_all(&output.stderr).unwrap();
+    if output.status.success() {
+        let digest = chrono_harness::sha256(&native_raw);
+        let path = format!(
+            "{}native-transport-{digest}.json",
+            request["native_artifacts"]["directory"].as_str().unwrap()
+        );
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(mut file) => file.write_all(&native_raw).unwrap(),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                assert_eq!(fs::read(&path).unwrap(), native_raw);
+            }
+            Err(error) => panic!("native acquisition original: {error}"),
+        }
+        let mut prepared: Value = serde_json::from_slice(&output.stdout).unwrap();
+        prepared["originals"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"path":path,"sha256":digest}));
+        emit(&prepared);
+    } else {
+        io::stdout().write_all(&output.stdout).unwrap();
+    }
+    ExitCode::from(u8::try_from(output.status.code().unwrap()).unwrap())
+}
+
 fn copy_tree(source: &Path, destination: &Path) {
     fs::create_dir_all(destination).unwrap();
     for entry in fs::read_dir(source).unwrap() {
@@ -160,6 +207,9 @@ fn main() -> ExitCode {
     }
     if name == "fixture-producer" {
         return prepared_producer(&args);
+    }
+    if name == "native-inputs" {
+        return native_inputs(&args);
     }
     if name == "mock-gh" {
         let data = read_json(&parent.join("full-units-api.json"));

@@ -133,7 +133,7 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
-pub(super) struct ShortHost {
+pub(crate) struct ShortHost {
     _dir: crate::tools::FixtureDirectory,
     root: PathBuf,
     pub(super) remote: PathBuf,
@@ -1012,14 +1012,10 @@ fn short_rejects_dirty_missing_unknown_binding_selector_and_long_spelling() {
 }
 #[test]
 fn generated_native_check_step_executes_same_short_command_and_event_rules() {
-    let h = ShortHost::new();
-    let event = h.root.join(".chrono-harness/state/event.json");
-    json_file(
-        &h.root,
-        ".chrono-harness/state/event.json",
-        &json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false}),
-    );
-    let workflow = fs::read_to_string(h.root.join(".github/workflows/alpha.yml")).unwrap();
+    let mut h = gating::GatedHost::new();
+    h.change(&["a.txt", "b.txt"]);
+    let detection = h.detection();
+    let workflow = fs::read_to_string(h.root.join(".github/workflows/collection.yml")).unwrap();
     assert!(!workflow.contains("Prepare fixed event inputs"));
     assert!(!workflow.contains("--base"));
     let line = workflow
@@ -1027,13 +1023,13 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
         .find(|l| l.contains("'check' '--unit' 'alpha'"))
         .unwrap()
         .trim();
-    let out = Command::new("/bin/bash")
-        .current_dir(&h.root)
-        .args(["-c", line])
-        .env(prepared::SOURCE, "ci")
-        .env("GITHUB_EVENT_NAME", "push")
-        .env("GITHUB_EVENT_PATH", &event)
-        .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+    let mut command = Command::new("/bin/bash");
+    command.args(["-c", line]);
+    h.environment(&mut command);
+    let out = command
+        .env("GITHUB_JOB", "unit_alpha")
+        .env("CHRONO_CI_DETECTION", detection.to_string())
+        .env("CHRONO_CI_NEEDS", "null")
         .output()
         .unwrap();
     assert_eq!(
@@ -1055,15 +1051,10 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
             .len(),
         4
     );
-    for (event_name, payload, expected_base) in [
+    for (event_name, mut payload, expected_base) in [
         (
             "pull_request",
             json!({"pull_request":{"base":{"sha":h.base},"head":{"sha":h.candidate}}}),
-            h.base.clone(),
-        ),
-        (
-            "workflow_dispatch",
-            json!({"inputs":{"base":h.base,"candidate":h.candidate,"initial":false}}),
             h.base.clone(),
         ),
         (
@@ -1073,19 +1064,19 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
         ),
     ] {
         // The fixture's v4 provider retains its registered push rule when explicitly configured.
-        json_file(&h.root, ".chrono-harness/state/event.json", &payload);
         let revision = if event_name == "pull_request" {
             tools::pr_workflow_merge(&h.root, &h.base, &h.candidate)
         } else {
             h.candidate.clone()
         };
+        if event_name == "pull_request" {
+            payload["pull_request"]["merge_commit_sha"] = json!(revision);
+        }
+        h.payload = payload;
         git(&h.root, &["checkout", "--detach", &revision]);
+        let detection = h.detection();
         let o = h
-            .command(&["check", "--unit", "alpha"])
-            .env(prepared::SOURCE, "ci")
-            .env("GITHUB_EVENT_NAME", event_name)
-            .env("GITHUB_EVENT_PATH", &event)
-            .env("CHRONO_WORKFLOW_REVISION", &revision)
+            .command(&["check", "--unit", "alpha"], &detection, &Value::Null)
             .output()
             .unwrap();
         assert_eq!(
@@ -1100,6 +1091,17 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
             assert_eq!(r["request"]["base"], expected_base);
         }
     }
+    h.payload = json!({"inputs":{"base":h.base,"candidate":h.candidate,"initial":false}});
+    let unsupported = h
+        .command(&["check", "--unit", "alpha"], &detection, &Value::Null)
+        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .output()
+        .unwrap();
+    assert_eq!(
+        unsupported.status.code(),
+        Some(2),
+        "gated parent accepted workflow_dispatch: {unsupported:?}"
+    );
 }
 #[test]
 fn local_collection_rejects_stale_failed_and_wrong_pin_reports_without_execution() {
@@ -1252,23 +1254,15 @@ fn actual_consumer_rejects_fabricated_expanded_entry_and_source_disagreement() {
 }
 #[test]
 fn native_short_initial_requires_explicit_parentless_event_and_canonical_entry() {
-    let mut h = ShortHost::new();
+    let mut h = gating::GatedHost::new();
     let tree = git(&h.root, &["rev-parse", "HEAD^{tree}"]);
     let candidate = git(&h.root, &["commit-tree", &tree, "-m", "parentless fixture"]);
     git(&h.root, &["checkout", "--detach", "-q", &candidate]);
     h.candidate = candidate;
-    let path = h.root.join(".chrono-harness/state/event.json");
-    json_file(
-        &h.root,
-        ".chrono-harness/state/event.json",
-        &json!({"inputs":{"base":"","candidate":h.candidate,"initial":true}}),
-    );
+    h.payload = json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":h.candidate,"created":true,"deleted":false});
+    let detection = h.detection();
     let o = h
-        .command(&["check", "--unit", "alpha"])
-        .env(prepared::SOURCE, "ci")
-        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
-        .env("GITHUB_EVENT_PATH", &path)
-        .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+        .command(&["check", "--unit", "alpha"], &detection, &Value::Null)
         .output()
         .unwrap();
     assert_eq!(
@@ -1320,16 +1314,11 @@ fn short_scoped_binding_never_falls_into_legacy_unbound_git() {
 
 #[test]
 fn preparation_retains_environment_identities_without_credential_values() {
-    let mut h = ShortHost::new();
-    h.modify(".chrono-harness/config.json", |c| {
-        c["environment"]["inherit"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!("GH_TOKEN"));
-        c["environment"]["credential_environment"] = json!(["GH_TOKEN"]);
-    });
+    let mut h = gating::GatedHost::new();
+    h.change(&["a.txt", "b.txt"]);
     let token = "fixture-credential-must-not-be-published";
     let out = h
+        .host
         .command(&["check"])
         .env("GH_TOKEN", token)
         .output()
@@ -1347,21 +1336,10 @@ fn preparation_retains_environment_identities_without_credential_values() {
         binding["environment"]["inherited"]["GH_TOKEN"],
         sha256(token.as_bytes())
     );
-    json_file(
-        &h.root,
-        ".chrono-harness/state/event.json",
-        &json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false}),
-    );
+    let detection = h.detection();
     let out = h
-        .command(&["check", "--unit", "alpha"])
+        .command(&["check", "--unit", "alpha"], &detection, &Value::Null)
         .env("GH_TOKEN", token)
-        .env(prepared::SOURCE, "ci")
-        .env("GITHUB_EVENT_NAME", "push")
-        .env(
-            "GITHUB_EVENT_PATH",
-            h.root.join(".chrono-harness/state/event.json"),
-        )
-        .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
         .output()
         .unwrap();
     assert!(
@@ -1370,9 +1348,11 @@ fn preparation_retains_environment_identities_without_credential_values() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(!String::from_utf8_lossy(&out.stdout).contains(token));
-    for entry in fs::read_dir(h.root.join(".chrono-harness/state/preparation")).unwrap() {
-        let bytes = fs::read(entry.unwrap().path()).unwrap();
-        assert!(!String::from_utf8_lossy(&bytes).contains(token));
+    for directory in ["preparation", "alpha/preparation"] {
+        for entry in fs::read_dir(h.root.join(".chrono-harness/state").join(directory)).unwrap() {
+            let bytes = fs::read(entry.unwrap().path()).unwrap();
+            assert!(!String::from_utf8_lossy(&bytes).contains(token));
+        }
     }
     let facts =
         chrono_harness::facts::Reader::for_config(&h.root, ".chrono-harness/config.json").unwrap();
@@ -1760,6 +1740,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     git(&consumer, &["clone", "-q", h.root.to_str().unwrap(), "."]);
     install(&consumer);
     gating::install_parent_provider(&consumer);
+    fs::create_dir_all(consumer.join(".chrono-harness/state")).unwrap();
     git(&consumer, &["config", "user.name", "Fixture"]);
     git(
         &consumer,

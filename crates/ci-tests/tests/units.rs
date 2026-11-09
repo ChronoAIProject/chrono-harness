@@ -564,7 +564,7 @@ fn collect_cli(host: &short::gating::GatedHost) -> std::process::Output {
 fn standalone_gather_is_rejected_without_transport_or_publication() {
     let (host, _, _) = gather_host("success");
     let root = host.path();
-    let launches = root.join(".chrono-harness/state/mock-launches.jsonl");
+    let launches = root.join(".chrono-harness/state/parent-calls");
     let before = fs::read(&launches).ok();
     let result = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(root)
@@ -770,7 +770,10 @@ fn download_recovery_shares_original_time_and_output_budgets() {
         let mut data: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
         match mode {
             "deadline" => data["download_pause_ms"] = json!(1500),
-            "output" => data["download_padding"] = json!(900),
+            // The parent artifact listing also consumes the cumulative stream
+            // budget. Keep the first failed download below its remaining bound;
+            // the second must exhaust the same 1024-byte stderr allowance.
+            "output" => data["download_padding"] = json!(460),
             _ => data["second_http_status"] = json!(401),
         }
         fs::write(path, serde_json::to_vec(&data).unwrap()).unwrap();
@@ -1032,8 +1035,7 @@ fn migration_retires_renamed_parent_and_rejects_host_edits_before_writes() {
         next["units"]["beta"]["timeout_minutes"] = json!(23);
         json_file(root, source, &next);
         let source_bytes = fs::read(root.join(source)).unwrap();
-        let beta = fs::read(root.join(".github/workflows/collection.yml")).unwrap();
-        let alpha = fs::read(root.join(".github/workflows/collection.yml")).unwrap();
+        let parent = fs::read(root.join(".github/workflows/collection.yml")).unwrap();
         if conflict == "old-edit" {
             fs::write(
                 root.join(".github/workflows/collection.yml"),
@@ -1066,13 +1068,9 @@ fn migration_retires_renamed_parent_and_rejects_host_edits_before_writes() {
                 );
                 assert_eq!(
                     fs::read(root.join(".github/workflows/collection.yml")).unwrap(),
-                    alpha
+                    parent
                 );
             }
-            assert_eq!(
-                fs::read(root.join(".github/workflows/collection.yml")).unwrap(),
-                beta
-            );
         } else {
             let report: Value = serde_json::from_str(&result.unwrap()).unwrap();
             assert_eq!(

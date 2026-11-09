@@ -62,11 +62,6 @@ fn adopt_short_host(
             "GITHUB_EVENT_PATH",
             "CHRONO_WORKFLOW_REVISION",
             "GITHUB_REPOSITORY",
-            "GITHUB_RUN_ID",
-            "GITHUB_RUN_ATTEMPT",
-            "GITHUB_JOB",
-            "CHRONO_CI_DETECTION",
-            "CHRONO_CI_NEEDS",
         ] {
             cfg["environment"]["inherit"]
                 .as_array_mut()
@@ -82,6 +77,23 @@ fn adopt_short_host(
                 "judge:registration",
             ));
         }
+        // Native job metadata belongs to acquisition, while the full business
+        // environment must agree across independent producer and collector jobs.
+        // The registered fixture adapter delegates to the real CI input producer
+        // and retains the exact native-only values alongside its original output.
+        let adapter = root.join(".chrono-harness/bin/native-inputs");
+        native_tools::install(&root, &adapter);
+        cfg["canonical_check"]["inputs"]["ci"]["tool"] = json!("native-inputs");
+        cfg["tools"].as_array_mut().unwrap().push(json!({"id":"native-inputs","program":".chrono-harness/bin/native-inputs","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-workflow-native-inputs 1"}));
+        cfg["input_closure"]["bindings"][0]["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("tool:native-inputs"));
+        added_edges.push(edge(
+            "tool:native-inputs",
+            "runtime-input",
+            "judge:registration",
+        ));
     }
     h.values.get_mut(FM).unwrap()["project_edges"]
         .as_array_mut()
@@ -378,7 +390,7 @@ fn full_provider_report_aliases_fail_before_generation_effects() {
     let (h, tools) = short_host(false);
     let root = h.root();
     let config = fs::read(root.join(CONFIG)).unwrap();
-    let workflows: Vec<_> = ["one", "two", "collection"]
+    let workflows: Vec<_> = ["collection"]
         .into_iter()
         .map(|id| {
             let path = root.join(format!(".github/workflows/{id}.yml"));
@@ -945,25 +957,15 @@ fn native_command(
     let job = if id == "collection" {
         "aggregate".to_owned()
     } else {
-        chrono_ci_job(id)
+        fixture_job_id(id)
     };
-    let mut inputs: Value =
-        chrono_harness::json(&fs::read(root.join(".chrono-harness/state/inputs.json")).unwrap())
-            .unwrap();
-    for endpoint in ["base", "candidate"] {
-        for (key, value) in [
-            ("GITHUB_RUN_ID", json!("101")),
-            ("GITHUB_RUN_ATTEMPT", json!("1")),
-            ("GITHUB_JOB", json!(job)),
-            ("CHRONO_CI_DETECTION", json!(detection.to_string())),
-            ("CHRONO_CI_NEEDS", json!(needs.to_string())),
-        ] {
-            inputs[endpoint]["environment"][key] = value;
-        }
-    }
     fs::write(
-        root.join(".chrono-harness/state/inputs.json"),
-        serde_json::to_vec(&inputs).unwrap(),
+        root.join(".chrono-harness/state/native-transport.json"),
+        serde_json::to_vec(&json!({
+            "GITHUB_RUN_ID":"101","GITHUB_RUN_ATTEMPT":"1","GITHUB_JOB":job,
+            "CHRONO_CI_DETECTION":detection.to_string(),"CHRONO_CI_NEEDS":needs.to_string()
+        }))
+        .unwrap(),
     )
     .unwrap();
     let mut process = Command::new("/bin/sh");
@@ -977,6 +979,28 @@ fn native_command(
         println!("GENERATED_FAILURE {}", String::from_utf8_lossy(&out.stderr));
     }
     let report = short_report(root, &argv, &out, Some("ci"));
+    if out.status.success() {
+        for key in ["GITHUB_JOB", "CHRONO_CI_NEEDS"] {
+            assert!(report["environment"]["inherited"].get(key).is_none());
+            assert!(report["environment"]["effective"].get(key).is_none());
+        }
+        let native = fs::read(root.join(".chrono-harness/state/native-transport.json")).unwrap();
+        let original = report["preparation"]["result"]["originals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|original| original["sha256"] == sha256(&native))
+            .expect("actual native-only acquisition values retained");
+        assert_eq!(
+            fs::read(root.join(original["path"].as_str().unwrap())).unwrap(),
+            native
+        );
+        let producer = &report["preparation"]["result"]["evidence"];
+        let raw = fs::read(root.join(producer["report_path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&raw), producer["report_sha256"]);
+        let original: Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(original["native_run"]["job"], job);
+    }
     if out.status.success() && id != "collection" {
         let mut production = Command::new(root.join(".chrono-harness/bin/chrono-ci"));
         production.current_dir(root).args([
@@ -1004,9 +1028,6 @@ fn native_command(
         .unwrap();
     }
     (out.status.code().unwrap(), report)
-}
-fn chrono_ci_job(id: &str) -> String {
-    format!("unit_{id}")
 }
 #[test]
 fn generated_automatic_full_units_gather_originals_on_separate_collection() {
@@ -1080,7 +1101,7 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
         let production =
             fs::read_to_string(unit_root.join(format!(".chrono-harness/state/production-{id}")))
                 .unwrap();
-        needs[chrono_ci_job(id)] =
+        needs[fixture_job_id(id)] =
             json!({"result":"success","outputs":{"production":production.trim()}});
         productions[id] = chrono_harness::json(production.as_bytes()).unwrap();
         copy_tree(

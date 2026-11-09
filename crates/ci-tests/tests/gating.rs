@@ -1402,9 +1402,11 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
     ])
     .unwrap();
     let r: Value = serde_json::from_str(&report).unwrap();
-    assert_eq!(
-        r["retired_workflows"],
-        json!([".github/workflows/alpha.yml", ".github/workflows/beta.yml"])
+    assert_eq!(r["retired_workflows"], json!([]));
+    assert!(
+        fs::read_to_string(h.root.join(".github/workflows/collection.yml"))
+            .unwrap()
+            .contains("new-custom")
     );
     assert!(h.root.join(prior).exists());
     assert!(!generate(&h.root, PROVIDER, true).unwrap());
