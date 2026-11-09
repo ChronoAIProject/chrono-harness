@@ -438,6 +438,7 @@
     {"path":"crates/cache-tests/Cargo.toml","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:cache-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/cache-tests/Cargo.lock","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:cache-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/cache-tests/tests/keys.rs","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/cache-tests/tests/fixtures/compiler-cache.json","owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"}]},
     {"path":"crates/worktree/src/automatic/migration.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/automatic/retirement.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/policy_migration.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
