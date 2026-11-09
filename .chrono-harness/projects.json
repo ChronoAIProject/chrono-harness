@@ -1867,16 +1867,6 @@
             "--manifest-path",
             "crates/inputs/Cargo.toml"
           ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.inputs",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/inputs/Cargo.toml"
-          ]
         }
       },
       "test_project": "inputs-tests",
@@ -2198,16 +2188,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.worktree-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml"
           ]
@@ -2693,16 +2673,6 @@
             "crates/pr/Cargo.toml"
           ]
         },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.pr",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/pr/Cargo.toml"
-          ]
-        },
         "lockfile": {
           "operation": "lockfile.pr",
           "tool": "cargo",
@@ -2749,16 +2719,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/pr-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.pr-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
             "--manifest-path",
             "crates/pr-tests/Cargo.toml"
           ]
