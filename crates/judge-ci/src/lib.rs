@@ -732,13 +732,7 @@ fn ci_impact(
         .collect();
     let closure = graph::closure(&edges, &seeds);
     let mut selected = closure.selected_tests();
-    let legacy_only: BTreeSet<_> = extras
-        .keys()
-        .filter(|t| !selected.contains(*t))
-        .cloned()
-        .collect();
     selected.extend(extras.keys().cloned());
-    let seed_nodes: Vec<_> = seeds.iter().map(|s| &s.node).collect();
     // The explicit graph and seed causes already determine every predecessor
     // and contributing-seed set. Opted-in hosts publish that sufficient source
     // once rather than repeating those derived strings for each (seed, node).
@@ -750,7 +744,7 @@ fn ci_impact(
     } else {
         object!(&closure)
     };
-    let mut explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seeds":seed_nodes, "seed_causes":seeds, "closure":closure_evidence, "extra_selections":extras, "legacy_only_selections":legacy_only});
+    let mut explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seed_causes":seeds, "closure":closure_evidence, "extra_selections":extras});
     if replay {
         explanation["representation"] = object!("explicit-graph/v1");
     }

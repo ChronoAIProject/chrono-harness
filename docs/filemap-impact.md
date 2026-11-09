@@ -128,7 +128,7 @@ registration 清单保留每条定义及其身份，例如 `project:t` 与 `scri
 
 `judge-ci` 保留已有的按范围快照、首次采用／初始清单语义，以及操作、绑定、工具、环境、执行限制触发、验证、参数执行和退出码传递。遍历改用 filemap 的 `graph::union`、`graph::closure`、`Closure::selected_tests`，移除原私有实现。这个 API 接收明确边和起点，不加载或强制旧宿主采用完整登记格式。
 
-CI 证据增加 `selection_explanation`，范围为 `chrono-ci-check/v1-adapter`，保存平表合并边、节点 ID `seeds`、可累加 `seed_causes`、传播结果、`extra_selections` 和 `legacy_only_selections`。额外原因明确说明操作、绑定、工具、环境或限制变化，但不能把原因文字当作白名单边或完整规则权威。原 CI 套件继续覆盖命令选择和执行语义；新增测试覆盖空图下旧版选择及执行限制变化。
+CI 证据的 `selection_explanation` 范围为 `chrono-ci-check/v1-adapter`，保存平表合并边、含起点节点的 `seed_causes`、传播结果和 `extra_selections`。不另存起点列表或额外选择与图选测结果的差集，详见 [CI 选测说明](ci.md)。额外原因明确说明操作、绑定、工具、环境或限制变化，但不能把原因文字当作白名单边或完整规则权威。现有 CI 套件覆盖命令选择和执行语义，含空图下额外选择及执行限制变化。
 
 当完整 routes／projects、保留输入和迁移证据能够替代实际本地／真实 CI 消费者后，这个适配器才能退出。共享执行和回执核对已归 routes／projects；有限输入和 ci-verify 迁移见[执行说明](execution.md)。工作流证明、分支检查、完整 Cargo／SDK 输入、全面启用及真实 CI 同判仍有后续工作，本仓仍为 `proposed`／输入不齐。
 
