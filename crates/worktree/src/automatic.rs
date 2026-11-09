@@ -147,7 +147,7 @@ impl EvidenceExclusion {
         let branch = if e.cache_only {
             observed.branch.clone()
         } else {
-            maintenance::checkout_reference(&e.branch)
+            maintenance::checkout_reference(e.current_branch())
         };
         for lock in [
             observed.metadata.join("index.lock"),
@@ -309,6 +309,8 @@ struct Entry {
     #[serde(default)]
     custodian_agent: Option<crate::AgentIdentity>,
     branch: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    checkout_branch: Option<String>,
     attachment: Attachment,
     policy_sha256: String,
     status: String,
@@ -332,6 +334,10 @@ struct Entry {
     disposed_at: Option<u64>,
 }
 impl Entry {
+    // Creation evidence keeps `branch`; only explicit migrate adopts a new checkout.
+    fn current_branch(&self) -> &str {
+        self.checkout_branch.as_deref().unwrap_or(&self.branch)
+    }
     fn report_handoff_pending(&self) -> bool {
         ["completed_uses", "main_cache_releases"]
             .iter()
@@ -1563,7 +1569,7 @@ impl Manager {
             r,
             &self.inputs.policy.coordinator_root,
             &e.path,
-            &e.branch,
+            e.current_branch(),
             head,
             lock,
         )?;
@@ -1584,8 +1590,8 @@ impl Manager {
         match main_branch {
             Some("HEAD") => (), // Detached main has no branch-removal authority.
             Some(reference) => references.push(reference.into()),
-            None if e.branch != "HEAD" => {
-                references.push(maintenance::checkout_reference(&e.branch))
+            None if e.current_branch() != "HEAD" => {
+                references.push(maintenance::checkout_reference(e.current_branch()))
             }
             None => (),
         }
@@ -1766,6 +1772,7 @@ impl Manager {
                 None
             },
             branch,
+            checkout_branch: None,
             attachment: attached,
             policy_sha256: sha256(&self.inputs.policy_bytes),
             status: "active".into(),
@@ -2204,7 +2211,7 @@ impl Manager {
             &[self.inputs.registrations.config(), target_regs.config()],
         )?;
         let paths = artifact_disposal::paths(r, &e.path, &head, &names)?;
-        let binding = value!({"path":e.path,"branch":e.branch,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,
+        let binding = value!({"path":e.path,"branch":e.current_branch(),"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,
             "head":head,"policy_sha256":self.policy_binding(&e)?.policy_sha256,"config_sha256":sha256(&self.inputs.config_bytes),
             "anchor_registry_digest":self.inputs.anchor_filemap_digest,
             "policy_source_root":self.inputs.source_root,"policy_source_commit":self.inputs.source_head,
@@ -2348,7 +2355,7 @@ impl Manager {
             }
         }
         let receipt=self.immutable(&format!("terminal-{token}.json"),&value!({
-            "schema":"chrono-worktree-terminal/v1","path":target,"branch":e.branch,"head":head,"attachment":e.attachment,
+            "schema":"chrono-worktree-terminal/v1","path":target,"branch":e.current_branch(),"head":head,"attachment":e.attachment,
             "policy_sha256":self.policy_binding(&e)?.policy_sha256,"retained_ref":self.inputs.policy.retained_ref,"retained_commit":retained_commit,
             "dispose_evidence":dispose_evidence,"artifacts_only":artifacts_only,
             "handoff":"caller-joined-owned-jobs-and-established-completion","report_path":report["report_path"]
@@ -3133,7 +3140,7 @@ impl Manager {
                     self.ledger.retired_leases.push(retirement::RetiredLease {
                         ownership: entry.ownership.clone().unwrap(),
                         creator_agent: entry.creator_agent.clone(),
-                        branch: entry.branch.clone(),
+                        branch: entry.current_branch().into(),
                         error: None,
                     });
                     count -= 1;
@@ -3434,7 +3441,7 @@ impl Manager {
                 attention_required,
             );
             rows.push(value!({"path":path,"work_state":work,"cleanup_state":cleanup,
-                "branch":entry.map(|e| &e.branch),"creator_agent":creator,
+                "branch":entry.map(Entry::current_branch),"creator_agent":creator,
                 "custodian_agent":entry.and_then(|e| e.custodian_agent.as_ref()),
                 "cleanup_progress":entry.and_then(|e| e.cleanup.as_ref()),
                 "agent_attention_required":agent_attention,
@@ -3627,7 +3634,7 @@ impl Manager {
                 )?;
                 artifact_disposal::paths(r, &e.path, &t.head, &names)?;
                 report["destination"] = value!(e.path);
-                report["branch_ref"] = value!(e.branch);
+                report["branch_ref"] = value!(e.current_branch());
                 report["head"] = value!(t.head);
                 report["base"] = value!(t.head);
                 crate::recovery::publish(&manager.inputs.policy.coordinator_root, report)?;
@@ -3648,7 +3655,7 @@ impl Manager {
                     r,
                     &manager.inputs.policy.coordinator_root,
                     path,
-                    &maintenance::checkout_reference(&e.branch),
+                    &maintenance::checkout_reference(e.current_branch()),
                     &t.head,
                 )?;
                 manager.check_entry(r, &e, &t.head, None)?;
@@ -3656,7 +3663,7 @@ impl Manager {
             } else {
                 Cleanup {
                     path: e.path.clone(),
-                    branch: e.branch.clone(),
+                    branch: e.current_branch().into(),
                     head: t.head.clone(),
                     retained_ref: manager.inputs.policy.retained_ref.clone(),
                     retained_commit: t.retained_commit.clone(),
