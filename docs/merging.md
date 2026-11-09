@@ -2,6 +2,8 @@
 
 独立 PR 并行检查，通过必需检查后及时合并；只按实际依赖、冲突和有效输入决定先后。默认不要求分支追平目标，也不按 PR 编号或创建时间排队。
 
+本仓的整体开发方式见[开发、集成与发布流程](development.md)。仓库已允许 GitHub 原生自动合并；调用方在每个就绪 PR 上提前启用，入口归[宿主自动交付授权](../.chrono-harness/instructions/host-context.md#自动交付授权)。必需 CI 和现有保护满足后，GitHub 直接合并。AI 负责修复失败及核对落地结果，不增加合并前放行步骤。
+
 此默认由产品的 `candidate.landing` 原子提供，新宿主运行 `chrono-instructions init` 即采用。现有宿主按[默认采用步骤](instructions.md#新默认的宿主采用边界)保留定制并更新登记源。GitHub CI 由 `chrono-ci init/generate` 生成；生成器不修改远端保护规则或自动取得合并权限。
 
 ## GitHub 配置

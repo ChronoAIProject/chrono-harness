@@ -119,6 +119,7 @@
     {"path":"crates/runner-tests/tests/cli_contract.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"AGENTS.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:instructions"},{"kind":"judge-trigger","to":"judge:filemap"}],"symlink":"CLAUDE.md"},
     {"path":"CLAUDE.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:instructions"},{"kind":"judge-trigger","to":"judge:filemap"}],"projection":{"sources":[".chrono-harness/instructions/manifest.json",".chrono-harness/instructions/catalog.json"],"producer":"project:instructions","scope":"managed-block"}},
+    {"path":"docs/development.md","owner":"repository","surface":"instruction-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"docs/merging.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":".chrono-harness/ci/admission.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"docs/instructions.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
