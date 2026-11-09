@@ -45,7 +45,7 @@ impl RetiredLease {
     }
 }
 
-fn absent(path: &Path) -> Result<bool, String> {
+pub(super) fn absent(path: &Path) -> Result<bool, String> {
     match fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
         Err(error) => Err(error.to_string()),
