@@ -9,6 +9,18 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+当前覆盖登记批次包括：FILEMAP 的 `crates/runner/src/verified_verifier.rs`、
+`crates/runner/src/verified_sources.rs` 及独立预期
+`crates/runner-tests/tests/verified_verifier.rs`，以及 runner 的
+`verified_paths.rs`、`verified_scope.rs`、`verified_status.rs`、`verified_limits.rs`
+和对应的 `runner-tests` 独立预期。它们均已声明 `program` 角色、唯一
+Verus 根及现役 `verify.verus-result`、`verify.runner-paths`、
+`verify.runner-status`、`verify.runner-limits` 与对应测试操作；`verified_scope.rs`
+沿 status 的真实整 crate 根验证，不另造重复操作。
+同源判断还要求根路径规范化、根路径唯一、program／specification 至少一个根、
+data 不得有根，以及每个登记操作存在于 execution plan。声明只建立待核的绑定关系；
+本批正式 CI 已核整 crate 证明，仍不代表全仓覆盖完成。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取
@@ -649,6 +661,12 @@ link／dep-info／`-o` 输出同源，源码和输出参数非空。额外参数
 至少一项 verified 和整个 crate；缺失或错型字段不能从另一份报告补齐。
 普通操作向解码接口传空字节，不解析其业务输出；其既有退出规则由原所有者保留。
 本地 projects 和离线 collection 都消费 routes 的同一准入结果。
+
+本地 judge-ci 和离线 collection 还共用 `bind_operation_output` 的组合准入。
+对声明为 passed 的普通操作，`Ok(None)` 与 `ordinary_output_accepted` 充要相等：
+必须有唯一登记方法、匹配的完整原操作和参数、退出 0 且无失败的原进程，并且没有编译库或依赖观察。
+这个正向成功合同不依赖报告解码成功；独立预期保留无效 UTF-8／NUL 业务 stdout，核合法普通操作仍成功且不产生证明条目。
+唯一方法的独立正例显式给出两种完整名称的不同位置和存在见证，原大小写、后缀与重复拒绝预期保持。
 
 本宿主为各项证明操作逐项登记固定 Verus 版本及 commit；报告准入的两项整 crate 根归
 runner 所有者计划。同次 DELTA 汇总核受影响证明及 registration、routes、judge-ci 和 CI 生成器的实际消费测试。

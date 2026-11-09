@@ -468,8 +468,19 @@ pub fn find_proof_invocation(methods: &Vec<ProofInvocation>, operation: &str)
         i += 1;
     }
     match found {
-        Some(index) => Ok(index),
-        None => Err("E_VERUS_RESULT: operation has no registered invocation".to_string()),
+        Some(index) => {
+            assert(unique_proof_invocation(methods@, operation@, index as int));
+            assert(exists|j: int| unique_proof_invocation(methods@, operation@, j));
+            Ok(index)
+        },
+        None => {
+            assert forall|j: int| unique_proof_invocation(methods@, operation@, j)
+                implies false by {
+                assert(0 <= j < methods.len());
+                assert(methods[j].operation@ != operation@);
+            }
+            Err("E_VERUS_RESULT: operation has no registered invocation".to_string())
+        },
     }
 }
 
@@ -513,6 +524,25 @@ pub open spec fn proof_bound(
         }
 }
 
+/// 无证明合同的普通操作成功，仍须绑定唯一方法、完整原参数及无失败原进程。
+pub open spec fn ordinary_process_bound(method: &ProofInvocation, process: &ProofProcess) -> bool {
+    method.output_contract.is_none() && process.argv.len() > 0
+        && process.operation@ == method.operation@
+        && same_arguments(process.argv@.skip(1), method.argv@)
+        && process.exit == 0 && !process.failed
+        && process.dependency.is_none() && process.artifact.is_none()
+}
+
+pub open spec fn ordinary_output_accepted(
+    operation: Seq<char>, methods: Seq<ProofInvocation>, original: &Option<ProofProcess>,
+) -> bool {
+    match original {
+        Some(process) => exists|i: int| unique_proof_invocation(methods, operation, i)
+            && ordinary_process_bound(&methods[i], process),
+        None => false,
+    }
+}
+
 /// 成功报告、原 argv、库、完整依赖和固定候选源码在此共同准入。
 /// 普通成功与非 passed 操作只返回 None，不能用作全仓覆盖的证明条目。
 pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRead>(
@@ -520,6 +550,8 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
     original: Option<ProofProcess>, registry: &Result<sources::SourceRegistry, String>, io: &I,
 ) -> (out: Result<Option<ProofAdmission>, String>)
     ensures state@ != "passed"@ ==> out.is_ok() && out.unwrap().is_none(),
+        state@ == "passed"@ ==> ((match out { Ok(None) => true, _ => false })
+            == ordinary_output_accepted(operation@, methods@, &original)),
         match out {
             Ok(Some(proof)) => state@ == "passed"@ && original.is_some() && registry.is_ok()
                 && exists|i: int| unique_proof_invocation(methods@, operation@, i)
@@ -542,6 +574,14 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
         Err(error) => { return Err(error); },
     };
     let method = &methods[index];
+    proof {
+        if ordinary_output_accepted(operation@, methods@, &original) {
+            let ordinary_index = choose|i: int| unique_proof_invocation(methods@, operation@, i)
+                && ordinary_process_bound(&methods[i], &process);
+            assert(ordinary_index == index as int);
+            assert(ordinary_process_bound(method, &process));
+        }
+    }
     let args = match sources::process_arguments(process.argv) {
         Ok(args) => args,
         Err(error) => { return Err(error); },
@@ -556,7 +596,12 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
         Err(error) => { return Err(error); },
         Ok(()) => {},
     }
-    if method.output_contract.is_none() { return Ok(None); }
+    if method.output_contract.is_none() {
+        assert(ordinary_process_bound(method, &process));
+        assert(ordinary_output_accepted(operation@, methods@, &original));
+        return Ok(None);
+    }
+    assert(!ordinary_output_accepted(operation@, methods@, &original));
     let source_admission = match sources::bind_compiler_sources(&args, process.dependency, registry, io) {
         Ok(Some(admission)) => admission,
         Err(error) => { return Err(error); },

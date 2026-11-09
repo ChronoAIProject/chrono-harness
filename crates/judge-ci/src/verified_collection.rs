@@ -76,8 +76,10 @@ pub fn operation_result_with_sources<T>(
     ensures row.id@ == operation@,
         row.status == if source_binding_failed(state@, &binding) { Status::Failed }
             else { operation_status(state@) },
-        row.cause@ == if source_binding_failed(state@, &binding) { binding.unwrap_err()@ }
-            else { operation_cause(error) },
+        row.cause@ == match binding {
+            Err(cause) => if state@ == "passed"@ { cause@ } else { operation_cause(error) },
+            Ok(_) => operation_cause(error),
+        },
         row.exit_code == if source_binding_failed(state@, &binding) {
             operation_exit("failed"@, observed)
         } else { operation_exit(state@, observed) },
