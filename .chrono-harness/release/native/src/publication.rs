@@ -115,7 +115,7 @@ pub(crate) fn original_absence(
     {
         return false;
     }
-    let Ok(value) = chrono_harness::json::<Value>(stdout) else {
+    let Ok(value) = chrono_harness::json(stdout) else {
         return false;
     };
     policy::api_outcome(1, value["status"].as_str(), value["message"].as_str(), true) == 1
