@@ -6,6 +6,10 @@ publish = false
 autotests = false
 
 [[test]]
+name = "identity"
+path = "tests/identity.rs"
+
+[[test]]
 name = "verified_recipe"
 path = "tests/verified_recipe.rs"
 
