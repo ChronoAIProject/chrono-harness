@@ -22,7 +22,10 @@ data 不得有根，以及每个登记操作存在于 execution plan。声明只
 本批正式 CI 已核整 crate 证明；`crates/judge-ci/src/verified_collection.rs`
 及 `crates/judge-ci-tests/tests/verified_collection.rs` 现在也以
 `verify.ci-collection`／`verify.ci-collection-tests` 注册其 program 根和独立预期，
-并由本地与离线 collection 的实际汇总消费。仍不代表全仓覆盖完成。
+并由本地与离线 collection 的实际汇总消费。CI 字面量、projects 语言配对和
+filemap 图内核及其独立预期也分别注册 `verify.ci-literals`、
+`verify.project-languages`、`verify.filemap-graph` 及对应测试操作，均保留原真实生产调用。
+仍不代表全仓覆盖完成。
 
 本批把已有整 crate Verus 根补入 FILEMAP 的同源绑定：`chrono-identifiers` 的
 `verify.identifiers`／`verify.identifiers-tests`，runner 的
