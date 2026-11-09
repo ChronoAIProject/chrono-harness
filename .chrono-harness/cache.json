@@ -897,12 +897,12 @@
     "cache.producer": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
-      "pointer": "/projects/34/actions/build"
+      "pointer": "/projects/32/actions/build"
     },
     "cache-tests.producer": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
-      "pointer": "/projects/35/actions/execute"
+      "pointer": "/projects/33/actions/execute"
     },
     "cache.cargo-registration": {
       "kind": "json-value",
