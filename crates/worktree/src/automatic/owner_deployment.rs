@@ -827,19 +827,28 @@ impl Manager {
                     entry.path.display()
                 ));
             }
-            let head = match inventory
+            let rows = inventory
                 .iter()
                 .filter(|row| Path::new(&row["worktree"]) == entry.path)
-                .count()
-            {
-                1 => Some(r.oid(&entry.path, "HEAD")?),
-                0 => {
+                .collect::<Vec<_>>();
+            let checkout = match rows.as_slice() {
+                [row] => {
+                    let reference = match (row.get("branch"), row.contains_key("detached")) {
+                        (Some(branch), false) if branch.starts_with("refs/heads/") => {
+                            branch.clone()
+                        }
+                        (None, true) => "HEAD".into(),
+                        _ => return Err("owner deployment checkout reference is unknown".into()),
+                    };
+                    Some((r.oid(&entry.path, "HEAD")?, reference))
+                }
+                [] => {
                     self.check_absent_enrollment(entry, &inventory)?;
                     None
                 }
                 _ => return Err("owner deployment enrollment inventory is ambiguous".into()),
             };
-            exclusions.push((entry, head, lease));
+            exclusions.push((entry, checkout, lease));
         }
         let ledger_path = self.record_directory.join("ledger.json");
         let ledger_bytes = fs::read(&ledger_path).map_err(|e| e.to_string())?;
@@ -864,14 +873,24 @@ impl Manager {
                         .into(),
                 );
             }
-            for (entry, head, lease) in &exclusions {
+            for (entry, checkout, lease) in &exclusions {
                 lease.stable()?;
                 self.birth_ready(entry)?;
-                match head {
-                    Some(head) if entry.path == root => self.check_entry(r, entry, head, None)?,
-                    Some(head) => {
+                match checkout {
+                    Some((head, _)) if entry.path == root => {
+                        self.check_entry(r, entry, head, None)?
+                    }
+                    Some((head, reference)) => {
                         // Exclude consumers without using their caches or policies.
-                        self.check_attachment(r, entry, head, None)?;
+                        // A branch change does not replace the original physical
+                        // attachment or its lease. Observe this checkout only for
+                        // deployment; cleanup still uses the unmodified entry.
+                        let mut current = Entry::clone(entry);
+                        current.branch = reference
+                            .strip_prefix("refs/heads/")
+                            .unwrap_or(reference)
+                            .to_owned();
+                        self.check_attachment(r, &current, head, None)?;
                     }
                     None => self.check_absent_enrollment(entry, &inventory)?,
                 }
@@ -931,9 +950,12 @@ impl Manager {
             "admission":self._gate.lease.as_ref().unwrap().id(),
             "enrollment":e.ownership.as_ref().ok_or("kernel ownership")?.id,
             "coordinator_root":self.inputs.policy.coordinator_root,"common":self.ledger.common,
-            "enrollments":exclusions.iter().map(|(entry, head, lease)| value!({
-                "path":entry.path,"attachment":entry.attachment,"head":head,
-                "availability":if head.is_some() { "present" } else { "absent" },
+            "enrollments":exclusions.iter().map(|(entry, checkout, lease)| value!({
+                "path":entry.path,"attachment":entry.attachment,
+                "enrolled_branch":entry.branch,
+                "current_reference":checkout.as_ref().map(|(_, reference)| reference),
+                "head":checkout.as_ref().map(|(head, _)| head),
+                "availability":if checkout.is_some() { "present" } else { "absent" },
                 "enrollment":{"path":entry.ownership.as_ref().unwrap().path,"id":lease.id()}
             })).collect::<Vec<_>>()});
         report["owner_deployment_identity"] = owner_identity.clone();
