@@ -204,6 +204,12 @@ fn enrollment_originals_are_protected_before_global_maintenance() {
             .contains("mock retained policy read failed"),
         "{report}"
     );
+    // A 25 ms round may publish only the disposal intent. Continue the same
+    // bounded owner maintenance; the failed policy's input must stay rooted.
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap();
+    maintain_original_until_absent(&inventory, &h.root.join(&h.sibling));
     assert_eq!(
         fs::read(h.root.join(&h.original)).unwrap(),
         b"original failure bytes\n"
