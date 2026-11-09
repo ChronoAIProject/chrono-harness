@@ -40,6 +40,10 @@ path = "tests/consumer.rs"
 name = "verified_evidence"
 path = "tests/verified_evidence.rs"
 
+[[test]]
+name = "verified_execution"
+path = "tests/verified_execution.rs"
+
 # Original-receipt fixtures reconstruct and reseal the judge DAG in process.
 # Path dependencies use this consumer root's profile.
 [profile.dev]
