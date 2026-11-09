@@ -7440,8 +7440,6 @@ jobs:
           CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
           CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          mkdir -p '.'
-          printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > 'CHRONO_RELEASE_DEPENDENCIES'
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-install-linux' '--install' '.chrono-harness/release/delivery.json' 'linux'
       - name: Preserve original release artifacts
         id: release_upload
@@ -7492,8 +7490,6 @@ jobs:
           CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
           CHRONO_RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          mkdir -p '.'
-          printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > 'CHRONO_RELEASE_DEPENDENCIES'
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-install-macos' '--install' '.chrono-harness/release/delivery.json' 'macos'
       - name: Preserve original release artifacts
         id: release_upload
