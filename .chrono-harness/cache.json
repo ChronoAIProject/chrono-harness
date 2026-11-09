@@ -1315,50 +1315,6 @@
       "restore": "compatible",
       "refresh_sources": true
     },
-    "check.instructions": {
-      "owner": "instructions",
-      "producer": "build.instructions",
-      "consumers": [
-        "check.unit_instructions"
-      ],
-      "artifacts": [
-        "instructions.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "instructions.manifest",
-        "instructions.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "instructions.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
     "check.instructions-tests": {
       "owner": "instructions-tests",
       "producer": "test.instructions-tests",
@@ -1815,7 +1771,6 @@
         "check.unit_inputs",
         "check.unit_judge-filemap",
         "check.unit_judge-projects",
-        "check.unit_judge-routes",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
         "check.unit_judge-workflow-units"

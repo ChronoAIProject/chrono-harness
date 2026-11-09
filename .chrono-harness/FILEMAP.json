@@ -1214,7 +1214,6 @@
         "verify.identifiers-tests",
         "fmt.identifiers",
         "fmt.identifiers-tests",
-        "build.identifiers",
         "test.identifiers-tests"
       ],
       "timeout_seconds": 900,
@@ -1266,7 +1265,6 @@
       "operations": [
         "fmt.instructions",
         "fmt.instructions-tests",
-        "build.instructions",
         "test.instructions-tests"
       ],
       "timeout_seconds": 600,
@@ -1345,7 +1343,6 @@
       "operations": [
         "fmt.judge-routes",
         "fmt.judge-routes-tests",
-        "build.judge-routes",
         "test.judge-routes-tests"
       ],
       "timeout_seconds": 900,
@@ -1589,7 +1586,6 @@
       "test.host-release-native-tests": {"resources":[],"outputs":[".chrono-harness/cache/"]},
       "fmt.identifiers": {"resources":[],"outputs":[]},
       "fmt.identifiers-tests": {"resources":[],"outputs":[]},
-      "build.identifiers": {"resources":[],"outputs":[".chrono-harness/cache/identifiers/target/"]},
       "test.identifiers-tests": {"resources":[],"outputs":[".chrono-harness/cache/identifiers-tests/target/"]},
       "verify.project-languages": {
         "resources": [],
@@ -1657,12 +1653,6 @@
         "resources": [],
         "outputs": [
           "crates/inputs/target/"
-        ]
-      },
-      "build.instructions": {
-        "resources": [],
-        "outputs": [
-          "crates/instructions/target/"
         ]
       },
       "build.judge-ci": {

@@ -1833,9 +1833,6 @@ fn run_process_inner_with_stdout(
     );
     Ok(process)
 }
-pub fn validate_response(r: &Response, id: &str, exit: i32) -> Result<(), String> {
-    validate_response_protocol(r, id, exit, PROTOCOL)
-}
 pub fn validate_response_protocol(
     r: &Response,
     id: &str,
@@ -1878,28 +1875,6 @@ pub fn validate_response_protocol(
         return Err("judge exit/status/results disagreement".into());
     }
     Ok(())
-}
-pub fn canonical_argv(
-    runner: &str,
-    config: &str,
-    base: Option<&str>,
-    candidate: &str,
-    initial: bool,
-) -> Vec<String> {
-    let mut v = vec![
-        runner.into(),
-        "check".into(),
-        "--config".into(),
-        config.into(),
-    ];
-    if let Some(b) = base {
-        v.extend(["--base".into(), b.into()])
-    }
-    v.extend(["--candidate".into(), candidate.into()]);
-    if initial {
-        v.push("--initial".into())
-    }
-    v
 }
 fn root_for_config(
     path: &Path,
