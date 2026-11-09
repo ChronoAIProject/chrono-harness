@@ -535,7 +535,13 @@ impl Inventory {
             }
         }
         for o in &l.outputs {
-            if o.references.iter().any(|id| !ids.contains(id)) {
+            // A finalized frontier original is excluded and retained for this
+            // entire retirement. Its unchanged outward edges may deliberately
+            // remain unread; every output eligible for mutation still needs its
+            // complete dependencies in the excluded ledger.
+            if !gate.retained_dependencies().contains(&o.id)
+                && o.references.iter().any(|id| !ids.contains(id))
+            {
                 return Err("missing retained output dependency".into());
             }
         }
