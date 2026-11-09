@@ -1248,6 +1248,11 @@ fn explicit_paged_partition_preserves_custody_and_excludes_live_allocation() {
 
 #[test]
 fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing_readers() {
+    if !isolated_capability::isolated_capability_test(
+        "fixture_body::explicit_paged_partition_resumes_both_activation_boundaries_without_releasing_readers",
+    ) {
+        return;
+    }
     for boundary in ["paged-records-published", "paged-buckets-archived"] {
         let h = host();
         let (store, allocation, before, owner_bytes, _, _) = paged_producer_fixture(&h);
@@ -1268,7 +1273,7 @@ fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing
         .unwrap_err();
         assert!(
             error.contains("controlled conversion interruption"),
-            "{error}"
+            "{boundary}: {error}"
         );
         assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
         let (code, report, error) = migrate_paged(&h);
