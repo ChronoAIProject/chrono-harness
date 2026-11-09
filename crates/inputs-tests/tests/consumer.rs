@@ -341,7 +341,11 @@ fn v2(h: &mut Host) {
         .as_array_mut()
         .unwrap()
     {
-        tool["program"] = json!(fs::canonicalize(tool["program"].as_str().unwrap()).unwrap());
+        let program = std::path::Path::new(tool["program"].as_str().unwrap());
+        // Native fixture tools stay relative to each host, including its clones.
+        if program.is_absolute() {
+            tool["program"] = json!(fs::canonicalize(program).unwrap());
+        }
     }
     h.values.get_mut(CONFIG).unwrap()["schema_version"] = json!(2);
     for row in h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
