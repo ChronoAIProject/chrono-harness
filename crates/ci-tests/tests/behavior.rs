@@ -860,7 +860,7 @@ fn standalone_version_is_actual_producer_and_rejects_extra_arguments() {
 }
 
 #[test]
-fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() {
+fn adopted_bootstrap_shell_ignores_path_shadow_and_matches_host_version() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read =
         |p: &str| -> Value { serde_json::from_slice(&fs::read(source.join(p)).unwrap()).unwrap() };
@@ -869,11 +869,10 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
         .as_array()
         .unwrap()
         .iter()
-        .find(|t| t["id"] == "python3")
+        .find(|t| t["id"] == "bash")
         .unwrap()
         .clone();
-    // This synthetic host adopts its actual interpreter. The product host's fixed
-    // interpreter pin is checked by the separately registered host migration tests.
+    // Observe the registered bootstrap shell before shadowing PATH.
     let observed = Command::new(tool["program"].as_str().unwrap())
         .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
         .env_clear()
@@ -882,20 +881,20 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     assert!(observed.status.success());
     tool["expected_version"] = json!(String::from_utf8(observed.stdout).unwrap().trim_end());
     let dir = tempfile::tempdir().unwrap();
-    let shadow = dir.path().join("python3");
+    let shadow = dir.path().join("bash");
     std::os::unix::fs::symlink(
         fs::canonicalize(env!("CARGO_BIN_EXE_chrono-ci-test-transport")).unwrap(),
         &shadow,
     )
     .unwrap();
-    let control = Command::new("python3")
+    let control = Command::new("bash")
         .env_clear()
         .env("PATH", dir.path())
         .arg("--version")
         .output()
         .unwrap();
     assert!(control.status.success());
-    assert_eq!(control.stdout, b"Python shadowed\n");
+    assert_eq!(control.stdout, b"Bash shadowed\n");
     let actual = Command::new(tool["program"].as_str().unwrap())
         .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
         .env_clear()
@@ -906,22 +905,16 @@ fn adopted_migration_interpreter_ignores_path_shadow_and_matches_host_version() 
     assert_eq!(
         String::from_utf8(actual.stdout).unwrap().trim_end(),
         tool["expected_version"].as_str().unwrap(),
-        "registered interpreter must survive unrelated PATH precedence"
+        "registered bootstrap shell must survive unrelated PATH precedence"
     );
     assert_eq!(
-        read(".chrono-harness/ci/check.json")["policy"]["tools"]["python3"],
+        read(".chrono-harness/ci/check.json")["policy"]["tools"]["bash"],
         tool["program"]
     );
     let provider = read(".chrono-harness/ci/units.json");
-    let launcher = config["tools"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|tool| tool["id"] == "bash")
-        .unwrap();
-    assert_eq!(provider["collection"]["bootstrap"][0], launcher["program"]);
+    assert_eq!(provider["collection"]["bootstrap"][0], tool["program"]);
     for unit in provider["units"].as_object().unwrap().values() {
-        assert_eq!(unit["bootstrap"][0], launcher["program"]);
+        assert_eq!(unit["bootstrap"][0], tool["program"]);
     }
 }
 
