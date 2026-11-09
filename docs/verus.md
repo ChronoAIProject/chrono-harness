@@ -50,6 +50,13 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 `verify.verus-result-tests` 独立预期。三项源码均已有真实 Verus invocation、整 crate
 结果和 Rust 消费者；本批只补 FILEMAP 绑定，不新增证明源或 Python 迁移。
 
+本批把 registration 的 input-coverage 行状态准入迁入
+`verified_input_coverage.rs`，由 `verify.registration-input-coverage` 和
+`verify.registration-input-coverage-tests` 分别证明生产谓词及独立边界预期。
+JSON 解析仍由适配器负责，但 `bound`／`absent` 的绑定要求、无绑定状态、
+`declared-complete` 对 `unresolved` 的拒绝以及 `absent` 识别均直接消费同一份
+Verus 执行函数；本批仍只覆盖该登记状态闭包，不宣称全仓证明完成。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取
