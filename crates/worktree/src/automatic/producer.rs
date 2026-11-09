@@ -2,6 +2,7 @@
 use super::*;
 use std::sync::Arc;
 mod body;
+mod layout_migration;
 mod rolling;
 use body::fingerprint;
 
@@ -206,6 +207,9 @@ impl Store {
             Self::open(directory, producer, false)?;
             return Ok(value!({"status":"already-current","producer":producer,
                 "disposal":"not-performed","historical_outcomes":"unchanged"}));
+        }
+        if json(&bytes)?.get("record_layout").is_some() {
+            return layout_migration::partition(directory, producer, candidate, &bytes, observer);
         }
         // Only this explicit current-owner operation reads the superseded data.
         // Ordinary publication has no v1 decoder or fallback.

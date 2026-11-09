@@ -146,7 +146,7 @@ impl EvidenceExclusion {
         let branch = if e.cache_only {
             observed.branch.clone()
         } else {
-            format!("refs/heads/{}", e.branch)
+            maintenance::checkout_reference(&e.branch)
         };
         for lock in [
             observed.metadata.join("index.lock"),
@@ -1241,7 +1241,7 @@ impl Manager {
         if self.scope == self.inputs.source_root {
             return Ok(());
         }
-        // Import binds an explicitly absent input without synthesizing it.
+        // A target without its own cleanup policy keeps the invoking policy.
         let path = no_symlink_parents(&self.scope, &self.inputs.config_path)?;
         let bytes = match fs::read(path) {
             Ok(bytes) => bytes,
@@ -1563,7 +1563,10 @@ impl Manager {
         match main_branch {
             Some("HEAD") => (), // Detached main has no branch-removal authority.
             Some(reference) => references.push(reference.into()),
-            None => references.push(format!("refs/heads/{}", e.branch)),
+            None if e.branch != "HEAD" => {
+                references.push(maintenance::checkout_reference(&e.branch))
+            }
+            None => (),
         }
         for reference in references {
             relative_path(&reference)?;
@@ -1617,15 +1620,23 @@ impl Manager {
         kind: &str,
         receipt: Value,
     ) -> Result<(), String> {
-        self.adopt_live_policy(r)?;
+        // Explicit import observes existing work under the invoking host's
+        // current policy. Its original inputs are bound below as raw committed
+        // bytes; adopting the target's policy is a separate migrate operation.
+        if kind != "import" {
+            self.adopt_live_policy(r)?;
+        }
         let target = absolute(target, false)?;
         self.enrollment_available(&target)?;
         let cache_only = kind == "main-cache";
-        let branch = if cache_only {
-            r.checkout_identity(&target)?.branch
+        let observed = r.checkout_identity(&target)?;
+        let branch = if cache_only || (kind == "import" && observed.branch == "HEAD") {
+            observed.branch
         } else {
-            r.text(&target, &["symbolic-ref", "--short", "HEAD"])?
-                .trim()
+            observed
+                .branch
+                .strip_prefix("refs/heads/")
+                .ok_or("enrollment requires a local branch or explicit detached import")?
                 .to_owned()
         };
         if cache_only
@@ -3578,7 +3589,7 @@ impl Manager {
                     r,
                     &manager.inputs.policy.coordinator_root,
                     path,
-                    &format!("refs/heads/{}", e.branch),
+                    &maintenance::checkout_reference(&e.branch),
                     &t.head,
                 )?;
                 manager.check_entry(r, &e, &t.head, None)?;
@@ -3843,7 +3854,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             )?
             .ok_or("automatic cleanup is not opted in")?;
             manager.protect_reports(r, &invoking)?;
-            if operation != "maintain" {
+            if !matches!(operation.as_str(), "maintain" | "status" | "import") {
                 manager.adopt_live_policy(r)?;
             }
             report["source_root"] = value!(manager.inputs.policy.coordinator_root);

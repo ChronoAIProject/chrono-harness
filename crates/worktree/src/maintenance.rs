@@ -503,6 +503,22 @@ fn physical(r: &mut Runner, root: &Path, args: &[&str]) -> Result<PathBuf, Strin
 fn common(r: &mut Runner, root: &Path) -> Result<PathBuf, String> {
     physical(r, root, &["rev-parse", "--git-common-dir"])
 }
+// HEAD is Git's reserved detached checkout spelling, never a local branch name.
+pub(crate) fn checkout_reference(branch: &str) -> String {
+    if branch == "HEAD" {
+        "HEAD".into()
+    } else {
+        format!("refs/heads/{branch}")
+    }
+}
+pub(crate) fn matches_checkout_reference(row: &BTreeMap<String, String>, reference: &str) -> bool {
+    if reference == "HEAD" {
+        row.contains_key("detached") && !row.contains_key("branch")
+    } else {
+        !row.contains_key("detached") && row.get("branch").map(String::as_str) == Some(reference)
+    }
+}
+
 pub(crate) fn identity(
     r: &mut Runner,
     root: &Path,
@@ -534,7 +550,7 @@ pub(crate) fn identity(
         .collect();
     if rows.len() != 1
         || rows[0].get("HEAD").map(String::as_str) != Some(head)
-        || rows[0].get("branch") != Some(&format!("refs/heads/{branch}"))
+        || !matches_checkout_reference(rows[0], &checkout_reference(branch))
         || rows[0].get("locked").map(String::as_str) != lock
         || rows[0].contains_key("prunable")
     {
@@ -545,7 +561,7 @@ pub(crate) fn identity(
         || fs::canonicalize(&observed.top).map_err(|e| e.to_string())? != target
         || fs::canonicalize(&observed.common).map_err(|e| e.to_string())? != common(r, root)?
         || observed.head != head
-        || observed.branch != format!("refs/heads/{branch}")
+        || observed.branch != checkout_reference(branch)
     {
         return Err("checkout identity or common repository mismatch".into());
     }
@@ -647,7 +663,7 @@ pub(crate) fn release_reconciled(
         r,
         root,
         target.to_str().ok_or("worktree path is not UTF-8")?,
-        &format!("refs/heads/{branch}"),
+        &checkout_reference(branch),
         head,
     )?;
     if r.text(target, &["write-tree"])?.trim() != tree {
@@ -732,7 +748,8 @@ impl Cleanup {
             );
             if path.starts_with(&self.path)
                 || self.path.starts_with(path)
-                || row.get("branch") == Some(&format!("refs/heads/{}", self.branch))
+                || (self.branch != "HEAD"
+                    && row.get("branch") == Some(&checkout_reference(&self.branch)))
             {
                 return Err(
                     "cleanup path or branch remains in use by a registered worktree".into(),
@@ -779,8 +796,16 @@ impl Cleanup {
         } else {
             "not-requested"
         });
-        let branch_ref = format!("refs/heads/{}", self.branch);
-        r.git(root, &["check-ref-format", &branch_ref])?;
+        let branch_ref = checkout_reference(&self.branch);
+        if self.branch == "HEAD" {
+            if enrollment_kind != "import" {
+                return Err("detached cleanup requires explicit current enrollment".into());
+            }
+            self.remove_branch = false;
+            report["branch_removal"] = value!("not-applicable-detached");
+        } else {
+            r.git(root, &["check-ref-format", &branch_ref])?;
+        }
         r.git(root, &["check-ref-format", &self.retained_ref])?;
         if !self.retained_ref.starts_with("refs/heads/") || self.retained_ref == branch_ref {
             return Err("retention must name a distinct explicit local branch".into());

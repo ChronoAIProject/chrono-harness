@@ -549,7 +549,7 @@ pub(crate) fn unlock(
     if !rows.iter().any(|row| {
         row.get("worktree").is_some_and(|p| p == path)
             && row.get("HEAD").map(String::as_str) == Some(base)
-            && row.get("branch").map(String::as_str) == Some(branch_ref)
+            && crate::maintenance::matches_checkout_reference(row, branch_ref)
             && !row.contains_key("locked")
     }) {
         return Err("worktree changed during final observation".into());

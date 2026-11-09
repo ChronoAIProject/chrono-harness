@@ -14,6 +14,9 @@
     "check-original": [
       ".chrono-harness/state/"
     ],
+    "bootstrap-owner-stage": [
+      ".chrono-harness/bin/owner-stages/"
+    ],
     "full-original": [
       ".chrono-harness/state/"
     ],
@@ -23,6 +26,9 @@
     ],
     "lifecycle-state-original": [
       ".chrono-harness/state/automatic-cleanup-v2/"
+    ],
+    "fixture-retirement": [
+      ".chrono-harness/state/temporary-hosts/worktree/body-inputs/"
     ]
   },
   "keep_seconds": 0,
