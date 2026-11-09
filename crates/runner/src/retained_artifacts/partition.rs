@@ -2,6 +2,7 @@
 //! mutable inventory. Multi-record exclusion is limited to actual graph edges.
 use super::*;
 use crate::ownership::DirectoryLease;
+use crate::verified_release as verified;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -44,6 +45,19 @@ pub struct ObservationToken {
     pub attempt: u64,
     pub original: OriginalIdentity,
 }
+impl ObservationToken {
+    pub fn binding(&self) -> verified::ObservationBinding<'_> {
+        verified::ObservationBinding {
+            role: &self.role,
+            epoch: &self.epoch,
+            id: &self.original.id,
+            path: &self.original.path,
+            physical: &self.original.identity,
+            serial: self.serial,
+            attempt: self.attempt,
+        }
+    }
+}
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ObservationOrder {
@@ -82,7 +96,7 @@ impl Inventory {
         path: &str,
         attempt: u64,
     ) -> Result<ObservationToken, String> {
-        if role.trim().is_empty() || role.len() > 256 || attempt == 0 {
+        if !verified::observation_role(role.trim(), role.len(), attempt) {
             return Err("invalid observation role/attempt".into());
         }
         let gate = self.addressed_gate(&[], &[path.into()], &[role.into()], None, false, true)?;
@@ -92,10 +106,11 @@ impl Inventory {
             .iter()
             .find(|o| o.path == path)
             .ok_or("observation producer is not enrolled")?;
-        if !output.tree
-            || output.phase != "publishing"
-            || identity(&no_symlink_parents(&self.root, path)?)? != output.identity
-        {
+        if !verified::observation_producer(
+            output.tree,
+            output.phase == "publishing",
+            identity(&no_symlink_parents(&self.root, path)?)? == output.identity,
+        ) {
             return Err("observation requires the actual publishing producer tree".into());
         }
         let original = OriginalIdentity {
@@ -109,7 +124,11 @@ impl Inventory {
             .get(role)
             .cloned()
             .ok_or("observation role is not excluded")?;
-        if record.observation.is_none() && (!record.ids.is_empty() || !record.attached.is_empty()) {
+        if !verified::observation_owner(
+            record.observation.is_some(),
+            record.ids.is_empty(),
+            record.attached.is_empty(),
+        ) {
             return Err("ordinary consumer cannot become an observation owner".into());
         }
         let mut order = record.observation.unwrap_or(ObservationOrder {
@@ -120,10 +139,8 @@ impl Inventory {
             accepted: 0,
             current: None,
         });
-        order.issued = order
-            .issued
-            .checked_add(1)
-            .ok_or("observation sequence exhausted")?;
+        order.issued =
+            verified::next_observation(order.issued).ok_or("observation sequence exhausted")?;
         let mut ids = record.ids;
         if !ids.contains(&original.id) {
             ids.push(original.id.clone());
@@ -149,11 +166,12 @@ impl Inventory {
         request: &ObservationToken,
         observed: Option<(&ObservationToken, bool)>,
     ) -> Result<(), String> {
-        if request.role.trim().is_empty()
-            || request.role.len() > 256
-            || request.serial == 0
-            || request.attempt == 0
-        {
+        if !verified::observation_token(
+            request.role.trim(),
+            request.role.len(),
+            request.serial,
+            request.attempt,
+        ) {
             return Err("invalid observation token".into());
         }
         let gate = self.addressed_gate(
@@ -170,13 +188,13 @@ impl Inventory {
             .iter()
             .find(|o| o.id == request.original.id)
             .ok_or("observation result is unavailable")?;
-        if output.path != request.original.path
-            || output.identity != request.original.identity
-            || !output.tree
-            || output.phase != "released"
-            || !output.manifest.sealed
-            || identity(&no_symlink_parents(&self.root, &output.path)?)? != output.identity
-        {
+        if !verified::observation_result(
+            output.tree,
+            output.phase == "released",
+            output.manifest.sealed,
+            output.path == request.original.path && output.identity == request.original.identity,
+            identity(&no_symlink_parents(&self.root, &output.path)?)? == output.identity,
+        ) {
             return Err("observation result is unsealed or replaced".into());
         }
         let record = gate
@@ -188,20 +206,14 @@ impl Inventory {
         let Some(mut order) = record.observation else {
             // An already empty, expired role may have been reclaimed. This never
             // creates a new root or sequence from an old completed operation.
-            if record.ids.is_empty() && record.attached.is_empty() {
+            if verified::observation_owner(false, record.ids.is_empty(), record.attached.is_empty())
+            {
                 return Ok(());
             }
             return Err("observation owner is not registered".into());
         };
         if let Some((observation, _)) = observed {
-            if observation.role != request.role
-                || observation.epoch != request.epoch
-                || observation.original != request.original
-                || observation.serial == 0
-                || observation.serial > request.serial
-                || observation.attempt == 0
-                || observation.attempt > request.attempt
-            {
+            if !verified::matching_observation(&request.binding(), &observation.binding()) {
                 return Err("observation does not belong to this returned request".into());
             }
         }
@@ -211,28 +223,24 @@ impl Inventory {
         // Completed output is no longer a member, even after empty metadata
         // expires and another epoch starts. Only a real pending/current member
         // can make a transition, and it must qualify that current epoch.
-        if order.epoch != request.epoch || request.serial > order.issued {
+        if !verified::observation_epoch(
+            true,
+            order.epoch == request.epoch,
+            request.serial,
+            order.issued,
+        ) {
             return Err("observation epoch/sequence differs".into());
         }
-        let mut ids = record.ids;
-        if order.current.as_ref() != Some(&request.original.id) {
-            ids.retain(|id| *id != request.original.id);
-        }
-        if let Some((observation, active)) = observed.filter(|(o, _)| o.serial > order.accepted) {
-            if let Some(current) = order.current.take() {
-                ids.retain(|id| *id != current);
-            }
-            order.accepted = observation.serial;
-            if active {
-                order.current = Some(request.original.id.clone());
-                if !ids.contains(&request.original.id) {
-                    ids.push(request.original.id.clone());
-                }
-            } else {
-                ids.retain(|id| *id != request.original.id);
-            }
-        }
-        self.reference_locked(&mut ledger, &request.role, &ids)?;
+        let settled = verified::settle_observation_members(
+            &record.ids,
+            &request.original.id,
+            &order.current,
+            order.accepted,
+            observed.map(|(token, active)| (token.serial, active)),
+        );
+        order.accepted = settled.accepted;
+        order.current = settled.current;
+        self.reference_locked(&mut ledger, &request.role, &settled.members)?;
         self.stable(&gate)?;
         self.partition_save_observation(&ledger, &gate, Some((&request.role, order)))
     }
@@ -676,10 +684,13 @@ impl Inventory {
                 || r.ids.len() > self.policy.max_related_outputs
                 || r.summaries.len() > self.policy.max_summaries
                 || r.observation.as_ref().is_some_and(|o| {
-                    o.epoch.len() != 64
-                        || o.issued == 0
-                        || o.accepted > o.issued
-                        || o.current.as_ref().is_some_and(|id| !r.ids.contains(id))
+                    !verified::observation_order(
+                        o.epoch.len(),
+                        o.issued,
+                        o.accepted,
+                        o.current.is_some(),
+                        o.current.as_ref().is_some_and(|id| r.ids.contains(id)),
+                    )
                 })
                 || identity(&directory).as_ref() != Ok(&r.directory_identity)
         }) {
@@ -1093,18 +1104,19 @@ impl Inventory {
         }
 
         for role in roles.values() {
-            if role.observation.is_some()
-                && observation
+            if !verified::observation_edit(
+                role.observation.is_some(),
+                observation
                     .as_ref()
-                    .is_none_or(|(name, _)| *name != role.role)
-                && ledger.roots.get(&role.role).cloned().unwrap_or_default()
-                    != role
+                    .is_some_and(|(name, _)| *name == role.role),
+                ledger.roots.get(&role.role).cloned().unwrap_or_default()
+                    == role
                         .ids
                         .iter()
                         .filter(|id| !gate.maintenance || objects.contains_key(*id))
                         .cloned()
-                        .collect::<Vec<_>>()
-            {
+                        .collect::<Vec<_>>(),
+            ) {
                 return Err("observation membership requires its domain transition".into());
             }
         }

@@ -407,7 +407,8 @@ impl Client {
             head,
             &self.config.required_checks,
         )?;
-        self.state.observed_snapshot(parsed.state == "OPEN")?;
+        self.state
+            .observed_snapshot(chrono_harness::verified_release::open_pr(&parsed.state))?;
         self.result["pr"] = json!(parsed.number);
         self.result["url"] = json!(parsed.url);
         self.result["observed_head"] = json!(parsed.head);

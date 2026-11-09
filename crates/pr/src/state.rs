@@ -3,6 +3,7 @@ use chrono_harness::ownership::Lease;
 use chrono_harness::retained_artifacts::retention::{
     Inventory, ObservationToken, Publication, read_guard, unique_path,
 };
+use chrono_harness::verified_release as verified;
 use chrono_harness::{
     CommandSpec, ProcessResult, file_identity, no_symlink_parents, sha256, validate_launch_evidence,
 };
@@ -93,15 +94,15 @@ impl Continuation {
         let (result, result_original) = read("result.json", 16777216)?;
         let (object, _) = read("object-state.json", 1048576)?;
         let object: ObjectState = serde_json::from_value(object).map_err(|e| e.to_string())?;
-        if object.schema != "chrono-pr-object-state/v1" || object.unresolved_create {
+        if !verified::object_state(&object.schema, object.unresolved_create) {
             return Err("continued operation has unresolved object state".into());
         }
         if let Some(request) = &object.request {
-            if request.original.path != *path
-                || request.role != State::object_role(&config.repository, args.number()?)
-                || request.serial == 0
-                || request.attempt == 0
-            {
+            if !verified::continued_observation(
+                &request.binding(),
+                &State::object_role(&config.repository, args.number()?),
+                path,
+            ) {
                 return Err("continued observation binding differs".into());
             }
         }
@@ -110,17 +111,11 @@ impl Continuation {
                 .request
                 .as_ref()
                 .ok_or("continued observation has no request")?;
-            if observed.token.original != request.original
-                || observed.token.role != request.role
-                || observed.token.epoch != request.epoch
-                || observed.token.serial == 0
-                || observed.token.serial > request.serial
-                || observed.token.attempt > request.attempt
-                || !matches!(
-                    result["pr_state"].as_str(),
-                    Some("OPEN" | "CLOSED" | "MERGED")
+            if !verified::matching_observation(&request.binding(), &observed.token.binding())
+                || !verified::observed_pr(
+                    result["pr_state"].as_str().unwrap_or(""),
+                    observed.active,
                 )
-                || observed.active != (result["pr_state"] == "OPEN")
             {
                 return Err("continued observation result differs".into());
             }
@@ -327,7 +322,7 @@ impl State {
     }
 
     pub(crate) fn operation_state(&self) -> &'static str {
-        if self.unreturned || self.object.unresolved_create {
+        if verified::unknown_pr_operation(self.unreturned, self.object.unresolved_create) {
             "unknown"
         } else {
             "completed"
@@ -386,9 +381,10 @@ impl State {
             inventory.reference_paths(&Self::recovery_role(&self.path), &[])?;
         }
         self.unreturned = true;
-        if spec.args.first().map(String::as_str) == Some("pr")
-            && spec.args.get(1).map(String::as_str) == Some("create")
-        {
+        if verified::creating_pr(
+            spec.args.first().map(String::as_str).unwrap_or(""),
+            spec.args.get(1).map(String::as_str).unwrap_or(""),
+        ) {
             self.object.unresolved_create = true;
         }
         Ok(n)
@@ -467,16 +463,20 @@ impl State {
         if !inputs.is_empty() {
             inventory.settle_publication_inputs(&path, &inputs)?;
         }
-        let complete = result["operation_state"] == "completed"
-            && result["receipts"]
+        let complete = verified::settled_pr_command(
+            self.unreturned,
+            self.object.unresolved_create,
+            result["receipts"]
                 .as_array()
-                .is_some_and(|rs| rs.iter().all(|r| r.get("storage_error").is_none()));
+                .is_some_and(|rs| rs.iter().all(|r| r.get("storage_error").is_none())),
+        );
         if let Some(previous) = self.continuation {
-            if complete
-                && result["error"].is_null()
-                && self.object.observed.is_some()
-                && result["observed_head"] == result["expected_head"]
-            {
+            if verified::continued_pr_handoff(
+                complete,
+                result["error"].is_null(),
+                self.object.observed.is_some(),
+                result["observed_head"] == result["expected_head"],
+            ) {
                 let result_bytes = serde_json::to_vec(result).map_err(|e| e.to_string())?;
                 if !inventory.published_tree_member(
                     &self.producer,
