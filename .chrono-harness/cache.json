@@ -777,14 +777,6 @@
       "path": "crates/diagnostics/Cargo.lock",
       "presence": "present"
     },
-    "diagnostics.sources": {
-      "kind": "registered-files",
-      "registry": ".chrono-harness/FILEMAP.json",
-      "node": "project:diagnostics",
-      "edges": [
-        "compile"
-      ]
-    },
     "diagnostics-tests.manifest": {
       "kind": "file",
       "path": "crates/diagnostics-tests/Cargo.toml",
@@ -1007,10 +999,6 @@
     "worktree-tests.target": {
       "owner": "worktree-tests",
       "path": "crates/worktree-tests/target/"
-    },
-    "diagnostics.target": {
-      "owner": "diagnostics",
-      "path": "crates/diagnostics/target/"
     },
     "diagnostics-tests.target": {
       "owner": "diagnostics-tests",
@@ -2613,50 +2601,6 @@
       ],
       "source_inputs": [
         "worktree-tests.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
-    "check.diagnostics": {
-      "owner": "diagnostics",
-      "producer": "build.diagnostics",
-      "consumers": [
-        "check.unit_diagnostics"
-      ],
-      "artifacts": [
-        "diagnostics.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "diagnostics.sources"
       ],
       "restore": "compatible",
       "refresh_sources": true

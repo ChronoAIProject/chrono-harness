@@ -1524,7 +1524,6 @@
       "operations": [
         "fmt.diagnostics",
         "fmt.diagnostics-tests",
-        "build.diagnostics",
         "test.diagnostics-tests"
       ],
       "timeout_seconds": 600,
@@ -1978,12 +1977,6 @@
       "fmt.diagnostics-tests": {
         "resources": [],
         "outputs": []
-      },
-      "build.diagnostics": {
-        "resources": [],
-        "outputs": [
-          "crates/diagnostics/target/"
-        ]
       },
       "test.diagnostics-tests": {
         "resources": [],
