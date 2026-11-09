@@ -184,7 +184,7 @@ JSON 解码器拒绝重复成员；profile、provider、command、protocol 类�
 | policy.environment | 明确传给操作的环境覆盖，本宿主设 `RUSTUP_TOOLCHAIN=1.95.0` |
 | policy.artifacts | 以 `/` 结尾的相对目录前缀，允许 ignored 执行产物存在；已跟踪文件不得重叠 |
 | policy.required_inputs | 此 profile 必需的明确普通已跟踪输入 |
-| policy.adoption_base | null，或明确允许其缺少旧 CI profile 的精确完整 base OID |
+| policy.adoption_base | 省略／null，或明确允许其缺少旧 CI profile 的精确完整 base OID |
 | policy.operation_timeout_seconds / operation_output_limit_bytes | 旧操作进程的正数兜底上限 |
 
 采用的 profile 设 `require_tool_bindings: true`，为 `cargo`、`rustc` 声明 `tool_bindings`，含预期路径、SHA-256、精确 `--version` 输出，以及可选 `allow_relocation`，允许等价本地 rustup 安装。登记操作前，生产者解析所选工具链文件，拒绝配置／PATH／编译器选择冲突，报告真实路径及身份。
@@ -217,7 +217,7 @@ profile 字节须同时匹配请求摘要和候选树，操作后再核快照；
 
 本宿主为受影响生产／测试对绑定格式化、生产二进制构建、专属测试执行。生产构建覆盖入口点，独立测试项目仅把库作为依赖编译不足以覆盖它；不另排冗余 Cargo check 或测试项目构建。bootstrap 在四项执行工具尚不存在时先构建它们；标准构建结果仍明确检查所选候选执行物源码。
 
-首次采用的精确 `adoption_base` 只允许基线缺 CI profile，仍保留并验证真实基线 FILEMAP／projects。候选绑定投射到已有基线登记，新绑定不编造基线节点，报告 `previous_enforcement: none`。本仓明确采用 `c4536e5c35d06302cdec655b3f11f9c257919155`。
+首次采用的精确 `adoption_base` 只允许基线缺 CI profile，仍保留并验证真实基线 FILEMAP／projects。候选绑定投射到已有基线登记，新绑定不编造基线节点，报告 `previous_enforcement: none`。本宿主已完成首次接入，现役 PR／dev 的两端均有检查 profile，因此移除宿主中的旧基线例外；首次接入记录归 Git／PR。
 
 旧仓库未登记时，须先建立如实登记，不能用空树或候选替代基线。全新无父宿主用 `--initial`。
 
