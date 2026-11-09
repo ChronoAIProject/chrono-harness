@@ -2454,6 +2454,171 @@ fn addressed_legacy_original_is_verified_without_silent_enrollment_or_rewriting(
 }
 
 #[test]
+fn policy_migration_recovers_interrupted_transactions_and_preserves_live_owners() {
+    if !isolated_capability_test(
+        "policy_migration_recovers_interrupted_transactions_and_preserves_live_owners",
+    ) {
+        return;
+    }
+    for phase in ["reserving", "retiring"] {
+        for capability_exists in [false, true] {
+            let h = report_host();
+            let path = ".chrono-harness/state/preparation/interrupted-migration.json";
+            retained_artifacts::retention::publish_owned_original(
+                h.path(),
+                "check-original",
+                path,
+                b"original failure bytes",
+                json!({"exit":9}),
+            )
+            .unwrap();
+            inventory(h.path())
+                .reference_paths("current-delivery", &[path.into()])
+                .unwrap();
+            let original = ledger(h.path());
+            let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+            let directory = h.path().join(".chrono-harness/state/output-retention-v1");
+            let key = format!("writer-{}", chrono_harness::sha256(path.as_bytes()));
+            let declaration = directory.join(format!("transaction-{key}.json"));
+            let mut transaction: Value =
+                serde_json::from_slice(&fs::read(&declaration).unwrap()).unwrap();
+            transaction["phase"] = json!(phase);
+            if phase == "reserving" {
+                transaction["lease_id"] = json!("");
+            }
+            let interrupted = serde_json::to_vec(&transaction).unwrap();
+            fs::write(&declaration, &interrupted).unwrap();
+            if !capability_exists {
+                fs::remove_file(directory.join(&key)).unwrap();
+            }
+            let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+            policy["keep_seconds"] = json!(3600);
+            let current = serde_json::to_vec(&policy).unwrap();
+            fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+
+            // An admitted publisher may still be between intent and capability
+            // attachment. Only its original address exclusion proves it left.
+            let address = directory.join("transaction-gates").join(&key);
+            let live = chrono_harness::ownership::DirectoryLease::acquire(&address, true, None)
+                .unwrap()
+                .unwrap();
+            assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+            assert_eq!(fs::read(&declaration).unwrap(), interrupted);
+            assert_eq!(ledger(h.path()), original);
+            drop(live);
+
+            if capability_exists {
+                let live = chrono_harness::ownership::Lease::acquire(
+                    &directory.join(&key),
+                    None,
+                    false,
+                    false,
+                    None,
+                )
+                .unwrap()
+                .unwrap();
+                assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+                assert_eq!(fs::read(&declaration).unwrap(), interrupted);
+                assert_eq!(ledger(h.path()), original);
+                drop(live);
+            }
+
+            let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+            assert_eq!(receipt["outputs_preserved"], 1);
+            assert_eq!(receipt["effects"], "metadata-binding-only");
+            assert_eq!(receipt["completion"], "not-established");
+            assert!(!declaration.exists());
+            assert!(!directory.join(&key).exists());
+            assert!(!address.exists());
+            let mut after = ledger(h.path());
+            after["policy_sha256"] = original["policy_sha256"].clone();
+            assert_eq!(after, original);
+            assert_eq!(
+                fs::read(h.path().join(path)).unwrap(),
+                b"original failure bytes"
+            );
+            inventory(h.path()).migrate_policy(&previous).unwrap();
+        }
+    }
+}
+
+#[test]
+fn policy_migration_recovers_empty_transaction_addresses_but_preserves_unknown_residue() {
+    if !isolated_capability_test(
+        "policy_migration_recovers_empty_transaction_addresses_but_preserves_unknown_residue",
+    ) {
+        return;
+    }
+    for residue in ["empty", "capability", "member", "unknown-key"] {
+        let h = report_host();
+        let path = ".chrono-harness/state/preparation/retired-address.json";
+        retained_artifacts::retention::publish_owned_original(
+            h.path(),
+            "check-original",
+            path,
+            b"preserved original",
+            json!({"exit":7}),
+        )
+        .unwrap();
+        let original = ledger(h.path());
+        let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+        let directory = h.path().join(".chrono-harness/state/output-retention-v1");
+        let key = format!("writer-{}", chrono_harness::sha256(path.as_bytes()));
+        fs::remove_file(directory.join(format!("transaction-{key}.json"))).unwrap();
+        if residue != "capability" {
+            fs::remove_file(directory.join(&key)).unwrap();
+        }
+        let mut address = directory.join("transaction-gates").join(&key);
+        if residue == "member" {
+            fs::write(address.join("unknown"), b"keep unknown bytes").unwrap();
+        } else if residue == "unknown-key" {
+            let unknown = directory.join("transaction-gates/unknown-address");
+            fs::rename(&address, &unknown).unwrap();
+            address = unknown;
+        }
+        let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+        policy["keep_seconds"] = json!(3600);
+        fs::write(
+            h.path().join(POLICY_PATH),
+            serde_json::to_vec(&policy).unwrap(),
+        )
+        .unwrap();
+        let live = chrono_harness::ownership::DirectoryLease::acquire(&address, true, None)
+            .unwrap()
+            .unwrap();
+        assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+        assert!(address.is_dir());
+        assert_eq!(ledger(h.path()), original);
+        drop(live);
+
+        if residue == "empty" {
+            let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+            assert_eq!(receipt["outputs_preserved"], 1);
+            assert!(!address.exists());
+            let mut after = ledger(h.path());
+            after["policy_sha256"] = original["policy_sha256"].clone();
+            assert_eq!(after, original);
+        } else {
+            assert!(inventory(h.path()).migrate_policy(&previous).is_err());
+            assert!(address.is_dir());
+            assert_eq!(ledger(h.path()), original);
+            if residue == "capability" {
+                assert!(directory.join(&key).exists());
+            } else if residue == "member" {
+                assert_eq!(
+                    fs::read(address.join("unknown")).unwrap(),
+                    b"keep unknown bytes"
+                );
+            }
+        }
+        assert_eq!(
+            fs::read(h.path().join(path)).unwrap(),
+            b"preserved original"
+        );
+    }
+}
+
+#[test]
 fn policy_migration_does_not_hold_descriptors_for_unrelated_outputs() {
     if !isolated_capability_test("policy_migration_does_not_hold_descriptors_for_unrelated_outputs")
     {

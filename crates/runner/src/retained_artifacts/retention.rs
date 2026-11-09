@@ -514,6 +514,13 @@ impl Inventory {
         self.directory.join(format!("transaction-{key}.json"))
     }
     fn transaction(&self, key: &str) -> Result<Option<Transaction>, String> {
+        let digest = key
+            .strip_prefix("writer-")
+            .or_else(|| key.strip_prefix("slot-"))
+            .or_else(|| key.strip_prefix("removal-"));
+        if !digest.is_some_and(crate::wire::is_digest) {
+            return Err("retention transaction binding changed; preserve capability".into());
+        }
         let path = self.transaction_path(key);
         let file = match fs::File::open(no_symlink_parents(
             &self.directory,
@@ -538,10 +545,6 @@ impl Inventory {
             return Err("retention transaction declaration byte capacity".into());
         }
         let record: Transaction = decode(&bytes)?;
-        let digest = key
-            .strip_prefix("writer-")
-            .or_else(|| key.strip_prefix("slot-"))
-            .or_else(|| key.strip_prefix("removal-"));
         let removal = key.starts_with("removal-");
         for path in &record.paths {
             crate::relative_path(path)?;
@@ -551,7 +554,6 @@ impl Inventory {
         }
         if record.schema != "chrono-output-transaction/v1"
             || record.key != key
-            || !digest.is_some_and(crate::wire::is_digest)
             || record.directory_identity != identity(&self.directory)?
             || record.lease_id.len() > 256
             || !matches!(record.phase.as_str(), "reserving" | "active" | "retiring")
@@ -661,12 +663,19 @@ impl Inventory {
             return Err("unsupported retention policy migration".into());
         }
         for key in self.transaction_keys()? {
-            let record = self
-                .transaction(&key)?
-                .ok_or("transaction disappeared during migration")?;
-            if record.phase != "active" {
-                return Err("recover unattached retention transaction before migration".into());
-            }
+            let record = match self.transaction(&key)? {
+                Some(record) if record.phase == "active" => record,
+                _ => {
+                    // Only the recovery owner can confirm retirement. A missing
+                    // declaration alone does not exclude an admitted publisher.
+                    if self.retire_transaction(&key)? {
+                        continue;
+                    }
+                    return Err(format!(
+                        "retention transaction {key} is still owned; preserve before policy migration"
+                    ));
+                }
+            };
             let _owner = Lease::acquire(
                 &self.directory.join(&key),
                 Some(&record.lease_id),
@@ -1759,14 +1768,26 @@ impl Inventory {
         }
         Ok(leases)
     }
-    fn retire_transaction(&self, key: &str) -> Result<(), String> {
+    fn retire_transaction(&self, key: &str) -> Result<bool, String> {
         let directory = no_symlink_parents(&self.directory, &format!("transaction-gates/{key}"))?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let Some(gate) = crate::ownership::DirectoryLease::acquire(&directory, true, None)? else {
-            return Ok(());
+            return Ok(false);
         };
         let Some(mut record) = self.transaction(key)? else {
-            return Ok(());
+            match fs::symlink_metadata(self.directory.join(key)) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => (),
+                Err(error) => return Err(error.to_string()),
+                Ok(_) => {
+                    return Err(format!(
+                        "retention transaction {key} has an undeclared capability; preserve it"
+                    ));
+                }
+            }
+            self.stable(&gate)?;
+            return fs::remove_dir(&directory)
+                .map(|()| true)
+                .map_err(|e| e.to_string());
         };
         let path = self.directory.join(key);
         match fs::symlink_metadata(&path) {
@@ -1781,7 +1802,7 @@ impl Inventory {
                     None,
                 )?
                 else {
-                    return Ok(());
+                    return Ok(false);
                 };
                 record.lease_id = owner.id().into();
                 record.phase = "retiring".into();
@@ -1807,7 +1828,9 @@ impl Inventory {
             &identity(&declaration)?,
             || self.stable(&gate),
         )?;
-        fs::remove_dir(&directory).map_err(|e| e.to_string())
+        fs::remove_dir(&directory)
+            .map(|()| true)
+            .map_err(|e| e.to_string())
     }
     fn maintain_locked(&self, observed: u64, gate: &Gate) -> Result<Value, String> {
         let began = self.round_began.get().unwrap_or_else(Instant::now);
