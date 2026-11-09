@@ -184,7 +184,9 @@ fn aged_busy_consumer_defers_and_independent_expired_checkout_advances() {
 #[test]
 fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches() {
     let h = Host::new("payload");
-    policy(&h, 1, 3, "dispose");
+    // Keep reuse and expiry as separate real-birth phases, as in the named
+    // checkout test; Git/source preservation is allowed to take over 3 seconds.
+    policy(&h, 1, 60, "dispose");
     native_consumer(&h, "ordinary");
     let target = h.parent.join("detached aged checkout");
     git(
@@ -238,7 +240,7 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
         "current detached source"
     );
     assert!(!target.join("output λ").exists());
-    older_than(&target, 3);
+    older_than(&target, 60);
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
     assert!(!target.exists(), "{finished}");

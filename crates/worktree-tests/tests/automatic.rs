@@ -2088,7 +2088,7 @@ fn automatic_import_is_explicit_and_not_a_historical_birth() {
 
 #[test]
 fn detached_import_preserves_unresolved_index_and_reports_unfinished_work() {
-    let h = Host::new("base\n");
+    let h = Host::new("payload");
     h.kernel_cleanup();
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     git(&h.root, &["checkout", "-b", "client/other-side"]);
