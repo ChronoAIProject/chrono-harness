@@ -1478,26 +1478,14 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
     );
     install_parent_provider(&root);
     let git_bin = fixture_git();
-    let version = Command::new(&git_bin).arg("--version").output().unwrap();
     let mut cfg: Value =
         serde_json::from_slice(&fs::read(root.join(".chrono-harness/config.json")).unwrap())
             .unwrap();
     for tool in cfg["tools"].as_array_mut().unwrap() {
         if tool["id"] == "git" {
             tool["program"] = json!(git_bin);
-            tool["expected_version"] =
-                json!(String::from_utf8(version.stdout.clone()).unwrap().trim());
-        }
-        if tool["id"] == "python3" {
-            let python = Command::new("/usr/bin/python3")
-                .arg("--version")
-                .output()
-                .unwrap();
-            tool["expected_version"] = json!(String::from_utf8(python.stdout).unwrap().trim());
         }
     }
-    cfg["environment"]["inputs"][0]["location"] = json!(git_bin);
-    cfg["environment"]["inputs"][0]["sha256"] = json!(sha256(&fs::read(&git_bin).unwrap()));
     json_file(&root, ".chrono-harness/config.json", &cfg);
     let mut provider: Value =
         serde_json::from_slice(&fs::read(root.join(PROVIDER)).unwrap()).unwrap();
