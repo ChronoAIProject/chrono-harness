@@ -2019,7 +2019,9 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
             ]),
         &h.root,
     );
-    start.await_file(&h.parent.join("admission-holder"));
+    // Admission follows bounded Git preparation; use the managed task outcome
+    // rather than killing preparation at an unrelated readiness deadline.
+    start.await_managed_file(&h.parent.join("admission-holder"));
     let _group = OwnedGroup(fs::read_to_string(h.parent.join("admission-holder")).unwrap());
     assert!(!start.wait().unwrap().success());
     for release in ["release-mutation", "release-hook"] {
