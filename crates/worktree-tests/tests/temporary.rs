@@ -391,9 +391,11 @@ fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
 #[test]
 fn producer_store_resolution_does_not_acquire_maintenance_admission() {
     let h = host();
-    h.policy(|p| p["timeout_seconds"] = value!(1));
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
+    // Initial maintenance uses its normal command budget. The short deadline
+    // belongs to the read-only resolution checked below while admission is held.
+    h.policy(|p| p["timeout_seconds"] = value!(1));
     let state = h.record_directory(&h.root);
     let owner = fs::read(state.join("owner.json")).unwrap();
     let ledger = fs::read(state.join("ledger.json")).unwrap();
