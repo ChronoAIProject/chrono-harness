@@ -4386,3 +4386,95 @@ fn final_report_dependencies_include_exact_nested_acquisition_members() {
         b"original unit bytes"
     );
 }
+
+#[test]
+fn sealed_tree_member_qualification_requires_exact_producer_identity_and_bytes() {
+    if !isolated_capability_test(
+        "sealed_tree_member_qualification_requires_exact_producer_identity_and_bytes",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/qualified-tree";
+    let member = format!("{path}/result.json");
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(path),
+        true,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
+    publication
+        .write_file(&h.path().join(&member), b"original")
+        .unwrap();
+    inventory(h.path())
+        .reference_paths("actual-consumer", &[path.into()])
+        .unwrap();
+    let digest = chrono_harness::sha256(b"original");
+    assert!(
+        !inventory(h.path())
+            .published_tree_member("fixture", path, &member, &digest, 8)
+            .unwrap(),
+        "live intent is not a completed original"
+    );
+    publication.complete(json!({"exit_code":7})).unwrap();
+    let _reader = retained_artifacts::retention::read_guard(h.path(), path)
+        .unwrap()
+        .unwrap();
+    assert!(
+        inventory(h.path())
+            .published_tree_member("fixture", path, &member, &digest, 8)
+            .unwrap()
+    );
+    assert!(
+        !inventory(h.path())
+            .published_tree_member("other-producer", path, &member, &digest, 8)
+            .unwrap()
+    );
+    assert!(
+        !inventory(h.path())
+            .published_tree_member(
+                "fixture",
+                path,
+                &member,
+                &chrono_harness::sha256(b"different"),
+                8
+            )
+            .unwrap()
+    );
+    assert!(
+        !inventory(h.path())
+            .published_tree_member("fixture", path, &member, &digest, 9)
+            .unwrap()
+    );
+    assert!(
+        !inventory(h.path())
+            .published_tree_member("fixture", path, &format!("{path}/missing"), &digest, 8)
+            .unwrap()
+    );
+    assert!(
+        inventory(h.path())
+            .published_tree_member(
+                "fixture",
+                path,
+                ".chrono-harness/state/fixtures/elsewhere",
+                &digest,
+                8
+            )
+            .is_err()
+    );
+    // Same bytes in a different inode do not have the producer's identity.
+    fs::rename(
+        h.path().join(&member),
+        h.path().join(format!("{path}/original-result")),
+    )
+    .unwrap();
+    fs::write(h.path().join(&member), b"original").unwrap();
+    assert!(
+        inventory(h.path())
+            .published_tree_member("fixture", path, &member, &digest, 8)
+            .is_err()
+    );
+}

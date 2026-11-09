@@ -1,5 +1,8 @@
 //! PR-owned immutable operation originals, protected by the existing output owner.
-use chrono_harness::retained_artifacts::retention::{Inventory, Publication, unique_path};
+use chrono_harness::ownership::Lease;
+use chrono_harness::retained_artifacts::retention::{
+    Inventory, Publication, read_guard, unique_path,
+};
 use chrono_harness::{CommandSpec, ProcessResult, no_symlink_parents, sha256};
 use serde_json::{Value, json};
 use std::{
@@ -10,9 +13,84 @@ use std::{
 
 pub(crate) struct State {
     root: PathBuf,
+    producer: String,
     pub(crate) path: String,
     publication: Publication,
     calls: usize,
+    continuation: Option<Continuation>,
+}
+
+struct Continuation {
+    path: String,
+    result_original: Value,
+    _reader: Lease,
+}
+
+impl Continuation {
+    fn load(
+        root: &Path,
+        inventory: &Inventory,
+        config: &super::Config,
+        config_bytes: &[u8],
+        args: &super::Args,
+    ) -> Result<Option<Self>, String> {
+        let Some(path) = args.values.get("--continue-operation") else {
+            return Ok(None);
+        };
+        chrono_harness::relative_path(path)?;
+        if !path.starts_with(&format!("{}/operation-", config.state_directory)) {
+            return Err("continued operation is outside the configured PR state scope".into());
+        }
+        let reader =
+            read_guard(root, path)?.ok_or("continued operation is unavailable or not enrolled")?;
+        let read = |name: &str, limit: usize| -> Result<(Value, Value), String> {
+            let member = format!("{path}/{name}");
+            let bytes = super::read_bounded(&no_symlink_parents(root, &member)?, limit)?;
+            let digest = sha256(&bytes);
+            if !inventory.published_tree_member(
+                &config.state_producer,
+                path,
+                &member,
+                &digest,
+                bytes.len() as u64,
+            )? {
+                return Err("continued operation has no matching sealed producer result; preserve originals".into());
+            }
+            Ok((
+                chrono_harness::json(&bytes)?,
+                json!({"path":member,"sha256":digest,"length":bytes.len()}),
+            ))
+        };
+        let (intent, _) = read("intent.json", 1048576)?;
+        let (old_config, _) = read("config.json", 1048576)?;
+        if old_config != chrono_harness::json(config_bytes)? {
+            return Err("continued operation config differs from the current binding".into());
+        }
+        let (result, result_original) = read("result.json", 16777216)?;
+        if intent["schema"] != "chrono-pr-operation/v1"
+            || intent["producer"] != "chrono-pr"
+            || intent["operation"] != *path
+            || intent["object"]["repository"] != config.repository
+            || intent["object"]["base"] != config.base
+            || intent["object"]["expected_head"] != args.get("--head-sha")?
+            || result["schema"] != "chrono-pr-result/v2"
+            || result["operation"] != *path
+            || result["operation_state"] != "completed"
+            || !result["command_exit_code"].is_u64()
+            || result["repository"] != config.repository
+            || result["base"] != config.base
+            || result["pr"] != args.number()?
+            || result["expected_head"] != args.get("--head-sha")?
+            || result.get("storage_error").is_some()
+        {
+            return Err("continued operation identity or local completion is not established; preserve originals".into());
+        }
+        Ok(Some(Self {
+            path: path.clone(),
+            result_original,
+            _reader: reader,
+        }))
+    }
 }
 
 pub(crate) fn now() -> Result<u128, String> {
@@ -38,6 +116,7 @@ impl State {
         ) {
             return Err("PR state producer/directory is not registered in retention policy".into());
         }
+        let continuation = Continuation::load(root, &inventory, config, config_bytes, args)?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
         let absolute = unique_path(&directory, "operation-", "")?;
         let path = absolute
@@ -55,9 +134,11 @@ impl State {
         publication.materialize_for_reference(&Self::recovery_role(&path))?;
         let state = Self {
             root: root.into(),
+            producer: config.state_producer.clone(),
             path,
             publication,
             calls: 0,
+            continuation,
         };
         let saved = (|| {
             let config_original = state.original("config.json", config_bytes)?;
@@ -65,6 +146,7 @@ impl State {
                 "schema":"chrono-pr-operation/v1", "operation":state.path, "producer":"chrono-pr",
                 "command":args.command, "arguments":args.values, "draft":args.draft,
                 "config_original":config_original,
+                "continuation":state.continuation.as_ref().map(|c| json!({"operation":c.path,"result_original":c.result_original,"method":"one read-only current PR observation; release only this prior root after sealed handoff"})),
                 "object":{"repository":config.repository,"base":config.base,"pr":args.number().ok(),"expected_head":args.get("--head-sha")?},
                 "state":"intent", "updated_at_unix_millis":now()?, "handle":null, "result":null,
                 "recovery":{"method":"inspect exact operation originals before any retry; missing result remains unknown", "consumer":Self::recovery_role(&state.path), "release":"only after matching terminal object evidence and recovery consumers end"}
@@ -72,6 +154,10 @@ impl State {
         })();
         saved.map_err(|e| format!("PR operation {} intent publication failed: {e}", state.path))?;
         Ok(state)
+    }
+
+    pub(crate) fn continued_path(&self) -> Option<&str> {
+        self.continuation.as_ref().map(|c| c.path.as_str())
     }
 
     fn recovery_role(path: &str) -> String {
@@ -142,13 +228,43 @@ impl State {
         let terminal_object = matches!(result["pr_state"].as_str(), Some("CLOSED" | "MERGED"));
         // Only an established result with no still-active PR can release this
         // attempt's recovery reference. Other attempts and objects are untouched.
-        let release =
-            result["error"].is_null() && (terminal_object || result["pr_state"].is_null());
+        let release = result["error"].is_null()
+            && result["outcome"] != "stale"
+            && (terminal_object || result["pr_state"].is_null());
         let root = self.root.clone();
         let path = self.path.clone();
         self.publication.complete(json!({"kind":"pr-operation","operation":path,"command_exit_code":result["command_exit_code"],"pr_state":result["pr_state"],"result":"result.json"}))?;
         let inventory = Inventory::adopted(&root)?.ok_or("PR retention owner disappeared")?;
         inventory.retain_diagnostic_path(&path)?;
+        if let Some(previous) = self.continuation {
+            // Keep both recovery roots on every failed/stale query or incomplete
+            // publication. A current PR observation does not finish an old task.
+            if result["error"].is_null()
+                && matches!(
+                    result["pr_state"].as_str(),
+                    Some("OPEN" | "CLOSED" | "MERGED")
+                )
+                && result["observed_head"] == result["expected_head"]
+            {
+                let _current_reader = read_guard(&root, &path)?
+                    .ok_or("continued result disappeared before handoff")?;
+                let result_bytes = serde_json::to_vec(result).map_err(|e| e.to_string())?;
+                if !inventory.published_tree_member(
+                    &self.producer,
+                    &path,
+                    &format!("{path}/result.json"),
+                    &sha256(&result_bytes),
+                    result_bytes.len() as u64,
+                )? {
+                    return Err(
+                        "continued result is not sealed; both recovery roots remain protected"
+                            .into(),
+                    );
+                }
+                inventory.retain_diagnostic_path(&previous.path)?;
+                inventory.reference_paths(&Self::recovery_role(&previous.path), &[])?;
+            }
+        }
         if release {
             inventory.reference_paths(&Self::recovery_role(&path), &[])?;
         }

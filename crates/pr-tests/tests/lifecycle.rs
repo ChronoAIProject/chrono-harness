@@ -2,6 +2,11 @@ use serde_json::{Value, json};
 use std::{fs, process::Command};
 use tempfile::TempDir;
 
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod isolated_capability;
+use chrono_harness::retained_artifacts::retention::Inventory;
+use isolated_capability::isolated_capability_test;
+
 const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const OTHER: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
@@ -466,8 +471,23 @@ fn timeout_and_output_limits_preserve_the_original_local_receipt() {
     let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
     assert_eq!(code, 3);
     assert_eq!(r["outcome"], "pending");
-    assert_eq!(h.calls().len(), 2);
-    assert!(r["receipts"][1]["failure"].is_string());
+    match h.calls().len() {
+        1 => {
+            // The one-second operation deadline includes the initial API call.
+            // It may expire before dispatching the native wait under real load.
+            assert_eq!(
+                r["error"], "operation deadline reached; remote result remains unverified",
+                "{r}"
+            );
+            assert_eq!(r["receipts"].as_array().unwrap().len(), 1, "{r}");
+            assert_eq!(r["receipts"][0]["exit_code"], 0, "{r}");
+        }
+        2 => {
+            assert_eq!(r["receipts"][1]["failure"], "process timed out", "{r}");
+            assert!(r["receipts"][1]["child_pid"].is_u64(), "{r}");
+        }
+        count => panic!("unexpected dispatch count {count}: {r}"),
+    }
     let h = Host::new(vec![
         json!({"prefix":["api","graphql"],"stdout":"x".repeat(100000)}),
     ]);
@@ -638,4 +658,288 @@ fn stream_publication_failure_returns_the_actual_unsaved_bytes() {
     )
     .unwrap();
     assert_eq!(saved, result);
+}
+
+#[test]
+fn continues_a_known_operation_and_keeps_command_and_object_facts_separate() {
+    let mut merged = snapshot();
+    merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
+    merged["data"]["repository"]["pullRequest"]["mergeCommit"] = json!({"oid":OTHER});
+    let h = Host::new(vec![api(snapshot()), api(merged)]);
+    let (first_code, first) = h.status();
+    assert_eq!(first_code, 0, "{first}");
+    assert_eq!(first["pr_state"], "OPEN");
+    let previous = first["operation"].as_str().unwrap();
+    let old_result = h.root.path().join(previous).join("result.json");
+    let original = fs::read(&old_result).unwrap();
+    let (code, continued) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        previous,
+    ]);
+    assert_eq!(code, 0, "{continued}");
+    assert_eq!(continued["continued_operation"], previous);
+    assert_eq!(continued["pr_state"], "MERGED");
+    assert_eq!(continued["merge_commit"], OTHER);
+    assert_ne!(continued["operation"], first["operation"]);
+    assert_eq!(
+        fs::read(&old_result).unwrap(),
+        original,
+        "new object state must not rewrite an old command result"
+    );
+    assert_eq!(
+        h.calls().len(),
+        2,
+        "continuation uses one readback and never creates a PR or starts a second watcher"
+    );
+}
+
+fn maintain_after_diagnostics(h: &Host) {
+    let future = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 100000;
+    for _ in 0..8 {
+        Inventory::adopted(h.root.path())
+            .unwrap()
+            .unwrap()
+            .maintain_at(future)
+            .unwrap();
+    }
+}
+
+#[test]
+fn continuation_releases_only_its_prior_record_after_a_durable_handoff() {
+    if !isolated_capability_test(
+        "continuation_releases_only_its_prior_record_after_a_durable_handoff",
+    ) {
+        return;
+    }
+    let mut merged = snapshot();
+    merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
+    merged["data"]["repository"]["pullRequest"]["mergeCommit"] = json!({"oid":OTHER});
+    let h = Host::new(vec![
+        api(snapshot()),
+        api(snapshot()),
+        api(snapshot()),
+        api(merged),
+    ]);
+    let (code, prior) = h.status();
+    assert_eq!(code, 0, "{prior}");
+    let (code, independent) = h.status();
+    assert_eq!(code, 0, "{independent}");
+    let previous = prior["operation"].as_str().unwrap();
+    let (code, current) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        previous,
+    ]);
+    assert_eq!(code, 0, "{current}");
+    assert_eq!(current["pr_state"], "OPEN");
+    maintain_after_diagnostics(&h);
+    assert!(
+        !h.root.path().join(previous).exists(),
+        "explicitly superseded local command can expire"
+    );
+    assert!(
+        h.root
+            .path()
+            .join(independent["operation"].as_str().unwrap())
+            .exists(),
+        "another caller's root remains protected"
+    );
+    let current_path = current["operation"].as_str().unwrap();
+    assert!(
+        h.root
+            .path()
+            .join(current_path)
+            .join("result.json")
+            .exists(),
+        "current OPEN object remains recoverable"
+    );
+    let (code, absent) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        previous,
+    ]);
+    assert_eq!(code, 2, "{absent}");
+    assert!(absent["error"].is_string());
+    assert_eq!(
+        h.calls().len(),
+        3,
+        "unavailable history never creates a new remote task"
+    );
+    let (code, terminal) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        current_path,
+    ]);
+    assert_eq!(code, 0, "{terminal}");
+    assert_eq!(terminal["merge_commit"], OTHER);
+    maintain_after_diagnostics(&h);
+    assert!(!h.root.path().join(current_path).exists());
+    assert!(
+        !h.root
+            .path()
+            .join(terminal["operation"].as_str().unwrap())
+            .exists()
+    );
+    assert!(
+        h.root
+            .path()
+            .join(independent["operation"].as_str().unwrap())
+            .exists()
+    );
+    assert_eq!(h.calls().len(), 4);
+}
+
+#[test]
+fn continuation_rejects_missing_changed_or_mismatched_originals_before_dispatch() {
+    for case in ["pr", "head", "config", "missing", "changed", "unregistered"] {
+        let h = Host::new(vec![api(snapshot())]);
+        let (code, prior) = h.status();
+        assert_eq!(code, 0, "{prior}");
+        let previous = prior["operation"].as_str().unwrap();
+        let result_path = h.root.path().join(previous).join("result.json");
+        match case {
+            "config" => {
+                let p = h.root.path().join(".chrono-harness/pr.json");
+                let mut c: Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
+                c["base"] = json!("main");
+                h.write_config(c);
+            }
+            "missing" => fs::remove_file(&result_path).unwrap(),
+            "changed" => fs::write(&result_path, prior.to_string() + " ").unwrap(),
+            "unregistered" => {
+                let copy = h
+                    .root
+                    .path()
+                    .join(".chrono-harness/state/pr-operations/operation-unregistered");
+                fs::create_dir(&copy).unwrap();
+                for name in ["config.json", "intent.json", "result.json"] {
+                    fs::copy(h.root.path().join(previous).join(name), copy.join(name)).unwrap();
+                }
+            }
+            _ => (),
+        }
+        let (code, result) = h.run(&[
+            "pr-status",
+            "--pr",
+            if case == "pr" { "43" } else { "42" },
+            "--head-sha",
+            if case == "head" { OTHER } else { HEAD },
+            "--continue-operation",
+            if case == "unregistered" {
+                ".chrono-harness/state/pr-operations/operation-unregistered"
+            } else {
+                previous
+            },
+        ]);
+        assert_eq!(code, 2, "{case}: {result}");
+        assert!(result["error"].is_string(), "{case}: {result}");
+        assert_eq!(h.calls().len(), 1, "{case} must reject before dispatch");
+        assert!(h.root.path().join(previous).exists());
+    }
+}
+
+#[test]
+fn failed_continuation_preserves_both_recovery_roots() {
+    if !isolated_capability_test("failed_continuation_preserves_both_recovery_roots") {
+        return;
+    }
+    let mut stale = snapshot();
+    stale["data"]["repository"]["pullRequest"]["headRefOid"] = json!(OTHER);
+    stale["data"]["repository"]["pullRequest"]["state"] = json!("CLOSED");
+    for (step, expected_exit) in [
+        (
+            json!({"prefix":["api","graphql"],"stdout":"offline","exit":2}),
+            2,
+        ),
+        (
+            json!({"prefix":["api","graphql"],"stdout":snapshot().to_string(),"block_result":true}),
+            2,
+        ),
+        (api(stale), 4),
+    ] {
+        let h = Host::new(vec![api(snapshot()), step]);
+        let (code, prior) = h.status();
+        assert_eq!(code, 0, "{prior}");
+        let previous = prior["operation"].as_str().unwrap();
+        let original = fs::read(h.root.path().join(previous).join("result.json")).unwrap();
+        let (code, result) = h.run(&[
+            "pr-status",
+            "--pr",
+            "42",
+            "--head-sha",
+            HEAD,
+            "--continue-operation",
+            previous,
+        ]);
+        assert_eq!(code, expected_exit, "{result}");
+        maintain_after_diagnostics(&h);
+        assert_eq!(
+            fs::read(h.root.path().join(previous).join("result.json")).unwrap(),
+            original
+        );
+        assert!(
+            h.root
+                .path()
+                .join(result["operation"].as_str().unwrap())
+                .exists()
+        );
+        assert_eq!(h.calls().len(), 2);
+    }
+}
+
+#[test]
+fn continuation_rejects_a_live_producer_even_when_result_bytes_exist() {
+    if !isolated_capability_test(
+        "continuation_rejects_a_live_producer_even_when_result_bytes_exist",
+    ) {
+        return;
+    }
+    let h = Host::new(vec![]);
+    let path = ".chrono-harness/state/pr-operations/operation-live";
+    fs::create_dir_all(h.root.path().join(".chrono-harness/state/pr-operations")).unwrap();
+    let inventory = Inventory::adopted(h.root.path()).unwrap().unwrap();
+    let publication = inventory
+        .plan("pr-original", path, true, json!({"state":"intent"}))
+        .unwrap();
+    publication
+        .materialize_for_reference("live-original-task")
+        .unwrap();
+    publication
+        .write_file(&h.root.path().join(path).join("result.json"), b"{}")
+        .unwrap();
+    let (code, result) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        path,
+    ]);
+    assert_eq!(code, 2, "{result}");
+    assert!(result["error"].is_string());
+    assert!(h.calls().is_empty());
+    assert!(h.root.path().join(path).exists());
+    drop(publication);
 }

@@ -21,8 +21,12 @@ fn main() {
         .collect::<Vec<_>>();
     assert_eq!(operations.len(), 1, "one current operation before dispatch");
     let operation = &operations[0];
+    let mut call = 1;
+    while operation.join(format!("call-{call}.result.json")).exists() {
+        call += 1;
+    }
     let intent: Value = serde_json::from_slice(
-        &fs::read(operation.join(format!("call-{}.intent.json", index + 1))).unwrap(),
+        &fs::read(operation.join(format!("call-{call}.intent.json"))).unwrap(),
     )
     .unwrap();
     assert_eq!(intent["state"], "intent");
@@ -33,7 +37,7 @@ fn main() {
         input.as_bytes()
     );
     if step["block_receipt"] == true {
-        fs::create_dir(operation.join(format!("call-{}.stdout", index + 1))).unwrap();
+        fs::create_dir(operation.join(format!("call-{call}.stdout"))).unwrap();
     }
     if step["block_result"] == true {
         fs::create_dir(operation.join("result.json")).unwrap();
