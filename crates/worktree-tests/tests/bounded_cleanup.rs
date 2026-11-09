@@ -135,6 +135,11 @@ fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
 
 #[test]
 fn cache_history_releases_old_generations_and_their_owned_originals() {
+    if !super::isolated_capability::isolated_capability_test(
+        "bounded_cleanup::cache_history_releases_old_generations_and_their_owned_originals",
+    ) {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = cache_history_host(0, 2);
     let index = fs::read(h.root.join(".git/index")).unwrap();
