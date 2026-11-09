@@ -926,6 +926,28 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "verify_downloads": {
+          "operation": "verify.ci-downloads",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-downloads.rlib,dep-info=.chrono-harness/state/verify.ci-downloads.rlib.d",
+            "crates/ci/src/verified_download.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-downloads.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -982,6 +1004,28 @@
             "crates/ci-tests/tests/verified_literals.rs",
             "-o",
             ".chrono-harness/state/verify.ci-literals-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_downloads": {
+          "operation": "verify.ci-downloads-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.ci-downloads-tests.rlib,dep-info=.chrono-harness/state/verify.ci-downloads-tests.rlib.d",
+            "crates/ci-tests/tests/verified_download.rs",
+            "-o",
+            ".chrono-harness/state/verify.ci-downloads-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {

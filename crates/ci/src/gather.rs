@@ -228,19 +228,21 @@ impl<'a> Transport<'a> {
             stdout_remaining = stdout_remaining.saturating_sub(p.stdout_bytes.len());
             stderr_remaining = stderr_remaining.saturating_sub(p.stderr_bytes.len());
             let success = p.failure.is_none() && p.exit_code == 0;
-            let status = download_http_status(&p.stderr_bytes);
+            let status = super::verified_download::http_status(&p.stderr_bytes);
             let delay = policy
                 .as_ref()
                 .map(|p| Duration::from_secs(p.delay_seconds));
-            let retry = !success
-                && p.failure.is_none()
-                && attempt < attempts
-                && policy.as_ref().is_some_and(|policy| {
+            let retry = super::verified_download::retry(
+                p.exit_code == 0,
+                p.failure.is_some(),
+                attempt < attempts,
+                policy.as_ref().is_some_and(|policy| {
                     status.is_some_and(|s| policy.http_statuses.contains(&s))
-                })
-                && stdout_remaining > 0
-                && stderr_remaining > 0
-                && delay.is_some_and(|d| d < deadline.saturating_duration_since(Instant::now()));
+                }),
+                stdout_remaining,
+                stderr_remaining,
+                delay.is_some_and(|d| d < deadline.saturating_duration_since(Instant::now())),
+            );
             if policy.is_some() {
                 self.observations
                     .last_mut()
@@ -268,28 +270,6 @@ impl<'a> Transport<'a> {
         }
         chrono_harness::json(&self.run(&args)?)
     }
-}
-
-/// The registered CLI protocol uses one unambiguous `HTTP nnn:` status in stderr.
-fn download_http_status(stderr: &[u8]) -> Option<u16> {
-    let mut status = None;
-    for token in stderr
-        .windows(9)
-        .filter(|s| s.starts_with(b"HTTP ") && s[8] == b':')
-    {
-        let digits = &token[5..8];
-        if !digits.iter().all(u8::is_ascii_digit) {
-            continue;
-        }
-        let current = digits
-            .iter()
-            .fold(0_u16, |n, digit| n * 10 + u16::from(digit - b'0'));
-        if status.is_some_and(|prior| prior != current) {
-            return None;
-        }
-        status = Some(current);
-    }
-    status
 }
 
 fn parent_run(
