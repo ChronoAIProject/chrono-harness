@@ -727,12 +727,18 @@ impl Inventory {
             }
         }
         let mut leases = Vec::new();
-        let mut directories = BTreeMap::new();
+        let mut directories = BTreeMap::<String, PathBuf>::new();
         let began = Instant::now();
         for (path, exclusive) in requests {
-            // If an ancestor is already exclusive, a second flock of one of its
-            // descendants adds no exclusion and could reverse another lock order.
-            let directory = self.path_directory(&path)?;
+            // Lexical prefix order acquires every parent first. Reuse its held
+            // address rather than hashing and resolving the full prefix again.
+            let directory = match path.rsplit_once('/') {
+                Some((parent, component)) => directories
+                    .get(parent)
+                    .ok_or("retention parent path gate is unavailable")?
+                    .join(sha256(component.as_bytes())),
+                None => self.path_directory(&path)?,
+            };
             fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
             let marker = no_symlink_parents(&directory, "address.json")?;
             // Birth needs only an absence observation here. Decode and validate
