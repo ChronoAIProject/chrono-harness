@@ -51,7 +51,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 1 权威与边界 | 部分 | runner `full.rs` 的外部 DAG；R `dag_*` | 其余判官政策和生命周期 |
 | 1 真实消费者与用途 | 部分：带版本的内部共享启动消费合同 | registration 的 `chrono-internal-causal-consumption/v1`；本仓采用已有 runner-startup，复用 need／output_use、生产／调用 action、profile 安装对、claim、真实消费证据。标准 scoped 准入核两端受影响关系，要求原真实消费者测试；Rust 成功／失败／边界及固定 Git 端点回归。这些关系检查不判断价值；全对象必要性继续由 AI 核查当前使用方和验收终点 | 是否有用仍由 AI 负责判断。已有有限 Darwin 内部启动消费；Linux、外部／全消费者采用、完整路径执行尚缺。仅有测试／分发资产不构成真实消费者 |
 | 2 独立项目与采用 | 部分 | 独立 manifest／lock／bootstrap 构建登记；共享身份判断有独立生产库、专属测试项目和 runner 真调用；runner 登记构建核对点名库的原证明、库字节及最终二进制 checksum，暖调用复用原证明，独立测试及其余使用方的编译产物绑定仍缺；SPEC §2.1 将共享数学归 trureturing、运行／模型对应归 chrono-harness | 通用完整 bootstrap 来源及启用；源码归属不证明实现满足模型 |
-| 2.1.1 Verus 规范性权威 | 规范已明确；实现部分完成 | SPEC 统一定义真实使用方、证明与生产调用绑定及 `E_VERUS_COVERAGE`；本地与离线汇总共用 Verus 方法选择及原报告／库／候选源码组合准入，普通成功不产生类型化证明条目；runner 的 paths／scope／status／limits、registration 的 nodes／readiness／consumption、CI collection 的状态源、CI 字面量、projects 语言配对和 filemap 图内核及其独立预期，以及 identifiers、retention release、runner Git binding、worktree lifecycle／attention／owner publication、cache planner、宿主 bootstrap cargo 与 release recipe 根和独立预期均完成 FILEMAP `verification` 角色、证明根和 execution-plan 操作绑定，并由现有同源整 crate Verus 调用验收；范围和外部接口见 Verus 实施说明 | 全仓覆盖门、存量文件分类、源码／编译结果／实际调用完整绑定、其余逻辑与 SPEC 对应仍未完成；不以当前 scoped 成功宣称本节已验收 |
+| 2.1.1 Verus 规范性权威 | 规范已明确；实现部分完成 | SPEC 统一定义真实使用方、证明与生产调用绑定及 `E_VERUS_COVERAGE`；本地与离线汇总共用 Verus 方法选择及原报告／库／候选源码组合准入，普通成功不产生类型化证明条目；runner 的 paths／scope／status／limits、registration 的 nodes／readiness／consumption、CI collection 的状态源、CI 字面量、projects 语言配对和 filemap 图内核及其独立预期，以及 identifiers、retention release、runner Git binding、worktree lifecycle／attention／owner publication、cache planner、宿主 bootstrap cargo、bootstrap bindings、runner cargo module 与 release recipe 根和独立预期均完成 FILEMAP `verification` 角色、证明根和 execution-plan 操作绑定，并由现有同源整 crate Verus 调用验收；范围和外部接口见 Verus 实施说明 | 全仓覆盖门、存量文件分类、源码／编译结果／实际调用完整绑定、其余逻辑与 SPEC 对应仍未完成；不以当前 scoped 成功宣称本节已验收 |
 | 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。实际配对准入由同源 `verified_languages.rs` 定义并已登记整 crate 根，独立预期核完整字面相等、shell→python 的方向及非法边界。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；owner 字节发布与 stage 原件核验迁入现有 Rust worktree 所有者，构建／资格读取及原件核验也由 Rust bootstrap 承担，旧 Python 实现及专属测试退役；Rust 用例验证现役边界，候选验收另记。Python 构建配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
 | 2.2 routes 回归 helper 迁移 | 已实现，范围有限 | 八项 judge-routes-tests 回归改用 Rust 测试自有子进程 helper。`tests/support/tool.rs` 是明确 Cargo binary 和 FILEMAP compile 输入，原 test:judge-routes-tests 计划沿用 Cargo test。保留字面／空／换行 argv、cwd／环境、回执篡改、错版本／执行物替换、PATH、版本观察复用、循环／预检拒绝、标准调用、汇总身份。真实标准 DELTA 消费沿原报告验证，运行事实不在表内复制 | 仅限此测试所有者。其余跨语言逻辑／helper、外部接口 fixture 登记、完整输入、启用、同判仍缺 |
 | 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入仍缺；有限配对、routes、迁移和快照已实现 |
@@ -65,7 +65,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 7.2 异常链与通用处理 | 部分：原生 IO、真实 judge 启动前／报告有类型传播 | diagnostics::error 包装／导入 chrono-error/v1；NativeIoError 保留原种类／消息／OS 码，LogFailure 共用 IO 模块。Unix 原生 writer 保留只读描述符 EBADF；发布错误保留通道／阶段／原业务、独立次要输出／诊断失败。专属原生／无原生／部分／flush 测试。完整 judge 以 chrono-runner-transport-failure/v1 保留准备原因／码、封存请求／judge／operation，区分未启动，保留子原件，晚期报告发布失败关联原原因。真实 IO、协议／schema／上下文变异、次要发布回归，见[诊断边界](diagnostics.md) | 已有有限 Darwin 原生观察；Linux、其他产品原生适配／类型传播、非 Unix 输出、任意自定义原因序列化、协议采用、持久引用、其他次要失败发布仍缺；完整输入／启用／SPEC 未完成 |
 | 7.3 自我检测 | 部分 | 原接收器描述符耗尽回归保留 spawn 原错／共享观察；资源比较消费登记实测，恢复保留失败／未确认 outcome、逐项清理和原报告。真实文件系统／CLI 回归；最终传输拒绝恢复观察缺失／变化，保留两快照 | 全生产者及历史超时根因；有限故障测试不证明普遍检测 |
 | 7.4 完成归属与等待 | 部分：原生引擎及生命周期等待 | runner 用一个已有内核退出观察器／私有通知。静默期间阻塞到真实事件或原期限，取消／释放／关闭提示沿原 socket；mapping v5 拒绝不兼容嵌套观察器。独立原生计数及原退出／期限／输出／launcher 中断／描述符预算回归 | 外部宿主／调用方通道选择、句柄、丢通道后不重复启动的恢复尚未实现；不控制其他任务，原生 Linux 待验 |
-| 7.5 所有工具本地状态与终态追踪 | 部分：PR 原件与明确接续 | PR v2 保存独立操作身份、配置／调用输入、实际返回的进程原件、命令退出与 PR／mergeCommit 观察；缺留存不派发，发布失败不能成功；已封存本地结果可由明确只读查询接续，新结果封存后释放指定旧恢复引用，Rust 测试核实际回收与其他调用方保留。复用现有输出保留所有者，不建集中账本，范围见[PR 工具](pr.md)；现役候选／原生交付另验 | 逐工具持久记录、跨会话恢复、命令与对象终态分离、发布失败恢复；终态确认且消费者释放后滚动清理，索引／摘要／回执也有限保留，活跃及 unknown 状态继续保护 |
+| 7.5 所有工具本地状态与终态追踪 | 部分：PR 实时原件与明确接续 | PR v2 保存独立操作身份、配置／调用输入、实时启动与部分流原件、接续前核实际原件并恢复封存后中断的输入交接、返回后核对的进程结果、命令退出与 PR／mergeCommit 观察；缺留存不派发，发布失败不能成功；已封存本地结果可由明确只读查询接续，新结果封存后释放指定旧恢复引用，Rust 测试核操作及依赖原件实际回收、其他调用方保留，以及真实外层中断后 unknown 原件继续保护。复用现有输出保留所有者，不建集中账本，范围见[PR 工具](pr.md)；现役候选／原生交付另验 | 逐工具持久记录、跨会话恢复、命令与对象终态分离、发布失败恢复；终态确认且消费者释放后滚动清理，索引／摘要／回执也有限保留，活跃及 unknown 状态继续保护 |
 | 7.5 工作树登记、恢复与清理 | 部分，候选验收待完成 | 现役创建／导入／use／finish／maintain、逐地址登记、内核保护及缓存恢复已有有限实现；候选增加独立 cleanup 阶段、显式维护重试 retained、证据实际不存在时整树回收及同源 Verus 判断／独立边界；复用缓存按明确的 finish／年龄时机选择，主检出释放请求持久绑定缓存代际，原件和物理效果另验；其他客户端与全部本地工作树接入未验收 | 漏登／空记录核对、明确接管、完整交接中断恢复、终态历史有限滚动及本地堆积实际回收；未处置对象不先丢当前记录 |
 | 8 七判官／混合修改 | 部分 | 七个有限生产者及 W 完整链消费者 | 完整宿主输入及启用 |
 | 9 报告／成本 | 部分 | runner full.rs；G full_report_* 核必需字段、配置／实测执行物区别、发现／具名输出来源、null／未解原因、pass／warn／fail／error 退出、旧明确存储／stdout 一致。声明成本报告已实现，有限 routes 工具／projects 证据已有 | 完整工具链／输入和可选测量；未知／冲突不能证明完整治理 |
@@ -163,7 +163,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 74 工作已保存／检查，但仍有消费者或未核落地 | 待实现：目前只有 SPEC §10.2 目标 | 分清源码保存、任务加入、检查结果、实际落地与清理；单个成功或退出不释放其他消费者 |
 | 75 工具返回后会话结束／机器重启 | 部分：PR 通过持久操作路径接续已封存的返回结果；无完整结果的任务恢复及全部工具仍待实现 | 从本地记录恢复原操作及对象、结果和句柄，不重复派发未知工作 |
 | 76 worktree 创建／pr-open 成功，对象仍活跃 | 部分：PR 返回结果分别保存命令终态与 OPEN／CLOSED／MERGED 观察；worktree 及完整接续仍待验收 | 命令终态与对象状态分别追踪，打开不等于合并，创建不等于可删除 |
-| 77 pr-watch 超时／中断／失败／身份不符 | 部分：返回后的等待原件、超时与身份失败已持久保存；实时句柄／部分流、跨中断恢复和旧活跃历史有界轮转待实现 | 保留原观察与失败，未确认对象保持 unknown，沿原通道恢复 |
+| 77 pr-watch 超时／中断／失败／身份不符 | 部分：实时启动／部分流、返回后的等待原件、超时与身份失败已保存；外层中断保护已验，跨中断自动收取原结果和旧活跃历史有界轮转待实现 | 保留原观察与失败，未确认对象保持 unknown，沿原通道恢复 |
 | 78 状态发布中断或副作用后发布失败 | 待实现：§7.5 | 原 intent／部分结果及错误可恢复，不报完整成功、不重复创建 |
 | 79 终态状态达到滚动清理条件 | 部分：PR 的终态和已明确接续旧原件沿既有 diagnostic 窗口回收，Rust 行为测试核物理效果；完整宿主及全工具仍待验收 | 只清理已确认终态、消费者已释放且满足政策的状态；活跃／unknown／恢复状态保护，超限据实报告 |
 | 80 清理终态状态后再次查询 | 部分：PR 接续已回收原件明确拒绝且不派发远端任务；其他工具及完整有限保留待实现 | 索引／摘要／回执也有限保留，已回收结果明确不可取得，不反推成功或取得对象删除权 |
@@ -192,9 +192,11 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 
 ## 当前必要性与数据边界
 
-runner 与 CI 诊断、保留回归中没有现役调用的临时过滤操作已退役。inputs／projects 迁移契约，以及工作树年龄、目录回收和部署排除回归的开发期定向入口也已移除；测试本体及断言继续由原未过滤操作或正式 core／adoption 分组执行。这只移除重复入口，不新增证明或检查路径，也不证明全部对象的必要性已完成。
+runner 与 CI 诊断、保留回归中没有现役调用的临时过滤操作已退役。inputs／projects 迁移契约，以及工作树年龄、目录回收、部署排除和登记原件保护回归的开发期定向入口也已移除；测试本体及断言继续由原未过滤操作或正式 core／adoption 分组执行。这只移除重复入口，不新增证明或检查路径，也不证明全部对象的必要性已完成。
 
 core 只准备当前标准入口实际使用的四项启动工具。没有当前调用方的 `chrono-inputs` 预先获取、构建、安装、共享传递及宿主工具声明已移除，专属绑定和 FILEMAP 边同步删除；inputs／workflow 的真实项目测试和公开发布资产保留。当前公开 bootstrap 和 macOS 原生启动链已实际消费这组工具，交付范围与原件见[对应 PR](https://github.com/ChronoAIProject/chrono-harness/pull/419)。总成本收益未测，全对象必要性审计继续保留未验证项。
+
+inputs、worktree-tests、pr 和 pr-tests 没有现役消费的独立预取动作已移除。原输入安装与 owner 验证消费者已退役，PR 工具没有独立预取要求；当前锁定构建和测试由 Cargo 获取依赖。core／所有者启动仍需要的四项预取继续由原入口负责。
 
 示例、CI、缓存、发布和指令文档保留当前接入方式、协议、使用方及验证限制；历史 CI 运行、环境摘要、测试数量、报告大小和指令载荷读数归原 PR、发布及线上原件，不另维护运行表。原件缺失仍是未验证，删除文档副本不改变历史失败或尚缺的验收。
 

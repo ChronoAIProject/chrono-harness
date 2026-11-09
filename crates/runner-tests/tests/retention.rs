@@ -2250,6 +2250,90 @@ fn policy_migration_does_not_hold_descriptors_for_unrelated_outputs() {
 }
 
 #[test]
+fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_dependencies() {
+    if !isolated_capability_test(
+        "policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_dependencies",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    let previous = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &previous).unwrap();
+    let shared_path = tree(h.path(), "shared-original");
+    fs::write(h.path().join(&shared_path).join("original"), b"preserved").unwrap();
+    let shared = inventory(h.path())
+        .begin_rooted(
+            "fixture",
+            &shared_path,
+            json!({"exit":9}),
+            &["keep-shared".into()],
+        )
+        .unwrap();
+    let shared_id = shared.id().to_owned();
+    shared.complete(json!({"exit":9})).unwrap();
+    let mut paths = vec![shared_path];
+    for n in 0..4 {
+        let path = tree(h.path(), &format!("referencing-{n}"));
+        fs::write(h.path().join(&path).join("original"), b"preserved").unwrap();
+        let publication = inventory(h.path())
+            .begin_rooted("fixture", &path, json!({"exit":0}), &[format!("keep-{n}")])
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(json!({"exit":0})).unwrap();
+        inventory(h.path())
+            .dependencies(&id, &[shared_id.clone()])
+            .unwrap();
+        paths.push(path);
+    }
+    let original = ledger(h.path());
+    let mut objects = Vec::new();
+    for (cursor, output) in original["outputs"].as_array().unwrap().iter().enumerate() {
+        let path = retention_state::object_path(h.path(), output["id"].as_str().unwrap());
+        let mut record: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        record["cursor"] = json!(cursor + 1);
+        fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+        objects.push((path, record));
+    }
+    let roots: Vec<_> = original["roots"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|role| {
+            let path = retention_state::role_path(h.path(), role);
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    policy["producers"]["check-original"] = json!([".chrono-harness/state/preparation/"]);
+    let current = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    assert_eq!(receipt["outputs_preserved"], 5);
+    assert_eq!(receipt["roots_preserved"], 5);
+    assert_eq!(receipt["policy_sha256"], chrono_harness::sha256(&current));
+    let mut after = ledger(h.path());
+    after["policy_sha256"] = original["policy_sha256"].clone();
+    assert_eq!(after, original);
+    for (path, mut expected) in objects {
+        expected["policy_sha256"] = json!(chrono_harness::sha256(&current));
+        let actual: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(actual, expected);
+    }
+    for (path, bytes) in roots {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    for path in paths {
+        assert_eq!(
+            fs::read(h.path().join(path).join("original")).unwrap(),
+            b"preserved"
+        );
+    }
+}
+
+#[test]
 fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes() {
     if !isolated_capability_test(
         "explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes",
@@ -3515,6 +3599,102 @@ fn preserved_original_release_keeps_other_members_of_the_same_consumer() {
 }
 
 #[test]
+fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisited() {
+    if !isolated_capability_test(
+        "maintenance_keeps_shared_role_members_outside_the_reference_component_unvisited",
+    ) {
+        return;
+    }
+    let h = host(256, 128);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(512);
+    policy["max_millis_per_round"] = json!(25);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut ids = Vec::new();
+    let mut originals = Vec::new();
+    for n in 0..65 {
+        let path = format!(".chrono-harness/state/fixtures/original-{n}");
+        fs::write(h.path().join(&path), b"required original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        ids.push(publication.id().to_owned());
+        publication.complete(json!({"exit": 7})).unwrap();
+        originals.push(path);
+    }
+    let report = ".chrono-harness/state/fixtures/obsolete-report";
+    fs::write(h.path().join(report), b"obsolete report").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", report, json!(null))
+        .unwrap();
+    let report_id = publication.id().to_owned();
+    inventory(h.path())
+        .dependencies(&report_id, &[ids[0].clone()])
+        .unwrap();
+    publication.complete(json!({"exit": 0})).unwrap();
+    inventory(h.path())
+        .reference("current-recheck", &ids[..64])
+        .unwrap();
+
+    // An interrupted root transition may have installed conservative attachment
+    // protection before publishing its membership. Neither that attachment nor
+    // current siblings belongs to the selected report's reference component.
+    let role_path = retention_state::role_path(h.path(), "current-recheck");
+    let mut role: Value = serde_json::from_slice(&fs::read(&role_path).unwrap()).unwrap();
+    role["attached"]
+        .as_array_mut()
+        .unwrap()
+        .push(json!(ids[64]));
+    fs::write(&role_path, serde_json::to_vec(&role).unwrap()).unwrap();
+    let role_before = fs::read(&role_path).unwrap();
+    let interrupted_path = retention_state::object_path(h.path(), &ids[64]);
+    let mut interrupted: Value =
+        serde_json::from_slice(&fs::read(&interrupted_path).unwrap()).unwrap();
+    interrupted["roles"] = json!(["current-recheck"]);
+    fs::write(&interrupted_path, serde_json::to_vec(&interrupted).unwrap()).unwrap();
+    let sibling_path = retention_state::object_path(h.path(), &ids[1]);
+    fs::write(&sibling_path, b"unrelated damaged declaration").unwrap();
+    let untouched: Vec<_> = ids[1..]
+        .iter()
+        .map(|id| {
+            let path = retention_state::object_path(h.path(), id);
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    let mut rounds = Vec::new();
+    for _ in 0..4 {
+        let round = inventory(h.path())
+            .maintain_originals(&[report_id.clone()])
+            .unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
+        assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+        rounds.push(round);
+        if !h.path().join(report).exists() {
+            break;
+        }
+    }
+    assert!(!h.path().join(report).exists(), "{rounds:?}");
+    assert_eq!(fs::read(role_path).unwrap(), role_before);
+    for (path, bytes) in untouched {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    for path in originals {
+        assert_eq!(fs::read(h.path().join(path)).unwrap(), b"required original");
+    }
+    let retained: Value =
+        serde_json::from_slice(&fs::read(retention_state::object_path(h.path(), &ids[0])).unwrap())
+            .unwrap();
+    assert_eq!(retained["roles"], json!(["current-recheck"]));
+    assert_eq!(retained["incoming"], json!([]));
+}
+
+#[test]
 fn explicit_maintenance_visits_only_the_named_originals() {
     if !isolated_capability_test("explicit_maintenance_visits_only_the_named_originals") {
         return;
@@ -4476,5 +4656,178 @@ fn sealed_tree_member_qualification_requires_exact_producer_identity_and_bytes()
         inventory(h.path())
             .published_tree_member("fixture", path, &member, &digest, 8)
             .is_err()
+    );
+}
+
+#[test]
+fn publication_input_handoff_requires_sealed_referenced_unchanged_originals() {
+    if !isolated_capability_test(
+        "publication_input_handoff_requires_sealed_referenced_unchanged_originals",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let input = ".chrono-harness/state/fixtures/process.stdout";
+    let unrelated = ".chrono-harness/state/fixtures/other.stdout";
+    for path in [input, unrelated] {
+        assert!(
+            retained_artifacts::retention::publish_pending_original(
+                h.path(),
+                "fixture",
+                path,
+                b"original",
+                json!({})
+            )
+            .unwrap()
+        );
+    }
+    let destination = ".chrono-harness/state/fixtures/domain-result";
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(destination),
+        true,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
+    publication
+        .write_file(
+            &h.path().join(destination).join("result.json"),
+            b"actual result",
+        )
+        .unwrap();
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[destination.into()])
+        .unwrap();
+    inventory(h.path())
+        .dependencies_paths(destination, &[input.into()])
+        .unwrap();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "live result cannot take over a publisher's protection"
+    );
+    publication.complete(json!({"exit_code":0})).unwrap();
+    let reader = retained_artifacts::retention::read_guard(h.path(), destination)
+        .unwrap()
+        .unwrap();
+    let input_reader = retained_artifacts::retention::read_guard(h.path(), input)
+        .unwrap()
+        .unwrap();
+    let before = ledger(h.path())["roots"].clone();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into(), unrelated.into()])
+            .is_err(),
+        "one missing dependency prevents every release"
+    );
+    assert_eq!(ledger(h.path())["roots"], before);
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(
+                destination,
+                &[".chrono-harness/state/fixtures/missing".into()]
+            )
+            .is_err()
+    );
+    let original = h.path().join(input);
+    let saved = h.path().join("retained-inode");
+    fs::rename(&original, &saved).unwrap();
+    fs::write(&original, b"original").unwrap();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "same bytes in a replacement inode are not the producer original"
+    );
+    assert_eq!(ledger(h.path())["roots"], before);
+    fs::remove_file(&original).unwrap();
+    fs::rename(saved, &original).unwrap();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "renaming back does not restore the producer's sealed stamp"
+    );
+    let clean = ".chrono-harness/state/fixtures/clean.stdout";
+    retained_artifacts::retention::publish_pending_original(
+        h.path(),
+        "fixture",
+        clean,
+        b"clean original",
+        json!({}),
+    )
+    .unwrap();
+    inventory(h.path())
+        .dependencies_paths(destination, &[clean.into()])
+        .unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .unwrap();
+    let state = ledger(h.path());
+    let roots = state["roots"].as_object().unwrap();
+    assert_eq!(
+        roots.len(),
+        3,
+        "domain, independent and changed publisher roots remain: {state}"
+    );
+    assert!(roots.contains_key("domain-recovery"));
+    drop(input_reader);
+    drop(reader);
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[])
+        .unwrap();
+    let released_roots = ledger(h.path())["roots"].clone();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .expect("already settled original handoff is a no-op after domain root release");
+    assert_eq!(ledger(h.path())["roots"], released_roots);
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "an outstanding changed original still cannot be released into an unrooted destination"
+    );
+    assert_eq!(ledger(h.path())["roots"], released_roots);
+    retained_artifacts::retention::publish_pending_original(
+        h.path(),
+        "fixture",
+        clean,
+        b"clean original",
+        json!({}),
+    )
+    .unwrap();
+    let pending_roots = ledger(h.path())["roots"].clone();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[clean.into()])
+            .is_err(),
+        "a real pending transfer still requires a protected destination"
+    );
+    assert_eq!(ledger(h.path())["roots"], pending_roots);
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[destination.into()])
+        .unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .unwrap();
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[])
+        .unwrap();
+    maintain_fixture_to(h.path(), 2);
+    assert!(!h.path().join(clean).exists());
+    assert!(
+        h.path().join(input).exists(),
+        "changed original remains protected"
+    );
+    assert!(!h.path().join(destination).exists());
+    assert!(
+        h.path().join(unrelated).exists(),
+        "another publisher remains protected"
     );
 }

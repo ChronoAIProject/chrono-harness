@@ -21,5 +21,10 @@
     "gh": "gh",
     "git": "git"
   },
-  "curl": "/usr/bin/curl"
+  "curl": "/usr/bin/curl",
+  "installation": {
+    "publisher": "publish",
+    "directory": ".chrono-harness/cache/release-publication/",
+    "shell": "/bin/sh"
+  }
 }

@@ -7393,3 +7393,114 @@ jobs:
           path: ".chrono-harness/cache/release-publication/"
           if-no-files-found: error
           include-hidden-files: true
+  linux_install:
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    needs: ["publish","linux_release_frontend"]
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - &chrono_release_download_30
+        name: Download selected original artifact from publish
+        if: ${{ always() && needs.publish.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.publish.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-publication/"
+      - *chrono_release_download_14
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "linux_install"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p '.'
+          printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > 'CHRONO_RELEASE_DEPENDENCIES'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-install-linux' '--install' '.chrono-harness/release/delivery.json' 'linux'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-linux-installation-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-install-linux/report/"
+          if-no-files-found: error
+          include-hidden-files: true
+  macos_install:
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    needs: ["publish","macos_release_frontend"]
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_30
+      - *chrono_release_download_29
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "macos_install"
+          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}
+          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}
+          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
+          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
+          CHRONO_RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p '.'
+          printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > 'CHRONO_RELEASE_DEPENDENCIES'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-install-macos' '--install' '.chrono-harness/release/delivery.json' 'macos'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-macos-installation-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-install-macos/report/"
+          if-no-files-found: error
+          include-hidden-files: true

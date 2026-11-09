@@ -17,7 +17,7 @@ fn main() {
     let operations = fs::read_dir(".chrono-harness/state/pr-operations")
         .unwrap()
         .map(|e| e.unwrap().path())
-        .filter(|p| !p.join("result.json").exists())
+        .filter(|p| p.is_dir() && !p.join("result.json").exists())
         .collect::<Vec<_>>();
     assert_eq!(operations.len(), 1, "one current operation before dispatch");
     let operation = &operations[0];
@@ -37,7 +37,7 @@ fn main() {
         input.as_bytes()
     );
     if step["block_receipt"] == true {
-        fs::create_dir(operation.join(format!("call-{call}.stdout"))).unwrap();
+        fs::create_dir(operation.join(format!("call-{call}.result.json"))).unwrap();
     }
     if step["block_result"] == true {
         fs::create_dir(operation.join("result.json")).unwrap();
@@ -61,6 +61,21 @@ fn main() {
     eprint!("{}", step["stderr"].as_str().unwrap_or(""));
     std::io::stdout().flush().unwrap();
     std::io::stderr().flush().unwrap();
+    #[cfg(unix)]
+    if step["wait_for_interruption"] == true {
+        // A blocking native handshake proves dispatch; the enclosing owner joins
+        // the interrupted PR and this child. No state/file polling in the fixture.
+        let mut ready = std::os::unix::net::UnixStream::connect("ready.sock").unwrap();
+        let bytes =
+            serde_json::to_vec(&json!({"operation":operation.to_str().unwrap(),"call":call}))
+                .unwrap();
+        ready
+            .write_all(&(bytes.len() as u32).to_be_bytes())
+            .unwrap();
+        ready.write_all(&bytes).unwrap();
+        let mut release = [0];
+        ready.read_exact(&mut release).unwrap();
+    }
     if let Some(ms) = step["sleep_ms"].as_u64() {
         std::thread::sleep(std::time::Duration::from_millis(ms));
     }

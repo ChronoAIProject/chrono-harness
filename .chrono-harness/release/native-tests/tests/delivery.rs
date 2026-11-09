@@ -1,5 +1,6 @@
 #[path = "support/recipe.rs"]
 mod fixture;
+use chrono_host_release::publication::{Commands, Reply};
 use chrono_host_release::{
     delivery::{self, Package},
     identity::{Channel, Identity, VerifiedCi},
@@ -8,6 +9,11 @@ use chrono_host_release::{
 };
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs};
+use std::{
+    collections::BTreeSet,
+    os::unix::fs::PermissionsExt,
+    path::{Path, PathBuf},
+};
 
 fn identity() -> Identity {
     Identity {
@@ -27,6 +33,294 @@ fn selected() -> Selection {
         artifact_id: "30".into(),
         run_id: "20".into(),
         attempt: "1".into(),
+    }
+}
+
+struct InstallCommands {
+    calls: Vec<(String, Vec<String>)>,
+    host: PathBuf,
+    identity: Identity,
+    fail: bool,
+    bad: Option<&'static str>,
+}
+impl Commands for InstallCommands {
+    fn body(&mut self, _: &Value) -> Result<String, String> {
+        panic!("installation has no API mutation")
+    }
+    fn execute(&mut self, program: &str, args: &[String]) -> Result<Reply, String> {
+        self.calls.push((program.into(), args.to_vec()));
+        if self.fail {
+            return Ok(Reply {
+                exit: 17,
+                stdout: b"original failed install".to_vec(),
+            });
+        }
+        if program == "/usr/bin/curl" {
+            let destination = &args[args.iter().position(|arg| arg == "--output").unwrap() + 1];
+            fs::write(
+                destination,
+                if self.bad == Some("download") {
+                    b"changed".as_slice()
+                } else {
+                    b"fixture public launcher".as_slice()
+                },
+            )
+            .unwrap();
+        }
+        if program == "/bin/sh" {
+            let mut rows = Vec::new();
+            for name in ["chrono-distribution", "chrono-harness"] {
+                let path = format!(".chrono-harness/bin/{name}");
+                let file = self.host.join(&path);
+                fs::create_dir_all(file.parent().unwrap()).unwrap();
+                fs::write(
+                    &file,
+                    if self.bad == Some("bytes") {
+                        b"changed".as_slice()
+                    } else {
+                        b"fixture executable".as_slice()
+                    },
+                )
+                .unwrap();
+                fs::set_permissions(
+                    &file,
+                    fs::Permissions::from_mode(if self.bad == Some("mode") {
+                        0o644
+                    } else {
+                        0o755
+                    }),
+                )
+                .unwrap();
+                rows.push(json!({"name":name,"path":path,"sha256":chrono_harness::sha256(b"fixture executable"),"size":18}));
+            }
+            fixture::write(
+                &self.host,
+                ".chrono-harness/state/distribution.json",
+                &json!({
+                "schema":"chrono-install-result/v1","version":self.identity.version,
+                "source_commit":if self.bad==Some("source") {"c".repeat(40)} else {self.identity.source_commit.clone()},
+                "source_tree":self.identity.source_tree,"platform":"linux-x86_64","installed":rows}),
+            );
+        }
+        Ok(Reply {
+            exit: 0,
+            stdout: b"original installer output".to_vec(),
+        })
+    }
+}
+
+fn install_fixture(channel: Channel) -> (tempfile::TempDir, Identity, InstallCommands) {
+    let root = tempfile::tempdir().unwrap();
+    let mut id = identity();
+    id.channel = channel;
+    let dir = root.path().join("publication/release");
+    fs::create_dir_all(&dir).unwrap();
+    let mut tools = BTreeMap::new();
+    for name in ["chrono-distribution", "chrono-harness"] {
+        let file = format!("{name}-linux-x86_64");
+        fs::write(dir.join(&file), b"fixture executable").unwrap();
+        tools.insert(
+            name,
+            json!({"file":file,"sha256":chrono_harness::sha256(b"fixture executable"),"size":18}),
+        );
+    }
+    fixture::write(
+        &dir,
+        "release.json",
+        &json!({"schema":"chrono-release/v1","version":id.version,
+        "source_commit":id.source_commit,"source_tree":id.source_tree,"platforms":{"linux-x86_64":tools}}),
+    );
+    fs::write(dir.join("install.sh"), b"fixture public launcher").unwrap();
+    let names = [
+        "release.json",
+        "install.sh",
+        "chrono-distribution-linux-x86_64",
+        "chrono-harness-linux-x86_64",
+    ];
+    let mut assets = BTreeMap::new();
+    for name in names {
+        let (sha, size) = chrono_harness::file_identity(&dir.join(name)).unwrap();
+        assets.insert(name, json!({"sha256":sha,"size":size}));
+    }
+    fs::write(root.path().join("publication/empty"), b"").unwrap();
+    let empty = json!({"path":"empty","sha256":chrono_harness::sha256(b""),"size":0});
+    fixture::write(
+        &root.path().join("publication"),
+        "receipt.json",
+        &json!({
+        "schema":"chrono-release-publication/v1","status":"passed","identity":id,
+        "processes":[{"exit_code":0,"stdout":empty,"stderr":empty}],
+        "result":{"mode":"build","release":{"draft":false,"tag_name":id.version},"assets":assets}}),
+    );
+    let commands = InstallCommands {
+        calls: vec![],
+        host: root.path().join("new host"),
+        identity: id.clone(),
+        fail: false,
+        bad: None,
+    };
+    (root, id, commands)
+}
+
+fn accept(root: &Path, id: &Identity, commands: &mut InstallCommands) -> Result<Value, String> {
+    delivery::install_release(
+        &root.join("publication"),
+        &commands.host.clone(),
+        id,
+        "linux-x86_64",
+        &BTreeSet::from(["chrono-distribution".into(), "chrono-harness".into()]),
+        "/bin/sh",
+        "/usr/bin/curl",
+        "https://example.invalid/fixed/install.sh",
+        commands,
+    )
+}
+
+#[test]
+fn integration_build_installs_all_members_from_its_own_package() {
+    let (root, id, mut commands) = install_fixture(Channel::Build);
+    let receipt = accept(root.path(), &id, &mut commands).unwrap();
+    assert_eq!(receipt["source_commit"], id.source_commit);
+    assert_eq!(commands.calls.len(), 2);
+    let (program, args) = &commands.calls[0];
+    assert_eq!(
+        program,
+        &root
+            .path()
+            .join("publication/release/chrono-distribution-linux-x86_64")
+            .to_str()
+            .unwrap()
+    );
+    assert_eq!(
+        args,
+        &vec![
+            "adopt".to_owned(),
+            "--host-root".into(),
+            commands.host.to_str().unwrap().into(),
+            "--manifest".into(),
+            root.path()
+                .join("publication/release/release.json")
+                .to_str()
+                .unwrap()
+                .into(),
+            "--source-dir".into(),
+            root.path()
+                .join("publication/release")
+                .to_str()
+                .unwrap()
+                .into(),
+            "--tool".into(),
+            "chrono-distribution".into(),
+            "--tool".into(),
+            "chrono-harness".into()
+        ]
+    );
+    assert_eq!(
+        commands.calls[1],
+        (
+            "/bin/sh".into(),
+            vec![
+                commands
+                    .host
+                    .join(".chrono-harness/install.sh")
+                    .to_str()
+                    .unwrap()
+                    .into(),
+                "--host-root".into(),
+                commands.host.to_str().unwrap().into()
+            ]
+        )
+    );
+}
+
+#[test]
+fn public_channels_consume_the_bound_public_installation_launcher() {
+    for channel in [Channel::Preview, Channel::Stable] {
+        let (root, id, mut commands) = install_fixture(channel);
+        accept(root.path(), &id, &mut commands).unwrap();
+        assert_eq!(
+            commands.calls[0],
+            (
+                "/usr/bin/curl".into(),
+                vec![
+                    "--disable".into(),
+                    "--proto".into(),
+                    "=https".into(),
+                    "--proto-redir".into(),
+                    "=https".into(),
+                    "--fail".into(),
+                    "--show-error".into(),
+                    "--location".into(),
+                    "--output".into(),
+                    commands.host.join("install.sh").to_str().unwrap().into(),
+                    "https://example.invalid/fixed/install.sh".into()
+                ]
+            )
+        );
+        assert_eq!(
+            commands.calls[1],
+            (
+                "/bin/sh".into(),
+                vec![
+                    commands.host.join("install.sh").to_str().unwrap().into(),
+                    "--host-root".into(),
+                    commands.host.to_str().unwrap().into()
+                ]
+            )
+        );
+    }
+}
+
+#[test]
+fn failed_commands_and_false_installation_receipts_cannot_pass() {
+    for failure in ["command", "download", "bytes", "mode", "source"] {
+        let (root, id, mut commands) = install_fixture(Channel::Preview);
+        if failure == "command" {
+            commands.fail = true;
+        } else {
+            commands.bad = Some(failure);
+        }
+        assert!(
+            accept(root.path(), &id, &mut commands).is_err(),
+            "{failure}"
+        );
+        assert_eq!(
+            commands.calls.len(),
+            if ["command", "download"].contains(&failure) {
+                1
+            } else {
+                2
+            }
+        );
+    }
+}
+
+#[test]
+fn changed_publication_or_assets_stop_before_installation() {
+    for failure in ["identity", "status", "asset", "original", "existing-host"] {
+        let (root, id, mut commands) = install_fixture(Channel::Preview);
+        let dir = root.path().join("publication");
+        match failure {
+            "identity" | "status" => {
+                let mut report: Value =
+                    serde_json::from_slice(&fs::read(dir.join("receipt.json")).unwrap()).unwrap();
+                if failure == "identity" {
+                    report["identity"]["source_commit"] = json!("c".repeat(40));
+                } else {
+                    report["status"] = json!("failed");
+                }
+                fixture::write(&dir, "receipt.json", &report);
+            }
+            "asset" => fs::write(dir.join("release/install.sh"), b"changed").unwrap(),
+            "original" => fs::write(dir.join("empty"), b"changed original").unwrap(),
+            "existing-host" => fs::create_dir(&commands.host).unwrap(),
+            _ => unreachable!(),
+        }
+        assert!(
+            accept(root.path(), &id, &mut commands).is_err(),
+            "{failure}"
+        );
+        assert!(commands.calls.is_empty(), "{failure}");
     }
 }
 

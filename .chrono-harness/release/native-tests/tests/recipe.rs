@@ -73,11 +73,13 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
                     owner["manifest"].clone()
                 ]
             );
-            let output_arguments = if owner["id"] == "worktree-tests" {
-                assert_eq!(
-                    &argv[argv.len() - 2..],
-                    &[json!("--"), json!("--test-threads=8")]
-                );
+            let test_threads = match owner["id"].as_str().unwrap() {
+                "worktree-tests" => Some("--test-threads=8"),
+                "pr-tests" => Some("--test-threads=2"),
+                _ => None,
+            };
+            let output_arguments = if let Some(test_threads) = test_threads {
+                assert_eq!(&argv[argv.len() - 2..], &[json!("--"), json!(test_threads)]);
                 &argv[4..argv.len() - 2]
             } else {
                 &argv[4..]
@@ -92,6 +94,7 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
     }
     assert_eq!(operations, covered);
     let jobs = workflow["jobs"].as_array().unwrap();
+    let delivery = read(".chrono-harness/release/delivery.json");
     assert_eq!(
         jobs.len(),
         loaded
@@ -102,8 +105,8 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
             .sum::<usize>()
             + loaded.recipe.native_frontends.len()
             + usize::from(workflow["delivery"].is_object())
+            + delivery["packages"].as_object().unwrap().len()
     );
-    let delivery = read(".chrono-harness/release/delivery.json");
     let publisher = jobs
         .iter()
         .find(|j| j["id"] == workflow["delivery"]["publisher"])
@@ -122,6 +125,27 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
     assert_eq!(publisher["needs"], json!(publisher_needs));
     assert_eq!(publisher["downloads"], json!(publisher_downloads));
     assert!(publisher.get("always").is_none_or(|v| v == false));
+    for native in delivery["packages"].as_object().unwrap().keys() {
+        let installation = jobs
+            .iter()
+            .find(|job| job["id"] == format!("{native}_install"))
+            .unwrap();
+        let frontend = &loaded.recipe.native_frontends[native];
+        assert_eq!(
+            installation["needs"],
+            json!([delivery["installation"]["publisher"], frontend.job])
+        );
+        assert_eq!(
+            installation["dependency_metadata"],
+            "CHRONO_RELEASE_DEPENDENCIES"
+        );
+        assert_eq!(
+            installation["downloads"],
+            json!([
+            {"job":delivery["installation"]["publisher"],"directory":delivery["installation"]["directory"]},
+            {"job":frontend.job,"directory":format!("{}/",frontend.directory)}])
+        );
+    }
     for (platform, bindings) in &loaded.recipe.native_jobs {
         let frontend = &loaded.recipe.native_frontends[platform];
         let producer = jobs.iter().find(|j| j["id"] == frontend.job).unwrap();

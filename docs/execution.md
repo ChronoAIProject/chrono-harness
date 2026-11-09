@@ -243,9 +243,11 @@ workflow 对直接完成或验证后的汇总完成应用同一完整迁移／�
 
 ## 历史格式转换与按范围 CI
 
-严格 v1 读取器拒绝 v2。候选读取器把 v1 结构保留为历史数据，不编造计划。内置宿主解码配置是 `chrono-ci-check/v1` 加 FILEMAP v1，登记在 workflow v2 的 `historical_profiles`。每项点名原配置路径、候选脚本及专属测试、精确的畸形旧记录、身份映射和有限歧义修复。已有 `migrations`、`retirements` 保留迁移与替代事实。config 还支持两端明确的 v2 存在／缺失声明，见[输入快照](inputs.md)；projects 支持 v1／v2，judges 使用 v1。
+本仓现役 `workflow.json` 的 `historical_profiles` 为空。旧 `chrono-ci-check/v1` 加 FILEMAP v1 宿主专用解码器、宿主／工具样本、对象获取辅助和迁移测试程序已退役，不再作为当前采用路径。当前 projects 验证使用原始未过滤专属 action；已退出支持的历史断言不构成保留义务。
 
-workflow v3 新增版本选择：`from_versions` 和 `to_versions` 各包含 `config`、`filemap`、`projects`、`judges`、`workflow` 五个正整数。前后映射必须不同，并精确匹配固定端点。其余字段为 `id`、`script`、`test`、`mappings`、`legacy_records`、`ambiguities`。旧标记配置仍按原含义读取。匹配超过一个就失败，未匹配版本配置则不运行解码器；每个变化格式仍须当前迁移声明。只有实际数据转换才要求转换器及已执行测试；只更新当前规则时不写这两个字段，也不增加历史兼容义务。
+通用转换接口供宿主按实际迁移需求显式登记，读取固定历史数据，不编造执行计划，也不执行历史判官。config 的两端明确存在／缺失声明见[输入快照](inputs.md)；projects 支持 v1／v2，judges 使用 v1。
+
+workflow v3 使用明确的版本选择：`from_versions` 和 `to_versions` 各包含 `config`、`filemap`、`projects`、`judges`、`workflow` 五个正整数。前后映射必须不同，并精确匹配固定端点。其余字段为 `id`、`script`、`test`、`mappings`、`legacy_records`、`ambiguities`。workflow v2 的具名 FILEMAP profile 继续按其声明读取。匹配超过一个就失败，未匹配版本配置则不运行解码器；每个变化格式仍须当前迁移声明。只有实际数据转换才要求转换器及已执行测试；只更新当前规则时不写这两个字段，也不增加历史兼容义务。
 
 选中的候选脚本接收 `chrono-historical-decode/v2`，含 `config_path`、`original`、`original_bytes`、`candidate`、`profile`，返回历史解释 `values`、保留旧定义 `historical` 及声明的 `mappings`。历史 `config` 必须仍等于原值，旧输入快照保留原格式与摘要。
 
@@ -253,15 +255,11 @@ workflow v3 新增版本选择：`from_versions` 和 `to_versions` 各包含 `co
 
 使用原生配置选择项时，registration 结果为 `chrono-registration-view/v2`，用 `config_bindings` 保存两端入口／实际配置路径。解码器输入为 `chrono-historical-decode/v3`，新增同一绑定，并按原路径保留 selector 与目标值。身份或原字节缺失／替换时拒绝；后续读取器也按解释结果核对保留解码输入的格式、标准入口和两端绑定。
 
-inputs 消费者会实际执行所选 workflow v1→v3 解码器及专属兼容测试；即使候选已没有旧目标，历史 selector／目标仍保留原值。直接 v1／v2 解码要求不变。
-
-当前本仓直接使用现役 FILEMAP 计划和项目 action。固定历史按范围宿主解码器、宿主／工具样本、对象获取辅助和迁移测试程序都已移除。当前 projects 验证使用原始未过滤专属 action。明确 workflow 移除声明把旧迁移组映射到该 action，但不声称仍保留已经退出支持的历史断言。
+宿主明确选择相应 decoder 时，inputs 消费者实际执行所选解码器及专属兼容测试；即使候选已没有旧目标，历史 selector／目标仍保留原值。没有转换需求时，不额外执行解码器或兼容测试；需要转换的格式变化仍须满足上述迁移要求。
 
 按范围 CI 与完整 workflow 共用 registration 的测试移除结构检查。不设替代项时，必须移除定义测试的项目／脚本及配对生产者，并明确声明生产者也无替代移除。分组别名通过保留的定义所有者解析。替代项必须解析成唯一当前测试，其现计划必须实际通过；移除声明或仅清单汇总都不能批准未执行替代。
 
 单元汇总通过原回执核验全部全局选中的当前操作。`removed`、`retirement_context` 保留已移除身份、旧定义和声明成本，空成本仍未知。仍存测试可以更新方法，不必永久保留已删除操作。
-
-**产品与政策曾同步修改：**按范围 CI 和独立 routes 不再要求保留每项旧操作，本仓也明确移除过时解码器与迁移组。结构拒绝和当前替代项真实执行仍保留。验证范围包括共用结构边界、真实按范围成功／失败、独立替代执行、既有 workflow 消费者，以及受影响两端的标准／真实 CI 变更检查。总验证成本未测。
 
 通用转换和迁移接口使用合成、自包含 workflow 样本，验证明确映射、有序操作、实际转换回执和失败输入，不获取历史仓库，也不提供生产兼容路径。当前演进和移除证明归[工作流检查](workflow.md)。
 

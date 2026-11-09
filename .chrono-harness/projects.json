@@ -1867,16 +1867,6 @@
             "--manifest-path",
             "crates/inputs/Cargo.toml"
           ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.inputs",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/inputs/Cargo.toml"
-          ]
         }
       },
       "test_project": "inputs-tests",
@@ -2119,21 +2109,6 @@
       "lockfile": "crates/worktree-tests/Cargo.lock",
       "root": "crates/worktree-tests",
       "actions": {
-        "execute_enrollment_originals": {
-          "operation": "test.worktree.enrollment-originals",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml",
-            "--test",
-            "creation",
-            "automatic::enrollment_originals_",
-            "--",
-            "--test-threads=1"
-          ]
-        },
         "format_check": {
           "operation": "fmt.worktree-tests",
           "tool": "cargo",
@@ -2198,16 +2173,6 @@
           "tool": "cargo",
           "argv": [
             "fmt",
-            "--manifest-path",
-            "crates/worktree-tests/Cargo.toml"
-          ]
-        },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.worktree-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml"
           ]
@@ -2693,16 +2658,6 @@
             "crates/pr/Cargo.toml"
           ]
         },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.pr",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/pr/Cargo.toml"
-          ]
-        },
         "lockfile": {
           "operation": "lockfile.pr",
           "tool": "cargo",
@@ -2753,16 +2708,6 @@
             "crates/pr-tests/Cargo.toml"
           ]
         },
-        "inputs_fetch": {
-          "operation": "inputs.fetch.pr-tests",
-          "tool": "cargo",
-          "argv": [
-            "fetch",
-            "--locked",
-            "--manifest-path",
-            "crates/pr-tests/Cargo.toml"
-          ]
-        },
         "execute": {
           "operation": "test.pr-tests",
           "tool": "cargo",
@@ -2770,7 +2715,9 @@
             "test",
             "--locked",
             "--manifest-path",
-            "crates/pr-tests/Cargo.toml"
+            "crates/pr-tests/Cargo.toml",
+            "--",
+            "--test-threads=2"
           ]
         },
         "lockfile": {
@@ -2887,6 +2834,32 @@
             ".chrono-harness/cache/release-publication",
             "--deliver",
             ".chrono-harness/release/delivery.json"
+          ]
+        },
+        "install_linux": {
+          "operation": "release.install-linux",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/release/consume.sh",
+            ".",
+            ".chrono-harness/cache/release-frontend",
+            ".chrono-harness/cache/release-install-linux",
+            "--install",
+            ".chrono-harness/release/delivery.json",
+            "linux"
+          ]
+        },
+        "install_macos": {
+          "operation": "release.install-macos",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/release/consume.sh",
+            ".",
+            ".chrono-harness/cache/release-frontend",
+            ".chrono-harness/cache/release-install-macos",
+            "--install",
+            ".chrono-harness/release/delivery.json",
+            "macos"
           ]
         }
       },
