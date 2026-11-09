@@ -3020,6 +3020,126 @@ fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_mi
 }
 
 #[test]
+fn declared_policy_migration_isolates_other_bindings_and_protects_forward_dependencies() {
+    if !isolated_capability_test(
+        "declared_policy_migration_isolates_other_bindings_and_protects_forward_dependencies",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+    fs::write(h.path().join("previous-policy.json"), &previous).unwrap();
+    let mut originals = Vec::new();
+    for name in ["dependency", "selected"] {
+        let path = tree(h.path(), name);
+        fs::write(h.path().join(&path).join("original"), name.as_bytes()).unwrap();
+        let publication = inventory(h.path())
+            .begin_rooted("fixture", &path, json!({"exit":9}), &[name.into()])
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(json!({"exit":9})).unwrap();
+        originals.push((id, path));
+    }
+    inventory(h.path())
+        .dependencies(&originals[1].0, &[originals[0].0.clone()])
+        .unwrap();
+    let dependency_reader = inventory(h.path()).consume(&originals[0].0).unwrap();
+
+    let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    let other_policy = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &other_policy).unwrap();
+    let unrelated_path = tree(h.path(), "other-old-policy");
+    let unrelated = inventory(h.path())
+        .begin("fixture", &unrelated_path, json!({"exit":0}))
+        .unwrap();
+    let unrelated_id = unrelated.id().to_owned();
+    unrelated.complete(json!({"exit":0})).unwrap();
+    policy["keep_seconds"] = json!(7200);
+    let current = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+    let before = ledger(h.path());
+    let mut request = json!({"operation":"migrate-policy","previous_policy":{"path":"previous-policy.json","sha256":chrono_harness::sha256(&previous)},"originals":[originals[1].0]});
+
+    let blocked = consumer_call(h.path(), request.clone());
+    assert_eq!(blocked.exit_code, 2);
+    assert!(blocked.stderr.contains("live output"), "{}", blocked.stderr);
+    assert_eq!(ledger(h.path()), before);
+    drop(dependency_reader);
+    for invalid in [
+        json!([]),
+        json!([originals[1].0, originals[1].0]),
+        json!(["missing"]),
+        json!(vec!["missing"; 33]),
+    ] {
+        request["originals"] = invalid;
+        assert_eq!(consumer_call(h.path(), request.clone()).exit_code, 2);
+        assert_eq!(ledger(h.path()), before);
+    }
+    request["originals"] = json!([originals[1].0]);
+    let unrelated_record = retention_state::object_path(h.path(), &unrelated_id);
+    let unrelated_bytes = fs::read(&unrelated_record).unwrap();
+    let mut selected_records = Vec::new();
+    for (id, _) in &originals {
+        let path = retention_state::object_path(h.path(), id);
+        let record: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        selected_records.push((path, record));
+    }
+    let roles: Vec<_> = before["roots"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|role| {
+            let path = retention_state::role_path(h.path(), role);
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    let migrated = consumer_call(h.path(), request.clone());
+    assert_eq!(migrated.exit_code, 0, "{}", migrated.stderr);
+    let receipt: Value = serde_json::from_str(&migrated.stdout).unwrap();
+    assert_eq!(receipt["outputs_preserved"], 2);
+    assert_eq!(receipt["scope"]["kind"], "declared-components");
+    assert_eq!(receipt["scope"]["complete"], false);
+    assert_eq!(fs::read(&unrelated_record).unwrap(), unrelated_bytes);
+    for (path, mut expected) in selected_records {
+        expected["policy_sha256"] = json!(chrono_harness::sha256(&current));
+        let actual: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(actual, expected);
+    }
+    for (path, bytes) in roles {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    for (_, path) in &originals {
+        assert_eq!(
+            fs::read(h.path().join(path).join("original")).unwrap(),
+            path.rsplit('/').next().unwrap().as_bytes()
+        );
+    }
+    assert_eq!(consumer_call(h.path(), request.clone()).exit_code, 0);
+    let current_reader = inventory(h.path()).consume(&originals[0].0).unwrap();
+    let blocked = consumer_call(h.path(), request.clone());
+    assert_eq!(blocked.exit_code, 2);
+    assert!(blocked.stderr.contains("live output"), "{}", blocked.stderr);
+    drop(current_reader);
+
+    // A third binding inside the selected forward dependency set still fails.
+    let dependency_record = retention_state::object_path(h.path(), &originals[0].0);
+    let mut dependency: Value =
+        serde_json::from_slice(&fs::read(&dependency_record).unwrap()).unwrap();
+    dependency["policy_sha256"] = json!(chrono_harness::sha256(&other_policy));
+    fs::write(&dependency_record, serde_json::to_vec(&dependency).unwrap()).unwrap();
+    let blocked = consumer_call(h.path(), request);
+    assert_eq!(blocked.exit_code, 2);
+    assert!(
+        blocked.stderr.contains("migration required"),
+        "{}",
+        blocked.stderr
+    );
+    assert_eq!(fs::read(&unrelated_record).unwrap(), unrelated_bytes);
+}
+
+#[test]
 fn explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion() {
     if !isolated_capability_test(
         "explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion",
