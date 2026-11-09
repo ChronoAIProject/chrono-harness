@@ -685,6 +685,33 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
 }
 
 impl Manager {
+    fn check_absent_enrollment(
+        &self,
+        entry: &Entry,
+        inventory: &[BTreeMap<String, String>],
+    ) -> Result<(), String> {
+        absolute(&entry.path, true)?;
+        absolute(&entry.attachment.metadata, true)?;
+        if entry.cache_only
+            || !matches!(entry.enrollment["kind"].as_str(), Some("birth" | "import"))
+            || !retirement::absent(&entry.path)?
+            || !retirement::absent(&entry.attachment.metadata)?
+        {
+            return Err(format!(
+                "owner deployment affected enrollment {} has a partial or unknown attachment; preserve selected bytes",
+                entry.path.display()
+            ));
+        }
+        let branch = format!("refs/heads/{}", entry.branch);
+        if inventory.iter().any(|row| {
+            Path::new(&row["worktree"]) == entry.path || row.get("branch") == Some(&branch)
+        }) {
+            return Err("owner deployment missing enrollment has another Git attachment; preserve selected bytes".into());
+        }
+        self.policy_binding(entry)?;
+        self.git_locks(entry, None)
+    }
+
     pub(super) fn deploy_owner(
         &mut self,
         r: &mut Runner,
@@ -744,17 +771,6 @@ impl Manager {
         }
         let mut exclusions = Vec::new();
         for entry in &entries {
-            if inventory
-                .iter()
-                .filter(|row| Path::new(&row["worktree"]) == entry.path)
-                .count()
-                != 1
-            {
-                return Err(format!(
-                    "owner deployment affected enrollment {} is unavailable in original Git inventory; preserve selected bytes",
-                    entry.path.display()
-                ));
-            }
             let lease = self.lease(entry, true)?.ok_or_else(|| format!(
                 "owner deployment affected enrollment {} has live inherited consumers; preserve selected bytes", entry.path.display()))?;
             if !entry.uses.is_empty() {
@@ -763,7 +779,19 @@ impl Manager {
                     entry.path.display()
                 ));
             }
-            exclusions.push((entry, r.oid(&entry.path, "HEAD")?, lease));
+            let head = match inventory
+                .iter()
+                .filter(|row| Path::new(&row["worktree"]) == entry.path)
+                .count()
+            {
+                1 => Some(r.oid(&entry.path, "HEAD")?),
+                0 => {
+                    self.check_absent_enrollment(entry, &inventory)?;
+                    None
+                }
+                _ => return Err("owner deployment enrollment inventory is ambiguous".into()),
+            };
+            exclusions.push((entry, head, lease));
         }
         let ledger_path = self.record_directory.join("ledger.json");
         let ledger_bytes = fs::read(&ledger_path).map_err(|e| e.to_string())?;
@@ -791,12 +819,13 @@ impl Manager {
             for (entry, head, lease) in &exclusions {
                 lease.stable()?;
                 self.birth_ready(entry)?;
-                if entry.path == root {
-                    self.check_entry(r, entry, head, None)?;
-                } else {
-                    // Publication excludes these consumers without using their
-                    // caches or adopting their independently owned policies.
-                    self.check_attachment(r, entry, head, None)?;
+                match head {
+                    Some(head) if entry.path == root => self.check_entry(r, entry, head, None)?,
+                    Some(head) => {
+                        // Exclude consumers without using their caches or policies.
+                        self.check_attachment(r, entry, head, None)?;
+                    }
+                    None => self.check_absent_enrollment(entry, &inventory)?,
                 }
             }
             Ok(())
@@ -856,6 +885,7 @@ impl Manager {
             "coordinator_root":self.inputs.policy.coordinator_root,"common":self.ledger.common,
             "enrollments":exclusions.iter().map(|(entry, head, lease)| value!({
                 "path":entry.path,"attachment":entry.attachment,"head":head,
+                "availability":if head.is_some() { "present" } else { "absent" },
                 "enrollment":{"path":entry.ownership.as_ref().unwrap().path,"id":lease.id()}
             })).collect::<Vec<_>>()});
         report["owner_deployment_identity"] = owner_identity.clone();

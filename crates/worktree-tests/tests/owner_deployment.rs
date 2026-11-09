@@ -379,6 +379,148 @@ fn linked(h: &Host) -> PathBuf {
     target
 }
 
+fn externally_removed_linked(h: &Host) -> (PathBuf, Value) {
+    let target = linked(h);
+    let entry = h.ledger()["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|entry| entry["path"] == value!(target))
+        .unwrap()
+        .clone();
+    git(
+        &h.root,
+        &["worktree", "remove", "--force", target.to_str().unwrap()],
+    );
+    assert!(fs::symlink_metadata(&target).is_err());
+    assert!(fs::symlink_metadata(entry["attachment"]["metadata"].as_str().unwrap()).is_err());
+    (target, entry)
+}
+
+#[test]
+fn owner_deployment_preserves_absent_enrollment_without_claiming_completion() {
+    let (h, exe, path, sha) = fixture();
+    let (target, entry) = externally_removed_linked(&h);
+    let ledger_path = h.ledger_path(&target);
+    let ledger = fs::read(&ledger_path).unwrap();
+    let birth = &entry["enrollment"]["sealed_receipt"];
+    let birth_path = h.root.join(birth["path"].as_str().unwrap());
+    let birth_bytes = fs::read(&birth_path).unwrap();
+    let branch = format!("refs/heads/{}", entry["branch"].as_str().unwrap());
+    let retained_head = git(&h.root, &["rev-parse", &branch]);
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    let exclusion = report["owner_deployment"]["original_protection"]["enrollments"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .unwrap();
+    assert_eq!(exclusion["availability"], "absent");
+    assert!(exclusion["head"].is_null());
+    assert_eq!(exclusion["attachment"], entry["attachment"]);
+    assert_eq!(fs::read(&ledger_path).unwrap(), ledger);
+    assert_eq!(fs::read(&birth_path).unwrap(), birth_bytes);
+    assert_eq!(git(&h.root, &["rev-parse", &branch]), retained_head);
+    let (code, status, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{status} {error}");
+    let observed = status["worktree_status"]["worktrees"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target))
+        .unwrap();
+    assert_eq!(observed["work_state"], "unknown");
+    assert_eq!(observed["physical_present"], false);
+    assert_eq!(observed["git_registered"], false);
+    assert_eq!(observed["attention_required"], true);
+    assert!(observed["terminal_receipt"].is_null());
+    assert_eq!(fs::read(&ledger_path).unwrap(), ledger);
+}
+
+#[test]
+fn owner_deployment_rejects_partial_or_replaced_absent_attachment() {
+    for fault in ["checkout", "metadata", "dangling-symlink"] {
+        let (h, exe, path, sha) = fixture();
+        let (target, entry) = externally_removed_linked(&h);
+        match fault {
+            "checkout" => fs::create_dir(&target).unwrap(),
+            "metadata" => {
+                fs::create_dir_all(entry["attachment"]["metadata"].as_str().unwrap()).unwrap()
+            }
+            _ => std::os::unix::fs::symlink(h.parent.join("unavailable-target"), &target).unwrap(),
+        }
+        let ledger = fs::read(h.ledger_path(&target)).unwrap();
+        let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+        let bytes = fs::read(&selected).unwrap();
+        let identity = chrono_harness::ownership::identity(&selected).unwrap();
+        let (code, report, error) = deploy(&h, &exe, &path, &sha);
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        assert_eq!(fs::read(&selected).unwrap(), bytes);
+        assert_eq!(
+            chrono_harness::ownership::identity(&selected).unwrap(),
+            identity
+        );
+        assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
+    }
+}
+
+#[test]
+fn owner_deployment_rejects_absent_enrollment_with_branch_attached_elsewhere() {
+    let (h, exe, path, sha) = fixture();
+    let (target, entry) = externally_removed_linked(&h);
+    let replacement = h.parent.join("replacement-linked");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            replacement.to_str().unwrap(),
+            entry["branch"].as_str().unwrap(),
+        ],
+    );
+    let (code, report, error) = h.auto("import", &["--path", replacement.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    let ledger = fs::read(h.ledger_path(&target)).unwrap();
+    let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+    let bytes = fs::read(&selected).unwrap();
+    let identity = chrono_harness::ownership::identity(&selected).unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("another Git attachment"),
+        "{report} {error}"
+    );
+    assert_eq!(fs::read(&selected).unwrap(), bytes);
+    assert_eq!(
+        chrono_harness::ownership::identity(&selected).unwrap(),
+        identity
+    );
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
+}
+
+#[test]
+fn owner_deployment_excludes_absent_enrollment_inherited_descendants_until_join() {
+    let (h, exe, path, sha) = fixture();
+    let (target, entry) = externally_removed_linked(&h);
+    let child = inherited_holder(&h, &entry);
+    let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+    let bytes = fs::read(&selected).unwrap();
+    let ledger = fs::read(h.ledger_path(&target)).unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    join_holder(child);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("live inherited consumers"),
+        "{report}"
+    );
+    assert_eq!(fs::read(&selected).unwrap(), bytes);
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
+}
+
 #[test]
 fn owner_deployment_excludes_main_and_linked_inherited_descendants_until_join() {
     for linked_holder in [false, true] {

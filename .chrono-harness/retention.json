@@ -23,6 +23,9 @@
     ],
     "lifecycle-state-original": [
       ".chrono-harness/state/automatic-cleanup-v2/"
+    ],
+    "fixture-retirement": [
+      ".chrono-harness/state/temporary-hosts/worktree/body-inputs/"
     ]
   },
   "keep_seconds": 0,
