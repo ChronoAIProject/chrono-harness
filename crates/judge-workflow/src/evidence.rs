@@ -1,4 +1,5 @@
 use crate::verified_evidence;
+use crate::verified_execution;
 use chrono_harness::{
     ProcessResult, sha256,
     wire::{self, Request, Response, Status},
@@ -62,17 +63,19 @@ fn execution_inner(plan: &Execution, results: &Results, contribution: bool) -> R
     plan.validate()?;
     let selected: Vec<_> = plan.selected.keys().cloned().collect();
     if let Some(completion) = &results.completion {
-        if completion.schema != "chrono-collected-completion/v1"
-            || completion.status != "passed"
-            || results.scope.as_deref() != Some("collect")
-            || completion.global_selected != selected
-            || !results.executed.is_empty()
-            || !results.blocked.is_empty()
-            || results.plan != plan.identity
-            || results.selected != selected
-            || results.tests.keys().cloned().collect::<Vec<_>>() != selected
-            || results.tests.values().any(|status| status != "passed")
-        {
+        let admitted = verified_execution::admit_collected(
+            completion.schema == "chrono-collected-completion/v1",
+            completion.status == "passed",
+            results.scope.as_deref() == Some("collect"),
+            completion.global_selected == selected,
+            results.executed.is_empty(),
+            results.blocked.is_empty(),
+            results.plan == plan.identity,
+            results.selected == selected,
+            results.tests.keys().cloned().collect::<Vec<_>>() == selected
+                && results.tests.values().all(|status| status == "passed"),
+        );
+        if !admitted {
             return Err("E_WORKFLOW_EVIDENCE: invalid collected completion".into());
         }
         let required: BTreeSet<_> = completion.required_units.iter().cloned().collect();
@@ -97,13 +100,15 @@ fn execution_inner(plan: &Execution, results: &Results, contribution: bool) -> R
         }
         return Ok(());
     }
-    if results.plan != plan.identity
-        || (results.scope.is_some() && !contribution)
-        || results.selected != selected
-        || results.tests.keys().cloned().collect::<Vec<_>>() != selected
-        || !results.passed()
-        || results.executed.len() != plan.operations.len()
-    {
+    let admitted = verified_execution::admit_execution(
+        results.plan == plan.identity,
+        results.scope.is_none() || contribution,
+        results.selected == selected,
+        results.tests.keys().cloned().collect::<Vec<_>>() == selected,
+        results.passed(),
+        results.executed.len() == plan.operations.len(),
+    );
+    if !admitted {
         return Err("E_WORKFLOW_EVIDENCE: incomplete test execution".into());
     }
     let mut seen = BTreeSet::new();
