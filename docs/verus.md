@@ -37,6 +37,13 @@ filemap 图内核及其独立预期也分别注册 `verify.ci-literals`、
 `verification` 声明，不新增证明源或重复实现。整 crate 证明、行为测试和实际
 生产调用仍按同次 DELTA 验收，局部结果不能代替全仓覆盖门。
 
+本批继续补齐宿主原生边界的既有证明根：`.chrono-harness/ci/native-tests/tests/verified_cargo.rs`
+登记 `verify.bootstrap-cargo-tests`，release 原生实现及独立预期登记
+`verify.release-recipe`／`verify.release-recipe-tests`。三项操作均已存在于 execution plan，
+FILEMAP 现在把源码、证明根和实际 Rust 测试消费者绑定到同一登记；本批不新增证明源、工具或
+Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA 验收，不能把宿主局部绑定当作
+全仓覆盖完成。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取

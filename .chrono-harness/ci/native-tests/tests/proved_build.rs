@@ -415,6 +415,7 @@ fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
     assert_eq!(release["consumer"], declaration["consumer"]);
     assert_eq!(release["original_count"], 1);
     assert_eq!(release["effects"], "consumer-root-release-only");
+    assert_eq!(release["disposal"], "not-attempted");
     assert_eq!(release["completion"], "not-established");
     write(
         &f.root.join(request_path),
@@ -431,6 +432,17 @@ fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
     ]);
     assert_eq!(maintained.exit_code, 0, "{}", maintained.stderr);
     let maintenance: Value = serde_json::from_str(&maintained.stdout).unwrap();
+    let id = declaration["originals"][0]["id"].as_str().unwrap();
+    let busy = json!({"id":id,"reason":format!("retention output metadata is busy: {id}")});
+    if maintenance["accounting_errors"] == json!([busy.clone()]) {
+        // 非阻塞维护可拒绝这个明确对象；拒绝时必须保留原件和未知计数。
+        assert_eq!(maintenance["protected"], json!([busy]));
+        assert_eq!(maintenance["scope"]["complete"], false);
+        assert_eq!(maintenance["remaining_outputs"], Value::Null);
+        assert_eq!(maintenance["disposed"], json!([]));
+        assert!(f.root.join(notice["path"].as_str().unwrap()).is_dir());
+        return;
+    }
     assert_eq!(maintenance["accounting_errors"], json!([]));
     // 25 ms 也可能在访问对象前用完；释放不承诺同轮开始或完成删除。
     if f.root.join(notice["path"].as_str().unwrap()).exists() {
