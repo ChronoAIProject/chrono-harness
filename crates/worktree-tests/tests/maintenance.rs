@@ -133,7 +133,7 @@ fn maintenance_recovers_failed_hook_without_rewriting_original_failure() {
 
 #[test]
 fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it() {
-    if !isolated_capability::isolated_capability_test(
+    if !super::isolated_capability::isolated_capability_test(
         "maintenance::recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it",
     ) {
         return;
