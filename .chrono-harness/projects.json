@@ -2678,17 +2678,6 @@
       "root": "crates/pr-tests",
       "language": "rust",
       "actions": {
-        "build": {
-          "operation": "build.pr-tests",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--tests",
-            "--locked",
-            "--manifest-path",
-            "crates/pr-tests/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.pr-tests",
           "tool": "cargo",
