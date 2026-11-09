@@ -9,6 +9,44 @@ pub(crate) const MARKER: &str = "# chrono-ci: owned github-job-gating/v1\n";
 pub const DETECTION_ENV: &str = "CHRONO_CI_DETECTION";
 pub const NEEDS_ENV: &str = "CHRONO_CI_NEEDS";
 
+/// 已由 needs 确认成功的依赖，继续核对所选原生执行的终态。
+pub fn completed_native_job(
+    listed: &Value,
+    mut read: impl FnMut(u64) -> Result<Value, String>,
+) -> Result<Value, String> {
+    let failed = || "latest native execution did not uniquely succeed".to_string();
+    if listed["status"] == "completed" {
+        return if listed["conclusion"] == "success" {
+            Ok(listed.clone())
+        } else {
+            Err(failed())
+        };
+    }
+    // needs has already succeeded. A nonterminal list row can lag the exact
+    // job resource; read that one resource once, without retrying failures.
+    if !matches!(
+        listed["status"].as_str(),
+        Some("queued" | "in_progress" | "waiting" | "pending" | "requested")
+    ) || listed.get("conclusion") != Some(&Value::Null)
+    {
+        return Err(failed());
+    }
+    let id = listed["id"]
+        .as_u64()
+        .filter(|id| *id > 0)
+        .ok_or_else(failed)?;
+    let detail = read(id)?;
+    if ["id", "run_id", "run_attempt", "head_sha", "name"]
+        .iter()
+        .any(|field| detail.get(*field) != listed.get(*field))
+        || detail["status"] != "completed"
+        || detail["conclusion"] != "success"
+    {
+        return Err(failed());
+    }
+    Ok(detail)
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {

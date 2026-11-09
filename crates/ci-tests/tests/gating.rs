@@ -3,6 +3,108 @@ use super::*;
 
 const PROVIDER: &str = ".chrono-harness/ci/units.json";
 
+fn native_job_detail(status: &str, conclusion: Value) -> Value {
+    json!({"id":91,"run_id":101,"run_attempt":2,"head_sha":"a".repeat(40),
+        "name":"chrono / alpha","status":status,"conclusion":conclusion})
+}
+
+#[test]
+fn stale_running_job_list_uses_one_bound_terminal_detail() {
+    for status in ["queued", "in_progress", "waiting", "pending", "requested"] {
+        let listed = native_job_detail(status, Value::Null);
+        let completed = native_job_detail("completed", json!("success"));
+        let mut calls = Vec::new();
+        let actual = chrono_ci::gating::completed_native_job(&listed, |id| {
+            calls.push(id);
+            Ok(completed.clone())
+        })
+        .unwrap();
+        assert_eq!(actual, completed);
+        assert_eq!(calls, vec![91]);
+        assert_eq!(listed["status"], status);
+    }
+}
+
+#[test]
+fn terminal_job_lists_keep_their_current_success_or_failure() {
+    for conclusion in ["success", "failure", "cancelled", "skipped"] {
+        let listed = native_job_detail("completed", json!(conclusion));
+        let result = chrono_ci::gating::completed_native_job(&listed, |_| {
+            panic!("terminal list must not be retried")
+        });
+        assert_eq!(result.is_ok(), conclusion == "success");
+    }
+    for listed in [
+        native_job_detail("unknown", Value::Null),
+        native_job_detail("in_progress", json!("failure")),
+        native_job_detail("in_progress", json!("success")),
+        {
+            let mut job = native_job_detail("in_progress", Value::Null);
+            job.as_object_mut().unwrap().remove("conclusion");
+            job
+        },
+        {
+            let mut job = native_job_detail("in_progress", Value::Null);
+            job["id"] = json!(0);
+            job
+        },
+    ] {
+        assert!(
+            chrono_ci::gating::completed_native_job(&listed, |_| panic!(
+                "malformed list must fail before detail"
+            ))
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn nonterminal_or_failed_detail_never_becomes_a_pass() {
+    for (status, conclusion) in [
+        ("in_progress", Value::Null),
+        ("completed", json!("failure")),
+        ("completed", json!("cancelled")),
+        ("completed", json!("skipped")),
+    ] {
+        let mut calls = 0;
+        let result = chrono_ci::gating::completed_native_job(
+            &native_job_detail("in_progress", Value::Null),
+            |id| {
+                assert_eq!(id, 91);
+                calls += 1;
+                Ok(native_job_detail(status, conclusion.clone()))
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(calls, 1);
+    }
+}
+
+#[test]
+fn job_detail_must_keep_the_selected_identity_and_original_error() {
+    for field in ["id", "run_id", "run_attempt", "head_sha", "name"] {
+        let mut detail = native_job_detail("completed", json!("success"));
+        detail[field] = if ["id", "run_id", "run_attempt"].contains(&field) {
+            json!(999)
+        } else {
+            json!("changed")
+        };
+        let result = chrono_ci::gating::completed_native_job(
+            &native_job_detail("in_progress", Value::Null),
+            |_| Ok(detail.clone()),
+        );
+        assert!(result.is_err(), "{field}");
+    }
+    assert_eq!(
+        chrono_ci::gating::completed_native_job(
+            &native_job_detail("in_progress", Value::Null),
+            |_| Err("original transport failure".into())
+        )
+        .unwrap_err(),
+        "original transport failure"
+    );
+}
+
 fn gating() -> Value {
     json!({"schema":"chrono-job-gating/v1","detector":{"runs_on":"ubuntu-24.04","timeout_minutes":10,"bootstrap":["host-tools-only"],"sparse_checkout":[".chrono-harness/", ".github/workflows/collection.yml"]}})
 }
