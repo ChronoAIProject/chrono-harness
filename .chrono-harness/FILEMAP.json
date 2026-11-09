@@ -1530,7 +1530,6 @@
       "operations": [
         "fmt.pr",
         "fmt.pr-tests",
-        "build.pr",
         "test.pr-tests"
       ],
       "timeout_seconds": 600,
