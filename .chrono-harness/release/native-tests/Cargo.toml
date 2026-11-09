@@ -6,6 +6,14 @@ publish = false
 autotests = false
 
 [[test]]
+name = "publication"
+path = "tests/publication.rs"
+
+[[test]]
+name = "delivery"
+path = "tests/delivery.rs"
+
+[[test]]
 name = "identity"
 path = "tests/identity.rs"
 
