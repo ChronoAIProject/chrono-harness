@@ -32,18 +32,34 @@ pub fn completed_native_job(
     let fields = ["id", "run_id", "run_attempt", "head_sha", "name"]
         .map(|field| -> Result<_, String> {
             Ok((
-                detail.get(field).map(serde_json::to_vec).transpose().map_err(|e| e.to_string())?,
-                listed.get(field).map(serde_json::to_vec).transpose().map_err(|e| e.to_string())?,
+                detail
+                    .get(field)
+                    .map(serde_json::to_vec)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+                listed
+                    .get(field)
+                    .map(serde_json::to_vec)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
             ))
         })
         .into_iter()
         .collect::<Result<Vec<_>, _>>()?;
-    let observed = fields.iter().map(|(a,b)| (a.as_deref(),b.as_deref())).collect::<Vec<_>>();
+    let observed = fields
+        .iter()
+        .map(|(a, b)| (a.as_deref(), b.as_deref()))
+        .collect::<Vec<_>>();
     if !policy::native_job_binding(&observed)
-        || !matches!(policy::native_job_state(
-            detail["status"].as_str(), detail["conclusion"].as_str(),
-            detail.get("conclusion").map(Value::is_null), detail["id"].as_u64(),
-        ), NativeJobState::Succeeded)
+        || !matches!(
+            policy::native_job_state(
+                detail["status"].as_str(),
+                detail["conclusion"].as_str(),
+                detail.get("conclusion").map(Value::is_null),
+                detail["id"].as_u64(),
+            ),
+            NativeJobState::Succeeded
+        )
     {
         return Err(failed());
     }

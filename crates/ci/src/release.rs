@@ -110,7 +110,10 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
         let index = super::verified_literals::publisher_index(&ids, &delivery.publisher)
             .ok_or("unregistered release publisher")?;
         let publisher = &c.jobs[index];
-        if !super::verified_literals::publisher_dependencies(publisher.needs.len(), publisher.always) {
+        if !super::verified_literals::publisher_dependencies(
+            publisher.needs.len(),
+            publisher.always,
+        ) {
             return Err("publisher requires successful declared dependencies".into());
         }
     }
@@ -382,7 +385,10 @@ fn render_unit<'a>(
         condition.push_str(" && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))");
     }
     output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
-    if super::verified_literals::delivery_publisher(c.delivery.as_ref().map(|d| d.publisher.as_str()), &job.id) {
+    if super::verified_literals::delivery_publisher(
+        c.delivery.as_ref().map(|d| d.publisher.as_str()),
+        &job.id,
+    ) {
         output.push_str("    permissions:\n      contents: write\n      actions: read\n");
     }
     if !job.needs.is_empty() {
@@ -460,7 +466,10 @@ fn render_unit<'a>(
     ));
     if c.delivery.is_some() {
         output.push_str("          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}\n          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}\n          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}\n          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}\n          CHRONO_RELEASE_VERSION: ${{ inputs.version }}\n");
-        if super::verified_literals::delivery_publisher(c.delivery.as_ref().map(|d| d.publisher.as_str()), &job.id) {
+        if super::verified_literals::delivery_publisher(
+            c.delivery.as_ref().map(|d| d.publisher.as_str()),
+            &job.id,
+        ) {
             output.push_str("          GH_TOKEN: ${{ github.token }}\n");
         }
     }
