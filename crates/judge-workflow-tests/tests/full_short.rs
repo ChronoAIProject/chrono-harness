@@ -995,10 +995,11 @@ fn native_command(
             fs::read(root.join(original["path"].as_str().unwrap())).unwrap(),
             native
         );
-        assert_eq!(
-            report["preparation"]["result"]["evidence"]["native_run"]["job"],
-            job
-        );
+        let producer = &report["preparation"]["result"]["evidence"];
+        let raw = fs::read(root.join(producer["report_path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&raw), producer["report_sha256"]);
+        let original: Value = serde_json::from_slice(&raw).unwrap();
+        assert_eq!(original["native_run"]["job"], job);
     }
     if out.status.success() && id != "collection" {
         let mut production = Command::new(root.join(".chrono-harness/bin/chrono-ci"));
