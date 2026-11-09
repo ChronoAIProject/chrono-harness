@@ -1475,19 +1475,10 @@ fn migration_local_short_lane() -> (Host, host::FixtureDirectory, std::path::Pat
     let (h, tools) = adopt_short_host(h, tools, false, None, false, true);
     make_local_lane(h, tools, "integration")
 }
-fn repair_collected(root: &Path, name: &str, expected_red: &str) -> Option<Value> {
+fn repair_collected(root: &Path, name: &str) -> Value {
     let (exit, report) = repair_short(root, name, &["check", "--collect"]);
-    if std::env::var_os("CHRONO_COLLECTION_REPAIR_RED").is_some() {
-        assert_eq!(exit, 2, "expected sealed-source rejection: {report}");
-        assert!(
-            report["stderr"].as_str().unwrap().contains(expected_red),
-            "{report}"
-        );
-        None
-    } else {
-        passed(exit, &report);
-        Some(report)
-    }
+    passed(exit, &report);
+    report
 }
 #[test]
 fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conversion() {
@@ -1513,14 +1504,11 @@ fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conve
     );
     // Collection must reuse originals without invoking the retained tools.
     fs::remove_file(tools.path().join("execution-migration")).unwrap();
-    let report = repair_collected(&lane, "q1-collect", "original conversion bootstrap binding");
+    let report = repair_collected(&lane, "q1-collect");
     assert_eq!(marker(tools.path()), before);
     for (path, bytes) in &originals {
         assert_eq!(fs::read(path).unwrap(), *bytes);
     }
-    let Some(report) = report else {
-        return;
-    };
     assert_eq!(
         report["tests"]["completion"]["required_units"],
         json!(["one", "two"])
@@ -1618,52 +1606,43 @@ fn repair_q2_local_full_one_and_empty_delta_ignore_unrelated_malformed_and_stale
             None
         };
         let before = marker(tools.path());
-        for (case, bytes, red) in [
-            ("malformed", b"{}".as_slice(), "original judges"),
-            (
-                "stale-conversion",
-                stale.as_slice(),
-                "original conversion bootstrap binding",
-            ),
+        for (case, bytes) in [
+            ("malformed", b"{}".as_slice()),
+            ("stale-conversion", stale.as_slice()),
         ] {
             let path = lane.join(".chrono-harness/state/two/check.json");
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(&path, bytes).unwrap();
-            if let Some(report) =
-                repair_collected(&lane, &format!("q2-{required}-{case}-collect"), red)
-            {
-                assert_eq!(
-                    report["tests"]["completion"]["required_units"],
-                    if required == "one" {
-                        json!(["one"])
-                    } else {
-                        json!([])
-                    }
-                );
-                assert_eq!(report["judges"].as_array().unwrap().len(), 7);
-                local_collection_observation(&lane, &report);
-            }
+            let report = repair_collected(&lane, &format!("q2-{required}-{case}-collect"));
+            assert_eq!(
+                report["tests"]["completion"]["required_units"],
+                if required == "one" {
+                    json!(["one"])
+                } else {
+                    json!([])
+                }
+            );
+            assert_eq!(report["judges"].as_array().unwrap().len(), 7);
+            local_collection_observation(&lane, &report);
             assert_eq!(fs::read(path).unwrap(), bytes);
             assert_eq!(marker(tools.path()), before);
         }
-        if std::env::var_os("CHRONO_COLLECTION_REPAIR_RED").is_none() {
-            if let Some(original) = original {
-                for case in ["missing", "malformed", "stale"] {
-                    match case {
-                        "missing" => fs::remove_file(&required_path).unwrap(),
-                        "malformed" => fs::write(&required_path, b"{}").unwrap(),
-                        "stale" => fs::write(&required_path, &selected_stale).unwrap(),
-                        _ => unreachable!(),
-                    }
-                    let (exit, _) = repair_short(
-                        &lane,
-                        &format!("q2-selected-{case}-collect"),
-                        &["check", "--collect"],
-                    );
-                    assert_ne!(exit, 0, "accepted selected {case} report");
-                    assert_eq!(marker(tools.path()), before);
-                    fs::write(&required_path, &original).unwrap();
+        if let Some(original) = original {
+            for case in ["missing", "malformed", "stale"] {
+                match case {
+                    "missing" => fs::remove_file(&required_path).unwrap(),
+                    "malformed" => fs::write(&required_path, b"{}").unwrap(),
+                    "stale" => fs::write(&required_path, &selected_stale).unwrap(),
+                    _ => unreachable!(),
                 }
+                let (exit, _) = repair_short(
+                    &lane,
+                    &format!("q2-selected-{case}-collect"),
+                    &["check", "--collect"],
+                );
+                assert_ne!(exit, 0, "accepted selected {case} report");
+                assert_eq!(marker(tools.path()), before);
+                fs::write(&required_path, &original).unwrap();
             }
         }
     }
