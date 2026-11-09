@@ -1429,6 +1429,18 @@ fn current_references_protect_closure_and_released_historical_cycles_are_not_roo
     let mut rounds = Vec::new();
     let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         i.reference("pending-native-rerun", &[aid.clone()]).unwrap();
+        // Selecting the rooted member must also work when its cyclic original
+        // is intentionally unvisited. Directory enumeration order must not be
+        // what makes the rooted frontier valid.
+        let selected = i.maintain_originals(&[aid.clone()]).unwrap();
+        assert!(
+            selected["accounting_errors"].as_array().unwrap().is_empty(),
+            "{selected}"
+        );
+        assert_eq!(selected["metadata_inventory_entries"], 1, "{selected}");
+        assert_eq!(selected["scope"]["complete"], false, "{selected}");
+        assert_eq!(selected["remaining_outputs"], Value::Null, "{selected}");
+        assert!(h.path().join(&a).is_dir() && h.path().join(&b).is_dir());
         rounds.push(i.maintain().unwrap());
         assert_eq!(rounds[0]["remaining_outputs"], 2);
         assert!(rounds[0]["nodes"].as_u64().unwrap() <= 3);
@@ -4454,11 +4466,39 @@ fn several_retirements_count_their_shared_finalized_original_once() {
     }
     let role = retention_state::role_path(h.path(), "actual-count-recheck");
     let role_before = fs::read(&role).unwrap();
-    let round = inventory(h.path()).maintain_originals(&ids).unwrap();
-    assert!(
-        round["accounting_errors"].as_array().unwrap().is_empty(),
-        "{round}"
-    );
+    let mut rounds = Vec::new();
+    let mut removed = 0;
+    for _ in 0..4 {
+        let pending: Vec<_> = ids
+            .iter()
+            .zip(&paths)
+            .filter(|(_, path)| h.path().join(path).exists())
+            .map(|(id, _)| id.clone())
+            .collect();
+        if pending.is_empty() {
+            break;
+        }
+        let round = inventory(h.path()).maintain_originals(&pending).unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        let remaining_reports = paths
+            .iter()
+            .filter(|path| h.path().join(path).exists())
+            .count();
+        // Even an incomplete round must not count the shared original once
+        // for every target it visited. Unvisited reports may remain unknown.
+        assert!(
+            round["known_retained_file_logical_bytes"].as_u64().unwrap()
+                <= (bytes.len() + remaining_reports * b"obsolete report".len()) as u64,
+            "{round}"
+        );
+        assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+        removed += round["removed_logical_bytes"].as_u64().unwrap();
+        rounds.push(round);
+    }
+    let round = rounds.last().unwrap();
     assert_eq!(round["scope"]["complete"], true, "{round}");
     assert_eq!(round["remaining_outputs"], 1, "{round}");
     assert_eq!(
@@ -4467,11 +4507,7 @@ fn several_retirements_count_their_shared_finalized_original_once() {
         "{round}"
     );
     assert_eq!(round["remaining_capability_retirements"], 0, "{round}");
-    assert_eq!(
-        round["removed_logical_bytes"],
-        3 * b"obsolete report".len(),
-        "{round}"
-    );
+    assert_eq!(removed, (3 * b"obsolete report".len()) as u64, "{rounds:?}");
     for path in paths {
         assert!(!h.path().join(path).exists(), "{round}");
     }
