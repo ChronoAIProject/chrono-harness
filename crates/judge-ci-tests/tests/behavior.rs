@@ -371,6 +371,20 @@ fn unknown_changed_path_never_green() {
     h.write("unknown.txt", "new");
     let c = h.commit();
     fail(&h.check(&b, &c), "unregistered tracked path");
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        v["files"].as_array_mut().unwrap().push(json!({
+            "path": ".chrono-harness/state/log",
+            "owner": "host",
+            "surface": "product",
+            "cost": "unmeasured",
+            "edges": []
+        }));
+    });
+    let registered = h.commit();
+    fail(
+        &h.check(&b, &registered),
+        "tracked path overlaps artifact exemption",
+    );
 }
 #[test]
 fn absent_registered_path_never_green() {
