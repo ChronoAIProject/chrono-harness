@@ -71,10 +71,10 @@ fn host() -> Host {
         "results_digest"
     ]);
     w["integration"]["tests"] = json!(["t"]);
-    w["stability"] = json!([{"id":"product","paths":["p/product.py"],"tests":["t"],"reason":"stability fixture"}]);
+    w["stability"] = json!([{"id":"product","paths":["p/product.case"],"tests":["t"],"reason":"stability fixture"}]);
     h.save();
     h.base = h.candidate.clone();
-    fs::write(h.root().join("p/product.py"), "def double(n): return 2*n\n").unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleMultiply);
     h.save();
     h
 }
@@ -425,7 +425,7 @@ fn grouped_project_host() -> Host {
         "results_digest"
     ]);
     w["integration"]["tests"] = json!(["t", "opaque/suffix"]);
-    w["stability"] = json!([{"id":"p","paths":["p/product.py"],"tests":["t", "opaque/suffix"],"reason":"grouped project stability fixture"}]);
+    w["stability"] = json!([{"id":"p","paths":["p/product.case"],"tests":["t", "opaque/suffix"],"reason":"grouped project stability fixture"}]);
 
     let test_project = &mut h.values.get_mut(PROJECTS).unwrap()["projects"][1];
     let execute = test_project["actions"]["execute"].clone();
@@ -701,11 +701,7 @@ fn configured_but_unexecuted_judge_cannot_be_certified() {
 #[test]
 fn failed_required_test_never_creates_integration_evidence() {
     let mut h = host();
-    fs::write(
-        h.root().join("p/product.py"),
-        "def double(n): return n+n+1\n",
-    )
-    .unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleAddOne);
     h.save();
     let (e, r) = run(&h, "integration", None, |_| {});
     assert_ne!(e, 0);
@@ -729,11 +725,7 @@ fn changed_base_rejects_old_integration_binding() {
     passed(e, &r);
     let (_, d) = certificate(&h);
     h.base = h.candidate.clone();
-    fs::write(
-        h.root().join("p/product.py"),
-        "def double(n): return 2*n+0\n",
-    )
-    .unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleAdd);
     h.save();
     let (e, r) = run(&h, "delivery", Some(&d), |_| {});
     assert_eq!(e, 1);
@@ -1015,8 +1007,8 @@ fn explicit_alias_repair_can_keep_the_alias_and_replace_the_obsolete_method() {
     h.values.get_mut(WORKFLOW).unwrap()["schema_version"] = 2.into();
     h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([]);
     let mut projects = values()[PROJECTS]["projects"].clone();
-    projects[0]["actions"] = json!({"build":{"operation":"old.build","tool":"python","argv":["-c","raise RuntimeError('obsolete build')"]}});
-    projects[1]["actions"] = json!({"execute":{"operation":"old.test","tool":"python","argv":["-c","raise RuntimeError('obsolete test')"]}});
+    projects[0]["actions"] = json!({"build":{"operation":"old.build","tool":"fixture","argv":["-c","raise RuntimeError('obsolete build')"]}});
+    projects[1]["actions"] = json!({"execute":{"operation":"old.test","tool":"fixture","argv":["-c","raise RuntimeError('obsolete test')"]}});
     h.values.get_mut(PROJECTS).unwrap()["projects"] = projects;
     h.save();
     h.base = h.candidate.clone();

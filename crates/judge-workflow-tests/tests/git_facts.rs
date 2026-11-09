@@ -22,7 +22,7 @@ pub(super) fn bind_host(mut h: Host) -> Host {
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|tool| tool["id"] == "python")
+        .find(|tool| tool["id"] == "fixture")
         .unwrap()["program"] = json!(h.tool);
     cfg["schema_version"] = json!(3);
     cfg["facts_git"] = json!({"tool":"facts-git","input":"git-bytes"});
@@ -58,8 +58,8 @@ pub(super) fn bind_host(mut h: Host) -> Host {
                 "consumer": "judge:projects",
                 "kind": "project-execution",
                 "inputs": [
-                    "tool:python",
-                    "input:interpreter",
+                    "tool:fixture",
+                    "input:execution-tool",
                     "input:data",
                     "environment:DECLARED_EMPTY",
                     "environment:DECLARED_ABSENT",
@@ -86,8 +86,8 @@ pub(super) fn bind_host(mut h: Host) -> Host {
                 "runtime-input",
                 "judge:registration",
             ),
-            edge("tool:python", "runtime-input", "judge:projects"),
-            edge("input:interpreter", "runtime-input", "judge:projects"),
+            edge("tool:fixture", "runtime-input", "judge:projects"),
+            edge("input:execution-tool", "runtime-input", "judge:projects"),
             edge("input:data", "runtime-input", "judge:projects"),
             edge(
                 "environment:DECLARED_EMPTY",
@@ -123,7 +123,7 @@ pub(super) fn bind_host(mut h: Host) -> Host {
     h.save();
     h.base = h.candidate.clone();
     fs::write(root.join("policy.json"), "{\"limit\":2}").unwrap();
-    fs::write(root.join("p/product.py"), "def double(n): return n+n\n").unwrap();
+    host::write_product(&root, "p/product.case", host::Product::DoubleAdd);
     h.save();
     h
 }
@@ -174,14 +174,14 @@ fn bound_context(h: &Host, kind: &str, digest: Option<&str>, execute: bool) -> (
                 .as_array()
                 .unwrap()
                 .iter()
-                .find(|i| i["id"] == "interpreter")
+                .find(|i| i["id"] == "execution-tool")
             {
                 let location = root.join(input["location"].as_str().unwrap());
                 let bytes = fs::read(location).unwrap();
                 let digest = sha256(&bytes);
                 let blob = format!(".chrono-harness/state/fixture-{digest}");
                 fs::write(root.join(&blob), &bytes).unwrap();
-                retained[endpoint]["files"]["interpreter"] =
+                retained[endpoint]["files"]["execution-tool"] =
                     json!({"blob":blob,"sha256":digest,"length":bytes.len()});
             }
             if cfg["environment"]["inputs"]
@@ -259,7 +259,7 @@ fn all_full_judges_consumer(selected_mode: bool) {
         h.save();
         h.base = h.candidate.clone();
         fs::write(h.root().join("policy.json"), "{\"limit\":3}").unwrap();
-        fs::write(h.root().join("p/product.py"), "def double(n): return n+n\n").unwrap();
+        host::write_product(&h.root(), "p/product.case", host::Product::DoubleAdd);
         h.save();
     }
     let state = h.root().join(".chrono-harness/state");
@@ -352,7 +352,7 @@ fn linked_full_host(selected: bool) -> Host {
     }
     h.save();
     h.base = h.candidate.clone();
-    fs::write(root.join("p/product.py"), "def double(n): return 2*n\n").unwrap();
+    host::write_product(&root, "p/product.case", host::Product::DoubleMultiply);
     h.save();
     h
 }
@@ -558,10 +558,10 @@ fn full_ci_consumer(selected: bool) {
             .unwrap()
             .push(f);
     }
-    fs::write(root.join("p/product.py"), "def double(n): return n+n\n").unwrap();
+    host::write_product(&root, "p/product.case", host::Product::DoubleAdd);
     h.save();
     h.base = h.candidate.clone();
-    fs::write(root.join("p/product.py"), "def double(n): return 2*n\n").unwrap();
+    host::write_product(&root, "p/product.case", host::Product::DoubleMultiply);
     h.save();
     let replay = |expected: i32| {
         let context = fs::read(root.join(".chrono-harness/state/context.json")).unwrap();
@@ -747,7 +747,7 @@ fn full_unit_real_seven_judge_contribution() {
     });
     h.save();
     h.base = h.candidate.clone();
-    fs::write(h.root().join("p/product.py"), "def double(n): return 2*n\n").unwrap();
+    host::write_product(&h.root(), "p/product.case", host::Product::DoubleMultiply);
     h.save();
     let (control_exit, control) = run_bound(&h, "integration", None);
     fs::write(

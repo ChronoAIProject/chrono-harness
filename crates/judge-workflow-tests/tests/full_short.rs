@@ -1269,13 +1269,13 @@ fn migration_local_short_lane() -> (Host, host::FixtureDirectory, std::path::Pat
     let tools = host::tool_directory("workflow native tools λ ");
     let wrapper = fs::canonicalize(tools.path())
         .unwrap()
-        .join("python-migration");
-    let python = fs::canonicalize(&h.tool).unwrap();
+        .join("execution-migration");
+    let execution = fs::canonicalize(&h.tool).unwrap();
     native_tools::install(tools.path(), &wrapper);
     native_tools::bind(
         &mut h,
-        "CHRONO_WORKFLOW_REAL_PYTHON",
-        &python,
+        "CHRONO_WORKFLOW_REAL_EXECUTION",
+        &execution,
         &["judge:projects"],
     );
     native_tools::bind(
@@ -1292,13 +1292,13 @@ fn migration_local_short_lane() -> (Host, host::FixtureDirectory, std::path::Pat
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|t| t["id"] == "python")
+        .find(|t| t["id"] == "fixture")
         .unwrap()["program"] = json!(wrapper);
     let input = cfg["environment"]["inputs"]
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|i| i["id"] == "interpreter")
+        .find(|i| i["id"] == "execution-tool")
         .unwrap();
     input["location"] = json!(wrapper);
     input["sha256"] = json!(sha256(&fs::read(&wrapper).unwrap()));
@@ -1359,7 +1359,7 @@ fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conve
         "compatibility trace is missing"
     );
     // Collection must reuse originals without invoking the retained tools.
-    fs::remove_file(tools.path().join("python-migration")).unwrap();
+    fs::remove_file(tools.path().join("execution-migration")).unwrap();
     let report = repair_collected(&lane, "q1-collect", "original conversion bootstrap binding");
     assert_eq!(marker(tools.path()), before);
     for (path, bytes) in &originals {

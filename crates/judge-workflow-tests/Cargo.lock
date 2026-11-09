@@ -150,6 +150,7 @@ dependencies = [
  "chrono-judge-registration",
  "chrono-judge-workflow",
  "chrono-worktree",
+ "serde",
  "serde_json",
  "tempfile",
 ]

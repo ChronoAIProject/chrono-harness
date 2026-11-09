@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub enum Product {
     DoubleMultiply,
     DoubleAdd,
+    DoubleAddOne,
     Answer,
 }
 
@@ -12,6 +13,7 @@ impl Product {
         match self {
             Self::DoubleMultiply => input * 2,
             Self::DoubleAdd => input + input,
+            Self::DoubleAddOne => input + input + 1,
             Self::Answer => 42,
         }
     }
