@@ -133,7 +133,7 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
-pub(super) struct ShortHost {
+pub(crate) struct ShortHost {
     _dir: crate::tools::FixtureDirectory,
     root: PathBuf,
     pub(super) remote: PathBuf,

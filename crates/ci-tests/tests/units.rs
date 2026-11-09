@@ -564,7 +564,7 @@ fn collect_cli(host: &short::gating::GatedHost) -> std::process::Output {
 fn standalone_gather_is_rejected_without_transport_or_publication() {
     let (host, _, _) = gather_host("success");
     let root = host.path();
-    let launches = root.join(".chrono-harness/state/mock-launches.jsonl");
+    let launches = root.join(".chrono-harness/state/parent-calls");
     let before = fs::read(&launches).ok();
     let result = Command::new(root.join(".chrono-harness/bin/chrono-ci"))
         .current_dir(root)
