@@ -61,6 +61,7 @@ pub struct Policy {
     pub causal_consumption: Option<Value>,
     pub filemap: String,
     pub projects: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub tools: BTreeMap<String, String>,
     #[serde(default)]
     pub bindings: BTreeMap<String, Vec<String>>,
@@ -75,6 +76,7 @@ pub struct Policy {
 #[derive(Debug)]
 struct Snapshot {
     registry: Value,
+    tools: BTreeMap<String, Value>,
     owner_nodes: BTreeMap<String, String>,
     files: BTreeMap<String, Value>,
     source_registry: Result<chrono_harness::verified_verifier::sources::SourceRegistry, String>,
@@ -205,10 +207,12 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
     for v in &p.required_inputs {
         relative_path(v)?
     }
-    for (k, v) in &p.tools {
-        id(k)?;
-        if v.is_empty() {
-            return Err("empty tool program".into());
+    if p.registration_config.is_none() {
+        for (k, v) in &p.tools {
+            id(k)?;
+            if v.is_empty() {
+                return Err("empty tool program".into());
+            }
         }
     }
     if let Some(b) = &p.adoption_base {
@@ -230,6 +234,28 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
         .as_ref()
         .map(|config| reader.registry_snapshot(root, oid, config))
         .transpose()?;
+    let tools = if let Some(snapshot) = &registration {
+        let config = snapshot
+            .values
+            .get(&snapshot.effective_path)
+            .ok_or("missing effective registration config")?;
+        let mut tools = BTreeMap::new();
+        for tool in array(config, "tools")? {
+            let name = text(tool, "id")?;
+            id(name)?;
+            if tools.insert(name.to_owned(), tool.clone()).is_some() {
+                return Err(format!("duplicate registered tool {name}"));
+            }
+        }
+        tools
+    } else {
+        p.tools
+            .iter()
+            .map(|(id, program)| {
+                (id.clone(), object!({"id":id,"program":program,"version_argv":["--version"],"expected_version":null}))
+            })
+            .collect()
+    };
     let fm = chrono_judge_registration::select_filemap(
         &fm,
         registration
@@ -348,7 +374,11 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
                 let operation = action.operation.as_str();
                 id(operation)?;
                 let tool = action.tool.as_str();
-                if !p.tools.contains_key(tool) {
+                if !verified_collection::action_tool_allowed(
+                    registration.is_some(),
+                    tools.contains_key(tool),
+                    p.tools.contains_key(tool),
+                ) {
                     return Err(format!("unknown tool {tool}"));
                 }
                 let argv = action.argv;
@@ -503,6 +533,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     let scheduling = chrono_judge_registration::execution::scheduling(&fm, &pr, &artifacts)?;
     let snapshot = Snapshot {
         registry: pr,
+        tools,
         owner_nodes,
         files,
         source_registry: serde_json::from_value(fm).map_err(|e| e.to_string()),
@@ -692,7 +723,7 @@ fn ci_impact(
                 }
             }
         }
-        let changed_tools = changed(&old.policy.tools, &new.policy.tools);
+        let changed_tools = changed(&old.tools, &new.tools);
         if !changed_tools.is_empty() || old.policy.environment != new.policy.environment {
             for s in [old, new] {
                 for (test, ops) in &s.policy.bindings {
@@ -1260,7 +1291,7 @@ fn inventory_profile(
     #[cfg(unix)]
     environment.remove(chrono_harness::process_fds::ENV);
     let mut environment_policy = object!({"values":p.environment,"inherit":null});
-    let mut declarations=object!(p.tools.iter().map(|(id,program)|object!({"id":id,"program":program,"version_argv":["--version"],"expected_version":null})).collect::<Vec<_>>());
+    let mut declarations = object!(new.tools.values().cloned().collect::<Vec<_>>());
     if req.base.is_none() {
         if let Some(config_path) = &p.registration_config {
             let values = reader.registry_values(root, &req.candidate, config_path)?;

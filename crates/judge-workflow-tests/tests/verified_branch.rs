@@ -47,4 +47,14 @@ fn commit_count_limit_preserves_large_unsigned_boundaries() {
     assert(largest && below && !over_zero);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn age_limit_is_inclusive_and_preserves_unsigned_boundaries() {
+    let zero = policy::age_within_limit(0, 0);
+    let exact = policy::age_within_limit(3_600_000_000_000, 3_600_000_000_000);
+    let one_over = policy::age_within_limit(3_600_000_000_001, 3_600_000_000_000);
+    let largest = policy::age_within_limit(u64::MAX, u64::MAX);
+    let below_largest = policy::age_within_limit(u64::MAX - 1, u64::MAX);
+    assert(zero && exact && !one_over && largest && below_largest);
+}
+
 }

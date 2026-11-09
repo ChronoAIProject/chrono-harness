@@ -721,6 +721,58 @@ fn checkout_migration_preserves_birth_old_commits_and_uncommitted_work() {
 }
 
 #[test]
+fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history() {
+    for busy in [true, false] {
+        let (h, target) = fixture();
+        cache(&target);
+        let entry = h.ledger()["entries"][0].clone();
+        let held = busy.then(|| {
+            let held =
+                fs::File::open(h.root.join(entry["ownership"]["path"].as_str().unwrap())).unwrap();
+            held.lock_shared().unwrap();
+            held
+        });
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
+        let original = h.ledger()["entries"][0].clone();
+        assert_eq!(
+            original["cleanup"]["stage"],
+            if busy {
+                "waiting-for-consumers"
+            } else {
+                "caches-released"
+            }
+        );
+        assert_eq!(original["status"], "active");
+        let report = h
+            .root
+            .join(original["cleanup"]["report_path"].as_str().unwrap());
+        let report_bytes = fs::read(&report).unwrap();
+        let cache_exists = target.join("output λ/cache").exists();
+        assert_eq!(cache_exists, busy);
+        drop(held);
+
+        git(&target, &["checkout", "-b", "integration/next-task"]);
+        let migrated = migrate(&h, &target);
+        assert_eq!(migrated["checkout_migration"]["status"], "adopted");
+        let adopted = h.ledger()["entries"][0].clone();
+        assert_eq!(adopted["checkout_branch"], "integration/next-task");
+        for field in [
+            "enrollment",
+            "cleanup",
+            "cache_attempts",
+            "terminal",
+            "uses",
+        ] {
+            assert_eq!(adopted[field], original[field], "{field}");
+        }
+        assert_eq!(target.join("output λ/cache").exists(), cache_exists);
+        assert_eq!(fs::read(report).unwrap(), report_bytes);
+        assert_eq!(adopted["status"], "active");
+    }
+}
+
+#[test]
 fn checkout_migration_keeps_live_unjoined_and_terminal_work_protected() {
     let (h, target) = fixture();
     git(&target, &["checkout", "-b", "integration/reuse"]);
