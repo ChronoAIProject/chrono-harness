@@ -9,6 +9,7 @@ use chrono_harness::verified_identifiers as identifiers;
 use chrono_harness::verified_verifier as policy;
 #[cfg(verus_keep_ghost)]
 use policy::identifiers;
+use policy::sources::SourceRole;
 use policy::{CompilerReport, CompilerVersion, OutputContract, Verification};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
@@ -354,7 +355,7 @@ fn observation_cannot_turn_failed_process_or_invalid_bound_into_source_evidence(
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn original_argv_keeps_every_argument_and_missing_success_receipt_rejects() {
+fn original_argv_keeps_every_argument_and_empty_original_rejects() {
     let original = vec!["verus\0é".to_string(), "root".to_string(), "root".to_string()];
     let args = policy::sources::process_arguments(&original).unwrap();
     assert(args.len() == 2 && args[0]@ == "root"@ && args[1]@ == "root"@);
@@ -364,17 +365,182 @@ fn original_argv_keeps_every_argument_and_missing_success_receipt_rejects() {
     expect_verifier_true(first && second);
     let empty = policy::sources::process_arguments(&Vec::new());
     expect_verifier_true(empty.is_err());
-    let io = UnavailableSources;
-    let registry = Err("registry read error".to_string());
-    let missing = policy::sources::bind_process_sources("passed", None, &registry, &io);
-    expect_verifier_true(missing.is_err());
-    let blocked = policy::sources::bind_process_sources("blocked", None, &registry, &io);
-    let failed = policy::sources::bind_process_sources("failed", None, &registry, &io);
+}
+
+/// 缺方法、歧义和首个完整文本命中分别定义，不接受前缀或大小写折叠。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn proof_invocation_requires_one_exact_registered_operation() {
+    let args = arguments();
+    let ordinary = None;
+    let proof_contract = contract();
+    let methods = vec![
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &proof_contract, output_limit_bytes: 1024 },
+        policy::ProofInvocation { operation: "Proof", argv: &args,
+            output_contract: &ordinary, output_limit_bytes: 1024 },
+    ];
+    proof {
+        reveal_strlit("proof"); reveal_strlit("Proof"); reveal_strlit("proof\0");
+        assert("proof"@[0] != "Proof"@[0]);
+        assert("proof"@.len() != "proof\0"@.len());
+        assert forall|j: int| 0 <= j < methods.len()
+            && (#[trigger] methods[j]).operation@ == "proof"@ implies j == 0 by {
+            if j != 0 { assert(j == 1); }
+        }
+        assert forall|j: int| 0 <= j < methods.len()
+            && (#[trigger] methods[j]).operation@ == "Proof"@ implies j == 1 by {
+            if j != 1 { assert(j == 0); }
+        }
+        assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
+        assert(exists|j: int| policy::unique_proof_invocation(methods@, "proof"@, j));
+        assert(policy::unique_proof_invocation(methods@, "Proof"@, 1));
+        assert(exists|j: int| policy::unique_proof_invocation(methods@, "Proof"@, j));
+    }
+    let exact = policy::find_proof_invocation(&methods, "proof");
+    expect_verifier_true(exact.is_ok() && exact.unwrap() == 0);
+    let other_case = policy::find_proof_invocation(&methods, "Proof");
+    expect_verifier_true(other_case.is_ok() && other_case.unwrap() == 1);
+    let suffix = policy::find_proof_invocation(&methods, "proof\0");
+    expect_verifier_true(suffix.is_err());
+    let duplicates = vec![
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &proof_contract, output_limit_bytes: 1024 },
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &ordinary, output_limit_bytes: 1024 },
+    ];
+    let ambiguous = policy::find_proof_invocation(&duplicates, "proof");
+    expect_verifier_true(ambiguous.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_arguments_preserve_order_duplicates_and_full_text() {
+    let first = vec!["a\0é".to_string(), "a".to_string(), "a".to_string()];
+    let same = vec!["a\0é".to_string(), "a".to_string(), "a".to_string()];
+    let reordered = vec!["a".to_string(), "a\0é".to_string(), "a".to_string()];
+    let shortened = vec!["a\0é".to_string(), "a".to_string()];
+    proof {
+        reveal_strlit("a\0é"); reveal_strlit("a");
+        assert("a\0é"@.len() != "a"@.len());
+    }
+    let exact = policy::equal_arguments(&first, &same);
+    let order = policy::equal_arguments(&first, &reordered);
+    let count = policy::equal_arguments(&first, &shortened);
+    expect_verifier_true(exact && !order && !count);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unified_admission_does_not_invent_a_proof_for_blocked_or_missing_receipts() {
+    let registry = Err("original registry error".to_string());
+    let methods = Vec::new();
+    let blocked = policy::bind_operation_output("blocked", "proof", &methods,
+        None, &registry, &UnavailableSources);
+    let failed = policy::bind_operation_output("failed", "proof", &methods,
+        None, &registry, &UnavailableSources);
     proof {
         reveal_strlit("blocked"); reveal_strlit("failed"); reveal_strlit("passed");
         assert("blocked"@[0] != "passed"@[0]); assert("failed"@[0] != "passed"@[0]);
     }
-    expect_verifier_true(blocked.is_ok() && failed.is_ok());
+    expect_verifier_true(blocked.is_ok() && blocked.unwrap().is_none());
+    expect_verifier_true(failed.is_ok() && failed.unwrap().is_none());
+    let missing = policy::bind_operation_output("passed", "proof", &methods,
+        None, &registry, &UnavailableSources);
+    expect_verifier_true(missing.is_err());
+}
+
+/// 普通操作的成功不能产生证明条目；其 stdout 保持业务字节，不要求解析。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unified_ordinary_success_has_no_proof_and_failed_process_is_rejected() {
+    let args = Vec::new();
+    let contract = None;
+    let methods = vec![policy::ProofInvocation { operation: "ordinary", argv: &args,
+        output_contract: &contract, output_limit_bytes: 1 }];
+    let argv = vec!["tool".to_string()];
+    let dependency = None;
+    let artifact = None;
+    let registry = Err("registry not required".to_string());
+    let raw = [255u8, 0u8];
+    let original = Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,
+        exit: 0, failed: false, dependency: &dependency, artifact: &artifact });
+    proof {
+        assert(policy::same_arguments(argv@.skip(1), args@));
+        assert(policy::unique_proof_invocation(methods@, "ordinary"@, 0));
+        assert(policy::ordinary_process_bound(&methods[0], &original.unwrap()));
+        assert(policy::ordinary_output_accepted("ordinary"@, methods@, &original));
+    }
+    let ordinary = policy::bind_operation_output("passed", "ordinary", &methods,
+        original, &registry, &UnavailableSources);
+    expect_verifier_true(ordinary.is_ok() && ordinary.unwrap().is_none());
+    let failed = policy::bind_operation_output("passed", "ordinary", &methods,
+        Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,
+            exit: 0, failed: true, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(failed.is_err());
+}
+
+impl policy::CompilerReportRead for UnavailableSources {
+    open spec fn decoded(&self, bytes: Seq<u8>) -> Option<CompilerReport> { None }
+    fn decode(&self, bytes: &[u8]) -> Option<CompilerReport> { None }
+}
+
+/// 对任意原件，任何实际返回的证明都包含同一份报告、源码和库的准入关系。
+fn any_unified_proof_has_a_unique_method_and_complete_original_evidence<I>(
+    operation: &str, methods: &Vec<policy::ProofInvocation>,
+    original: Option<policy::ProofProcess>,
+    registry: &Result<policy::sources::SourceRegistry, String>, io: &I,
+)
+    where I: policy::sources::CandidateSourceRead + policy::CompilerReportRead,
+{
+    let admitted = policy::bind_operation_output("passed", operation, methods, original, registry, io);
+    if let Ok(Some(proof)) = admitted {
+        let ghost index = choose|i: int|
+            policy::unique_proof_invocation(methods@, operation@, i)
+                && policy::proof_bound(&proof, &methods[i], &original.unwrap(), &registry.unwrap());
+        assert(policy::proof_bound(&proof, &methods[index], &original.unwrap(), &registry.unwrap()));
+        assert(registry.is_ok());
+        assert(original.is_some());
+        assert(original.unwrap().exit == 0 && !original.unwrap().failed);
+        assert(original.unwrap().dependency.is_some());
+        assert(original.unwrap().artifact.is_some());
+        assert(proof.report.verification.success);
+        assert(proof.report.verification.errors == 0);
+        assert(proof.report.verification.verified > 0);
+        assert(proof.report.verification.is_verifying_entire_crate);
+        assert(proof.sources.candidate.len() > 0);
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unified_proof_rejects_missing_report_and_different_original_identity() {
+    let args = arguments();
+    let proof_contract = contract();
+    let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
+        output_contract: &proof_contract, output_limit_bytes: 1024 }];
+    let mut argv = vec!["verus".to_string()];
+    let mut i = 0;
+    while i < args.len()
+        invariant 0 <= i <= args.len(), argv.len() == i + 1,
+            forall|j: int| 0 <= j < i ==> (#[trigger] argv[j + 1])@ == args[j]@,
+        decreases args.len() - i,
+    { argv.push(args[i].clone()); i += 1; }
+    let dependency = Some(Ok(vec![0u8]));
+    let artifact = Some(Ok(library(1)));
+    let registry = Err("original registry error".to_string());
+    let missing_report = policy::bind_operation_output("passed", "proof", &methods,
+        Some(policy::ProofProcess { operation: "proof", argv: &argv, stdout: &[],
+            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(missing_report.is_err());
+    let wrong_operation = policy::bind_operation_output("passed", "proof", &methods,
+        Some(policy::ProofProcess { operation: "Proof", argv: &argv, stdout: &[],
+            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(wrong_operation.is_err());
+    let wrong_argv = vec!["verus".to_string()];
+    let wrong_arguments = policy::bind_operation_output("passed", "proof", &methods,
+        Some(policy::ProofProcess { operation: "proof", argv: &wrong_argv, stdout: &[],
+            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
+        &registry, &UnavailableSources);
+    expect_verifier_true(wrong_arguments.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -384,7 +550,7 @@ fn explicit_file_membership_uses_full_original_text() {
         vstd::string::is_ascii_spec_bytes("a"); vstd::string::is_ascii_spec_bytes("A");
         vstd::string::is_ascii_spec_bytes("a\0");
     }
-    let files = vec![policy::sources::SourceFile { path: "a".to_string() }];
+    let files = vec![policy::sources::SourceFile { path: "a".to_string(), verification: None }];
     assert(files.len() == 1 && files[0].path@ == "a"@);
     assert(vstd::utf8::encode_utf8(files[0].path@) =~= seq![97u8]);
     assert(policy::sources::registered_source(files@, seq![97u8]));
@@ -413,6 +579,128 @@ fn explicit_file_membership_uses_full_original_text() {
     expect_verifier_true(!suffix);
 }
 
+
+fn declared_source_root(path: &str, operation: &str) -> (root: policy::sources::SourceProofRoot)
+    ensures root.path@ == path@, root.operation@ == operation@,
+{
+    policy::sources::SourceProofRoot { path: path.to_string(), operation: operation.to_string() }
+}
+
+fn source_declaration(role: policy::sources::SourceRole, roots: Vec<policy::sources::SourceProofRoot>)
+    -> (file: policy::sources::SourceFile)
+    ensures file.path@ == "file"@, file.verification.is_some(),
+        file.verification.unwrap().role == role,
+        file.verification.unwrap().roots@ == roots@,
+        forall|i: int| 0 <= i < roots.len() ==>
+            file.verification.unwrap().roots[i].path@ == roots@[i].path@
+                && file.verification.unwrap().roots[i].operation@ == roots@[i].operation@,
+{
+    policy::sources::SourceFile { path: "file".to_string(),
+        verification: Some(policy::sources::SourceVerification { role, roots }) }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn explicit_program_specification_and_data_have_distinct_root_obligations() {
+    proof { reveal(policy::sources::source_declaration_valid); }
+    let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
+    expect_verifier_true(unknown.verification.is_none());
+    let absent = policy::sources::validate_source_declaration(&unknown);
+    expect_verifier_true(absent.is_ok());
+    let data = source_declaration(SourceRole::Data, Vec::new());
+    let data_result = policy::sources::validate_source_declaration(&data);
+    expect_verifier_true(data_result.is_ok());
+    let program = source_declaration(SourceRole::Program, Vec::new());
+    let program_result = policy::sources::validate_source_declaration(&program);
+    expect_verifier_true(program_result.is_err());
+    let specification = source_declaration(SourceRole::Specification, Vec::new());
+    let specification_result = policy::sources::validate_source_declaration(&specification);
+    expect_verifier_true(specification_result.is_err());
+    let data_with_root = source_declaration(SourceRole::Data,
+        vec![declared_source_root("r", "verify.r")]);
+    let invalid_data = policy::sources::validate_source_declaration(&data_with_root);
+    expect_verifier_true(invalid_data.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn declared_roots_require_canonical_paths_and_nonempty_operation_text() {
+    proof {
+        reveal(policy::sources::source_declaration_valid);
+        reveal_strlit(""); reveal_strlit("r"); reveal_strlit("verify.r"); reveal_strlit("./r");
+        vstd::string::is_ascii_spec_bytes("r"); vstd::string::is_ascii_spec_bytes("./r");
+        reveal_with_fuel(policy::sources::path_scan, 8);
+        reveal_with_fuel(policy::sources::joined_components, 4);
+    }
+    let program = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r")]);
+    assert(policy::sources::canonical_source_path(vstd::utf8::encode_utf8("r"@)));
+    let valid_program = policy::sources::validate_source_declaration(&program);
+    expect_verifier_true(valid_program.is_ok());
+    let specification = source_declaration(SourceRole::Specification,
+        vec![declared_source_root("r", "verify.r")]);
+    let valid_specification = policy::sources::validate_source_declaration(&specification);
+    expect_verifier_true(valid_specification.is_ok());
+    let noncanonical = source_declaration(SourceRole::Program,
+        vec![declared_source_root("./r", "verify.r")]);
+    assert(!policy::sources::canonical_source_path(vstd::utf8::encode_utf8("./r"@)));
+    let rejected_path = policy::sources::validate_source_declaration(&noncanonical);
+    expect_verifier_true(rejected_path.is_err());
+    let empty_operation = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "")]);
+    assert(empty_operation.verification.unwrap().roots@[0].operation@.len() == 0);
+    let rejected_operation = policy::sources::validate_source_declaration(&empty_operation);
+    expect_verifier_true(rejected_operation.is_err());
+    let empty_path = source_declaration(SourceRole::Program,
+        vec![declared_source_root("", "verify.r")]);
+    assert(!policy::sources::canonical_source_path(vstd::utf8::encode_utf8(""@)));
+    let rejected_empty_path = policy::sources::validate_source_declaration(&empty_path);
+    expect_verifier_true(rejected_empty_path.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn duplicate_root_paths_are_rejected_even_with_different_operations() {
+    proof {
+        reveal(policy::sources::source_declaration_valid);
+        reveal(policy::sources::distinct_proof_root);
+        reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("verify.r"); reveal_strlit("verify.R");
+        vstd::string::is_ascii_spec_bytes("r"); vstd::string::is_ascii_spec_bytes("R");
+        reveal_with_fuel(policy::sources::path_scan, 8);
+        reveal_with_fuel(policy::sources::joined_components, 4);
+    }
+    let duplicate = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r"), declared_source_root("r", "other")]);
+    assert(!policy::sources::distinct_proof_root(duplicate.verification.unwrap().roots@, 1));
+    let rejected_duplicate = policy::sources::validate_source_declaration(&duplicate);
+    expect_verifier_true(rejected_duplicate.is_err());
+    let different_case = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r"), declared_source_root("R", "verify.R")]);
+    assert("r"@[0] != "R"@[0]);
+    assert("r"@ != "R"@);
+    assert(policy::sources::distinct_proof_root(different_case.verification.unwrap().roots@, 1));
+    let distinct = policy::sources::validate_source_declaration(&different_case);
+    expect_verifier_true(distinct.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn proof_roots_must_name_registered_execution_operations() {
+    proof {
+        reveal(policy::sources::proof_roots_use_registered_operations);
+        reveal(policy::sources::proof_root_operation_registered);
+        reveal_strlit(""); reveal_strlit("other"); reveal_strlit("verify.r");
+    }
+    let valid = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "verify.r")]);
+    let operations = vec!["other".to_string(), "verify.r".to_string()];
+    let accepted = policy::sources::proof_roots_have_registered_operations(&valid, &operations);
+    expect_verifier_true(accepted);
+    let missing = vec!["other".to_string()];
+    assert(valid.verification.unwrap().roots@[0].operation@ == "verify.r"@);
+    assert(missing@[0]@ == "other"@);
+    assert(missing@[0]@ != valid.verification.unwrap().roots@[0].operation@);
+    let rejected = policy::sources::proof_roots_have_registered_operations(&valid, &missing);
+    expect_verifier_true(!rejected);
+    let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
+    expect_verifier_true(policy::sources::proof_roots_have_registered_operations(&unknown, &missing));
+}
 
 fn metadata_fixture(path: Vec<u8>, length: u64) -> (source: policy::sources::SourceBinding)
     ensures source.path@ == path@, source.length == length,
