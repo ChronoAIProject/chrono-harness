@@ -844,6 +844,20 @@ impl Inventory {
         }
         Ok(ledger)
     }
+    pub(super) fn partition_rebind_policy(&self, gate: &Gate) -> Result<(), String> {
+        self.stable(gate)?;
+        let digest = sha256(&self.policy_bytes);
+        for record in gate.objects.borrow_mut().values_mut() {
+            if record.policy_sha256 != digest {
+                record.policy_sha256 = digest.clone();
+                self.write_metadata(
+                    &self.object_directory(&record.id)?.join("record.json"),
+                    record,
+                )?;
+            }
+        }
+        Ok(())
+    }
     pub(super) fn partition_save(&self, ledger: &Ledger, gate: &Gate) -> Result<(), String> {
         gate.stable()?;
         let mut objects = gate.objects.borrow_mut();
