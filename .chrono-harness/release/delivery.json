@@ -1,0 +1,25 @@
+{
+  "schema": "chrono-release-delivery/v1",
+  "publication": {
+    "repository": "ChronoAIProject/chrono-harness",
+    "workflow_id": 367893956,
+    "workflow_path": ".github/workflows/chrono-ci.yml",
+    "branch": "dev"
+  },
+  "frontend": "linux",
+  "packages": {
+    "linux": {
+      "platform": "linux-x86_64",
+      "directory": ".chrono-harness/cache/release-platforms/linux"
+    },
+    "macos": {
+      "platform": "macos-aarch64",
+      "directory": ".chrono-harness/cache/release-platforms/macos"
+    }
+  },
+  "tools": {
+    "gh": "gh",
+    "git": "git"
+  },
+  "curl": "/usr/bin/curl"
+}

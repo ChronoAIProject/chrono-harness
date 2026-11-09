@@ -6,7 +6,7 @@
 
 ## 登记与生成
 
-发布源包含 `schema`、`workflow_path`、`name`、`push_branches`、固定提交的 `checkout_action`／`upload_artifact_action`，以及非空 `jobs`。每个 job 登记 `id`、`runs_on`、`timeout_minutes`、`command`（完整 argv）、`artifact_name` 和 `artifact_directory`（以 `/` 结尾的相对目录）。job ID 和产物名各自唯一。目录按字面处理，不是 glob；参数不作 shell 展开。未知／重复字段、无效路径、空命令和配置值中的 GitHub 表达式都会被拒绝。`push_branches` 为空时只能手动触发。
+发布源包含 `schema`、`workflow_path`、`name`、`push_branches`、固定提交的 `checkout_action`／`upload_artifact_action`，以及非空 `jobs`。每个 job 登记 `id`、`runs_on`、`timeout_minutes`、`command`（完整 argv）、`artifact_name` 和 `artifact_directory`（以 `/` 结尾的相对目录）。job ID 和产物名各自唯一。目录按字面处理，不是 glob；参数不作 shell 展开。未知／重复字段、无效路径、空命令和配置值中的 GitHub 表达式都会被拒绝。未采用下文 `delivery` 时，`push_branches` 为空表示只能手动触发。
 
 ```sh
 # 从外部显式配置采用；保留已存在的宿主定制
@@ -18,9 +18,9 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 
 首次 `init` 把源放到宿主 `.chrono-harness/ci/release.json`，后续 init 保留已采用源。generate／verify 的源必须位于宿主 `.chrono-harness/`。输出用独立 `github-release/v1` 标记声明归属，不能覆盖无归属工作流、检查工作流或符号链接。重复生成不写文件，verify 只报漂移、不修文件。写入器逐文件替换，不保证多文件崩溃事务或并发写入；登记改名／删除后，旧工作流须显式退役。
 
-生成的 job 使用登记 runner，检出 `workflow_dispatch` 的 `source` 或 push 提交，再用 Bash 执行原 argv。`source` 是直接交给 checkout 的修订字符串，生成器不保证它是完整 commit OID；构建消费者负责核实际源码身份及验收。参数按字面引用，失败保留原退出码；后续 `always()` 上传尝试保留原产物，产物缺失仍报错。job 独立运行，一个失败不会取消其他 job。工作流仅有 `contents: read`，不创建 Release、合并平台清单或上传发行资产。
+生成的 job 使用登记 runner，检出 `workflow_dispatch` 的 `source` 或 push 提交，再用 Bash 执行原 argv。`source` 是直接交给 checkout 的修订字符串，生成器不保证它是完整 commit OID；构建消费者负责核实际源码身份及验收。参数按字面引用，失败保留原退出码；后续 `always()` 上传尝试保留原产物，产物缺失仍报错。job 独立运行，一个失败不会取消其他 job。未采用 `delivery` 的工作流仅有 `contents: read`，只构建并保留 Actions artifacts。
 
-本仓将 `push_branches` 置空，只通过 `workflow_dispatch` 指定 `source` 发起发布构建。临时集成分支的名称归 Git 历史，不作为长期发布触发条件维护；常规变更的验收由登记的 PR CI 执行。
+本仓将 `push_branches` 置空，采用 `delivery` 订阅 dev 的 `chrono / collection` 完成事件；仅成功的 push 运行启动自动测试版。临时 integration 通过 `workflow_dispatch` 的 `source` 和默认 `channel=build` 验证构建，不公开版本。常规变更仍由登记的 PR CI 验收。
 
 新登记应明确设置 `include_hidden_files: true`。v1／v2 都支持，本仓已采用；它让上传保留登记产物根中的隐藏路径，范围仍取 `artifact_directory`。省略或 false 保留原投影及序列化源身份。
 
@@ -105,3 +105,17 @@ Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时�
 Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，供真实源码 DELTA fixture 解析两端登记；未观察的 Rust 工具版本保持 `null`。这仅补齐引用关系，不代表 Linux canonical/full 输入已经完整绑定。失败诊断格式变化时，同步迁移原有 custody 断言，仍核验主错误、失败状态和原始输出。
 
 发布驱动在子进程运行时分别实时转交原 stdout／stderr，不再等结束后才显示。结束后仍等待两条流读完，再保存原字节、摘要、退出码和回执；转交失败继续收取输出，不能覆盖子进程原失败。这样可以从原生日志定位超时前实际执行到的位置；被强杀前未完成的回执仍不构成成功证据。新增回归用阻塞输入握手验证输出在子进程结束前可见，仍核原失败退出和保留字节；转交的进程／线程和 IO 成本未测。
+
+## 持续交付与恢复
+
+本批同时修改产品程序和宿主政策：`chrono-ci` 投影触发、固定检出和作业权限；Rust 发布程序负责版本、原件和 GitHub 状态；宿主的 [delivery.json](../.chrono-harness/release/delivery.json) 选择仓库、落地工作流 ID／路径／分支、平台包目录、frontend 和实际工具。新增一个发布作业，复用两平台 collector 与 Linux frontend；构建与测试原作业保持原命令和时限。新增 IO、作业和存储的总成本未知。
+
+v2 可选 `delivery` 明确登记 `workflow`、`branch` 和 `publisher`。它与直接 push 触发互斥。所有作业检出原完成事件的 `head_sha`；只有发布作业取得 `contents: write` 和 `actions: read`，并接收当前 token。其余作业维持只读。手动输入 `channel` 可为 build、preview 或 stable；公开渠道还须提供固定 `source`、`verified_run` 和 `verified_attempt`。stable 另需 `version`，且必须等于该源码中的正式计划版本。
+
+preview 版本由计划版本核心、原 CI run／attempt 和完整源码提交组成，例如 `v0.1.0-dev.1234.2.g<40位SHA>`。相同原 CI 身份重试得到同一版本；不同源码或 CI attempt 得到不同版本。单元、验证、collector 与 publisher 核同一身份。普通 build 使用计划版本，走完平台原件核验及组合打包后保留 Actions artifacts，不调用公开 Release API。
+
+发布者核对当前依赖选择的平台原报告、完整原件摘要和全部资产；公开前另核原 CI 的工作流 ID、路径、push 事件、dev 分支、完整源码、attempt 和真实成功状态。它复用受验的 `chrono-distribution assemble`，输出固定版本的 release.json、install.sh 及平台二进制；随后创建 draft，上传缺少的资产，核 GitHub 返回的 size／sha256 后公开，并重新读取 Release、资产与实际标签源码。
+
+恢复只继续同一版本、源码和资产身份：已有相同 draft 可以续传，已公开且完全一致的版本可核验复用；冲突、公开版缺资产、原 CI 不合格或上传失败均停止，不使用 clobber，也不把失败 draft 当公开交付。过程原流、请求正文与结果保留在发布作业 artifact，沿用已有有限产物保留与清理所有者。
+
+正式公开入口为 `release.deliver`，需要已下载且验证的 frontend、登记平台包、当前 needs 元数据和原 CI 身份。日常由生成的发布工作流提供这些输入；不会用本地测试结果替代原生平台、公开资产或真实安装验收。本批的远端自动触发、实际发布和两平台安装仍待验收。

@@ -1,0 +1,12 @@
+{
+  "id": 1234,
+  "run_attempt": 2,
+  "workflow_id": 99,
+  "path": ".github/workflows/ci.yml",
+  "event": "push",
+  "head_branch": "dev",
+  "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "status": "completed",
+  "conclusion": "success",
+  "repository": {"full_name": "example/product"}
+}
