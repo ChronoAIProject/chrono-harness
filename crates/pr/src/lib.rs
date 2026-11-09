@@ -2,7 +2,8 @@ mod snapshot;
 mod state;
 
 use chrono_harness::{
-    CliOutput, CommandSpec, file_identity, resolve_program, run_process_observed_for,
+    CliOutput, CommandSpec, ProcessEvidence, file_identity, resolve_program,
+    run_process_observed_retained_for,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -314,7 +315,20 @@ impl Client {
         let attempt = self
             .state
             .call_intent(&spec, input, &self.digest, timeout)?;
-        let process = run_process_observed_for(&self.root, &spec, input, &self.digest, timeout)?;
+        let paths = self.state.process_paths(attempt);
+        let evidence = ProcessEvidence {
+            stdout: &paths[0],
+            stderr: &paths[1],
+            launch: &paths[2],
+        };
+        let process = run_process_observed_retained_for(
+            &self.root,
+            &spec,
+            input,
+            &self.digest,
+            timeout,
+            &evidence,
+        )?;
         let code = process.exit_code;
         let receipt = match self.state.receipt(attempt, &process) {
             Ok(receipt) => receipt,
@@ -572,7 +586,7 @@ pub fn run(raw: &[OsString]) -> CliOutput {
                         }
                         client.result["error"] = json!(error);
                     }
-                    client.result["operation_state"] = json!("completed");
+                    client.result["operation_state"] = json!(client.state.operation_state());
                     client.result["command_exit_code"] = json!(exit_code(&client.result));
                     match state::now() {
                         Ok(now) => client.result["updated_at_unix_millis"] = json!(now),

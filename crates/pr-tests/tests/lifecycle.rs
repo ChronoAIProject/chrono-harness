@@ -38,7 +38,7 @@ impl Host {
         };
         fs::create_dir(host.root.path().join(".chrono-harness")).unwrap();
         fs::write(host.root.path().join(".chrono-harness/retention.json"), json!({
-            "schema":"chrono-output-retention/v2", "producers":{"pr-original":[".chrono-harness/state/pr-operations/"]},
+            "schema":"chrono-output-retention/v2", "producers":{"pr-original":[".chrono-harness/state/pr-operations/"],"check-original":[".chrono-harness/state/pr-operations/"]},
             "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_related_outputs":32,"max_summaries":32,
             "max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000
         }).to_string()).unwrap();
@@ -279,7 +279,7 @@ fn native_auth_failure_and_failed_readback_remain_unknown() {
 fn watch_joins_one_native_wait_and_rechecks_identity() {
     let h = Host::new(vec![api(pending()), watch(0), api(snapshot())]);
     let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
-    assert_eq!(code, 0);
+    assert_eq!(code, 0, "{r}");
     assert_eq!(r["outcome"], "passed");
     let calls = h.calls();
     assert_eq!(calls.len(), 3);
@@ -633,7 +633,7 @@ fn merged_state_requires_and_retains_the_actual_merge_identity() {
 }
 
 #[test]
-fn stream_publication_failure_returns_the_actual_unsaved_bytes() {
+fn receipt_publication_failure_returns_the_actual_unsaved_receipt_bytes() {
     let mut step = api(snapshot());
     step["block_receipt"] = json!(true);
     let h = Host::new(vec![step]);
@@ -750,6 +750,28 @@ fn continuation_releases_only_its_prior_record_after_a_durable_handoff() {
         !h.root.path().join(previous).exists(),
         "explicitly superseded local command can expire"
     );
+    for receipt in prior["receipts"].as_array().unwrap() {
+        for field in ["stdout_original", "stderr_original", "launch_original"] {
+            assert!(
+                !h.root
+                    .path()
+                    .join(receipt[field]["path"].as_str().unwrap())
+                    .exists(),
+                "superseded process original must expire: {field}"
+            );
+        }
+    }
+    for receipt in independent["receipts"].as_array().unwrap() {
+        for field in ["stdout_original", "stderr_original", "launch_original"] {
+            assert!(
+                h.root
+                    .path()
+                    .join(receipt[field]["path"].as_str().unwrap())
+                    .exists(),
+                "independent process original remains protected: {field}"
+            );
+        }
+    }
     assert!(
         h.root
             .path()
@@ -942,4 +964,343 @@ fn continuation_rejects_a_live_producer_even_when_result_bytes_exist() {
     assert!(h.calls().is_empty());
     assert!(h.root.path().join(path).exists());
     drop(publication);
+}
+
+#[test]
+fn returned_pr_receipt_binds_durable_launch_without_retaining_credentials() {
+    let h = Host::new(vec![api(snapshot())]);
+    let (code, result) = h.status();
+    assert_eq!(code, 0, "{result}");
+    let receipt = &result["receipts"][0];
+    let original = &receipt["launch_original"];
+    let path = original["path"]
+        .as_str()
+        .expect("PR receipt must reference the actual persisted launch, not only its returned PID");
+    let bytes = fs::read(h.root.path().join(path)).unwrap();
+    assert_eq!(chrono_harness::sha256(&bytes), original["sha256"]);
+    assert_eq!(bytes.len() as u64, original["length"].as_u64().unwrap());
+    let launch: Value = serde_json::from_slice(&bytes).unwrap();
+    assert_eq!(launch["schema"], "chrono-process-launch/v2");
+    assert_eq!(launch["child_pid"], receipt["child_pid"]);
+    assert_eq!(launch["launcher_pid"], receipt["launcher_pid"]);
+    assert_eq!(launch["argv"], receipt["argv"]);
+    assert_eq!(launch["sha256"], receipt["sha256"]);
+    assert!(
+        launch.get("environment").is_none(),
+        "launch originals must not persist credentials"
+    );
+    assert!(
+        !bytes
+            .windows(b"fixture-secret-never-retain".len())
+            .any(|w| w == b"fixture-secret-never-retain")
+    );
+    assert!(launch["environment_digest"].is_string());
+    assert_eq!(h.calls().len(), 1);
+}
+
+#[test]
+fn unregistered_process_originals_refuse_dispatch() {
+    let h = Host::new(vec![api(snapshot())]);
+    let path = h.root.path().join(".chrono-harness/retention.json");
+    let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    policy["producers"]
+        .as_object_mut()
+        .unwrap()
+        .remove("check-original");
+    fs::write(path, policy.to_string()).unwrap();
+    let (code, result) = h.status();
+    assert_eq!(code, 2, "{result}");
+    assert!(result["error"].as_str().unwrap().contains("check-original"));
+    assert!(h.calls().is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_operation() {
+    if !isolated_capability_test(
+        "enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_operation",
+    ) {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::unix::net::{UnixListener, UnixStream},
+        time::Duration,
+    };
+    let mut step = api(snapshot());
+    // More than the supported platforms' stdout pipe capacity: reaching the
+    // handshake requires the actual runner reader to drain some original bytes.
+    step["stdout"] = json!("x".repeat(2 * 1024 * 1024));
+    step["stderr"] = json!("original partial diagnostic\n");
+    step["wait_for_interruption"] = json!(true);
+    let h = Host::new(vec![step]);
+    let config_path = h.root.path().join(".chrono-harness/pr.json");
+    let mut config: Value = serde_json::from_slice(&fs::read(&config_path).unwrap()).unwrap();
+    config["output_limit_bytes"] = json!(4 * 1024 * 1024);
+    h.write_config(config);
+    let listener = UnixListener::bind(h.root.path().join("ready.sock")).unwrap();
+    let cli = env!("CARGO_BIN_EXE_chrono-pr-test-cli");
+    let spec = chrono_harness::CommandSpec {
+        program: cli.into(),
+        args: vec![
+            "pr-status".into(),
+            "--pr".into(),
+            "42".into(),
+            "--head-sha".into(),
+            HEAD.into(),
+            "--host-root".into(),
+            h.root.path().to_str().unwrap().into(),
+        ],
+        env: [("GH_TOKEN".into(), "fixture-secret-never-retain".into())]
+            .into_iter()
+            .collect(),
+        timeout_seconds: 30,
+        output_limit_bytes: 1048576,
+    };
+    let digest = chrono_harness::file_identity(std::path::Path::new(cli))
+        .unwrap()
+        .0;
+    let (operation, originals) = std::thread::scope(|scope| {
+        let root = h.root.path();
+        let task = scope.spawn(|| {
+            let result = chrono_harness::run_process_observed_for(
+                root,
+                &spec,
+                &[],
+                &digest,
+                Duration::from_secs(30),
+            );
+            // If launch fails before the fixture handshake, wake the same native
+            // channel with the original result rather than hanging the test.
+            if let Ok(mut ready) = UnixStream::connect(root.join("ready.sock")) {
+                let bytes = serde_json::to_vec(
+                    &json!({"completed_before_handshake":format!("{result:?}")}),
+                )
+                .unwrap();
+                let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
+                let _ = ready.write_all(&bytes);
+            }
+            result
+        });
+        let (mut ready, _) = listener.accept().unwrap();
+        let mut length = [0; 4];
+        ready.read_exact(&mut length).unwrap();
+        let mut bytes = vec![0; u32::from_be_bytes(length) as usize];
+        ready.read_exact(&mut bytes).unwrap();
+        let message: Value = serde_json::from_slice(&bytes).unwrap();
+        assert!(
+            message.get("completed_before_handshake").is_none(),
+            "{message}"
+        );
+        let operation = message["operation"].as_str().unwrap().to_owned();
+        let call: Value = serde_json::from_slice(
+            &fs::read(root.join(&operation).join("call-1.intent.json")).unwrap(),
+        )
+        .unwrap();
+        let originals = call["process_originals"].clone();
+        let launch_bytes = fs::read(root.join(originals["launch"].as_str().unwrap())).unwrap();
+        let launch: Value = serde_json::from_slice(&launch_bytes).unwrap();
+        assert_eq!(launch["schema"], "chrono-process-launch/v2");
+        assert!(launch.get("environment").is_none());
+        assert!(
+            !root.join(&operation).join("result.json").exists(),
+            "launch is live evidence, not a terminal result"
+        );
+        assert!(!root.join(&operation).join("call-1.result.json").exists());
+        let partial = fs::read(root.join(originals["stdout"].as_str().unwrap())).unwrap();
+        assert!(!partial.is_empty());
+        assert!(partial.iter().all(|byte| *byte == b'x'));
+        let launcher = launch["launcher_pid"].as_u64().unwrap() as i32;
+        assert_eq!(unsafe { libc::kill(launcher, libc::SIGKILL) }, 0);
+        let joined = task.join().unwrap().unwrap();
+        assert_eq!(joined.child_pid, Some(launcher as u32));
+        assert_eq!(joined.exit_signal, Some(libc::SIGKILL));
+        (operation, originals)
+    });
+    // Caller has joined its enclosing owned process. A later query still cannot
+    // manufacture the missing original PR terminal receipt or release its root.
+    maintain_after_diagnostics(&h);
+    assert!(!h.root.path().join(&operation).join("result.json").exists());
+    for field in ["stdout", "stderr", "launch"] {
+        assert!(
+            h.root
+                .path()
+                .join(originals[field].as_str().unwrap())
+                .exists(),
+            "unknown original remains protected: {field}"
+        );
+    }
+    let (code, result) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        &operation,
+    ]);
+    assert_eq!(code, 2, "{result}");
+    assert_eq!(
+        h.calls().len(),
+        1,
+        "unknown attempt must not be recreated or replaced by a successful query"
+    );
+}
+
+#[test]
+fn continuation_recovers_the_originals_handoff_before_releasing_the_prior_operation() {
+    if !isolated_capability_test(
+        "continuation_recovers_the_originals_handoff_before_releasing_the_prior_operation",
+    ) {
+        return;
+    }
+    let h = Host::new(vec![
+        api(snapshot()),
+        json!({"prefix":["api","graphql"],"exit":2,"stderr":"original readback failure"}),
+        api(snapshot()),
+    ]);
+    let (code, previous) = h.status();
+    assert_eq!(code, 0, "{previous}");
+    let path = previous["operation"].as_str().unwrap();
+    let saved_result = fs::read(h.root.path().join(path).join("result.json")).unwrap();
+    // Re-consuming the actual immutable originals recreates the exact remaining
+    // producer protection after interruption between result sealing and handoff.
+    // All bytes and domain results still come from the real original producer.
+    for field in ["stdout_original", "stderr_original", "launch_original"] {
+        let original = &previous["receipts"][0][field];
+        let path = original["path"].as_str().unwrap();
+        let bytes = fs::read(h.root.path().join(path)).unwrap();
+        assert!(
+            chrono_harness::retained_artifacts::retention::publish_pending_original(
+                h.root.path(),
+                "check-original",
+                path,
+                &bytes,
+                json!({"consumer":"continuation regression re-reading the original publication"}),
+            )
+            .unwrap()
+        );
+    }
+    let (code, failed) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        path,
+    ]);
+    assert_eq!(code, 2, "{failed}");
+    maintain_after_diagnostics(&h);
+    assert!(
+        h.root.path().join(path).exists(),
+        "failed query preserves prior recovery"
+    );
+    for field in ["stdout_original", "stderr_original", "launch_original"] {
+        assert!(
+            h.root
+                .path()
+                .join(previous["receipts"][0][field]["path"].as_str().unwrap())
+                .exists(),
+            "failed query preserves original producer protection: {field}"
+        );
+    }
+    let (code, current) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        path,
+    ]);
+    assert_eq!(code, 0, "{current}");
+    assert_eq!(h.calls().len(), 3);
+    assert_eq!(
+        fs::read(h.root.path().join(path).join("result.json")).unwrap(),
+        saved_result
+    );
+    maintain_after_diagnostics(&h);
+    assert!(
+        !h.root.path().join(path).exists(),
+        "accepted prior operation expires"
+    );
+    for field in ["stdout_original", "stderr_original", "launch_original"] {
+        let original = previous["receipts"][0][field]["path"].as_str().unwrap();
+        assert!(
+            !h.root.path().join(original).exists(),
+            "accepted original producer handoff must recover and expire: {field}"
+        );
+    }
+    assert!(
+        h.root
+            .path()
+            .join(current["operation"].as_str().unwrap())
+            .exists(),
+        "current OPEN observation remains protected"
+    );
+}
+
+#[test]
+fn continuation_requires_available_unchanged_actual_process_originals_before_dispatch() {
+    for failure in ["missing", "modified", "replaced"] {
+        let h = Host::new(vec![api(snapshot()), api(snapshot())]);
+        let (code, previous) = h.status();
+        assert_eq!(code, 0, "{previous}");
+        let operation = previous["operation"].as_str().unwrap();
+        let original = previous["receipts"][0]["stdout_original"]["path"]
+            .as_str()
+            .unwrap();
+        let path = h.root.path().join(original);
+        match failure {
+            "missing" => fs::remove_file(&path).unwrap(),
+            "modified" => fs::write(&path, b"different original output").unwrap(),
+            "replaced" => {
+                let saved = fs::read(&path).unwrap();
+                fs::rename(&path, path.with_extension("saved-original")).unwrap();
+                fs::write(&path, saved).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let (code, result) = h.run(&[
+            "pr-status",
+            "--pr",
+            "42",
+            "--head-sha",
+            HEAD,
+            "--continue-operation",
+            operation,
+        ]);
+        assert_eq!(code, 2, "{failure}: {result}");
+        assert!(result["error"].is_string(), "{failure}: {result}");
+        assert_eq!(
+            h.calls().len(),
+            1,
+            "{failure}: failed original qualification must not dispatch a new query"
+        );
+        assert!(h.root.path().join(operation).exists());
+    }
+}
+
+#[test]
+fn continuation_can_recheck_a_terminal_operation_after_its_original_handoff() {
+    let mut merged = snapshot();
+    merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
+    merged["data"]["repository"]["pullRequest"]["mergeCommit"] = json!({"oid":OTHER});
+    let h = Host::new(vec![api(merged.clone()), api(merged)]);
+    let (code, previous) = h.status();
+    assert_eq!(code, 0, "{previous}");
+    let (code, current) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        previous["operation"].as_str().unwrap(),
+    ]);
+    assert_eq!(code, 0, "{current}");
+    assert_eq!(current["pr_state"], "MERGED");
+    assert_eq!(current["merge_commit"], OTHER);
+    assert_eq!(h.calls().len(), 2);
 }

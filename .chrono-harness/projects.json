@@ -2715,7 +2715,9 @@
             "test",
             "--locked",
             "--manifest-path",
-            "crates/pr-tests/Cargo.toml"
+            "crates/pr-tests/Cargo.toml",
+            "--",
+            "--test-threads=2"
           ]
         },
         "lockfile": {

@@ -4658,3 +4658,176 @@ fn sealed_tree_member_qualification_requires_exact_producer_identity_and_bytes()
             .is_err()
     );
 }
+
+#[test]
+fn publication_input_handoff_requires_sealed_referenced_unchanged_originals() {
+    if !isolated_capability_test(
+        "publication_input_handoff_requires_sealed_referenced_unchanged_originals",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let input = ".chrono-harness/state/fixtures/process.stdout";
+    let unrelated = ".chrono-harness/state/fixtures/other.stdout";
+    for path in [input, unrelated] {
+        assert!(
+            retained_artifacts::retention::publish_pending_original(
+                h.path(),
+                "fixture",
+                path,
+                b"original",
+                json!({})
+            )
+            .unwrap()
+        );
+    }
+    let destination = ".chrono-harness/state/fixtures/domain-result";
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(destination),
+        true,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
+    publication
+        .write_file(
+            &h.path().join(destination).join("result.json"),
+            b"actual result",
+        )
+        .unwrap();
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[destination.into()])
+        .unwrap();
+    inventory(h.path())
+        .dependencies_paths(destination, &[input.into()])
+        .unwrap();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "live result cannot take over a publisher's protection"
+    );
+    publication.complete(json!({"exit_code":0})).unwrap();
+    let reader = retained_artifacts::retention::read_guard(h.path(), destination)
+        .unwrap()
+        .unwrap();
+    let input_reader = retained_artifacts::retention::read_guard(h.path(), input)
+        .unwrap()
+        .unwrap();
+    let before = ledger(h.path())["roots"].clone();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into(), unrelated.into()])
+            .is_err(),
+        "one missing dependency prevents every release"
+    );
+    assert_eq!(ledger(h.path())["roots"], before);
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(
+                destination,
+                &[".chrono-harness/state/fixtures/missing".into()]
+            )
+            .is_err()
+    );
+    let original = h.path().join(input);
+    let saved = h.path().join("retained-inode");
+    fs::rename(&original, &saved).unwrap();
+    fs::write(&original, b"original").unwrap();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "same bytes in a replacement inode are not the producer original"
+    );
+    assert_eq!(ledger(h.path())["roots"], before);
+    fs::remove_file(&original).unwrap();
+    fs::rename(saved, &original).unwrap();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "renaming back does not restore the producer's sealed stamp"
+    );
+    let clean = ".chrono-harness/state/fixtures/clean.stdout";
+    retained_artifacts::retention::publish_pending_original(
+        h.path(),
+        "fixture",
+        clean,
+        b"clean original",
+        json!({}),
+    )
+    .unwrap();
+    inventory(h.path())
+        .dependencies_paths(destination, &[clean.into()])
+        .unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .unwrap();
+    let state = ledger(h.path());
+    let roots = state["roots"].as_object().unwrap();
+    assert_eq!(
+        roots.len(),
+        3,
+        "domain, independent and changed publisher roots remain: {state}"
+    );
+    assert!(roots.contains_key("domain-recovery"));
+    drop(input_reader);
+    drop(reader);
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[])
+        .unwrap();
+    let released_roots = ledger(h.path())["roots"].clone();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .expect("already settled original handoff is a no-op after domain root release");
+    assert_eq!(ledger(h.path())["roots"], released_roots);
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "an outstanding changed original still cannot be released into an unrooted destination"
+    );
+    assert_eq!(ledger(h.path())["roots"], released_roots);
+    retained_artifacts::retention::publish_pending_original(
+        h.path(),
+        "fixture",
+        clean,
+        b"clean original",
+        json!({}),
+    )
+    .unwrap();
+    let pending_roots = ledger(h.path())["roots"].clone();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[clean.into()])
+            .is_err(),
+        "a real pending transfer still requires a protected destination"
+    );
+    assert_eq!(ledger(h.path())["roots"], pending_roots);
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[destination.into()])
+        .unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .unwrap();
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[])
+        .unwrap();
+    maintain_fixture_to(h.path(), 2);
+    assert!(!h.path().join(clean).exists());
+    assert!(
+        h.path().join(input).exists(),
+        "changed original remains protected"
+    );
+    assert!(!h.path().join(destination).exists());
+    assert!(
+        h.path().join(unrelated).exists(),
+        "another publisher remains protected"
+    );
+}
