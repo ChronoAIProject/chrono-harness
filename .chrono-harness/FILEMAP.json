@@ -1007,7 +1007,6 @@
     {"from":"environment:CHRONO_FULL_TEST_RECEIPTS","kind":"runtime-input","to":"project:judge-workflow-tests"},
     {"from":"environment:CHRONO_WORKTREE_TEST_RECEIPTS","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:CHRONO_CHECK_HANDOFF_TRACE","kind":"runtime-input","to":"project:worktree-tests"},
-    {"from":"environment:CHRONO_IMMUTABLE_INPUT_FIXTURE","kind":"runtime-input","to":"project:runner-tests"},
     {"from":"tool:git","kind":"runtime-input","to":"project:host-release-native"},
     {"from":"environment:PATH","kind":"runtime-input","to":"project:host-release-native"},
     {"from":"environment:TMPDIR","kind":"runtime-input","to":"project:host-release-native"},
