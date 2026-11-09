@@ -73,11 +73,13 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
                     owner["manifest"].clone()
                 ]
             );
-            let output_arguments = if owner["id"] == "worktree-tests" {
-                assert_eq!(
-                    &argv[argv.len() - 2..],
-                    &[json!("--"), json!("--test-threads=8")]
-                );
+            let test_threads = match owner["id"].as_str().unwrap() {
+                "worktree-tests" => Some("--test-threads=8"),
+                "pr-tests" => Some("--test-threads=2"),
+                _ => None,
+            };
+            let output_arguments = if let Some(test_threads) = test_threads {
+                assert_eq!(&argv[argv.len() - 2..], &[json!("--"), json!(test_threads)]);
                 &argv[4..argv.len() - 2]
             } else {
                 &argv[4..]
