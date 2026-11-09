@@ -38,7 +38,10 @@ fn delivery_missing_fields_are_not_empty_or_zero_values() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn delivery_requires_all_full_text_fields() {
-    proof { reveal_strlit("source"); reveal_strlit("source-extra"); }
+    proof {
+        reveal_strlit("source"); reveal_strlit("source-extra");
+        assert("source"@.len() != "source-extra"@.len());
+    }
     let exact = delivery::text_fields(&[(Some("source"), "source")]);
     let prefix = delivery::text_fields(&[(Some("source-extra"), "source")]);
     let missing = delivery::text_fields(&[(Some("source"), "source"), (None, "source")]);
@@ -69,7 +72,10 @@ fn delivery_public_versions_require_a_complete_draft_or_exact_existing_assets() 
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn delivery_only_treats_the_original_explicit_404_as_absent() {
-    proof { reveal_strlit("404"); reveal_strlit("Not Found"); reveal_strlit("403"); }
+    proof {
+        reveal_strlit("404"); reveal_strlit("Not Found"); reveal_strlit("403");
+        assert("403"@[2] != "404"@[2]);
+    }
     let success = delivery::api_outcome(0, None, None, false);
     let absent = delivery::api_outcome(1, Some("404"), Some("Not Found"), true);
     let denied = delivery::api_outcome(1, Some("403"), Some("Not Found"), true);
@@ -90,7 +96,16 @@ fn delivery_asset_names_do_not_allow_paths_or_parent_components() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn delivery_channel_and_requested_version_are_exact() {
-    proof { reveal_strlit(""); reveal_strlit("build"); reveal_strlit("preview"); reveal_strlit("stable"); reveal_strlit("Preview"); reveal_strlit("v1.2.3"); reveal_strlit("v1.2.3-beta.1"); }
+    proof {
+        reveal_strlit(""); reveal_strlit("build"); reveal_strlit("preview"); reveal_strlit("stable"); reveal_strlit("Preview"); reveal_strlit("v1.2.3"); reveal_strlit("v1.2.3-beta.1");
+        assert("preview"@.len() != "build"@.len());
+        assert("stable"@.len() != "build"@.len());
+        assert("stable"@.len() != "preview"@.len());
+        assert("Preview"@.len() != "build"@.len());
+        assert("Preview"@.len() != "stable"@.len());
+        assert("Preview"@[0] != "preview"@[0]);
+        assert("v1.2.3"@.len() != "v1.2.3-beta.1"@.len());
+    }
     let build = delivery::channel("");
     let preview = delivery::channel("preview");
     let stable = delivery::channel("stable");

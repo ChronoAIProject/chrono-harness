@@ -149,8 +149,11 @@ pub fn name(bytes: &[u8]) -> (valid: bool)
     ensures valid == (bytes.len() > 0 && bytes@ != seq![46u8] && bytes@ != seq![46u8,46]
         && forall|i: int| 0 <= i < bytes.len() ==> name_byte(#[trigger] bytes[i])),
 {
-    if bytes.len() == 0 || identifiers::equal_bytes(bytes, &[46u8])
-        || identifiers::equal_bytes(bytes, &[46u8,46]) { return false; }
+    let dot = [46u8];
+    let parent = [46u8,46];
+    proof { assert(dot@ =~= seq![46u8]); assert(parent@ =~= seq![46u8,46]); }
+    if bytes.len() == 0 || identifiers::equal_bytes(bytes, &dot)
+        || identifiers::equal_bytes(bytes, &parent) { return false; }
     let mut i = 0;
     while i < bytes.len()
         invariant i <= bytes.len(), bytes.len() > 0,
