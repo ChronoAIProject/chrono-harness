@@ -1243,6 +1243,22 @@ fn full_report_forwards_real_named_outputs_and_warn_without_inventing_observatio
     }
     assert_eq!(report["tests"][0]["state"], "executed");
     assert_eq!(report["tests"][0]["exit_code"], 0);
+    assert_eq!(
+        report["tools"][0]["path"],
+        fs::canonicalize(h.root().join(".chrono-harness/bin/report-fixture"))
+            .unwrap()
+            .to_str()
+            .unwrap()
+    );
+    assert_eq!(
+        report["tools"][0]["version"],
+        format!("chrono-test-registration-regression {}", env!("CARGO_PKG_VERSION"))
+    );
+    assert!(
+        fs::read(h.root().join(".chrono-harness/state/tool-version.stderr.bin"))
+            .unwrap()
+            .is_empty()
+    );
     let evidence = &report["tests"][0]["evidence"][0];
     let bytes = fs::read(h.root().join(evidence["path"].as_str().unwrap())).unwrap();
     assert_eq!(evidence["sha256"], sha256(&bytes));
