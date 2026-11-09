@@ -32,7 +32,7 @@
 
 可重建工具不随证据重复上传；原生总量和耗时收益尚未验证，原 bootstrap 和标准检查仍须执行。
 
-CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选择 Git。准备命令和绑定 Git 消费者使用同一原生执行物，故障适配器在输入登记保留所选路径。平台缺登记就失败，不从环境 PATH 回退。这不改变消费宿主 Git 政策，也不证明 Git 输入完整。
+CI fixture 用已有 `resolve_program` 从继承的 PATH 解析 Git，不在仓库维护主机路径清单；找不到程序就失败。隔离测试在遮蔽 PATH 前解析真实 Git，并用 `CHRONO_CI_FIXTURE_GIT` 传给自己的子进程；生产调用仍只使用已绑定的工具。准备命令和绑定 Git 消费者使用所选执行物，故障适配器在本轮输入登记保留实际路径、版本和摘要。这不改变消费宿主的 Git 政策，也不证明 Git 输入完整；剩余真实 Git fixture 的命令边界 mock 迁移仍未完成。
 
 从仓库根运行。core、缓存、detector、单元准备、共享启动、Verus 准备和所有者阶段构建由 Rust 执行，统一通过薄 shell 入口启动。首次前端编译需要 Git、rustup 和固定 Rust 1.95.0；已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。所有者资格读取和构建也由该 Rust 实现维护。发布编排与部分 Python 接口测试样本仍需各自登记的解释器，bootstrap 不再要求 Python。
 
@@ -50,6 +50,10 @@ CI fixture 从 `.chrono-harness/tests/ci-tools.json` 的明确 OS／架构项选
 在已有 bootstrap 租约内用固定 Rust 1.95.0 构建并调用本宿主的 `chrono-host-bootstrap`。
 Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及两流，再交出现有 stage 描述符；
 阶段校验读取同一生产者的固定原件。shell 只转交参数，不复制构建配方或解释报告。
+升级的 `bootstrap-owner-upgrade/attempt-*` 按整目录交给现有 retention：
+真实调用结束后，阶段报告的使用方保护原子交接为该目录的依赖，成功后可滚动回收。
+失败或中断沿宿主有限诊断期限保留；没有有效 JSON 时保留原始 stdout、stderr 和退出码。
+活的目录发布租约保护这些依赖，不另建可能在中断后永久遗留的父使用方根。
 普通入口先通过已部署所有者构建并安装前端到 `.chrono-harness/bin/chrono-host-bootstrap`，再经同一固定版本的 `rustup run` 执行该保留文件，保持首次编译与后续调用的 Rustup 目录选择一致；不在释放租约后执行可回收缓存中的二进制。关联检出缺少协调所有者时在编译前拒绝。core 的升级编排也由 Rust 执行，Verus 准备沿同一入口委托登记操作。
 
 项目操作的 `bootstrap-native` 工具槽也指向上述保留文件。首次执行这些操作前，先走同一候选安装入口；完成缓存释放后，构建前置继续消费已安装前端，不依赖 Cargo target 中的临时执行物。

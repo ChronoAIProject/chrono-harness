@@ -85,6 +85,95 @@ fn expanded_observation(reader: &Reader) -> Value {
     observed
 }
 
+// 新 scoped 绑定只在命令边界模拟 Git，不初始化仓库或委托真实 Git。
+fn observed_host() -> Host {
+    let temporary = tempfile::tempdir().unwrap();
+    let root = fs::canonicalize(temporary.path()).unwrap();
+    fs::create_dir(root.join(".chrono-harness")).unwrap();
+    let tools = root.join("tools");
+    fs::create_dir(&tools).unwrap();
+    let tool = tools.join("git-wrapper");
+    native_executable::install(env!("CARGO_BIN_EXE_chrono-test-git-input"), &tool).unwrap();
+    fs::write(
+        tools.join("git-case.json"),
+        serde_json::to_vec(&json!({"root":root,"mode":"fixed-response",
+            "stdout":"git mock observed\n","stderr":"","exit_code":0}))
+        .unwrap(),
+    )
+    .unwrap();
+    let config = json!({
+        "schema_version":4,"facts_git":{"tool":"git"},
+        "tools":[{"id":"git","program":"git-wrapper","resolution":"PATH-once",
+            "version_argv":["--version"],"expected_version":null}],
+        "environment":{"inherit":[],"values":{"PATH":tools},"inputs":[]},
+        "protocol":{"timeout_seconds":30,"stdout_limit_bytes":1048576}
+    });
+    Host {
+        _temporary: temporary,
+        root,
+        tool,
+        config,
+    }
+}
+
+#[test]
+fn scoped_facts_observe_git_without_a_host_allowlist_and_recheck_its_bytes() {
+    let h = observed_host();
+    let reader = h.open().unwrap();
+    let observed = expanded_observation(&reader);
+    assert_eq!(
+        observed["binding"]["sha256"],
+        sha256(&fs::read(&h.tool).unwrap())
+    );
+    assert_eq!(observed["binding"]["path"], json!(h.tool));
+    assert!(observed["binding"]["input"].is_null());
+    assert_eq!(observed["processes"][0]["stdout"], "git mock observed\n");
+    assert_eq!(
+        reader.git(&h.root, &["status"]).unwrap(),
+        b"git mock observed\n"
+    );
+    let trace = fs::read_to_string(h.root.join("trace")).unwrap();
+    assert_eq!(trace.lines().count(), 2);
+    assert_eq!(trace.lines().next(), Some("--version"));
+    assert!(trace.lines().last().unwrap().ends_with(" status"));
+    // 修改执行物后必须在启动任何新命令之前拒绝。
+    let permissions = fs::metadata(&h.tool).unwrap().permissions();
+    fs::remove_file(&h.tool).unwrap();
+    fs::write(&h.tool, "changed executable").unwrap();
+    fs::set_permissions(&h.tool, permissions).unwrap();
+    assert!(
+        reader
+            .git(&h.root, &["status"])
+            .unwrap_err()
+            .contains("executable/input changed")
+    );
+    assert_eq!(fs::read_to_string(h.root.join("trace")).unwrap(), trace);
+}
+
+#[test]
+fn scoped_observation_keeps_explicit_expectations_and_full_input_requirements() {
+    let mut h = observed_host();
+    h.config["schema_version"] = json!(3);
+    assert!(h.open().is_err());
+    assert!(!h.root.join("trace").exists());
+    h.config["schema_version"] = json!(4);
+    h.config["tools"][0]["expected_version"] = json!("different version");
+    assert!(h.open().err().unwrap().message.contains("version mismatch"));
+    h.config["tools"][0]["expected_version"] = Value::Null;
+    fs::remove_file(h.root.join("trace")).unwrap();
+    h.config["facts_git"]["input"] = json!("git-binary");
+    h.config["environment"]["inputs"] = json!([{"id":"git-binary","location":h.tool,
+        "presence":"present","sha256":"f".repeat(64)}]);
+    assert!(
+        h.open()
+            .err()
+            .unwrap()
+            .message
+            .contains("declared digest mismatch")
+    );
+    assert!(!h.root.join("trace").exists());
+}
+
 #[test]
 fn actual_registry_test_inputs_have_explicit_runner_test_consumers() {
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

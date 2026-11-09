@@ -950,11 +950,12 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
     let commands = [cargo_result(true), cargo_result(false)];
-    let (created_tx, created_rx) = mpsc::channel();
-    let (resume_tx, resume_rx) = mpsc::channel();
-    let (busy_tx, busy_rx) = mpsc::channel();
-    let (finished_tx, finished_rx) = mpsc::channel();
     let (first, second) = std::thread::scope(|scope| {
+        // 控制端退出时先关闭释放信道，再由 scope 等待生产者，避免断言失败留下阻塞线程。
+        let (created_tx, created_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let (busy_tx, busy_rx) = mpsc::channel();
+        let (finished_tx, finished_rx) = mpsc::channel();
         let root = &owner.root;
         let command = &commands[0];
         let store = &directory;

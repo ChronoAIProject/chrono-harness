@@ -105,14 +105,7 @@ fn producer_record_path(directory: &Path, allocation: &Path) -> PathBuf {
     ))
 }
 fn fixture_git() -> PathBuf {
-    let registry = source().join(".chrono-harness/tests/worktree-tools.json");
-    let tools = json(&fs::read(&registry).expect("registered worktree test tools")).unwrap();
-    assert_eq!(tools["schema"], "chrono-worktree-test-tools/v1");
-    let program = tools["platforms"][platform()]["git"]
-        .as_str()
-        .expect("Git must be explicitly registered for this test platform");
-    assert!(Path::new(program).is_absolute());
-    chrono_harness::resolve_program(&source(), program, None).unwrap()
+    chrono_harness::resolve_program(&source(), "git", None).expect("Git fixture tool on PATH")
 }
 mod age;
 mod automatic;
