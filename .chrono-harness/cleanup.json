@@ -195,11 +195,7 @@
       "disposition": "dispose"
     },
     {
-      "path": ".chrono-harness/cache/release/",
-      "disposition": "dispose"
-    },
-    {
-      "path": ".chrono-harness/cache/release-dependencies/",
+      "path": ".chrono-harness/cache/release-frontend/",
       "disposition": "dispose"
     },
     {

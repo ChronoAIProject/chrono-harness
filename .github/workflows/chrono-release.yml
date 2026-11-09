@@ -1,8 +1,6 @@
 # chrono-ci: owned github-release/v1
 name: "chrono-release-build"
 on:
-  push:
-    branches: ["integration/distribution","integration/release-ci","integration/release-units"]
   workflow_dispatch:
     inputs:
       source:
@@ -14,6 +12,7 @@ permissions:
 jobs:
   linux_build_runner:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -35,6 +34,14 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - &chrono_release_download_14
+        name: Download selected original artifact from linux_release_frontend
+        if: ${{ always() && needs.linux_release_frontend.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_release_frontend.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-frontend/"
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -67,7 +74,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_runner"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -103,6 +110,7 @@ jobs:
           include-hidden-files: true
   linux_build_instructions:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -124,6 +132,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -156,7 +165,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_instructions"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -192,6 +201,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_ci:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -213,6 +223,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -245,7 +256,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_ci"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -281,6 +292,7 @@ jobs:
           include-hidden-files: true
   linux_build_ci:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -302,6 +314,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -334,7 +347,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_ci"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -370,6 +383,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_registration:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -391,6 +405,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -423,7 +438,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_registration"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -459,6 +474,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_filemap:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -480,6 +496,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -512,7 +529,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_filemap"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -548,6 +565,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_routes:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -569,6 +587,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -601,7 +620,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_routes"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -637,6 +656,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_projects:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -658,6 +678,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -690,7 +711,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_projects"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -726,6 +747,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_cost:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -747,6 +769,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -779,7 +802,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_cost"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -815,6 +838,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_mixed:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -836,6 +860,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -868,7 +893,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_mixed"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -904,6 +929,7 @@ jobs:
           include-hidden-files: true
   linux_build_judge_workflow:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -925,6 +951,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -957,7 +984,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_judge_workflow"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -993,6 +1020,7 @@ jobs:
           include-hidden-files: true
   linux_build_inputs:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1014,6 +1042,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -1046,7 +1075,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_inputs"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1082,6 +1111,7 @@ jobs:
           include-hidden-files: true
   linux_build_distribution:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1103,6 +1133,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -1135,7 +1166,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_distribution"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1171,6 +1202,7 @@ jobs:
           include-hidden-files: true
   linux_build_worktree:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1192,6 +1224,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -1224,7 +1257,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_worktree"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1260,7 +1293,7 @@ jobs:
           include-hidden-files: true
   linux_verify_distribution_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_distribution"]
+    needs: ["linux_release_frontend","linux_build_distribution"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1282,6 +1315,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - &chrono_release_download_2
         name: Download selected original artifact from linux_build_distribution
         if: ${{ always() && needs.linux_build_distribution.outputs.artifact_id != '' }}
@@ -1322,7 +1356,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_distribution_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1358,7 +1392,7 @@ jobs:
           include-hidden-files: true
   linux_verify_worktree_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_ci","linux_build_worktree"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_ci","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1380,6 +1414,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - &chrono_release_download_12
         name: Download selected original artifact from linux_build_runner
         if: ${{ always() && needs.linux_build_runner.outputs.artifact_id != '' }}
@@ -1436,7 +1471,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_worktree_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1472,7 +1507,7 @@ jobs:
           include-hidden-files: true
   linux_verify_runner_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner"]
+    needs: ["linux_release_frontend","linux_build_runner"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1494,6 +1529,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -1527,7 +1563,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_runner_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1563,7 +1599,7 @@ jobs:
           include-hidden-files: true
   linux_verify_inputs_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1585,6 +1621,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - &chrono_release_download_9
         name: Download selected original artifact from linux_build_judge_registration
@@ -1682,7 +1719,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_inputs_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1718,7 +1755,7 @@ jobs:
           include-hidden-files: true
   linux_verify_ci_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_worktree"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1740,6 +1777,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - &chrono_release_download_4
         name: Download selected original artifact from linux_build_judge_ci
@@ -1784,7 +1822,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_ci_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1820,7 +1858,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_ci_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_ci"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1842,6 +1880,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_4
       - name: Prepare registered caches
@@ -1876,7 +1915,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_ci_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -1912,7 +1951,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_registration_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_registration"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1934,6 +1973,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_9
       - name: Prepare registered caches
@@ -1968,7 +2008,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_registration_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2004,7 +2044,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2026,6 +2066,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_4
       - *chrono_release_download_1
@@ -2065,7 +2106,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_projects_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2101,7 +2142,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_worktree"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_worktree"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2123,6 +2164,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_1
       - *chrono_release_download_9
@@ -2166,7 +2208,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_workflow_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2202,6 +2244,7 @@ jobs:
           include-hidden-files: true
   linux_verify_instructions_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2223,6 +2266,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2255,7 +2299,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_instructions_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2291,7 +2335,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_filemap_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2313,6 +2357,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_9
       - *chrono_release_download_6
@@ -2350,7 +2395,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_filemap_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2386,6 +2431,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_routes_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2407,6 +2453,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2439,7 +2486,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_routes_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2475,7 +2522,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_cost_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2497,6 +2544,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_9
       - *chrono_release_download_6
@@ -2533,7 +2581,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_cost_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2569,7 +2617,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_mixed_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost","linux_build_judge_mixed"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost","linux_build_judge_mixed"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2591,6 +2639,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_9
       - *chrono_release_download_6
@@ -2628,7 +2677,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_judge_mixed_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2664,7 +2713,7 @@ jobs:
           include-hidden-files: true
   linux_package:
     if: ${{ always() && github.event.deleted != true }}
-    needs: ["linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_release_build_tests","linux_verify_release_build_integration","linux_verify_diagnostics_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests","linux_verify_pr_tests"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_diagnostics_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests","linux_verify_pr_tests","linux_verify_host_release_native_tests"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2686,6 +2735,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_12
       - name: Download selected original artifact from linux_build_instructions
         if: ${{ always() && needs.linux_build_instructions.outputs.artifact_id != '' }}
@@ -2811,20 +2861,6 @@ jobs:
           artifact-ids: ${{ needs.linux_verify_judge_mixed_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests/"
-      - name: Download selected original artifact from linux_verify_release_build_tests
-        if: ${{ always() && needs.linux_verify_release_build_tests.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_verify_release_build_tests.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_release_build_tests/"
-      - name: Download selected original artifact from linux_verify_release_build_integration
-        if: ${{ always() && needs.linux_verify_release_build_integration.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_verify_release_build_integration.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
       - name: Download selected original artifact from linux_verify_diagnostics_tests
         if: ${{ always() && needs.linux_verify_diagnostics_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2868,6 +2904,13 @@ jobs:
           artifact-ids: ${{ needs.linux_verify_pr_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_pr_tests/"
+      - name: Download selected original artifact from linux_verify_host_release_native_tests
+        if: ${{ always() && needs.linux_verify_host_release_native_tests.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_verify_host_release_native_tests.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/verify_host_release_native_tests/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -2879,7 +2922,7 @@ jobs:
         run: |
           mkdir -p '.chrono-harness/cache'
           printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > '.chrono-harness/cache/release-dependencies.json'
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/package' '--collect'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/package' '--collect'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -2891,6 +2934,7 @@ jobs:
           include-hidden-files: true
   macos_build_runner:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -2912,6 +2956,14 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - &chrono_release_download_29
+        name: Download selected original artifact from macos_release_frontend
+        if: ${{ always() && needs.macos_release_frontend.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_release_frontend.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-frontend/"
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2944,7 +2996,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_runner"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_runner' '--unit' 'build_runner'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -2980,6 +3032,7 @@ jobs:
           include-hidden-files: true
   macos_build_instructions:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3001,6 +3054,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3033,7 +3087,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_instructions"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_instructions' '--unit' 'build_instructions'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3069,6 +3123,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_ci:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3090,6 +3145,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3122,7 +3178,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_ci"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_ci' '--unit' 'build_judge_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3158,6 +3214,7 @@ jobs:
           include-hidden-files: true
   macos_build_ci:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3179,6 +3236,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3211,7 +3269,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_ci"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_ci' '--unit' 'build_ci'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3247,6 +3305,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_registration:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3268,6 +3327,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3300,7 +3360,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_registration"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_registration' '--unit' 'build_judge_registration'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3336,6 +3396,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_filemap:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3357,6 +3418,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3389,7 +3451,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_filemap"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_filemap' '--unit' 'build_judge_filemap'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3425,6 +3487,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_routes:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3446,6 +3509,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3478,7 +3542,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_routes"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_routes' '--unit' 'build_judge_routes'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3514,6 +3578,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_projects:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3535,6 +3600,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3567,7 +3633,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_projects"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_projects' '--unit' 'build_judge_projects'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3603,6 +3669,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_cost:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3624,6 +3691,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3656,7 +3724,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_cost"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_cost' '--unit' 'build_judge_cost'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3692,6 +3760,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_mixed:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3713,6 +3782,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3745,7 +3815,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_mixed"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_mixed' '--unit' 'build_judge_mixed'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3781,6 +3851,7 @@ jobs:
           include-hidden-files: true
   macos_build_judge_workflow:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3802,6 +3873,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3834,7 +3906,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_judge_workflow"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_judge_workflow' '--unit' 'build_judge_workflow'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3870,6 +3942,7 @@ jobs:
           include-hidden-files: true
   macos_build_inputs:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3891,6 +3964,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -3923,7 +3997,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_inputs"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_inputs' '--unit' 'build_inputs'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -3959,6 +4033,7 @@ jobs:
           include-hidden-files: true
   macos_build_distribution:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -3980,6 +4055,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4012,7 +4088,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_distribution"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_distribution' '--unit' 'build_distribution'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4048,6 +4124,7 @@ jobs:
           include-hidden-files: true
   macos_build_worktree:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4069,6 +4146,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4101,7 +4179,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_worktree"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_worktree' '--unit' 'build_worktree'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4137,7 +4215,7 @@ jobs:
           include-hidden-files: true
   macos_verify_distribution_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_distribution"]
+    needs: ["macos_release_frontend","macos_build_distribution"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4159,7 +4237,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - &chrono_release_download_16
+      - *chrono_release_download_29
+      - &chrono_release_download_17
         name: Download selected original artifact from macos_build_distribution
         if: ${{ always() && needs.macos_build_distribution.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4199,7 +4278,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_distribution_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_distribution_tests' '--unit' 'verify_distribution_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4235,7 +4314,7 @@ jobs:
           include-hidden-files: true
   macos_verify_worktree_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_ci","macos_build_worktree"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_ci","macos_build_worktree"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4257,7 +4336,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - &chrono_release_download_26
+      - *chrono_release_download_29
+      - &chrono_release_download_27
         name: Download selected original artifact from macos_build_runner
         if: ${{ always() && needs.macos_build_runner.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4265,7 +4345,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_runner.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_runner/"
-      - &chrono_release_download_15
+      - &chrono_release_download_16
         name: Download selected original artifact from macos_build_ci
         if: ${{ always() && needs.macos_build_ci.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4273,7 +4353,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_ci.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_ci/"
-      - &chrono_release_download_27
+      - &chrono_release_download_28
         name: Download selected original artifact from macos_build_worktree
         if: ${{ always() && needs.macos_build_worktree.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4313,7 +4393,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_worktree_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_worktree_tests' '--unit' 'verify_worktree_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4349,7 +4429,7 @@ jobs:
           include-hidden-files: true
   macos_verify_runner_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner"]
+    needs: ["macos_release_frontend","macos_build_runner"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4371,7 +4451,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
+      - *chrono_release_download_29
+      - *chrono_release_download_27
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4404,7 +4485,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_runner_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_runner_tests' '--unit' 'verify_runner_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4440,7 +4521,7 @@ jobs:
           include-hidden-files: true
   macos_verify_inputs_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4462,8 +4543,9 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - &chrono_release_download_23
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - &chrono_release_download_24
         name: Download selected original artifact from macos_build_judge_registration
         if: ${{ always() && needs.macos_build_judge_registration.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4471,7 +4553,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_registration.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-      - &chrono_release_download_20
+      - &chrono_release_download_21
         name: Download selected original artifact from macos_build_judge_filemap
         if: ${{ always() && needs.macos_build_judge_filemap.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4479,7 +4561,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_filemap.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
-      - &chrono_release_download_24
+      - &chrono_release_download_25
         name: Download selected original artifact from macos_build_judge_routes
         if: ${{ always() && needs.macos_build_judge_routes.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4487,7 +4569,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_routes.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_routes/"
-      - &chrono_release_download_22
+      - &chrono_release_download_23
         name: Download selected original artifact from macos_build_judge_projects
         if: ${{ always() && needs.macos_build_judge_projects.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4495,7 +4577,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_projects.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_projects/"
-      - &chrono_release_download_19
+      - &chrono_release_download_20
         name: Download selected original artifact from macos_build_judge_cost
         if: ${{ always() && needs.macos_build_judge_cost.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4503,7 +4585,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_cost.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_cost/"
-      - &chrono_release_download_21
+      - &chrono_release_download_22
         name: Download selected original artifact from macos_build_judge_mixed
         if: ${{ always() && needs.macos_build_judge_mixed.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4511,7 +4593,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_mixed.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-      - &chrono_release_download_25
+      - &chrono_release_download_26
         name: Download selected original artifact from macos_build_judge_workflow
         if: ${{ always() && needs.macos_build_judge_workflow.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4519,7 +4601,7 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_workflow.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - &chrono_release_download_17
+      - &chrono_release_download_18
         name: Download selected original artifact from macos_build_inputs
         if: ${{ always() && needs.macos_build_inputs.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4559,7 +4641,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_inputs_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_inputs_tests' '--unit' 'verify_inputs_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4595,7 +4677,7 @@ jobs:
           include-hidden-files: true
   macos_verify_ci_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_worktree"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_worktree"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4617,8 +4699,9 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - &chrono_release_download_18
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - &chrono_release_download_19
         name: Download selected original artifact from macos_build_judge_ci
         if: ${{ always() && needs.macos_build_judge_ci.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -4626,9 +4709,9 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_ci.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-      - *chrono_release_download_15
-      - *chrono_release_download_23
-      - *chrono_release_download_27
+      - *chrono_release_download_16
+      - *chrono_release_download_24
+      - *chrono_release_download_28
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4661,7 +4744,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_ci_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_ci_tests' '--unit' 'verify_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4697,7 +4780,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_ci_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_ci"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4719,8 +4802,9 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - *chrono_release_download_18
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - *chrono_release_download_19
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4753,7 +4837,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_ci_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_ci_tests' '--unit' 'verify_judge_ci_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4789,7 +4873,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_registration_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_registration"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4811,8 +4895,9 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - *chrono_release_download_23
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - *chrono_release_download_24
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4845,7 +4930,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_registration_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_registration_tests' '--unit' 'verify_judge_registration_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4881,7 +4966,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4903,13 +4988,14 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - *chrono_release_download_18
-      - *chrono_release_download_15
-      - *chrono_release_download_23
-      - *chrono_release_download_20
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - *chrono_release_download_19
+      - *chrono_release_download_16
       - *chrono_release_download_24
-      - *chrono_release_download_22
+      - *chrono_release_download_21
+      - *chrono_release_download_25
+      - *chrono_release_download_23
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4942,7 +5028,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_projects_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_projects_tests' '--unit' 'verify_judge_projects_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -4978,7 +5064,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_worktree"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_worktree"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5000,17 +5086,18 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - *chrono_release_download_15
-      - *chrono_release_download_23
-      - *chrono_release_download_20
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - *chrono_release_download_16
       - *chrono_release_download_24
-      - *chrono_release_download_22
-      - *chrono_release_download_19
       - *chrono_release_download_21
       - *chrono_release_download_25
-      - *chrono_release_download_17
-      - *chrono_release_download_27
+      - *chrono_release_download_23
+      - *chrono_release_download_20
+      - *chrono_release_download_22
+      - *chrono_release_download_26
+      - *chrono_release_download_18
+      - *chrono_release_download_28
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5043,7 +5130,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_workflow_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_workflow_tests' '--unit' 'verify_judge_workflow_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5079,6 +5166,7 @@ jobs:
           include-hidden-files: true
   macos_verify_instructions_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5100,6 +5188,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5132,7 +5221,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_instructions_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_instructions_tests' '--unit' 'verify_instructions_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5168,7 +5257,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_filemap_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5190,11 +5279,12 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - *chrono_release_download_23
-      - *chrono_release_download_20
+      - *chrono_release_download_29
+      - *chrono_release_download_27
       - *chrono_release_download_24
-      - *chrono_release_download_22
+      - *chrono_release_download_21
+      - *chrono_release_download_25
+      - *chrono_release_download_23
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5227,7 +5317,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_filemap_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_filemap_tests' '--unit' 'verify_judge_filemap_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5263,6 +5353,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_routes_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5284,6 +5375,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5316,7 +5408,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_routes_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_routes_tests' '--unit' 'verify_judge_routes_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5352,7 +5444,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_cost_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5374,10 +5466,11 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - *chrono_release_download_23
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - *chrono_release_download_24
+      - *chrono_release_download_21
       - *chrono_release_download_20
-      - *chrono_release_download_19
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5410,7 +5503,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_cost_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_cost_tests' '--unit' 'verify_judge_cost_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5446,7 +5539,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_mixed_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost","macos_build_judge_mixed"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost","macos_build_judge_mixed"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5468,11 +5561,12 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
-      - *chrono_release_download_23
-      - *chrono_release_download_20
-      - *chrono_release_download_19
+      - *chrono_release_download_29
+      - *chrono_release_download_27
+      - *chrono_release_download_24
       - *chrono_release_download_21
+      - *chrono_release_download_20
+      - *chrono_release_download_22
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5505,7 +5599,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_judge_mixed_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_judge_mixed_tests' '--unit' 'verify_judge_mixed_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -5541,7 +5635,7 @@ jobs:
           include-hidden-files: true
   macos_package:
     if: ${{ always() && github.event.deleted != true }}
-    needs: ["macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_release_build_tests","macos_verify_release_build_integration","macos_verify_diagnostics_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests","macos_verify_pr_tests"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_diagnostics_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests","macos_verify_pr_tests","macos_verify_host_release_native_tests"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5563,7 +5657,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_26
+      - *chrono_release_download_29
+      - *chrono_release_download_27
       - name: Download selected original artifact from macos_build_instructions
         if: ${{ always() && needs.macos_build_instructions.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -5571,18 +5666,18 @@ jobs:
           artifact-ids: ${{ needs.macos_build_instructions.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_instructions/"
-      - *chrono_release_download_18
-      - *chrono_release_download_15
-      - *chrono_release_download_23
-      - *chrono_release_download_20
-      - *chrono_release_download_24
-      - *chrono_release_download_22
       - *chrono_release_download_19
+      - *chrono_release_download_16
+      - *chrono_release_download_24
       - *chrono_release_download_21
       - *chrono_release_download_25
+      - *chrono_release_download_23
+      - *chrono_release_download_20
+      - *chrono_release_download_22
+      - *chrono_release_download_26
+      - *chrono_release_download_18
       - *chrono_release_download_17
-      - *chrono_release_download_16
-      - *chrono_release_download_27
+      - *chrono_release_download_28
       - name: Download selected original artifact from macos_verify_distribution_tests
         if: ${{ always() && needs.macos_verify_distribution_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -5688,20 +5783,6 @@ jobs:
           artifact-ids: ${{ needs.macos_verify_judge_mixed_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_judge_mixed_tests/"
-      - name: Download selected original artifact from macos_verify_release_build_tests
-        if: ${{ always() && needs.macos_verify_release_build_tests.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_verify_release_build_tests.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_release_build_tests/"
-      - name: Download selected original artifact from macos_verify_release_build_integration
-        if: ${{ always() && needs.macos_verify_release_build_integration.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_verify_release_build_integration.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/verify_release_build_integration/"
       - name: Download selected original artifact from macos_verify_diagnostics_tests
         if: ${{ always() && needs.macos_verify_diagnostics_tests.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -5709,7 +5790,7 @@ jobs:
           artifact-ids: ${{ needs.macos_verify_diagnostics_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_diagnostics_tests/"
-      - &chrono_release_download_14
+      - &chrono_release_download_15
         name: Download selected original artifact from macos_build_cache
         if: ${{ always() && needs.macos_build_cache.outputs.artifact_id != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -5745,6 +5826,13 @@ jobs:
           artifact-ids: ${{ needs.macos_verify_pr_tests.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/verify_pr_tests/"
+      - name: Download selected original artifact from macos_verify_host_release_native_tests
+        if: ${{ always() && needs.macos_verify_host_release_native_tests.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_verify_host_release_native_tests.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/verify_host_release_native_tests/"
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -5756,7 +5844,7 @@ jobs:
         run: |
           mkdir -p '.chrono-harness/cache'
           printf '%s\n' "$CHRONO_RELEASE_DEPENDENCIES" > '.chrono-harness/cache/release-dependencies.json'
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/package' '--collect'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/package' '--collect'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -5766,182 +5854,9 @@ jobs:
           path: ".chrono-harness/cache/release-results/package/"
           if-no-files-found: error
           include-hidden-files: true
-  linux_verify_release_build_tests:
-    if: ${{ github.event.deleted != true }}
-    runs-on: "ubuntu-24.04"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Run registered release command
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "linux_verify_release_build_tests"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_release_build_tests' '--unit' 'verify_release_build_tests'
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-linux-verify_release_build_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_release_build_tests/"
-          if-no-files-found: error
-          include-hidden-files: true
-  macos_verify_release_build_tests:
-    if: ${{ github.event.deleted != true }}
-    runs-on: "macos-26"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - name: Run registered release command
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "macos_verify_release_build_tests"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_release_build_tests' '--unit' 'verify_release_build_tests'
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-macos-verify_release_build_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_release_build_tests/"
-          if-no-files-found: error
-          include-hidden-files: true
-  linux_verify_release_build_integration:
-    if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_distribution","linux_build_cache"]
-    runs-on: "ubuntu-24.04"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_2
-      - *chrono_release_download_0
-      - name: Run registered release command
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "linux_verify_release_build_integration"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_release_build_integration' '--unit' 'verify_release_build_integration'
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-linux-verify_release_build_integration-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_release_build_integration/"
-          if-no-files-found: error
-          include-hidden-files: true
-  macos_verify_release_build_integration:
-    if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_distribution","macos_build_cache"]
-    runs-on: "macos-26"
-    timeout-minutes: 45
-    outputs:
-      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
-      run_id: ${{ steps.release_identity.outputs.run_id }}
-      attempt: ${{ steps.release_identity.outputs.attempt }}
-    steps:
-      - name: Check out requested release source
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          ref: ${{ inputs.source || github.sha }}
-          fetch-depth: 0
-      - name: Bind original producing attempt
-        id: release_identity
-        if: ${{ always() }}
-        shell: bash
-        env:
-          RELEASE_RUN: ${{ github.run_id }}
-          RELEASE_ATTEMPT: ${{ github.run_attempt }}
-        run: |
-          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_16
-      - *chrono_release_download_14
-      - name: Run registered release command
-        if: ${{ always() }}
-        shell: bash
-        env:
-          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
-          CHRONO_RELEASE_RUN: ${{ github.run_id }}
-          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "macos_verify_release_build_integration"
-        run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_release_build_integration' '--unit' 'verify_release_build_integration'
-      - name: Preserve original release artifacts
-        id: release_upload
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: "chrono-release-macos-verify_release_build_integration-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_release_build_integration/"
-          if-no-files-found: error
-          include-hidden-files: true
   linux_verify_diagnostics_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -5963,6 +5878,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5995,7 +5911,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_diagnostics_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6031,6 +5947,7 @@ jobs:
           include-hidden-files: true
   macos_verify_diagnostics_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -6052,6 +5969,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -6084,7 +6002,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_diagnostics_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_diagnostics_tests' '--unit' 'verify_diagnostics_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6120,6 +6038,7 @@ jobs:
           include-hidden-files: true
   linux_build_cache:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -6141,6 +6060,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -6173,7 +6093,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_build_cache"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6209,7 +6129,7 @@ jobs:
           include-hidden-files: true
   linux_verify_cache_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["linux_build_cache"]
+    needs: ["linux_release_frontend","linux_build_cache"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -6231,6 +6151,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - *chrono_release_download_0
       - name: Prepare registered caches
         id: chrono_cache_plan
@@ -6264,7 +6185,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_cache_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6300,6 +6221,7 @@ jobs:
           include-hidden-files: true
   macos_build_cache:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -6321,6 +6243,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -6353,7 +6276,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_build_cache"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/build_cache' '--unit' 'build_cache'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6389,7 +6312,7 @@ jobs:
           include-hidden-files: true
   macos_verify_cache_tests:
     if: ${{ github.event.deleted != true }}
-    needs: ["macos_build_cache"]
+    needs: ["macos_release_frontend","macos_build_cache"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -6411,7 +6334,8 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
-      - *chrono_release_download_14
+      - *chrono_release_download_29
+      - *chrono_release_download_15
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -6444,7 +6368,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_cache_tests"
         run: |
-          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' 'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_cache_tests' '--unit' 'verify_cache_tests'
       - name: Seal producer cache contents
         id: chrono_cache_seal
         if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
@@ -6480,6 +6404,7 @@ jobs:
           include-hidden-files: true
   linux_verify_host_bootstrap_native_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -6501,6 +6426,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6510,7 +6436,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_bootstrap_native_tests"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6522,6 +6448,7 @@ jobs:
           include-hidden-files: true
   macos_verify_host_bootstrap_native_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -6543,6 +6470,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6552,7 +6480,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_bootstrap_native_tests"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_native_tests' '--unit' 'verify_host_bootstrap_native_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6564,6 +6492,7 @@ jobs:
           include-hidden-files: true
   linux_verify_host_bootstrap_launcher_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -6585,6 +6514,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6594,7 +6524,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_host_bootstrap_launcher_tests"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6606,6 +6536,7 @@ jobs:
           include-hidden-files: true
   macos_verify_host_bootstrap_launcher_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -6627,6 +6558,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6636,7 +6568,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_host_bootstrap_launcher_tests"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_bootstrap_launcher_tests' '--unit' 'verify_host_bootstrap_launcher_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6648,6 +6580,7 @@ jobs:
           include-hidden-files: true
   linux_verify_pr_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -6669,6 +6602,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6678,7 +6612,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "linux_verify_pr_tests"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6690,6 +6624,7 @@ jobs:
           include-hidden-files: true
   macos_verify_pr_tests:
     if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -6711,6 +6646,7 @@ jobs:
           RELEASE_ATTEMPT: ${{ github.run_attempt }}
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
       - name: Run registered release command
         if: ${{ always() }}
         shell: bash
@@ -6720,7 +6656,7 @@ jobs:
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
           CHRONO_RELEASE_JOB: "macos_verify_pr_tests"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_pr_tests' '--unit' 'verify_pr_tests'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
@@ -6731,6 +6667,94 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_identifiers_tests:
+    if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend"]
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "linux_verify_identifiers_tests"
+        run: |
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-linux-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+  macos_verify_identifiers_tests:
+    if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend"]
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "macos_verify_identifiers_tests"
+        run: |
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-macos-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+  linux_release_frontend:
     if: ${{ github.event.deleted != true }}
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6760,19 +6784,64 @@ jobs:
           CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "linux_verify_identifiers_tests"
+          CHRONO_RELEASE_JOB: "linux_release_frontend"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: "chrono-release-linux-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
+          name: "chrono-release-linux-frontend-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-frontend/"
           if-no-files-found: error
           include-hidden-files: true
-  macos_verify_identifiers_tests:
+  linux_verify_host_release_native_tests:
+    if: ${{ github.event.deleted != true }}
+    needs: ["linux_release_frontend","linux_build_cache"]
+    runs-on: "ubuntu-24.04"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_14
+      - *chrono_release_download_0
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "linux_verify_host_release_native_tests"
+        run: |
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-linux-verify_host_release_native_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-results/verify_host_release_native_tests/"
+          if-no-files-found: error
+          include-hidden-files: true
+  macos_release_frontend:
     if: ${{ github.event.deleted != true }}
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6802,15 +6871,60 @@ jobs:
           CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
           CHRONO_RELEASE_RUN: ${{ github.run_id }}
           CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
-          CHRONO_RELEASE_JOB: "macos_verify_identifiers_tests"
+          CHRONO_RELEASE_JOB: "macos_release_frontend"
         run: |
-          'python3' '.chrono-harness/release/build.py' '.' '.chrono-harness/cache/release-results/verify_identifiers_tests' '--unit' 'verify_identifiers_tests'
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/native.sh' '.' '.chrono-harness/ci/bootstrap-release-frontend.json' '.chrono-harness/cache/release-frontend' '--export-frontend'
       - name: Preserve original release artifacts
         id: release_upload
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: "chrono-release-macos-verify_identifiers_tests-${{ github.run_id }}-${{ github.run_attempt }}"
-          path: ".chrono-harness/cache/release-results/verify_identifiers_tests/"
+          name: "chrono-release-macos-frontend-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-frontend/"
+          if-no-files-found: error
+          include-hidden-files: true
+  macos_verify_host_release_native_tests:
+    if: ${{ github.event.deleted != true }}
+    needs: ["macos_release_frontend","macos_build_cache"]
+    runs-on: "macos-26"
+    timeout-minutes: 45
+    outputs:
+      artifact_id: ${{ steps.release_upload.outputs.artifact-id }}
+      run_id: ${{ steps.release_identity.outputs.run_id }}
+      attempt: ${{ steps.release_identity.outputs.attempt }}
+    steps:
+      - name: Check out requested release source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ inputs.source || github.sha }}
+          fetch-depth: 0
+      - name: Bind original producing attempt
+        id: release_identity
+        if: ${{ always() }}
+        shell: bash
+        env:
+          RELEASE_RUN: ${{ github.run_id }}
+          RELEASE_ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
+      - *chrono_release_download_29
+      - *chrono_release_download_15
+      - name: Run registered release command
+        if: ${{ always() }}
+        shell: bash
+        env:
+          CHRONO_RELEASE_DEPENDENCIES: ${{ toJson(needs) }}
+          CHRONO_RELEASE_RUN: ${{ github.run_id }}
+          CHRONO_RELEASE_ATTEMPT: ${{ github.run_attempt }}
+          CHRONO_RELEASE_JOB: "macos_verify_host_release_native_tests"
+        run: |
+          '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-results/verify_host_release_native_tests' '--unit' 'verify_host_release_native_tests'
+      - name: Preserve original release artifacts
+        id: release_upload
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: "chrono-release-macos-verify_host_release_native_tests-${{ github.run_id }}-${{ github.run_attempt }}"
+          path: ".chrono-harness/cache/release-results/verify_host_release_native_tests/"
           if-no-files-found: error
           include-hidden-files: true

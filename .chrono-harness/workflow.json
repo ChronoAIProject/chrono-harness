@@ -175,8 +175,13 @@
         "assets/distribution/bootstrap.sh",
         ".chrono-harness/release/plan.json",
         ".chrono-harness/release/build.json",
-        ".chrono-harness/release/build.py",
-        ".github/workflows/chrono-release.yml"
+        ".github/workflows/chrono-release.yml",
+        ".chrono-harness/release/native.sh",
+        ".chrono-harness/release/consume.sh",
+        ".chrono-harness/release/native/src/execution.rs",
+        ".chrono-harness/release/native/src/recipe.rs",
+        ".chrono-harness/release/native/src/receipt.rs",
+        ".chrono-harness/release/native/src/frontend.rs"
       ],
       "tests": [
         "distribution-tests"
@@ -290,7 +295,30 @@
     ],
     "evidence": ".chrono-harness/state/integration.json"
   },
-  "retirements": [],
-  "migrations": [],
-  "historical_profiles": []
+  "retirements": [
+    {
+      "kind": "project",
+      "id": "release-build",
+      "replacement": "host-release-native",
+      "reason": "发布配方、原生单元、collector、前端原件生产与消费均由独立 Rust 发布项目承担；正式发布入口改用薄 shell 委托该项目，退役 Python 发布实现。"
+    },
+    {
+      "kind": "test",
+      "id": "release-build-tests",
+      "replacement": "host-release-native-tests",
+      "reason": "原配方单元与失败保留义务由当前未过滤 Rust 专属测试承接，覆盖解析、依赖、暂存、原始进程输出、回执、前端交接和 CLI；Python 导入与字节码专属断言随旧实现退役。"
+    },
+    {
+      "kind": "test",
+      "id": "release-build-integration",
+      "replacement": "host-release-native-tests",
+      "reason": "真实 distribution 打包与 cache 可执行文件消费已纳入同一未过滤 Rust 专属测试操作；正式验证单元显式依赖 build_cache，退役原 Python integration 分组，不删除其当前行为义务。"
+    }
+  ],
+  "migrations": [
+
+  ],
+  "historical_profiles": [
+
+  ]
 }
