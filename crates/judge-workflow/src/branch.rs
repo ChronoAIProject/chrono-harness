@@ -131,7 +131,10 @@ pub fn with_reader(
         .as_f64()
         .filter(|v| v.is_finite() && *v >= 0.0)
         .ok_or("E_BRANCH_CONTEXT: invalid count threshold")?;
-    if behind as f64 > count {
+    // The JSON/floating-point threshold is an external input adapter. Once
+    // validated and normalized, the admission decision is owned by Verus.
+    let max_behind = count as usize;
+    if !verified_branch::commit_count_within_limit(behind, max_behind) {
         return Err(format!(
             "E_BRANCH_STALE: behind={behind}; age_ns={}",
             age.whole_nanoseconds()

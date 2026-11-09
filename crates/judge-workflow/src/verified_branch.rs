@@ -47,4 +47,18 @@ pub fn select_source_kind(
     }
 }
 
+/// A branch is fresh with respect to the registered commit-count limit when
+/// its measured distance does not exceed that limit.
+pub open spec fn behind_within_limit(behind: usize, max_behind: usize) -> bool {
+    behind <= max_behind
+}
+
+/// The production branch adapter supplies the measured commit count and the
+/// normalized registered limit; the decision itself is proved here.
+pub fn commit_count_within_limit(behind: usize, max_behind: usize) -> (allowed: bool)
+    ensures allowed == behind_within_limit(behind, max_behind),
+{
+    behind <= max_behind
+}
+
 }

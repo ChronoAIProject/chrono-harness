@@ -31,4 +31,20 @@ fn target_branch_is_rejected_even_with_one_prefix() {
     assert(feature.is_none() && integration.is_none());
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn commit_count_limit_is_inclusive() {
+    let zero = policy::commit_count_within_limit(0, 0);
+    let exact = policy::commit_count_within_limit(7, 7);
+    let over = policy::commit_count_within_limit(8, 7);
+    assert(zero && exact && !over);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn commit_count_limit_preserves_large_unsigned_boundaries() {
+    let largest = policy::commit_count_within_limit(usize::MAX, usize::MAX);
+    let below = policy::commit_count_within_limit(usize::MAX - 1, usize::MAX);
+    let over_zero = policy::commit_count_within_limit(1, 0);
+    assert(largest && below && !over_zero);
+}
+
 }
