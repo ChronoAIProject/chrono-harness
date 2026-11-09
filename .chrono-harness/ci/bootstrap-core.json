@@ -35,7 +35,7 @@
       "destination": ".chrono-harness/bin/chrono-worktree"
     },
     {
-      "source": ".chrono-harness/cache/bootstrap-verus/verus-0.2026.04.24.f8e1704-arm64-macos.zip",
+      "source": ".chrono-harness/cache/bootstrap-owner-tooling/verus/package.zip",
       "destination": ".chrono-harness/bin/verus.zip"
     }
   ],

@@ -40,6 +40,8 @@ admission 的目标声明覆盖 dev 和所有层级的 integration 分支，复�
 
 CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份只保存主机路径的 JSON 及其 FILEMAP 输入边已退役。现役 fixture 仍在本轮绑定实际路径、版本和字节，原测试断言及未过滤测试义务保留；这只移除重复的主机选择数据，不证明完整输入、跨平台验收或 §2.2 的外部命令 mock 合同完成。剩余真实 Git fixture 的执行边界迁移仍未完成。
 
+固定 Verus 下载包的候选采用改用 `bootstrap-owner-tooling/verus/package.zip` 单槽，保留当前 checksum、原子发布、失败保全和证明消费者。旧版本目录仅由现有生命周期入口回收，不增加 TTL 或清理器；候选 bootstrap、标准检查、原生消费和真实协调者迁移尚待验收。路径和政策变更本身不证明旧目录已回收。
+
 ## 按 SPEC 章节查看
 
 | SPEC 章节 | 状态 | 生产者与直接证据 | 仍需完成 |
