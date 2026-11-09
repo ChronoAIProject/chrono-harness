@@ -196,7 +196,7 @@ fn publication_probe(root: &Path, endpoint: &str, method: &str, exit: i32, stdou
 fn first_publication_absence_probes_do_not_prevent_public_installation() {
     for channel in [Channel::Preview, Channel::Stable] {
         for resource in ["releases/tags", "git/ref/tags"] {
-            let (root, id, mut commands) = install_fixture(channel);
+            let (root, id, mut commands) = install_fixture(channel.clone());
             publication_probe(
                 root.path(),
                 &format!("repos/acme/project/{resource}/{}", id.version),
