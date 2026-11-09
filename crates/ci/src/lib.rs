@@ -268,18 +268,8 @@ fn validate_policy(c: &Config, full_policy: bool) -> Result<(), String> {
     Ok(())
 }
 pub fn render(c: &Config, config_path: &str) -> Result<String, String> {
-    render_extended(c, config_path, None, "chrono-check", false, false)
-}
-fn render_extended(
-    c: &Config,
-    config_path: &str,
-    scope: Option<&chrono_harness::units::Scope>,
-    artifact_prefix: &str,
-    read_actions: bool,
-    full_policy: bool,
-) -> Result<String, String> {
-    let job = render_job(c, config_path, scope, artifact_prefix, full_policy)?;
-    let header = render_header(c, scope, read_actions, MARKER);
+    let job = render_job(c, config_path, None, "chrono-check", false)?;
+    let header = render_header(c, None, false, MARKER);
     Ok(format!("{header}jobs:\n  check:\n{job}"))
 }
 
