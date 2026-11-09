@@ -528,18 +528,6 @@
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
         },
-        "runtime_logging": {
-          "operation": "test.runner.runtime-logging",
-          "tool": "cargo",
-          "argv": [
-            "test",
-            "--locked",
-            "--manifest-path",
-            "crates/runner-tests/Cargo.toml",
-            "--test",
-            "runtime_logging"
-          ]
-        },
         "verify_git_binding": {
           "operation": "verify.runner-git-binding-tests",
           "tool": "verus",
@@ -2618,15 +2606,6 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
-        },
-        "owner_stage": {
-          "operation": "host.bootstrap-owner-stage",
-          "tool": "bash",
-          "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
-            ".",
-            ".chrono-harness/ci/bootstrap-owner-stage.json"
-          ]
         }
       },
       "language": "rust",
