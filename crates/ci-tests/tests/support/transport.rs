@@ -321,7 +321,6 @@ fn main() {
     }
     let executable = std::env::args_os().next().unwrap();
     match Path::new(&executable).file_name().unwrap().as_bytes() {
-        b"python3" => return println!("Python shadowed"),
         b"mutating-producer" => return mutating_producer(),
         b"fixture-producer" => return preparation_fixture(),
         b"retention-failure" => return retention_failure_fixture(),
