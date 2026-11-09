@@ -1,7 +1,7 @@
 {
   "schema": "chrono-cache/v2",
   "namespace": "chrono-harness",
-  "artifact_registry": ".chrono-harness/git/pinned-macos.json",
+  "artifact_registry": ".chrono-harness/git/macos-27.json",
   "require_primary_checkout": true,
   "inputs": {
     "rustc.file": {
@@ -886,7 +886,7 @@
     },
     "cache.cargo-registration": {
       "kind": "json-value",
-      "path": ".chrono-harness/git/pinned-macos.json",
+      "path": ".chrono-harness/git/macos-27.json",
       "pointer": "/tools/0"
     },
     "verus.download": {

@@ -14,7 +14,7 @@ const CACHE: &str = ".chrono-harness/ci/bootstrap-cache.json";
 const CHECK: &str = ".chrono-harness/ci/check.json";
 const FM: &str = ".chrono-harness/FILEMAP.json";
 const PROJECTS: &str = ".chrono-harness/projects.json";
-const POLICY: &str = ".chrono-harness/git/pinned-macos.json";
+const POLICY: &str = ".chrono-harness/git/macos-27.json";
 
 fn host() -> Endpoint {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

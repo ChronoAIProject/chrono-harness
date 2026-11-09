@@ -20,6 +20,7 @@ use manifest::Manifest;
 #[path = "partition.rs"]
 mod partition;
 use partition::Gate;
+pub use partition::ObservationToken;
 
 pub const POLICY_PATH: &str = ".chrono-harness/retention.json";
 const STATE: &str = ".chrono-harness/state/output-retention-v1";
@@ -232,7 +233,7 @@ pub struct Inventory {
     round_verified_left: Cell<Option<u64>>,
 }
 /// Exact existing owner identity supplied by a declared original consumer.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OriginalIdentity {
     pub id: String,
