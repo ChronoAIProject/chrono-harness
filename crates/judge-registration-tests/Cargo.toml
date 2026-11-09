@@ -41,5 +41,9 @@ path = "tests/verified_nodes.rs"
 name = "verified_readiness"
 path = "tests/verified_readiness.rs"
 
+[[test]]
+name = "verified_input_coverage"
+path = "tests/verified_input_coverage.rs"
+
 [profile.dev.package.sha2]
 opt-level = 3
