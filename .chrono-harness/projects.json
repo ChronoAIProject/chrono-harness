@@ -2823,6 +2823,18 @@
             ".chrono-harness/cache/release-frontend",
             "--export-frontend"
           ]
+        },
+        "publish": {
+          "operation": "release.deliver",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/release/consume.sh",
+            ".",
+            ".chrono-harness/cache/release-frontend",
+            ".chrono-harness/cache/release-publication",
+            "--deliver",
+            ".chrono-harness/release/delivery.json"
+          ]
         }
       },
       "test_project": "host-release-native-tests"

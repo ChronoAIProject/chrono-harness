@@ -18,6 +18,8 @@ const ADOPTED: &str = ".chrono-harness/ci/release.json";
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delivery: Option<Delivery>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persistent_cache: Option<super::cache::Config>,
     pub schema: String,
     pub workflow_path: String,
@@ -30,6 +32,15 @@ pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub download_artifact_action: Option<String>,
     pub jobs: Vec<Job>,
+}
+
+/// 宿主选择成功落地 CI 与唯一发布作业；普通构建继续只读。
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Delivery {
+    pub workflow: String,
+    pub branch: String,
+    pub publisher: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -85,6 +96,25 @@ fn literal(value: &str) -> Result<(), String> {
 }
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
+    if let Some(delivery) = &c.delivery {
+        if c.schema != UNITS_SCHEMA || !c.push_branches.is_empty() {
+            return Err("delivery requires release v2 and a successful workflow trigger".into());
+        }
+        for value in [&delivery.workflow, &delivery.branch, &delivery.publisher] {
+            literal(value)?;
+            if value.is_empty() {
+                return Err("empty delivery workflow, branch or publisher".into());
+            }
+        }
+        let publisher = c
+            .jobs
+            .iter()
+            .find(|j| j.id == delivery.publisher)
+            .ok_or("unregistered release publisher")?;
+        if publisher.needs.is_empty() || publisher.always {
+            return Err("publisher requires successful declared dependencies".into());
+        }
+    }
     if let Some(cache) = &c.persistent_cache {
         if c.schema != UNITS_SCHEMA {
             return Err("persistent release cache requires v2".into());
@@ -246,6 +276,13 @@ pub fn render(c: &Config) -> Result<String, String> {
         .map(|(index, (key, _))| (key, (format!("chrono_release_download_{index}"), false)))
         .collect();
     let mut output = format!("{MARKER}name: {}\non:\n", scalar(&c.name));
+    if let Some(delivery) = &c.delivery {
+        output.push_str(&format!(
+            "  workflow_run:\n    workflows: [{}]\n    branches: [{}]\n    types: [completed]\n",
+            scalar(&delivery.workflow),
+            scalar(&delivery.branch)
+        ));
+    }
     if !c.push_branches.is_empty() {
         output.push_str(&format!(
             "  push:\n    branches: {}\n",
@@ -253,8 +290,12 @@ pub fn render(c: &Config) -> Result<String, String> {
         ));
     }
     output.push_str(
-        "  workflow_dispatch:\n    inputs:\n      source:\n        description: Source revision to check out\n        required: true\n        type: string\npermissions:\n  contents: read\n",
+        "  workflow_dispatch:\n    inputs:\n      source:\n        description: Source revision to check out\n        required: true\n        type: string\n",
     );
+    if c.delivery.is_some() {
+        output.push_str("      channel:\n        description: Build artifacts or publish a verified source\n        type: choice\n        default: build\n        options: [build, preview, stable]\n      verified_run:\n        description: Successful landing CI run ID\n        type: string\n      verified_attempt:\n        description: Original successful CI attempt\n        type: string\n      version:\n        description: Explicit stable version matching the source plan\n        type: string\n");
+    }
+    output.push_str("permissions:\n  contents: read\n");
     output.push_str("jobs:\n");
     for job in &c.jobs {
         if c.schema == UNITS_SCHEMA {
@@ -334,11 +375,17 @@ fn render_unit<'a>(
     job: &'a Job,
     shared_downloads: &mut BTreeMap<(&'a str, &'a str), (String, bool)>,
 ) -> Result<(), String> {
-    output.push_str(&format!(
-        "  {}:\n    if: ${{{{ {}github.event.deleted != true }}}}\n",
-        job.id,
+    let mut condition = format!(
+        "{}github.event.deleted != true",
         if job.always { "always() && " } else { "" }
-    ));
+    );
+    if c.delivery.is_some() {
+        condition.push_str(" && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))");
+    }
+    output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
+    if c.delivery.as_ref().is_some_and(|d| d.publisher == job.id) {
+        output.push_str("    permissions:\n      contents: write\n      actions: read\n");
+    }
     if !job.needs.is_empty() {
         output.push_str(&format!(
             "    needs: {}\n",
@@ -356,7 +403,7 @@ fn render_unit<'a>(
       - name: Check out requested release source
         uses: {checkout}
         with:
-          ref: ${{{{ inputs.source || github.sha }}}}
+          ref: {source}
           fetch-depth: 0
       - name: Bind original producing attempt
         id: release_identity
@@ -370,7 +417,12 @@ fn render_unit<'a>(
 "#,
         runner = scalar(&job.runs_on),
         timeout = job.timeout_minutes,
-        checkout = c.checkout_action
+        checkout = c.checkout_action,
+        source = if c.delivery.is_some() {
+            "${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}"
+        } else {
+            "${{ inputs.source || github.sha }}"
+        }
     ));
     for download in &job.downloads {
         let prefix =
@@ -408,10 +460,16 @@ fn render_unit<'a>(
           CHRONO_RELEASE_RUN: ${{{{ github.run_id }}}}
           CHRONO_RELEASE_ATTEMPT: ${{{{ github.run_attempt }}}}
           CHRONO_RELEASE_JOB: {job}
-        run: |
 "#,
         job = scalar(&job.id)
     ));
+    if c.delivery.is_some() {
+        output.push_str("          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}\n          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}\n          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}\n          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}\n          CHRONO_RELEASE_VERSION: ${{ inputs.version }}\n");
+        if c.delivery.as_ref().is_some_and(|d| d.publisher == job.id) {
+            output.push_str("          GH_TOKEN: ${{ github.token }}\n");
+        }
+    }
+    output.push_str("        run: |\n");
     if let Some(metadata) = &job.dependency_metadata {
         let parent = Path::new(metadata)
             .parent()

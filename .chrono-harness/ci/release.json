@@ -2888,12 +2888,8 @@
       ],
       "artifact_name": "chrono-release-linux-frontend",
       "artifact_directory": ".chrono-harness/cache/release-frontend/",
-      "needs": [
-
-      ],
-      "downloads": [
-
-      ]
+      "needs": [],
+      "downloads": []
     },
     {
       "id": "linux_verify_host_release_native_tests",
@@ -2943,12 +2939,8 @@
       ],
       "artifact_name": "chrono-release-macos-frontend",
       "artifact_directory": ".chrono-harness/cache/release-frontend/",
-      "needs": [
-
-      ],
-      "downloads": [
-
-      ]
+      "needs": [],
+      "downloads": []
     },
     {
       "id": "macos_verify_host_release_native_tests",
@@ -2979,6 +2971,43 @@
         {
           "job": "macos_build_cache",
           "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
+        }
+      ]
+    },
+    {
+      "id": "publish",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
+        "/bin/bash",
+        ".chrono-harness/release/consume.sh",
+        ".",
+        ".chrono-harness/cache/release-frontend",
+        ".chrono-harness/cache/release-publication",
+        "--deliver",
+        ".chrono-harness/release/delivery.json"
+      ],
+      "artifact_name": "chrono-release-publication",
+      "artifact_directory": ".chrono-harness/cache/release-publication/",
+      "needs": [
+        "linux_release_frontend",
+        "linux_package",
+        "macos_package"
+      ],
+      "downloads": [
+        {
+          "job": "linux_release_frontend",
+          "directory": ".chrono-harness/cache/release-frontend/"
+        },
+        {
+          "job": "linux_package",
+          "directory": ".chrono-harness/cache/release-platforms/linux/"
+        },
+        {
+          "job": "macos_package",
+          "directory": ".chrono-harness/cache/release-platforms/macos/"
         }
       ]
     }
@@ -3862,5 +3891,10 @@
         ]
       }
     }
+  },
+  "delivery": {
+    "workflow": "chrono / collection",
+    "branch": "dev",
+    "publisher": "publish"
   }
 }

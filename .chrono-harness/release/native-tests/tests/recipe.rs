@@ -103,7 +103,27 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
             .map(|jobs| jobs.len())
             .sum::<usize>()
             + loaded.recipe.native_frontends.len()
+            + usize::from(workflow["delivery"].is_object())
     );
+    let delivery = read(".chrono-harness/release/delivery.json");
+    let publisher = jobs
+        .iter()
+        .find(|j| j["id"] == workflow["delivery"]["publisher"])
+        .unwrap();
+    let frontend = &loaded.recipe.native_frontends[delivery["frontend"].as_str().unwrap()];
+    let mut publisher_needs = vec![frontend.job.clone()];
+    let mut publisher_downloads =
+        vec![json!({"job":frontend.job,"directory":format!("{}/",frontend.directory)})];
+    for (native, package) in delivery["packages"].as_object().unwrap() {
+        let job = &loaded.recipe.native_jobs[native][&loaded.recipe.collector.id];
+        publisher_needs.push(job.clone());
+        publisher_downloads.push(
+            json!({"job":job,"directory":format!("{}/",package["directory"].as_str().unwrap())}),
+        );
+    }
+    assert_eq!(publisher["needs"], json!(publisher_needs));
+    assert_eq!(publisher["downloads"], json!(publisher_downloads));
+    assert!(publisher.get("always").is_none_or(|v| v == false));
     for (platform, bindings) in &loaded.recipe.native_jobs {
         let frontend = &loaded.recipe.native_frontends[platform];
         let producer = jobs.iter().find(|j| j["id"] == frontend.job).unwrap();
