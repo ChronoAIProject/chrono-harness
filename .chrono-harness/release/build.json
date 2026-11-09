@@ -24,7 +24,6 @@
     "cargo": "cargo",
     "rustc": "rustc",
     "git": "git",
-    "python3": "python3",
     "bash": "/bin/bash"
   },
   "verification_operations": [

@@ -250,7 +250,7 @@ Config v3 可在 facts_git 中采用 `guard: {schema: "chrono-git-inputs/v1", in
 
 具名 inputs 观察使用 chrono-git-inputs-result/v1，保留实际文件身份／缺失与completeness_proven=false；前后观察不证明瞬时并发隔离、完整输入或确定性同判。
 
-当前宿主显式登记 cargo、python3 与 chrono-ci 的版本合同；尚未具备 Cargo／SDK 输入及其依赖的完整性。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。`argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
+当前宿主显式登记 Cargo、harness 工具和各自实际使用的工具版本合同；尚未具备 Cargo／SDK 输入及其依赖的完整性。换工具链由 AI 显式更新登记，声明版本不代替实际版本观察。`argv` 是原始参数数组；只对注册的整参数占位符 `{base}`、`{candidate}` 做替换。
 
 没有 shell 插值、模板语言或依据当前目录猜测 manifest 的行为。只继承 environment.inherit 逐个列出的变量，缺值记录为 absent，values 显式覆盖。inputs 为逐文件登记的有效输入，ID 唯一。v1 及 v2 present 的摘要 null 仍仅表示未绑定草稿；不得解释为缺失。v2 absent 禁止携带摘要；缺失不同于空文件。v2 快照保留实际 `{absent:true}` 或文件内容身份，判官核对登记与两端快照，并在操作前后核候选路径。
 

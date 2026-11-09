@@ -25,7 +25,7 @@
   "checkout_action": "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
   "upload_artifact_action": "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
   "timeout_minutes": 30,
-  "bootstrap": ["python3", ".chrono-harness/bootstrap.py", "."],
+  "bootstrap": ["/bin/bash", ".chrono-harness/ci/bootstrap-native.sh", ".", ".chrono-harness/ci/bootstrap-core.json"],
   "runner": ".chrono-harness/bin/chrono-harness",
   "check_config": ".chrono-harness/config.json",
   "context_path": ".chrono-harness/state/full/context.json",
