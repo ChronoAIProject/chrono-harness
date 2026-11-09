@@ -40,7 +40,9 @@ CI fixture 用已有 `resolve_program` 从继承的 PATH 解析 Git，不在仓�
 
 没有现役 profile 使用的私有工具链安装分支及专属测试已退役。bootstrap 沿当前工具链选择：Cargo 不可用时安装指定版本的 minimal 加 rustfmt，缺格式化组件时只补该组件；可写构建目录仍由 `host_environment` 的缓存路径声明。工具身份、编译器选择及失败原件继续由原入口核验和保留，不为主机盘点另装完整 SDK。
 
-它按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap 操作，再复制声明二进制，不复制 Cargo 配方或发现项目。工具链操作明确点名版本，不改全局默认。专属 CI 测试的复制宿主回归消费已安装候选工具，须先 bootstrap：
+FILEMAP 按实际读取者登记这些源配置：Rust 前端读取工具链登记、阶段 profile 和升级声明；worktree 在前端启动和阶段原件核验中读取相应 profile、工具链登记与 projects。关系分别指向生产项目，已有 shell／测试边不能替代它们；每次构建的观察和原件仍归 state／线上 artifact。
+
+Rust 前端按 `.chrono-harness/projects.json` 构建明确列出的 bootstrap 操作，再复制声明二进制，不复制 Cargo 配方或发现项目。工具链操作明确点名版本，不改全局默认。专属 CI 测试的复制宿主回归消费已安装候选工具，须先 bootstrap：
 
 ```sh
 /bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json
