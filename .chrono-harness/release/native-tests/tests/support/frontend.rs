@@ -233,7 +233,7 @@ impl Fixture {
     }
 
     pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
-        let mut command = Command::new("/bin/sh");
+        let mut command = Command::new("/bin/bash");
         command
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
             .arg(self.host.root())

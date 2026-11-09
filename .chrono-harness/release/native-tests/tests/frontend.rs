@@ -3,7 +3,7 @@
 mod fixture;
 use fixture::{Fixture, recipe};
 use serde_json::{Value, json};
-use std::{fs, os::unix::fs::PermissionsExt, path::Path};
+use std::{fs, os::fd::AsFd, os::unix::fs::PermissionsExt, path::Path};
 
 #[test]
 fn actual_export_preserves_original_bootstrap_streams_and_the_executable_archive() {
@@ -278,6 +278,9 @@ fn native_launcher_restores_executable_mode_and_runs_the_selected_frontend_witho
     let directory = f.host.root().join("frontend");
     assert!(f.export(&directory).status.success());
     assert!(!directory.join("chrono-host-release").exists());
+    // 即使直接执行此测试，也要经过正式消费路径的继承能力交接。
+    let ownership = tempfile::tempfile().unwrap();
+    let _scope = chrono_harness::process_fds::Scope::new(&[ownership.as_fd()]).unwrap();
     let out = f.unit_through_launcher(&directory);
     assert!(
         out.status.success(),
