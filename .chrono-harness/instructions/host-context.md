@@ -85,7 +85,9 @@ AI 开始和交接本仓工作时运行 status，关注本地未终结、未知�
 
 本宿主在 worktree.json／cleanup.json 中采用 automatic_cleanup/v2。协调锚是 Git owner inventory 的 main worktree，状态位于 `.chrono-harness/state/automatic-cleanup-v2/`。start／reconstruct 自动登记，只维护目标记录；本宿主采用的 bootstrap／check 委托同一负责方，不扫描无关工作树或输出。跨对象清理走显式 maintain。
 
-每个工作树有独立地址和 metadata 租约。最后一个内核租约释放后，该对象的普通入口可以回收未 finish 的可重建缓存；活子孙进程、源码、分支、尚未保全的提交、bin 和证据都保留，也不因此设置完成状态。只采用已验证的描述符转交链，不按年龄、目录名或空闲删除。
+每个工作树有独立地址和 metadata 租约。最后一个内核租约释放后，该对象的普通入口可以回收未 finish 的可重建缓存；活子孙进程、源码、分支、尚未保全的提交、bin 和证据都保留，也不因此设置完成状态。只采用已验证的描述符转交链。cleanup.json 明确采用用户选择的实际创建年龄严格 >7200 秒复用、>14400 秒可删除；先将源码、原索引及 checkout reflog 独有提交保存在真实保留分支，仍排除活跃或未知使用方、当前调用者和必要证据。年龄、目录名或空闲本身不授予任意目录删除资格。
+
+retention 明确登记 `bootstrap-owner-stage` 的 `.chrono-harness/bin/owner-stages/`。bootstrap 所有者保留当前发布槽位、活使用方和必要诊断，按登记期限回收合格旧 stage；bootstrap 尝试目录由现役 `check-original` 范围管理。年龄和 stage 范围采用须先部署配套工具，再通过正式生命周期／retention 政策迁移，不能只改配置或手改状态。仍被使用的旧分页 producer 只通过显式 `migrate --partition-producer` 保留原字节和引用后转换，新产物走整目录滚动；普通路径不读取旧分页格式。
 
 显式维护遇到无关登记项清理失败时，保留原回执和 `cleanup_failures`，继续执行合法目标；目标身份、政策、所有权或协调状态写入失败，仍会阻断。显式 maintain 仍报告失败。未封口 birth 只有在实际排除旧使用方，并核对原附件和政策后才能恢复；原来缺失或部分完成的结果继续保留。已发布缓存尝试后出现新使用时，开启新代际，不覆盖旧 intent／result。命令原 stdout、stderr 和退出码都保留；stderr 非空不等于生命周期失败。
 
