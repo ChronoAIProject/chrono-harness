@@ -44,6 +44,12 @@ FILEMAP 现在把源码、证明根和实际 Rust 测试消费者绑定到同一
 Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA 验收，不能把宿主局部绑定当作
 全仓覆盖完成。
 
+本批继续补齐 bootstrap bindings 的实现与独立预期，登记现有
+`verify.bootstrap-bindings`／`verify.bootstrap-bindings-tests`；同时把 runner 的
+`verified_cargo.rs` 模块绑定到包含它的 `verify.verus-result` 整 crate 证明和
+`verify.verus-result-tests` 独立预期。三项源码均已有真实 Verus invocation、整 crate
+结果和 Rust 消费者；本批只补 FILEMAP 绑定，不新增证明源或 Python 迁移。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取
