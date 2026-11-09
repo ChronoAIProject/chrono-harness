@@ -403,7 +403,7 @@ Gitlink、特殊文件及非 UTF-8 登记路径尚不支持；时间戳、ACL、
 
 短入口仅在原报告发布后投影，不另执行判官或业务。失败生产者与版本探针保留原始回执，解码／校验失败引用原 acquisition；完成报告发布前的执行错误另留原错误，不能称为已完成报告。保留失败时如实返回原错误与保留失败，不伪造路径；早期配置／选择错误仍为原 E_CHECK，不宣称普遍输出上界。
 
-无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 job；当前目标是一份 parent workflow，先 detector，再 job 级 if 条件 单元，最后 `always()` aggregate（needs detector 与全部单元），仅 aggregate 为 必需检查。旧登记在显式迁移前保留各独立 workflow 合同。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各单元具有独立检查名、checkout、启动命令、边界、报告及重跑。
+无论仓库规模，每个能独立验收、独立重跑的单元均生成独立 job；当前目标是一份 parent workflow，先 detector，再 job 级 if 条件单元，最后 `always()` aggregate（needs detector 与全部单元），仅 aggregate 为必需检查。边界由宿主显式登记，必要前置与完整测试义务仍须保留。各单元具有独立检查名、checkout、启动命令、边界、报告及重跑。
 
 单元及完整测试计划的对应在宿主 `.chrono-harness/` 显式登记；不得按目录、语言或自动发现依赖分组。计划须恰有一个所属单元，漏登、重登和未知计划先报错。跨单元共用操作须逐项声明由哪些单元各自重复；本版不隐式传输产物或推断单元间依赖。
 
@@ -427,11 +427,11 @@ CI 的执行结果转换与终态使用同源 Verus：完整 passed／blocked �
 库存异常及诊断失败由同一证明所有者产生对应失败记录和状态。
 这些局部证明不替代 projects 原结果生产、原件准入、JSON 解码和完整覆盖门，范围见 [Verus 说明](docs/verus.md)。
 
-`chrono-github-units/v1` 从显式 provider 生成各独立 workflow 与汇总 workflow。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；手动单元组合使用显式 manifest，本版汇总 workflow 不提供未实现的手动触发。启动工具按各单元显式配置，不默认构建所有项目。
+`chrono-github-units/v1` 从明确的 provider 生成单个父工作流，其中各单元与汇总各有一个 job。provider 只准备固定输入、收集和运输对应 candidate/event/attempt 的原始报告并运行上述指令；最终裁决仍归判官。push／pull_request 自动汇总核实际 workflow 源和 attempt 未漂移；本地组合使用显式 manifest，父工作流不提供手动触发。启动工具按各单元显式配置，不默认构建所有项目。
 
 完整字段、共享／重试合同、初始输入及当前采用边界见 [并发 CI 合同](docs/ci-units.md)。此扩展不自动启用完整七判官治理；产品仓库按登记将完整测试计划分配给显式单元，当前通过 `job_gating` 投影为一份 parent 内的独立条件 job；启动核心及共享操作也由宿主登记。
 
-`job_gating` 是 `chrono-github-units/v1` scoped／v2 full 的显式可选采用；缺字段保持旧语义，不追溯重解释历史证据。检测复用 judge-ci collection inventory；full 调度复用 FILEMAP/routes 的纯声明选测及两端 assignment，SDK 输入快照仍归实际 full 准入。检测不得调用业务 check/probe、选全兜底或推断目录／语言／import；允许按宿主显式 source inputs 启动产品本身。
+`job_gating` 是 `chrono-github-units/v1` scoped／v2 full 的必需调度声明。独立单元工作流拓扑已退役；单元不登记虚拟 `workflow_path`，gather 不接受已无使用方的 `wait_seconds`／`poll_seconds`。旧发布与历史证据保留原事实，不构成现役源码的兼容执行路径。检测复用 judge-ci collection inventory；full 调度复用 FILEMAP/routes 的纯声明选测及两端 assignment，SDK 输入快照仍归实际 full 准入。检测不得调用业务 check/probe、选全兜底或推断目录／语言／import；允许按宿主显式 source inputs 启动产品本身。
 
 Git 完整树／登记 blob 在不物化全部宿主源时可读，PR 固定原生 workflow 合并提交 M 及其第一父 B，校验第二父为事件 head H；所有作业检出 M，`candidate=M` 与 `event_head=H` 分别绑定测试和 GitHub 运行归属、默认 push 完整 before/after，既有 integration `push_baselines` 保留并由 detector 一次固定。浅 blobless depth2 是可用起点，缺端点明确补取；禁止静默 HEAD^／merge-base 和 workflow paths／paths-ignore。完整 Git DELTA 不设路径数量门，超过平台 API 路径上限仍完整处理。
 

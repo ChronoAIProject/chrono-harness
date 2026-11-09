@@ -37,7 +37,6 @@
   },
   "units": {
     "example": {
-      "workflow_path": ".github/workflows/chrono-ci-example.yml",
       "name": "Example / example",
       "runs_on": "self-hosted",
       "timeout_minutes": 45,
@@ -51,7 +50,6 @@
       "artifact_directory": ".chrono-harness/state/example/"
     },
     "harness": {
-      "workflow_path": ".github/workflows/chrono-ci-harness.yml",
       "name": "Example / harness",
       "runs_on": "self-hosted",
       "timeout_minutes": 45,
@@ -78,8 +76,6 @@
     "environment": {},
     "timeout_seconds": 60,
     "output_limit_bytes": 8388608,
-    "wait_seconds": 1800,
-    "poll_seconds": 30,
     "manifest_path": ".chrono-harness/state/collection/manifest.json",
     "download_directory": ".chrono-harness/state/collection/downloads/",
     "report_path": ".chrono-harness/state/collection/gather.json"

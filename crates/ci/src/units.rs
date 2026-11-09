@@ -1,4 +1,4 @@
-//! Explicit independent units, with opt-in single-parent job scheduling.
+//! Explicit units scheduled as jobs within one parent workflow.
 use super::*;
 use chrono_harness::{
     file_identity,
@@ -15,29 +15,18 @@ pub struct FullContexts {
     pub units: BTreeMap<String, String>,
 }
 
-fn gating_present<'de, D: serde::Deserializer<'de>>(
-    d: D,
-) -> Result<Option<super::gating::Config>, D::Error> {
-    super::gating::Config::deserialize(d).map(Some)
-}
 fn full_contexts_present<'de, D: serde::Deserializer<'de>>(
     d: D,
 ) -> Result<Option<FullContexts>, D::Error> {
     FullContexts::deserialize(d).map(Some)
 }
-pub(super) const MARKER: &str = "# chrono-ci: owned github-units/v1\n";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub persistent_cache: Option<super::cache::Config>,
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "gating_present"
-    )]
-    pub job_gating: Option<super::gating::Config>,
+    pub job_gating: super::gating::Config,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -53,7 +42,6 @@ pub struct Config {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Workflow {
-    pub workflow_path: String,
     pub name: String,
     pub runs_on: String,
     pub timeout_minutes: u32,
@@ -85,8 +73,6 @@ pub struct Gather {
     pub environment: BTreeMap<String, String>,
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
-    pub wait_seconds: u64,
-    pub poll_seconds: u64,
     pub manifest_path: String,
     pub download_directory: String,
     pub report_path: String,
@@ -103,16 +89,12 @@ impl Config {
         let mut c = self.collection.clone();
         if let Some(unit) = unit {
             let u = self.units.get(unit).ok_or("unregistered workflow unit")?;
-            c.workflow_path = u.workflow_path.clone();
             c.name = u.name.clone();
             c.runs_on = u.runs_on.clone();
             c.timeout_minutes = u.timeout_minutes;
             c.bootstrap = u.bootstrap.clone();
             c.context_path = u.context_path.clone();
             c.artifact_directory = u.artifact_directory.clone();
-        }
-        if self.job_gating.is_some() {
-            c.workflow_path = self.collection.workflow_path.clone();
         }
         Ok(c)
     }
@@ -131,9 +113,7 @@ pub fn validate(c: &Config) -> Result<(), String> {
     if let Some(cache) = &c.persistent_cache {
         let mut jobs: BTreeSet<_> = c.units.keys().map(|id| super::gating::job_id(id)).collect();
         jobs.insert("aggregate".into());
-        if c.job_gating.is_some() {
-            jobs.insert("detect".into());
-        }
+        jobs.insert("detect".into());
         super::cache::validate(cache, &jobs)?;
     }
     if !matches!(c.schema.as_str(), SCHEMA | FULL_SCHEMA)
@@ -195,23 +175,15 @@ pub fn validate(c: &Config) -> Result<(), String> {
             roots.push(&unit.artifact_directory);
         }
     }
-    if let Some(gating) = &c.job_gating {
-        super::gating::validate(c, gating)?;
-    }
+    super::gating::validate(c, &c.job_gating)?;
     super::validate_policy(&c.collection, c.schema == FULL_SCHEMA)?;
-    let mut paths = BTreeSet::from([c.collection.workflow_path.clone()]);
     let mut names = BTreeSet::from([c.collection.name.clone()]);
     let mut contexts = BTreeSet::from([c.collection.context_path.clone()]);
     for (id, unit) in &c.units {
         chrono_harness::units::id(id)?;
-        let mut legacy_address = c.workflow(Some(id))?;
-        legacy_address.workflow_path = unit.workflow_path.clone();
-        super::validate_policy(&legacy_address, c.schema == FULL_SCHEMA)?;
-        if !paths.insert(unit.workflow_path.clone())
-            || !names.insert(unit.name.clone())
-            || !contexts.insert(unit.context_path.clone())
-        {
-            return Err("unit workflow path/name/context collision".into());
+        super::validate_policy(&c.workflow(Some(id))?, c.schema == FULL_SCHEMA)?;
+        if !names.insert(unit.name.clone()) || !contexts.insert(unit.context_path.clone()) {
+            return Err("unit job name/context collision".into());
         }
     }
     chrono_harness::validate_command(&chrono_harness::CommandSpec {
@@ -239,13 +211,6 @@ pub fn validate(c: &Config) -> Result<(), String> {
         })
     {
         return Err("invalid transport environment or credential omission declaration".into());
-    }
-    if c.gather.wait_seconds == 0
-        || c.gather.poll_seconds == 0
-        || c.gather.poll_seconds > c.gather.wait_seconds
-        || c.gather.poll_seconds > 60
-    {
-        return Err("invalid bounded unit collection wait".into());
     }
     if let Some(retry) = &c.gather.download_retry {
         let statuses: BTreeSet<_> = retry.http_statuses.iter().copied().collect();
@@ -360,45 +325,7 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
     if !config_path.starts_with(".chrono-harness/ci/") {
         return Err("unit source must belong to host CI configuration".into());
     }
-    if c.job_gating.is_some() {
-        return super::gating::render(c, config_path);
-    }
-    let mut outputs = BTreeMap::new();
-    for unit in c
-        .units
-        .keys()
-        .map(|s| Some(s.as_str()))
-        .chain(std::iter::once(None))
-    {
-        let w = c.workflow(unit)?;
-        let scope = c.scope(unit);
-        let artifact = unit
-            .map(|u| format!("chrono-unit-{u}"))
-            .unwrap_or("chrono-collection".into());
-        let rendered = super::render_extended(
-            &w,
-            config_path,
-            Some(&scope),
-            &artifact,
-            unit.is_none(),
-            c.schema == FULL_SCHEMA,
-        )?
-        .replacen(super::MARKER, MARKER, 1);
-        let rendered = super::cache::project(
-            c.persistent_cache.as_ref(),
-            &unit
-                .map(super::gating::job_id)
-                .unwrap_or("aggregate".into()),
-            rendered,
-            "Bootstrap registered tools",
-            "Canonical harness check",
-            None,
-            None,
-            Some("Preserve actual check evidence"),
-        )?;
-        outputs.insert(w.workflow_path.clone(), rendered);
-    }
-    Ok(outputs)
+    super::gating::render(c, config_path)
 }
 
 fn projection_changes(
@@ -411,12 +338,7 @@ fn projection_changes(
     let outputs = render(c, path)?;
     let mut writes = vec![];
     for (path, bytes) in &outputs {
-        let marker = if c.job_gating.is_some() {
-            super::gating::MARKER
-        } else {
-            MARKER
-        };
-        if !output_preflight(root, path, bytes, marker)? {
+        if !output_preflight(root, path, bytes, super::gating::MARKER)? {
             if verify {
                 return Err(format!("generated unit workflow drift: {path}"));
             }
@@ -438,27 +360,11 @@ pub fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<boo
 pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     let path = ".chrono-harness/ci/units.json";
     let existing = no_symlink_parents(root, path)?.exists();
-    let mut c: Config = if existing {
+    let c: Config = if existing {
         decode(&fs::read(root.join(path)).map_err(|e| e.to_string())?)?
     } else {
         incoming
     };
-    if !existing && c.job_gating.is_none() {
-        c.job_gating = Some(super::gating::Config {
-            startup: None,
-            schema: super::gating::SCHEMA.into(),
-            detector: super::gating::Detector {
-                evidence_directory: None,
-                runs_on: c.collection.runs_on.clone(),
-                timeout_minutes: c.collection.timeout_minutes,
-                bootstrap: c.collection.bootstrap.clone(),
-                sparse_checkout: vec![
-                    ".chrono-harness/".into(),
-                    c.collection.workflow_path.clone(),
-                ],
-            },
-        });
-    }
     if !existing {
         profile(root, &c)?;
         projection_changes(root, path, &c, false)?;
@@ -515,13 +421,7 @@ fn prepare_scope(
     generate(root, path, c, true)?;
     let profile = profile(root, c)?;
     let w = c.workflow(unit)?;
-    let detection = if c.job_gating.is_some() {
-        Some(super::gating::native_detection(
-            root, path, c, event, payload, revision,
-        )?)
-    } else {
-        None
-    };
+    let detection = super::gating::native_detection(root, path, c, event, payload, revision)?;
     let mut context = super::prepare_policy_fixed(
         root,
         &w,
@@ -529,13 +429,11 @@ fn prepare_scope(
         payload,
         revision,
         c.schema == FULL_SCHEMA,
-        detection.as_ref(),
+        Some(&detection),
     )?;
-    if let Some(detection) = detection {
-        context["detection"] = detection;
-        context["native_run"] =
-            serde_json::to_value(super::gating::native_run(unit)?).map_err(|e| e.to_string())?;
-    }
+    context["detection"] = detection;
+    context["native_run"] =
+        serde_json::to_value(super::gating::native_run(unit)?).map_err(|e| e.to_string())?;
     let argv = context["canonical_argv"]
         .as_array_mut()
         .ok_or("missing canonical command")?;

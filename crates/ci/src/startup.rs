@@ -51,7 +51,7 @@ pub(crate) fn validate(c: &units::Config, s: &Config) -> Result<(), String> {
     {
         return Err("startup artifact collides with an evidence artifact".into());
     }
-    let g = c.job_gating.as_ref().ok_or("startup requires job gating")?;
+    let g = &c.job_gating;
     let mut evidence = vec![
         ".chrono-harness/state/",
         c.collection.artifact_directory.as_str(),

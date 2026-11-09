@@ -36,7 +36,6 @@
   },
   "units": {
     "runner": {
-      "workflow_path": ".github/workflows/chrono-ci-runner.yml",
       "name": "chrono / runner",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -50,7 +49,6 @@
       "artifact_directory": ".chrono-harness/state/units/runner/"
     },
     "instructions": {
-      "workflow_path": ".github/workflows/chrono-ci-instructions.yml",
       "name": "chrono / instructions",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -66,7 +64,6 @@
       "artifact_directory": ".chrono-harness/state/units/instructions/"
     },
     "judge-ci": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-ci.yml",
       "name": "chrono / judge-ci",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -80,7 +77,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-ci/"
     },
     "ci": {
-      "workflow_path": ".github/workflows/chrono-ci-ci.yml",
       "name": "chrono / ci",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -94,7 +90,6 @@
       "artifact_directory": ".chrono-harness/state/units/ci/"
     },
     "judge-registration": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-registration.yml",
       "name": "chrono / judge-registration",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -108,7 +103,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-registration/"
     },
     "judge-filemap": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-filemap.yml",
       "name": "chrono / judge-filemap",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -122,7 +116,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-filemap/"
     },
     "judge-routes": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-routes.yml",
       "name": "chrono / judge-routes",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -138,7 +131,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-routes/"
     },
     "judge-projects": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-projects.yml",
       "name": "chrono / judge-projects",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -152,7 +144,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-projects/"
     },
     "judge-cost": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-cost.yml",
       "name": "chrono / judge-cost",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -166,7 +157,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-cost/"
     },
     "judge-mixed": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-mixed.yml",
       "name": "chrono / judge-mixed",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -180,7 +170,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-mixed/"
     },
     "judge-workflow": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-workflow.yml",
       "name": "chrono / judge-workflow",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -194,7 +183,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-workflow/"
     },
     "inputs": {
-      "workflow_path": ".github/workflows/chrono-ci-inputs.yml",
       "name": "chrono / inputs",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -208,7 +196,6 @@
       "artifact_directory": ".chrono-harness/state/units/inputs/"
     },
     "distribution": {
-      "workflow_path": ".github/workflows/chrono-ci-distribution.yml",
       "name": "chrono / distribution",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -224,7 +211,6 @@
       "artifact_directory": ".chrono-harness/state/units/distribution/"
     },
     "worktree": {
-      "workflow_path": ".github/workflows/chrono-ci-worktree.yml",
       "name": "chrono / worktree",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -238,7 +224,6 @@
       "artifact_directory": ".chrono-harness/state/units/worktree/"
     },
     "judge-workflow-units": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-workflow-units.yml",
       "name": "chrono / judge-workflow-units",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -252,7 +237,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-units/"
     },
     "judge-workflow-short": {
-      "workflow_path": ".github/workflows/chrono-ci-judge-workflow-short.yml",
       "name": "chrono / judge-workflow-short",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -266,7 +250,6 @@
       "artifact_directory": ".chrono-harness/state/units/judge-workflow-short/"
     },
     "release-build": {
-      "workflow_path": ".github/workflows/chrono-ci-release-build.yml",
       "name": "chrono / release-build",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -280,7 +263,6 @@
       "artifact_directory": ".chrono-harness/state/units/release-build/"
     },
     "worktree-adoption": {
-      "workflow_path": ".github/workflows/chrono-ci-worktree-adoption.yml",
       "name": "chrono / worktree-adoption",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -294,7 +276,6 @@
       "artifact_directory": ".chrono-harness/state/units/worktree-adoption/"
     },
     "diagnostics": {
-      "workflow_path": ".github/workflows/chrono-ci-diagnostics.yml",
       "name": "chrono / diagnostics",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -310,7 +291,6 @@
       "artifact_directory": ".chrono-harness/state/units/diagnostics/"
     },
     "host-bootstrap": {
-      "workflow_path": ".github/workflows/chrono-ci-host-bootstrap.yml",
       "name": "chrono / host-bootstrap",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -324,7 +304,6 @@
       "artifact_directory": ".chrono-harness/state/units/host-bootstrap/"
     },
     "cache": {
-      "workflow_path": ".github/workflows/chrono-ci-cache.yml",
       "name": "chrono / cache",
       "runs_on": "macos-26",
       "timeout_minutes": 45,
@@ -352,8 +331,6 @@
     },
     "timeout_seconds": 60,
     "output_limit_bytes": 8388608,
-    "wait_seconds": 1800,
-    "poll_seconds": 30,
     "manifest_path": ".chrono-harness/state/collection/manifest.json",
     "download_directory": ".chrono-harness/state/collection/downloads/",
     "report_path": ".chrono-harness/state/collection/gather.json",

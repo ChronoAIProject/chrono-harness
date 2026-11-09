@@ -6,19 +6,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-fn encode(value: &str) -> String {
-    value
-        .bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-                (b as char).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect()
-}
-
 struct AcquisitionBudget {
     deadline: Instant,
     stdout_remaining: usize,
@@ -540,69 +527,7 @@ fn inner(
     } else {
         None
     };
-    let completed = if c.job_gating.is_some() {
-        parent_units(root, c, repository, &context, transport)?
-    } else {
-        let deadline = Instant::now() + Duration::from_secs(c.gather.wait_seconds);
-        let mut pending: BTreeMap<_, _> = c.units.iter().collect();
-        let mut completed = BTreeMap::new();
-        while !pending.is_empty() {
-            let mut ready = vec![];
-            for (unit, workflow) in &pending {
-                let filename = workflow
-                    .workflow_path
-                    .strip_prefix(".github/workflows/")
-                    .ok_or("workflow path")?;
-                let endpoint = format!(
-                    "repos/{repository}/actions/workflows/{}/runs?head_sha={event_head}&event={event}&per_page=100",
-                    encode(filename)
-                );
-                let pages = transport.api(&endpoint, true)?;
-                let mut matches = vec![];
-                for page in pages.as_array().ok_or("paginated run pages missing")? {
-                    for run in page["workflow_runs"]
-                        .as_array()
-                        .ok_or("workflow run list missing")?
-                    {
-                        if run["head_sha"] == event_head
-                            && run["event"] == event
-                            && run["path"] == workflow.workflow_path
-                        {
-                            matches.push(run.clone());
-                        }
-                    }
-                }
-                if matches.len() > 1 {
-                    return Err(format!(
-                        "ambiguous runs for unit {unit}; use an explicit local collection manifest"
-                    ));
-                }
-                if let Some(run) = matches.first() {
-                    if run["status"] == "completed" {
-                        ready.push(((*unit).clone(), run.clone()));
-                    }
-                }
-            }
-            for (unit, run) in ready {
-                pending.remove(&unit);
-                completed.insert(unit, run);
-            }
-            if pending.is_empty() {
-                break;
-            }
-            if Instant::now() >= deadline {
-                return Err(format!(
-                    "unit collection wait expired; unresolved units: {:?}",
-                    pending.keys()
-                ));
-            }
-            std::thread::sleep(
-                Duration::from_secs(c.gather.poll_seconds)
-                    .min(deadline.saturating_duration_since(Instant::now())),
-            );
-        }
-        completed
-    };
+    let completed = parent_units(root, c, repository, &context, transport)?;
     let mut reports = vec![];
     let mut identities = vec![];
     let download_prefix = {
@@ -649,30 +574,24 @@ fn inner(
             .ok_or("unit run attempt missing")?;
         let w = &c.units[&unit];
         let destination = format!("{download_prefix}{unit}/{id}/{attempt}");
-        let artifact = if c.job_gating.is_some() {
-            run["production"]["artifact"]
-                .as_str()
-                .ok_or("original artifact name missing")?
-                .to_owned()
-        } else {
-            format!("chrono-unit-{unit}-{id}-{attempt}")
-        };
+        let artifact = run["production"]["artifact"]
+            .as_str()
+            .ok_or("original artifact name missing")?
+            .to_owned();
         transport.begin_artifact()?;
-        if c.job_gating.is_some() {
-            if parent_artifacts.is_none() {
-                parent_artifacts = Some(transport.api(
-                    &format!("repos/{repository}/actions/runs/{id}/artifacts?per_page=100"),
-                    true,
-                )?);
-            }
-            Transport::artifact_metadata(
-                parent_artifacts.as_ref().unwrap(),
-                id,
-                repository,
-                &artifact,
-                event_head,
-            )?;
+        if parent_artifacts.is_none() {
+            parent_artifacts = Some(transport.api(
+                &format!("repos/{repository}/actions/runs/{id}/artifacts?per_page=100"),
+                true,
+            )?);
         }
+        Transport::artifact_metadata(
+            parent_artifacts.as_ref().unwrap(),
+            id,
+            repository,
+            &artifact,
+            event_head,
+        )?;
         let destination = transport.download(id, repository, &artifact, &destination)?;
         let downloaded = |input: &str| -> Result<String, String> {
             let relative = input
@@ -681,20 +600,18 @@ fn inner(
             relative_path(relative)?;
             Ok(format!("{destination}/{relative}"))
         };
-        if c.job_gating.is_some() {
-            if run["production"]["context_sha256"]
-                != file_identity(&no_symlink_parents(root, &downloaded(&w.context_path)?)?)?.0
-                || run["production"]["report_sha256"]
-                    != file_identity(&no_symlink_parents(
-                        root,
-                        &downloaded(&registered[&unit].report_path)?,
-                    )?)?
-                    .0
-            {
-                return Err(format!(
-                    "unit {unit} artifact differs from original production output"
-                ));
-            }
+        if run["production"]["context_sha256"]
+            != file_identity(&no_symlink_parents(root, &downloaded(&w.context_path)?)?)?.0
+            || run["production"]["report_sha256"]
+                != file_identity(&no_symlink_parents(
+                    root,
+                    &downloaded(&registered[&unit].report_path)?,
+                )?)?
+                .0
+        {
+            return Err(format!(
+                "unit {unit} artifact differs from original production output"
+            ));
         }
         if let Some(profile) = &stream_profile {
             let limits: chrono_judge_ci::CollectionLimits = profile
@@ -760,31 +677,24 @@ fn inner(
                 "unit {unit} context disagrees with fixed collection inputs"
             ));
         }
-        if c.job_gating.is_some()
-            && (unit_context["detection"] != context["detection"]
-                || unit_context["workflow_source_revision"] != context["workflow_source_revision"])
+        if unit_context["detection"] != context["detection"]
+            || unit_context["workflow_source_revision"] != context["workflow_source_revision"]
         {
             return Err(format!(
                 "unit {unit} parent run/attempt/source detection mismatch"
             ));
         }
-        if c.job_gating.is_some() {
-            let native: super::gating::NativeRun =
-                serde_json::from_value(unit_context["native_run"].clone())
-                    .map_err(|e| format!("unit native run missing: {e}"))?;
-            if native.repository != repository
-                || native.run_id != id
-                || native.run_attempt != attempt
-                || native.job != super::gating::job_id(&unit)
-            {
-                return Err(format!("unit {unit} artifact run/attempt/job mismatch"));
-            }
+        let native: super::gating::NativeRun =
+            serde_json::from_value(unit_context["native_run"].clone())
+                .map_err(|e| format!("unit native run missing: {e}"))?;
+        if native.repository != repository
+            || native.run_id != id
+            || native.run_attempt != attempt
+            || native.job != super::gating::job_id(&unit)
+        {
+            return Err(format!("unit {unit} artifact run/attempt/job mismatch"));
         }
-        let workflow_path = if c.job_gating.is_some() {
-            &c.collection.workflow_path
-        } else {
-            &w.workflow_path
-        };
+        let workflow_path = &c.collection.workflow_path;
         let revision = unit_context["workflow_source_revision"]
             .as_str()
             .filter(|v| full_oid(v))
@@ -798,7 +708,7 @@ fn inner(
             "--header".into(),
             "Accept: application/vnd.github.raw".into(),
         ];
-        if c.job_gating.is_none() || workflow_source.is_none() {
+        if workflow_source.is_none() {
             let source = transport.run(&source_args)?;
             if source != fs::read(root.join(workflow_path)).map_err(|e| e.to_string())? {
                 return Err(format!("unit {unit} executed a different workflow source"));
@@ -822,29 +732,14 @@ fn inner(
             input.as_object_mut().unwrap().remove("artifacts");
         }
         reports.push(input);
-        if c.job_gating.is_none() {
-            let endpoint = format!("repos/{repository}/actions/runs/{id}");
-            let fresh = transport.api(&endpoint, false)?;
-            if fresh["run_attempt"] != attempt
-                || fresh["status"] != "completed"
-                || fresh["head_sha"] != event_head
-                || fresh["event"] != event
-                || fresh["path"] != w.workflow_path
-            {
-                return Err("unit run changed while collecting original evidence".into());
-            }
-        }
         transport
             .acquisition
             .as_ref()
             .ok_or("artifact budget missing")?
             .remaining()?;
-        if c.job_gating.is_none() {
-            transport.acquisition = None;
-        }
         identities.push(json!({"unit":unit,"run":id,"attempt":attempt,"conclusion":run["conclusion"],"job_id":run["unit_job_id"],"workflow_source_revision":revision,"workflow_sha256":sha256(&source)}));
     }
-    if c.job_gating.is_some() && !identities.is_empty() {
+    if !identities.is_empty() {
         let d: super::gating::Detection =
             serde_json::from_value(context["detection"].clone()).map_err(|e| e.to_string())?;
         let fresh = transport.api(

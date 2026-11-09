@@ -1,5 +1,5 @@
 #[path = "gating.rs"]
-mod gating;
+pub(super) mod gating;
 use super::*;
 
 #[test]
@@ -133,7 +133,7 @@ fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream
 use chrono_harness::{prepared, sha256};
 use std::path::PathBuf;
 
-pub(super) struct ShortHost {
+pub(crate) struct ShortHost {
     _dir: crate::tools::FixtureDirectory,
     root: PathBuf,
     pub(super) remote: PathBuf,
@@ -172,7 +172,7 @@ impl ShortHost {
         let git_bin = fixture_git();
         let version = Command::new(&git_bin).arg("--version").output().unwrap();
         let native = json!({"operation":"prepare.check.ci","tool":"chrono-ci","argv":["check-inputs","--config",".chrono-harness/ci/units.json","--event-env","GITHUB_EVENT_NAME","--payload-env","GITHUB_EVENT_PATH","--revision-env","CHRONO_WORKFLOW_REVISION","--repository-env","GITHUB_REPOSITORY"]});
-        let cfg = json!({"schema_version":4,"status":"proposed","enforcement":"not-implemented","runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/FILEMAP.json","workflow":".chrono-harness/workflow.json"},"canonical_check":{"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":".chrono-harness/ci/check.json","inputs":{"local":{"operation":"prepare.check.local","tool":"chrono-worktree","argv":["check-inputs","--config",".chrono-harness/worktree.json"]},"ci":native}},"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":git_bin,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},{"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},{"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"},{"id":"unit-fixture","program":UNIT_TOOL,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci-test-transport 1"}],"protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":67108864,"encoding":"UTF-8"},"environment":{"inherit":["PATH","HOME","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","GITHUB_REPOSITORY"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_bin,"presence":"present","sha256":sha256(&fs::read(&git_bin).unwrap())}]},"input_closure":{"status":"incomplete","unresolved":["fixture closure"]},"semantic_fields":[],"artifacts":[{"path":".chrono-harness/state/","owner":"host","kind":"evidence","tracked":false},{"path":".chrono-harness/bin/","owner":"host","kind":"executable","tracked":false}]});
+        let cfg = json!({"schema_version":4,"status":"proposed","enforcement":"not-implemented","runner":{"path":".chrono-harness/bin/chrono-harness","version":"0.1.0","sha256":null},"registries":{"judges":".chrono-harness/judges.json","projects":".chrono-harness/projects.json","filemap":".chrono-harness/FILEMAP.json","workflow":".chrono-harness/workflow.json"},"canonical_check":{"operation":"validate.delta","argv":[".chrono-harness/bin/chrono-harness","check"],"profile":".chrono-harness/ci/check.json","inputs":{"local":{"operation":"prepare.check.local","tool":"chrono-worktree","argv":["check-inputs","--config",".chrono-harness/worktree.json"]},"ci":native}},"facts_git":{"tool":"git","input":"git-bytes"},"tools":[{"id":"git","program":git_bin,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()},{"id":"chrono-worktree","program":".chrono-harness/bin/chrono-worktree","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-worktree 0.1.0"},{"id":"chrono-ci","program":".chrono-harness/bin/chrono-ci","resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci 0.1.0"},{"id":"unit-fixture","program":UNIT_TOOL,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"chrono-ci-test-transport 1"}],"protocol":{"id":"chrono-judge/v1","timeout_seconds":30,"stdout_limit_bytes":67108864,"encoding":"UTF-8"},"environment":{"inherit":["PATH","HOME","CHRONO_CHECK_SOURCE","GITHUB_EVENT_NAME","GITHUB_EVENT_PATH","CHRONO_WORKFLOW_REVISION","GITHUB_REPOSITORY","GITHUB_RUN_ID","GITHUB_RUN_ATTEMPT","GITHUB_JOB","CHRONO_CI_DETECTION","CHRONO_CI_NEEDS"],"values":{"GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},"inputs":[{"id":"git-bytes","location":git_bin,"presence":"present","sha256":sha256(&fs::read(&git_bin).unwrap())}]},"input_closure":{"status":"incomplete","unresolved":["fixture closure"]},"semantic_fields":[],"artifacts":[{"path":".chrono-harness/state/","owner":"host","kind":"evidence","tracked":false},{"path":".chrono-harness/bin/","owner":"host","kind":"executable","tracked":false}]});
         let mut cfg = cfg;
         cfg["environment"]["values"]["TMPDIR"] = json!(dir.path());
         json_file(&root, ".chrono-harness/config.json", &cfg);
@@ -1384,71 +1384,28 @@ fn preparation_retains_environment_identities_without_credential_values() {
 
 #[test]
 fn generated_native_collect_gathers_inside_short_check_and_repeats_without_business() {
-    let mut h = ShortHost::new();
-    h.modify(".chrono-harness/config.json", |c| {
-        c["environment"]["inherit"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!("GH_TOKEN"));
-        c["environment"]["credential_environment"] = json!(["GH_TOKEN"]);
-    });
-    h.modify(".chrono-harness/ci/units.json", |c| {
-        configure_mock_transport(c);
-        c["gather"]["wait_seconds"] = json!(1);
-        c["gather"]["poll_seconds"] = json!(1);
-    });
-    install_mock_transport(&h.root, "success", &h.candidate);
-    let event = h.root.join(".chrono-harness/state/event.json");
-    json_file(
-        &h.root,
-        ".chrono-harness/state/event.json",
-        &json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false}),
-    );
-    let command = |args: &[&str]| {
-        let mut c = h.command(args);
-        c.env(prepared::SOURCE, "ci")
-            .env("GITHUB_EVENT_NAME", "push")
-            .env("GITHUB_EVENT_PATH", &event)
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-            .env("GITHUB_REPOSITORY", "owner/host")
-            .env("GH_TOKEN", "fixture-native-secret");
-        c
-    };
-    for unit in ["alpha", "beta"] {
-        let out = command(&["check", "--unit", unit]).output().unwrap();
-        assert!(
-            out.status.success(),
-            "{} {}",
-            String::from_utf8_lossy(&out.stderr),
-            String::from_utf8_lossy(&out.stdout)
-        );
-        let target = h
-            .root
-            .join(format!(".chrono-harness/state/mock-artifacts/{unit}"));
-        fs::create_dir_all(&target).unwrap();
-        copy_artifacts(
-            &h.root.join(format!(".chrono-harness/state/{unit}")),
-            &target,
-        );
-    }
+    let mut h = gating::GatedHost::new();
+    h.change(&["a.txt", "b.txt"]);
+    let d = h.detection();
+    h.units(&d);
+    h.mock(&d, "success");
+    let needs = gating::needs(&h, &d);
     let a = fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap();
     let b = fs::read(h.root.join(".chrono-harness/state/calls-b")).unwrap();
     let workflow = fs::read_to_string(h.root.join(".github/workflows/collection.yml")).unwrap();
     let line = workflow
         .lines()
-        .find(|l| l.contains("'check' '--collect'"))
+        .find(|line| line.contains("'check' '--collect'"))
         .unwrap()
         .trim();
     for _ in 0..2 {
-        let out = Command::new("/bin/bash")
-            .current_dir(&h.root)
-            .args(["-c", line])
-            .env(prepared::SOURCE, "ci")
-            .env("GITHUB_EVENT_NAME", "push")
-            .env("GITHUB_EVENT_PATH", &event)
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-            .env("GITHUB_REPOSITORY", "owner/host")
-            .env("GH_TOKEN", "fixture-native-secret")
+        let mut command = Command::new("/bin/bash");
+        command.args(["-c", line]);
+        h.environment(&mut command);
+        let out = command
+            .env("GITHUB_JOB", "aggregate")
+            .env("CHRONO_CI_DETECTION", serde_json::to_string(&d).unwrap())
+            .env("CHRONO_CI_NEEDS", serde_json::to_string(&needs).unwrap())
             .output()
             .unwrap();
         assert!(
@@ -1456,13 +1413,10 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
             "{} {}",
             String::from_utf8_lossy(&out.stderr),
             String::from_utf8_lossy(&out.stdout)
-                .chars()
-                .take(500)
-                .collect::<String>()
         );
         let r = published_report(&h.root, None, &out);
         assert_eq!(r["response"]["evidence"]["executed"], json!([]));
-        assert!(!String::from_utf8_lossy(&out.stdout).contains("fixture-native-secret"));
+        assert!(!String::from_utf8_lossy(&out.stdout).contains("fixture-parent-secret"));
     }
     assert_eq!(
         fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap(),
@@ -1471,48 +1425,6 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
     assert_eq!(
         fs::read(h.root.join(".chrono-harness/state/calls-b")).unwrap(),
         b
-    );
-    h.modify(".chrono-harness/config.json", |c| {
-        c["protocol"]["timeout_seconds"] = json!(5)
-    });
-    h.modify(".chrono-harness/ci/units.json", |c| {
-        c["gather"]["wait_seconds"] = json!(6)
-    });
-    let launches = fs::read(h.root.join(".chrono-harness/state/mock-launches.jsonl")).unwrap();
-    json_file(
-        &h.root,
-        ".chrono-harness/state/event.json",
-        // Invalid acquisition bounds must reject before obtaining Git endpoints.
-        &json!({"ref":"refs/heads/dev","before":"b".repeat(40),"after":h.candidate,"created":false,"deleted":false}),
-    );
-    let rejected = h
-        .command(&["check", "--collect"])
-        .env(prepared::SOURCE, "ci")
-        .env("GITHUB_EVENT_NAME", "push")
-        .env("GITHUB_EVENT_PATH", &event)
-        .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-        .env("GITHUB_REPOSITORY", "owner/host")
-        .output()
-        .unwrap();
-    if rejected.status.code() != Some(2)
-        || !String::from_utf8_lossy(&rejected.stderr).contains("registered acquisition timeout")
-    {
-        retain_command_result(
-            &h.root,
-            &["check".into(), "--collect".into()],
-            &json!({"fixture":"acquisition-bound-rejection", "event_path":event, "candidate":h.candidate}),
-            &rejected,
-        );
-    }
-    assert_eq!(rejected.status.code(), Some(2));
-    assert!(
-        String::from_utf8_lossy(&rejected.stderr).contains("registered acquisition timeout"),
-        "{}",
-        String::from_utf8_lossy(&rejected.stderr)
-    );
-    assert_eq!(
-        fs::read(h.root.join(".chrono-harness/state/mock-launches.jsonl")).unwrap(),
-        launches
     );
 }
 
@@ -1732,7 +1644,7 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
 
 #[test]
 fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer() {
-    let mut h = ShortHost::new();
+    let mut h = gating::GatedHost::new();
     let prefix = ".chrono-harness/state/custom evidence λ/";
     h.modify(".chrono-harness/ci/units.json", |c| {
         c["collection"]["artifact_directory"] = json!(format!("{prefix}collection/"));
@@ -1744,9 +1656,6 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
         c["gather"]["manifest_path"] = json!(format!("{prefix}collection/manifest.json"));
         c["gather"]["report_path"] = json!(format!("{prefix}collection/gather.json"));
         c["gather"]["download_directory"] = json!(format!("{prefix}collection/downloads/"));
-        configure_mock_transport(c);
-        c["gather"]["wait_seconds"] = json!(1);
-        c["gather"]["poll_seconds"] = json!(1);
     });
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["report_path"] = json!(format!("{prefix}collection/check.json"));
@@ -1766,17 +1675,12 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     fs::write(h.root.join("b.txt"), "portable b").unwrap();
     h.revise();
     let payload = json!({"ref":"refs/heads/dev","before":h.base,"after":h.candidate,"created":false,"deleted":false});
+    h.payload = payload.clone();
+    let d = h.detection();
     json_file(&h.root, ".chrono-harness/state/event.json", &payload);
     for unit in ["alpha", "beta"] {
         let out = h
-            .command(&["check", "--unit", unit])
-            .env(prepared::SOURCE, "ci")
-            .env("GITHUB_EVENT_NAME", "push")
-            .env(
-                "GITHUB_EVENT_PATH",
-                h.root.join(".chrono-harness/state/event.json"),
-            )
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
+            .command(&["check", "--unit", unit], &d, &Value::Null)
             .output()
             .unwrap();
         assert!(
@@ -1785,6 +1689,7 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
             String::from_utf8_lossy(&out.stderr),
             String::from_utf8_lossy(&out.stdout)
         );
+        h.produce(unit);
         let report = published_report(&h.root, Some(unit), &out);
         assert!(
             report["retained_report"]
@@ -1854,12 +1759,19 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     fs::create_dir(&consumer).unwrap();
     git(&consumer, &["clone", "-q", h.root.to_str().unwrap(), "."]);
     install(&consumer);
+    gating::install_parent_provider(&consumer);
     git(&consumer, &["config", "user.name", "Fixture"]);
     git(
         &consumer,
         &["config", "user.email", "fixture@example.invalid"],
     );
     for unit in ["alpha", "beta"] {
+        fs::copy(
+            h.root
+                .join(format!(".chrono-harness/state/production-{unit}")),
+            consumer.join(format!(".chrono-harness/state/production-{unit}")),
+        )
+        .unwrap();
         copy_artifacts(
             &h.root.join(format!("{prefix}{unit}")),
             &consumer.join(format!(".chrono-harness/state/mock-artifacts/{unit}")),
@@ -1877,22 +1789,10 @@ fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer()
     assert!(!h.root.exists());
     // Failure diagnostics belong to the active consumer after producer relocation.
     h.root = consumer.clone();
-    install_mock_transport(&consumer, "success", &h.candidate);
+    h.mock(&d, "success");
+    let needs = gating::needs(&h, &d);
     json_file(&consumer, ".chrono-harness/state/event.json", &payload);
-    let command = || {
-        let mut c = Command::new(consumer.join(".chrono-harness/bin/chrono-harness"));
-        c.current_dir(&consumer)
-            .args(["check", "--collect"])
-            .env(prepared::SOURCE, "ci")
-            .env("GITHUB_EVENT_NAME", "push")
-            .env(
-                "GITHUB_EVENT_PATH",
-                consumer.join(".chrono-harness/state/event.json"),
-            )
-            .env("CHRONO_WORKFLOW_REVISION", &h.candidate)
-            .env("GITHUB_REPOSITORY", "owner/host");
-        c
-    };
+    let command = || h.command(&["check", "--collect"], &d, &needs);
     let out = command().output().unwrap();
     assert!(
         out.status.success(),

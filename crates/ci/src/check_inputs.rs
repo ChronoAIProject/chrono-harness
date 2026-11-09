@@ -296,20 +296,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             }) {
                 return Err("unit producer/upload contract mismatch".into());
             }
-            if req.selection == Selection::Collect && c.job_gating.is_none() {
-                let policy: Value = decode(
-                    &fs::read(no_symlink_parents(root, &req.effective_config)?)
-                        .map_err(|e| e.to_string())?,
-                )?;
-                if policy["protocol"]["timeout_seconds"].as_u64().unwrap_or(0)
-                    <= c.gather.wait_seconds
-                {
-                    return Err(
-                        "native gathering wait must fit the registered acquisition timeout".into(),
-                    );
-                }
-            }
-            if c.job_gating.is_some() && req.selection == Selection::Collect {
+            if req.selection == Selection::Collect {
                 let needs: Value = decode(
                     std::env::var(super::gating::NEEDS_ENV)
                         .map_err(|_| "aggregate needs missing")?

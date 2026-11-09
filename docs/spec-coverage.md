@@ -178,7 +178,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 登记、操作及测试配对 | registration、routes、projects；[执行合同](execution.md) | 显式登记和实际回执检查已实现；不发现隐藏依赖、不判断产品价值，完整宿主输入与其余跨语言 helper 迁移尚未完成 |
 | 固定端点与输入 | runner、inputs；[Git 事实](git-facts.md)、[输入](inputs.md) | 当前候选读取固定端点数据；快照、摘要和配置选择只绑定已声明输入，不证明完整输入或本地／CI 同判 |
 | DELTA 和实际选测 | filemap、routes、projects；[影响闭包](filemap-impact.md) | 使用两端显式登记和实际遍历结果；完整图／SPEC 对应及外围转换仍有未证明部分，不按目录或语言推断选测 |
-| CI 与汇总 | ci、judge-ci；[CI](ci.md)、[单元](ci-units.md)、[完整上下文](full-ci.md) | scoped 短命令和原件汇总有现役使用方；full 宿主采用、完整来源与普遍同判尚未完成 |
+| CI 与汇总 | ci、judge-ci；[CI](ci.md)、[单元](ci-units.md)、[完整上下文](full-ci.md) | scoped 短命令和原件汇总有现役使用方；单元 provider 只支持明确的父工作流，不保留独立单元地址和等待／轮询参数；下载重试、原件拒绝及 full 汇总回归使用父拓扑，full 夹具的原生 job 值由登记适配器留存并转交真实采集程序；旧发布示例不证明当前源码采用，full 宿主采用、完整来源与普遍同判尚未完成 |
 | 缓存 | cache、CI／release provider；[缓存](ci-cache.md) | 现役检查／发布使用所选键、恢复、实际构建、封存和保存；有限原生观察不证明全消费者、并发或完整输入正确性 |
 | 日志、错误和协议 | runner、diagnostics；[诊断](diagnostics.md)、[执行](execution.md) | 真实进程、原退出／输出和有限故障边界有测试；跨产品诊断、完整响应组合、JSON／IO 和通用错误覆盖尚未完成 |
 | 工作树和任务等待 | worktree、runner；[工作树](worktree.md) | 已采用路径保护实际源码、消费者及可重建缓存，保留原失败／unknown；外部任务通道恢复、完整协作复用、PR／合并编排尚未实现 |
