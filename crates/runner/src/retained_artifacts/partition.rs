@@ -604,12 +604,21 @@ impl Inventory {
         )
     }
     fn read_metadata<T: for<'a> Deserialize<'a>>(&self, path: &Path) -> Result<Option<T>, String> {
-        let file = match fs::File::open(path) {
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            // Refuse links and avoid blocking on a FIFO before fstat can reject it.
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+        let file = match options.open(path) {
             Ok(file) => file,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.to_string()),
         };
-        if !file.metadata().map_err(|e| e.to_string())?.is_file()
+        let metadata = file.metadata().map_err(|e| e.to_string())?;
+        if !metadata.is_file()
             || fs::symlink_metadata(path)
                 .map_err(|e| e.to_string())?
                 .file_type()
@@ -617,7 +626,13 @@ impl Inventory {
         {
             return Err("retention declaration must be a physical regular file".into());
         }
-        let mut raw = Vec::new();
+        if metadata.len() > MAX_STATE {
+            return Err("retention declaration byte bound".into());
+        }
+        // Take's default read_to_end otherwise probes and grows an empty buffer
+        // through several small reads. The observed length is only a capacity
+        // hint: retain the actual-read bound in case the file grows meanwhile.
+        let mut raw = Vec::with_capacity(metadata.len() as usize);
         file.take(MAX_STATE + 1)
             .read_to_end(&mut raw)
             .map_err(|e| e.to_string())?;
@@ -732,7 +747,7 @@ impl Inventory {
             // descendants adds no exclusion and could reverse another lock order.
             let directory = self.path_directory(&path)?;
             fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-            let marker = no_symlink_parents(&directory, "address.json")?;
+            let marker = directory.join("address.json");
             // Birth needs only an absence observation here. Decode and validate
             // an existing declaration once, under the acquired path lease.
             let missing = match fs::symlink_metadata(&marker) {
