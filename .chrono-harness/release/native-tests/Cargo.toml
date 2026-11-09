@@ -1,0 +1,73 @@
+[package]
+name = "chrono-host-release-tests"
+version = "0.1.0"
+edition = "2024"
+publish = false
+autotests = false
+
+[[test]]
+name = "verified_recipe"
+path = "tests/verified_recipe.rs"
+
+[dependencies]
+chrono-host-bootstrap = { path = "../../ci/native" }
+chrono-harness = { path = "../../../crates/runner" }
+chrono-host-release = { path = "../native" }
+chrono-distribution = { path = "../../../crates/distribution" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tar = "0.4"
+tempfile = "3"
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
+
+[[test]]
+name = "process"
+path = "tests/process.rs"
+
+[[test]]
+name = "transport"
+path = "tests/transport.rs"
+
+[[test]]
+name = "recipe"
+path = "tests/recipe.rs"
+
+[[test]]
+name = "receipt"
+path = "tests/receipt.rs"
+
+[[test]]
+name = "staging"
+path = "tests/staging.rs"
+
+[[test]]
+name = "execution"
+path = "tests/execution.rs"
+
+[[test]]
+name = "frontend"
+path = "tests/frontend.rs"
+
+[[bin]]
+name = "chrono-test-release-cli"
+path = "../native/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-release-distribution"
+path = "../../../crates/distribution/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-release-tool"
+path = "tests/support/release_tool.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-release-operation"
+path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"
+test = false
+bench = false

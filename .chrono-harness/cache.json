@@ -81,7 +81,8 @@
         "args": [
           "-srm"
         ],
-        "env": {},
+        "env": {
+        },
         "timeout_seconds": 30,
         "output_limit_bytes": 65536
       },
@@ -102,7 +103,8 @@
           "macosx",
           "--show-sdk-build-version"
         ],
-        "env": {},
+        "env": {
+        },
         "timeout_seconds": 30,
         "output_limit_bytes": 65536
       },
@@ -122,7 +124,8 @@
           "--find",
           "ld"
         ],
-        "env": {},
+        "env": {
+        },
         "timeout_seconds": 30,
         "output_limit_bytes": 65536
       },
@@ -142,7 +145,8 @@
           "--find",
           "clang"
         ],
-        "env": {},
+        "env": {
+        },
         "timeout_seconds": 30,
         "output_limit_bytes": 65536
       },
@@ -161,7 +165,8 @@
         "args": [
           "--version"
         ],
-        "env": {},
+        "env": {
+        },
         "timeout_seconds": 30,
         "output_limit_bytes": 65536
       },
@@ -180,7 +185,8 @@
         "args": [
           "--version"
         ],
-        "env": {},
+        "env": {
+        },
         "timeout_seconds": 30,
         "output_limit_bytes": 65536
       },
@@ -845,7 +851,7 @@
     },
     "release.script": {
       "kind": "file",
-      "path": ".chrono-harness/release/build.py",
+      "path": ".chrono-harness/release/consume.sh",
       "presence": "present"
     },
     "release.config": {
@@ -871,12 +877,12 @@
     "cache.producer": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
-      "pointer": "/projects/34/actions/build"
+      "pointer": "/projects/32/actions/build"
     },
     "cache-tests.producer": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
-      "pointer": "/projects/35/actions/execute"
+      "pointer": "/projects/33/actions/execute"
     },
     "cache.cargo-registration": {
       "kind": "json-value",
@@ -2435,8 +2441,7 @@
       "owner": "distribution",
       "producer": "build.distribution",
       "consumers": [
-        "check.unit_distribution",
-        "check.unit_release-build-integration"
+        "check.unit_distribution"
       ],
       "artifacts": [
         "distribution.target"
@@ -6217,7 +6222,7 @@
       "source_inputs": [
         "worktree.sources"
       ],
-      "restore": "compatible"
+      "restore": "exact"
     },
     "verus.archive": {
       "owner": "repository",
@@ -6342,12 +6347,6 @@
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:workflow-short/operations"
-      }
-    ],
-    "check.unit_release-build-integration": [
-      {
-        "registry": ".chrono-harness/FILEMAP.json",
-        "pointer": "/execution_plans/test:release-build-integration/operations"
       }
     ],
     "check.unit_worktree-adoption": [
@@ -6539,19 +6538,19 @@
     "release.linux_verify_diagnostics_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/31/operation"
+        "pointer": "/units/30/operation"
       }
     ],
     "release.linux_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/32/id"
+        "pointer": "/units/31/id"
       }
     ],
     "release.linux_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/33/operation"
+        "pointer": "/units/32/operation"
       }
     ],
     "release.macos_build_runner": [
@@ -6725,19 +6724,19 @@
     "release.macos_verify_diagnostics_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/31/operation"
+        "pointer": "/units/30/operation"
       }
     ],
     "release.macos_build_cache": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/32/id"
+        "pointer": "/units/31/id"
       }
     ],
     "release.macos_verify_cache_tests": [
       {
         "registry": ".chrono-harness/release/build.json",
-        "pointer": "/units/33/operation"
+        "pointer": "/units/32/operation"
       }
     ]
   },

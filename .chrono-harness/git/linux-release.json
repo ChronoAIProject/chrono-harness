@@ -274,26 +274,20 @@
       "tracked": false
     },
     {
-      "path": ".chrono-harness/cache/release/",
-      "owner": "release-build",
-      "kind": "build-cache",
-      "tracked": false
-    },
-    {
-      "path": ".chrono-harness/cache/release-dependencies/",
-      "owner": "release-build",
+      "path": ".chrono-harness/cache/release-frontend/",
+      "owner": "host-release-native",
       "kind": "build-cache",
       "tracked": false
     },
     {
       "path": ".chrono-harness/cache/release-handoffs/",
-      "owner": "release-build",
+      "owner": "host-release-native",
       "kind": "build-cache",
       "tracked": false
     },
     {
       "path": ".chrono-harness/cache/release-results/",
-      "owner": "release-build",
+      "owner": "host-release-native",
       "kind": "build-cache",
       "tracked": false
     },

@@ -1768,16 +1768,18 @@ impl Manager {
             .map_or(self.inputs.registrations.as_ref(), |(registrations, _)| {
                 registrations
             });
-        artifact_disposal::registered(
-            &self
-                .inputs
-                .policy
-                .artifacts
-                .iter()
-                .map(|a| a.path.clone())
-                .collect::<Vec<_>>(),
-            &[target_registrations.config()],
-        )?;
+        if kind != "import" {
+            artifact_disposal::registered(
+                &self
+                    .inputs
+                    .policy
+                    .artifacts
+                    .iter()
+                    .map(|a| a.path.clone())
+                    .collect::<Vec<_>>(),
+                &[target_registrations.config()],
+            )?;
+        }
         for (path, digest) in &policy_inputs {
             if digest.is_some() {
                 start::registered_policy(
