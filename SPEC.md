@@ -869,7 +869,7 @@ GitHub 当前 attempt API 视图可能包含沿用结果，新 job ID 不证明�
 
 源码增加 可选的 `automatic_cleanup`：宿主在 `.chrono-harness/` 登记版本化政策、准确产物路径／处置、存活协调锚、固定保留分支与可选删分支；未采用的旧配置保持显式维护语义。成功 start/reconstruct 自动登记实际 birth，并在新建前排空已登记终态项；finish 是调用方加入任务并确认完成／落地后的固定交接，运行时观察当前身份、固定保留 OID、产生不可覆盖终态回执并立即调用同一 drain，独立命令为 maintain。
 
-登记消费操作通过 use 复用现有进程 owner 与小型持久使用保护，和 finish／删除同步；任意未登记后台写入仍归调用方加入。缓存处置复用现役产物 owner，不推断语言或目录；未解决证据、脏源码及未保留提交保留 checkout，只清准确授权的可重建输出。整树清理继续委托原 Cleanup 保留合同。原失败、部分效果、缺失／中断及漂移均据实保留，未建立空闲定时清理、掉电事务或通用证据归档平台。
+登记消费操作通过 use 复用现有进程 owner 与小型持久使用保护，和 finish／删除同步；任意未登记后台写入仍归调用方加入。缓存处置复用现役产物 owner，不推断语言或目录。宿主须明确登记普通释放即可处置的临时产物，以及留到明确 finish 或合格年龄回收的跨操作复用缓存；普通 bootstrap／check／use 返回不得提前删除后一类缓存，finish 释放应可持久恢复且不授权删除后续代际。未解决证据、脏源码及未保留提交保留 checkout，只清准确授权的可重建输出。整树清理继续委托原 Cleanup 保留合同。原失败、部分效果、缺失／中断及漂移均据实保留，未建立空闲定时清理、掉电事务或通用证据归档平台。
 
 主宿主政策保留 state/bin，默认 cache-only；真实宿主 terminal 事件与 Git/GitHub 落地归调用方。完整格式与限界见 [自动生命周期清理](docs/worktree.md#opt-in-automatic-lifecycle-cleanup)。
 
@@ -1283,7 +1283,7 @@ init/generate 只接受当前 schema 2 / atomic-rules/relative-alias/v3 manifest
 
 自举由同一工具生成中文根、英文 Markdown 与聚焦 skill；产品资产/宿主采用数据/生成投影均显式登记，不是第二份手工政策。五份完整治理登记仍 proposed、input_closure 仍 incomplete；指令专用 manifest 校验与内容图解析不代表治理判官或 AI 遵守。另行采用的 CI slice 及其实际 DELTA 范围见 §14 和 docs/ci.md。
 
-`automatic_cleanup/v2` 以目标独立的 metadata 租约与附件代际 SH/EX 租约，在后续普通生命周期与已采用 check/bootstrap 中恢复未调用 finish 的会话中断，包含正常返回且没有遗留 use token 的情况。EX 取得后，准确的两端登记可重建缓存以专属不可覆盖 intent、原缺失／失败输入和新真实回执重试；不创建持久自有 Git lock，不设 terminal，不删除源码、分支、未保留提交、bin/state 或证据。
+`automatic_cleanup/v2` 以目标独立的 metadata 租约与附件代际 SH/EX 租约，在后续普通生命周期与已采用 check/bootstrap 中恢复未调用 finish 的会话中断，包含正常返回且没有遗留 use token 的情况。EX 取得后，准确的两端登记 dispose 产物以专属不可覆盖 intent、原缺失／失败输入和新真实回执重试；finish-dispose 复用缓存须等明确 finish 释放或合格年龄回收；不创建持久自有 Git lock，不设 terminal，不删除源码、分支、未保留提交、bin/state 或证据。
 
 旧／缺失／漂移身份保留，整树 finish 保留真实交接合同。描述符由原进程 engine 的子副本与登记 Rust 转交方法明确传递，不推断通用继承。本地真实 Cargo test／原生子进程回归验证独立父子进程的租约转交，完整采用仍需已提交组合与支持平台验收；不从父进程退出、PID 缺失、年龄或空闲推断子孙终止。源与宿主政策同时修改，兼容协调者部署、旧生产者排除、已提交组合、支持平台验收、真实宿主切换和 Git/PR/发布仍归调用方。
 
