@@ -346,9 +346,8 @@ fn fixed_original_validation_binds_the_host_and_streams_without_rerunning_tools(
     };
     let raw = original(&fixture);
     let calls = fs::read(fixture.tools.join("calls.json")).unwrap();
-    let validate = |raw: &[u8]| {
-        validate_fixed_execution(&fixture.root, &fixture.environment, &native, raw)
-    };
+    let validate =
+        |raw: &[u8]| validate_fixed_execution(&fixture.root, &fixture.environment, &native, raw);
     let report = validate(&raw).unwrap();
     assert_eq!(report.operations.len(), 2);
     assert_eq!(
@@ -365,7 +364,9 @@ fn fixed_original_validation_binds_the_host_and_streams_without_rerunning_tools(
     }
     let mut changed: Value = serde_json::from_slice(&raw).unwrap();
     changed["host_root"] = json!(fixture.root.join("another-host"));
-    let error = validate(&serde_json::to_vec(&changed).unwrap()).err().unwrap();
+    let error = validate(&serde_json::to_vec(&changed).unwrap())
+        .err()
+        .unwrap();
     assert!(error.contains("another host"), "{error}");
     assert_eq!(fs::read(fixture.tools.join("calls.json")).unwrap(), calls);
 }
