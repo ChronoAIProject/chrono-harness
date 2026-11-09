@@ -12,32 +12,62 @@ use vstd::prelude::*;
 
 verus! {
 
+proof fn parsed_result_is_unique(bytes: Seq<u8>, left: Option<u16>, right: Option<u16>)
+    requires policy::parsed(bytes, left), policy::parsed(bytes, right),
+    ensures left == right,
+    decreases if left.is_none() { 1nat } else { 0nat },
+{
+    match (left, right) {
+        (Some(a), Some(b)) => {
+            let i = choose|i: int| 0 <= i < bytes.len()
+                && policy::token_at(bytes, i) && policy::code_at(bytes, i) == a;
+            assert(policy::code_at(bytes, i) == b);
+        },
+        (Some(a), None) => {
+            let i = choose|i: int| 0 <= i < bytes.len()
+                && policy::token_at(bytes, i) && policy::code_at(bytes, i) == a;
+            assert(!policy::prefix(bytes, bytes.len() as int, None));
+            let (j, k) = choose|j: int, k: int| policy::token_at(bytes, j)
+                && policy::token_at(bytes, k) && policy::code_at(bytes, j) != policy::code_at(bytes, k);
+            assert(policy::code_at(bytes, j) == a && policy::code_at(bytes, k) == a);
+        },
+        (None, Some(b)) => {
+            parsed_result_is_unique(bytes, right, left);
+        },
+        _ => {},
+    }
+}
+
+fn expect(bytes: &[u8], expected: Option<u16>)
+    requires policy::parsed(bytes@, expected),
+{
+    let actual = policy::http_status(bytes);
+    proof { parsed_result_is_unique(bytes@, actual, expected); }
+    assert(actual == expected);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn only_complete_ascii_status_tokens_are_accepted() {
-    let empty = policy::http_status(&[]);
-    let short = policy::http_status(&[72u8, 84, 84, 80, 32, 53, 48, 51]);
-    let valid = policy::http_status(&[72u8, 84, 84, 80, 32, 53, 48, 51, 58]);
-    let wrong_prefix = policy::http_status(&[104u8, 84, 84, 80, 32, 53, 48, 51, 58]);
-    let not_a_digit = policy::http_status(&[72u8, 84, 84, 80, 32, 53, 255, 51, 58]);
-    let wrong_suffix = policy::http_status(&[72u8, 84, 84, 80, 32, 53, 48, 51, 59]);
-    assert(empty == None::<u16> && short == None::<u16> && valid == Some(503u16)
-        && wrong_prefix == None::<u16> && not_a_digit == None::<u16> && wrong_suffix == None::<u16>);
+    expect(&[], None);
+    expect(&[72u8, 84, 84, 80, 32, 53, 48, 51], None);
+    expect(&[72u8, 84, 84, 80, 32, 53, 48, 51, 58], Some(503));
+    expect(&[104u8, 84, 84, 80, 32, 53, 48, 51, 58], None);
+    expect(&[72u8, 84, 84, 80, 32, 53, 255, 51, 58], None);
+    expect(&[72u8, 84, 84, 80, 32, 53, 48, 51, 59], None);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn repeated_statuses_are_unambiguous_but_conflicting_statuses_are_rejected() {
-    let repeated = policy::http_status(&[
+    expect(&[
         72u8, 84, 84, 80, 32, 53, 48, 51, 58,
         72, 84, 84, 80, 32, 53, 48, 51, 58,
-    ]);
-    let conflict = policy::http_status(&[
+    ], Some(503));
+    expect(&[
         72u8, 84, 84, 80, 32, 53, 48, 51, 58,
         72, 84, 84, 80, 32, 52, 48, 49, 58,
-    ]);
-    let embedded = policy::http_status(&[255u8, 72, 84, 84, 80, 32, 48, 48, 48, 58, 0]);
-    let maximum = policy::http_status(&[72u8, 84, 84, 80, 32, 57, 57, 57, 58]);
-    assert(repeated == Some(503u16) && conflict == None::<u16>
-        && embedded == Some(0u16) && maximum == Some(999u16));
+    ], None);
+    expect(&[255u8, 72, 84, 84, 80, 32, 48, 48, 48, 58, 0], Some(0));
+    expect(&[72u8, 84, 84, 80, 32, 57, 57, 57, 58], Some(999));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
