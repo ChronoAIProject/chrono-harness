@@ -68,7 +68,7 @@ fn delivery_publisher_lookup_keeps_the_first_full_match() {
     proof { assert(jobs@ =~= seq!["build","publish","publish"]); }
     let selected = policy::publisher_index(&jobs,"publish");
     let prefix = policy::publisher_index(&jobs,"publishing");
-    assert(selected == Some(1usize) && prefix == None);
+    assert(selected == Some(1usize) && prefix == None::<usize>);
     let dependencies = policy::publisher_dependencies(1,false);
     let missing = policy::publisher_dependencies(0,false);
     let always = policy::publisher_dependencies(1,true);
