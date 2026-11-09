@@ -1209,6 +1209,77 @@ impl Inventory {
         }
         self.save(&l, &gate)
     }
+    /// Hand off explicitly declared process originals to an already sealed, rooted
+    /// consumer output. The caller holds read guards and has verified actual bytes.
+    /// Reuse the existing consumer transfer; never create a second durable root.
+    pub fn settle_publication_inputs(
+        &self,
+        destination: &str,
+        paths: &[String],
+    ) -> Result<(), String> {
+        let gate = self.addressed_gate(
+            &[],
+            &[paths, &[destination.into()]].concat(),
+            &[],
+            None,
+            false,
+            true,
+        )?;
+        let ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter()
+            .find(|o| o.path == destination)
+            .ok_or("publication handoff destination is not enrolled")?;
+        if output.phase != "released"
+            || !output.manifest.sealed
+            || identity(&no_symlink_parents(&self.root, destination)?)? != output.identity
+            || !ledger.roots.values().any(|ids| ids.contains(&output.id))
+        {
+            return Err("publication handoff destination is not sealed and protected".into());
+        }
+        let mut transfers = Vec::new();
+        for path in paths {
+            let input = ledger
+                .outputs
+                .iter()
+                .find(|o| o.path == *path)
+                .ok_or("publication handoff input is not enrolled")?;
+            if input.id == output.id
+                || !output.references.contains(&input.id)
+                || input.phase != "released"
+                || !input.manifest.sealed
+                || identity(&no_symlink_parents(&self.root, path)?)? != input.identity
+            {
+                return Err(
+                    "publication handoff input is not sealed, referenced or unchanged".into(),
+                );
+            }
+            if input.tree || input.manifest.entries.len() != 1 {
+                return Err("publication handoff requires a sealed process file".into());
+            }
+            Manifest::validate(&input.manifest.entries[0], &self.root)?;
+            let consumer = format!("publication-recheck:{}", input.id);
+            if ledger.roots.contains_key(&self.consumer_role(&consumer)?) {
+                transfers.push(Consumer {
+                    schema: "chrono-retention-consumer/v1".into(),
+                    consumer,
+                    purpose: "Verified process originals accepted by the sealed domain result"
+                        .into(),
+                    originals: vec![OriginalIdentity {
+                        id: input.id.clone(),
+                        path: input.path.clone(),
+                        identity: input.identity.clone(),
+                    }],
+                });
+            }
+        }
+        drop(gate);
+        for consumer in transfers {
+            self.transfer_consumer(&consumer, destination)?;
+        }
+        Ok(())
+    }
     /// Consumer roles are explicit roots. Replacing/releasing a role releases its prior closure.
     pub fn reference(&self, consumer: &str, ids: &[String]) -> Result<(), String> {
         if consumer.is_empty() || consumer.len() > 256 {

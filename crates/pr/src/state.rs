@@ -3,7 +3,9 @@ use chrono_harness::ownership::Lease;
 use chrono_harness::retained_artifacts::retention::{
     Inventory, Publication, read_guard, unique_path,
 };
-use chrono_harness::{CommandSpec, ProcessResult, no_symlink_parents, sha256};
+use chrono_harness::{
+    CommandSpec, ProcessResult, file_identity, no_symlink_parents, sha256, validate_launch_evidence,
+};
 use serde_json::{Value, json};
 use std::{
     fs,
@@ -17,6 +19,8 @@ pub(crate) struct State {
     pub(crate) path: String,
     publication: Publication,
     calls: usize,
+    unreturned: bool,
+    inputs: Vec<(String, Lease)>,
     continuation: Option<Continuation>,
 }
 
@@ -138,6 +142,8 @@ impl State {
             path,
             publication,
             calls: 0,
+            unreturned: false,
+            inputs: Vec::new(),
             continuation,
         };
         let saved = (|| {
@@ -182,6 +188,19 @@ impl State {
         Ok(json!({"path":path,"sha256":sha256(bytes),"length":bytes.len()}))
     }
 
+    pub(crate) fn process_paths(&self, n: usize) -> [PathBuf; 3] {
+        ["stdout", "stderr", "launch.json"]
+            .map(|suffix| self.root.join(format!("{}.call-{n}.{suffix}", self.path)))
+    }
+
+    pub(crate) fn operation_state(&self) -> &'static str {
+        if self.unreturned {
+            "unknown"
+        } else {
+            "completed"
+        }
+    }
+
     pub(crate) fn call_intent(
         &mut self,
         spec: &CommandSpec,
@@ -191,25 +210,79 @@ impl State {
     ) -> Result<usize, String> {
         self.calls += 1;
         let n = self.calls;
+        let paths = self.process_paths(n);
+        let inventory = Inventory::adopted(&self.root)?.ok_or("PR retention owner disappeared")?;
+        let originals = paths
+            .iter()
+            .map(|path| {
+                path.strip_prefix(&self.root)
+                    .unwrap()
+                    .to_str()
+                    .ok_or("process original path UTF-8")
+                    .map(str::to_owned)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if originals
+            .iter()
+            .any(|path| !inventory.accepts("check-original", path))
+        {
+            return Err(
+                "PR process originals require registered check-original retention scopes".into(),
+            );
+        }
         let input_original = self.original(&format!("call-{n}.stdin"), input)?;
         self.write(&format!("call-{n}.intent.json"), &json!({
             "schema":"chrono-pr-call/v1", "operation":self.path, "attempt":n, "producer":"chrono-pr",
             "argv":std::iter::once(&spec.program).chain(spec.args.iter()).collect::<Vec<_>>(),
             "executable_sha256":digest, "stdin_original":input_original,
+            "process_originals":{"stdout":originals[0],"stderr":originals[1],"launch":originals[2]},
             "environment_sha256":sha256(&serde_json::to_vec(&spec.env).map_err(|e| e.to_string())?),
             "timeout_millis":timeout.as_millis(), "output_limit_bytes":spec.output_limit_bytes,
             "state":"intent", "updated_at_unix_millis":now()?, "handle":null, "result":null,
             "recovery":"no terminal result or live launch publication means unknown; do not infer completion or blindly recreate"
         }))?;
+        self.unreturned = true;
         Ok(n)
     }
 
-    pub(crate) fn receipt(&self, n: usize, process: &ProcessResult) -> Result<Value, String> {
-        let stdout = self.original(&format!("call-{n}.stdout"), &process.stdout_bytes)?;
-        let stderr = self.original(&format!("call-{n}.stderr"), &process.stderr_bytes)?;
+    pub(crate) fn receipt(&mut self, n: usize, process: &ProcessResult) -> Result<Value, String> {
+        self.unreturned = false; // Actual engine returned; storage failure keeps its complete embedded result.
+        let paths = self.process_paths(n);
+        let inventory = Inventory::adopted(&self.root)?.ok_or("PR retention owner disappeared")?;
+        let mut originals = Vec::new();
+        for path in &paths {
+            let relative = path
+                .strip_prefix(&self.root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("process original path UTF-8")?
+                .to_owned();
+            let reader =
+                read_guard(&self.root, &relative)?.ok_or("process original is not enrolled")?;
+            let (digest, length) = file_identity(path)?;
+            if !inventory.published_original(&relative, &digest, length)? {
+                return Err("process original is not durably published; preserve originals".into());
+            }
+            originals.push(json!({"path":relative,"sha256":digest,"length":length}));
+            self.inputs.push((relative, reader));
+        }
+        validate_launch_evidence(&paths[2], process)?;
+        for (index, (digest, length)) in [
+            (&process.stdout_sha256, process.stdout_bytes.len()),
+            (&process.stderr_sha256, process.stderr_bytes.len()),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            if originals[index]["sha256"] != *digest || originals[index]["length"] != length as u64
+            {
+                return Err("process original stream differs from returned bytes".into());
+            }
+        }
         let mut receipt = Self::process_fields(process);
-        receipt["stdout_original"] = stdout;
-        receipt["stderr_original"] = stderr;
+        receipt["stdout_original"] = originals[0].clone();
+        receipt["stderr_original"] = originals[1].clone();
+        receipt["launch_original"] = originals[2].clone();
         receipt["updated_at_unix_millis"] = json!(now()?);
         self.write(&format!("call-{n}.result.json"), &receipt)?;
         Ok(receipt)
@@ -225,6 +298,13 @@ impl State {
 
     pub(crate) fn finish(self, result: &Value) -> Result<(), String> {
         self.write("result.json", result)?;
+        let inputs = self
+            .inputs
+            .iter()
+            .map(|(path, _)| path.clone())
+            .collect::<Vec<_>>();
+        let inventory = Inventory::adopted(&self.root)?.ok_or("PR retention owner disappeared")?;
+        inventory.dependencies_paths(&self.path, &inputs)?;
         let terminal_object = matches!(result["pr_state"].as_str(), Some("CLOSED" | "MERGED"));
         // Only an established result with no still-active PR can release this
         // attempt's recovery reference. Other attempts and objects are untouched.
@@ -236,6 +316,11 @@ impl State {
         self.publication.complete(json!({"kind":"pr-operation","operation":path,"command_exit_code":result["command_exit_code"],"pr_state":result["pr_state"],"result":"result.json"}))?;
         let inventory = Inventory::adopted(&root)?.ok_or("PR retention owner disappeared")?;
         inventory.retain_diagnostic_path(&path)?;
+        if !inputs.is_empty() {
+            let _reader =
+                read_guard(&root, &path)?.ok_or("PR result disappeared before handoff")?;
+            inventory.settle_publication_inputs(&path, &inputs)?;
+        }
         if let Some(previous) = self.continuation {
             // Keep both recovery roots on every failed/stale query or incomplete
             // publication. A current PR observation does not finish an old task.

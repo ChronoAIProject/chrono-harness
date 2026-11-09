@@ -1948,7 +1948,12 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
     let spec = chrono_harness::CommandSpec {
         program: PROCESS_FIXTURE.into(),
         args: vec!["retained".into(), "normal".into()],
-        env: Default::default(),
+        env: [(
+            "GH_TOKEN".into(),
+            "fixture-launch-secret-never-retain".into(),
+        )]
+        .into_iter()
+        .collect(),
         timeout_seconds: 30,
         output_limit_bytes: 4096,
     };
@@ -1984,7 +1989,18 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
     assert_eq!(launch["argv"], value!(result.argv));
     assert_eq!(launch["cwd"], value!(result.cwd));
     assert_eq!(launch["sha256"], digest);
-    assert_eq!(launch["environment"], value!(result.environment));
+    assert_eq!(launch["schema"], "chrono-process-launch/v2");
+    assert!(launch.get("environment").is_none());
+    assert_eq!(
+        result.environment["GH_TOKEN"],
+        "fixture-launch-secret-never-retain"
+    );
+    assert!(
+        !fs::read(paths.launch)
+            .unwrap()
+            .windows(b"fixture-launch-secret-never-retain".len())
+            .any(|w| w == b"fixture-launch-secret-never-retain")
+    );
     assert_eq!(launch["environment_digest"], result.environment_digest);
     assert_eq!(launch["stdin_sha256"], sha256(b"original stdin"));
     assert_eq!(launch["timeout_seconds"], 30);
