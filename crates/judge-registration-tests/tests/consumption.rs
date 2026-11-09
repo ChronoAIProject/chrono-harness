@@ -108,7 +108,10 @@ fn startup_commands_preserve_registered_arguments() {
             &BTreeSet::new(),
         )
         .unwrap_err();
-        assert!(error.contains("producer/caller invocation mismatch"), "{error}");
+        assert!(
+            error.contains("producer/caller invocation mismatch"),
+            "{error}"
+        );
     }
 }
 
