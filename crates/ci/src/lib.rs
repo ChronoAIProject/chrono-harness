@@ -755,34 +755,6 @@ fn prepare_policy_fixed(
         Err(error) => Err(facts.error(error)),
     }
 }
-fn store_context(
-    root: &Path,
-    path: &str,
-    context: &Value,
-    output: Option<&str>,
-) -> Result<(), String> {
-    write_file(
-        root,
-        path,
-        &(serde_json::to_string_pretty(context).map_err(|e| e.to_string())? + "\n").into_bytes(),
-    )?;
-    if let Some(output) = output {
-        use std::io::Write;
-        let mut f = fs::OpenOptions::new()
-            .append(true)
-            .open(output)
-            .map_err(|e| e.to_string())?;
-        writeln!(
-            f,
-            "base={}\ncandidate={}\ninitial={}",
-            context["base"].as_str().unwrap_or(""),
-            context["candidate"].as_str().ok_or("candidate absent")?,
-            context["initial"]
-        )
-        .map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}
 pub fn dispatch(args: &[String]) -> Result<String, String> {
     if args.first().map(String::as_str) == Some("production") {
         return gating::production(args);
