@@ -1116,3 +1116,219 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     );
     assert_eq!(h.auto("maintain", &[]).0, 0);
 }
+
+fn paged_producer_fixture(
+    h: &Host,
+) -> (
+    PathBuf,
+    chrono_worktree::TemporaryHost,
+    Value,
+    Vec<u8>,
+    PathBuf,
+    Vec<u8>,
+) {
+    assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
+    let (store, allocation) = allocation(h);
+    copy(&store, allocation.path(), "retained body");
+    fs::write(allocation.path().join("captured.bin"), b"original capture").unwrap();
+    chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", allocation.path())
+        .unwrap()
+        .acquire(
+            "actual diagnostic",
+            "consumer must survive the explicit conversion",
+        )
+        .unwrap();
+    let before = producer_state(&store);
+    let mut owner = json(&fs::read(store.join("objects.json")).unwrap()).unwrap();
+    owner["record_layout"] = value!("sha256-nibble/v1");
+    let owner_bytes = serde_json::to_vec_pretty(&owner).unwrap();
+    let path = producer_record_path(&store, allocation.path());
+    let mut record = json(&fs::read(&path).unwrap()).unwrap();
+    record["owner_sha256"] = value!(sha256(&owner_bytes));
+    record["object"]["captures"] = value!({"captured.bin":{"outcome":"not-established"}});
+    record["object"]["original_release"] = value!("prior original inspection declaration");
+    record["object"]["shared_originals"] = value!({});
+    record["object"]["retiring"] = value!(false);
+    record["object"]["metadata_directory"] = Value::Null;
+    record["object"]["metadata_identity"] = Value::Null;
+    record["object"]["born_nanos"] = value!(1);
+    record["object"]["disposable_directory"] = value!(true);
+    let record_bytes = serde_json::to_vec(&record).unwrap();
+    let name = path.file_name().unwrap().to_str().unwrap();
+    let bucket = path.parent().unwrap().join(&name[..1]);
+    fs::create_dir(&bucket).unwrap();
+    let original = bucket.join(name);
+    fs::rename(&path, &original).unwrap();
+    fs::write(&original, &record_bytes).unwrap();
+    fs::write(store.join("objects.json"), &owner_bytes).unwrap();
+    (
+        store,
+        allocation,
+        before,
+        owner_bytes,
+        original,
+        record_bytes,
+    )
+}
+
+fn migrate_paged(h: &Host) -> (i32, Value, String) {
+    h.auto(
+        "migrate",
+        &[
+            "--path",
+            h.root.to_str().unwrap(),
+            "--partition-producer",
+            "test-allocation",
+        ],
+    )
+}
+
+#[test]
+fn explicit_paged_partition_preserves_custody_and_excludes_live_allocation() {
+    let h = host();
+    let (store, allocation, before, owner_bytes, original, record_bytes) =
+        paged_producer_fixture(&h);
+    let root = allocation.path().to_owned();
+    let (code, report, error) = migrate_paged(&h);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("live allocation consumers"),
+        "{report}"
+    );
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
+    assert_eq!(fs::read(&original).unwrap(), record_bytes);
+    drop(allocation);
+    let (code, report, error) = migrate_paged(&h);
+    assert_eq!(code, 0, "{report} {error}");
+    assert_eq!(report["producer_partition"]["objects"], 1);
+    assert_eq!(report["producer_partition"]["disposal"], "not-performed");
+    let reference = &report["producer_partition"]["receipt"];
+    let raw = fs::read(store.join(reference["path"].as_str().unwrap())).unwrap();
+    assert_eq!(sha256(&raw), reference["sha256"]);
+    let migration = json(&raw).unwrap();
+    assert_eq!(
+        fs::read(store.join(migration["source"]["path"].as_str().unwrap())).unwrap(),
+        owner_bytes
+    );
+    let old = &migration["registrations"][0]["original"];
+    let retained = fs::read(store.join(old["path"].as_str().unwrap())).unwrap();
+    assert_eq!(retained, record_bytes);
+    assert_eq!(sha256(&retained), old["sha256"]);
+    assert_eq!(producer_state(&store)["objects"], before["objects"]);
+    assert_eq!(
+        fs::read(root.join("retained body")).unwrap(),
+        [0, 255, 7, 8]
+    );
+    assert_eq!(
+        fs::read(root.join("captured.bin")).unwrap(),
+        b"original capture"
+    );
+    let current = fs::read(store.join("objects.json")).unwrap();
+    assert_eq!(
+        migrate_paged(&h).1["producer_partition"]["status"],
+        "already-current"
+    );
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), current);
+    let independent = chrono_worktree::TemporaryHost::allocate(
+        &store,
+        "test-allocation",
+        &[],
+        "current allocation ",
+    )
+    .unwrap();
+    assert!(independent.path().is_dir());
+    chrono_worktree::RetainedArtifact::resume(&store, "test-allocation", &root)
+        .unwrap()
+        .release(
+            "actual diagnostic",
+            "actual reader consumed migrated original",
+        )
+        .unwrap();
+}
+
+#[test]
+fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing_readers() {
+    for boundary in ["paged-records-published", "paged-buckets-archived"] {
+        let h = host();
+        let (store, allocation, before, owner_bytes, _, _) = paged_producer_fixture(&h);
+        drop(allocation);
+        let candidate = git(&h.root, &["rev-parse", "HEAD"]);
+        let error = chrono_worktree::RetainedArtifact::partition_with_observer(
+            &store,
+            "test-allocation",
+            candidate.trim(),
+            |stage| {
+                if stage == boundary {
+                    Err("controlled conversion interruption".into())
+                } else {
+                    Ok(())
+                }
+            },
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("controlled conversion interruption"),
+            "{error}"
+        );
+        assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
+        let (code, report, error) = migrate_paged(&h);
+        assert_eq!(code, 0, "{boundary}: {report} {error}");
+        assert_eq!(producer_state(&store)["objects"], before["objects"]);
+    }
+}
+
+#[test]
+fn explicit_paged_partition_rejects_prepared_record_drift_before_activation() {
+    let h = host();
+    let (store, allocation, _, owner_bytes, _, _) = paged_producer_fixture(&h);
+    let root = allocation.path().to_owned();
+    drop(allocation);
+    let candidate = git(&h.root, &["rev-parse", "HEAD"]);
+    let prepared = producer_record_path(&store, &root);
+    let error = chrono_worktree::RetainedArtifact::partition_with_observer(
+        &store,
+        "test-allocation",
+        candidate.trim(),
+        |stage| {
+            if stage == "paged-records-published" {
+                fs::write(&prepared, b"unknown replacement").unwrap();
+            }
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert!(error.contains("prepared registration changed"), "{error}");
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
+    assert_eq!(fs::read(&prepared).unwrap(), b"unknown replacement");
+    let (code, report, error) = migrate_paged(&h);
+    assert_ne!(code, 0, "{report} {error}");
+    assert_eq!(fs::read(&prepared).unwrap(), b"unknown replacement");
+    assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
+}
+
+#[test]
+fn explicit_paged_partition_rejects_unknown_fields_owner_binding_and_symbolic_sources() {
+    for fault in ["unknown-field", "owner-binding", "symbolic-source"] {
+        let h = host();
+        let (store, allocation, _, owner_bytes, original, bytes) = paged_producer_fixture(&h);
+        drop(allocation);
+        let mut record = json(&bytes).unwrap();
+        match fault {
+            "unknown-field" => record["object"]["unregistered_custody"] = value!(true),
+            "owner-binding" => record["owner_sha256"] = value!("0".repeat(64)),
+            _ => {
+                let retained = h.parent.join("retained-previous-registration.json");
+                fs::rename(&original, &retained).unwrap();
+                std::os::unix::fs::symlink(&retained, &original).unwrap();
+            }
+        }
+        if fault != "symbolic-source" {
+            fs::write(&original, serde_json::to_vec(&record).unwrap()).unwrap();
+        }
+        let changed = fs::read(&original).unwrap();
+        let (code, report, error) = migrate_paged(&h);
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        assert_eq!(fs::read(store.join("objects.json")).unwrap(), owner_bytes);
+        assert_eq!(fs::read(&original).unwrap(), changed);
+    }
+}
