@@ -11,6 +11,39 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/release/consume.sh","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native.sh","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/frontend.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/frontend.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/ci/bootstrap-release-frontend.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/frontend.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/local.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/evidence.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/execution.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/main.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/execution.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/execution.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/release_tool.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/staging.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/staging.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/receipt.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/receipt.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/receipt.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/recipe.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/recipe.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/recipe.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/transport.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/transport.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/support/archive.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/Cargo.toml","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/Cargo.lock","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/lib.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/verified_recipe.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native/src/process.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/Cargo.toml","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/Cargo.lock","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/verified_recipe.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/process.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":".chrono-harness/ci/native-tests/tests/support/proved_cargo.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native-tests/tests/proved_build.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/runner-build.json","owner":"host-bootstrap-native","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}]},
@@ -68,11 +101,11 @@
     {"path":".gitignore","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"README.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"SPEC.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
-    {"path":".chrono-harness/config.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
-    {"path":".chrono-harness/git/macos-27.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
-    {"path":".chrono-harness/git/pinned-macos.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"project:cache"},{"kind":"runtime-input","to":"project:release-build"}]},
+    {"path":".chrono-harness/config.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
+    {"path":".chrono-harness/git/macos-27.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
+    {"path":".chrono-harness/git/pinned-macos.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"project:cache"},{"kind":"runtime-input","to":"project:host-release-native"}]},
     {"path":".chrono-harness/judges.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
-    {"path":".chrono-harness/projects.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:projects"},{"kind":"judge-trigger","to":"judge:routes"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"runtime-input","to":"project:judge-routes-tests"}]},
+    {"path":".chrono-harness/projects.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:projects"},{"kind":"judge-trigger","to":"judge:routes"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"runtime-input","to":"project:judge-routes-tests"}]},
     {"path":".chrono-harness/FILEMAP.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"project:judge-routes-tests"}]},
     {"path":".chrono-harness/workflow.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
     {"path":"crates/runner/Cargo.toml","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -248,14 +281,13 @@
     {"path":"crates/distribution/Cargo.toml","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/Cargo.lock","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/src/lib.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"}]},
-    {"path":"crates/distribution/src/main.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"}]},
+    {"path":"crates/distribution/src/main.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":"crates/distribution-tests/Cargo.toml","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/Cargo.lock","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/installation.rs","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
     {"path":"assets/distribution/bootstrap.sh","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
-    {"path":".chrono-harness/release/plan.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:distribution-tests"},{"kind":"test-execution","to":"test:release-build-tests"}]},
-    {"path":".chrono-harness/release/build.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:cache-tests"}]},
-    {"path":".chrono-harness/release/build.py","owner":"release-build","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:release-build"}]},
+    {"path":".chrono-harness/release/plan.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:distribution-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/build.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"runtime-input","to":"project:cache-tests"}]},
     {"path":".github/workflows/chrono-release.yml","owner":"repository","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:distribution-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"docs/distribution.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"docs/examples.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
@@ -294,7 +326,7 @@
     {"path":"crates/ci/src/event_git.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"crates/ci/src/release.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"crates/ci-tests/tests/release.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
-    {"path":".chrono-harness/ci/release.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:release-build-tests"}]},
+    {"path":".chrono-harness/ci/release.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":"docs/release-ci.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/worktree/src/remote.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/remote.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
@@ -352,7 +384,6 @@
     {"path":"examples/ci-host-job-gating/message.py","owner":"repository","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"examples/ci-host-job-gating/message.txt","owner":"repository","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":".chrono-harness/ci/workflow-inventory.json","owner":"ci","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:judge-workflow-tests"},{"kind":"test-execution","to":"test:workflow-units"},{"kind":"test-execution","to":"test:workflow-short"},{"kind":"runtime-input","to":"project:ci"}]},
-    {"path":".chrono-harness/release/build-tests.py","owner":"release-build-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:release-build-tests"},{"kind":"test-execution","to":"test:release-build-integration"}]},
     {"path":"crates/worktree/src/automatic.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/automatic/age.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/artifact_disposal.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
@@ -371,8 +402,8 @@
     {"path":"crates/runner-tests/tests/support/prepared_producer.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/runner-tests/tests/support/isolated_capability.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":"crates/runner-tests/tests/support/native_executable.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
-    {"path":"crates/judge-projects-tests/tests/support/execution_child.rs","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
-    {"path":"crates/judge-projects-tests/tests/support/execution_fixture.rs","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
+    {"path":"crates/judge-projects-tests/tests/support/execution_child.rs","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"compile","to":"project:host-bootstrap-native-tests"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":"crates/judge-projects-tests/tests/support/execution_fixture.rs","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"compile","to":"project:host-bootstrap-native-tests"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":"crates/judge-registration-tests/tests/languages.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-projects-tests/tests/languages.rs","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"}]},
     {"path":"crates/ci-tests/tests/support/transport.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
@@ -384,11 +415,6 @@
     {"path":"crates/worktree-tests/tests/support/version_probe.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/worktree-tests/tests/support/native_cargo/Cargo.toml","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/worktree-tests/tests/support/native_cargo/src/lib.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
-    {"path":".chrono-harness/release/dependency-tests.py","owner":"release-build-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:release-build-tests"},{"kind":"test-execution","to":"test:release-build-tests"}]},
-    {"path":".chrono-harness/release/fixtures/tool.py","owner":"release-build-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:release-build-tests"},{"kind":"test-execution","to":"test:release-build-tests"}]},
-    {"path":".chrono-harness/release/fixtures/unit-tools.py","owner":"release-build-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:release-build-tests"},{"kind":"test-execution","to":"test:release-build-tests"}]},
-    {"path":".chrono-harness/release/fixtures/unit-pack.py","owner":"release-build-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:release-build-tests"},{"kind":"test-execution","to":"test:release-build-tests"}]},
-    {"path":".chrono-harness/release/fixtures/unit-consumer.py","owner":"release-build-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:release-build-tests"},{"kind":"test-execution","to":"test:release-build-tests"}]},
     {"path":"crates/judge-workflow-tests/tests/support/native_tool.rs","owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"}]},
     {"path":"crates/judge-workflow-tests/tests/support/native_tools.rs","owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"}]},
     {"path":"crates/ci-tests/tests/support/provider.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
@@ -420,7 +446,7 @@
     {"path":"crates/ci/src/cache.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/ci-tests/tests/cache.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":".chrono-harness/cache.json","owner":"repository","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:cache"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"runtime-input","to":"project:cache-tests"}]},
-    {"path":".chrono-harness/ci/bootstrap-cache.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
+    {"path":".chrono-harness/ci/bootstrap-cache.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":"crates/cache/src/recovery.rs","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/cache-tests/tests/recovery.rs","owner":"cache-tests","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/ci/src/startup.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -442,7 +468,7 @@
     {"path":"crates/worktree-tests/tests/evidence_retirement.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/ci-tests/tests/initial_short.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"crates/judge-registration-tests/tests/support/regression_child.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
-    {"path":".chrono-harness/ci/bootstrap-toolchains.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:cache"}]},
+    {"path":".chrono-harness/ci/bootstrap-toolchains.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"runtime-input","to":"project:runner-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"runtime-input","to":"project:cache"}]},
     {"path":"crates/worktree/src/automatic/producer/body.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/temporary.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/worktree-tests/tests/fixture_body.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
@@ -501,7 +527,7 @@
     {"path":"crates/distribution-tests/tests/fixtures/beta-v1.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/fixtures/alpha-v2.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/fixtures/beta-v2.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
-    {"path":".chrono-harness/git/linux-release.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:release-build-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
+    {"path":".chrono-harness/git/linux-release.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:distribution-tests"},{"kind":"runtime-input","to":"project:runner"},{"kind":"runtime-input","to":"project:worktree"},{"kind":"runtime-input","to":"project:ci"},{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"runtime-input","to":"project:cache-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
     {"path":"crates/ci-tests/tests/inventory.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"crates/ci/src/inventory.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":".chrono-harness/ci/bootstrap-unit.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:cache-tests"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"test-execution","to":"test:host-bootstrap-launcher-tests"}]},
@@ -545,6 +571,18 @@
     {"path":"crates/ci/src/downloads.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]}
   ],
   "project_edges": [
+    {"from":"project:host-bootstrap-native","kind":"compile","to":"project:host-release-native"},
+    {"from":"project:host-bootstrap-native","kind":"compile","to":"project:host-release-native-tests"},
+    {"from":"project:distribution","kind":"compile","to":"project:host-release-native-tests"},
+    {"from":"project:judge-registration","kind":"compile","to":"project:host-release-native"},
+    {"from":"project:runner","kind":"compile","to":"project:host-release-native"},
+    {"from":"project:runner","kind":"compile","to":"project:host-release-native-tests"},
+    {"from":"project:identifiers","kind":"compile","to":"project:host-release-native"},
+    {"from":"project:identifiers","kind":"compile","to":"project:host-release-native-tests"},
+    {"from":"project:host-release-native","kind":"compile","to":"project:host-release-native-tests"},
+    {"from":"project:host-release-native","kind":"test-execution","to":"test:host-release-native-tests"},
+    {"from":"project:host-release-native-tests","kind":"test-execution","to":"test:host-release-native-tests"},
+    {"from":"tool:verus","kind":"test-execution","to":"test:host-release-native-tests"},
     {"from":"project:identifiers","kind":"compile","to":"project:runner"},
     {"from":"project:identifiers","kind":"compile","to":"project:worktree"},
     {"from":"project:identifiers","kind":"compile","to":"project:worktree-tests"},
@@ -974,25 +1012,19 @@
     {"from":"environment:CHRONO_WORKTREE_TEST_RECEIPTS","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:CHRONO_CHECK_HANDOFF_TRACE","kind":"runtime-input","to":"project:worktree-tests"},
     {"from":"environment:CHRONO_IMMUTABLE_INPUT_FIXTURE","kind":"runtime-input","to":"project:runner-tests"},
-    {"from":"project:release-build","kind":"test-execution","to":"test:release-build-tests"},
-    {"from":"tool:python3","kind":"runtime-input","to":"project:release-build"},
-    {"from":"tool:git","kind":"runtime-input","to":"project:release-build"},
-    {"from":"environment:PATH","kind":"runtime-input","to":"project:release-build"},
-    {"from":"environment:TMPDIR","kind":"runtime-input","to":"project:release-build"},
-    {"from":"project:release-build-tests","kind":"test-execution","to":"test:release-build-tests"},
-    {"from":"tool:python3","kind":"runtime-input","to":"project:release-build-tests"},
-    {"from":"tool:git","kind":"runtime-input","to":"project:release-build-tests"},
-    {"from":"environment:PATH","kind":"runtime-input","to":"project:release-build-tests"},
-    {"from":"environment:TMPDIR","kind":"runtime-input","to":"project:release-build-tests"},
-    {"from":"tool:cargo","kind":"runtime-input","to":"project:release-build"},
-    {"from":"environment:HOME","kind":"runtime-input","to":"project:release-build"},
-    {"from":"environment:CARGO_HOME","kind":"runtime-input","to":"project:release-build"},
-    {"from":"environment:RUSTUP_HOME","kind":"runtime-input","to":"project:release-build"},
-    {"from":"environment:SDKROOT","kind":"runtime-input","to":"project:release-build"},
-    {"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:release-build"},
-    {"from":"project:release-build","kind":"test-execution","to":"test:release-build-integration"},
-    {"from":"project:release-build-tests","kind":"test-execution","to":"test:release-build-integration"},
-    {"from":"project:distribution","kind":"test-execution","to":"test:release-build-integration"},
+    {"from":"tool:git","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"environment:PATH","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"environment:TMPDIR","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"tool:git","kind":"runtime-input","to":"project:host-release-native-tests"},
+    {"from":"environment:PATH","kind":"runtime-input","to":"project:host-release-native-tests"},
+    {"from":"environment:TMPDIR","kind":"runtime-input","to":"project:host-release-native-tests"},
+    {"from":"tool:cargo","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"environment:HOME","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"environment:CARGO_HOME","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"environment:RUSTUP_HOME","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"environment:SDKROOT","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:host-release-native"},
+    {"from":"project:distribution","kind":"test-execution","to":"test:host-release-native-tests"},
     {"from":"project:worktree","kind":"test-execution","to":"test:worktree-adoption"},
     {"from":"project:worktree-tests","kind":"test-execution","to":"test:worktree-adoption"},
     {"from":"tool:cargo","kind":"runtime-input","to":"project:diagnostics"},
@@ -1132,9 +1164,11 @@
     {"from":"environment:SDKROOT","kind":"runtime-input","to":"project:pr-tests"},
     {"from":"environment:CARGO_TERM_COLOR","kind":"runtime-input","to":"project:pr-tests"},
     {"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:pr"},
-    {"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:pr-tests"}
+    {"from":"environment:CARGO_INCREMENTAL","kind":"runtime-input","to":"project:pr-tests"},
+    {"from":"project:cache","kind":"test-execution","to":"test:host-release-native-tests"}
   ],
   "test_costs": [
+    {"test":"host-release-native-tests","cost":"unmeasured"},
     {"test":"identifiers-tests","cost":"unmeasured"},
     {"test":"host-bootstrap-launcher-tests","cost":"unmeasured"},
     {"test":"host-bootstrap-native-tests","cost":"unmeasured"},
@@ -1154,14 +1188,13 @@
     {"test":"worktree-tests","cost":"unmeasured"},
     {"test":"workflow-units","cost":"unmeasured"},
     {"test":"workflow-short","cost":"unmeasured"},
-    {"test":"release-build-tests","cost":"unmeasured"},
-    {"test":"release-build-integration","cost":"unmeasured"},
     {"test":"worktree-adoption","cost":"unmeasured"},
     {"test":"diagnostics-tests","cost":"unmeasured"},
     {"test":"cache-tests","cost":"unmeasured"},
     {"test":"pr-tests","cost":"unmeasured"}
   ],
   "execution_plans": {
+    "test:host-release-native-tests": {"operations":["verify.release-recipe","verify.release-recipe-tests","fmt.host-release-native","fmt.host-release-native-tests","build.host-release-native","build.cache","test.host-release-native-tests"],"timeout_seconds":600,"output_limit_bytes":1048576},
     "test:identifiers-tests": {
       "operations": [
         "verify.identifiers",
@@ -1454,22 +1487,6 @@
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576
     },
-    "test:release-build-tests": {
-      "operations": [
-        "release.tests.units"
-      ],
-      "timeout_seconds": 600,
-      "output_limit_bytes": 1048576
-    },
-    "test:release-build-integration": {
-      "operations": [
-        "build.distribution",
-        "build.cache",
-        "release.tests.integration"
-      ],
-      "timeout_seconds": 600,
-      "output_limit_bytes": 1048576
-    },
     "test:worktree-adoption": {
       "operations": [
         "fmt.worktree",
@@ -1542,6 +1559,12 @@
       "worktree-test-inventory"
     ],
     "claims": {
+      "verify.release-recipe": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.release-recipe-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "fmt.host-release-native": {"resources":[],"outputs":[]},
+      "fmt.host-release-native-tests": {"resources":[],"outputs":[]},
+      "build.host-release-native": {"resources":[],"outputs":[".chrono-harness/cache/"]},
+      "test.host-release-native-tests": {"resources":[],"outputs":[".chrono-harness/cache/"]},
       "fmt.identifiers": {"resources":[],"outputs":[]},
       "fmt.identifiers-tests": {"resources":[],"outputs":[]},
       "build.identifiers": {"resources":[],"outputs":[".chrono-harness/cache/identifiers/target/"]},
@@ -1898,16 +1921,6 @@
           ".chrono-harness/state/"
         ]
       },
-      "release.tests.units": {
-        "resources": [],
-        "outputs": []
-      },
-      "release.tests.integration": {
-        "resources": [],
-        "outputs": [
-          ".chrono-harness/state/"
-        ]
-      },
       "test.worktree.core": {
         "resources": [
           "worktree-test-inventory"
@@ -2131,7 +2144,8 @@
       },
       "verify.cache-planner": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.cache-planner-tests": {"resources":[],"outputs":[".chrono-harness/state/"]}
-    ,"fmt.pr":{"resources":[],"outputs":[]},"fmt.pr-tests":{"resources":[],"outputs":[]},"build.pr":{"resources":[],"outputs":["crates/pr/target/"]},"test.pr-tests":{"resources":[],"outputs":["crates/pr-tests/target/"]}}
+    ,"fmt.pr":{"resources":[],"outputs":[]},"fmt.pr-tests":{"resources":[],"outputs":[]},"build.pr":{"resources":[],"outputs":["crates/pr/target/"]},"test.pr-tests":{"resources":[],"outputs":["crates/pr-tests/target/"]}
+    }
   },
   "configuration_edges": {
     "schema": "chrono-filemap-configuration-edges/v1",

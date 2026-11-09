@@ -2087,30 +2087,41 @@ fn automatic_import_is_explicit_and_not_a_historical_birth() {
 }
 
 #[test]
-fn observational_import_binds_original_configuration_without_adopting_its_format() {
+fn observational_import_binds_original_inputs_without_adopting_format_or_disposal_scopes() {
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
-    for detached in [false, true] {
-        let target = h.parent.join(if detached {
-            "retired detached configuration"
-        } else {
-            "retired named configuration"
-        });
+    for (detached, retired) in [(false, false), (false, true), (true, false), (true, true)] {
+        let target = h
+            .parent
+            .join(format!("observational import {detached} {retired}"));
+        let branch = format!("client/observational-import-{detached}-{retired}");
         let mut args = vec!["worktree", "add"];
         if detached {
             args.push("--detach");
         } else {
-            args.extend(["-b", "client/retired-configuration"]);
+            args.extend(["-b", &branch]);
         }
         args.extend([target.to_str().unwrap(), "dev"]);
         git(&h.root, &args);
         let config_path = target.join(POLICY);
         let mut config = json(&fs::read(&config_path).unwrap()).unwrap();
-        config["schema"] = value!("chrono-worktree-config/v3");
-        config["git"]["identities"] = value!([]);
+        if retired {
+            config["schema"] = value!("chrono-worktree-config/v3");
+            config["git"]["identities"] = value!([]);
+        }
         let config_bytes = serde_json::to_vec_pretty(&config).unwrap();
         fs::write(&config_path, &config_bytes).unwrap();
+        let mut registry = json(&fs::read(target.join(CONFIG)).unwrap()).unwrap();
+        registry["artifacts"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|artifact| artifact["path"] != "nested/cache/");
+        fs::write(
+            target.join(CONFIG),
+            serde_json::to_vec_pretty(&registry).unwrap(),
+        )
+        .unwrap();
         let head = commit(&target);
         fs::write(target.join("payload"), "unfinished source\n").unwrap();
         output(&target);
@@ -2121,6 +2132,7 @@ fn observational_import_binds_original_configuration_without_adopting_its_format
             metadata.join("index"),
             target.join("payload"),
             target.join(AUTO_POLICY),
+            target.join(CONFIG),
         ]
         .map(|path| {
             let bytes = fs::read(&path).unwrap();
@@ -2168,7 +2180,14 @@ fn observational_import_binds_original_configuration_without_adopting_its_format
             }
             let (code, refused, error) = h.auto(operation, &args);
             assert_ne!(code, 0, "{operation}: {refused} {error}");
-            assert!(refused["error"].as_str().unwrap().contains("identities"));
+            assert!(
+                refused["error"].as_str().unwrap().contains(if retired {
+                    "identities"
+                } else {
+                    "disposal directory is not an artifact"
+                }),
+                "{operation}: {refused} {error}"
+            );
         }
         assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger_bytes);
         assert_eq!(fs::read(&config_path).unwrap(), config_bytes);
@@ -2518,17 +2537,6 @@ fn automatic_symlink_containment_and_internal_external_target_safety() {
             }
         }
     }
-}
-
-pub(super) fn consuming_operation(h: &Host, body: &str) {
-    consuming_scripts(
-        h,
-        value!([
-            {"id":"consumer","path":"s.sh","test_script":"consumer-tests","actions":{"execute":{"operation":"use.consumer","tool":"sh","argv":["s.sh"]}}},
-            {"id":"consumer-tests","path":"st.sh","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"sh","argv":["st.sh"]}}}
-        ]),
-        &[("s.sh", body.as_bytes()), ("st.sh", b"exit 0\n")],
-    );
 }
 
 pub(super) fn native_git(h: &Host, mode: &str, mut parameters: Value) -> PathBuf {

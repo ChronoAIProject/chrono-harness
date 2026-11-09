@@ -202,12 +202,18 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     for _ in 0..8 {
         let round = inventory().maintain_originals(&ids).unwrap();
         for error in round["accounting_errors"].as_array().unwrap() {
-            assert!(
-                error["reason"].as_str().is_some_and(|reason| {
-                    reason.starts_with("retention output metadata is busy: output-")
-                }),
-                "{round}"
-            );
+            let reason = error["reason"].as_str().unwrap();
+            let busy_metadata = reason
+                .strip_prefix("retention output metadata is busy: ")
+                .is_some_and(|id| ids.iter().any(|expected| expected == id));
+            let busy_path = reason
+                .strip_prefix("retention path is busy: ")
+                .is_some_and(|path| {
+                    [&old["intent"]["path"], &old["path"]]
+                        .iter()
+                        .any(|expected| expected.as_str() == Some(path))
+                });
+            assert!(busy_metadata || busy_path, "{round}");
         }
         rounds.push(round);
         if [&old["intent"]["path"], &old["path"]]
@@ -596,7 +602,8 @@ fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second
         &mut h.auto_command("use", &["--operation", "use.consumer"]),
         &h.root,
     );
-    await_file(&h.root.join(".chrono-harness/state/grandchild"));
+    // Observe the managed producer under its registered bounds, including Git preparation.
+    first.await_managed_file(&h.root.join(".chrono-harness/state/grandchild"));
     fs::create_dir_all(h.root.join("output λ")).unwrap();
     fs::write(
         h.root.join("output λ/cache"),
