@@ -274,13 +274,35 @@ fn actual_native_unit_retains_original_frontend_metadata_for_the_collector() {
 
 #[test]
 fn native_launcher_restores_executable_mode_and_runs_the_selected_frontend_without_rust() {
+    if std::env::var_os("CHRONO_TEST_RELEASE_LAUNCHER").is_none() {
+        let mut command = std::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "native_launcher_restores_executable_mode_and_runs_the_selected_frontend_without_rust",
+                "--nocapture",
+            ])
+            .env("CHRONO_TEST_RELEASE_LAUNCHER", "1");
+        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "stdout={} stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
     let f = Fixture::new();
     let directory = f.host.root().join("frontend");
     assert!(f.export(&directory).status.success());
     assert!(!directory.join("chrono-host-release").exists());
     // 即使直接执行此测试，也要经过正式消费路径的继承能力交接。
-    let ownership = tempfile::tempfile().unwrap();
-    let _scope = chrono_harness::process_fds::Scope::new(&[ownership.as_fd()]).unwrap();
+    let ownership = (0..27)
+        .map(|_| tempfile::tempfile().unwrap())
+        .collect::<Vec<_>>();
+    let descriptors = ownership.iter().map(AsFd::as_fd).collect::<Vec<_>>();
+    let _scope = chrono_harness::process_fds::Scope::new(&descriptors).unwrap();
     let out = f.unit_through_launcher(&directory);
     assert!(
         out.status.success(),
