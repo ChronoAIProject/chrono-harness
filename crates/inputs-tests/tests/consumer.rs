@@ -219,6 +219,7 @@ fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_by
             .get("bytes")
             .is_none()
     );
+    assert!(pair["base"]["files"]["data"].get("bytes").is_none());
     let (exit, r) = check(&h, &pair);
     assert_eq!(exit, 0, "{}", r["findings"]);
     assert_eq!(r["tests"]["tests"]["test:t"], "passed");
@@ -229,9 +230,12 @@ fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_by
     );
     let (exit, inline) = h.run_with_context(
         |inputs| {
-            let executable = json!({"bytes":fs::read(&h.tool).unwrap()});
+            *inputs = pair.clone();
+            // Compare representations using bounded data; keep native tool
+            // bytes addressed independently of platform debug-symbol size.
+            let data = json!({"bytes":fs::read(h.external.path()).unwrap()});
             for endpoint in ["base", "candidate"] {
-                inputs[endpoint]["files"]["execution-tool"] = executable.clone();
+                inputs[endpoint]["files"]["data"] = data.clone();
             }
         },
         |ctx| {

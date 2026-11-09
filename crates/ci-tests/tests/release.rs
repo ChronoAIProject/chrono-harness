@@ -316,6 +316,71 @@ fn units_config() -> Value {
 }
 
 #[test]
+fn delivery_binds_landing_source_and_limits_write_permission_to_the_publisher() {
+    let mut c = units_config();
+    c["push_branches"] = json!([]);
+    c["jobs"][1]["always"] = json!(false);
+    c["delivery"] = json!({"workflow":"landing CI","branch":"dev","publisher":"consumer"});
+    let rendered = release::render(&serde_json::from_value(c).unwrap()).unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&rendered).unwrap();
+    assert_eq!(
+        yaml["on"]["workflow_run"]["workflows"],
+        json!(["landing CI"])
+    );
+    assert_eq!(yaml["on"]["workflow_run"]["branches"], json!(["dev"]));
+    assert_eq!(yaml["on"]["workflow_run"]["types"], json!(["completed"]));
+    assert!(yaml["on"].get("push").is_none());
+    assert_eq!(yaml["permissions"]["contents"], "read");
+    let jobs = &yaml["jobs"];
+    assert!(jobs["native"].get("permissions").is_none());
+    assert_eq!(jobs["consumer"]["permissions"]["contents"], "write");
+    assert_eq!(jobs["consumer"]["if"], jobs["native"]["if"]);
+    for job in ["native", "consumer"] {
+        let j = &jobs[job];
+        let condition = j["if"].as_str().unwrap();
+        assert!(condition.contains("workflow_run.conclusion == 'success'"));
+        assert!(condition.contains("workflow_run.event == 'push'"));
+        assert_eq!(
+            j["steps"][0]["with"]["ref"],
+            "${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}"
+        );
+        let step = j["steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["name"] == "Run registered release command")
+            .unwrap();
+        assert_eq!(
+            step["env"]["CHRONO_RELEASE_CI_ATTEMPT"],
+            "${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}"
+        );
+        assert_eq!(step["env"].get("GH_TOKEN").is_some(), job == "consumer");
+    }
+}
+
+#[test]
+fn delivery_rejects_unregistered_publishers_push_bypasses_and_unsuccessful_dependencies() {
+    for case in 0..5 {
+        let mut c = units_config();
+        c["push_branches"] = json!([]);
+        c["jobs"][1]["always"] = json!(false);
+        c["delivery"] = json!({"workflow":"landing CI","branch":"dev","publisher":"consumer"});
+        match case {
+            0 => c["delivery"]["publisher"] = json!("missing"),
+            1 => c["push_branches"] = json!(["dev"]),
+            2 => c["jobs"][1]["always"] = json!(true),
+            3 => c["delivery"]["publisher"] = json!("native"),
+            4 => c["delivery"]["workflow"] = json!("${{ inputs.other }}"),
+            _ => unreachable!(),
+        }
+        assert!(
+            release::render(&serde_json::from_value(c).unwrap()).is_err(),
+            "case {case}"
+        );
+    }
+}
+
+#[test]
 fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_metadata() {
     let c: release::Config = serde_json::from_value(units_config()).unwrap();
     let yaml = release::render(&c).unwrap();
