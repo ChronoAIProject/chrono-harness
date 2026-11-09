@@ -2,54 +2,8 @@
   "schema": "chrono-cache/v2",
   "namespace": "compiler-contract-fixture",
   "artifact_registry": ".chrono-harness/git/pinned-macos.json",
-  "require_primary_checkout": true,
+  "require_primary_checkout": false,
   "inputs": {
-    "rustc.file": {
-      "kind": "command",
-      "command": {
-        "program": "rustup",
-        "args": [
-          "which",
-          "--toolchain",
-          "1.95.0",
-          "rustc"
-        ],
-        "env": {
-          "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
-        },
-        "timeout_seconds": 30,
-        "output_limit_bytes": 65536
-      },
-      "inherit": [
-        "PATH",
-        "HOME",
-        "RUSTUP_HOME"
-      ],
-      "result": "file-path"
-    },
-    "cargo.file": {
-      "kind": "command",
-      "command": {
-        "program": "rustup",
-        "args": [
-          "which",
-          "--toolchain",
-          "1.95.0",
-          "cargo"
-        ],
-        "env": {
-          "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
-        },
-        "timeout_seconds": 30,
-        "output_limit_bytes": 65536
-      },
-      "inherit": [
-        "PATH",
-        "HOME",
-        "RUSTUP_HOME"
-      ],
-      "result": "file-path"
-    },
     "rustc.version": {
       "kind": "command",
       "command": {
@@ -73,175 +27,6 @@
         "RUSTUP_HOME"
       ],
       "result": "stdout"
-    },
-    "platform": {
-      "kind": "command",
-      "command": {
-        "program": "/usr/bin/uname",
-        "args": [
-          "-srm"
-        ],
-        "env": {
-        },
-        "timeout_seconds": 30,
-        "output_limit_bytes": 65536
-      },
-      "inherit": [
-        "PATH",
-        "HOME",
-        "RUSTUP_HOME",
-        "CARGO_HOME"
-      ],
-      "result": "stdout"
-    },
-    "macos.sdk": {
-      "kind": "command",
-      "command": {
-        "program": "/usr/bin/xcrun",
-        "args": [
-          "--sdk",
-          "macosx",
-          "--show-sdk-build-version"
-        ],
-        "env": {
-        },
-        "timeout_seconds": 30,
-        "output_limit_bytes": 65536
-      },
-      "inherit": [
-        "PATH",
-        "HOME",
-        "RUSTUP_HOME",
-        "CARGO_HOME"
-      ],
-      "result": "stdout"
-    },
-    "macos.linker": {
-      "kind": "command",
-      "command": {
-        "program": "/usr/bin/xcrun",
-        "args": [
-          "--find",
-          "ld"
-        ],
-        "env": {
-        },
-        "timeout_seconds": 30,
-        "output_limit_bytes": 65536
-      },
-      "inherit": [
-        "PATH",
-        "HOME",
-        "RUSTUP_HOME",
-        "CARGO_HOME"
-      ],
-      "result": "file-path"
-    },
-    "macos.cc": {
-      "kind": "command",
-      "command": {
-        "program": "/usr/bin/xcrun",
-        "args": [
-          "--find",
-          "clang"
-        ],
-        "env": {
-        },
-        "timeout_seconds": 30,
-        "output_limit_bytes": 65536
-      },
-      "inherit": [
-        "PATH",
-        "HOME",
-        "RUSTUP_HOME",
-        "CARGO_HOME"
-      ],
-      "result": "file-path"
-    },
-    "bootstrap.cargo.home-config": {
-      "kind": "file",
-      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config",
-      "presence": "absent"
-    },
-    "bootstrap.cargo.home-config-toml": {
-      "kind": "file",
-      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/config.toml",
-      "presence": "absent"
-    },
-    "absent.RUSTFLAGS": {
-      "kind": "environment",
-      "name": "RUSTFLAGS",
-      "presence": "absent"
-    },
-    "absent.CARGO_ENCODED_RUSTFLAGS": {
-      "kind": "environment",
-      "name": "CARGO_ENCODED_RUSTFLAGS",
-      "presence": "absent"
-    },
-    "absent.CARGO_BUILD_TARGET": {
-      "kind": "environment",
-      "name": "CARGO_BUILD_TARGET",
-      "presence": "absent"
-    },
-    "absent.CARGO_TARGET_DIR": {
-      "kind": "environment",
-      "name": "CARGO_TARGET_DIR",
-      "presence": "absent"
-    },
-    "absent.RUSTC": {
-      "kind": "environment",
-      "name": "RUSTC",
-      "presence": "absent"
-    },
-    "absent.RUSTC_WRAPPER": {
-      "kind": "environment",
-      "name": "RUSTC_WRAPPER",
-      "presence": "absent"
-    },
-    "absent.RUSTC_WORKSPACE_WRAPPER": {
-      "kind": "environment",
-      "name": "RUSTC_WORKSPACE_WRAPPER",
-      "presence": "absent"
-    },
-    "root.cargo-config": {
-      "kind": "file",
-      "path": ".cargo/config",
-      "presence": "absent"
-    },
-    "root.cargo-config-toml": {
-      "kind": "file",
-      "path": ".cargo/config.toml",
-      "presence": "absent"
-    },
-    "root.rust-toolchain": {
-      "kind": "file",
-      "path": "rust-toolchain",
-      "presence": "absent"
-    },
-    "root.rust-toolchain-toml": {
-      "kind": "file",
-      "path": "rust-toolchain.toml",
-      "presence": "absent"
-    },
-    "runner.manifest": {
-      "kind": "file",
-      "path": "crates/runner/Cargo.toml",
-      "presence": "present"
-    },
-    "runner.lock": {
-      "kind": "file",
-      "path": "crates/runner/Cargo.lock",
-      "presence": "present"
-    },
-    "diagnostics.manifest": {
-      "kind": "file",
-      "path": "crates/diagnostics/Cargo.toml",
-      "presence": "present"
-    },
-    "diagnostics.lock": {
-      "kind": "file",
-      "path": "crates/diagnostics/Cargo.lock",
-      "presence": "present"
     },
     "cache.manifest": {
       "kind": "file",
@@ -278,31 +63,6 @@
       "edges": [
         "compile"
       ]
-    },
-    "bootstrap.script": {
-      "kind": "file",
-      "path": ".chrono-harness/ci/bootstrap-native.sh",
-      "presence": "present"
-    },
-    "bootstrap.config": {
-      "kind": "file",
-      "path": ".chrono-harness/ci/bootstrap-core.json",
-      "presence": "present"
-    },
-    "check.environment": {
-      "kind": "json-value",
-      "path": ".chrono-harness/ci/check.json",
-      "pointer": "/policy/environment"
-    },
-    "check.cargo-tool": {
-      "kind": "json-value",
-      "path": ".chrono-harness/ci/check.json",
-      "pointer": "/policy/tools/cargo"
-    },
-    "bootstrap.toolchains": {
-      "kind": "file",
-      "path": ".chrono-harness/ci/bootstrap-toolchains.json",
-      "presence": "present"
     },
     "cache.producer": {
       "kind": "json-value",
@@ -341,45 +101,16 @@
         "cache.target"
       ],
       "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
         "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
         "cache.manifest",
         "cache.lock",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "check.cargo-tool",
-        "bootstrap.toolchains",
         "cache.producer",
         "cache.cargo-registration"
       ],
       "source_inputs": [
         "cache.sources"
       ],
-      "restore": "compatible",
-      "verify_contents": true
+      "restore": "compatible"
     },
     "compiler.cache-tests": {
       "owner": "cache-tests",
@@ -391,47 +122,18 @@
         "cache-tests.target"
       ],
       "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
         "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
         "cache.manifest",
         "cache.lock",
         "cache-tests.manifest",
         "cache-tests.lock",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "check.cargo-tool",
-        "bootstrap.toolchains",
         "cache-tests.producer",
         "cache.cargo-registration"
       ],
       "source_inputs": [
         "cache-tests.sources"
       ],
-      "restore": "compatible",
-      "verify_contents": true
+      "restore": "compatible"
     }
   },
   "consumer_operations": {
@@ -442,6 +144,6 @@
       }
     ]
   },
-  "recover_failed_restores": true,
-  "recover_unconfirmed_restores": true
+  "recover_failed_restores": false,
+  "recover_unconfirmed_restores": false
 }
