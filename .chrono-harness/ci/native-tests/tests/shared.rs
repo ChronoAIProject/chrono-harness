@@ -37,7 +37,6 @@ fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
     .unwrap();
     let host = root.to_str().unwrap();
     for (args, operation) in [
-        (vec!["bootstrap", host, "missing.json"], "bootstrap"),
         (vec![host, "missing.json"], "bootstrap"),
         (vec!["bootstrap", "missing.json"], "bootstrap"),
         (vec![host, "missing.json", "produce"], "produce"),
@@ -90,7 +89,11 @@ fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
 #[test]
 fn native_entrypoint_rejects_unknown_and_missing_arguments() {
     let root = tempfile::tempdir().unwrap();
-    for args in [vec!["unknown", ".", "unused.json"], vec![]] {
+    for args in [
+        vec!["unknown", ".", "unused.json"],
+        vec!["bootstrap", ".", "unused.json"],
+        vec![],
+    ] {
         let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
         command.current_dir(root.path()).args(args).env_clear();
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();

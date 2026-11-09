@@ -64,7 +64,7 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 
 下载启用 curl 的 `--verbose`，将重定向、响应状态和响应头写入已有原始 stderr，供区分 API 响应与最终资产服务的失败。失败不能仅凭 HTTP 403 归因为权限、限流或链接过期；须读实际响应及原退出码。额外诊断字节沿用现有输出上限和保留规则。
 
-本宿主只维护当前采用的安装 profile。薄 shell 入口省略配置时选择现有 `bootstrap-core.json`；
+本宿主只维护当前采用的安装 profile。薄 shell 入口必须明确传入 `HOST CONFIG`；普通构建的 Rust 前端使用相同参数，不另设 `bootstrap` 子命令。
 旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。
 detector、缓存和各单元仍消费各自显式登记的 profile，不因默认安装而取得额外工具。
 共享启动的 produce／install／verify 已登记到同一个 Rust 前端；produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者。缓存、detector 和单元 profile 同样选择原生入口，操作 ID、原始回执、产物绑定及失败合同保留。消费者首次从源码准备前端的构建与存储成本仍须实测，不能把语言迁移算作性能收益。旧 Python 启动实现、伴生测试及导入专属断言已随入口退役。发布编排归现役 Rust 发布项目，详见[发布说明](release-ci.md)；外部宿主不运行本仓这项源码构建。
