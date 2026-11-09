@@ -46,10 +46,6 @@ fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
             vec!["bootstrap", "missing.json", "verify", "core"],
             "verify",
         ),
-        (
-            vec!["validate-original-execution", host, "missing.json"],
-            "validate-original-execution",
-        ),
     ] {
         let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
         command
@@ -89,6 +85,23 @@ fn runtime_logging_uses_the_explicit_host_from_another_working_directory() {
         );
     }
     assert!(!outside.path().join(".chrono-harness").exists());
+}
+
+#[test]
+fn native_entrypoint_rejects_unknown_and_missing_arguments() {
+    let root = tempfile::tempdir().unwrap();
+    for args in [vec!["unknown", ".", "unused.json"], vec![]] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+        command.current_dir(root.path()).args(args).env_clear();
+        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+        let output = command.output().unwrap();
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        assert!(
+            String::from_utf8_lossy(&output.stderr)
+                .contains("unknown native bootstrap command or arguments")
+        );
+    }
 }
 
 fn cli(root: &Path, environment: &Environment, args: &[&str]) -> Output {

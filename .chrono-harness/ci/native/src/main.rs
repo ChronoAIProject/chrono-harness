@@ -2,7 +2,7 @@
 use chrono_host_bootstrap::{
     bindings,
     construction::{BuildFailure, Construction},
-    download, lifecycle, original, owner, profile, proved_build, shared,
+    download, lifecycle, owner, profile, proved_build, shared,
 };
 use serde_json::json;
 use std::{path::Path, process::ExitCode};
@@ -126,18 +126,6 @@ fn run() -> Result<(), BuildFailure> {
                 shared.verify(&root, &environment, &native, selected)
             }
         }
-        [command, host, reference] if command == "validate-original-execution" => {
-            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
-            let raw = profile::read(&root, reference, b".chrono-harness/state/")?;
-            let report = original::validate_fixed_execution(&root, &environment, &native, &raw)?;
-            println!(
-                "{}",
-                json!({"schema":"chrono-bootstrap-original-execution-validation/v1",
-                "path":reference, "sha256":chrono_harness::sha256(&raw),
-                "source":report.source, "operations":report.operations.len()})
-            );
-            Ok(())
-        }
         [command, host, config] if command == "construct-owner-stage" => {
             bootstrap(host, config, true)
         }
@@ -172,12 +160,7 @@ fn main() -> ExitCode {
         [operation, host, _]
             if matches!(
                 operation.to_str(),
-                Some(
-                    "bootstrap"
-                        | "construct-owner-stage"
-                        | "validate-original-execution"
-                        | "compile"
-                )
+                Some("bootstrap" | "construct-owner-stage" | "compile")
             ) =>
         {
             (Some(host), operation.to_str().unwrap())
