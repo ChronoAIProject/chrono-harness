@@ -42,6 +42,14 @@ pub fn native_job_state(
         (out is Rejected) <==> !((optional_text_is(status,"completed") && optional_text_is(conclusion,"success"))
             || (nonterminal(status) && conclusion_null == Some(true) && id is Some && id.unwrap() > 0)),
 {
+    proof {
+        reveal_strlit("completed");
+        reveal_strlit("queued");
+        reveal_strlit("in_progress");
+        reveal_strlit("waiting");
+        reveal_strlit("pending");
+        reveal_strlit("requested");
+    }
     if text_is(status,"completed") {
         if text_is(conclusion,"success") { NativeJobState::Succeeded }
         else { NativeJobState::Rejected }
