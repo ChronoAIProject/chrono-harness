@@ -651,7 +651,13 @@ impl Inventory {
                 .cloned();
             if let Some(role) = next_role {
                 let record = self.read_role(&role)?;
-                if let Some(record) = &record {
+                // Maintenance needs the consumer's membership of the actual
+                // reference component, not every independent output sharing
+                // that consumer. Keep its full declaration under exclusion;
+                // load/save below project only the visited members.
+                if let Some(record) = &record
+                    && !maintenance
+                {
                     selected.extend(record.ids.iter().cloned());
                     selected.extend(record.attached.iter().cloned());
                 }
@@ -833,10 +839,16 @@ impl Inventory {
         }
         for role in roles.values() {
             ledger.summaries.extend(role.summaries.clone());
-            if role.ids.is_empty() {
+            let ids: Vec<_> = role
+                .ids
+                .iter()
+                .filter(|id| !gate.maintenance || objects.contains_key(*id))
+                .cloned()
+                .collect();
+            if ids.is_empty() {
                 ledger.roots.remove(&role.role);
             } else {
-                ledger.roots.insert(role.role.clone(), role.ids.clone());
+                ledger.roots.insert(role.role.clone(), ids);
             }
         }
         if gate.maintenance {
@@ -999,7 +1011,23 @@ impl Inventory {
         }
 
         for role in roles.values_mut() {
-            let next = ledger.roots.get(&role.role).cloned().unwrap_or_default();
+            let mut next = ledger.roots.get(&role.role).cloned().unwrap_or_default();
+            if gate.maintenance {
+                // The ledger contains only this reference component. Preserve
+                // every unvisited member and the original membership order.
+                let selected = next;
+                next = role
+                    .ids
+                    .iter()
+                    .filter(|id| !objects.contains_key(*id) || selected.contains(*id))
+                    .cloned()
+                    .collect();
+                for id in selected {
+                    if !next.contains(&id) {
+                        next.push(id);
+                    }
+                }
+            }
             if role.ids != next {
                 role.metadata_expires = now()?.saturating_add(self.policy.metadata_keep_seconds);
             }
@@ -1038,7 +1066,14 @@ impl Inventory {
             )?;
         }
         for role in roles.values_mut() {
-            role.attached = role.ids.iter().cloned().collect();
+            if gate.maintenance {
+                // Unvisited attachments may be conservative protection from an
+                // interrupted transition. Only reconcile the excluded members.
+                role.attached.retain(|id| !objects.contains_key(id));
+                role.attached.extend(role.ids.iter().cloned());
+            } else {
+                role.attached = role.ids.iter().cloned().collect();
+            }
             self.persist_change(
                 &self.role_directory(&role.role)?.join("record.json"),
                 role,
