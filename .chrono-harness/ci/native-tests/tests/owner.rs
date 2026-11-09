@@ -74,7 +74,9 @@ impl Staged {
         }
     }
     fn new() -> Self {
-        let fixture = Self::setup();
+        Self::from_fixture(Self::setup())
+    }
+    fn from_fixture(fixture: Fixture) -> Self {
         let selected = fixture.root.join(".chrono-harness/bin/cargo");
         let previous = owner::file_binding(&selected).unwrap();
         let output = Self::invoke(
@@ -156,6 +158,75 @@ impl Staged {
         write_json(&root.join(owner::CURRENT), &adoption);
         adoption
     }
+}
+
+#[test]
+fn stage_directory_follows_its_actual_report_then_expires_as_a_whole() {
+    use chrono_harness::retained_artifacts::retention::{self, Inventory};
+    #[path = "../../../../crates/runner-tests/tests/support/isolated_capability.rs"]
+    mod isolated_capability;
+    if !isolated_capability::isolated_capability_test(
+        "stage_directory_follows_its_actual_report_then_expires_as_a_whole",
+    ) {
+        return;
+    }
+    let fixture = Staged::setup();
+    fixture.adopt_retention(3600);
+    let policy = fixture.root.join(retention::POLICY_PATH);
+    let mut declaration = read_json(&policy);
+    declaration["producers"]["bootstrap-owner-stage"] = json!([owner::STAGES]);
+    write_json(&policy, &declaration);
+    // The Git mock owns source qualification. Its empty marker cannot stand
+    // in for a repository when the real retention owner excludes Git inputs.
+    fs::remove_dir(fixture.root.join(".git")).unwrap();
+    let staged = Staged::from_fixture(fixture);
+    let directory = staged.stage_path().parent().unwrap().to_owned();
+    let relative = directory
+        .strip_prefix(&staged.fixture.root)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let guard = retention::read_guard(&staged.fixture.root, relative).unwrap();
+    assert!(guard.is_some(), "stage directory has no rolling owner");
+    drop(guard);
+    let observed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        + 3601;
+    let inventory = Inventory::adopted(&staged.fixture.root).unwrap().unwrap();
+    for _ in 0..8 {
+        inventory.maintain_at(observed).unwrap();
+    }
+    assert!(
+        staged.stage_path().is_file(),
+        "the actual current report must retain its stage"
+    );
+    let mut fixture = staged.fixture;
+    fixture.config["owner_stage"] = Value::Null;
+    fs::remove_file(fixture.root.join("prepared")).unwrap();
+    let loaded = fixture.commit();
+    fs::remove_dir(fixture.root.join(".git")).unwrap();
+    let mut build = chrono_host_bootstrap::construction::Construction::begin(
+        &fixture.root,
+        loaded,
+        &fixture.environment,
+    )
+    .unwrap();
+    build.prerequisites(&mut vec![], &mut vec![]).unwrap();
+    build.select().unwrap();
+    build.operations(&mut vec![], &mut vec![]).unwrap();
+    assert!(build.finish(Ok(())).unwrap().outcome.is_ok());
+    for _ in 0..8 {
+        inventory.maintain_at(observed).unwrap();
+        if !directory.exists() {
+            break;
+        }
+    }
+    assert!(
+        !directory.exists(),
+        "unreferenced expired stage directory was not reclaimed"
+    );
 }
 
 #[test]

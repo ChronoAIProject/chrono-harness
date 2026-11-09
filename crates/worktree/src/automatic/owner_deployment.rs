@@ -552,7 +552,11 @@ fn owner_binding(path: &Path) -> Result<publication_policy::Binding, String> {
     serde_json::from_value(executable_binding(path)?).map_err(|e| e.to_string())
 }
 
-fn publication_original(path: &Path, value: &Value) -> Result<(), String> {
+fn publication_original(
+    path: &Path,
+    value: &Value,
+    publication: Option<&chrono_harness::retained_artifacts::retention::Publication>,
+) -> Result<(), String> {
     let mut raw = serde_json::to_vec_pretty(value).map_err(|e| e.to_string())?;
     raw.push(b'\n');
     let exists = path.exists();
@@ -563,7 +567,10 @@ fn publication_original(path: &Path, value: &Value) -> Result<(), String> {
         Vec::new()
     };
     match publication_policy::immutable_original(exists, &original, &raw) {
-        publication_policy::OriginalAction::Create => write_bytes(path, &raw, true)?,
+        publication_policy::OriginalAction::Create => match publication {
+            Some(publication) => publication.write_file(path, &raw)?,
+            None => write_bytes(path, &raw, true)?,
+        },
         publication_policy::OriginalAction::Keep => {}
         publication_policy::OriginalAction::Reject => {
             return Err("owner publication original collision".into());
@@ -593,6 +600,42 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
     let intent = no_symlink_parents(root, &format!("{parent}/publication-intent.json"))?;
     let next = no_symlink_parents(root, &format!("{parent}/publication-next-owner"))?;
     let result_path = no_symlink_parents(root, &format!("{parent}/publication-result.json"))?;
+    if result_path.is_file() {
+        // A completed directory is immutable. A retry can consume its exact
+        // publication, but cannot reopen it or repair changed originals.
+        let planned: publication_policy::Intent =
+            decode(&fs::read(&intent).map_err(|e| e.to_string())?)?;
+        let installed = owner_binding(&target)?;
+        if !matches!(
+            publication_policy::selected_action(
+                &installed,
+                &expected.previous,
+                &planned.replacement
+            ),
+            publication_policy::SelectedAction::Keep
+        ) {
+            return Err("selected owner drifted after publication intent".into());
+        }
+        let result = json(&fs::read(&result_path).map_err(|e| e.to_string())?)?;
+        let original = value!({"schema":"chrono-bootstrap-owner-publication/v1","stage":record,
+            "installed":installed,"adoption":"not-claimed","task_completion":"not-claimed"});
+        if !publication_policy::valid_intent(&planned, &expected)
+            || !publication_policy::valid_publication(
+                &installed,
+                &planned.replacement,
+                &owner_binding(&previous)?,
+                &expected,
+            )
+            || result != original
+        {
+            return Err("completed owner publication changed; preserve originals".into());
+        }
+        return Ok(result);
+    }
+    let publication = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+        .map(|inventory| inventory.resume_unfinished_directory("bootstrap-owner-stage", parent))
+        .transpose()?
+        .flatten();
     let previous_exists = previous.exists();
     let selected_before = if previous_exists {
         None
@@ -604,9 +647,10 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
         selected_before.as_ref(),
         &expected.previous,
     ) {
-        publication_policy::OriginalAction::Create => {
-            fs::hard_link(&target, &previous).map_err(|e| e.to_string())?;
-        }
+        publication_policy::OriginalAction::Create => match &publication {
+            Some(publication) => publication.hard_link_file(&target, &previous)?,
+            None => fs::hard_link(&target, &previous).map_err(|e| e.to_string())?,
+        },
         publication_policy::OriginalAction::Keep => {}
         publication_policy::OriginalAction::Reject => {
             return Err("selected owner changed before original preservation".into());
@@ -626,25 +670,23 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
         }
         publication_policy::IntentAction::Prepare => {
             // Never adopt a replacement whose preparation has no original intent.
-            let mut output = fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&next)
-                .map_err(|e| format!("prepare owner publication: {e}"))?;
-            output
-                .write_all(&fs::read(&staged).map_err(|e| e.to_string())?)
-                .map_err(|e| e.to_string())?;
+            chrono_harness::retained_artifacts::retention::copy_adopted(
+                publication.as_ref(),
+                &staged,
+                &next,
+            )?;
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                output
-                    .set_permissions(fs::Permissions::from_mode(0o755))
+                fs::set_permissions(&next, fs::Permissions::from_mode(0o755))
                     .map_err(|e| e.to_string())?;
             }
-            output.sync_all().map_err(|e| e.to_string())?;
+            fs::File::open(&next)
+                .and_then(|f| f.sync_all())
+                .map_err(|e| e.to_string())?;
             let planned = value!({"schema":"chrono-bootstrap-owner-publication-intent/v1",
             "stage":record,"replacement":executable_binding(&next)?});
-            publication_original(&intent, &planned)?;
+            publication_original(&intent, &planned, publication.as_ref())?;
             planned
         }
     };
@@ -680,7 +722,12 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
     }
     let result = value!({"schema":"chrono-bootstrap-owner-publication/v1","stage":record,
         "installed":installed,"adoption":"not-claimed","task_completion":"not-claimed"});
-    publication_original(&result_path, &result)?;
+    publication_original(&result_path, &result, publication.as_ref())?;
+    if let Some(publication) = publication {
+        publication.complete(
+            value!({"status":"published","adoption":"not-claimed","task_completion":"not-claimed"}),
+        )?;
+    }
     Ok(result)
 }
 
