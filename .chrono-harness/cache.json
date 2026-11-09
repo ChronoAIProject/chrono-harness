@@ -6222,7 +6222,7 @@
       "source_inputs": [
         "worktree.sources"
       ],
-      "restore": "compatible"
+      "restore": "exact"
     },
     "verus.archive": {
       "owner": "repository",
