@@ -1195,7 +1195,7 @@
     {"test":"pr-tests","cost":"unmeasured"}
   ],
   "execution_plans": {
-    "test:host-release-native-tests": {"operations":["verify.release-recipe","verify.release-recipe-tests","fmt.host-release-native","fmt.host-release-native-tests","build.host-release-native","build.cache","test.host-release-native-tests"],"timeout_seconds":900,"output_limit_bytes":1048576},
+    "test:host-release-native-tests": {"operations":["verify.release-recipe","verify.release-recipe-tests","fmt.host-release-native","fmt.host-release-native-tests","build.host-release-native","build.cache","test.host-release-native-tests"],"timeout_seconds":600,"output_limit_bytes":1048576},
     "test:identifiers-tests": {
       "operations": [
         "verify.identifiers",
