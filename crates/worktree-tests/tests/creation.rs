@@ -1243,7 +1243,7 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
             .push(file(path, value!([])));
         fs::write(h.root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
         let host_config =
-            json(&fs::read(source().join(".chrono-harness/git/pinned-macos.json")).unwrap())
+            json(&fs::read(source().join(".chrono-harness/git/macos-27.json")).unwrap())
                 .unwrap();
         let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
         config["artifacts"] = host_config["artifacts"].clone();

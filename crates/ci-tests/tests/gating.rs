@@ -1865,7 +1865,7 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     let config_path = ".chrono-harness/config.json";
     let bind_config = |root: &Path| {
         let mut config: Value = serde_json::from_slice(
-            &fs::read(root.join(".chrono-harness/git/pinned-macos.json")).unwrap(),
+            &fs::read(root.join(".chrono-harness/git/macos-27.json")).unwrap(),
         )
         .unwrap();
         let tool_id = config["facts_git"]["tool"].as_str().unwrap().to_owned();

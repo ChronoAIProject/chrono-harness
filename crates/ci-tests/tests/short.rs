@@ -1507,7 +1507,7 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
     let adopted: Value = serde_json::from_slice(
         &fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.chrono-harness/git/pinned-macos.json"),
+                .join("../../.chrono-harness/git/macos-27.json"),
         )
         .unwrap(),
     )

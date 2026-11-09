@@ -145,7 +145,7 @@ v2 位置拒绝符号链接路径段，包括悬空链接，以及 `..`。平台
 
 普通构建继续使用登记的锁定 Cargo 操作；core／所有者 bootstrap 仍实际调用的 fetch 保留。安装工具与原件由当前生产者按自己的实际使用方保管，不为历史盘点重建主机快照。普通输入快照与传输保持各自合同；其余采用仍须核对当前使用方，不能由测试或声明存在证明必要。
 
-根选择器采用既有 `chrono-git-configs/v1` 平台映射，四份 scoped schema4 政策退役 Git SHA／版本白名单、重复输入和对应 FILEMAP 边。Git facts 与工作树均一次绑定实际 Git，保留真实版本进程和逐调用字节保护；不另造本机快照或激活层。显式预期及 full v3 合同继续严格核验。格式与固定基线数据边界见[Git 选择](git-facts.md#exact-host-executable-selection)和[工作树政策](worktree.md#git-身份与固定输入)。
+根选择器采用既有 `chrono-git-configs/v1` 平台映射，宿主 scoped schema4 政策退役 Git SHA／版本白名单、重复输入和对应 FILEMAP 边。Git facts 与工作树均一次绑定实际 Git，保留真实版本进程和逐调用字节保护；不另造本机快照或激活层。显式预期及 full v3 合同继续严格核验。格式与固定基线数据边界见[Git 选择](git-facts.md#exact-host-executable-selection)和[工作树政策](worktree.md#git-身份与固定输入)。
 
 旧样本、声明和比较归 Git 历史；仍有用途的缺失原件与独有工作由[输入保管者](input-source-custody.md)负责。退役不补齐历史观察，也不证明完整输入、固定两端原件、full CI 验收或同判。
 

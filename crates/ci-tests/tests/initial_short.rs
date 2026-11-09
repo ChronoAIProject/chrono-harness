@@ -56,7 +56,7 @@ impl Host {
             .output()
             .unwrap();
         let mut cfg: Value = serde_json::from_slice(
-            &fs::read(product.join(".chrono-harness/git/pinned-macos.json")).unwrap(),
+            &fs::read(product.join(".chrono-harness/git/macos-27.json")).unwrap(),
         )
         .unwrap();
         cfg["tools"] = json!([
