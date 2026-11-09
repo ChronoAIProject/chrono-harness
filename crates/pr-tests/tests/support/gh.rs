@@ -18,17 +18,28 @@ fn main() {
         .unwrap()
         .map(|e| e.unwrap().path())
         .filter(|p| p.is_dir() && !p.join("result.json").exists())
+        .filter_map(|operation| {
+            let mut call = 1;
+            while operation.join(format!("call-{call}.result.json")).exists() {
+                call += 1;
+            }
+            let intent: Value = serde_json::from_slice(
+                &fs::read(operation.join(format!("call-{call}.intent.json"))).ok()?,
+            )
+            .ok()?;
+            let launch: Value = serde_json::from_slice(
+                &fs::read(intent["process_originals"]["launch"].as_str()?).ok()?,
+            )
+            .ok()?;
+            (launch["child_pid"] == std::process::id()).then_some((operation, call, intent))
+        })
         .collect::<Vec<_>>();
-    assert_eq!(operations.len(), 1, "one current operation before dispatch");
-    let operation = &operations[0];
-    let mut call = 1;
-    while operation.join(format!("call-{call}.result.json")).exists() {
-        call += 1;
-    }
-    let intent: Value = serde_json::from_slice(
-        &fs::read(operation.join(format!("call-{call}.intent.json"))).unwrap(),
-    )
-    .unwrap();
+    assert_eq!(
+        operations.len(),
+        1,
+        "one original launch binds this actual fixture child"
+    );
+    let (operation, call, intent) = &operations[0];
     assert_eq!(intent["state"], "intent");
     assert_eq!(intent["handle"], Value::Null);
     assert_eq!(intent["result"], Value::Null);
@@ -57,6 +68,19 @@ fn main() {
         assert_eq!(input, expected);
     }
     fs::write("index", (index + 1).to_string()).unwrap();
+    #[cfg(unix)]
+    if step["pause_before_response"] == true {
+        let mut ready = std::os::unix::net::UnixStream::connect("response.sock").unwrap();
+        let bytes =
+            serde_json::to_vec(&json!({"operation":operation.to_str().unwrap(),"call":call}))
+                .unwrap();
+        ready
+            .write_all(&(bytes.len() as u32).to_be_bytes())
+            .unwrap();
+        ready.write_all(&bytes).unwrap();
+        let mut release = [0];
+        ready.read_exact(&mut release).unwrap();
+    }
     print!("{}", step["stdout"].as_str().unwrap_or(""));
     eprint!("{}", step["stderr"].as_str().unwrap_or(""));
     std::io::stdout().flush().unwrap();
