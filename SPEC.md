@@ -1173,9 +1173,9 @@ registration 负责严格当前 schema、受影响引用、固定快照、登记
 
 当前 FILEMAP v2 执行及 workflow v2／v3 历史 profile 约定见[执行说明](docs/execution.md)。Config 支持 v1 及明确存在状态的 v2／v3／v4，projects 支持 v1／v2，judges 用 v1。Workflow v3 按两端精确 schema 版本选择登记的宿主 decoder，含保留旧输入语义的 config v1→v2 兼容验证；它不自动写宿主配置，严格旧 v1 Reader 会拒绝新字段。
 
-早期随宿主提供的历史 decoder 处理 chrono-ci-check/v1 加 FILEMAP v1，使用固定原字节和明确绑定，保留候选 script／tool、映射、输出摘要及全部旧定义。ci.verify 原样移入 ci.actions.execute，由 ci-tests 执行；旧伪脚本／owner／test 以明确替代退役。六条旧验证触发边保留，原 ci-tests 独有触发现在也执行 verify。这不声称选测或成本精确等价。该历史 decoder 的当前退役范围见 docs/execution.md。
+本仓 `workflow.json` 的 `historical_profiles` 为空，旧宿主专用 decoder 及其样本、对象获取和迁移测试已退役。通用转换接口的当前登记和验证边界由[执行说明](docs/execution.md#历史格式转换与按范围-ci)维护；已完成的宿主迁移过程归 Git／PR 历史，不产生继续维护旧路径的义务。
 
-scoped judge-ci 经明确适配器复用 routes 计划及 projects 执行／回执逻辑。当前宿主操作顺序只由 FILEMAP 管理，历史 v1 绑定仅作 decoder 输入。在原生 full CI 替代此消费者前，scoped 旧选测／环境限制继续标明。ci 仍负责 workflow 生成与事件准备，instructions 独立。bootstrap 使用 Rust 1.95.0 和登记 locked build action 安装新增二进制，所有成本仍未知。
+scoped judge-ci 经明确适配器复用 routes 计划及 projects 执行／回执逻辑。当前宿主操作顺序只由 FILEMAP 管理，scoped 选测与环境的适用范围仍按当前合同标明。ci 负责 workflow 生成与事件准备，instructions 独立。bootstrap 使用登记的 Rust 工具链和 locked build action；构建、验证、CI 与存储总成本未测。
 
 scoped `chrono-ci-check/v2` 必须明确 `policy.facts_config` 为 `.chrono-harness/` 下路径，在获取对象前选择候选 full-v3 或 schema4 Git 绑定。schema4 可只声明工具并显式采用 null 版本预期；同一运行的实际执行物身份和原结果由读取器产生并逐调用保护。需要预期身份的消费者须另有 §1.1 的必要性终点，不能为了记录环境而维护主机白名单；显式预期仍严格核验。同一 Reader 读取两端、原 commit parents、index／dirty 事实、可选 full-registration 解释及执行后事实。
 
