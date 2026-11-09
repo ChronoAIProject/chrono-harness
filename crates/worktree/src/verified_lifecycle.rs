@@ -118,6 +118,16 @@ pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: boo
     equal_text(kind, "import") || (equal_text(kind, "birth") && registered)
 }
 
+// The caller holds the original exclusive lease. Cleanup observations are
+// diagnostic history; actual unjoined work still prevents checkout adoption.
+pub fn checkout_migration_ready(status: &str, terminal: bool, uses_pending: bool,
+    handoff_pending: bool) -> (ready: bool)
+    ensures ready <==> (status@ == "active"@ && !terminal
+        && !uses_pending && !handoff_pending),
+{
+    equal_text(status, "active") && !terminal && !uses_pending && !handoff_pending
+}
+
 pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
     ensures accepted <==> (kind@ == "import"@ || registered),
 {
