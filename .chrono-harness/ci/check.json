@@ -17,9 +17,7 @@
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
       "bash": "/bin/bash",
-      "rustup": "rustup",
       "verus": ".chrono-harness/bin/verus/verus",
-      "curl": "/usr/bin/curl",
       "shasum": "/usr/bin/shasum",
       "tar": "/usr/bin/tar",
       "bootstrap-native": ".chrono-harness/cache/host-bootstrap-native/target/debug/chrono-host-bootstrap"
