@@ -129,7 +129,6 @@ fn run() -> Result<(), BuildFailure> {
         [command, host, config] if command == "construct-owner-stage" => {
             bootstrap(host, config, true)
         }
-        [command, host, config] if command == "bootstrap" => bootstrap(host, config, false),
         [host, config] => bootstrap(host, config, false),
         _ => Err("unknown native bootstrap command or arguments".into()),
     }
@@ -160,7 +159,7 @@ fn main() -> ExitCode {
         [operation, host, _]
             if matches!(
                 operation.to_str(),
-                Some("bootstrap" | "construct-owner-stage" | "compile")
+                Some("construct-owner-stage" | "compile")
             ) =>
         {
             (Some(host), operation.to_str().unwrap())
