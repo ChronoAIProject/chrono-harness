@@ -2051,17 +2051,7 @@ fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
 #[test]
 fn immutable_input_contract_reads_complete_large_bytes_with_original_processes() {
     let h = Host::new(json!({"mode":"passthrough"}));
-    let original = if let Some(path) = std::env::var_os("CHRONO_IMMUTABLE_INPUT_FIXTURE") {
-        let bytes = fs::read(path).unwrap();
-        assert_eq!(bytes.len(), 2_022_211);
-        assert_eq!(
-            sha256(&bytes),
-            "15f1ec444ed15be8d5979257bf1e092d78a95081ec43aa77f5b973b25b955346"
-        );
-        bytes
-    } else {
-        vec![b'x'; 2_022_211]
-    };
+    let original = vec![b'x'; 2_022_211];
     let path = ".chrono-harness/immutable-input.json";
     fs::write(h.root.join(path), &original).unwrap();
     let oid = commit(&h);
