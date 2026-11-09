@@ -12,7 +12,7 @@
 cargo build --locked --manifest-path crates/pr/Cargo.toml
 ```
 
-当前源码入口为 `crates/pr/target/debug/chrono-pr`；尚未加入公开发布包。使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2 并登记该生产者的精确范围；缺失时不派发 gh。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
+当前源码入口为 `crates/pr/target/debug/chrono-pr`；尚未加入公开发布包。使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2，登记 `pr-original` 的操作目录范围和 `check-original` 的同级进程原件范围；缺失时不派发 gh。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
 
 ```sh
 crates/pr/target/debug/chrono-pr pr-open \
@@ -30,7 +30,7 @@ crates/pr/target/debug/chrono-pr pr-watch --pr 123 --head-sha <40位提交SHA>
 
 ## JSON 和退出码
 
-stdout 恰为一份 `chrono-pr-result/v2` JSON，帮助信息除外。结果含 command、repository、base、pr、expected_head、observed_head、outcome、checks、error 和 receipts，并给出 `operation`、`continued_operation`、`operation_state`、`command_exit_code`、`pr_state`、`merge_commit` 和更新时间。每条回执保存实际 argv、执行物摘要、PID、退出／signal、失败、流完整性和 stdout／stderr 原件的路径、长度及摘要；正常结果不再内嵌两套流字节。消费者读取原件并核摘要。原件写入失败时，stdout 退回实际已取得的内嵌字节并明确报告 `storage_error`，退出 2；该输出不声称已持久保存。不保存子进程环境值或凭据，调用意图只保留环境摘要。
+stdout 恰为一份 `chrono-pr-result/v2` JSON，帮助信息除外。结果含 command、repository、base、pr、expected_head、observed_head、outcome、checks、error 和 receipts，并给出 `operation`、`continued_operation`、`operation_state`、`command_exit_code`、`pr_state`、`merge_commit` 和更新时间。每条回执保存实际 argv、执行物摘要、PID、退出／signal、失败、流完整性和 stdout／stderr／launch 原件的路径、长度及摘要；正常结果不再内嵌两套流字节。消费者读取原件并核摘要。原件写入失败时，stdout 退回实际已取得的内嵌字节并明确报告 `storage_error`，退出 2；该输出不声称已持久保存。不保存子进程环境值或凭据，调用意图只保留环境摘要。
 
 | 退出码 | outcome | 含义 |
 | --- | --- | --- |
@@ -45,19 +45,19 @@ stdout 恰为一份 `chrono-pr-result/v2` JSON，帮助信息除外。结果含 
 
 ## 本地操作原件与当前边界
 
-每次调用在登记目录下取得独立操作地址。原件保留所有者先登记输出 intent、绑定物理目录并保护恢复使用方；工具再写不可变的 `config.json`、`intent.json`。每次 gh 调用前保存实际 argv、输入原件、执行物／环境摘要、时限、输出上限和时间；这些写入失败就不启动 gh。没有实际句柄或结果时字段为 null。进程返回后保存 `call-N.stdout`、`call-N.stderr` 和 `call-N.result.json`，最后发布 `result.json`。文件及所在目录同步后才继续派发。缺失、部分写入或未完成保留发布均不算终态。
+每次调用在登记目录下取得独立操作地址。原件保留所有者先登记输出 intent、绑定物理目录并保护恢复使用方；工具再写不可变的 `config.json`、`intent.json`。每次 gh 调用前保存实际 argv、输入原件、执行物／环境摘要、精确时限、输出上限、时间，以及 `process_originals` 的三个明确地址；这些写入失败就不启动 gh。没有实际句柄或结果时字段为 null。现有 runner 在运行中保存 `<operation>.call-N.stdout`、`<operation>.call-N.stderr` 和 `<operation>.call-N.launch.json`，与操作目录并列。启动原件使用 `chrono-process-launch/v2`，绑定实际 PID、argv、执行物、输入及环境摘要，禁止保存环境值；内存执行结果仍保留实际环境，供现役绑定核对。流文件随原读取器写入已经取得的有界字节；launch 和部分流均不表示进程结束。进程返回后，PR 核对原件身份、字节、摘要和启动绑定，直接引用原件，写 `call-N.result.json`，最后发布 `result.json`。文件及所在目录同步后才继续派发。缺失、部分写入或未完成保留发布均不算终态。
 
 `operation_state=completed` 只表示本地调用已返回并收取本次子进程结果，实际命令退出码另存；`pr_state=OPEN` 仍是活跃 PR。MERGED 必须带真实有效的 `mergeCommit.oid`，它只是远端观察，不证明实际落地树／发布已验收。原结果、PR 状态和存储发布状态分开；最后的保留封存或引用释放失败也退出 2，先前已写出的业务结果继续作为原件保护，不把它当完整成功。
 
-每次操作只有自身输出与恢复引用，没有总清单准入或全库扫描。结果无错误且对象已确认为 CLOSED／MERGED，或明确尚无 PR 的正常返回，可以释放本次恢复引用；原件再按现有 diagnostic 保留窗口滚出。本宿主窗口为 86400 秒，单输出、每轮节点／字节／时间及元数据上限沿 retention.json；沿既有 retention 维护入口回收，不另造清理器。
+每次操作只有自身输出与恢复引用，没有总清单准入或全库扫描。已核对的进程原件先登记为该操作的明确依赖，操作结果封存后复用现有消费者交接，释放这些原件的临时发布保护；不新增永久引用。结果发布或交接失败仍保留保护。结果无错误且对象已确认为 CLOSED／MERGED，或明确尚无 PR 的正常返回，可以释放本次恢复引用；原件再按现有 diagnostic 保留窗口滚出。本宿主窗口为 86400 秒，单输出、每轮节点／字节／时间及元数据上限沿 retention.json；沿既有 retention 维护入口回收，不另造清理器。
 
-**这一批是 §7.5 的局部实现。** gh 尚未返回时，实时启动句柄及部分流还没有接入这份 PR 原件；中断后的结果必须保持 unknown，不能从 PID 缺失或旧 intent 推定结束。显式接续只覆盖原本地调用已返回且结果封存的记录；尚无完整结果的旧 unknown 仍受保护，不能靠新查询证明旧进程结束。未声明接续的独立查询各自保留，当前实现不自动查找或合并所有历史，不能宣称全部活跃历史已有有界轮转。保留政策迁移、真实中断恢复和全部工具采用也未完成。参数／配置／留存入口在有效 state 建立前失败时，`operation=null` 明确表示没有可声称已保存的操作。不得手改这些状态制造成功或释放。
+**这一批是 §7.5 的局部实现。** gh 尚未返回时已保留真实启动句柄和部分流；外层中断的 Rust 验收核实际 live 原件、缺失终态与后续维护保留。中断后的原操作仍是 unknown，不能从 PID 缺失、旧 intent 或新查询推定结束；没有完整进程结果时不会发布已完成操作。显式接续只覆盖原本地调用已返回且结果封存的记录；尚无完整结果的旧 unknown 仍受保护，不能靠新查询证明旧进程结束。未声明接续的独立查询各自保留，当前实现不自动查找或合并所有历史，不能宣称全部活跃历史已有有界轮转。保留政策迁移、跨中断自动接续收取原结果和全部工具采用仍未完成。参数／配置／留存入口在有效 state 建立前失败时，`operation=null` 明确表示没有可声称已保存的操作。不得手改这些状态制造成功或释放。
 
-**产品与宿主政策同改：**产品新增上述原件和结果格式，宿主把现役 PR 配置迁到 v2，并在 retention／FILEMAP 登记生产者、输入和消费者。旧 v1 不再支持，不迁移或改写旧原件。现有共享状态须沿其所有者的正式政策迁移和部署边界采用；本候选不改协调者或现有共享安装。新增磁盘 IO、验证与存储成本未测。
+**当前格式迁移：**runner 的启动原件生产者、验证器和现役消费者统一采用 digest-only v2，旧启动格式不再读取。PR 复用现有执行与保留登记；本批没有修改宿主保留政策或共享安装。新增原件 IO、核验和存储的完整成本未测。
 
 ## 验收与范围
 
-登记的 `test:pr-tests` 执行两项目格式检查、生产构建及 Rust 行为测试。测试用独立 Rust gh 替身核实际 argv、stdin、输出和退出状态，覆盖创建／复用、失败恢复、字面文本、身份变化、缺检查、失败检查、截断和协议错误，以及原生等待后的重新核对。gh 替身在执行模拟副作用前核真实 intent 与输入原件；另测持久结果／流、未登记时零派发、结果发布失败和真实合并身份。接续测试实际跨 CLI 调用，并在诊断期限后执行现有维护，核旧原件回收、当前 OPEN 与其他调用方保留、终态回收及已回收原件拒绝；失败／活生产者／身份变化均保留原保护。外部接口样本独立登记。
+登记的 `test:pr-tests` 执行两项目格式检查、生产构建及 Rust 行为测试。当前 `test.pr-tests` 保留全部未过滤测试，显式使用 `-- --test-threads=2`；本地、CI 和委托该操作的发布验证共用此入口。增加实时原件后，默认并发的本机测试中原生等待已返回，但最后快照前用尽原 5 秒总时限；完整相同 29 项测试的窗口读数为默认线程 27.80 秒、28 过 1 未满足成功预期，2 线程 47.75 秒、29 过。该选择降低测试自身并行度以避免 fixture 互相挤占时限，保留所有断言和业务时限；不代表生产延迟改善，完整 CI 成本未测。测试用独立 Rust gh 替身核实际 argv、stdin、输出和退出状态，覆盖创建／复用、失败恢复、字面文本、身份变化、缺检查、失败检查、截断和协议错误，以及原生等待后的重新核对。gh 替身在执行模拟副作用前核真实 intent 与输入原件；另测持久结果／流、未登记时零派发、结果发布失败和真实合并身份。实际中断测试用单个阻塞 Unix socket 握手，在 gh 尚运行时核启动记录和部分 stdout，再中断其 PR 启动者，由现有执行器加入原任务；维护后保留未知原件且接续查询零派发。该测试只使用已有 `libc` 绑定操作自身进程，不引入新的进程控制实现。接续测试实际跨 CLI 调用，并在诊断期限后执行现有维护，核旧操作连同进程原件回收、当前 OPEN 与其他调用方保留、终态回收及已回收原件拒绝；失败／活生产者／身份变化均保留原保护。外部接口样本独立登记。
 
 产品与宿主登记同时变化：新增 PR 产品、配置、配对、依赖和检查计划，复用 worktree CI 单元运行 PR 测试，不增加主检查工作流或必需检查。发布验证沿用“覆盖所有现役测试项目”的合同，新增 Linux／macOS 各一个 `verify_pr_tests`，执行原未过滤测试，无发布资产前置；发布包不新增二进制。两项目的 target 进入现有生成物和清理白名单，沿用原有身份、使用保护与清理条件。原有检查判法不变，新增构建、测试和 target 存储成本未测。新项目锁定 runner 当前使用的 `libc 0.2.189`；初次解析的 `0.2.191` 缺少 runner 在 macOS 使用的 `NOTE_REAP`，不采用该组合。
 

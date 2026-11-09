@@ -751,7 +751,6 @@ struct LaunchEvidence {
     cwd: PathBuf,
     executable: PathBuf,
     sha256: String,
-    environment: std::collections::BTreeMap<String, String>,
     environment_digest: String,
     #[serde(default)]
     ownership_fds: Option<String>,
@@ -760,7 +759,7 @@ struct LaunchEvidence {
     output_limit_bytes: usize,
 }
 
-pub(crate) fn validate_launch_evidence(path: &Path, process: &ProcessResult) -> Result<(), String> {
+pub fn validate_launch_evidence(path: &Path, process: &ProcessResult) -> Result<(), String> {
     validate_launch_evidence_detailed(path, process).map_err(|failure| failure.message)
 }
 fn validate_launch_evidence_detailed(
@@ -796,14 +795,13 @@ pub(crate) fn validate_launch_evidence_bytes(
         .output_limit_bytes
         .ok_or("process receipt missing output bound")?;
     let expected = LaunchEvidence {
-        schema: "chrono-process-launch/v1".into(),
+        schema: "chrono-process-launch/v2".into(),
         launcher_pid,
         child_pid,
         argv: process.argv.clone(),
         cwd: process.cwd.clone(),
         executable: process.executable.clone(),
         sha256: process.sha256.clone(),
-        environment: process.environment.clone(),
         environment_digest: process.environment_digest.clone(),
         ownership_fds: process.ownership_fds.clone(),
         stdin_sha256: process.stdin_sha256.clone(),
@@ -831,9 +829,6 @@ pub(crate) fn validate_launch_evidence_bytes(
     }
     if record.sha256 != expected.sha256 {
         mismatches.push("executable_sha256");
-    }
-    if record.environment != expected.environment {
-        mismatches.push("environment");
     }
     if record.environment_digest != expected.environment_digest {
         mismatches.push("environment_digest");
@@ -865,12 +860,31 @@ pub fn run_process_observed_retained(
     digest: &str,
     evidence: &ProcessEvidence<'_>,
 ) -> Result<ProcessResult, String> {
+    run_process_observed_retained_for(
+        root,
+        s,
+        input,
+        digest,
+        Duration::from_secs(s.timeout_seconds),
+        evidence,
+    )
+}
+
+/// Retain live originals with the caller's exact acquisition deadline, using the same engine.
+pub fn run_process_observed_retained_for(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    timeout: Duration,
+    evidence: &ProcessEvidence<'_>,
+) -> Result<ProcessResult, String> {
     finish_detailed(run_process_inner(
         root,
         s,
         input,
         Some(digest),
-        Duration::from_secs(s.timeout_seconds),
+        timeout,
         Some(evidence),
     ))
 }
@@ -1316,11 +1330,11 @@ fn run_process_inner_with_stdout(
         child.ownership.log_identity();
         let publication_failure = evidence.as_ref().and_then(|paths| {
             let record = serde_json::json!({
-                "schema": "chrono-process-launch/v1",
+                "schema": "chrono-process-launch/v2",
                 "launcher_pid": launcher_pid, "child_pid": pid,
                 "argv": std::iter::once(executable.to_string_lossy().into_owned()).chain(s.args.clone()).collect::<Vec<_>>(),
                 "cwd": root, "executable": executable, "sha256": hash,
-                "environment": environment, "environment_digest": environment_digest,
+                "environment_digest": environment_digest,
                 "ownership_fds": ownership_fds, "stdin_sha256": stdin_sha256,
                 "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
             });
