@@ -1,4 +1,5 @@
 mod snapshot;
+mod state;
 
 use chrono_harness::{
     CliOutput, CommandSpec, file_identity, resolve_program, run_process_observed_for,
@@ -28,12 +29,14 @@ struct Config {
     watch_timeout_seconds: u64,
     watch_interval_seconds: u64,
     output_limit_bytes: usize,
+    state_directory: String,
+    state_producer: String,
 }
 
 impl Config {
     fn validate(&self) -> Result<(), String> {
         let parts = self.repository.split('/').collect::<Vec<_>>();
-        if self.schema != "chrono-pr-config/v1"
+        if self.schema != "chrono-pr-config/v2"
             || parts.len() != 2
             || parts.iter().any(|s| {
                 s.is_empty()
@@ -44,6 +47,15 @@ impl Config {
             })
         {
             return Err("invalid config schema or owner/repository".into());
+        }
+        chrono_harness::relative_path(&self.state_directory)?;
+        if !self.state_directory.starts_with(".chrono-harness/state/")
+            || self.state_directory.ends_with('/')
+            || self.state_producer.is_empty()
+            || self.state_producer.len() > 128
+            || self.state_producer.chars().any(char::is_control)
+        {
+            return Err("invalid PR state directory or producer".into());
         }
         if !branch(&self.base)
             || self.gh.is_empty()
@@ -197,6 +209,7 @@ struct Client {
     budget: Duration,
     pending_deadline: bool,
     result: Value,
+    state: state::State,
 }
 
 impl Client {
@@ -214,7 +227,8 @@ impl Client {
             .map(String::as_str)
             .unwrap_or(".chrono-harness/pr.json");
         let path = chrono_harness::no_symlink_parents(&root, config_path)?;
-        let config: Config = chrono_harness::decode(&read_bounded(&path, 1048576)?)?;
+        let config_bytes = read_bounded(&path, 1048576)?;
+        let config: Config = chrono_harness::decode(&config_bytes)?;
         config.validate()?;
         let mut env = BTreeMap::new();
         for key in [
@@ -252,6 +266,7 @@ impl Client {
         } else {
             config.api_timeout_seconds.saturating_mul(4)
         });
+        let state = state::State::begin(&root, &config, &config_bytes, args)?;
         let mut client = Self {
             root,
             config,
@@ -262,7 +277,9 @@ impl Client {
             budget,
             pending_deadline: false,
             result,
+            state,
         };
+        client.result["operation"] = json!(client.state.path);
         client.result["repository"] = json!(client.config.repository);
         client.result["base"] = json!(client.config.base);
         Ok(client)
@@ -291,14 +308,29 @@ impl Client {
             timeout_seconds: timeout.as_secs().max(1),
             output_limit_bytes: self.config.output_limit_bytes,
         };
+        let attempt = self
+            .state
+            .call_intent(&spec, input, &self.digest, timeout)?;
         let process = run_process_observed_for(&self.root, &spec, input, &self.digest, timeout)?;
         let code = process.exit_code;
-        self.result["receipts"].as_array_mut().unwrap().push(json!({
-            "argv":process.argv,"executable":process.executable,"sha256":process.sha256,
-            "exit_code":code,"failure":process.failure,"stdout_bytes":process.stdout_bytes,"stderr_bytes":process.stderr_bytes,
-            "stdout_sha256":process.stdout_sha256,"stderr_sha256":process.stderr_sha256,
-            "child_pid":process.child_pid,"timeout_seconds":spec.timeout_seconds
-        }));
+        let receipt = match self.state.receipt(attempt, &process) {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                let mut original = state::State::process_fields(&process);
+                original["stdout_bytes"] = json!(process.stdout_bytes);
+                original["stderr_bytes"] = json!(process.stderr_bytes);
+                original["storage_error"] = json!(error);
+                self.result["receipts"]
+                    .as_array_mut()
+                    .unwrap()
+                    .push(original);
+                return Err(format!("PR original publication failed: {error}"));
+            }
+        };
+        self.result["receipts"]
+            .as_array_mut()
+            .unwrap()
+            .push(receipt);
         if let Some(failure) = process.failure {
             // Deadline classification is based on the local clock and the original
             // producer failure, never on an assumed remote CI terminal state.
@@ -361,6 +393,7 @@ impl Client {
         self.result["url"] = json!(parsed.url);
         self.result["observed_head"] = json!(parsed.head);
         self.result["pr_state"] = json!(parsed.state);
+        self.result["merge_commit"] = json!(parsed.merge_commit);
         self.result["draft"] = json!(parsed.draft);
         self.result["checks"] = json!(parsed.checks);
         self.result["outcome"] = json!(parsed.outcome);
@@ -517,7 +550,7 @@ pub fn run(raw: &[OsString]) -> CliOutput {
             stderr: String::new(),
         };
     }
-    let mut result = json!({"schema":"chrono-pr-result/v1","command":raw.first().and_then(|s|s.to_str()),"repository":null,"base":null,"pr":null,"expected_head":null,"observed_head":null,"outcome":"unknown","checks":[],"error":null,"receipts":[]});
+    let mut result = json!({"schema":"chrono-pr-result/v2","operation":null,"operation_state":"unknown","pr_state":null,"merge_commit":null,"command":raw.first().and_then(|s|s.to_str()),"repository":null,"base":null,"pr":null,"expected_head":null,"observed_head":null,"outcome":"unknown","checks":[],"error":null,"receipts":[]});
     match Args::parse(raw) {
         Err(error) => result["error"] = json!(error),
         Ok(args) => {
@@ -536,21 +569,40 @@ pub fn run(raw: &[OsString]) -> CliOutput {
                         }
                         client.result["error"] = json!(error);
                     }
+                    client.result["operation_state"] = json!("completed");
+                    client.result["command_exit_code"] = json!(exit_code(&client.result));
+                    match state::now() {
+                        Ok(now) => client.result["updated_at_unix_millis"] = json!(now),
+                        Err(error) => {
+                            client.result["outcome"] = json!("unknown");
+                            client.result["error"] = json!(error);
+                        }
+                    }
+                    if let Err(error) = client.state.finish(&client.result) {
+                        client.result["operation_state"] = json!("unknown");
+                        client.result["outcome"] = json!("unknown");
+                        client.result["storage_error"] = json!(error);
+                    }
                     result = client.result;
                 }
             }
         }
     }
-    let exit_code = match result["outcome"].as_str().unwrap_or("unknown") {
+    let exit_code = exit_code(&result);
+    result["command_exit_code"] = json!(exit_code);
+    CliOutput {
+        exit_code,
+        stdout: format!("{}\n", serde_json::to_string(&result).unwrap()),
+        stderr: String::new(),
+    }
+}
+
+fn exit_code(result: &Value) -> u8 {
+    match result["outcome"].as_str().unwrap_or("unknown") {
         "opened" | "existing" | "passed" => 0,
         "failed" | "closed" => 1,
         "pending" => 3,
         "stale" => 4,
         _ => 2,
-    };
-    CliOutput {
-        exit_code,
-        stdout: format!("{}\n", serde_json::to_string(&result).unwrap()),
-        stderr: String::new(),
     }
 }

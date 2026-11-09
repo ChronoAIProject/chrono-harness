@@ -29,6 +29,9 @@
     ],
     "fixture-retirement": [
       ".chrono-harness/state/temporary-hosts/worktree/body-inputs/"
+    ],
+    "pr-original": [
+      ".chrono-harness/state/pr-operations/"
     ]
   },
   "keep_seconds": 0,
