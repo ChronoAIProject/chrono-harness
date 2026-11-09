@@ -858,8 +858,11 @@ Rust 测试另外验证真实消费者，不替代证明。
 `host.verus-download` 委托当前 Rust 启动程序，先按 `verus-macos-arm64.sha256`
 核对本地包；匹配时输出 `cache-hit`，不启动 curl。包缺失或内容不符时才通过 GitHub
 固定发布资产 API 下载，唯一地址归 projects.json，请求采用 `Accept: application/octet-stream`。
-下载写入同目录的私有临时文件，校验通过后原子替换归档并输出 `downloaded`；
-下载失败保留原退出和响应头，校验失败不覆盖原包。临时下载字节随本次操作回收。
+下载使用 tempfile 的私有临时文件；core 和独立 Verus profile 都把 `TMPDIR`
+选为已登记可回收的 `bootstrap-owner-tooling/tmp`，不把临时字节放进保留归档目录。
+校验通过后原子替换归档并输出 `downloaded`；下载失败保留原退出和响应头，
+校验失败不覆盖原包。正常返回或报错时由 tempfile 回收；强制中断后的残留归现有工作树清理所有者。
+临时目录与归档须在同一文件系统；跨文件系统的原子发布失败，不另复制或覆盖旧包。
 后续独立校验仍读取同一份 SHA-256 声明，校验通过后才解包。
 冷下载使用固定版本的官方 release 下载地址，避免依赖匿名 API 的请求额度。
 原响应头保留在 `.chrono-harness/state/verus-download.headers`，由现有失败工件上传供下载故障排查。

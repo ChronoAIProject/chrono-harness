@@ -2,12 +2,14 @@ use serde_json::Value;
 use std::{
     fs,
     os::unix::fs::symlink,
+    path::Path,
     process::{Command, Output},
 };
 
 const ARCHIVE: &str = ".chrono-harness/cache/bootstrap-owner-tooling/verus/package.zip";
 const CHECKSUM: &str = ".chrono-harness/ci/package.sha256";
 const HEADERS: &str = ".chrono-harness/state/download.headers";
+const TEMPORARIES: &str = ".chrono-harness/cache/bootstrap-owner-tooling/tmp";
 const BODY: &[u8] = b"verified archive\x00\xff\n";
 
 struct Fixture(tempfile::TempDir);
@@ -26,6 +28,7 @@ impl Fixture {
             ".chrono-harness/ci",
             ".chrono-harness/state",
             ".chrono-harness/cache/bootstrap-owner-tooling/verus",
+            TEMPORARIES,
         ] {
             fs::create_dir_all(fixture.0.path().join(directory)).unwrap();
         }
@@ -38,6 +41,7 @@ impl Fixture {
     }
     fn invoke(&self, curl: &str, url: &str) -> Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
+        command.env("TMPDIR", self.0.path().join(TEMPORARIES));
         command.args([
             "download",
             self.0.path().to_str().unwrap(),
@@ -55,6 +59,19 @@ impl Fixture {
             "https://example.invalid/archive.zip",
         )
     }
+    fn assert_disposable_download(&self) {
+        let args: Vec<String> = serde_json::from_slice(
+            &fs::read(self.0.path().join("download-calls.json")).unwrap(),
+        )
+        .unwrap();
+        let output = Path::new(&args[args.iter().position(|arg| arg == "--output").unwrap() + 1]);
+        assert_eq!(output.parent().unwrap(), self.0.path().join(TEMPORARIES));
+        assert!(!output.exists());
+        assert_eq!(
+            fs::read_dir(self.0.path().join(TEMPORARIES)).unwrap().count(),
+            0
+        );
+    }
 }
 
 #[test]
@@ -71,6 +88,7 @@ fn concurrent_preparation_publishes_only_verified_archives() {
         assert_eq!(report["sha256"], chrono_harness::sha256(BODY));
     }
     assert_eq!(fs::read(fixture.0.path().join(ARCHIVE)).unwrap(), BODY);
+    fixture.assert_disposable_download();
     assert_eq!(
         fs::read_dir(fixture.0.path().join(ARCHIVE).parent().unwrap())
             .unwrap()
@@ -103,6 +121,7 @@ fn missing_or_corrupt_archive_is_verified_before_replacement_then_reused() {
         let report: Value = serde_json::from_slice(&output.stdout).unwrap();
         assert_eq!(report["status"], "downloaded");
         assert_eq!(fs::read(fixture.0.path().join(ARCHIVE)).unwrap(), BODY);
+        fixture.assert_disposable_download();
         let calls = fs::read(fixture.0.path().join("download-calls.json")).unwrap();
         let second = fixture.run();
         assert!(second.status.success(), "{:?}", second);
@@ -124,6 +143,7 @@ fn download_failure_keeps_original_exit_headers_and_previous_archive() {
     fs::write(fixture.0.path().join("download-exit"), b"56").unwrap();
     let output = fixture.run();
     assert_eq!(output.status.code(), Some(56), "{:?}", output);
+    fixture.assert_disposable_download();
     assert!(
         output
             .stderr
@@ -151,6 +171,7 @@ fn wrong_download_content_is_rejected_without_publishing_or_overwriting() {
         let output = fixture.run();
         assert!(!output.status.success());
         assert!(String::from_utf8_lossy(&output.stderr).contains("checksum mismatch"));
+        fixture.assert_disposable_download();
         assert_eq!(
             fs::read(fixture.0.path().join(ARCHIVE)).ok().as_deref(),
             old
