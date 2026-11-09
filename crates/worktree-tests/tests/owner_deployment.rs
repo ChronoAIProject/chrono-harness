@@ -446,7 +446,7 @@ fn owner_deployment_rejects_partial_or_replaced_absent_attachment() {
         match fault {
             "checkout" => fs::create_dir(&target).unwrap(),
             "metadata" => {
-                fs::create_dir(entry["attachment"]["metadata"].as_str().unwrap()).unwrap()
+                fs::create_dir_all(entry["attachment"]["metadata"].as_str().unwrap()).unwrap()
             }
             _ => std::os::unix::fs::symlink(h.parent.join("unavailable-target"), &target).unwrap(),
         }
@@ -463,6 +463,40 @@ fn owner_deployment_rejects_partial_or_replaced_absent_attachment() {
         );
         assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
     }
+}
+
+#[test]
+fn owner_deployment_rejects_absent_enrollment_with_branch_attached_elsewhere() {
+    let (h, exe, path, sha) = fixture();
+    let (target, entry) = externally_removed_linked(&h);
+    let replacement = h.parent.join("replacement-linked");
+    git(
+        &h.root,
+        &[
+            "worktree",
+            "add",
+            replacement.to_str().unwrap(),
+            entry["branch"].as_str().unwrap(),
+        ],
+    );
+    let (code, report, error) = h.auto("import", &["--path", replacement.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    let ledger = fs::read(h.ledger_path(&target)).unwrap();
+    let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+    let bytes = fs::read(&selected).unwrap();
+    let identity = chrono_harness::ownership::identity(&selected).unwrap();
+    let (code, report, error) = deploy(&h, &exe, &path, &sha);
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report.to_string().contains("another Git attachment"),
+        "{report} {error}"
+    );
+    assert_eq!(fs::read(&selected).unwrap(), bytes);
+    assert_eq!(
+        chrono_harness::ownership::identity(&selected).unwrap(),
+        identity
+    );
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
 }
 
 #[test]
