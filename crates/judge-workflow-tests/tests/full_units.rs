@@ -1355,25 +1355,8 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         &tool_root.join("business-launches"),
         &["judge:registration", "judge:projects"],
     );
-    for (tool, consumer) in [
-        ("transition-decoder", "judge:registration"),
-        ("transition-checks", "judge:projects"),
-    ] {
-        let node = format!("tool:{tool}");
-        h.values.get_mut(CONFIG).unwrap()["input_closure"]["bindings"]
-            .as_array_mut()
-            .unwrap()
-            .iter_mut()
-            .find(|binding| binding["consumer"] == consumer)
-            .unwrap()["inputs"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!(node));
-        h.values.get_mut(FM).unwrap()["project_edges"]
-            .as_array_mut()
-            .unwrap()
-            .push(edge(&node, "runtime-input", consumer));
-    }
+    native_tools::bind_input(&mut h, "tool:transition-decoder", &["judge:registration"]);
+    native_tools::bind_input(&mut h, "tool:transition-checks", &["judge:projects"]);
     h.tool = wrapper.clone();
     h.values.get_mut(CONFIG).unwrap()["tools"]
         .as_array_mut()
