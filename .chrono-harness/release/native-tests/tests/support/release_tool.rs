@@ -10,6 +10,12 @@ use std::{
 
 fn run() -> Result<u8, String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args == ["--process-output-bound"] {
+        io::stdout()
+            .write_all(&[7u8; 100_000])
+            .map_err(|e| e.to_string())?;
+        return Ok(0);
+    }
     if args == ["--process-parent"] {
         let child = Command::new(std::env::current_exe().map_err(|e| e.to_string())?)
             .arg("--process-tail")

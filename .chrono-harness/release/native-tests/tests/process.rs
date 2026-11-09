@@ -118,7 +118,10 @@ fn deadline_keeps_bytes_actually_observed_and_actual_termination_signal() {
 fn output_bound_keeps_only_original_prefix_and_reports_incomplete_stream() {
     let source = tempfile::tempdir().unwrap();
     let output = tempfile::tempdir().unwrap();
-    let mut command = command(source.path(), json!([{"Stdout":vec![7u8;100000]}]));
+    let mut command = command(source.path(), json!([]));
+    // Produce the original 100,000 bytes without exceeding Linux's per-argument bound.
+    command.program = env!("CARGO_BIN_EXE_chrono-test-release-tool").into();
+    command.args = vec!["--process-output-bound".into()];
     command.output_limit_bytes = 1024;
     let captured = execute(
         source.path(),
