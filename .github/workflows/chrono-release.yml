@@ -1,8 +1,6 @@
 # chrono-ci: owned github-release/v1
 name: "chrono-release-build"
 on:
-  push:
-    branches: ["integration/distribution","integration/release-ci","integration/release-units"]
   workflow_dispatch:
     inputs:
       source:

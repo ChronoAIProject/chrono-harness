@@ -18,6 +18,8 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 
 生成的 job 使用登记 runner，检出 `workflow_dispatch` 的 `source` 或 push 提交，再用 Bash 执行原 argv。`source` 是直接交给 checkout 的修订字符串，生成器不保证它是完整 commit OID；构建消费者负责核实际源码身份及验收。参数按字面引用，失败保留原退出码；后续 `always()` 上传尝试保留原产物，产物缺失仍报错。job 独立运行，一个失败不会取消其他 job。工作流仅有 `contents: read`，不创建 Release、合并平台清单或上传发行资产。
 
+本仓将 `push_branches` 置空，只通过 `workflow_dispatch` 指定 `source` 发起发布构建。临时集成分支的名称归 Git 历史，不作为长期发布触发条件维护；常规变更的验收由登记的 PR CI 执行。
+
 新登记应明确设置 `include_hidden_files: true`。v1／v2 都支持，本仓已采用；它让上传保留登记产物根中的隐藏路径，范围仍取 `artifact_directory`。省略或 false 保留原投影及序列化源身份。
 
 ## 本仓采用
