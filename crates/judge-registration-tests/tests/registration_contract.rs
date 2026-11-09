@@ -2004,3 +2004,34 @@ fn configuration_edges_select_exact_policy_without_changing_shared_graph() {
 
 #[path = "verified_consumption.rs"]
 mod verified_consumption;
+
+#[test]
+fn tracked_sources_accept_contracts_and_require_explicit_projection_sources() {
+    use chrono_judge_registration::select_filemap;
+    let source = json!({"schema_version":2,"status":"proposed","cost_models":{},
+        "files":[{"path":"policy.json","provenance":"portable-contract",
+            "owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[]}],
+        "project_edges":[],"test_costs":[],"execution_plans":{}});
+    assert_eq!(select_filemap(&source, None).unwrap(), source);
+    let mut projection = source.clone();
+    projection["files"][0]["provenance"] = json!("deterministic-projection");
+    projection["files"][0]["projection"] = json!({"sources":["source.json"],
+        "producer":"project:generator","scope":"whole-file"});
+    assert_eq!(select_filemap(&projection, None).unwrap(), projection);
+
+    let mut missing_generator = projection.clone();
+    missing_generator["files"][0].as_object_mut().unwrap().remove("projection");
+    let mut mislabeled = projection;
+    mislabeled["files"][0]["provenance"] = json!("portable-contract");
+    let mut runtime = source.clone();
+    runtime["files"][0]["path"] = json!("report.json");
+    runtime["files"][0]["provenance"] = json!("runtime-fact");
+    for invalid in [missing_generator, mislabeled, runtime] {
+        assert!(select_filemap(&invalid, None).unwrap_err().contains("E_DATA_PROVENANCE"));
+    }
+    for malformed in [Value::Null, json!("observed"), json!({"kind":"portable-contract"})] {
+        let mut invalid = source.clone();
+        invalid["files"][0]["provenance"] = malformed;
+        assert!(select_filemap(&invalid, None).is_err());
+    }
+}
