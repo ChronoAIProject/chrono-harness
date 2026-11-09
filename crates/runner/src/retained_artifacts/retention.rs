@@ -703,12 +703,20 @@ impl Inventory {
         Ok(lease)
     }
     /// Explicit owner migration. The caller supplies the exact prior policy bytes;
-    /// every existing output must still be declared, and all old producers/readers must be excluded.
+    /// each selected output and its forward dependencies must still be declared,
+    /// and their old producers/readers must be excluded. None selects the inventory.
     /// This changes no output identity, original outcome, expiry, root, or completion state.
-    pub fn migrate_policy(&self, previous_policy: &[u8]) -> Result<Value, String> {
+    pub fn migrate_policy(
+        &self,
+        previous_policy: &[u8],
+        originals: Option<&[String]>,
+    ) -> Result<Value, String> {
         let previous: Policy = decode(previous_policy)?;
         if previous.schema != self.policy.schema {
             return Err("unsupported retention policy migration".into());
+        }
+        if let Some(originals) = originals {
+            self.validate_originals(originals)?;
         }
         for key in self.transaction_keys()? {
             let record = match self.transaction(&key)? {
@@ -733,7 +741,10 @@ impl Inventory {
             )?
             .ok_or("live addressed publisher prevents retention migration")?;
         }
-        let ids = self.partition_ids()?;
+        let ids = match originals {
+            Some(originals) => originals.to_vec(),
+            None => self.partition_ids()?,
+        };
         let previous_digest = sha256(previous_policy);
         let current_digest = sha256(&self.policy_bytes);
         let mut preserved = BTreeSet::new();
@@ -777,7 +788,7 @@ impl Inventory {
             }
         }
         Ok(
-            json!({"schema":"chrono-output-policy-migration/v1","previous_policy_sha256":previous_digest,"policy_sha256":current_digest,"outputs_preserved":preserved.len(),"roots_preserved":roots.len(),"effects":"metadata-binding-only","completion":"not-established"}),
+            json!({"schema":"chrono-output-policy-migration/v1","previous_policy_sha256":previous_digest,"policy_sha256":current_digest,"outputs_preserved":preserved.len(),"roots_preserved":roots.len(),"effects":"metadata-binding-only","completion":"not-established","scope":{"kind":if originals.is_some(){"declared-components"}else{"registered-inventory"},"complete":false}}),
         )
     }
     /// Enroll exactly the producer-owned path before writing. Caller must exclude old producers
@@ -1743,13 +1754,10 @@ impl Inventory {
         self.round_metadata.set(None);
         result
     }
-    /// A caller can name its actual remaining originals without re-enumerating
-    /// unrelated diagnostic metadata. The same limits and dependency guards apply.
-    pub fn maintain_originals(&self, originals: &[String]) -> Result<Value, String> {
+    /// Shared explicit selection bounds for migration and maintenance.
+    fn validate_originals(&self, originals: &[String]) -> Result<(), String> {
         if !crate::verified_release::unique_selection(originals, self.policy.max_related_outputs) {
-            return Err(
-                "explicit maintenance originals are empty, duplicated or over capacity".into(),
-            );
+            return Err("explicit originals are empty, duplicated or over capacity".into());
         }
         for id in originals {
             let path = self.object_directory(id)?.join("record.json");
@@ -1757,9 +1765,15 @@ impl Inventory {
                 .map_err(|e| e.to_string())?
                 .is_file()
             {
-                return Err("explicit maintenance original declaration is unavailable".into());
+                return Err("explicit original declaration is unavailable".into());
             }
         }
+        Ok(())
+    }
+    /// A caller can name its actual remaining originals without re-enumerating
+    /// unrelated diagnostic metadata. The same limits and dependency guards apply.
+    pub fn maintain_originals(&self, originals: &[String]) -> Result<Value, String> {
+        self.validate_originals(originals)?;
         self.round_metadata
             .set(Some(self.policy.max_metadata_bytes_per_round));
         let result = self.maintain_round(now()?, Some(originals));

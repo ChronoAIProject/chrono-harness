@@ -12,7 +12,7 @@
 cargo build --locked --manifest-path crates/pr/Cargo.toml
 ```
 
-当前源码入口为 `crates/pr/target/debug/chrono-pr`；尚未加入公开发布包。使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2，登记 `pr-original` 的操作目录范围和 `check-original` 的同级进程原件范围；缺失时不派发 gh。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
+当前源码入口为 `crates/pr/target/debug/chrono-pr`；尚未加入公开发布包。本宿主将 `crates/pr/target/` 声明为 `finish-dispose`，因为构建完成后的 PR 命令仍需该执行物。普通 `build.pr` 使用结束后保留目录，调用方核对全部 PR 操作完成再走正式 finish；合格年龄回收仍须排除实际使用方。使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2，登记 `pr-original` 的操作目录范围和 `check-original` 的同级进程原件范围；缺失时不派发 gh。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
 
 ```sh
 crates/pr/target/debug/chrono-pr pr-open \

@@ -185,7 +185,7 @@ fn main() {
         let result = Inventory::adopted(root)
             .unwrap()
             .unwrap()
-            .migrate_policy(&fs::read(previous).unwrap())
+            .migrate_policy(&fs::read(previous).unwrap(), None)
             .unwrap();
         println!("{result}");
         return;
