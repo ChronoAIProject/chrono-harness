@@ -90,6 +90,28 @@ fn registered_startup_chain_requires_declared_mock_evidence() {
 }
 
 #[test]
+fn startup_commands_preserve_registered_arguments() {
+    let old = host();
+    for operation in [
+        "host.bootstrap-shared-produce",
+        "host.bootstrap-shared-install-unit_runner",
+    ] {
+        let mut candidate = host();
+        action(&mut candidate, operation)["argv"]
+            .as_array_mut()
+            .unwrap()
+            .insert(0, json!("-B"));
+        let error =
+            consumption::validate_delta(Some(&old), &candidate, &paths(&[CORE]), &BTreeSet::new())
+                .unwrap_err();
+        assert!(
+            error.contains("producer/caller invocation mismatch"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn startup_data_requires_installed_output_and_selected_producer_and_consumer() {
     for defect in [
         "uninstalled",

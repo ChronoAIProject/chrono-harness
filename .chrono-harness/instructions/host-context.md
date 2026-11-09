@@ -6,7 +6,7 @@
 
 本宿主以当前规范为合同，无需兼容历史版本、格式、接口或执行路径。变更时，同步迁移当前使用方和登记，移除只为历史兼容保留的实现与测试。旧版本材料仅保留其事实用途，不产生继续支持的义务。固定基线 DELTA、必要原件和正在使用的对象，仍按当前合同保护。
 
-本仓维护 Rust harness 产品，以及独立的宿主采用数据。[SPEC](../../SPEC.md) 是产品合同，尚未全部实现；当前结果和缺口见[覆盖表](../../docs/spec-coverage.md)。每个生产项目及其专属测试项目都有独立的 manifest、lock 和 target，没有根 workspace。独立 Python 脚本与测试也明确登记配对。
+本仓维护 Rust harness 产品，以及独立的宿主采用数据。[SPEC](../../SPEC.md) 是产品合同，尚未全部实现；当前结果和缺口见[覆盖表](../../docs/spec-coverage.md)。每个生产项目及其专属测试项目都有独立的 manifest、lock 和 target，没有根 workspace。Python 业务示例及其测试由示例宿主独立登记配对。
 
 产品默认数据归 `assets/instructions/catalog.json` 和 `assets/instructions/default-manifest.json` 维护。本宿主的选择归本目录的 [catalog](catalog.json)、[manifest](manifest.json) 和本文件维护。产品资产用于编译和测试；宿主数据及现有生成副本用于运行。升级二进制或重复 init 不会覆盖宿主选择。采用新默认时，要比较所选产品版本的 catalog／default-manifest，保留定制，再编辑宿主源并 generate；步骤见[新默认的宿主采用边界](../../docs/instructions.md#新默认的宿主采用边界)，没有自动更新。CLAUDE.md 是生成的中文根指南；AGENTS.md 是目标字面值为 `CLAUDE.md` 的相对符号链接，不手改生成内容。
 
@@ -44,7 +44,7 @@
 /bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json
 ```
 
-检查前，从候选源码执行 Rust core bootstrap。薄 shell 入口先委托已有所有者保护前端编译，随后运行保留在 bin 中的前端；首次 Git main 检出可以初始化。Rust 版本、操作和安装产物由 bootstrap-core.json／projects.json 决定，不用环境默认值替代，也不改全局默认工具链。全部现役 bootstrap profile、所有者资格读取和共享产物消费均由 Rust 执行。发布编排使用 Rust 与薄 shell，部分 Python 接口测试样本仍需解释器；其工具绑定归各自登记，不再为 bootstrap 保留 Python 入口。工具观察或摘要不能证明完整来源。关联检出缺少兼容协调者或所有权信息时，在构建前失败。详见 [CI 启动](../../docs/ci.md#this-repository)和[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
+检查前，从候选源码执行 Rust core bootstrap。薄 shell 入口先委托已有所有者保护前端编译，随后运行保留在 bin 中的前端；首次 Git main 检出可以初始化。Rust 版本、操作和安装产物由 bootstrap-core.json／projects.json 决定，不用环境默认值替代，也不改全局默认工具链。全部现役 bootstrap profile、所有者资格读取和共享产物消费均由 Rust 执行。发布编排和通用测试子程序使用 Rust 与薄 shell；Python 解释器由 Python 业务示例按自身登记使用，安装、bootstrap 和本仓通用检查不因此要求 Python。工具观察或摘要不能证明完整来源。关联检出缺少兼容协调者或所有权信息时，在构建前失败。详见 [CI 启动](../../docs/ci.md#this-repository)和[生命周期参与](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)。
 
 ### 本地／CI 检查
 
