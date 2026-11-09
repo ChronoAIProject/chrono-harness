@@ -5,8 +5,8 @@
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_host_release::verified_recipe as policy;
-use policy::{DependencyResult, Invocation};
 use policy::delivery;
+use policy::{DependencyResult, Invocation};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
