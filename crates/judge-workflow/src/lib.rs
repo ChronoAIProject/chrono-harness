@@ -3,6 +3,7 @@ mod branch;
 mod certificate;
 mod evidence;
 mod transition;
+mod verified_branch;
 pub use branch::{branch, current_observation_age, observation_age};
 use chrono_harness::{
     facts, json,

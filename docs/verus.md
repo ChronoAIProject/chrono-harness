@@ -896,6 +896,25 @@ filemap 的原 `valid_types` 已移到现役 `verified_graph.rs`，直接消费�
 JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成义务。
 额外证明、编译、运行、CI与存储总成本未测；不据此声明全仓覆盖门已完成。
 
+## 工作流来源分支准入
+
+`crates/judge-workflow/src/verified_branch.rs` 拥有来源分支类型的唯一准入判断。
+它要求 feature／integration 前缀恰好命中一个，且来源分支不能是目标分支；结果为
+`Feature`、`Integration` 或拒绝。`branch.rs` 只负责读取登记前缀、判断字符串前缀是否命中，
+再直接消费该 Verus 函数并把枚举映射为现有 JSON 的 `feature`／`integration` 文本。
+因此前缀字符串和 Git ref 校验仍是明确适配器，仓内来源类型选择由已证明谓词决定。
+
+同一证明根还拥有提交落后数的边界判断：`commit_count_within_limit` 只在实际落后数不超过
+登记上限时返回通过。`branch.rs` 负责把已验证的 JSON 浮点上限正规化为无符号计数，随后直接
+消费该 Verus 结果；等值通过、超一拒绝和 `usize` 最大值边界由独立预期覆盖。时间计算、Git
+历史遍历和 JSON 解码仍是明确适配器，尚未由本批证明。
+
+生产根和独立边界根分别登记为 `verify.judge-workflow` 与
+`verify.judge-workflow-tests`，由 workflow 的真实 branch／consumer 测试计划共同验收。
+独立预期覆盖单一前缀、零／双前缀、目标分支及提交落后数边界；本批只覆盖来源类型和提交数
+准入，时间新鲜度、
+Git 历史、JSON 解码和完整 workflow 事务仍不在该证明内。
+
 ## 专属测试的语言配对
 
 projects 的实际 `dedicated_pair` 直接把登记中的 implementation／testing 字符串借给

@@ -1,3 +1,4 @@
+use crate::verified_branch::{self, SourceKind};
 use chrono_harness::facts;
 use serde_json::{Value, json};
 use std::{collections::BTreeSet, path::Path};
@@ -85,22 +86,24 @@ pub fn with_reader(
     reader
         .git(root, &["check-ref-format", &format!("refs/heads/{source}")])
         .map_err(|e| format!("E_BRANCH_CONTEXT: invalid Git branch name: {e}"))?;
-    let mut kinds = vec![];
-    for (kind, key) in [
-        ("feature", "feature_prefix"),
-        ("integration", "integration_prefix"),
-    ] {
-        let prefix = text(w, key)?;
-        if source
-            .strip_prefix(prefix)
-            .is_some_and(|tail| !tail.is_empty())
-        {
-            kinds.push(kind)
-        }
-    }
-    if kinds.len() != 1 || source == text(w, "target_branch")? {
-        return Err("E_BRANCH_CONTEXT: missing or ambiguous registered source branch".into());
-    }
+    let feature_prefix = text(w, "feature_prefix")?;
+    let integration_prefix = text(w, "integration_prefix")?;
+    let feature_matches = source
+        .strip_prefix(feature_prefix)
+        .is_some_and(|tail| !tail.is_empty());
+    let integration_matches = source
+        .strip_prefix(integration_prefix)
+        .is_some_and(|tail| !tail.is_empty());
+    let kind = verified_branch::select_source_kind(
+        feature_matches,
+        integration_matches,
+        source == text(w, "target_branch")?,
+    )
+    .ok_or("E_BRANCH_CONTEXT: missing or ambiguous registered source branch")?;
+    let kind_name = match kind {
+        SourceKind::Feature => "feature",
+        SourceKind::Integration => "integration",
+    };
     let age = observation_age(ctx, w)?;
     let dev_ancestors = commits(reader, root, dev)?;
     let branch_ancestors = commits(reader, root, candidate)?;
@@ -128,13 +131,16 @@ pub fn with_reader(
         .as_f64()
         .filter(|v| v.is_finite() && *v >= 0.0)
         .ok_or("E_BRANCH_CONTEXT: invalid count threshold")?;
-    if behind as f64 > count {
+    // The JSON/floating-point threshold is an external input adapter. Once
+    // validated and normalized, the admission decision is owned by Verus.
+    let max_behind = count as usize;
+    if !verified_branch::commit_count_within_limit(behind, max_behind) {
         return Err(format!(
             "E_BRANCH_STALE: behind={behind}; age_ns={}",
             age.whole_nanoseconds()
         ));
     }
     Ok(
-        json!({"kind":kinds[0],"branch_ref":source,"fork_point":fork,"behind_commits":behind,"age_seconds":age.as_seconds_f64(),"branch_started_at":ctx["branch_started_at"],"observed_at":ctx["observed_at"]}),
+        json!({"kind":kind_name,"branch_ref":source,"fork_point":fork,"behind_commits":behind,"age_seconds":age.as_seconds_f64(),"branch_started_at":ctx["branch_started_at"],"observed_at":ctx["observed_at"]}),
     )
 }
