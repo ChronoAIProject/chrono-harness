@@ -58,6 +58,8 @@ v1 输出和无依赖行为保留。v2 增加固定提交的 `download_artifact_
 
 宿主唯一完整发布入口是 `.chrono-harness/release/native.sh`，它委托现有 Rust bootstrap 构建并安装 `chrono-host-release`，再直接运行该程序。配方解析、调度、状态与原件核验均由 `.chrono-harness/release/native/` 的 Rust 项目负责。`build.json` 管理 unit ID、manifest／asset 或原始 operation、依赖、handoff 目录、成本、原生 job 对应、局部并发和时限。`projects.json` 独自管理原测试 argv，`plan.json` 独自管理资产源路径，`consumer_staging` 列全部保留目的路径；不扫描目录、名称或测试正文找单元。
 
+FILEMAP 将构建配方、资产计划和项目动作表登记为发布程序的运行输入，将发布 CI 源登记为工作流生成器的运行输入。各自的测试边另行保留；测试引用不能代替实际生产使用关系。
+
 ```sh
 /bin/bash .chrono-harness/release/native.sh ROOT .chrono-harness/ci/bootstrap-release-frontend.json ABSENT_OUTPUT
 ```

@@ -74,6 +74,13 @@ JSON 解析仍由适配器负责，但 `bound`／`absent` 的绑定要求、无�
 `declared-complete` 对 `unresolved` 的拒绝以及 `absent` 识别均直接消费同一份
 Verus 执行函数；本批仍只覆盖该登记状态闭包，不宣称全仓证明完成。
 
+本批把 `judge-cost` 的声明成本未知坐标判定迁入
+`crates/judge-cost/src/verified_cost.rs`，由 `verify.judge-cost` 和
+`verify.judge-cost-tests` 分别验证生产谓词与独立边界预期。`produce` 在生成
+`unknown` 成本记录前直接调用该 Verus 函数；JSON 字段读取和坐标列表编码仍是
+明确的适配器。现役 cost judge 的消费者回归同时核对已知、缺失和混合坐标，
+本批只覆盖四个资源坐标的未知判定，不宣称成本模型、测量或全仓覆盖已完成。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取
