@@ -534,7 +534,14 @@ impl Inventory {
             let directory = self.path_directory(&path)?;
             fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
             let marker = no_symlink_parents(&directory, "address.json")?;
-            if self.read_metadata::<Address>(&marker)?.is_none() {
+            // Birth needs only an absence observation here. Decode and validate
+            // an existing declaration once, under the acquired path lease.
+            let missing = match fs::symlink_metadata(&marker) {
+                Ok(_) => false,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                Err(error) => return Err(error.to_string()),
+            };
+            if missing {
                 let initial = DirectoryLease::acquire(
                     &directory,
                     true,
@@ -717,8 +724,12 @@ impl Inventory {
             } else {
                 fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
                 leases.push(
-                    DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
-                        .ok_or("retention consumer metadata is busy")?,
+                    DirectoryLease::acquire(
+                        &directory,
+                        true,
+                        wait.then(|| Duration::from_secs(5)),
+                    )?
+                    .ok_or("retention consumer metadata is busy")?,
                 );
                 let actual = self.read_role(&role)?;
                 if actual.as_ref().map(|r| (&r.ids, &r.attached))
@@ -754,8 +765,12 @@ impl Inventory {
             }
             if !discover_under_lease {
                 leases.push(
-                    DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
-                        .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
+                    DirectoryLease::acquire(
+                        &directory,
+                        true,
+                        wait.then(|| Duration::from_secs(5)),
+                    )?
+                    .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
                 );
             }
             let record = if let Some((_, path)) = birth.as_ref().filter(|b| b.0 == id) {
