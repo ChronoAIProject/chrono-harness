@@ -1997,6 +1997,8 @@
             "branch",
             "--test",
             "consumer",
+            "--test",
+            "verified_evidence",
             "--",
             "--skip",
             "full_units::"
