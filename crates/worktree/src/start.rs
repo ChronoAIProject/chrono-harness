@@ -365,7 +365,16 @@ pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result
     let exclusions = facts::artifact_exclusions(&artifacts);
     // Read both ignored and nonignored files together. An ignore-rule change
     // between two complementary queries must not make a present file disappear.
-    let mut args = vec!["ls-files", "--others", "-z", "--", "."];
+    // Admission only needs to find unregistered work, not list every file in it.
+    let mut args = vec![
+        "ls-files",
+        "--others",
+        "--directory",
+        "--no-empty-directory",
+        "-z",
+        "--",
+        ".",
+    ];
     args.extend(exclusions.iter().map(String::as_str));
     let observed: Vec<_> = paths(r.literal_inventory(target, &args)?)?
         .into_iter()

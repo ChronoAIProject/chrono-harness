@@ -1802,7 +1802,7 @@ fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_f
     fs::create_dir_all(&allowed).unwrap();
     fs::write(allowed.join("kept"), "declared").unwrap();
     fs::create_dir_all(h.root.join("empty-unregistered/nested")).unwrap();
-    fs::create_dir_all(h.root.join("CacheCase/allowed/empty")).unwrap();
+    fs::create_dir_all(allowed.join("empty")).unwrap();
     for (i, path) in [
         "cache[1]/outside",
         "cache1/allowed/foreign",
