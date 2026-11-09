@@ -9,8 +9,16 @@ use chrono_ci::verified_download as policy;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
+
+fn expect_true(actual: bool)
+    requires actual,
+{
+    if !actual { panic!(); }
+}
 
 proof fn parsed_result_is_unique(bytes: Seq<u8>, left: Option<u16>, right: Option<u16>)
     requires policy::parsed(bytes, left), policy::parsed(bytes, right),
@@ -43,7 +51,21 @@ fn expect(bytes: &[u8], expected: Option<u16>)
 {
     let actual = policy::http_status(bytes);
     proof { parsed_result_is_unique(bytes@, actual, expected); }
-    assert(actual == expected);
+    expect_true(actual == expected);
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+#[should_panic]
+fn runtime_http_expectation_keeps_its_failure_branch() {
+    expect(&[], Some(503));
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+#[should_panic]
+fn runtime_retry_expectation_keeps_its_failure_branch() {
+    expect_true(false);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -107,7 +129,7 @@ fn every_missing_retry_obligation_stops_another_download() {
     let no_stdout = policy::retry(false, false, true, true, 0, 1, true);
     let no_stderr = policy::retry(false, false, true, true, 1, 0, true);
     let deadline = policy::retry(false, false, true, true, 1, 1, false);
-    assert(allowed && !successful && !failed_process && !exhausted && !unlisted
+    expect_true(allowed && !successful && !failed_process && !exhausted && !unlisted
         && !no_stdout && !no_stderr && !deadline);
 }
 
