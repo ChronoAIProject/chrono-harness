@@ -716,11 +716,15 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
     use std::io::Read;
     let root = Path::new(config["root"].as_str().unwrap());
     assert_eq!(std::env::current_dir().unwrap(), root);
-    let args: Vec<_> = arguments
-        .iter()
-        .map(|arg| arg.to_str().unwrap())
-        .filter(|arg| *arg != "--no-replace-objects")
-        .collect();
+    let mut args = Vec::new();
+    let mut arguments = arguments.iter();
+    while let Some(arg) = arguments.next() {
+        match arg.to_str().unwrap() {
+            "--no-replace-objects" | "--no-optional-locks" => (),
+            "-C" => assert_eq!(Path::new(arguments.next().unwrap()), root),
+            arg => args.push(arg),
+        }
+    }
     let head = "a".repeat(64);
     let object = |bytes: &[u8]| {
         let mut framed = format!("blob {}\0", bytes.len()).into_bytes();
