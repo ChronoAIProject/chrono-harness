@@ -116,15 +116,8 @@ fn paths(raw: Vec<u8>) -> Result<Vec<String>, String> {
         .map(|v| utf8(v.to_vec()))
         .collect()
 }
-pub fn index_flags(root: &Path) -> Result<Vec<IndexFlag>, String> {
-    Reader::legacy().index_flags(root)
-}
 pub fn checkout(root: &Path, candidate: &str) -> Result<Checkout, String> {
     Reader::legacy().checkout(root, candidate)
-}
-/// Export immutable bytes, never run base code; supported files are read-only.
-pub fn export(root: &Path, oid: &str, t: &Tree, dest: &Path) -> Result<(), String> {
-    Reader::legacy().export(root, oid, t, dest)
 }
 pub fn registry_paths(config: &Value, path: &str) -> Result<Vec<String>, String> {
     let mut paths = vec![path.to_string()];
@@ -371,9 +364,6 @@ impl Reader {
             untracked: self.untracked_excluding(root, artifacts)?,
             index_flags: self.index_flags(root)?,
         })
-    }
-    pub fn export(&self, root: &Path, oid: &str, t: &Tree, dest: &Path) -> Result<(), String> {
-        self.export_limited(root, oid, t, dest, u64::MAX)
     }
     /// Preserve the exact source bytes while enforcing the output owner's reservation before writes.
     pub fn export_limited(
