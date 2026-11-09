@@ -19,6 +19,7 @@ bench = false
 test-support = []
 
 [dependencies]
+chrono-diagnostics = { path = "../diagnostics" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"

@@ -111,7 +111,7 @@ retention 明确登记 `bootstrap-owner-stage` 的 `.chrono-harness/bin/owner-st
 
 完整治理登记仍为 proposed，`enforcement=not-implemented`、`input_closure=incomplete`。Cargo、编译器、SDK、配置及其他适用输入和执行程序的绑定，仍有缺口。
 
-宿主 Git facts 采用既有 `chrono-git-configs/v1` 平台映射，macOS／Linux 分别选择 macos-27／linux-release。四份 schema4 政策的 Git 使用已登记 PATH 一次解析，版本预期为 null，不维护主机执行物 SHA／版本清单。读取器保留实际路径、摘要、原版本进程及逐调用字节漂移检查；显式预期与 full v3 合同继续严格核验。[工作树政策](../worktree.json)同样使用运行内实际绑定。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不复制为跟踪白名单。
+宿主 Git facts 采用既有 `chrono-git-configs/v1` 平台映射，macOS／Linux 分别选择 macos-27／linux-release。现役 schema4 政策的 Git 使用已登记 PATH 一次解析，版本预期为 null，不维护主机执行物 SHA／版本清单。读取器保留实际路径、摘要、原版本进程及逐调用字节漂移检查；显式预期与 full v3 合同继续严格核验。[工作树政策](../worktree.json)同样使用运行内实际绑定。主机、镜像、路径及工具观察直接查本轮 state／CI 原件，不复制为跟踪白名单。
 
 本批产品与宿主政策同步修改：scoped 接受实际观察，full v3 的显式预期合同不变。固定基线的身份／政策只由候选解码器作为数据解释，不执行历史 Git。缓存与发布另有消费者的明确原生政策元数据继续保留。候选标准／原生验收、真实协调者部署及随后 canonical 消费须分别核实，不由声明证明采用；完整成本仍未测。
 

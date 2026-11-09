@@ -26,7 +26,7 @@ tail -F .chrono-harness/state/logs/runtime.jsonl
 
 日志目录专用于当前家族。目录符号链接、成员符号链接或非普通文件会被拒绝；无关文件保持原状。单条记录超限不截断，日志失败由 `finish()` 保留，入口向 stderr 尝试发布 `runtime.logging_failed` 及原生原因／相关错误。初始化失败阻止业务启动；运行中失败保留原业务输出和返回码，入口最终退出 2。应急 stderr 也不可用时，只能保留失败退出，不能声称已经写下完整记录。文件关闭不代表 fsync；突然终止、断电和任意外部修改的完整恢复不在此保证内。
 
-入口使用明确 `--host-root`；Rust bootstrap 按实际命令选择位置参数中的宿主，再通过同一 `cli_at` 适配器记录。未指定宿主时使用真实 cwd，不向父目录搜索，也不使用新的环境开关。没有该文件时，沿用使用方原目的；这不证明该宿主已经采用文件日志。当前接入 runner、worktree、CI、cache、inputs、distribution、本宿主 Rust bootstrap 及 Rust 判官入口。独立 instructions 工具、Python 宿主脚本、非 Rust 适配和所有领域错误链的迁移仍待完成，不据此宣称完整 §7.1／§7.2 已实现。
+入口使用明确 `--host-root`；Rust bootstrap 按实际命令选择位置参数中的宿主，再通过同一 `cli_at` 适配器记录。未指定宿主时使用真实 cwd，不向父目录搜索，也不使用新的环境开关。没有该文件时，沿用使用方原目的；这不证明该宿主已经采用文件日志。当前接入 instructions、runner、worktree、CI、cache、inputs、distribution、本宿主 Rust bootstrap 及 Rust 判官入口。Python 宿主脚本、非 Rust 适配和所有领域错误链的迁移仍待完成，不据此宣称完整 §7.1／§7.2 已实现。
 
 CI 的 `chrono-log-stderr/v1` 仍要求原 stderr：检查 logger 在保留该原通道的同时写入滚动文件，沿用原请求／计划／操作上下文与真实等待行为。`stderr` 配置只控制普通入口的新增副本，不能取消已登记的判官证据通道。机器 stdout 不加入日志。滚动文件不接受不可变证据引用；报告引用的原始输出和错误继续由现有 retention 所有者回收，不能让日志轮换删除它们。
 
