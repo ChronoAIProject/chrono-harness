@@ -104,7 +104,7 @@ fn startup_commands_preserve_registered_arguments() {
         let error = consumption::validate_delta(
             Some(&old),
             &candidate,
-            &paths(&[PROJECTS]),
+            &paths(&[CORE]),
             &BTreeSet::new(),
         )
         .unwrap_err();
