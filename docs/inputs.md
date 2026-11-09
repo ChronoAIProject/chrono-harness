@@ -33,7 +33,7 @@ macOS 27 不把某次源码 bootstrap 的安装摘要作为后续构建的固定
 
 本仓当前 scoped 入口没有调用已安装的 `chrono-inputs`，因此 core 的获取、构建、安装、共享传递及宿主工具声明一同移除。inputs／workflow 测试仍构建并运行项目自身的程序，发布也保留对应资产；这些使用方的计划和缓存继续有效。未来采用完整输入采集时，须由实际入口登记所需安装，不能据此为当前单元预先准备。
 
-macOS 27 不固定 shasum、tar 的系统版本输出；二者使用与 macOS 26 政策相同的 `expected_version: null`，校验／解压操作继续登记。Verus 下载由 `host.verus-download` 委托 bootstrap 程序，curl 路径由该操作的参数指定；外层工具表不再重复登记没有直接 action 的 curl。Verus 的所选版本、下载地址、摘要和证明结果合同归现役 bootstrap／项目操作。无实际使用方的 `CHRONO_XCODE_CONTENTS` 不进入环境。SDK、开发目录和链接器不覆盖为某一 Xcode 安装的绝对路径；沿已登记变量继承当前选择，未设置时由既有 Rust／Cargo 和 Xcode 工具选择。这些取舍不补齐 full 输入或执行物绑定。
+macOS 27 的 tar 使用 `expected_version: null`，负责现役解包操作。Verus 下载和包摘要校验由 `host.verus-download` 委托 Rust bootstrap 程序完成；外层不再重复调用 shasum 或登记其专属工具槽位。curl 路径由下载操作的参数指定，外层工具表不重复登记没有直接 action 的 curl。Verus 的所选版本、下载地址、摘要和证明结果合同归现役 bootstrap／项目操作。无实际使用方的 `CHRONO_XCODE_CONTENTS` 不进入环境。SDK、开发目录和链接器不覆盖为某一 Xcode 安装的绝对路径；沿已登记变量继承当前选择，未设置时由既有 Rust／Cargo 和 Xcode 工具选择。这些取舍不补齐 full 输入或执行物绑定。
 
 普通构建与行为测试沿各自登记计划执行。
 
@@ -145,7 +145,7 @@ v2 位置拒绝符号链接路径段，包括悬空链接，以及 `..`。平台
 
 普通构建继续使用登记的锁定 Cargo 操作；core／所有者 bootstrap 仍实际调用的 fetch 保留。安装工具与原件由当前生产者按自己的实际使用方保管，不为历史盘点重建主机快照。普通输入快照与传输保持各自合同；其余采用仍须核对当前使用方，不能由测试或声明存在证明必要。
 
-根选择器采用既有 `chrono-git-configs/v1` 平台映射，四份 scoped schema4 政策退役 Git SHA／版本白名单、重复输入和对应 FILEMAP 边。Git facts 与工作树均一次绑定实际 Git，保留真实版本进程和逐调用字节保护；不另造本机快照或激活层。显式预期及 full v3 合同继续严格核验。格式与固定基线数据边界见[Git 选择](git-facts.md#exact-host-executable-selection)和[工作树政策](worktree.md#git-身份与固定输入)。
+根选择器采用既有 `chrono-git-configs/v1` 平台映射，宿主 scoped schema4 政策退役 Git SHA／版本白名单、重复输入和对应 FILEMAP 边。Git facts 与工作树均一次绑定实际 Git，保留真实版本进程和逐调用字节保护；不另造本机快照或激活层。显式预期及 full v3 合同继续严格核验。格式与固定基线数据边界见[Git 选择](git-facts.md#exact-host-executable-selection)和[工作树政策](worktree.md#git-身份与固定输入)。
 
 旧样本、声明和比较归 Git 历史；仍有用途的缺失原件与独有工作由[输入保管者](input-source-custody.md)负责。退役不补齐历史观察，也不证明完整输入、固定两端原件、full CI 验收或同判。
 

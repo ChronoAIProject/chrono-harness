@@ -2,7 +2,7 @@
 
 本文维护产品要求的覆盖表，不是运行日志，也不是第二份政策。目标仍是完整 SPEC。`implemented` 表示所列合同有真实生产者和行为测试，不表示本宿主已启用或交付；`partial` 表示仍有缺口。五份完整宿主登记仍为 proposed，输入未完整、执行物绑定缺失。有限宿主的 registration／filemap 成功不等于七判官通过，本地检查不证明原生 CI 或落地。
 
-宿主 Git facts 的当前必要性是运行内固定同一实际 Git，保留原结果并拒绝后续字节漂移；没有消费者要求跟踪每台主机的预期 SHA／版本。本仓已退役四份 scoped 政策的白名单和重复输入，根入口复用 v1 平台映射，实际身份归 state／线上原件。声明判断和可选预期比较使用同源 Verus 及独立边界，mock Git 回归覆盖观察、显式预期拒绝和执行前漂移；full v3 的显式合同保留。[退役及采用交付](https://github.com/ChronoAIProject/chrono-harness/pull/419)已核对标准检查、macOS 原生范围和真实共享协调者的公开入口；其他平台、完整输入及全对象必要性仍须各自的验收证据。
+宿主 Git facts 的当前必要性是运行内固定同一实际 Git，保留原结果并拒绝后续字节漂移；没有消费者要求跟踪每台主机的预期 SHA／版本。本仓已退役 scoped 政策的白名单和重复输入，根入口复用 v1 平台映射，实际身份归 state／线上原件。声明判断和可选预期比较使用同源 Verus 及独立边界，mock Git 回归覆盖观察、显式预期拒绝和执行前漂移；full v3 的显式合同保留。[退役及采用交付](https://github.com/ChronoAIProject/chrono-harness/pull/419)已核对标准检查、macOS 原生范围和真实共享协调者的公开入口；其他平台、完整输入及全对象必要性仍须各自的验收证据。
 
 普通完整检查通过，只表示 DELTA 满足现役登记合同。`declared-complete` 是受信任 AI 对宿主治理／输入范围负责的声明，判官核引用、身份、快照和实际操作。registration 当前输出 `completeness_proven:false`，不阻止必需登记及所选检查通过后的普通验收。已知缺输入、必需依赖未解决、缺绑定／快照、漂移仍失败，真实工具链／SDK／配置义务保留；普通验收不要求证明一切隐藏输入都不存在，也不要求 VM。
 
@@ -211,11 +211,13 @@ inputs、worktree-tests、pr 和 pr-tests 没有现役消费的独立预取动�
 
 已退役的 runner／diagnostics 额外 guard、专属主机观察、运行时来源模式和旧分支原生初始盘点，不再列为待激活的宿主义务。旧盘点的工作流、安装／观察声明、探测 helper、专属动作和测试同步退役；core／所有者 bootstrap 实际使用的 fetch 保留。普通锁定 Cargo 构建和行为测试继续执行，通用输入产品仍须核对当前使用方。现役完整宿主登记仍为 proposed／not-implemented／incomplete。
 
-旧安装身份、无人调用的本机观察声明和旧仓库审计快照已移除。四份宿主政策已去除无直接操作的编译器／rustup 重复项；本机 Cargo 通过调用环境解析，bootstrap 继续核官方组件字节，选择合同归[输入所有者](inputs.md#工具链入口与本机路径)。CI／worktree 测试准备也已[移除两份主机 Git 路径表](https://github.com/ChronoAIProject/chrono-harness/pull/462)，复用已有解析器及运行内实际绑定；这不证明外部命令 mock 的完整迁移。保留的政策和功能仍按当前使用方逐项核必要性。线上 CI 运行事实不在本表复制；当前仍需的来源／未完成工作由[输入保管者](input-source-custody.md)负责，历史失败和独有工作不能因本表收敛而被删除。
+旧安装身份、无人调用的本机观察声明和旧仓库审计快照已移除。宿主政策已去除无直接操作的编译器／rustup 重复项；本机 Cargo 通过调用环境解析，bootstrap 继续核官方组件字节，选择合同归[输入所有者](inputs.md#工具链入口与本机路径)。CI／worktree 测试准备也已[移除两份主机 Git 路径表](https://github.com/ChronoAIProject/chrono-harness/pull/462)，复用已有解析器及运行内实际绑定；这不证明外部命令 mock 的完整迁移。保留的政策和功能仍按当前使用方逐项核必要性。线上 CI 运行事实不在本表复制；当前仍需的来源／未完成工作由[输入保管者](input-source-custody.md)负责，历史失败和独有工作不能因本表收敛而被删除。
 
 Cargo 配置输入由宿主内的 `CARGO_HOME` 负责。缓存探测、所选平台检查和发布缓存生产命令使用同一相对目录，复用已有 `config`／`config.toml` 输入，退役 runner 主目录绑定。可重建 Cargo home 归已有缓存生命周期，实际路径和原进程结果归 state／线上原件。具体消费归[缓存](ci-cache.md)和[发布](release-ci.md)所有者；真实原生缓存、平台发布及完整配置输入闭包仍须分别验收。
 
 Verus 下载的 curl 路径由现役 bootstrap 操作参数负责；两份 macOS 工具表及 scoped 检查工具表中的重复 curl 槽位已移除。scoped 也移除无直接 action 的 rustup，bootstrap、发布和缓存各自需要的 rustup 选择继续由原所有者负责，具体边界见[输入说明](inputs.md)。
+
+Verus 包的缓存命中与新下载均由现役 Rust 下载动作核对完整 SHA-256；外层重复的 shasum 动作及其专属工具登记已移除。原下载拒绝、恢复、失败保全测试和证明继续执行，完整成本仍未知。
 
 ## 尚未完成的组合验收
 

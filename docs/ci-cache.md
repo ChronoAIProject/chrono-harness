@@ -35,6 +35,8 @@ bootstrap／发布回执记录传给子进程的值。发布导入／汇总与�
 - 具名缓存，声明 `owner`、登记 `producer` 操作 ID、`consumers`、产物 ID、互不相交的 `compatibility_inputs`／`source_inputs`、`restore`（`exact` 或 `compatible`）。每个列表均非空且成员唯一。
 - `consumer_operations`，将每个消费者绑定到已有方法登记。每个引用用字面宿主 `registry` 路径和 JSON `pointer` 选择一个操作 ID，或非空且唯一的 ID 数组。引用缺失、值错误、订阅缓存的 producer 不在消费者所选操作内，都会在输入探测和原生恢复前失败。计划保留来源摘要和所选 ID，不从语言、路径或运行活动猜方法；声明有效也不证明实际执行。
 
+本宿主的产物归属和 `cache.cargo-registration` 直接读取现役 `macos-27.json` 的 `artifacts` 与 `/tools/0`，发布暂存也复用其中的产物归属，不另维护内容相同的政策副本。这些字段是宿主声明，不是运行主机的观察；Linux 使用方读取它们不会执行 macOS 工具。缓存兼容键包含登记路径，切换来源后使用新的兼容键；原缓存不会因字段相同而继续命中，完整迁移成本未测。
+
 | 输入种类 | 读取与绑定规则 |
 | --- | --- |
 | `file` | 字面路径和预期 `presence`（`present`／`absent`）；存在文件从真实字节计算摘要 |
@@ -192,7 +194,7 @@ Cargo 下载内容由其已有自动清理管理；CI 的工具链目录随隔�
 
 detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
 
-本仓编译缓存的生产者使用专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。bootstrap 配方、四份检查政策和发布源中的缓存生产命令明确选择这个仓库相对目录；发布命令用已有 `/usr/bin/env` 转交变量，不新增调度入口。Cargo 子进程的工作目录是实际检出根，独立检出各自拥有该缓存。
+本仓编译缓存的生产者使用专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。bootstrap 配方、检查政策和发布源中的缓存生产命令明确选择这个仓库相对目录；发布命令用已有 `/usr/bin/env` 转交变量，不新增调度入口。Cargo 子进程的工作目录是实际检出根，独立检出各自拥有该缓存。
 
 缓存的 Cargo／rustc 探测同样明确选择该目录，不再继承另一份 `CARGO_HOME`。所有相关编译缓存复用 `bootstrap.cargo.home-config`／`bootstrap.cargo.home-config-toml` 两项缺失声明；存在任一配置时规划失败，避免恢复与实际构建配置不符的产物。已删除 `/Users/runner`、`/home/runner` 的四条主机目录声明，不展开 HOME，也不另存主机观察。这些选择不证明祖先 Cargo 配置及其余构建输入完整；实际环境、失败和原件继续归本轮 state／线上 CI。
 
@@ -211,6 +213,8 @@ detector 在启动前恢复、启动成功后保存。检查单元通过已有�
 只解包，不另恢复或保存这项缓存。
 冷启动仍下载；本地有效包和恢复包均由[同一下载动作](verus.md)重新计算 SHA-256，
 匹配后才复用。损坏包重新下载，失败不冒充命中，也不跳过证明、测试或后续解包。
+该 Rust 动作也在新包发布前核对完整 SHA-256；启动配方随后直接解包，移除重复重读同一包的 shasum 操作及其工具登记。
+既有下载测试继续覆盖缓存命中、坏包恢复、坏下载拒绝和失败保全；这项删减不提供并发写入隔离，完整耗时收益未测。
 
 **启动实现与宿主政策同改：**新增归档准备判断、Rust 行为测试、独立 Verus 边界预期，
 并登记实际产物、使用方和原生 restore／save 投影。每次命中增加一次包摘要计算，
