@@ -2,14 +2,27 @@ use serde_json::{Value, json};
 use std::{fs, process::Command};
 
 fn execute(root: &std::path::Path, program: &Value) -> std::process::Output {
-    fs::write(root.join("check.case"), serde_json::to_vec(program).unwrap()).unwrap();
+    fs::write(
+        root.join("check.case"),
+        serde_json::to_vec(program).unwrap(),
+    )
+    .unwrap();
     Command::new(env!("CARGO_BIN_EXE_chrono-test-project-execution"))
         .current_dir(root)
         .env_clear()
         .env("EMPTY", "")
         .env("DECLARED_EMPTY", "")
-        .env("FACTS_GIT", env!("CARGO_BIN_EXE_chrono-test-project-execution"))
-        .args(["file", "check.case", "$HOME `literal` <tag>", "", "line\nnext"])
+        .env(
+            "FACTS_GIT",
+            env!("CARGO_BIN_EXE_chrono-test-project-execution"),
+        )
+        .args([
+            "file",
+            "check.case",
+            "$HOME `literal` <tag>",
+            "",
+            "line\nnext",
+        ])
         .output()
         .unwrap()
 }
@@ -83,7 +96,10 @@ fn environment_observation_and_write_keep_actual_exit_and_bytes() {
     );
     assert_eq!(output.status.code(), Some(9), "{output:?}");
     assert!(output.stderr.is_empty());
-    assert_eq!(serde_json::from_slice::<Value>(&output.stdout).unwrap(), json!([null, ""]));
+    assert_eq!(
+        serde_json::from_slice::<Value>(&output.stdout).unwrap(),
+        json!([null, ""])
+    );
     assert_eq!(fs::read(root.path().join("input")).unwrap(), b"after");
     assert!(!root.path().join("not-reached").exists());
 }
@@ -105,10 +121,17 @@ fn shared_preparation_count_is_checked_in_the_child() {
 fn invalid_program_and_product_are_rejected_without_effects() {
     for (program, product) in [
         (json!({"unknown":"program"}), "DoubleAdd"),
-        (json!([{"CheckProduct":{"path":"product.case","input":21,"expected":42}}]), "UnknownProduct"),
+        (
+            json!([{"CheckProduct":{"path":"product.case","input":21,"expected":42}}]),
+            "UnknownProduct",
+        ),
     ] {
         let root = tempfile::tempdir().unwrap();
-        fs::write(root.path().join("product.case"), serde_json::to_vec(product).unwrap()).unwrap();
+        fs::write(
+            root.path().join("product.case"),
+            serde_json::to_vec(product).unwrap(),
+        )
+        .unwrap();
         let output = execute(root.path(), &program);
         assert!(!output.status.success(), "{output:?}");
         assert!(output.stdout.is_empty());
@@ -130,7 +153,10 @@ fn native_input_probe_uses_the_declared_tool_and_observes_actual_absence() {
     let rejected = Command::new(env!("CARGO_BIN_EXE_chrono-test-project-execution"))
         .current_dir(root.path())
         .env_clear()
-        .env("FACTS_GIT", env!("CARGO_BIN_EXE_chrono-test-project-execution"))
+        .env(
+            "FACTS_GIT",
+            env!("CARGO_BIN_EXE_chrono-test-project-execution"),
+        )
         .args(["file", "check.case"])
         .output()
         .unwrap();

@@ -1,10 +1,10 @@
 mod execution_fixture;
 
-use execution_fixture::Step;
+use execution_fixture::{Product, Step};
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
-use std::process::ExitCode;
+use std::process::{Command, ExitCode};
 use std::time::Duration;
 
 fn require(path: &str, expected: &[u8]) -> io::Result<()> {
@@ -18,7 +18,7 @@ fn require(path: &str, expected: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
-fn run(steps: Vec<Step>) -> io::Result<u8> {
+fn run(steps: Vec<Step>, arguments: &[String]) -> io::Result<u8> {
     for step in steps {
         match step {
             Step::Stdout(bytes) => {
@@ -43,7 +43,78 @@ fn run(steps: Vec<Step>) -> io::Result<u8> {
                 .write(true)
                 .open(path)?
                 .write_all(&bytes)?,
+            Step::Write { path, bytes } => fs::write(path, bytes)?,
             Step::Require { path, bytes } => require(&path, &bytes)?,
+            Step::RequireSuffix { path, bytes } => {
+                if !fs::read(&path)?.ends_with(&bytes) {
+                    return Err(io::Error::other(format!("{path}: required suffix absent")));
+                }
+            }
+            Step::RequireCount { path, byte, count } => {
+                if fs::read(&path)?
+                    .iter()
+                    .filter(|&&value| value == byte)
+                    .count()
+                    != count
+                {
+                    return Err(io::Error::other(format!("{path}: required count differs")));
+                }
+            }
+            Step::CheckProduct {
+                path,
+                input,
+                expected,
+            } => {
+                let product: Product = serde_json::from_slice(&fs::read(&path)?)?;
+                let actual = product.evaluate(input);
+                if actual != expected {
+                    return Err(io::Error::other(format!(
+                        "{path}: expected {expected}, observed {actual}"
+                    )));
+                }
+            }
+            Step::ObserveProcess => {
+                serde_json::to_writer(
+                    io::stdout().lock(),
+                    &serde_json::json!([
+                        arguments,
+                        std::env::current_dir()?,
+                        std::env::var("EMPTY").ok(),
+                        std::env::var("ABSENT").ok()
+                    ]),
+                )?;
+                println!();
+            }
+            Step::ObserveEnvironment { names } => {
+                let values: Vec<_> = names.iter().map(|name| std::env::var(name).ok()).collect();
+                serde_json::to_writer(io::stdout().lock(), &values)?;
+                println!();
+            }
+            Step::CheckNativeInputs { path } => {
+                let tool = std::env::var_os("FACTS_GIT")
+                    .ok_or_else(|| io::Error::other("FACTS_GIT absent"))?;
+                let version = Command::new(tool).arg("--version").output()?;
+                if !version.status.success() {
+                    return Err(io::Error::other(format!(
+                        "declared Git version failed: {version:?}"
+                    )));
+                }
+                if std::env::var_os("DECLARED_EMPTY") != Some("".into())
+                    || std::env::var_os("DECLARED_ABSENT").is_some()
+                {
+                    return Err(io::Error::other(
+                        "declared native input environment differs",
+                    ));
+                }
+                println!(
+                    "data-present {}",
+                    if std::path::Path::new(&path).exists() {
+                        "True"
+                    } else {
+                        "False"
+                    }
+                );
+            }
             Step::Rendezvous { address, id } => {
                 let mut stream = TcpStream::connect(address)?;
                 stream.write_all(id.as_bytes())?;
@@ -92,9 +163,16 @@ fn main() -> ExitCode {
             }
         };
     }
-    assert_eq!(args.len(), 2, "expected run and encoded Rust fixture steps");
-    assert_eq!(args[0], "run");
-    match run(serde_json::from_str(&args[1]).expect("valid fixture steps")) {
+    let execute = || -> io::Result<u8> {
+        match args.as_slice() {
+            [mode, encoded] if mode == "run" => run(serde_json::from_str(encoded)?, &[]),
+            [mode, path, arguments @ ..] if mode == "file" => {
+                run(serde_json::from_slice(&fs::read(path)?)?, arguments)
+            }
+            _ => Err(io::Error::other("expected run JSON or file PATH [ARG ...]")),
+        }
+    };
+    match execute() {
         Ok(code) => ExitCode::from(code),
         Err(error) => {
             eprintln!("{error:?}");
