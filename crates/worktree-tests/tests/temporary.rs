@@ -1213,16 +1213,28 @@ fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocatio
 #[test]
 fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_output() {
     use std::io::{Read, Write};
-    let coordinator = source();
-    let (store, outputs) = chrono_worktree::TemporaryHost::registered_store(
-        &coordinator,
-        POLICY,
-        "worktree-test-host",
-    )
-    .unwrap();
+    let isolated = host();
+    let coordinator = isolated.root.clone();
+    let policy_path = coordinator.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"][0]["generated_outputs"] =
+        value!(["source with spaces/independent/producer/target/"]);
+    policy["retained_producers"][0]["source_roots"] = value!(["source with spaces/"]);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&coordinator);
+    let (store, outputs) =
+        chrono_worktree::TemporaryHost::registered_store(&coordinator, POLICY, "test-allocation")
+            .unwrap();
+    assert_eq!(
+        store,
+        isolated
+            .root
+            .join(".chrono-harness/state/custom temporary λ"),
+        "native maintenance must use only the isolated coordinator's registered producer"
+    );
     let allocation = chrono_worktree::TemporaryHost::allocate(
         &store,
-        "worktree-test-host",
+        "test-allocation",
         &outputs,
         "real coordinator λ ",
     )
@@ -1296,18 +1308,17 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     drop(allocation);
     let maintain = || {
         let mut command =
-            Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
+            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output =
             chrono_worktree::TemporaryHost::capture_bound_output(&root, &mut command).unwrap();
         let report = json(&output.stdout).unwrap();
         let failures = report["cleanup_failures"].as_array().unwrap();
-        assert_eq!(
-            output.status.code(),
-            Some(if failures.is_empty() { 0 } else { 2 }),
-            "{report}"
-        );
+        assert_eq!(report["lifecycle_coordinator_root"], value!(coordinator));
+        assert_eq!(report["invoking_root"], value!(coordinator));
+        assert!(failures.is_empty(), "{report}");
+        assert!(output.status.success(), "{report}");
         report
     };
     let protected = maintain();
@@ -1317,7 +1328,7 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
             .as_array()
             .unwrap()
             .iter()
-            .any(|row| row["producer"] == "worktree-test-host"
+            .any(|row| row["producer"] == "test-allocation"
                 && row["status"] == "protected"
                 && row["path"]
                     .as_str()
