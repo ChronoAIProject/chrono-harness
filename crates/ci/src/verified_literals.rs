@@ -12,6 +12,145 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
+pub enum NativeJobState { Succeeded, ReadDetail { id: u64 }, Rejected }
+
+pub open spec fn optional_text_is(value: Option<&str>, expected: &str) -> bool {
+    match value { Some(value) => value@ == expected@, None => false }
+}
+
+pub fn text_is(value: Option<&str>, expected: &str) -> (same: bool)
+    ensures same == optional_text_is(value, expected),
+{
+    match value { Some(value) => identifiers::equal_text(value, expected), None => false }
+}
+
+pub open spec fn nonterminal(status: Option<&str>) -> bool {
+    optional_text_is(status,"queued") || optional_text_is(status,"in_progress")
+        || optional_text_is(status,"waiting") || optional_text_is(status,"pending")
+        || optional_text_is(status,"requested")
+}
+
+/// 终态不重新请求；只有明确的非终态、原 null 和正 job ID 才选择一次精确读取。
+pub fn native_job_state(
+    status: Option<&str>, conclusion: Option<&str>, conclusion_null: Option<bool>, id: Option<u64>,
+) -> (out: NativeJobState)
+    ensures
+        (out is Succeeded) <==> (optional_text_is(status,"completed") && optional_text_is(conclusion,"success")),
+        (out is ReadDetail) <==> (nonterminal(status) && conclusion_null == Some(true)
+            && id is Some && id.unwrap() > 0),
+        out is ReadDetail ==> out->ReadDetail_id == id.unwrap(),
+        (out is Rejected) <==> !((optional_text_is(status,"completed") && optional_text_is(conclusion,"success"))
+            || (nonterminal(status) && conclusion_null == Some(true) && id is Some && id.unwrap() > 0)),
+{
+    proof {
+        reveal_strlit("completed");
+        reveal_strlit("queued");
+        reveal_strlit("in_progress");
+        reveal_strlit("waiting");
+        reveal_strlit("pending");
+        reveal_strlit("requested");
+        assert("completed"@.len() != "queued"@.len());
+        assert("completed"@.len() != "in_progress"@.len());
+        assert("completed"@.len() != "waiting"@.len());
+        assert("completed"@.len() != "pending"@.len());
+        assert("completed"@[0] != "requested"@[0]);
+        assert(optional_text_is(status,"completed") ==> !nonterminal(status));
+    }
+    if text_is(status,"completed") {
+        if text_is(conclusion,"success") { NativeJobState::Succeeded }
+        else { NativeJobState::Rejected }
+    } else if (text_is(status,"queued") || text_is(status,"in_progress") || text_is(status,"waiting")
+        || text_is(status,"pending") || text_is(status,"requested")) && conclusion_null == Some(true)
+    {
+        match id {
+            Some(id) if id > 0 => NativeJobState::ReadDetail { id },
+            _ => NativeJobState::Rejected,
+        }
+    } else { NativeJobState::Rejected }
+}
+
+pub open spec fn same_observed_field(first: Option<&[u8]>, second: Option<&[u8]>) -> bool {
+    match (first,second) {
+        (None,None) => true,
+        (Some(first),Some(second)) => first@ == second@,
+        _ => false,
+    }
+}
+
+pub fn observed_field_equal(first: Option<&[u8]>, second: Option<&[u8]>) -> (same: bool)
+    ensures same == same_observed_field(first,second),
+{
+    match (first,second) {
+        (None,None) => true,
+        (Some(first),Some(second)) => identifiers::equal_bytes(first,second),
+        _ => false,
+    }
+}
+
+/// id、run_id、run_attempt、head_sha、name 五个原字段必须完整保持。
+pub fn native_job_binding(fields: &[(Option<&[u8]>, Option<&[u8]>)]) -> (same: bool)
+    ensures same == (fields.len() == 5
+        && forall|i: int| 0 <= i < fields.len() ==> same_observed_field(fields@[i].0,fields@[i].1)),
+{
+    if fields.len() != 5 { return false; }
+    let mut i = 0;
+    while i < fields.len()
+        invariant fields.len() == 5, i <= fields.len(),
+            forall|j: int| 0 <= j < i ==> same_observed_field(fields@[j].0,fields@[j].1),
+        decreases fields.len() - i,
+    {
+        if !observed_field_equal(fields[i].0,fields[i].1) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub fn delivery_mode(schema: &str, push_branches: usize) -> (valid: bool)
+    ensures valid == (schema@ == "chrono-github-release/v2"@ && push_branches == 0),
+{
+    identifiers::equal_text(schema,"chrono-github-release/v2") && push_branches == 0
+}
+
+pub fn delivery_nonempty(value: &str) -> (valid: bool)
+    ensures valid == (value@.len() > 0),
+{ !value.is_empty() }
+
+/// 保留原 .find 的第一个匹配及全文比较，不根据 job 的位置猜发布者。
+pub fn publisher_index(jobs: &[&str], publisher: &str) -> (index: Option<usize>)
+    ensures match index {
+        Some(i) => i < jobs.len() && jobs@[i as int]@ == publisher@
+            && forall|j: int| 0 <= j < i ==> jobs@[j]@ != publisher@,
+        None => forall|j: int| 0 <= j < jobs.len() ==> jobs@[j]@ != publisher@,
+    },
+{
+    let mut i = 0;
+    while i < jobs.len()
+        invariant i <= jobs.len(), forall|j: int| 0 <= j < i ==> jobs@[j]@ != publisher@,
+        decreases jobs.len() - i,
+    {
+        if identifiers::equal_text(jobs[i],publisher) { return Some(i); }
+        i += 1;
+    }
+    None
+}
+
+pub fn publisher_dependencies(needs: usize, always: bool) -> (valid: bool)
+    ensures valid == (needs > 0 && !always),
+{ needs > 0 && !always }
+
+pub fn delivery_publisher(publisher: Option<&str>, job: &str) -> (selected: bool)
+    ensures selected == optional_text_is(publisher, job),
+{ text_is(publisher,job) }
+
+pub fn delivery_source(enabled: bool) -> (source: &'static str)
+    ensures source@ == if enabled {
+        "${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}"@
+    } else { "${{ inputs.source || github.sha }}"@ },
+{
+    if enabled { "${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}" }
+    else { "${{ inputs.source || github.sha }}" }
+}
+
 pub fn cache_save_event_guard(push_only: bool) -> (guard: &'static str)
     ensures guard@ == if push_only { "github.event_name == 'push' && "@ } else { ""@ },
 {

@@ -50,6 +50,24 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 `verify.verus-result-tests` 独立预期。三项源码均已有真实 Verus invocation、整 crate
 结果和 Rust 消费者；本批只补 FILEMAP 绑定，不新增证明源或 Python 迁移。
 
+## 发布交付字段判断
+
+发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
+`verify.release-recipe`／`verify.release-recipe-tests` 整 crate 根。
+身份适配器把完整环境文本交给规范十进制、版本分量、channel 和显式版本判断；
+发布适配器把原 GitHub JSON 的可选文本、整数和布尔值直接交给逐字段判断，
+缺失或错型不与空文本、零或 false 混同。API 的原退出和精确 404 字段共同决定缺失，
+公开版本只有在全部声明资产已经存在时才允许沿用；草稿继续上传所缺资产。
+独立根列出缺字段、完整文本、数字、channel、名称和草稿状态边界，普通 Rust
+行为测试继续核实际环境与 mock 命令。这里的局部绑定不代表整个发布编排已证明。
+
+**实现与宿主验证登记同改：**复用固定 Verus、宏和两项现役证明操作，
+不增加安装器、证明过滤、测试时限或预算。采用固定 Rust 的 `str::split`、
+`strip_prefix` 提供原版本分量，`str::parse::<u64>` 对溢出返回错误，
+以及固定 Serde JSON 的字段读取、`as_str`／`as_u64`／`as_bool` 类型观察。
+这些接口只解码实际输入，不供应预先算好的合格标志；仓内字段判断由 Verus 执行。
+比较成本随实际字段字节和数量增长；新增构建、证明、CI 与存储总成本未测。
+
 ## runner 构建中的证明库与缓存
 
 本宿主的 `build.runner` 由 Rust 启动程序读取
@@ -148,6 +166,26 @@ JSON、Unicode trim、原件读取、实际进程终结、租约与多文件发�
 局部证明不证明 GitHub 观察真实、跨中断自动恢复或完整 SPEC 已完成；新增 IO、构建及存储成本未测。
 
 ## CI 配置的字面文本
+
+CI 的原生 job 终态选择和发布者准入也直接消费本节的同源根。
+`native_job_state` 保留 completed 的原结论；只有已知非终态、明确存在的 null 结论和正 job ID
+才返回一次精确详情读取。适配器按返回 ID 调用 provider 一次，再由同源判断核成功终态，
+并逐项比较 id、run_id、run_attempt、head_sha、name 五个完整原字段。
+缺字段与存在的 null 分别保留；JSON 字段的原值编码由固定 Serde JSON 接口供应，
+比较由已有 identifiers 字节判断执行，不把字段先折成一个“已合格”标志。
+
+发布登记的 v2／触发方式、非空字段、首个完整 publisher 匹配、必需依赖和权限选择，
+以及 checkout 的固定源码表达式也由同一生产根拥有。独立根核终态失败不重读、
+缺失／非 null／零 ID 不读详情、原字段完整性、首个匹配及发布者依赖边界；
+原 Rust mock 仍核准确调用次数、参数、原错误和每个字段的替换拒绝。
+实际 provider、YAML 执行与整个生成器的原生验收仍须分别完成。
+
+**实现与宿主验证登记同改：**gating／release 的实际使用绑定到现有
+`verify.ci-literals`／`verify.ci-literals-tests`，复用已锁定工具和整 crate 参数。
+没有新 job、工具、预算、重试或审批。固定 Serde JSON 对实际 job 字段提供完整编码，
+标准 Option／Result 的 map、transpose 和错误传播只转发编码结果；
+普通适配器对发布 job 的 ID 数组保留输入顺序，实际搜索由 Verus 完成。
+每个待核 native job 编码五对字段；新增编译、证明、CI、分配与存储成本未测。
 
 `crates/ci/src/verified_literals.rs` 统一负责 full 与 release 的单行文本判断。
 输入为空或含普通 UTF-8 文本时允许；出现 NUL、LF、CR，或任意位置的精确 `${{` 字节序列时拒绝。

@@ -30,9 +30,10 @@ path = "tests/support/gh.rs"
 test = false
 bench = false
 
-# 与真实 runner 的开发配置一致；保留调试断言及原行为时限。
+# 保留 runner 的开发优化、调试断言及原行为时限；测试工程不生成调试信息。
 [profile.dev]
 opt-level = 1
+debug = 0
 
 [profile.dev.package.sha2]
 opt-level = 3
