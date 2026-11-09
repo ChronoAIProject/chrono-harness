@@ -1,4 +1,6 @@
 //! 发布工具的真实 CLI 与外部 bootstrap 报告样本；样本不冒充真实原生构建。
+#[path = "context.rs"]
+mod context;
 #[path = "recipe.rs"]
 pub mod recipe;
 use serde_json::{Value, json};
@@ -163,7 +165,7 @@ impl Fixture {
     }
 
     pub fn export(&self, destination: &Path) -> std::process::Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-release-cli"));
+        let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-cli"));
         command
             .args([
                 self.host.root().as_os_str(),
@@ -224,7 +226,7 @@ impl Fixture {
     }
 
     pub fn unit(&self, executable: &Path) -> std::process::Output {
-        let mut command = Command::new(executable);
+        let mut command = context::command(executable);
         command
             .arg(self.host.root())
             .arg(self.host.root().join("handoffs/none"))
@@ -233,7 +235,7 @@ impl Fixture {
     }
 
     pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
-        let mut command = Command::new("/bin/bash");
+        let mut command = context::command("/bin/bash");
         command
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
             .arg(self.host.root())
