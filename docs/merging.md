@@ -1,5 +1,7 @@
 # 宿主默认合并方案
 
+本仓日常分支、提交、Issue 与 PR 内容约定见 [Git 与 GitHub 协作规范](../CONTRIBUTING.md)；本文负责合并候选、远端准入和实际落地的操作合同。
+
 独立 PR 并行检查，通过必需检查后及时合并；只按实际依赖、冲突和有效输入决定先后。默认不要求分支追平目标，也不按 PR 编号或创建时间排队。
 
 此默认由产品的 `candidate.landing` 原子提供，新宿主运行 `chrono-instructions init` 即采用。现有宿主按[默认采用步骤](instructions.md#新默认的宿主采用边界)保留定制并更新登记源。GitHub CI 由 `chrono-ci init/generate` 生成；生成器不修改远端保护规则或自动取得合并权限。

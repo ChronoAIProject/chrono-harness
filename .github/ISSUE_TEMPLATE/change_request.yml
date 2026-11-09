@@ -1,0 +1,55 @@
+name: 变更提案／任务
+description: 明确需求、实际使用方、范围和可观察的验收结果。
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先搜索已有事项并阅读 [协作规范](https://github.com/ChronoAIProject/chrono-harness/blob/dev/CONTRIBUTING.md)。
+        小修复可直接开 PR；跨 PR 或需要持续跟踪的工作使用此表单。
+  - type: dropdown
+    id: kind
+    attributes:
+      label: 变更类别
+      options:
+        - 功能
+        - 文档／协作规范
+        - 重构／性能
+        - 构建／CI／发布
+        - 其他必要维护
+    validations:
+      required: true
+  - type: textarea
+    id: need
+    attributes:
+      label: 问题与实际使用方
+      description: 谁需要什么结果？现有行为为什么无法满足？给出当前入口和需求依据。
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: 目标与范围
+      description: 期望行为、明确不在本次范围内的内容，以及相关 SPEC 条款。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 已有能力与替代方案
+      description: 已核对哪些现有能力？复用、最小改动或不改动为什么足够或不足？尚未审计时如实说明。
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: 验收条件
+      description: 写可观察的成功、失败和边界预期，以及由谁通过什么入口实际使用成果。
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: 影响、依赖与恢复
+      description: 关联 Issue／PR、受影响接口、迁移、验证和运行成本；未知项写明，不虚构结论。
+    validations:
+      required: true
