@@ -1722,37 +1722,16 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock"
+            ".chrono-harness/ci/native/Cargo.lock",
+            ".chrono-harness/release/native/Cargo.lock",
+            ".chrono-harness/release/native-tests/Cargo.lock",
+            "crates/cache/Cargo.lock",
+            "crates/distribution/Cargo.lock"
           ],
           "consumers": [
             "unit_release-build"
           ],
           "save_job": "unit_release-build",
-          "restore_from": "cargo.detect"
-        },
-        "cargo.release-build-integration": {
-          "owner": "repository",
-          "need": "复用锁定依赖和固定工具链的下载资料。",
-          "output_use": "在首次编译前恢复；实际构建工具仍校验、补齐依赖并执行原操作。",
-          "paths": [
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/"
-          ],
-          "compatibility_files": [
-            ".chrono-harness/ci/bootstrap-toolchains.json"
-          ],
-          "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
-            "crates/cache/Cargo.lock",
-            "crates/distribution/Cargo.lock"
-          ],
-          "consumers": [
-            "unit_release-build-integration"
-          ],
-          "save_job": "unit_release-build-integration",
           "restore_from": "cargo.detect"
         },
         "cargo.worktree-adoption": {
