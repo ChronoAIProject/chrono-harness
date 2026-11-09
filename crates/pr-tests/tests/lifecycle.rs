@@ -1146,3 +1146,161 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
         "unknown attempt must not be recreated or replaced by a successful query"
     );
 }
+
+#[test]
+fn continuation_recovers_the_originals_handoff_before_releasing_the_prior_operation() {
+    if !isolated_capability_test(
+        "continuation_recovers_the_originals_handoff_before_releasing_the_prior_operation",
+    ) {
+        return;
+    }
+    let h = Host::new(vec![
+        api(snapshot()),
+        json!({"prefix":["api","graphql"],"exit":2,"stderr":"original readback failure"}),
+        api(snapshot()),
+    ]);
+    let (code, previous) = h.status();
+    assert_eq!(code, 0, "{previous}");
+    let path = previous["operation"].as_str().unwrap();
+    let saved_result = fs::read(h.root.path().join(path).join("result.json")).unwrap();
+    // Re-consuming the actual immutable originals recreates the exact remaining
+    // producer protection after interruption between result sealing and handoff.
+    // All bytes and domain results still come from the real original producer.
+    for field in ["stdout_original", "stderr_original", "launch_original"] {
+        let original = &previous["receipts"][0][field];
+        let path = original["path"].as_str().unwrap();
+        let bytes = fs::read(h.root.path().join(path)).unwrap();
+        assert!(
+            chrono_harness::retained_artifacts::retention::publish_pending_original(
+                h.root.path(),
+                "check-original",
+                path,
+                &bytes,
+                json!({"consumer":"continuation regression re-reading the original publication"}),
+            )
+            .unwrap()
+        );
+    }
+    let (code, failed) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        path,
+    ]);
+    assert_eq!(code, 2, "{failed}");
+    maintain_after_diagnostics(&h);
+    assert!(
+        h.root.path().join(path).exists(),
+        "failed query preserves prior recovery"
+    );
+    for field in ["stdout_original", "stderr_original", "launch_original"] {
+        assert!(
+            h.root
+                .path()
+                .join(previous["receipts"][0][field]["path"].as_str().unwrap())
+                .exists(),
+            "failed query preserves original producer protection: {field}"
+        );
+    }
+    let (code, current) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        path,
+    ]);
+    assert_eq!(code, 0, "{current}");
+    assert_eq!(h.calls().len(), 3);
+    assert_eq!(
+        fs::read(h.root.path().join(path).join("result.json")).unwrap(),
+        saved_result
+    );
+    maintain_after_diagnostics(&h);
+    assert!(
+        !h.root.path().join(path).exists(),
+        "accepted prior operation expires"
+    );
+    for field in ["stdout_original", "stderr_original", "launch_original"] {
+        let original = previous["receipts"][0][field]["path"].as_str().unwrap();
+        assert!(
+            !h.root.path().join(original).exists(),
+            "accepted original producer handoff must recover and expire: {field}"
+        );
+    }
+    assert!(
+        h.root
+            .path()
+            .join(current["operation"].as_str().unwrap())
+            .exists(),
+        "current OPEN observation remains protected"
+    );
+}
+
+#[test]
+fn continuation_requires_available_unchanged_actual_process_originals_before_dispatch() {
+    for failure in ["missing", "modified", "replaced"] {
+        let h = Host::new(vec![api(snapshot()), api(snapshot())]);
+        let (code, previous) = h.status();
+        assert_eq!(code, 0, "{previous}");
+        let operation = previous["operation"].as_str().unwrap();
+        let original = previous["receipts"][0]["stdout_original"]["path"]
+            .as_str()
+            .unwrap();
+        let path = h.root.path().join(original);
+        match failure {
+            "missing" => fs::remove_file(&path).unwrap(),
+            "modified" => fs::write(&path, b"different original output").unwrap(),
+            "replaced" => {
+                let saved = fs::read(&path).unwrap();
+                fs::rename(&path, path.with_extension("saved-original")).unwrap();
+                fs::write(&path, saved).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        let (code, result) = h.run(&[
+            "pr-status",
+            "--pr",
+            "42",
+            "--head-sha",
+            HEAD,
+            "--continue-operation",
+            operation,
+        ]);
+        assert_eq!(code, 2, "{failure}: {result}");
+        assert!(result["error"].is_string(), "{failure}: {result}");
+        assert_eq!(
+            h.calls().len(),
+            1,
+            "{failure}: failed original qualification must not dispatch a new query"
+        );
+        assert!(h.root.path().join(operation).exists());
+    }
+}
+
+#[test]
+fn continuation_can_recheck_a_terminal_operation_after_its_original_handoff() {
+    let mut merged = snapshot();
+    merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
+    merged["data"]["repository"]["pullRequest"]["mergeCommit"] = json!({"oid":OTHER});
+    let h = Host::new(vec![api(merged.clone()), api(merged)]);
+    let (code, previous) = h.status();
+    assert_eq!(code, 0, "{previous}");
+    let (code, current) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        previous["operation"].as_str().unwrap(),
+    ]);
+    assert_eq!(code, 0, "{current}");
+    assert_eq!(current["pr_state"], "MERGED");
+    assert_eq!(current["merge_commit"], OTHER);
+    assert_eq!(h.calls().len(), 2);
+}

@@ -28,6 +28,7 @@ struct Continuation {
     path: String,
     result_original: Value,
     _reader: Lease,
+    inputs: Vec<(String, Lease)>,
 }
 
 impl Continuation {
@@ -89,10 +90,47 @@ impl Continuation {
         {
             return Err("continued operation identity or local completion is not established; preserve originals".into());
         }
+        let receipts = result["receipts"]
+            .as_array()
+            .ok_or("continued operation has no original process receipts")?;
+        let mut inputs = Vec::new();
+        for (index, receipt) in receipts.iter().enumerate() {
+            let (saved, _) = read(&format!("call-{}.result.json", index + 1), 16777216)?;
+            if saved != *receipt {
+                return Err("continued process receipt differs from the sealed original".into());
+            }
+            for (field, suffix) in [
+                ("stdout_original", "stdout"),
+                ("stderr_original", "stderr"),
+                ("launch_original", "launch.json"),
+            ] {
+                let original = &receipt[field];
+                let expected = format!("{path}.call-{}.{suffix}", index + 1);
+                if original["path"] != expected {
+                    return Err(
+                        "continued process original address differs from its operation".into(),
+                    );
+                }
+                let guard = read_guard(root, &expected)?
+                    .ok_or("continued process original is unavailable or not enrolled")?;
+                let (digest, length) = file_identity(&no_symlink_parents(root, &expected)?)?;
+                if original["sha256"] != digest
+                    || original["length"] != length
+                    || !inventory.published_original(&expected, &digest, length)?
+                {
+                    return Err(
+                        "continued process original changed or is not sealed; preserve originals"
+                            .into(),
+                    );
+                }
+                inputs.push((expected, guard));
+            }
+        }
         Ok(Some(Self {
             path: path.clone(),
             result_original,
             _reader: reader,
+            inputs,
         }))
     }
 }
@@ -345,6 +383,17 @@ impl State {
                         "continued result is not sealed; both recovery roots remain protected"
                             .into(),
                     );
+                }
+                let prior_inputs = previous
+                    .inputs
+                    .iter()
+                    .map(|(path, _)| path.clone())
+                    .collect::<Vec<_>>();
+                if !prior_inputs.is_empty() {
+                    // The original domain result is sealed and its input guards
+                    // still qualify the exact producer files. Complete only the
+                    // handoff interrupted after that seal; never replay a process.
+                    inventory.settle_publication_inputs(&previous.path, &prior_inputs)?;
                 }
                 inventory.retain_diagnostic_path(&previous.path)?;
                 inventory.reference_paths(&Self::recovery_role(&previous.path), &[])?;

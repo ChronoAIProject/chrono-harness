@@ -4686,6 +4686,43 @@ fn publication_input_handoff_requires_sealed_referenced_unchanged_originals() {
     inventory(h.path())
         .reference_paths("domain-recovery", &[])
         .unwrap();
+    let released_roots = ledger(h.path())["roots"].clone();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .expect("already settled original handoff is a no-op after domain root release");
+    assert_eq!(ledger(h.path())["roots"], released_roots);
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[input.into()])
+            .is_err(),
+        "an outstanding changed original still cannot be released into an unrooted destination"
+    );
+    assert_eq!(ledger(h.path())["roots"], released_roots);
+    retained_artifacts::retention::publish_pending_original(
+        h.path(),
+        "fixture",
+        clean,
+        b"clean original",
+        json!({}),
+    )
+    .unwrap();
+    let pending_roots = ledger(h.path())["roots"].clone();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &[clean.into()])
+            .is_err(),
+        "a real pending transfer still requires a protected destination"
+    );
+    assert_eq!(ledger(h.path())["roots"], pending_roots);
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[destination.into()])
+        .unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &[clean.into()])
+        .unwrap();
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[])
+        .unwrap();
     maintain_fixture_to(h.path(), 2);
     assert!(!h.path().join(clean).exists());
     assert!(

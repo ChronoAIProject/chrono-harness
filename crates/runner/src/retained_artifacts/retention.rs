@@ -1234,7 +1234,6 @@ impl Inventory {
         if output.phase != "released"
             || !output.manifest.sealed
             || identity(&no_symlink_parents(&self.root, destination)?)? != output.identity
-            || !ledger.roots.values().any(|ids| ids.contains(&output.id))
         {
             return Err("publication handoff destination is not sealed and protected".into());
         }
@@ -1273,6 +1272,11 @@ impl Inventory {
                     }],
                 });
             }
+        }
+        // A completed handoff remains a no-op after the domain root is released.
+        // An actual pending producer transfer still requires a protected target.
+        if !transfers.is_empty() && !ledger.roots.values().any(|ids| ids.contains(&output.id)) {
+            return Err("publication handoff destination is not sealed and protected".into());
         }
         drop(gate);
         for consumer in transfers {
