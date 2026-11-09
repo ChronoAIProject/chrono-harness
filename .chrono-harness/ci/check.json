@@ -277,7 +277,6 @@
         "inputs",
         "judge-filemap",
         "judge-projects",
-        "judge-routes",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"
