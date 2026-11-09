@@ -42,6 +42,27 @@ struct RetainedInput {
     byte_length: usize,
     format: String,
 }
+impl RetainedInput {
+    fn bytes(&self, root: &Path) -> Result<Vec<u8>, String> {
+        if self.schema != "chrono-worktree-retained-input/v1"
+            || self.source_root != root
+            || !matches!(self.format.as_str(), "bytes" | "receipt")
+        {
+            return Err("invalid retained lifecycle input binding".into());
+        }
+        let bytes = state_bytes(root, &self.path)?;
+        if bytes.len() != self.byte_length || sha256(&bytes) != self.sha256 {
+            return Err("original lifecycle receipt changed: retained input mismatch".into());
+        }
+        Ok(bytes)
+    }
+}
+
+pub(crate) fn retained_bytes(root: &Path, input: &Value) -> Result<Vec<u8>, String> {
+    let input: RetainedInput = serde_json::from_value(input.clone())
+        .map_err(|e| format!("invalid retained lifecycle input: {e}"))?;
+    input.bytes(root)
+}
 
 pub(crate) fn retained_input(root: &Path, path: &str, bytes: &[u8], format: &str) -> Value {
     value!(RetainedInput {
@@ -72,6 +93,10 @@ fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(),
             "/unreferenced_original_receipt/input",
             "/original_result/input",
             "/declaration_input",
+            "/age_retirement_input",
+            "/prior_age_result/input",
+            "/age_reuse/input",
+            "/prior_terminal_input",
         ] {
             if let Some(input) = report.pointer(pointer) {
                 inputs.push(
@@ -126,10 +151,7 @@ pub(crate) fn verify_inputs(root: &Path, report: &Value) -> Result<(), String> {
         )) {
             continue;
         }
-        let bytes = crate::recovery::state_bytes(&input.source_root, &input.path)?;
-        if bytes.len() != input.byte_length || sha256(&bytes) != input.sha256 {
-            return Err("original lifecycle receipt changed: retained input mismatch".into());
-        }
+        let bytes = input.bytes(root)?;
         if input.format == "receipt" {
             collect_inputs(&json(&bytes)?, &mut inputs)?;
         }

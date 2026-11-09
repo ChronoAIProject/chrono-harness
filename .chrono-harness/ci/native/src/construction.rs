@@ -465,7 +465,19 @@ impl<'a> Construction<'a> {
         &mut self,
         previous: &policy::owner_publication::Binding,
     ) -> Result<(), BuildFailure> {
-        let stage = crate::owner::stage(self.root, &self.inherited, &self.profile, previous)?;
+        let report_directory = self
+            .directory
+            .strip_prefix(self.root)
+            .map_err(|e| e.to_string())?
+            .to_str()
+            .ok_or("non UTF-8 bootstrap directory")?;
+        let stage = crate::owner::stage(
+            self.root,
+            &self.inherited,
+            &self.profile,
+            previous,
+            report_directory,
+        )?;
         self.report.owner_stage =
             Some(serde_json::to_value(stage).map_err(|error| error.to_string())?);
         Ok(())
@@ -553,8 +565,15 @@ impl<'a> Construction<'a> {
                         .into_iter()
                         .chain(operation.reused_from.iter().map(|original| &original.path))
                 })
+                .map(String::as_str)
+                .chain(
+                    self.report
+                        .owner_stage
+                        .iter()
+                        .filter_map(|stage| stage["staged"]["path"].as_str()),
+                )
                 .filter(|path| !path.starts_with(&format!("{directory}/")))
-                .cloned()
+                .map(str::to_owned)
                 .collect();
             // Protect both generations and all explicitly reused originals before
             // releasing the producer or replacing the selected report bytes.

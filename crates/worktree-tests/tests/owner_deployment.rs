@@ -26,6 +26,10 @@ fn fixture_with_entrypoint(
         ]);
         policy["producers"]["bootstrap-fixture"] =
             value!([".chrono-harness/state/bootstrap-fixture/"]);
+        policy["producers"]["check-original"] =
+            value!([".chrono-harness/state/bootstrap-fixture/"]);
+        policy["producers"]["bootstrap-owner-stage"] =
+            value!([".chrono-harness/bin/owner-stages/"]);
         policy["diagnostic_keep_seconds"] = value!(0);
         policy["max_related_outputs"] = value!(512);
         fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
@@ -190,18 +194,8 @@ fn current_owner_retains_its_adoption_and_stage_after_enrollment_refresh() {
     use chrono_harness::retained_artifacts::retention::Inventory;
     let (h, exe, path, sha) =
         fixture_with_entrypoint(None, ".chrono-harness/ci/owner-stage-producer.sh", true);
-    // Enroll the fixture's actual completed stage bytes, without changing its result.
-    Inventory::adopted(&h.root)
-        .unwrap()
-        .unwrap()
-        .begin(
-            "bootstrap-fixture",
-            &path,
-            value!({"publication":"published"}),
-        )
-        .unwrap()
-        .complete(value!({"publication":"published"}))
-        .unwrap();
+    // The actual construction producer enrolled its whole report and stage
+    // directories. No test-written publication substitutes for that handoff.
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_eq!(code, 0, "{report} {error}");
     let receipt = report["owner_deployment"]["receipt"]["path"]
@@ -221,7 +215,11 @@ fn current_owner_retains_its_adoption_and_stage_after_enrollment_refresh() {
                 .as_array()
                 .unwrap()
                 .iter()
-                .find(|o| o["path"] == *path)
+                .find(|o| {
+                    o["path"].as_str().is_some_and(|owned| {
+                        owned == path || path.starts_with(&format!("{owned}/"))
+                    })
+                })
                 .unwrap()["id"]
                 .as_str()
                 .unwrap()

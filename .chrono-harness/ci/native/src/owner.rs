@@ -6,13 +6,13 @@ use crate::{
     source,
     verified_bindings::{self as policy, owner_publication as publication},
 };
-use chrono_harness::{decode, file_identity, json, sha256};
+use chrono_harness::{decode, file_identity, json, retained_artifacts::retention, sha256};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
     ffi::OsStr,
-    fs, io,
+    fs,
     os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
 };
@@ -322,6 +322,7 @@ pub fn stage(
     environment: &Environment,
     profile: &Profile,
     previous: &publication::Binding,
+    report_directory: &str,
 ) -> Result<publication::Stage, String> {
     require_capabilities(root, environment)?;
     let declaration = profile
@@ -336,21 +337,30 @@ pub fn stage(
     let before = file_binding(&source)?;
     let parent = profile::path(root, STAGES.trim_end_matches('/'), b".chrono-harness/bin/")?;
     fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
-    let directory = tempfile::Builder::new()
-        .prefix("stage-")
-        .tempdir_in(parent)
-        .map_err(|error| error.to_string())?
-        .keep();
+    let directory = retention::unique_path(&parent, "stage-", "")?;
+    let publication = retention::create_adopted(
+        root,
+        "bootstrap-owner-stage",
+        &directory,
+        true,
+        serde_json::json!({"stage":"construction","publication":"not-established"}),
+    )?;
+    let relative = directory
+        .strip_prefix(root)
+        .map_err(|e| e.to_string())?
+        .to_str()
+        .ok_or("non UTF-8 owner stage")?;
+    if publication.is_some() {
+        let inventory =
+            retention::Inventory::adopted(root)?.ok_or("owner stage policy disappeared")?;
+        inventory.retain_diagnostic_path(relative)?;
+        // The live construction report owns this stage before any writer can
+        // release it. Current/adopted report references later own its lifetime.
+        inventory.dependencies_paths(report_directory, &[relative.into()])?;
+    }
     let target = directory.join("chrono-worktree");
-    let mut input = fs::File::open(&source).map_err(|error| error.to_string())?;
-    let mut output = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&target)
-        .map_err(|error| error.to_string())?;
-    io::copy(&mut input, &mut output).map_err(|error| error.to_string())?;
-    output
-        .set_permissions(fs::Permissions::from_mode(0o755))
+    retention::copy_adopted(publication.as_ref(), &source, &target)?;
+    fs::set_permissions(&target, fs::Permissions::from_mode(0o755))
         .map_err(|error| error.to_string())?;
     let staged = file_binding(&target)?;
     if !publication::binding_equal(&file_binding(&source)?, &before)

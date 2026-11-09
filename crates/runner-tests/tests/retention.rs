@@ -75,6 +75,170 @@ fn ledger(root: &Path) -> Value {
 }
 
 #[test]
+fn executable_output_requires_an_explicit_subdirectory_and_preserves_selected_binary() {
+    if !isolated_capability_test(
+        "executable_output_requires_an_explicit_subdirectory_and_preserves_selected_binary",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    for scope in [".chrono-harness/bin/", ".chrono-harness/", "crates/"] {
+        policy["producers"]["fixture"] = json!([scope]);
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        assert!(Inventory::adopted(h.path()).is_err(), "{scope}");
+    }
+    policy["producers"]["fixture"] = json!([".chrono-harness/bin/owner-stages/"]);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let parent = h.path().join(".chrono-harness/bin/owner-stages");
+    fs::create_dir_all(&parent).unwrap();
+    let selected = h.path().join(".chrono-harness/bin/chrono-worktree");
+    fs::write(&selected, b"current installed executable").unwrap();
+    let stage = parent.join("stage-fixture");
+    let publication =
+        retained_artifacts::retention::create_adopted(h.path(), "fixture", &stage, true, json!({}))
+            .unwrap()
+            .unwrap();
+    publication
+        .write_file(&stage.join("candidate"), b"candidate executable")
+        .unwrap();
+    publication.complete(json!({"status":"joined"})).unwrap();
+    maintain_fixture_to(h.path(), 0);
+    assert!(!stage.exists());
+    assert_eq!(
+        fs::read(&selected).unwrap(),
+        b"current installed executable"
+    );
+}
+
+#[test]
+fn unfinished_directory_resumes_after_accounting_and_seals_only_after_actual_publication() {
+    if !isolated_capability_test(
+        "unfinished_directory_resumes_after_accounting_and_seals_only_after_actual_publication",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/two-stage-output";
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(path),
+        true,
+        json!({"stage":"constructed"}),
+    )
+    .unwrap()
+    .unwrap();
+    publication
+        .write_file(&h.path().join(path).join("candidate"), b"candidate bytes")
+        .unwrap();
+    let id = publication.id().to_owned();
+    inventory(h.path())
+        .reference_paths("actual-stage-report", &[path.into()])
+        .unwrap();
+    assert!(
+        inventory(h.path())
+            .resume_unfinished_directory("fixture", path)
+            .is_err()
+    );
+    drop(publication);
+    maintenance(h.path());
+    let interrupted = ledger(h.path())["outputs"][0]["outcome"].clone();
+    assert_eq!(interrupted["completion"], "not-established");
+    let publication = inventory(h.path())
+        .resume_unfinished_directory("fixture", path)
+        .unwrap()
+        .unwrap();
+    assert_eq!(publication.id(), id);
+    publication
+        .write_file(
+            &h.path().join(path).join("publication-result"),
+            b"published bytes",
+        )
+        .unwrap();
+    publication.complete(json!({"status":"published"})).unwrap();
+    assert!(
+        inventory(h.path())
+            .resume_unfinished_directory("fixture", path)
+            .is_err()
+    );
+    maintenance(h.path());
+    assert_eq!(
+        fs::read(h.path().join(path).join("candidate")).unwrap(),
+        b"candidate bytes"
+    );
+    assert_eq!(
+        fs::read(h.path().join(path).join("publication-result")).unwrap(),
+        b"published bytes"
+    );
+    inventory(h.path())
+        .reference("actual-stage-report", &[])
+        .unwrap();
+    maintain_fixture_to(h.path(), 0);
+    assert!(!h.path().join(path).exists());
+}
+
+#[test]
+fn unfinished_directory_resume_preserves_live_readers_replacements_and_completed_originals() {
+    if !isolated_capability_test(
+        "unfinished_directory_resume_preserves_live_readers_replacements_and_completed_originals",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/unpublished";
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(path),
+        true,
+        json!({"original_exit":null}),
+    )
+    .unwrap()
+    .unwrap();
+    drop(publication);
+    let reader = retained_artifacts::retention::read_guard(h.path(), path)
+        .unwrap()
+        .unwrap();
+    assert!(
+        inventory(h.path())
+            .resume_unfinished_directory("fixture", path)
+            .is_err()
+    );
+    drop(reader);
+    fs::rename(
+        h.path().join(path),
+        h.path().join(format!("{path}-original")),
+    )
+    .unwrap();
+    fs::create_dir(h.path().join(path)).unwrap();
+    assert!(
+        inventory(h.path())
+            .resume_unfinished_directory("fixture", path)
+            .is_err()
+    );
+    assert!(h.path().join(format!("{path}-original")).is_dir());
+    assert!(h.path().join(path).is_dir());
+    let complete = ".chrono-harness/state/fixtures/complete";
+    let publication = retained_artifacts::retention::create_adopted(
+        h.path(),
+        "fixture",
+        &h.path().join(complete),
+        true,
+        json!({}),
+    )
+    .unwrap()
+    .unwrap();
+    publication.complete(json!({"status":"joined"})).unwrap();
+    assert!(
+        inventory(h.path())
+            .resume_unfinished_directory("fixture", complete)
+            .is_err()
+    );
+}
+
+#[test]
 fn live_publication_accepts_exact_caller_without_leaving_a_durable_root() {
     if !isolated_capability_test(
         "live_publication_accepts_exact_caller_without_leaving_a_durable_root",

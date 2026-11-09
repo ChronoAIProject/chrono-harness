@@ -393,8 +393,7 @@ fn producer_store_resolution_does_not_acquire_maintenance_admission() {
     let h = host();
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
-    // Initial maintenance uses its normal command budget. The short deadline
-    // belongs to the read-only resolution checked below while admission is held.
+    // Apply the short limit to resolution, after preparing maintenance ownership.
     h.policy(|p| p["timeout_seconds"] = value!(1));
     let state = h.record_directory(&h.root);
     let owner = fs::read(state.join("owner.json")).unwrap();

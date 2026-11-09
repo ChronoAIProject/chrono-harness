@@ -107,6 +107,7 @@ fn producer_record_path(directory: &Path, allocation: &Path) -> PathBuf {
 fn fixture_git() -> PathBuf {
     chrono_harness::resolve_program(&source(), "git", None).expect("Git fixture tool on PATH")
 }
+mod age;
 mod automatic;
 mod bounded_cleanup;
 mod check_inputs;
