@@ -8,12 +8,26 @@ mod execution_fixture;
 use execution_fixture::Step;
 
 fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_projects::Results {
-    let result = execute(plan);
-    if !result.as_ref().is_ok_and(|r| r.passed()) {
+    let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.chrono-harness/state/test-failures");
+    std::fs::create_dir_all(&directory).unwrap();
+    let trace = tempfile::Builder::new()
+        .prefix("scheduler-trace-")
+        .tempdir_in(&directory)
+        .unwrap();
+    let logger = chrono_diagnostics::logging::Logger::new(
+        "projects-execution-test",
+        chrono_diagnostics::logging::Level::DEBUG,
+        chrono_diagnostics::rolling::RollingFile::open(trace.path(), 1024 * 1024, 2).unwrap(),
+    );
+    let result = logger.run(|| execute(plan));
+    let trace_status = logger.finish();
+    if !result.as_ref().is_ok_and(|r| r.passed()) || trace_status.is_err() {
+        eprintln!(
+            "original execution trace retained at {}",
+            trace.keep().display()
+        );
         let retained = (|| -> Result<_, Box<dyn std::error::Error>> {
-            let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../.chrono-harness/state/test-failures");
-            std::fs::create_dir_all(&directory)?;
             let (file, path) = tempfile::Builder::new()
                 .prefix("scheduler-")
                 .suffix(".json")
@@ -56,6 +70,7 @@ fn execute_observed(plan: &chrono_judge_routes::Execution) -> chrono_judge_proje
             ),
         }
     }
+    trace_status.expect("execution trace must preserve its original events");
     result.unwrap()
 }
 

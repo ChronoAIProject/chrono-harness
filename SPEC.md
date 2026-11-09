@@ -176,7 +176,7 @@ FILEMAP 的文件可显式声明 `verification`：`role` 为 `program`、`specif
 
 projects schema v2 要求每个 project／script 显式登记非空 `language`；projects 判官只核 DELTA 影响的专属配对，要求语言 ID 相同，唯一额外准入为生产 `shell`、测试 `python`。这两个保留 ID 由宿主显式选择，sh／bash 可登记为 `shell`；其它 ID 是不作推断、不归一化的字面值。schema v1 保留旧合同，不因升级二进制自动取得语言约束。
 
-配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。显式测试清单由 Rust `chrono-ci test-inventory` 读取宿主 `chrono-workflow-inventory/v1` 配置，核对登记的 Cargo/libtest 未过滤、ignored 与分组列表：未过滤清单及各分组须非空，各组互不相交，合计精确覆盖未过滤清单，ignored 清单须为空；不据此推导依赖或选测；行为验证归 `ci-tests`。宿主 bootstrap 的 Rust 生产／专属测试项目及薄 shell 入口分别登记，由原生启动 CI 单元执行；Python 启动栈及其实现专属测试已从现役登记退役。示例的 v2 采用、剩余跨语言测试夹具迁移及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
+配对检查验证登记，不从文件正文证明实现、测试驱动与 helper 的实际语言，也不证明不存在薄包装。实际操作身份仍由登记路由与原始执行回执核对。本仓采用 v2 声明；scoped CI 与 projects 判官共用配对和语言规则，scoped v1 登记保留旧解释。显式测试清单由 Rust `chrono-ci test-inventory` 读取宿主 `chrono-workflow-inventory/v1` 配置，核对登记的 Cargo/libtest 未过滤、ignored 与分组列表：未过滤清单及各分组须非空，各组互不相交，合计精确覆盖未过滤清单，ignored 清单须为空；不据此推导依赖或选测；行为验证归 `ci-tests`。宿主 bootstrap 的 Rust 生产／专属测试项目及薄 shell 入口分别登记，由原生启动 CI 单元执行；Python 启动栈及其实现专属测试已从现役登记退役。示例的 v2 采用及 helper／外部 fixture 的完整语言登记仍未完成，不宣称本条全面启用。
 
 ### 2.3 仓库源数据、在线事实与主机绑定边界
 
@@ -1151,7 +1151,7 @@ stdout 为版本化 JSON，绑定调用、仓库、期望／观察 SHA、检查�
 
 本仓旧输入分支的原生初始盘点已退役：当前检查和发布没有消费其全工具安装及主机／SDK／Python／配置盘点输出。删除对应工作流、转发与探测脚本、宿主观察声明、专属动作及测试；普通 core／所有者 bootstrap 的实际 fetch、构建和安装保留。不将旧盘点列为待激活义务；仍有用途的历史原件按现有保管合同处理，退役不证明输入齐全或历史验收通过。
 
-§2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本库现有 Rust 测试仍包含内嵌 Python／Shell 测试逻辑，须迁移到 Rust 测试及子进程 helper；真实跨语言接口 fixture 须按该节独立登记。本仓已采用 v2，示例的 v2 采用、helper 的完整语言登记与实际代码迁移仍未完成；声明检查不证明源码的实际语言。
+§2.2 的语言声明与受影响配对检查由 projects schema v2 承载，v1 宿主不自动启用。本仓通用执行、历史转换和报告工具观察回归由 Rust 测试及子进程 helper 实现；Python 业务示例及其配对测试保留，真实跨语言接口 fixture 仍须按该节独立登记。本仓已采用 v2；示例的 v2 采用、helper 的完整语言登记及完整同语言约束验收仍未完成，声明检查不证明源码的实际语言。
 
 §4.2、§7.1 与 §7.2 是尚未完整验收的目标合同。当前实现已有 stdout 协议隔离、原始进程字节／退出和部分失败证据保留，结构化日志与跨层异常链尚未全面采用。缓存键与 provider 投影已有候选实现，主宿主显式登记实际检查／Rust 发布作业、需求、用途和项目编译产物，生成固定版本的 restore/save action；当前运行输入与编译源码分别取有界命令观察及 FILEMAP 显式闭包。
 

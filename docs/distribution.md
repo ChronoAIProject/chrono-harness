@@ -132,7 +132,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 ## 宿主采用
 
-宿主安装和原生 CI 输入准备使用 Rust 工具及薄 Shell 入口，无需复制本仓 `.chrono-harness/ci/` 和 `.chrono-harness/release/` 下的 Python。这些脚本负责本仓源码构建和发布；真实 Python 业务及其输入探测是否需要 Python，由宿主自己的明确登记决定。
+宿主安装和原生 CI 输入准备使用 Rust 工具及薄 Shell 入口。本仓 `.chrono-harness/ci/` 和 `.chrono-harness/release/` 中的 Rust 项目与薄 Shell 入口负责本仓源码构建和发布，普通宿主使用已安装工具。真实 Python 业务及其输入探测是否需要 Python，由宿主自己的明确登记决定。
 
 取得固定发布清单和对应平台的 `chrono-distribution` 后，明确选择要安装的工具：
 

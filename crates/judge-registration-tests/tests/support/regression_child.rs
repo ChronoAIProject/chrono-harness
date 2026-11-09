@@ -76,9 +76,9 @@ fn run(mode: &str, bytes: &[u8]) -> Result<u8, String> {
     let outputs = if mode == "conflict" {
         json!({"impact":{"seeds":[request.judge_id]},"tests":null,"costs":{"unknown":["fixture"]}})
     } else {
-        // This is an actual external tool observation, with no Python test logic.
-        let tool = "/usr/bin/python3";
-        let child = Command::new(tool)
+        // Observe the actual fixture executable without a host interpreter dependency.
+        let tool = std::env::current_exe().map_err(|e| e.to_string())?;
+        let child = Command::new(&tool)
             .arg("--version")
             .output()
             .map_err(|e| e.to_string())?;
@@ -121,6 +121,13 @@ fn run(mode: &str, bytes: &[u8]) -> Result<u8, String> {
 
 fn main() -> ExitCode {
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.as_slice() == ["--version"] {
+        println!(
+            "chrono-test-registration-regression {}",
+            env!("CARGO_PKG_VERSION")
+        );
+        return ExitCode::SUCCESS;
+    }
     if args.len() != 1 {
         eprintln!("expected one regression mode");
         return ExitCode::from(2);
