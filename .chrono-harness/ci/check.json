@@ -16,7 +16,6 @@
       "cargo": "cargo",
       "chrono-ci": ".chrono-harness/bin/chrono-ci",
       "chrono-worktree": ".chrono-harness/bin/chrono-worktree",
-      "python3": "/usr/bin/python3",
       "bash": "/bin/bash",
       "rustup": "rustup",
       "verus": ".chrono-harness/bin/verus/verus",

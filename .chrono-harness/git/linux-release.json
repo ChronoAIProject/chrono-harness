@@ -342,15 +342,6 @@
       "expected_version": null
     },
     {
-      "id": "python3",
-      "program": "/usr/bin/python3",
-      "resolution": "PATH-once",
-      "version_argv": [
-        "--version"
-      ],
-      "expected_version": null
-    },
-    {
       "id": "chrono-ci",
       "program": ".chrono-harness/bin/chrono-ci",
       "resolution": "PATH-once",
