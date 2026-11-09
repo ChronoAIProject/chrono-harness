@@ -1,3 +1,5 @@
+#[path = "context.rs"]
+mod context;
 #[path = "recipe.rs"]
 mod recipe;
 use chrono_host_release::recipe::Loaded;
@@ -159,7 +161,7 @@ impl Fixture {
         dependencies: &Value,
         collect: bool,
     ) -> Output {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-release-cli"));
+        let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-cli"));
         command.arg(self.root()).arg(output);
         if collect {
             command.arg("--collect");
@@ -201,7 +203,7 @@ impl Fixture {
 
     pub fn local(&self, output: &Path) -> Output {
         capture(
-            Command::new(env!("CARGO_BIN_EXE_chrono-test-release-cli"))
+            context::command(env!("CARGO_BIN_EXE_chrono-test-release-cli"))
                 .arg(self.root())
                 .arg(output),
         )

@@ -96,6 +96,8 @@ v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、�
 
 Rust `test.host-release-native-tests` 运行全部发布行为测试。真实 distribution pack 使用测试 crate 自行编译的 distribution alias；真实 cache 回归消费暂存到 `crates/cache/target/debug/chrono-cache` 的选中发布资产，并执行 plan→recover→stage→consumer→plan。因此发布验证只依赖 `build_cache`，不依赖发布版 distribution。本地 FILEMAP、shared_operations 和两平台 needs／downloads 同步登记；原两组 Python 验证由这一未过滤 Rust 操作替代。回归核传输摘要、恢复原件及重新规划的执行物身份，不能代替不同编译配置或完整外围 workflow 的验收。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures，collector 仍要求全部真实单元成功。
 
+发布行为测试在创建临时宿主的 CLI／launcher 子进程时，统一移除外层发布的十个控制变量，再显式设置该样本的运行、依赖等输入。否则真实 preview 的源码 SHA 会污染临时仓库，触发正确的源码身份拒绝。普通 CI 中的 Rust 命令替身回归模拟 build／preview／stable 父环境，核对清除继承值、保留显式输入与其他环境；它不调用 Git 或编译器，也不代替两平台原始未过滤测试与公开发布验收。
+
 发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。Git 按所选政策一次解析并固定本轮实际身份；显式配置版本或摘要预期时，不符仍在执行前拒绝。运行读数归 state／线上原件，候选是否可用仍须实际验证。
 
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
