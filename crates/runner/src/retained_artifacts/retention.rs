@@ -680,8 +680,9 @@ impl Inventory {
         let current_digest = sha256(&self.policy_bytes);
         let mut preserved = BTreeSet::new();
         let mut roots = BTreeSet::new();
-        // Preflight before changing bindings. Reacquire and revalidate each actual
-        // relationship component for the write; never hold unrelated descriptors.
+        // Rebinding needs only an output and its forward dependencies. Reverse
+        // references and consumer roots are unchanged, so do not expand them as
+        // disposal does. Preflight, then reacquire and revalidate before writing.
         // A later interruption may leave old/current components, which the same
         // exact migration request already accepts on reentry.
         for publish in [false, true] {
@@ -690,8 +691,8 @@ impl Inventory {
                 if seen.contains(id) {
                     continue;
                 }
-                let gate = self.addressed_gate(&[id.clone()], &[], &[], None, true, true)?;
-                let mut l = self.load_bound(&gate, &previous_digest)?;
+                let gate = self.addressed_gate(&[id.clone()], &[], &[], None, false, true)?;
+                let l = self.load_bound(&gate, &previous_digest)?;
                 seen.insert(id.clone());
                 seen.extend(l.outputs.iter().map(|output| output.id.clone()));
                 let mut owners = Vec::new();
@@ -711,8 +712,7 @@ impl Inventory {
                     );
                 }
                 if publish {
-                    l.policy_sha256 = current_digest.clone();
-                    self.save(&l, &gate)?;
+                    self.partition_rebind_policy(&gate)?;
                     preserved.extend(l.outputs.iter().map(|output| output.id.clone()));
                     roots.extend(l.roots.keys().cloned());
                 }

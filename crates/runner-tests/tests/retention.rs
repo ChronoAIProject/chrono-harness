@@ -2289,6 +2289,24 @@ fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_depende
         paths.push(path);
     }
     let original = ledger(h.path());
+    let mut objects = Vec::new();
+    for (cursor, output) in original["outputs"].as_array().unwrap().iter().enumerate() {
+        let path = retention_state::object_path(h.path(), output["id"].as_str().unwrap());
+        let mut record: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        record["cursor"] = json!(cursor + 1);
+        fs::write(&path, serde_json::to_vec(&record).unwrap()).unwrap();
+        objects.push((path, record));
+    }
+    let roots: Vec<_> = original["roots"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .map(|role| {
+            let path = retention_state::role_path(h.path(), role);
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
     policy["producers"]["check-original"] = json!([".chrono-harness/state/preparation/"]);
     let current = serde_json::to_vec(&policy).unwrap();
     fs::write(h.path().join(POLICY_PATH), &current).unwrap();
@@ -2299,6 +2317,14 @@ fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_depende
     let mut after = ledger(h.path());
     after["policy_sha256"] = original["policy_sha256"].clone();
     assert_eq!(after, original);
+    for (path, mut expected) in objects {
+        expected["policy_sha256"] = json!(chrono_harness::sha256(&current));
+        let actual: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(actual, expected);
+    }
+    for (path, bytes) in roots {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
     for path in paths {
         assert_eq!(
             fs::read(h.path().join(path).join("original")).unwrap(),
