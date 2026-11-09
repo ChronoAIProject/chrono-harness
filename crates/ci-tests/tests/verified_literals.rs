@@ -12,6 +12,89 @@ use vstd::prelude::*;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn native_job_terminal_outcomes_never_select_another_detail() {
+    proof {
+        reveal_strlit("completed"); reveal_strlit("success"); reveal_strlit("failure");
+        assert("success"@[0] != "failure"@[0]);
+    }
+    let passed = policy::native_job_state(Some("completed"),Some("success"),Some(false),None);
+    let failed = policy::native_job_state(Some("completed"),Some("failure"),Some(false),Some(1));
+    assert(matches!(passed, policy::NativeJobState::Succeeded));
+    assert(matches!(failed, policy::NativeJobState::Rejected));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn native_job_detail_requires_an_explicit_null_and_positive_exact_id() {
+    proof {
+        reveal_strlit("in_progress"); reveal_strlit("completed"); reveal_strlit("queued");
+        reveal_strlit("waiting"); reveal_strlit("pending"); reveal_strlit("requested");
+        assert("in_progress"@.len() != "completed"@.len());
+    }
+    let detail = policy::native_job_state(Some("in_progress"),None,Some(true),Some(91));
+    let missing = policy::native_job_state(Some("in_progress"),None,None,Some(91));
+    let valued = policy::native_job_state(Some("in_progress"),None,Some(false),Some(91));
+    let zero = policy::native_job_state(Some("in_progress"),None,Some(true),Some(0));
+    let absent = policy::native_job_state(Some("in_progress"),None,Some(true),None);
+    match detail { policy::NativeJobState::ReadDetail { id } => assert(id == 91), _ => assert(false) }
+    assert(matches!(missing,policy::NativeJobState::Rejected));
+    assert(matches!(valued,policy::NativeJobState::Rejected));
+    assert(matches!(zero,policy::NativeJobState::Rejected));
+    assert(matches!(absent,policy::NativeJobState::Rejected));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn native_job_fields_keep_absent_distinct_from_present_and_compare_all_bytes() {
+    let one = [1u8,2];
+    let different = [1u8,3];
+    proof { assert(one@ =~= seq![1u8,2]); assert(different@ =~= seq![1u8,3]); }
+    let same = policy::observed_field_equal(Some(&one),Some(&one));
+    let changed = policy::observed_field_equal(Some(&one),Some(&different));
+    let absent = policy::observed_field_equal(None,Some(&one));
+    let both_absent = policy::observed_field_equal(None,None);
+    assert(same && !changed && !absent && both_absent);
+    let short = policy::native_job_binding(&[(None,None)]);
+    assert(!short);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_publisher_lookup_keeps_the_first_full_match() {
+    proof {
+        reveal_strlit("build"); reveal_strlit("publish"); reveal_strlit("publishing");
+        assert("build"@.len() != "publish"@.len());
+        assert("publishing"@.len() != "publish"@.len());
+    }
+    let jobs = ["build","publish","publish"];
+    proof { assert(jobs@ =~= seq!["build","publish","publish"]); }
+    let selected = policy::publisher_index(&jobs,"publish");
+    let prefix = policy::publisher_index(&jobs,"publishing");
+    assert(selected == Some(1usize) && prefix == None::<usize>);
+    let dependencies = policy::publisher_dependencies(1,false);
+    let missing = policy::publisher_dependencies(0,false);
+    let always = policy::publisher_dependencies(1,true);
+    assert(dependencies && !missing && !always);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn delivery_requires_v2_and_the_successful_workflow_trigger() {
+    proof {
+        reveal_strlit("chrono-github-release/v2"); reveal_strlit("chrono-github-release/v1");
+        assert("chrono-github-release/v2"@[23] != "chrono-github-release/v1"@[23]);
+    }
+    let valid = policy::delivery_mode("chrono-github-release/v2",0);
+    let push = policy::delivery_mode("chrono-github-release/v2",1);
+    let legacy = policy::delivery_mode("chrono-github-release/v1",0);
+    assert(valid && !push && !legacy);
+}
+
+#[cfg(verus_keep_ghost)]
+fn delivery_checkout_uses_the_landing_source_and_build_keeps_its_source() {
+    let delivery = policy::delivery_source(true);
+    let build = policy::delivery_source(false);
+    assert(delivery@ == "${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}"@);
+    assert(build@ == "${{ inputs.source || github.sha }}"@);
+}
+
 // The native workflow test checks the emitted guard at runtime.
 #[cfg(verus_keep_ghost)]
 fn push_only_cache_saving_has_an_exact_native_event_guard() {

@@ -16,11 +16,17 @@ chrono-ci test-inventory --host-root HOST --config CONFIG
 
 本仓 workflow 专属测试项目明确登记三组，分别分配给 `judge-workflow`（核心）、`judge-workflow-units`（直接完整单元测试）、`judge-workflow-short`（完整短命令测试）。action 明确选择成员，清单保护核覆盖范围，不推断依赖。三组合计覆盖原两个测试二进制，保留 fixture、profile 和业务限制。发布仍使用不带过滤的 `actions.execute`／原 `test.judge-workflow-tests`，旧测试身份通过 `test_groups` 绑定独立的核心过滤 action。
 
+该测试项目的 dev profile 去掉调试信息，保留调试断言和溢出检查。迁移样本会把实际辅助程序纳入固定 Git 快照；调试信息没有测试使用方，却会随 Git 原始输出进入请求和报告。由 Cargo 在产物生产处移除这部分内容，原有迁移、原件复用、坏证据拒绝、测试集合、超时和报告上限保持不变；本地与原生 CI 仍须分别核对实际执行。
+
 各组保留构建前置，并通过登记的 `workflow.inventory` 操作运行 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
 worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四项宿主入口集成测试：参与式检查、脱离父进程的 Rust 消费者、短检查、原生 Cargo 子进程。核心组排除同样四个名称。旧 Python bootstrap 组合及独立入口测试随实现退役；当前 bootstrap 委托与拒绝边界归 Rust bootstrap 专属测试。两组和发布用的未过滤 action 均显式采用 8 个 libtest 线程，限制单个测试进程内部的并发；宿主操作仍按 cap=2 调度。当前测试和期限保留。
+
+断言失败原件在最后一个使用方退出后即可回收的测试，复用现有 Rust 锁能力隔离工具，在独立测试进程中执行。其他测试的 fork 会短暂继承本进程的文件描述符，包括尚未 exec 关闭的 CLOEXEC 描述符；这段临时继承不能用来判定目标使用方未释放。原件保留、过期后的单轮回收和已有源码保全断言保持，并在回收失败时输出实际维护结果；不增加重试、测试时限或生产权限。
+
+分页登记迁移的替换检测也使用同一隔离工具：释放原分配者后，迁移必须能够取得 metadata 写锁，才可到达测试注入的登记替换边界。保留替换拒绝、原登记保全和后续迁移仍拒绝的全部断言。
 
 `worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
@@ -139,6 +145,8 @@ PR 用固定 workflow merge commit 的第一父提交作 base，该合并提交�
 GitHub [原生路径过滤](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#git-diff-comparisons)文档有 3000 文件上限，[PR files API](https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files)最多 3,000，[compare API](https://docs.github.com/en/rest/commits/commits#compare-two-commits)最多 300。detector 不从它们取文件列表，这些也不是通用运行上限。
 
 Rust provider 拒绝检测失败／取消／缺失，以及任一选中单元失败、取消、缺失或意外跳过。只有 detector 声明非必需的跳过可接受。gather 核精确父 run／仓库／当前 attempt／事件／工作流源码，依赖完成后分页读 job 历史，不轮询其他工作流，也不等自己的父运行结束。
+
+原生 needs 已确认成功，但完整 job 列表中的唯一最新执行仍是已知非终态且 conclusion 为 null 时，gather 只额外读取一次该精确 job ID 的详情。详情须保持 id／run_id／run_attempt／head_sha／name 不变，并实际为 completed／success；仍未完成、失败、身份变化或传输失败都拒绝。已终结的列表结果保持原判定，不通过重读掩盖失败。两次响应沿现有 transport 保留；正常终态列表不增加 IO，无轮询或预算调整，额外读取的总成本未知。
 
 独立重试保留原 detector 及成功前置 attempt。非必需跳过由 `needs` 绑定，无需 job 执行 metadata 或产物。每个选中单元须在同一父 run 有成功的最新 API 状态；生成 `production` 输出寻址真实原 artifact、上下文摘要、报告摘要及生产 attempt。
 

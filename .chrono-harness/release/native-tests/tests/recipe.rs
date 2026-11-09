@@ -94,6 +94,7 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
     }
     assert_eq!(operations, covered);
     let jobs = workflow["jobs"].as_array().unwrap();
+    let delivery = read(".chrono-harness/release/delivery.json");
     assert_eq!(
         jobs.len(),
         loaded
@@ -103,7 +104,44 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
             .map(|jobs| jobs.len())
             .sum::<usize>()
             + loaded.recipe.native_frontends.len()
+            + usize::from(workflow["delivery"].is_object())
+            + delivery["packages"].as_object().unwrap().len()
     );
+    let publisher = jobs
+        .iter()
+        .find(|j| j["id"] == workflow["delivery"]["publisher"])
+        .unwrap();
+    let frontend = &loaded.recipe.native_frontends[delivery["frontend"].as_str().unwrap()];
+    let mut publisher_needs = vec![frontend.job.clone()];
+    let mut publisher_downloads =
+        vec![json!({"job":frontend.job,"directory":format!("{}/",frontend.directory)})];
+    for (native, package) in delivery["packages"].as_object().unwrap() {
+        let job = &loaded.recipe.native_jobs[native][&loaded.recipe.collector.id];
+        publisher_needs.push(job.clone());
+        publisher_downloads.push(
+            json!({"job":job,"directory":format!("{}/",package["directory"].as_str().unwrap())}),
+        );
+    }
+    assert_eq!(publisher["needs"], json!(publisher_needs));
+    assert_eq!(publisher["downloads"], json!(publisher_downloads));
+    assert!(publisher.get("always").is_none_or(|v| v == false));
+    for native in delivery["packages"].as_object().unwrap().keys() {
+        let installation = jobs
+            .iter()
+            .find(|job| job["id"] == format!("{native}_install"))
+            .unwrap();
+        let frontend = &loaded.recipe.native_frontends[native];
+        assert_eq!(
+            installation["needs"],
+            json!([delivery["installation"]["publisher"], frontend.job])
+        );
+        assert_eq!(
+            installation["downloads"],
+            json!([
+            {"job":delivery["installation"]["publisher"],"directory":delivery["installation"]["directory"]},
+            {"job":frontend.job,"directory":format!("{}/",frontend.directory)}])
+        );
+    }
     for (platform, bindings) in &loaded.recipe.native_jobs {
         let frontend = &loaded.recipe.native_frontends[platform];
         let producer = jobs.iter().find(|j| j["id"] == frontend.job).unwrap();
