@@ -171,9 +171,108 @@ fn accept(root: &Path, id: &Identity, commands: &mut InstallCommands) -> Result<
         &BTreeSet::from(["chrono-distribution".into(), "chrono-harness".into()]),
         "/bin/sh",
         "/usr/bin/curl",
+        "acme/project",
         "https://example.invalid/fixed/install.sh",
         commands,
     )
+}
+
+fn publication_probe(root: &Path, endpoint: &str, method: &str, exit: i32, stdout: &[u8]) {
+    let directory = root.join("publication");
+    let stderr = b"gh: Not Found (HTTP 404)\n";
+    fs::write(directory.join("probe.stdout"), stdout).unwrap();
+    fs::write(directory.join("probe.stderr"), stderr).unwrap();
+    let mut report: Value =
+        serde_json::from_slice(&fs::read(directory.join("receipt.json")).unwrap()).unwrap();
+    report["processes"].as_array_mut().unwrap().push(json!({
+        "argv":["/usr/bin/gh","api","--method",method,endpoint],
+        "exit_code":exit,
+        "stdout":{"path":"probe.stdout","sha256":chrono_harness::sha256(stdout),"size":stdout.len()},
+        "stderr":{"path":"probe.stderr","sha256":chrono_harness::sha256(stderr),"size":stderr.len()}
+    }));
+    fixture::write(&directory, "receipt.json", &report);
+}
+
+#[test]
+fn first_publication_absence_probes_do_not_prevent_public_installation() {
+    for channel in [Channel::Preview, Channel::Stable] {
+        for resource in ["releases/tags", "git/ref/tags"] {
+            let (root, id, mut commands) = install_fixture(channel.clone());
+            publication_probe(
+                root.path(),
+                &format!("repos/acme/project/{resource}/{}", id.version),
+                "GET",
+                1,
+                include_bytes!("data/github-release-not-found.json"),
+            );
+            accept(root.path(), &id, &mut commands).unwrap();
+            assert_eq!(commands.calls.len(), 2);
+            assert_eq!(commands.calls[0].0, "/usr/bin/curl");
+        }
+    }
+}
+
+#[test]
+fn publication_absence_does_not_hide_failed_or_unbound_processes() {
+    for failure in [
+        "exit",
+        "forbidden",
+        "message",
+        "malformed",
+        "repository",
+        "version",
+        "method",
+        "endpoint",
+        "stdout",
+        "stderr",
+        "build",
+    ] {
+        let (root, id, mut commands) = install_fixture(if failure == "build" {
+            Channel::Build
+        } else {
+            Channel::Preview
+        });
+        let mut endpoint = format!("repos/acme/project/releases/tags/{}", id.version);
+        if failure == "repository" {
+            endpoint = format!("repos/another/project/releases/tags/{}", id.version);
+        } else if failure == "version" {
+            endpoint = "repos/acme/project/releases/tags/v0.0.0".into();
+        } else if failure == "endpoint" {
+            endpoint = "repos/acme/project/releases/123/assets".into();
+        }
+        let mut body: Value =
+            serde_json::from_slice(include_bytes!("data/github-release-not-found.json")).unwrap();
+        if failure == "forbidden" {
+            body["status"] = json!("403");
+        } else if failure == "message" {
+            body["message"] = json!("unexpected response");
+        }
+        let stdout = if failure == "malformed" {
+            b"original invalid JSON".to_vec()
+        } else {
+            serde_json::to_vec(&body).unwrap()
+        };
+        publication_probe(
+            root.path(),
+            &endpoint,
+            if failure == "method" { "POST" } else { "GET" },
+            if failure == "exit" { 2 } else { 1 },
+            &stdout,
+        );
+        if ["stdout", "stderr"].contains(&failure) {
+            fs::write(
+                root.path().join(format!("publication/probe.{failure}")),
+                b"changed original",
+            )
+            .unwrap();
+        }
+        assert!(
+            accept(root.path(), &id, &mut commands).is_err(),
+            "{failure}"
+        );
+        assert!(commands.calls.is_empty(), "{failure}");
+        assert!(!commands.host.exists(), "{failure}");
+    }
 }
 
 #[test]
