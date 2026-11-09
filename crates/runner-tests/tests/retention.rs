@@ -4507,11 +4507,7 @@ fn several_retirements_count_their_shared_finalized_original_once() {
         "{round}"
     );
     assert_eq!(round["remaining_capability_retirements"], 0, "{round}");
-    assert_eq!(
-        removed,
-        (3 * b"obsolete report".len()) as u64,
-        "{rounds:?}"
-    );
+    assert_eq!(removed, (3 * b"obsolete report".len()) as u64, "{rounds:?}");
     for path in paths {
         assert!(!h.path().join(path).exists(), "{round}");
     }
