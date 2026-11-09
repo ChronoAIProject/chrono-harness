@@ -849,6 +849,34 @@ impl Manager {
         exclusive_namespace: bool,
         wait: bool,
     ) -> Result<Option<Self>, String> {
+        let Some(mut manager) = Self::open_metadata(
+            r,
+            root,
+            config_path,
+            bytes,
+            token,
+            scope,
+            exclusive_namespace,
+            wait,
+        )?
+        else {
+            return Ok(None);
+        };
+        manager.restore_absent_policy(r)?;
+        Ok(Some(manager))
+    }
+    // Metadata ownership and its durable consumers do not depend on whether an
+    // absent checkout's adopted policy can still be interpreted.
+    fn open_metadata(
+        r: &mut Runner,
+        root: &Path,
+        config_path: &str,
+        bytes: &[u8],
+        token: &str,
+        scope: &Path,
+        exclusive_namespace: bool,
+        wait: bool,
+    ) -> Result<Option<Self>, String> {
         let Some(inputs) = PolicyInputs::load(r, root, config_path, bytes)? else {
             return Ok(None);
         };
@@ -1050,7 +1078,7 @@ impl Manager {
             }
             absolute(&e.path, true)?;
         }
-        let mut manager = Self {
+        let manager = Self {
             inputs,
             ledger,
             directory,
@@ -1059,7 +1087,6 @@ impl Manager {
             _namespace: namespace,
             _gate: gate,
         };
-        manager.restore_absent_policy(r)?;
         manager.protect_originals()?;
         Ok(Some(manager))
     }
@@ -2470,15 +2497,7 @@ impl Manager {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
         report["producer_drains"] = value!([]);
-        report["output_retention"] = if all {
-            value!(self.outside_enrollment(r, |inputs, _| {
-                chrono_harness::retained_artifacts::retention::maintain_adopted(
-                    &inputs.policy.coordinator_root,
-                )
-            })?)
-        } else {
-            Value::Null
-        };
+        report["output_retention"] = Value::Null;
         report["maintenance_scope"] = if all {
             value!({"kind":"declared-enrollments"})
         } else {
@@ -2502,13 +2521,14 @@ impl Manager {
                 ))
             };
         }
-        let independent = self.outside_enrollment_readonly(r, |manager, r| {
+        let (independent, unprotected) = self.outside_enrollment_readonly(r, |manager, r| {
             let mut failures = Vec::new();
+            let mut unprotected = Vec::new();
             for path in manager.enrollment_paths()? {
                 if path == manager.scope {
                     continue;
                 }
-                let opened = Self::open(
+                let opened = Self::open_metadata(
                     r,
                     &manager.inputs.policy.coordinator_root,
                     &manager.inputs.config_path,
@@ -2520,6 +2540,14 @@ impl Manager {
                 );
                 match opened {
                     Ok(Some(mut owner)) => {
+                        if let Err(error) = owner.restore_absent_policy(r) {
+                            failures.push(format!("{}: {error}", path.display()));
+                            report["drain"]
+                                .as_array_mut()
+                                .unwrap()
+                                .push(value!({"path":path,"status":"failed","error":error}));
+                            continue;
+                        }
                         match owner.drain_entries(r, exclude, report, true) {
                             Ok(pending) => failures.extend(pending),
                             Err(error) => {
@@ -2536,11 +2564,13 @@ impl Manager {
                         if error.contains("enrollment metadata is busy")
                             || error.contains("enrollment metadata remains busy") =>
                     {
+                        unprotected.push(path.clone());
                         report["drain"].as_array_mut().unwrap().push(
                             value!({"path":path,"status":"preserved","preserved_reason":error}),
                         );
                     }
                     Err(error) => {
+                        unprotected.push(path.clone());
                         failures.push(format!("{}: {error}", path.display()));
                         report["drain"]
                             .as_array_mut()
@@ -2549,7 +2579,7 @@ impl Manager {
                     }
                 }
             }
-            Ok(failures)
+            Ok((failures, unprotected))
         })?;
         failures.extend(independent);
         let producer_failures = self.outside_enrollment(r, |inputs, _| {
@@ -2586,6 +2616,19 @@ impl Manager {
         Ok(failures)
         })?;
         failures.extend(producer_failures);
+        // All declared ledgers must establish their original consumers before
+        // this cross-object pass. Unknown metadata defers only that dependent
+        // pass; independent worktree and producer maintenance has already run.
+        report["output_retention"] = if unprotected.is_empty() {
+            value!(self.outside_enrollment(r, |inputs, _| {
+                chrono_harness::retained_artifacts::retention::maintain_adopted(
+                    &inputs.policy.coordinator_root,
+                )
+            })?)
+        } else {
+            value!({"status":"preserved","reason":"enrollment original protection unavailable",
+                "unprotected_enrollments":unprotected})
+        };
         report["cleanup_failures"] = value!(failures);
         if failures.is_empty() {
             Ok(())
