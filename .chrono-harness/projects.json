@@ -2438,24 +2438,6 @@
       "lockfile": ".chrono-harness/ci/native/Cargo.lock",
       "root": ".chrono-harness/ci/native",
       "actions": {
-        "validate_original_execution": {
-          "operation": "host.bootstrap-native-original-execution",
-          "tool": "cargo",
-          "argv": [
-            "run",
-            "--locked",
-            "--manifest-path",
-            ".chrono-harness/ci/native/Cargo.toml",
-            "--target-dir",
-            ".chrono-harness/cache/host-bootstrap-native/target",
-            "--bin",
-            "chrono-host-bootstrap",
-            "--",
-            "validate-original-execution",
-            ".",
-            ".chrono-harness/state/bootstrap.json"
-          ]
-        },
         "build": {
           "operation": "build.host-bootstrap-native",
           "tool": "cargo",
