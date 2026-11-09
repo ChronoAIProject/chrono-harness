@@ -129,36 +129,16 @@ impl GatedHost {
         let mut cfg: Value =
             serde_json::from_slice(&fs::read(h.root.join(".chrono-harness/config.json")).unwrap())
                 .unwrap();
-        for key in [
-            "CHRONO_CI_DETECTION",
-            "CHRONO_CI_NEEDS",
-            "GITHUB_RUN_ID",
-            "GITHUB_RUN_ATTEMPT",
-            "GITHUB_JOB",
-            "GH_TOKEN",
-        ] {
-            cfg["environment"]["inherit"]
-                .as_array_mut()
-                .unwrap()
-                .push(json!(key));
-        }
+        cfg["environment"]["inherit"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!("GH_TOKEN"));
         cfg["environment"]["credential_environment"] = json!(["GH_TOKEN"]);
         json_file(&h.root, ".chrono-harness/config.json", &cfg);
         let mut provider: Value =
             serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
-        provider["job_gating"] = gating();
         provider["gather"]["program"] = json!(".chrono-harness/bin/parent-gh");
         migrate_provider(&h.root, &provider);
-        let mut fm: Value =
-            serde_json::from_slice(&fs::read(h.root.join(".chrono-harness/FILEMAP.json")).unwrap())
-                .unwrap();
-        fm["files"].as_array_mut().unwrap().retain(|r| {
-            !matches!(
-                r["path"].as_str(),
-                Some(".github/workflows/alpha.yml" | ".github/workflows/beta.yml")
-            )
-        });
-        json_file(&h.root, ".chrono-harness/FILEMAP.json", &fm);
         h.revise();
         h.base = h.candidate.clone();
         git(&h.root, &["push", "-q", "origin", "dev"]);

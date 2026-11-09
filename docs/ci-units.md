@@ -152,7 +152,7 @@ Rust 行为回归验证单／多／零单元及重复汇总的请求次数，跨
 
 ### 拓扑迁移
 
-新 v4 单元初始化在没有已采用拓扑时选择条件父工作流；已有明确旧 provider 含义及定制保留。
+单元初始化要求完整、明确的条件父工作流声明，不补造 detector 配置；已有现役 provider 的宿主定制保留。
 
 full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语义文档读取、routes `global_selection`／分配验证及 `units::required`。它不提供 schema2 完整上下文、原 birth 回执、输入快照、流式产物或历史转换观察。最终完整汇总仍核真实有效输入和七判官原件。
 
@@ -160,11 +160,11 @@ full-v2 调度在 SDK 快照存在前复用纯 FILEMAP 声明影响、固定语�
 
 普通 `init`／`generate`／`verify` 只拥有当前 provider 输出，先核这些输出、保留宿主来源、拒绝无所有权冲突。verify 报漂移不修复；它们不推导其他拓扑、检查或退役旧工作流。
 
-拓扑变更用已有明确 `migrate`，提供精确旧 provider 快照和新来源。写入前核旧生成结果／新冲突，保留定制，只退役旧快照拥有的输出，同时更新宿主 FILEMAP 和明确消费者。
+现役配置的地址或来源变更用已有明确 `migrate`，提供精确原 provider 快照和新来源。写入前核原生成结果／新冲突，保留定制，只退役原快照拥有的输出，同时更新宿主 FILEMAP 和明确消费者。该入口不解码已退役的独立单元拓扑；旧发布宿主的升级须由其负责方保全并迁移原输出。
 
 准备和源码检查只绑定真实的 `collection.workflow_path`。单元配置没有独立工作流地址，gather 没有等待／轮询参数；汇总在原生 needs 完成后取得原报告，不等待自身所属的父运行结束。
 
-这样去掉重复迁移逻辑，以及普通生成时额外渲染／读取旧拓扑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。旧 ci-host 和已发布 Go／TS／mix provider 在公开二进制可用、调用方明确迁移前保留历史形式。
+这样去掉普通生成时额外渲染／读取旧拓扑的逻辑；运行和 CI 收益未测。[可复制条件宿主](../examples/ci-host-job-gating/README.md)使用安装工具和固定短命令。已发布 Go／TS／mix 示例继续绑定其旧二进制；这不形成现役源码的兼容执行义务。
 
 本仓通过 projects.json 的 `ci.generate-job-gating-example` 操作维护该示例的生成工作流，委托同一 Rust 生成器；执行时沿用登记的 `chrono-worktree use` 保护。
 
