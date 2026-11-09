@@ -1731,6 +1731,47 @@ fn large_registered_artifacts_do_not_exhaust_cleanliness_output_bound() {
     );
 }
 
+#[test]
+fn large_unregistered_directory_is_rejected_without_exhausting_cleanliness_output_bound() {
+    let h = Host::new("payload");
+    h.policy(|p| p["output_limit_bytes"] = value!(16384));
+    let base = git(&h.root, &["rev-parse", "HEAD"]);
+    let directory = h.root.join("unregistered-work");
+    fs::create_dir_all(&directory).unwrap();
+    for i in 0..512 {
+        fs::write(
+            directory.join(format!("{i:04}-{}", "source".repeat(12))),
+            "preserve unregistered work",
+        )
+        .unwrap();
+    }
+    let (code, report, error) = h.reconstruct(
+        reconstruction(&base, &base, value!([])),
+        "large-unregistered",
+    );
+    assert_ne!(code, 0, "{report} {error}");
+    assert!(
+        report["error"].as_str().unwrap().contains("unregistered"),
+        "{} {error}",
+        report["error"]
+    );
+    assert!(!h.parent.join("large-unregistered").exists());
+    assert_eq!(fs::read_dir(&directory).unwrap().count(), 512);
+    for i in 0..512 {
+        assert_eq!(
+            fs::read(directory.join(format!("{i:04}-{}", "source".repeat(12)))).unwrap(),
+            b"preserve unregistered work"
+        );
+    }
+    assert!(
+        report["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|p| p["process"]["failure"].is_null())
+    );
+}
+
 fn register_artifact(h: &Host, artifact: &str, ignore: &str) {
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     config["artifacts"]
@@ -1760,6 +1801,8 @@ fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_f
     let allowed = h.root.join("cache[1]/allowed");
     fs::create_dir_all(&allowed).unwrap();
     fs::write(allowed.join("kept"), "declared").unwrap();
+    fs::create_dir_all(h.root.join("empty-unregistered/nested")).unwrap();
+    fs::create_dir_all(h.root.join("CacheCase/allowed/empty")).unwrap();
     for (i, path) in [
         "cache[1]/outside",
         "cache1/allowed/foreign",
