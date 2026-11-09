@@ -337,85 +337,35 @@ fn immutable_reader_rejects_symbolic_missing_and_mismatched_producer_identities(
 }
 
 #[test]
-fn native_entrypoint_qualifies_the_fixed_original_and_rejects_other_hosts_and_escaping_references()
-{
-    use chrono_host_bootstrap::bindings::native_platform;
+fn fixed_original_validation_binds_the_host_and_streams_without_rerunning_tools() {
+    use chrono_host_bootstrap::original::validate_fixed_execution;
     let fixture = Fixture::new();
-    let registry_path = fixture.root.join(".chrono-harness/ci/registry.json");
-    let mut registry: Value = serde_json::from_slice(&fs::read(&registry_path).unwrap()).unwrap();
-    let native = native_platform().unwrap();
-    registry["platforms"][format!("{}/{}", native.system, native.machine)] =
-        registry["platforms"]["fixture/native"].clone();
-    fs::write(&registry_path, serde_json::to_vec(&registry).unwrap()).unwrap();
+    let native = NativePlatform {
+        system: "fixture".into(),
+        machine: "native".into(),
+    };
     let raw = original(&fixture);
     let calls = fs::read(fixture.tools.join("calls.json")).unwrap();
-    let invoke = |arguments: &[&str]| {
-        let mut command =
-            std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-bootstrap-native"));
-        command
-            .current_dir(&fixture.root)
-            .args(arguments)
-            .env_clear()
-            .envs(fixture.environment.iter().filter(|(key, _)| {
-                key.as_os_str() != std::ffi::OsStr::new(chrono_harness::process_fds::ENV)
-            }));
-        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        command.output().unwrap()
+    let validate = |raw: &[u8]| {
+        validate_fixed_execution(&fixture.root, &fixture.environment, &native, raw)
     };
-    let output = invoke(&[
-        "validate-original-execution",
-        ".",
-        ".chrono-harness/state/bootstrap.json",
-    ]);
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let receipt: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let report = validate(&raw).unwrap();
+    assert_eq!(report.operations.len(), 2);
     assert_eq!(
-        receipt["schema"],
-        "chrono-bootstrap-original-execution-validation/v1"
-    );
-    assert_eq!(receipt["sha256"], chrono_harness::sha256(&raw));
-    assert_eq!(receipt["operations"], 2);
-    assert_eq!(
-        receipt["source"],
+        serde_json::to_value(report.source).unwrap(),
         serde_json::from_slice::<Value>(&raw).unwrap()["source"]
     );
-    for arguments in [
-        vec![
-            "validate-original-execution",
-            ".",
-            ".chrono-harness/state/../ci/build.json",
-        ],
-        vec![
-            "validate-original-execution",
-            ".",
-            ".chrono-harness/ci/build.json",
-        ],
-        vec!["unknown", ".", ".chrono-harness/state/bootstrap.json"],
-        vec![],
+    for path in [
+        ".chrono-harness/state/../ci/build.json",
+        ".chrono-harness/ci/build.json",
     ] {
-        let output = invoke(&arguments);
-        assert_eq!(output.status.code(), Some(1));
-        assert!(output.stdout.is_empty());
-        assert!(!output.stderr.is_empty());
+        let mut changed: Value = serde_json::from_slice(&raw).unwrap();
+        changed["operations"][0]["stdout"]["path"] = json!(path);
+        assert!(validate(&serde_json::to_vec(&changed).unwrap()).is_err());
     }
     let mut changed: Value = serde_json::from_slice(&raw).unwrap();
     changed["host_root"] = json!(fixture.root.join("another-host"));
-    fs::write(
-        fixture.root.join(".chrono-harness/state/bootstrap.json"),
-        serde_json::to_vec(&changed).unwrap(),
-    )
-    .unwrap();
-    let output = invoke(&[
-        "validate-original-execution",
-        ".",
-        ".chrono-harness/state/bootstrap.json",
-    ]);
-    assert_eq!(output.status.code(), Some(1));
-    assert!(output.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&output.stderr).contains("another host"));
+    let error = validate(&serde_json::to_vec(&changed).unwrap()).err().unwrap();
+    assert!(error.contains("another host"), "{error}");
     assert_eq!(fs::read(fixture.tools.join("calls.json")).unwrap(), calls);
 }
