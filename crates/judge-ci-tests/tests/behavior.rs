@@ -35,12 +35,6 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
     assert_eq!(e["closure"]["selected_tests"], json!(["test:suite"]));
     for name in &names {
         assert!(
-            e["seeds"]
-                .as_array()
-                .unwrap()
-                .contains(&json!(format!("file:{name}")))
-        );
-        assert!(
             e["seed_causes"]
                 .as_array()
                 .unwrap()
@@ -285,12 +279,6 @@ fn rename_is_delete_plus_add() {
     assert!(explanation["edges"].as_array().unwrap().contains(
         &json!({"from":"file:src.txt", "kind":"compile", "to":"project:lib", "origin":"base"})
     ));
-    assert!(
-        explanation["seeds"]
-            .as_array()
-            .unwrap()
-            .contains(&json!("file:src.txt"))
-    );
     assert!(
         explanation["seed_causes"]
             .as_array()
@@ -730,7 +718,7 @@ fn adapter_explains_legacy_only_selection_without_graph_edges() {
     assert_eq!(h.calls(), 1);
     let e = &r.evidence["selection_explanation"];
     assert_eq!(e["edges"], json!([]));
-    assert_eq!(e["legacy_only_selections"], json!(["test:suite"]));
+    assert_eq!(r.evidence["selected"], json!(["test:suite"]));
     assert_eq!(
         e["extra_selections"]["test:suite"],
         json!(["changed operation: test.suite"])

@@ -14,9 +14,11 @@
 | `judge-ci` | 按范围 CI 的登记、快照、起点和操作政策，通过明确适配器复用上述机制 |
 | `ci` | GitHub 工作流生成及事件输入准备，不选测、不判断结果 |
 
-`selection_explanation.extra_selections` 解释旧规则额外选中项，`legacy_only_selections` 指出不由 test-execution 边选中的部分。这些不变成完整政策边，见[影响范围说明](filemap-impact.md)。`instructions` 仍独立，catalog、布局和相对根别名不变。
+`selection_explanation.extra_selections` 解释操作、绑定、工具、环境或限制变化带来的额外选择。这些不变成完整政策边，见[影响范围说明](filemap-impact.md)。`instructions` 仍独立，catalog、布局和相对根别名不变。
 
-按范围政策可明确选 `selection_evidence: "explicit-graph/v1"`：保留完整两端合并 `edges`、`seeds`、`seed_causes`、额外选择及原因；`closure.schema: "chrono-ci-reachability/v1"` 发布排序的 `reached` 节点和图选中的 `selected_tests`。由保留图和原因可重建前驱及贡献起点表，因此传输省去重复派生字符串，不改选择或执行。省略保留旧说明形状，null／未知格式在业务前失败。
+按范围政策可明确选 `selection_evidence: "explicit-graph/v1"`：保留完整两端合并 `edges`、`seed_causes`、额外选择及原因；`closure.schema: "chrono-ci-reachability/v1"` 发布排序的 `reached` 节点和图选中的 `selected_tests`。由保留图和原因可重建前驱及贡献起点表，因此传输省去重复派生字符串，不改选择或执行。省略时发布完整传播结果，null／未知格式在业务前失败。
+
+按范围 CI 的起点由 `seed_causes[].node` 维护，不再额外发布重复的 `seeds` 列表；`extra_selections` 与图选测结果已能区分额外选择，也不再发布两者差集 `legacy_only_selections`。现役读取方已迁移，完整 FILEMAP 的独立 impact 合同保持原格式。输出及计算成本收益尚未实测。
 
 本宿主因 2697 条私有声明使原响应超过未改动的 8 MiB 上限而采用此表示。Rust 测试保留全部 2697 个明确起点输入和输出限制。完整 FILEMAP 影响输出保留原版本格式。源码／bootstrap／标准／原生验收及总验证成本仍分别处理。
 
