@@ -1564,6 +1564,98 @@ fn identity_drift_and_changed_policy_preserve_original_evidence() {
     );
 }
 #[test]
+fn bounded_disposal_does_not_rewrite_unchanged_dependency_declarations() {
+    if !isolated_capability_test(
+        "bounded_disposal_does_not_rewrite_unchanged_dependency_declarations",
+    ) {
+        return;
+    }
+    let h = host(2, 16);
+    let report_path = tree(h.path(), "obsolete-report");
+    let report = inventory(h.path())
+        .begin("fixture", &report_path, json!(null))
+        .unwrap();
+    let report_id = report.id().to_owned();
+    for n in 0..4 {
+        fs::write(h.path().join(&report_path).join(n.to_string()), [7; 32]).unwrap();
+    }
+    let mut originals = Vec::new();
+    for n in 0..8 {
+        let path = format!(".chrono-harness/state/fixtures/required-{n}");
+        fs::write(h.path().join(&path), b"current original").unwrap();
+        let publication = inventory(h.path())
+            .begin_rooted("fixture", &path, json!(null), &[format!("current-{n}")])
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(json!({"exit": 7})).unwrap();
+        originals.push((id, path));
+    }
+    inventory(h.path())
+        .dependencies(
+            &report_id,
+            &originals
+                .iter()
+                .map(|(id, _)| id.clone())
+                .collect::<Vec<_>>(),
+        )
+        .unwrap();
+    report.complete(json!({"exit": 17})).unwrap();
+    let declarations: Vec<_> = originals
+        .iter()
+        .map(|(id, _)| {
+            let path = retention_state::object_path(h.path(), id);
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+
+    let round = inventory(h.path())
+        .maintain_originals(&[report_id.clone()])
+        .unwrap();
+    assert!(
+        round["accounting_errors"].as_array().unwrap().is_empty(),
+        "{round}"
+    );
+    assert_eq!(round["nodes"], 2, "{round}");
+    assert_eq!(round["removed_logical_bytes"], 32, "{round}");
+    assert!(round["disposed"].as_array().unwrap().is_empty(), "{round}");
+    assert!(h.path().join(&report_path).is_dir());
+    for (path, before) in &declarations {
+        assert_eq!(fs::read(path).unwrap(), *before, "{}", path.display());
+    }
+    let partial: Value = serde_json::from_slice(
+        &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(partial["output"]["phase"], "disposing");
+    assert_eq!(partial["output"]["outcome"]["exit"], 17);
+
+    for _ in 0..8 {
+        let round = inventory(h.path())
+            .maintain_originals(&[report_id.clone()])
+            .unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert!(round["nodes"].as_u64().unwrap() <= 2, "{round}");
+        if !h.path().join(&report_path).exists() {
+            break;
+        }
+    }
+    assert!(!h.path().join(&report_path).exists());
+    for (id, path) in originals {
+        assert_eq!(fs::read(h.path().join(path)).unwrap(), b"current original");
+        let record: Value =
+            serde_json::from_slice(&fs::read(retention_state::object_path(h.path(), &id)).unwrap())
+                .unwrap();
+        assert_eq!(record["incoming"], json!([]));
+        assert_eq!(record["output"]["outcome"]["exit"], 7);
+        assert_eq!(record["roles"].as_array().unwrap().len(), 1);
+    }
+}
+
+#[test]
 fn partial_disposal_is_bounded_resumable_and_cannot_be_referenced_again() {
     if !isolated_capability_test(
         "partial_disposal_is_bounded_resumable_and_cannot_be_referenced_again",
@@ -4830,4 +4922,233 @@ fn publication_input_handoff_requires_sealed_referenced_unchanged_originals() {
         h.path().join(unrelated).exists(),
         "another publisher remains protected"
     );
+}
+
+fn observation_publication(
+    root: &Path,
+    name: &str,
+) -> (String, retained_artifacts::retention::Publication) {
+    let path = format!(".chrono-harness/state/fixtures/{name}");
+    let publication = inventory(root)
+        .plan("fixture", &path, true, json!({"state":"intent"}))
+        .unwrap();
+    publication.materialize().unwrap();
+    publication
+        .write_file(
+            &root.join(&path).join("result.json"),
+            b"actual producer result",
+        )
+        .unwrap();
+    (path, publication)
+}
+
+#[test]
+fn observation_order_keeps_newer_facts_pending_unknown_and_independent_objects() {
+    if !isolated_capability_test(
+        "observation_order_keeps_newer_facts_pending_unknown_and_independent_objects",
+    ) {
+        return;
+    }
+    let h = host(512, 16);
+    let (a, pa) = observation_publication(h.path(), "older");
+    let (b, pb) = observation_publication(h.path(), "newer");
+    let (other, po) = observation_publication(h.path(), "other-object");
+    let owner = inventory(h.path());
+    let first = owner.reserve_observation("pr42", &a, 1).unwrap();
+    let newer = owner.reserve_observation("pr42", &b, 1).unwrap();
+    let independent = owner.reserve_observation("pr43", &other, 1).unwrap();
+    let failed_final = owner.reserve_observation("pr42", &a, 3).unwrap();
+    assert!(first.serial < newer.serial && newer.serial < failed_final.serial);
+    assert_eq!(independent.serial, 1);
+    assert_ne!(first.epoch, independent.epoch);
+    pb.complete(json!({})).unwrap();
+    po.complete(json!({})).unwrap();
+    pa.complete(json!({})).unwrap();
+    owner
+        .settle_observation(&newer, Some((&newer, true)))
+        .unwrap();
+    owner
+        .settle_observation(&independent, Some((&independent, true)))
+        .unwrap();
+    // Command a returned last and issued the latest failed request. Only its
+    // earlier valid fact participates in acceptance, so b still owns this PR.
+    owner
+        .settle_observation(&failed_final, Some((&first, true)))
+        .unwrap();
+    let (unknown, pu) = observation_publication(h.path(), "unknown");
+    owner.reserve_observation("pr42", &unknown, 1).unwrap();
+    drop(pu); // Missing domain completion remains unknown, never manufactured.
+    for _ in 0..8 {
+        let round = maintenance(h.path());
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+    }
+    assert!(!h.path().join(a).exists());
+    for path in [&b, &other, &unknown] {
+        assert!(h.path().join(path).exists());
+    }
+    assert!(
+        owner
+            .reference_paths("pr42", &[])
+            .unwrap_err()
+            .contains("observation")
+    );
+    assert_eq!(
+        ledger(h.path())["roots"]["pr42"].as_array().unwrap().len(),
+        2
+    );
+}
+
+#[test]
+fn observation_handoff_rejects_unsealed_replaced_or_mismatched_bindings() {
+    if !isolated_capability_test(
+        "observation_handoff_rejects_unsealed_replaced_or_mismatched_bindings",
+    ) {
+        return;
+    }
+    let h = host(512, 16);
+    let (path, publication) = observation_publication(h.path(), "qualified");
+    let owner = inventory(h.path());
+    let token = owner.reserve_observation("pr42", &path, 1).unwrap();
+    assert!(
+        owner
+            .settle_observation(&token, Some((&token, true)))
+            .unwrap_err()
+            .contains("unsealed")
+    );
+    publication.complete(json!({})).unwrap();
+    for fault in ["epoch", "serial", "path", "identity", "observation"] {
+        let mut bad = token.clone();
+        match fault {
+            "epoch" => bad.epoch = "wrong epoch".into(),
+            "serial" => bad.serial += 1,
+            "path" => bad.original.path.push_str("-other"),
+            "identity" => bad.original.identity.push_str("-other"),
+            "observation" => bad.attempt += 1,
+            _ => unreachable!(),
+        }
+        let rejected = if fault == "observation" {
+            owner.settle_observation(&token, Some((&bad, true)))
+        } else {
+            owner.settle_observation(&bad, Some((&bad, true)))
+        };
+        assert!(rejected.is_err(), "{fault}");
+    }
+    let actual = h.path().join(&path);
+    let saved = actual.with_extension("saved-original");
+    fs::rename(&actual, &saved).unwrap();
+    fs::create_dir(&actual).unwrap();
+    assert!(owner.settle_observation(&token, None).is_err());
+    fs::remove_dir(&actual).unwrap();
+    fs::rename(saved, actual).unwrap();
+    owner
+        .settle_observation(&token, Some((&token, true)))
+        .unwrap();
+    owner
+        .settle_observation(&token, Some((&token, true)))
+        .unwrap();
+    assert_eq!(
+        ledger(h.path())["roots"]["pr42"].as_array().unwrap().len(),
+        1
+    );
+}
+
+#[test]
+fn observation_metadata_survives_pending_work_then_expires_after_terminal_settlement() {
+    if !isolated_capability_test(
+        "observation_metadata_survives_pending_work_then_expires_after_terminal_settlement",
+    ) {
+        return;
+    }
+    let h = host(512, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(0);
+    fs::write(&policy_path, policy.to_string()).unwrap();
+    let (path, publication) = observation_publication(h.path(), "pending");
+    let owner = inventory(h.path());
+    let first = owner.reserve_observation("pr42", &path, 1).unwrap();
+    for _ in 0..8 {
+        let round = maintenance(h.path());
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+    }
+    let final_request = owner.reserve_observation("pr42", &path, 2).unwrap();
+    assert_eq!(first.epoch, final_request.epoch);
+    assert_eq!(final_request.serial, first.serial + 1);
+    publication.complete(json!({})).unwrap();
+    owner
+        .settle_observation(&final_request, Some((&final_request, false)))
+        .unwrap();
+    owner
+        .settle_observation(&final_request, Some((&final_request, false)))
+        .unwrap();
+    let old_reader = retained_artifacts::retention::read_guard(h.path(), &path)
+        .unwrap()
+        .unwrap();
+    for _ in 0..8 {
+        let round = maintenance(h.path());
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+    }
+    let role_path = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/roles")
+        .join(chrono_harness::sha256(b"pr42"));
+    assert!(
+        h.path().join(&path).exists(),
+        "actual reader keeps the old sealed output"
+    );
+    assert!(!role_path.exists());
+    let (next, publication) = observation_publication(h.path(), "next-epoch");
+    let newer = owner.reserve_observation("pr42", &next, 1).unwrap();
+    assert_ne!(newer.epoch, first.epoch);
+    assert_eq!(newer.serial, 1);
+    publication.complete(json!({})).unwrap();
+    owner.settle_observation(&final_request, Some((&final_request, false))).expect("already completed handoff is a no-op after the object's empty metadata expires and a new epoch begins");
+    assert_eq!(
+        ledger(h.path())["roots"]["pr42"],
+        json!([newer.original.id])
+    );
+    owner.settle_observation(&newer, None).unwrap();
+    drop(old_reader);
+    for _ in 0..8 {
+        let round = maintenance(h.path());
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+    }
+    assert!(!h.path().join(path).exists());
+}
+
+#[test]
+fn observation_reservation_cannot_claim_an_ordinary_nonempty_consumer() {
+    let h = host(512, 16);
+    let (path, publication) = observation_publication(h.path(), "ordinary");
+    let owner = inventory(h.path());
+    owner
+        .reference_paths("existing-consumer", &[path.clone()])
+        .unwrap();
+    assert!(
+        owner
+            .reserve_observation("existing-consumer", &path, 1)
+            .unwrap_err()
+            .contains("ordinary")
+    );
+    publication.complete(json!({})).unwrap();
+    for _ in 0..8 {
+        let round = maintenance(h.path());
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+    }
+    assert!(h.path().join(path).exists());
 }

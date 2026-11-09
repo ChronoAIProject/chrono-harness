@@ -102,6 +102,10 @@ path = "tests/verified_limits.rs"
 name = "verified_verifier"
 path = "tests/verified_verifier.rs"
 
+[[test]]
+name = "verified_release"
+path = "tests/verified_release.rs"
+
 [[bin]]
 name = "chrono-test-retention-child"
 path = "tests/support/retention_child.rs"
