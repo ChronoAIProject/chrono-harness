@@ -19,7 +19,10 @@ Verus 根及现役 `verify.verus-result`、`verify.runner-paths`、
 沿 status 的真实整 crate 根验证，不另造重复操作。
 同源判断还要求根路径规范化、根路径唯一、program／specification 至少一个根、
 data 不得有根，以及每个登记操作存在于 execution plan。声明只建立待核的绑定关系；
-本批正式 CI 已核整 crate 证明，仍不代表全仓覆盖完成。
+本批正式 CI 已核整 crate 证明；`crates/judge-ci/src/verified_collection.rs`
+及 `crates/judge-ci-tests/tests/verified_collection.rs` 现在也以
+`verify.ci-collection`／`verify.ci-collection-tests` 注册其 program 根和独立预期，
+并由本地与离线 collection 的实际汇总消费。仍不代表全仓覆盖完成。
 
 ## runner 构建中的证明库与缓存
 
