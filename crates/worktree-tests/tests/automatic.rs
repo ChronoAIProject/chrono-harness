@@ -3,6 +3,209 @@ mod retention_state;
 use super::*;
 const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
 
+// A metadata fixture with a fully mocked Git boundary. The absent checkout's
+// adopted policy cannot be read, while its ledger still consumes an original.
+struct EnrollmentOriginalsFixture {
+    _directory: tempfile::TempDir,
+    root: PathBuf,
+    target: PathBuf,
+    record: PathBuf,
+    original: String,
+    sibling: String,
+}
+impl EnrollmentOriginalsFixture {
+    fn new() -> Self {
+        use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+        let directory = tempfile::tempdir().unwrap();
+        let root = fs::canonicalize(directory.path()).unwrap();
+        fs::create_dir(root.join(".git")).unwrap();
+        let fixture = root.join("git-fixture.json");
+        let mut registered = values();
+        registered.get_mut(PROJECTS).unwrap()["owners"] = value!(["host"]);
+        registered.get_mut(PROJECTS).unwrap()["projects"] = value!([]);
+        registered.get_mut(FM).unwrap()["project_edges"] = value!([]);
+        registered.get_mut(FM).unwrap()["test_costs"] = value!([]);
+        for path in [POLICY, AUTO_POLICY, POLICY_PATH] {
+            registered.get_mut(FM).unwrap()["files"]
+                .as_array_mut()
+                .unwrap()
+                .push(file(path, value!([])));
+        }
+        write_values(&root, &registered);
+        let write = |path: &str, value: Value| {
+            fs::write(root.join(path), serde_json::to_vec(&value).unwrap()).unwrap();
+        };
+        write(
+            "git-fixture.json",
+            value!({"mode":"enrollment-originals","root":root}),
+        );
+        write(
+            POLICY,
+            value!({
+                "schema":"chrono-worktree-config/v1","host_config":CONFIG,"remote":"unused",
+                "git":{"program":env!("CARGO_BIN_EXE_chrono-worktree-test-git"),"expected_version":null,"sha256":null},
+                "environment":{"inherit":[],"values":{"HOME":root,"CHRONO_TEST_GIT_FIXTURE":fixture}},
+                "timeout_seconds":30,"output_limit_bytes":1048576,
+                "report_directory":".chrono-harness/state/worktrees/","automatic_cleanup":AUTO_POLICY
+            }),
+        );
+        write(
+            AUTO_POLICY,
+            value!({
+                "schema":"chrono-worktree-automatic-cleanup/v1","coordinator_root":root,
+                "state_directory":".chrono-harness/state/automatic-cleanup/",
+                "retained_ref":"refs/heads/dev","retention":"ancestor","remove_branch":false,
+                "allow_evidence_disposal":true,"artifacts":[]
+            }),
+        );
+        write(
+            POLICY_PATH,
+            value!({
+                "schema":"chrono-output-retention/v2",
+                "producers":{"lifecycle-original":[".chrono-harness/state/"]},
+                "keep_seconds":0,"max_related_outputs":512,"max_summaries":128,
+                "max_nodes_per_round":256,"max_bytes_per_round":67108864,
+                "max_millis_per_round":25,"max_output_bytes":1073741824,
+                "max_manifest_nodes":16384,"max_metadata_bytes_per_round":67108864
+            }),
+        );
+        let target = root.join("absent-checkout");
+        let record = root
+            .join(".chrono-harness/state/automatic-cleanup/enrollments")
+            .join(sha256(target.to_str().unwrap().as_bytes()));
+        fs::create_dir_all(&record).unwrap();
+        let original = ".chrono-harness/state/birth-original.json".to_owned();
+        let sibling = ".chrono-harness/state/released-sibling.json".to_owned();
+        fs::write(
+            record.join("owner.json"),
+            serde_json::to_vec(&value!({
+                "schema":"chrono-worktree-enrollment-owner/v1","coordinator_root":root,
+                "common":root.join(".git"),"path":target
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            record.join("ledger.json"),
+            serde_json::to_vec(&value!({
+                "schema":"chrono-worktree-enrollment-state/v1","coordinator_root":root,
+                "common":root.join(".git"),"entries":[{
+                    "path":target,"branch":"integration/absent","status":"active",
+                    "attachment":{"gitfile_sha256":"unknown","gitfile_id":"unknown",
+                        "metadata":root.join(".git/worktrees/absent"),"metadata_id":"unknown"},
+                    "policy_sha256":"old-policy",
+                    "enrollment":{"kind":"birth","observed_head":"b".repeat(40),
+                        "policy_inputs":{},"receipt":{"source_root":root,"report_path":original}},
+                    "uses":[],"terminal":null,"attempts":[]
+                }]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        for path in [&original, &sibling] {
+            fs::write(root.join(path), b"original failure bytes\n").unwrap();
+            Inventory::adopted(&root)
+                .unwrap()
+                .unwrap()
+                .begin("lifecycle-original", path, value!({"status":"unknown"}))
+                .unwrap()
+                .complete(value!({"status":"failed","error":"original failure"}))
+                .unwrap();
+        }
+        Self {
+            _directory: directory,
+            root,
+            target,
+            record,
+            original,
+            sibling,
+        }
+    }
+    fn invoke(&self, operation: &str, select: bool) -> (i32, Value) {
+        let mut args = vec![
+            operation.into(),
+            "--host-root".into(),
+            self.root.to_str().unwrap().into(),
+        ];
+        if select {
+            args.extend(["--path".into(), self.target.to_str().unwrap().into()]);
+        }
+        let output = chrono_worktree::run(&args);
+        let report = json(output.stdout.as_bytes())
+            .unwrap_or_else(|error| panic!("{error}: {} {}", output.stdout, output.stderr));
+        (output.exit_code, report)
+    }
+}
+
+#[test]
+fn enrollment_originals_survive_failed_absent_policy_read() {
+    let h = EnrollmentOriginalsFixture::new();
+    let (code, report) = h.invoke("status", true);
+    assert_eq!(code, 2, "{report}");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("mock retained policy read failed"),
+        "{report}"
+    );
+    let role = format!(
+        "worktree-enrollment:{}",
+        sha256(h.target.to_str().unwrap().as_bytes())
+    );
+    let state = retention_state::snapshot(&h.root);
+    assert_eq!(
+        state["roots"][&role].as_array().map(Vec::len),
+        Some(1),
+        "a policy failure must not prevent the verified ledger from protecting its original"
+    );
+}
+
+#[test]
+fn enrollment_originals_are_protected_before_global_maintenance() {
+    let h = EnrollmentOriginalsFixture::new();
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 2, "{report}");
+    assert!(
+        report["error"]
+            .as_str()
+            .unwrap()
+            .contains("mock retained policy read failed"),
+        "{report}"
+    );
+    assert_eq!(
+        fs::read(h.root.join(&h.original)).unwrap(),
+        b"original failure bytes\n"
+    );
+    assert!(
+        !h.root.join(&h.sibling).exists(),
+        "independent released originals can still be reclaimed: {report}"
+    );
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+}
+
+#[test]
+fn enrollment_originals_unknown_metadata_defers_only_global_original_maintenance() {
+    let h = EnrollmentOriginalsFixture::new();
+    fs::create_dir(h.record.join("gate.lock")).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert!(
+        h.root.join(&h.original).is_file(),
+        "busy metadata has unverified consumers: {report}"
+    );
+    assert!(h.root.join(&h.sibling).is_file());
+    assert_eq!(report["output_retention"]["status"], "preserved");
+    assert!(
+        report["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["path"] == value!(h.target) && row["status"] == "preserved")
+    );
+}
+
 impl Host {
     pub(super) fn automatic(&self, disposition: &str) {
         let mut config = json(&fs::read(self.root.join(CONFIG)).unwrap()).unwrap();

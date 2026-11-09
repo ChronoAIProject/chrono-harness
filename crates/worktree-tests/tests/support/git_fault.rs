@@ -100,6 +100,10 @@ fn main() {
     let config: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
     let home = PathBuf::from(std::env::var_os("HOME").expect("fixture HOME"));
     let args: Vec<OsString> = std::env::args_os().skip(1).collect();
+    if config["mode"] == "enrollment-originals" {
+        enrollment_originals(&config, &args);
+        return;
+    }
     let git = config["git"].as_str().unwrap();
     let arg = |index: usize, expected: &str| args.get(index).is_some_and(|value| value == expected);
     match config["mode"].as_str().unwrap() {
@@ -705,4 +709,65 @@ fn main() {
     }
     let error = Command::new(git).args(args).exec();
     panic!("fixture Git exec failed: {error}");
+}
+
+// This fixture has no real Git fallback. Every external response is explicit.
+fn enrollment_originals(config: &Value, arguments: &[OsString]) {
+    use std::io::Read;
+    let root = Path::new(config["root"].as_str().unwrap());
+    assert_eq!(std::env::current_dir().unwrap(), root);
+    let args: Vec<_> = arguments
+        .iter()
+        .map(|arg| arg.to_str().unwrap())
+        .filter(|arg| *arg != "--no-replace-objects")
+        .collect();
+    let head = "a".repeat(40);
+    let blob = |spec: &str| {
+        let (revision, path) = spec.split_once(':').unwrap();
+        if revision != head {
+            eprintln!("mock retained policy read failed");
+            std::process::exit(71);
+        }
+        fs::read(root.join(path)).unwrap()
+    };
+    match args.as_slice() {
+        ["--version"] => println!("git version enrollment-mock"),
+        ["check-ref-format", "refs/heads/dev"] => (),
+        ["symbolic-ref", "--quiet", "refs/heads/dev"] => std::process::exit(1),
+        ["rev-parse", "--verify", "--end-of-options", "HEAD"] => println!("{head}"),
+        [
+            "rev-parse",
+            "--show-toplevel",
+            "--git-common-dir",
+            "--absolute-git-dir",
+            "HEAD",
+            "--symbolic-full-name",
+            "HEAD",
+        ] => {
+            println!(
+                "{}\n{}\n{}\n{head}\nrefs/heads/dev",
+                root.display(),
+                root.join(".git").display(),
+                root.join(".git").display()
+            );
+        }
+        ["worktree", "list", "--porcelain", "-z"] => {
+            print!(
+                "worktree {}\0HEAD {head}\0branch refs/heads/dev\0\0",
+                root.display()
+            );
+        }
+        ["show", spec] => io::stdout().write_all(&blob(spec)).unwrap(),
+        ["cat-file", "--batch"] => {
+            let mut input = String::new();
+            io::stdin().read_to_string(&mut input).unwrap();
+            for spec in input.lines() {
+                let bytes = blob(spec);
+                println!("{} blob {}", "c".repeat(40), bytes.len());
+                io::stdout().write_all(&bytes).unwrap();
+                println!();
+            }
+        }
+        _ => panic!("unexpected mocked Git call: {args:?}"),
+    }
 }
