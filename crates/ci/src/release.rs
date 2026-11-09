@@ -97,21 +97,20 @@ fn literal(value: &str) -> Result<(), String> {
 
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
     if let Some(delivery) = &c.delivery {
-        if c.schema != UNITS_SCHEMA || !c.push_branches.is_empty() {
+        if !super::verified_literals::delivery_mode(&c.schema, c.push_branches.len()) {
             return Err("delivery requires release v2 and a successful workflow trigger".into());
         }
         for value in [&delivery.workflow, &delivery.branch, &delivery.publisher] {
             literal(value)?;
-            if value.is_empty() {
+            if !super::verified_literals::delivery_nonempty(value) {
                 return Err("empty delivery workflow, branch or publisher".into());
             }
         }
-        let publisher = c
-            .jobs
-            .iter()
-            .find(|j| j.id == delivery.publisher)
+        let ids = c.jobs.iter().map(|job| job.id.as_str()).collect::<Vec<_>>();
+        let index = super::verified_literals::publisher_index(&ids, &delivery.publisher)
             .ok_or("unregistered release publisher")?;
-        if publisher.needs.is_empty() || publisher.always {
+        let publisher = &c.jobs[index];
+        if !super::verified_literals::publisher_dependencies(publisher.needs.len(), publisher.always) {
             return Err("publisher requires successful declared dependencies".into());
         }
     }
@@ -383,7 +382,7 @@ fn render_unit<'a>(
         condition.push_str(" && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))");
     }
     output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
-    if c.delivery.as_ref().is_some_and(|d| d.publisher == job.id) {
+    if super::verified_literals::delivery_publisher(c.delivery.as_ref().map(|d| d.publisher.as_str()), &job.id) {
         output.push_str("    permissions:\n      contents: write\n      actions: read\n");
     }
     if !job.needs.is_empty() {
@@ -418,11 +417,7 @@ fn render_unit<'a>(
         runner = scalar(&job.runs_on),
         timeout = job.timeout_minutes,
         checkout = c.checkout_action,
-        source = if c.delivery.is_some() {
-            "${{ github.event.workflow_run.head_sha || inputs.source || github.sha }}"
-        } else {
-            "${{ inputs.source || github.sha }}"
-        }
+        source = super::verified_literals::delivery_source(c.delivery.is_some())
     ));
     for download in &job.downloads {
         let prefix =
@@ -465,7 +460,7 @@ fn render_unit<'a>(
     ));
     if c.delivery.is_some() {
         output.push_str("          CHRONO_RELEASE_CHANNEL: ${{ github.event_name == 'workflow_run' && 'preview' || inputs.channel || 'build' }}\n          CHRONO_RELEASE_SOURCE: ${{ github.event.workflow_run.head_sha || inputs.source }}\n          CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}\n          CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}\n          CHRONO_RELEASE_VERSION: ${{ inputs.version }}\n");
-        if c.delivery.as_ref().is_some_and(|d| d.publisher == job.id) {
+        if super::verified_literals::delivery_publisher(c.delivery.as_ref().map(|d| d.publisher.as_str()), &job.id) {
             output.push_str("          GH_TOKEN: ${{ github.token }}\n");
         }
     }

@@ -149,6 +149,26 @@ JSON、Unicode trim、原件读取、实际进程终结、租约与多文件发�
 
 ## CI 配置的字面文本
 
+CI 的原生 job 终态选择和发布者准入也直接消费本节的同源根。
+`native_job_state` 保留 completed 的原结论；只有已知非终态、明确存在的 null 结论和正 job ID
+才返回一次精确详情读取。适配器按返回 ID 调用 provider 一次，再由同源判断核成功终态，
+并逐项比较 id、run_id、run_attempt、head_sha、name 五个完整原字段。
+缺字段与存在的 null 分别保留；JSON 字段的原值编码由固定 Serde JSON 接口供应，
+比较由已有 identifiers 字节判断执行，不把字段先折成一个“已合格”标志。
+
+发布登记的 v2／触发方式、非空字段、首个完整 publisher 匹配、必需依赖和权限选择，
+以及 checkout 的固定源码表达式也由同一生产根拥有。独立根核终态失败不重读、
+缺失／非 null／零 ID 不读详情、原字段完整性、首个匹配及发布者依赖边界；
+原 Rust mock 仍核准确调用次数、参数、原错误和每个字段的替换拒绝。
+实际 provider、YAML 执行与整个生成器的原生验收仍须分别完成。
+
+**实现与宿主验证登记同改：**gating／release 的实际使用绑定到现有
+`verify.ci-literals`／`verify.ci-literals-tests`，复用已锁定工具和整 crate 参数。
+没有新 job、工具、预算、重试或审批。固定 Serde JSON 对实际 job 字段提供完整编码，
+标准 Option／Result 的 map、transpose 和错误传播只转发编码结果；
+普通适配器对发布 job 的 ID 数组保留输入顺序，实际搜索由 Verus 完成。
+每个待核 native job 编码五对字段；新增编译、证明、CI、分配与存储成本未测。
+
 `crates/ci/src/verified_literals.rs` 统一负责 full 与 release 的单行文本判断。
 输入为空或含普通 UTF-8 文本时允许；出现 NUL、LF、CR，或任意位置的精确 `${{` 字节序列时拒绝。
 孤立的 `$`、`${`、花括号及 shell 字面文本仍允许。两个现役配置校验保留各自错误信息，
