@@ -791,14 +791,6 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     match command.as_str() {
         "test-inventory" => inventory::execute(&root, config),
         "migrate" => {
-            if opts
-                .keys()
-                .any(|k| !["--host-root", "--config", "--from", "--previous-config"].contains(k))
-            {
-                return Err(
-                    "migrate accepts only host-root, config, from and previous-config".into(),
-                );
-            }
             let previous = *opts.get("--from").ok_or("--from required")?;
             migrate::migrate(
                 &root,
