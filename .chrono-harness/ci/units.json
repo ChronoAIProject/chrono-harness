@@ -257,27 +257,10 @@
         "/bin/bash",
         ".chrono-harness/ci/bootstrap-native.sh",
         ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
+        ".chrono-harness/ci/bootstrap-unit.json"
       ],
       "context_path": ".chrono-harness/state/units/release-build/context.json",
       "artifact_directory": ".chrono-harness/state/units/release-build/"
-    },
-    "release-build-integration": {
-      "name": "chrono / release-build-integration",
-      "runs_on": "macos-26",
-      "timeout_minutes": 45,
-      "bootstrap": [
-        "/bin/bash",
-        ".chrono-harness/ci/bootstrap-native.sh",
-        ".",
-        ".chrono-harness/ci/bootstrap-shared.json",
-        "verify",
-        "core"
-      ],
-      "context_path": ".chrono-harness/state/units/release-build-integration/context.json",
-      "artifact_directory": ".chrono-harness/state/units/release-build-integration/"
     },
     "worktree-adoption": {
       "name": "chrono / worktree-adoption",
@@ -344,7 +327,8 @@
     "credential_environment": [
       "GH_TOKEN"
     ],
-    "environment": {},
+    "environment": {
+    },
     "timeout_seconds": 60,
     "output_limit_bytes": 8388608,
     "manifest_path": ".chrono-harness/state/collection/manifest.json",
@@ -591,18 +575,6 @@
             ".chrono-harness/ci/bootstrap-shared.json",
             "install",
             "unit_release-build"
-          ]
-        },
-        "unit_release-build-integration": {
-          "need": "Run the current candidate canonical check and its registered preparation.",
-          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
-          "install": [
-            "/bin/bash",
-            ".chrono-harness/ci/bootstrap-native.sh",
-            ".",
-            ".chrono-harness/ci/bootstrap-shared.json",
-            "install",
-            "unit_release-build-integration"
           ]
         },
         "unit_worktree-adoption": {
@@ -1104,23 +1076,6 @@
           "check.judge-workflow-tests.judge-workflow-short"
         ]
       },
-      "unit_release-build-integration": {
-        "need": "This job executes the explicitly referenced build and test operations.",
-        "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
-        "prepare": [
-          "/bin/bash",
-          ".chrono-harness/ci/bootstrap-native.sh",
-          ".",
-          ".chrono-harness/ci/bootstrap-shared.json",
-          "verify",
-          "cache"
-        ],
-        "consumer": "check.unit_release-build-integration",
-        "caches": [
-          "check.distribution"
-        ],
-        "save_caches": []
-      },
       "unit_worktree-adoption": {
         "need": "This job executes the explicitly referenced build and test operations.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
@@ -1227,7 +1182,6 @@
             "unit_judge-workflow-units",
             "unit_judge-workflow-short",
             "unit_release-build",
-            "unit_release-build-integration",
             "unit_worktree-adoption",
             "unit_diagnostics",
             "unit_host-bootstrap",
@@ -1744,37 +1698,16 @@
             ".chrono-harness/ci/bootstrap-toolchains.json"
           ],
           "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock"
+            ".chrono-harness/ci/native/Cargo.lock",
+            ".chrono-harness/release/native/Cargo.lock",
+            ".chrono-harness/release/native-tests/Cargo.lock",
+            "crates/cache/Cargo.lock",
+            "crates/distribution/Cargo.lock"
           ],
           "consumers": [
             "unit_release-build"
           ],
           "save_job": "unit_release-build",
-          "restore_from": "cargo.detect"
-        },
-        "cargo.release-build-integration": {
-          "owner": "repository",
-          "need": "复用锁定依赖和固定工具链的下载资料。",
-          "output_use": "在首次编译前恢复；实际构建工具仍校验、补齐依赖并执行原操作。",
-          "paths": [
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/",
-            ".chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/"
-          ],
-          "compatibility_files": [
-            ".chrono-harness/ci/bootstrap-toolchains.json"
-          ],
-          "source_files": [
-            ".chrono-harness/ci/native/Cargo.lock",
-            "crates/cache/Cargo.lock",
-            "crates/distribution/Cargo.lock"
-          ],
-          "consumers": [
-            "unit_release-build-integration"
-          ],
-          "save_job": "unit_release-build-integration",
           "restore_from": "cargo.detect"
         },
         "cargo.worktree-adoption": {

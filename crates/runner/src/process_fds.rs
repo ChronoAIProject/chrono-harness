@@ -16,22 +16,31 @@ fn duplicate(fd: RawFd) -> Result<OwnedFd, ProcessFailure> {
     if fd < 3 {
         return Err("ownership descriptor must not alias stdio".into());
     }
-    let copy = unsafe {
-        libc::fcntl(
-            fd,
-            libc::F_DUPFD_CLOEXEC,
-            crate::process_ownership::PRIVATE_FD_MIN,
-        )
+    let duplicate = || {
+        let copy = unsafe {
+            libc::fcntl(
+                fd,
+                libc::F_DUPFD_CLOEXEC,
+                crate::process_ownership::PRIVATE_FD_MIN,
+            )
+        };
+        if copy < 0 {
+            let error = io::Error::last_os_error();
+            return Err(ProcessFailure::native(
+                "E_PROCESS_OWNERSHIP_DUPLICATE",
+                format!("ownership descriptor: {error}"),
+                error,
+            ));
+        }
+        Ok(unsafe { OwnedFd::from_raw_fd(copy) })
     };
-    if copy < 0 {
-        let error = io::Error::last_os_error();
-        return Err(ProcessFailure::native(
-            "E_PROCESS_OWNERSHIP_DUPLICATE",
-            format!("ownership descriptor: {error}"),
-            error,
-        ));
+    let copy = duplicate()?;
+    // Bash 3.2 不检查占用就把脚本输入复制到 255；能力载体须避开它。
+    // 第二次复制期间持有该槽位，也保留描述符耗尽时的原生错误。
+    if copy.as_raw_fd() == 255 {
+        return duplicate();
     }
-    Ok(unsafe { OwnedFd::from_raw_fd(copy) })
+    Ok(copy)
 }
 /// A thread-local, owned set of opaque capabilities forwarded by every engine call.
 /// Dropping closes copies; it never unlocks a shared inherited open description.
@@ -80,7 +89,7 @@ fn inherited() -> Result<Vec<RawFd>, ProcessFailure> {
                 let error = io::Error::last_os_error();
                 return Err(ProcessFailure::native(
                     "E_PROCESS_OWNERSHIP_INHERITED",
-                    format!("inherited ownership descriptor: {error}"),
+                    format!("inherited ownership descriptor {fd}: {error}"),
                     error,
                 ));
             }

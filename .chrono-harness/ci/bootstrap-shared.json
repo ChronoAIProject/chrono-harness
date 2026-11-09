@@ -77,9 +77,6 @@
       "core"
     ],
     "unit_release-build": [
-      "core"
-    ],
-    "unit_release-build-integration": [
       "cache",
       "core"
     ],

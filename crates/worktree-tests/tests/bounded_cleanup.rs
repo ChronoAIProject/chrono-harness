@@ -489,7 +489,8 @@ fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second
         &mut h.auto_command("use", &["--operation", "use.consumer"]),
         &h.root,
     );
-    await_file(&h.root.join(".chrono-harness/state/grandchild"));
+    // Observe the managed producer under its registered bounds, including Git preparation.
+    first.await_managed_file(&h.root.join(".chrono-harness/state/grandchild"));
     fs::create_dir_all(h.root.join("output λ")).unwrap();
     fs::write(
         h.root.join("output λ/cache"),
