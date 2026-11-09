@@ -50,8 +50,7 @@ fn positive(environment: &Environment, name: &str) -> Result<u64, String> {
 fn core(version: &str) -> Result<&str, String> {
     let core = version.split('-').next().unwrap_or("");
     let numbers: Vec<_> = core.strip_prefix('v').unwrap_or("").split('.').collect();
-    if !policy::version_numbers(&numbers)
-    {
+    if !policy::version_numbers(&numbers) {
         return Err(error(
             "release plan needs a vMAJOR.MINOR.PATCH version core",
         ));
@@ -89,7 +88,10 @@ pub fn resolve(
     if identity.channel == Channel::Build {
         return Ok(identity);
     }
-    if !policy::text_fields(&[(Some(text(environment, "CHRONO_RELEASE_SOURCE")?), source_commit)]) {
+    if !policy::text_fields(&[(
+        Some(text(environment, "CHRONO_RELEASE_SOURCE")?),
+        source_commit,
+    )]) {
         return Err(error(
             "requested source differs from the observed fixed commit",
         ));
@@ -102,7 +104,12 @@ pub fn resolve(
     let requested_version = text(environment, "CHRONO_RELEASE_VERSION")?;
     match identity.channel {
         Channel::Preview => {
-            if !policy::requested_version(selected_channel, requested_version, version_core, planned_version) {
+            if !policy::requested_version(
+                selected_channel,
+                requested_version,
+                version_core,
+                planned_version,
+            ) {
                 return Err(error(
                     "preview version is derived from its CI and source identities",
                 ));
@@ -113,7 +120,12 @@ pub fn resolve(
             );
         }
         Channel::Stable => {
-            if !policy::requested_version(selected_channel, requested_version, version_core, planned_version) {
+            if !policy::requested_version(
+                selected_channel,
+                requested_version,
+                version_core,
+                planned_version,
+            ) {
                 return Err(error(
                     "stable delivery needs an explicit final version matching the fixed plan",
                 ));

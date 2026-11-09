@@ -1,11 +1,11 @@
 //! 发布入口的实际字段判断。适配器只供应外部解码的原值，不供应预先算好的通过标志。
+use super::identifiers;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
-use super::identifiers;
 
 verus! {
 

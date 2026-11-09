@@ -1,5 +1,8 @@
 //! GitHub 发布状态机。命令边界可替换；同一版本只续传相同资产。
-use crate::{identity::{Channel, Identity}, verified_recipe::delivery as policy};
+use crate::{
+    identity::{Channel, Identity},
+    verified_recipe::delivery as policy,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -70,10 +73,15 @@ fn api(
     }
     let reply = commands.execute("gh", &args)?;
     let value: Value = chrono_harness::json(&reply.stdout)?;
-    match policy::api_outcome(reply.exit, value["status"].as_str(), value["message"].as_str(), absent) {
+    match policy::api_outcome(
+        reply.exit,
+        value["status"].as_str(),
+        value["message"].as_str(),
+        absent,
+    ) {
         0 => return Ok(Some(value)),
         1 => return Ok(None),
-        _ => {},
+        _ => {}
     }
     Err(error(format!(
         "original GitHub API exited {}: {}",
@@ -114,8 +122,7 @@ pub fn verify_ci(
         (run["status"].as_str(), "completed"),
         (run["conclusion"].as_str(), "success"),
         (run["repository"]["full_name"].as_str(), &config.repository),
-    ])
-    {
+    ]) {
         return Err(error(
             "original landing CI does not qualify this fixed source",
         ));
@@ -127,7 +134,10 @@ fn release_header(release: &Value, identity: &Identity) -> Result<u64, String> {
     let preview = identity.channel == Channel::Preview;
     if !policy::text_fields(&[
         (release["tag_name"].as_str(), &identity.version),
-        (release["target_commitish"].as_str(), &identity.source_commit),
+        (
+            release["target_commitish"].as_str(),
+            &identity.source_commit,
+        ),
     ]) || !policy::boolean_fields(&[(release["prerelease"].as_bool(), preview)])
         || policy::draft_state(release["draft"].as_bool(), 0) == 2
     {
@@ -173,8 +183,12 @@ fn remote_assets(
         if !remaining.remove(name)
             || !policy::text_fields(&[
                 (asset["state"].as_str(), "uploaded"),
-                (asset["digest"].as_str(), &format!("sha256:{}", expected.sha256)),
-            ]) || !policy::number_fields(&[(asset["size"].as_u64(), expected.size)])
+                (
+                    asset["digest"].as_str(),
+                    &format!("sha256:{}", expected.sha256),
+                ),
+            ])
+            || !policy::number_fields(&[(asset["size"].as_u64(), expected.size)])
         {
             return Err(error(format!("remote asset identity conflicts: {name}")));
         }
@@ -303,7 +317,10 @@ pub fn publish(
     // 重新读取实际公开状态；PATCH 成功不能代替落地核验。
     let observed = api(commands, "GET", endpoint, None, false)?.ok_or("missing public release")?;
     if release_header(&observed, identity)? != id
-        || !policy::boolean_fields(&[(release["draft"].as_bool(), false), (observed["draft"].as_bool(), false)])
+        || !policy::boolean_fields(&[
+            (release["draft"].as_bool(), false),
+            (observed["draft"].as_bool(), false),
+        ])
         || !remote_assets(config, id, assets, commands)?.is_empty()
     {
         return Err(error("public release verification failed"));

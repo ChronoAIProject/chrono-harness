@@ -50,7 +50,7 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 `verify.verus-result-tests` 独立预期。三项源码均已有真实 Verus invocation、整 crate
 结果和 Rust 消费者；本批只补 FILEMAP 绑定，不新增证明源或 Python 迁移。
 
-## runner 构建中的证明库与缓存
+## 发布交付字段判断
 
 发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
 `verify.release-recipe`／`verify.release-recipe-tests` 整 crate 根。
