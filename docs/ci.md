@@ -84,6 +84,8 @@ detector、缓存和各单元仍消费各自显式登记的 profile，不因默�
 
 本宿主使用 config schema4。`canonical_check` 声明 `profile`、`inputs.local` 及可选 `inputs.ci`。生产者沿用 `{operation,tool,argv}` action、工具／环境／协议上限。runner 观察真实短入口，调用绑定生产者，保留原进程证据，再通过已有判官路径执行准备后的类型化检查，不重新分发虚构的长参数。
 
+`.chrono-harness/ci/check.json` 是实际运行输入：runner 读取 profile 并绑定请求，worktree 核对本地固定输入，ci 读取单元分配和汇总要求，judge-ci 解析所选政策。FILEMAP 将该源分别连接到四个生产项目；原测试关系继续负责行为验证。
+
 准备记录环境值摘要及原环境摘要。可选 `environment.credential_environment` 从 `inherit` 点名仅供获取的凭据：传给生产者和其声明的收集传输，不传给 Git 或判官。本仓声明 `GH_TOKEN`，与已有 gather 凭据政策一致。外层获取继承也将已声明 `SSH_AUTH_SOCK` 交给 worktree Git 所有者；缺失仍记为缺失。环境清空和各所有者明确白名单继续适用。
 
 获取限 2400 秒，覆盖登记的 1800 秒原生汇总等待；冲突的更短获取上限明确失败。
