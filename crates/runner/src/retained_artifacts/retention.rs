@@ -960,6 +960,50 @@ impl Inventory {
         self.stable(&gate)?;
         Ok(published)
     }
+    /// Qualify one explicitly named member of a sealed producer tree. The caller
+    /// holds read_guard(tree) through any ensuing handoff; no directory scan or
+    /// historical result can substitute for this publication and physical file.
+    pub fn published_tree_member(
+        &self,
+        producer: &str,
+        tree: &str,
+        member: &str,
+        digest: &str,
+        length: u64,
+    ) -> Result<bool, String> {
+        crate::relative_path(tree)?;
+        crate::relative_path(member)?;
+        if !member.starts_with(&format!("{tree}/")) {
+            return Err("original member is outside its declared tree".into());
+        }
+        let gate = self.addressed_gate(&[], &[tree.into()], &[], None, false, true)?;
+        let ledger = self.load(&gate)?;
+        let published = match ledger.outputs.iter().find(|o| o.path == tree) {
+            Some(output)
+                if output.tree
+                    && output.producer == producer
+                    && output.phase == "released"
+                    && output.manifest.sealed =>
+            {
+                if identity(&no_symlink_parents(&self.root, tree)?)? != output.identity {
+                    return Err("published tree identity changed; preserve originals".into());
+                }
+                match output.manifest.entries.iter().find(|e| e.path == member) {
+                    Some(entry) if !entry.directory && entry.bytes == length => {
+                        Manifest::validate(entry, &self.root)?;
+                        let actual =
+                            crate::file_identity(&no_symlink_parents(&self.root, member)?)?;
+                        Manifest::validate(entry, &self.root)?;
+                        actual == (digest.into(), length)
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        };
+        self.stable(&gate)?;
+        Ok(published)
+    }
     pub fn accepts(&self, producer: &str, path: &str) -> bool {
         self.policy
             .producers

@@ -88,6 +88,7 @@ dependencies = [
 name = "chrono-pr-tests"
 version = "0.1.0"
 dependencies = [
+ "chrono-harness",
  "chrono-pr",
  "serde_json",
  "tempfile",

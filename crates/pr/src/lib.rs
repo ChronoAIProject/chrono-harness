@@ -15,7 +15,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-const HELP: &str = "chrono-pr pr-open --head BRANCH --head-sha SHA --title TITLE --body-file FILE [--draft]\nchrono-pr pr-status --pr NUMBER --head-sha SHA\nchrono-pr pr-watch --pr NUMBER --head-sha SHA\nAll commands: [--host-root ROOT] [--config .chrono-harness/pr.json]\nResults: JSON; exits 0 complete, 1 failed/closed, 2 unknown/error, 3 pending, 4 stale.\n";
+const HELP: &str = "chrono-pr pr-open --head BRANCH --head-sha SHA --title TITLE --body-file FILE [--draft]\nchrono-pr pr-status --pr NUMBER --head-sha SHA [--continue-operation PATH]\nchrono-pr pr-watch --pr NUMBER --head-sha SHA\nAll commands: [--host-root ROOT] [--config .chrono-harness/pr.json]\nResults: JSON; exits 0 complete, 1 failed/closed, 2 unknown/error, 3 pending, 4 stale.\n";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -116,6 +116,8 @@ impl Args {
             let common = ["--host-root", "--config", "--head-sha"];
             let specific = if command == "pr-open" {
                 &["--head", "--title", "--body-file"][..]
+            } else if command == "pr-status" {
+                &["--pr", "--continue-operation"][..]
             } else {
                 &["--pr"][..]
             };
@@ -279,6 +281,7 @@ impl Client {
             result,
             state,
         };
+        client.result["continued_operation"] = json!(client.state.continued_path());
         client.result["operation"] = json!(client.state.path);
         client.result["repository"] = json!(client.config.repository);
         client.result["base"] = json!(client.config.base);
@@ -550,7 +553,7 @@ pub fn run(raw: &[OsString]) -> CliOutput {
             stderr: String::new(),
         };
     }
-    let mut result = json!({"schema":"chrono-pr-result/v2","operation":null,"operation_state":"unknown","pr_state":null,"merge_commit":null,"command":raw.first().and_then(|s|s.to_str()),"repository":null,"base":null,"pr":null,"expected_head":null,"observed_head":null,"outcome":"unknown","checks":[],"error":null,"receipts":[]});
+    let mut result = json!({"schema":"chrono-pr-result/v2","continued_operation":null,"operation":null,"operation_state":"unknown","pr_state":null,"merge_commit":null,"command":raw.first().and_then(|s|s.to_str()),"repository":null,"base":null,"pr":null,"expected_head":null,"observed_head":null,"outcome":"unknown","checks":[],"error":null,"receipts":[]});
     match Args::parse(raw) {
         Err(error) => result["error"] = json!(error),
         Ok(args) => {
