@@ -2151,7 +2151,7 @@
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml",
             "--",
-            "--test-threads=2"
+            "--test-threads=8"
           ]
         },
         "execute_core": {
@@ -2163,7 +2163,7 @@
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml",
             "--",
-            "--test-threads=2",
+            "--test-threads=8",
             "--skip",
             "interrupted_cleanup::public_participating_check_preserves_zero_and_nonzero_stderr_results",
             "--skip",
@@ -2183,7 +2183,7 @@
             "--manifest-path",
             "crates/worktree-tests/Cargo.toml",
             "--",
-            "--test-threads=2",
+            "--test-threads=8",
             "--exact",
             "interrupted_cleanup::public_participating_check_preserves_zero_and_nonzero_stderr_results",
             "interrupted_cleanup::returned_use_without_token_still_protects_detached_native_child",
