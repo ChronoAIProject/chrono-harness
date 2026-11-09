@@ -2776,7 +2776,7 @@ impl Manager {
                         self.reconcile_birth(r, i, lease)?;
                     }
                     if age {
-                        self.execute_age(r, i, token, attempt, true)
+                        self.execute_age(r, i, token, attempt)
                     } else if cache {
                         self.execute_cache(r, i, token, attempt, false)
                     } else {
@@ -3897,7 +3897,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         "use" | "check" | "bootstrap" => "used",
         _ => return Err("unknown lifecycle operation".into()),
     };
-    let mut use_guard = None;
+    let mut _use_guard = None;
     start::with_report_for_consumer(
         &invoking,
         config_path,
@@ -3993,7 +3993,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
                     manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
-                    manager.prepare_age_use(r, target, report)?;
                     if manager.current_entry(target).is_none()
                         && target == &manager.inputs.policy.coordinator_root
                         && manager.inputs.policy.main_cache_only
@@ -4125,7 +4124,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         })
                         .map(|producer| producer.id.clone());
                     if e.ownership.is_some() {
-                        use_guard = Some(
+                        _use_guard = Some(
                             manager
                                 .lease(&e, false)?
                                 .ok_or("enrollment lease is busy")?,
@@ -4246,18 +4245,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(error) = artifact_error {
                         return Err(error);
                     }
-                    let age_cleanup = manager.inputs.policy.age_policy.is_some();
-                    if age_cleanup {
-                        drop(use_guard.take());
-                    }
                     let mut post_use_cleanup = value!({});
-                    let cleanup_exclusions = if age_cleanup {
-                        vec![invoking.clone()]
-                    } else {
-                        vec![invoking.clone(), target.clone()]
-                    };
-                    let cleanup =
-                        manager.drain_for_admission(r, &cleanup_exclusions, &mut post_use_cleanup);
+                    let cleanup = manager.drain_for_admission(
+                        r,
+                        &[invoking.clone(), target.clone()],
+                        &mut post_use_cleanup,
+                    );
                     report["post_use_cleanup"] = post_use_cleanup;
                     cleanup?;
                     Ok(())

@@ -82,7 +82,24 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     );
     assert_eq!(code, 0, "{used} {error}");
     assert_eq!(used["managed_process"]["stdout"], "ordinary-work");
-    let saved = &used["age_reuse"]["source_preservation"];
+    assert!(used["age_reuse"].is_null(), "{used}");
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), original);
+    assert_eq!(git(&target, &["show", ":payload"]), "staged-original");
+    assert_eq!(
+        fs::read_to_string(target.join("payload")).unwrap(),
+        "current-source"
+    );
+    assert!(target.join("output λ/cache").is_file());
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let result = maintained["drain"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target) && !row["receipt"].is_null())
+        .unwrap();
+    let original_result = drain_report(result);
+    let saved = &original_result["source_preservation"];
     assert_eq!(saved["original_head"], original);
     assert!(
         saved["reflog_refs"]
@@ -111,6 +128,20 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     assert!(!target.join("output λ").exists());
     let reference = saved["retained_ref"].as_str().unwrap().to_owned();
     let head = saved["head"].as_str().unwrap().to_owned();
+    output(&target);
+    let (code, reused, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{reused} {error}");
+    assert!(reused["age_reuse"].is_null(), "{reused}");
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    assert!(target.join("output λ/cache").is_file());
     // Modification now must not extend checkout creation age.
     fs::write(target.join("payload"), "source at deletion").unwrap();
     older_than(&target, 60);
@@ -219,7 +250,27 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
         ],
     );
     assert_eq!(code, 0, "{used} {error}");
-    let saved = &used["age_reuse"]["source_preservation"];
+    assert!(used["age_reuse"].is_null(), "{used}");
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    assert_eq!(
+        git(&target, &["show", ":payload"]),
+        "original staged source"
+    );
+    assert_eq!(
+        fs::read_to_string(target.join("payload")).unwrap(),
+        "current detached source"
+    );
+    assert!(target.join("output λ/cache").is_file());
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let result = maintained["drain"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(target) && !row["receipt"].is_null())
+        .unwrap();
+    let original_result = drain_report(result);
+    let saved = &original_result["source_preservation"];
     assert_eq!(saved["original_head"], head);
     assert_ne!(saved["head"], head);
     let show = |reference: &Value| {
@@ -277,6 +328,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     )
     .unwrap();
     older_than(&target, 40);
+    output(&target);
     let (code, used, error) = h.auto(
         "use",
         &[
@@ -287,12 +339,22 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
         ],
     );
     assert_eq!(code, 0, "{used} {error}");
+    assert!(used["age_reuse"].is_null(), "{used}");
+    assert!(target.join("output λ/cache").is_file());
     assert!(target.exists());
     assert_eq!(
         fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
         b"needed original\0\xff"
     );
-    let observations = used["post_use_cleanup"]["drain"].as_array().unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(target.exists());
+    assert!(!target.join("output λ").exists());
+    assert_eq!(
+        fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
+        b"needed original\0\xff"
+    );
+    let observations = maintained["drain"].as_array().unwrap();
     assert!(
         observations
             .iter()
