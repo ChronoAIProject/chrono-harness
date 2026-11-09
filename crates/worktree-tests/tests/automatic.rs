@@ -2520,17 +2520,6 @@ fn automatic_symlink_containment_and_internal_external_target_safety() {
     }
 }
 
-pub(super) fn consuming_operation(h: &Host, body: &str) {
-    consuming_scripts(
-        h,
-        value!([
-            {"id":"consumer","path":"s.sh","test_script":"consumer-tests","actions":{"execute":{"operation":"use.consumer","tool":"sh","argv":["s.sh"]}}},
-            {"id":"consumer-tests","path":"st.sh","tests_for":"consumer","actions":{"execute":{"operation":"test.consumer","tool":"sh","argv":["st.sh"]}}}
-        ]),
-        &[("s.sh", body.as_bytes()), ("st.sh", b"exit 0\n")],
-    );
-}
-
 pub(super) fn native_git(h: &Host, mode: &str, mut parameters: Value) -> PathBuf {
     let input = h.parent.join("git-fixture.json");
     parameters["mode"] = value!(mode);
