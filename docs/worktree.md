@@ -306,9 +306,9 @@ result 严格形式与检出中断恢复相同，只有实测缺失才用 `{"pre
 
 ## 退役远端工作分支
 
-公开 beta.10 macOS 二进制在落地已验后，退役产品发布分支及四个示例采用分支，核原进程字节、预期分支／目标、lease 删除和实测缺失。两个原生发布 job 也运行专属 worktree 测试，见[发布证据](distribution.md)、[示例采用](examples.md)。
+历史公开二进制与示例宿主的退役验收观察见[原 PR](https://github.com/ChronoAIProject/chrono-harness/pull/61)及其发布记录；这些观察不证明当前候选已经验收。
 
-`cleanup-remote` 从 beta.10 提供，沿同一登记配置／进程报告，使用明确计划：
+`cleanup-remote` 沿同一登记配置和进程报告，使用明确计划：
 
 ```sh
 .chrono-harness/bin/chrono-worktree cleanup-remote \
