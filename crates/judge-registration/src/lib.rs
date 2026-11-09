@@ -8,6 +8,8 @@ mod transition;
 #[allow(unexpected_cfgs)]
 pub mod verified_consumption;
 #[allow(unexpected_cfgs)]
+pub mod verified_input_coverage;
+#[allow(unexpected_cfgs)]
 pub mod verified_nodes;
 #[allow(unexpected_cfgs)]
 pub mod verified_readiness;

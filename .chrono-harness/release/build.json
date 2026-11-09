@@ -406,7 +406,6 @@
       "needs": [
         "build_runner",
         "build_judge_ci",
-        "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -827,7 +826,6 @@
       "release_assets": [
         "chrono-harness",
         "chrono-judge-ci",
-        "chrono-ci",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-routes",

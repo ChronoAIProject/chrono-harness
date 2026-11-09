@@ -276,7 +276,7 @@ impl Inventory {
         let Some(gate) = DirectoryLease::acquire(&directory, true, None)? else {
             return Ok(());
         };
-        let mut record = self.read_object(id)?;
+        let mut record = self.read_object(id, &directory)?;
         if record.output.is_some()
             || !record.incoming.is_empty()
             || !record.roles.is_empty()
@@ -385,7 +385,7 @@ impl Inventory {
         Ok(errors)
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
-        let (leases, directories) = self.path_gates(paths, true)?;
+        let (leases, directories) = self.path_gates(paths, true, true)?;
         let targets = paths
             .iter()
             .map(|path| Ok((path.clone(), self.path_directory(path)?)))
@@ -604,12 +604,21 @@ impl Inventory {
         )
     }
     fn read_metadata<T: for<'a> Deserialize<'a>>(&self, path: &Path) -> Result<Option<T>, String> {
-        let file = match fs::File::open(path) {
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            // Refuse links and avoid blocking on a FIFO before fstat can reject it.
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+        let file = match options.open(path) {
             Ok(file) => file,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.to_string()),
         };
-        if !file.metadata().map_err(|e| e.to_string())?.is_file()
+        let metadata = file.metadata().map_err(|e| e.to_string())?;
+        if !metadata.is_file()
             || fs::symlink_metadata(path)
                 .map_err(|e| e.to_string())?
                 .file_type()
@@ -617,7 +626,13 @@ impl Inventory {
         {
             return Err("retention declaration must be a physical regular file".into());
         }
-        let mut raw = Vec::new();
+        if metadata.len() > MAX_STATE {
+            return Err("retention declaration byte bound".into());
+        }
+        // Take's default read_to_end otherwise probes and grows an empty buffer
+        // through several small reads. The observed length is only a capacity
+        // hint: retain the actual-read bound in case the file grows meanwhile.
+        let mut raw = Vec::with_capacity(metadata.len() as usize);
         file.take(MAX_STATE + 1)
             .read_to_end(&mut raw)
             .map_err(|e| e.to_string())?;
@@ -653,14 +668,13 @@ impl Inventory {
         self.charge_metadata(raw.len() as u64)?;
         write(path, &raw)
     }
-    fn read_object(&self, id: &str) -> Result<Object, String> {
-        let directory = self.object_directory(id)?;
+    fn read_object(&self, id: &str, directory: &Path) -> Result<Object, String> {
         let record: Object = self
-            .read_metadata(&no_symlink_parents(&directory, "record.json")?)?
+            .read_metadata(&no_symlink_parents(directory, "record.json")?)?
             .ok_or_else(|| format!("retained output unavailable: {id}"))?;
         if record.schema != "chrono-retained-output/v2"
             || record.id != id
-            || record.directory_identity != identity(&directory)?
+            || record.directory_identity != identity(directory)?
             || record
                 .output
                 .as_ref()
@@ -713,6 +727,7 @@ impl Inventory {
         &self,
         paths: &[String],
         wait: bool,
+        read_ancestor_addresses: bool,
     ) -> Result<(Vec<DirectoryLease>, BTreeMap<String, PathBuf>), String> {
         let mut requests = BTreeMap::<String, bool>::new();
         for path in paths {
@@ -732,14 +747,20 @@ impl Inventory {
             // descendants adds no exclusion and could reverse another lock order.
             let directory = self.path_directory(&path)?;
             fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-            let marker = no_symlink_parents(&directory, "address.json")?;
+            let marker = directory.join("address.json");
+            // Maintenance already holds the actual output declarations. It
+            // needs each target's mapping, plus physical ancestor exclusion.
+            // Ordinary publication also consumes ancestor mappings to detect
+            // overlapping reservations and therefore keeps reading them all.
+            let read_address = read_ancestor_addresses || exclusive;
             // Birth needs only an absence observation here. Decode and validate
             // an existing declaration once, under the acquired path lease.
-            let missing = match fs::symlink_metadata(&marker) {
-                Ok(_) => false,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
-                Err(error) => return Err(error.to_string()),
-            };
+            let missing = read_address
+                && match fs::symlink_metadata(&marker) {
+                    Ok(_) => false,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                    Err(error) => return Err(error.to_string()),
+                };
             if missing {
                 let initial = DirectoryLease::acquire(
                     &directory,
@@ -764,11 +785,13 @@ impl Inventory {
                 wait.then(|| Duration::from_secs(5).saturating_sub(began.elapsed())),
             )?
             .ok_or_else(|| format!("retention path is busy: {path}"))?;
-            let address = self
-                .read_metadata::<Address>(&marker)?
-                .ok_or("retention path declaration disappeared")?;
-            if address.path != path {
-                return Err("retention path address changed".into());
+            if read_address {
+                let address = self
+                    .read_metadata::<Address>(&marker)?
+                    .ok_or("retention path declaration disappeared")?;
+                if address.path != path {
+                    return Err("retention path address changed".into());
+                }
             }
             directories.insert(path, directory);
             leases.push(lease);
@@ -818,7 +841,7 @@ impl Inventory {
         wait: bool,
     ) -> Result<Gate, String> {
         let discover_under_lease = maintenance && !wait && birth.is_none();
-        let (mut leases, mut path_dirs) = self.path_gates(paths, wait)?;
+        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
         if birth.is_some() && !occupied.is_empty() {
@@ -890,13 +913,14 @@ impl Inventory {
             let Some(id) = next else {
                 break;
             };
+            let directory = self.object_directory(&id)?;
             if discover_under_lease {
                 leases.push(
-                    DirectoryLease::acquire(&self.object_directory(&id)?, true, None)?
+                    DirectoryLease::acquire(&directory, true, None)?
                         .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
                 );
             }
-            let record = self.read_object(&id)?;
+            let record = self.read_object(&id, &directory)?;
             if let Some(output) = &record.output {
                 selected.extend(output.references.iter().cloned());
             }
@@ -911,7 +935,7 @@ impl Inventory {
         }
         if maintenance {
             let target_paths: Vec<_> = observed.values().map(|r| r.path.clone()).collect();
-            let (additional, dirs) = self.path_gates(&target_paths, wait)?;
+            let (additional, dirs) = self.path_gates(&target_paths, wait, !discover_under_lease)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
         }
@@ -962,6 +986,13 @@ impl Inventory {
         }
         let mut records = BTreeMap::new();
         for id in selected {
+            if discover_under_lease {
+                records.insert(
+                    id.clone(),
+                    observed.remove(&id).ok_or("excluded output was not read")?,
+                );
+                continue;
+            }
             let directory = self.object_directory(&id)?;
             let fresh = birth.as_ref().is_some_and(|b| b.0 == id);
             if fresh {
@@ -993,10 +1024,8 @@ impl Inventory {
                     metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
                     prune_path: Some(path.clone()),
                 }
-            } else if discover_under_lease {
-                observed.remove(&id).ok_or("excluded output was not read")?
             } else {
-                self.read_object(&id)?
+                self.read_object(&id, &directory)?
             };
             if fresh {
                 self.write_metadata(&directory.join("record.json"), &record)?;

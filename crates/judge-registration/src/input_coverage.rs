@@ -35,6 +35,7 @@ pub(crate) fn shape(coverage: &Value, closure: &Value) -> Result<(), String> {
         .iter()
         .map(|binding| (binding["id"].as_str().unwrap(), binding))
         .collect();
+    let closure_status = schema::string(&closure["status"])?;
     let mut seen = BTreeSet::new();
     let mut covered = BTreeSet::new();
     for row in schema::array(&coverage["rows"])? {
@@ -54,22 +55,10 @@ pub(crate) fn shape(coverage: &Value, closure: &Value) -> Result<(), String> {
         schema::string(&row["reason"])?;
         let state = schema::string(&row["state"])?;
         let ids = schema::array(&row["bindings"])?;
-        match state {
-            "bound" | "absent" if ids.is_empty() => {
-                return Err(format!(
-                    "coverage {state} requires bindings: {consumer}/{domain}"
-                ));
-            }
-            "bound" | "absent" => {}
-            "not-applicable" | "unresolved" => {
-                if !ids.is_empty() {
-                    return Err(format!("coverage {state} cannot carry bindings"));
-                }
-                if state == "unresolved" && closure["status"] == "declared-complete" {
-                    return Err(format!("unresolved coverage domain {consumer}/{domain}"));
-                }
-            }
-            _ => return Err(format!("unsupported coverage state {state}")),
+        if !crate::verified_input_coverage::row_state_valid(state, ids.len(), closure_status) {
+            return Err(format!(
+                "invalid coverage state {state}: {consumer}/{domain}"
+            ));
         }
         let mut row_ids = BTreeSet::new();
         for id in ids {
@@ -138,7 +127,7 @@ pub(crate) fn validate(registrations: &Registrations, response: &mut Response) {
         .map(|input| (input["id"].as_str().unwrap(), input))
         .collect();
     for (index, row) in coverage["rows"].as_array().unwrap().iter().enumerate() {
-        if row["state"] != "absent" {
+        if !crate::verified_input_coverage::is_absent(row["state"].as_str().unwrap()) {
             continue;
         }
         for id in row["bindings"].as_array().unwrap() {

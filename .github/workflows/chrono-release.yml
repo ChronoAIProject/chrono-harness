@@ -2167,7 +2167,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2192,7 +2192,6 @@ jobs:
       - *chrono_release_download_14
       - *chrono_release_download_12
       - *chrono_release_download_4
-      - *chrono_release_download_1
       - *chrono_release_download_9
       - *chrono_release_download_6
       - *chrono_release_download_10
@@ -5234,7 +5233,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_projects_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5259,7 +5258,6 @@ jobs:
       - *chrono_release_download_29
       - *chrono_release_download_27
       - *chrono_release_download_19
-      - *chrono_release_download_16
       - *chrono_release_download_24
       - *chrono_release_download_21
       - *chrono_release_download_25
