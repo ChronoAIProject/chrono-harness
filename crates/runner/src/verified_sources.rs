@@ -560,6 +560,132 @@ pub struct SourceRegistry {
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
 pub struct SourceFile {
     pub path: String,
+    #[cfg_attr(not(verus_keep_ghost), serde(default))]
+    pub verification: Option<SourceVerification>,
+}
+
+/// 缺少声明仍是未知覆盖；数据声明不授予任何仓内函数受信例外。
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+pub enum SourceRole {
+    Program,
+    Specification,
+    Data,
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct SourceVerification {
+    pub role: SourceRole,
+    pub roots: Vec<SourceProofRoot>,
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct SourceProofRoot {
+    pub path: String,
+    pub operation: String,
+}
+
+pub open spec fn canonical_source_path(path: Seq<u8>) -> bool {
+    relative_components(path).is_some()
+        && joined_components(relative_components(path).unwrap()) == path
+}
+
+pub fn canonical_source_name(path: &str) -> (valid: bool)
+    ensures valid == canonical_source_path(vstd::utf8::encode_utf8(path@)),
+{
+    let bytes = path.as_bytes();
+    match normalize_relative_path(bytes) {
+        None => false,
+        Some(normalized) => equal_bytes(normalized.as_slice(), bytes),
+    }
+}
+
+pub open spec fn proof_root_declaration_valid(root: &SourceProofRoot) -> bool {
+    canonical_source_path(vstd::utf8::encode_utf8(root.path@)) && root.operation@.len() > 0
+}
+
+pub open spec fn distinct_proof_root(roots: Seq<SourceProofRoot>, index: int) -> bool {
+    forall|j: int| 0 <= j < index ==> (#[trigger] roots[j]).path@ != roots[index].path@
+}
+
+pub open spec fn source_declaration_valid(file: &SourceFile) -> bool {
+    match &file.verification {
+        None => true,
+        Some(declaration) => match &declaration.role {
+            SourceRole::Data => declaration.roots.len() == 0,
+            SourceRole::Program | SourceRole::Specification => declaration.roots.len() > 0
+                && forall|i: int| 0 <= i < declaration.roots.len() ==>
+                    proof_root_declaration_valid(#[trigger] &declaration.roots[i])
+                        && distinct_proof_root(declaration.roots@, i),
+        },
+    }
+}
+
+fn distinct_source_root(roots: &Vec<SourceProofRoot>, index: usize) -> (distinct: bool)
+    requires index < roots.len(),
+    ensures distinct == distinct_proof_root(roots@, index as int),
+{
+    let mut j = 0;
+    while j < index
+        invariant 0 <= j <= index < roots.len(),
+            forall|k: int| 0 <= k < j ==> (#[trigger] roots[k]).path@ != roots[index as int].path@,
+        decreases index - j,
+    {
+        if super::equal_text(roots[j].path.as_str(), roots[index].path.as_str()) {
+            return false;
+        }
+        j += 1;
+    }
+    true
+}
+
+/// registration 消费此同源判断；声明有效不等于证明已经执行或覆盖完整。
+pub fn valid_source_declaration(file: &SourceFile) -> (valid: bool)
+    ensures valid == source_declaration_valid(file),
+{
+    let declaration = match &file.verification { None => { return true; }, Some(value) => value };
+    match &declaration.role {
+        SourceRole::Data => { return declaration.roots.len() == 0; },
+        SourceRole::Program | SourceRole::Specification => {},
+    }
+    if declaration.roots.len() == 0 { return false; }
+    let mut i = 0;
+    let mut valid = true;
+    while i < declaration.roots.len()
+        invariant 0 <= i <= declaration.roots.len(), declaration.roots.len() > 0,
+            valid == (forall|j: int| 0 <= j < i ==>
+                proof_root_declaration_valid(#[trigger] &declaration.roots[j])
+                    && distinct_proof_root(declaration.roots@, j)),
+        decreases declaration.roots.len() - i,
+    {
+        let root = &declaration.roots[i];
+        assert(root.path@ == declaration.roots@[i as int].path@);
+        assert(root.operation@ == declaration.roots@[i as int].operation@);
+        let operation_empty = root.operation.as_str().is_empty();
+        let current = canonical_source_name(root.path.as_str())
+            && !operation_empty
+            && distinct_source_root(&declaration.roots, i);
+        assert(operation_empty == (root.operation@.len() == 0));
+        assert(current == (proof_root_declaration_valid(
+            &declaration.roots[i as int])
+            && distinct_proof_root(declaration.roots@, i as int)));
+        valid = valid && current;
+        i += 1;
+    }
+    valid
+}
+
+pub fn validate_source_declaration(file: &SourceFile) -> (out: Result<(), String>)
+    ensures out.is_ok() == source_declaration_valid(file),
+        match out {
+            Err(message) => message@ == "E_VERUS_COVERAGE: invalid file proof declaration"@,
+            Ok(()) => true,
+        },
+{
+    if valid_source_declaration(file) { Ok(()) }
+    else { Err("E_VERUS_COVERAGE: invalid file proof declaration".to_string()) }
 }
 
 /// 适配器只提供解码、固定候选字节、原模式和摘要观察，不能在此接口内决定准入。
@@ -629,7 +755,7 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         Err(_) => true,
     },
 {
-    // 路由准入已证明合同与观察的有无一致；此层不再复制合同或按名称推断操作。
+    // 组合入口先核合同与观察的有无；此层不复制合同或按名称推断操作。
     if observed.is_none() { return Ok(None); }
     if !super::canonical_verifier_arguments(args) {
         return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string());
@@ -721,45 +847,6 @@ pub fn process_arguments(argv: &Vec<String>) -> (args: Result<Vec<String>, Strin
         i += 1;
     }
     Ok(args)
-}
-
-pub fn admission_result(admission: Result<Option<SourceAdmission>, String>) -> (out: Result<(), String>)
-    ensures out.is_ok() == admission.is_ok(),
-        match (out, admission) {
-            (Err(first), Err(second)) => first@ == second@,
-            _ => true,
-        },
-{
-    match admission { Ok(_) => Ok(()), Err(error) => Err(error) }
-}
-
-/// 只对同一原回执的成功操作绑定源码；原失败、阻断及其原件交回既有结果生产者。
-pub fn bind_process_sources<I: CandidateSourceRead>(
-    state: &str, receipt: Option<(&Vec<String>, &Option<Result<Vec<u8>, String>>)>,
-    registry: &Result<SourceRegistry, String>, io: &I,
-) -> (out: Result<(), String>)
-    ensures state@ != "passed"@ ==> out.is_ok(),
-        state@ == "passed"@ && receipt.is_none() ==> out.is_err(),
-        state@ == "passed"@ && out.is_ok() ==> match receipt {
-            Some((argv, observed)) => argv.len() > 0 && match observed {
-                None => true,
-                Some(Ok(bytes)) => registry.is_ok() && exists|admission: SourceAdmission|
-                    admission_matches(&admission, argv@.skip(1), bytes@, registry.unwrap().files@),
-                Some(Err(_)) => false,
-            },
-            None => false,
-        },
-{
-    if !super::identifiers::equal_text(state, "passed") { return Ok(()); }
-    let (argv, observed) = match receipt {
-        Some(value) => value,
-        None => { return Err("E_VERUS_SOURCES: successful operation has no original receipt".to_string()); },
-    };
-    let args = match process_arguments(argv) {
-        Ok(args) => args,
-        Err(error) => { return Err(error); },
-    };
-    admission_result(bind_compiler_sources(&args, observed, registry, io))
 }
 
 pub open spec fn source_pair_matches(source: &SourceBinding, candidate: &SourceBinding) -> bool {
@@ -976,6 +1063,86 @@ pub open spec fn checksum_trailer(
             }
         }
     }
+}
+
+pub open spec fn proof_roots_use_registered_operations(
+    file: &SourceFile, operations: Seq<String>,
+) -> bool {
+    match &file.verification {
+        None => true,
+        Some(declaration) => match &declaration.role {
+            SourceRole::Data => declaration.roots.len() == 0,
+            SourceRole::Program | SourceRole::Specification =>
+                forall|i: int| 0 <= i < declaration.roots.len() ==>
+                    proof_root_operation_registered(
+                        #[trigger] &declaration.roots[i], operations),
+        },
+    }
+}
+
+/// 单个声明根必须指向现役 execution plan 的真实操作。
+pub open spec fn proof_root_operation_registered(
+    root: &SourceProofRoot, operations: Seq<String>,
+) -> bool {
+    exists|j: int| 0 <= j < operations.len()
+        && operations[j]@ == root.operation@
+}
+
+fn operation_is_registered(
+    root: &SourceProofRoot, operations: &Vec<String>,
+) -> (valid: bool)
+    ensures valid == proof_root_operation_registered(root, operations@),
+{
+    let target = &root.operation;
+    let mut j = 0;
+    let mut found = false;
+    while j < operations.len()
+        invariant 0 <= j <= operations.len(), !found ==>
+                forall|k: int| 0 <= k < j ==> operations[k]@ != target@,
+            found <==> exists|k: int| 0 <= k < j && operations[k]@ == target@,
+        decreases operations.len() - j,
+    {
+        if super::equal_text(operations[j].as_str(), target.as_str()) {
+            found = true;
+        }
+        j += 1;
+    }
+    assert(found == proof_root_operation_registered(root, operations@));
+    found
+}
+
+/// 每个已声明程序／规格根必须指向现役 execution plan 的真实操作。
+pub fn proof_roots_have_registered_operations(
+    file: &SourceFile, operations: &Vec<String>,
+) -> (valid: bool)
+    ensures valid == proof_roots_use_registered_operations(file, operations@),
+{
+    let declaration = match &file.verification {
+        None => { return true; },
+        Some(value) => value,
+    };
+    match &declaration.role {
+        SourceRole::Data => { return declaration.roots.len() == 0; },
+        SourceRole::Program | SourceRole::Specification => {},
+    }
+    let mut i = 0;
+    let mut valid = true;
+    while i < declaration.roots.len()
+        invariant 0 <= i <= declaration.roots.len(),
+            valid == (forall|k: int| 0 <= k < i as int ==>
+                proof_root_operation_registered(
+                    #[trigger] &declaration.roots[k], operations@)),
+        decreases declaration.roots.len() - i,
+    {
+        let current = operation_is_registered(&declaration.roots[i], operations);
+        valid = valid && current;
+        i += 1;
+    }
+    assert(i == declaration.roots.len());
+    assert(valid == (forall|k: int| 0 <= k < declaration.roots.len() as int ==>
+        proof_root_operation_registered(#[trigger] &declaration.roots[k], operations@)));
+    assert(valid == proof_roots_use_registered_operations(file, operations@));
+    valid
 }
 
 pub open spec fn dependency_content_matches(

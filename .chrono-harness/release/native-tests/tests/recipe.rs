@@ -76,7 +76,7 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
             let output_arguments = if owner["id"] == "worktree-tests" {
                 assert_eq!(
                     &argv[argv.len() - 2..],
-                    &[json!("--"), json!("--test-threads=2")]
+                    &[json!("--"), json!("--test-threads=8")]
                 );
                 &argv[4..argv.len() - 2]
             } else {
