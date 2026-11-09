@@ -316,12 +316,6 @@
       "tracked": false
     },
     {
-      "path": ".chrono-harness/cache/bootstrap-verus/",
-      "owner": "repository",
-      "kind": "download-cache",
-      "tracked": false
-    },
-    {
       "path": ".chrono-harness/cache/bootstrap-owner-tooling/verus/",
       "owner": "repository",
       "kind": "download-cache",

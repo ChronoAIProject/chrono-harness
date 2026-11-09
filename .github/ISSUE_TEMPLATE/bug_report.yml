@@ -1,0 +1,49 @@
+name: 缺陷报告
+description: 提供可复现的输入、预期与实际失败。
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请搜索已有 Issue／PR，并阅读 [协作规范](https://github.com/ChronoAIProject/chrono-harness/blob/dev/CONTRIBUTING.md)。
+        未知信息写“未知”并说明原因；日志和输入请脱敏。
+  - type: textarea
+    id: impact
+    attributes:
+      label: 问题与影响
+      description: 谁在完成什么目标时受到影响？具体入口是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: 版本与环境
+      description: 版本或完整 SHA、安装方式、操作系统／架构及相关工具版本；只填写与问题有关的内容。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: 复现输入与步骤
+      description: 最小输入、实际命令、前置条件和复现频率；无法复现时写明已有事实。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期结果
+      description: 应满足的行为或 SPEC 条款，以及修复后怎样验收。
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果与原始失败
+      description: 实际 stdout／stderr、退出码或 signal、报告／CI 链接；没有原件时说明缺口。
+    validations:
+      required: true
+  - type: textarea
+    id: related
+    attributes:
+      label: 已尝试的方法与关联事项
+      description: 实际尝试、绕行办法及相关 Issue／PR；不要把猜测写成根因。

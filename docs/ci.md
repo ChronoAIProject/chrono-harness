@@ -60,11 +60,9 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 
 项目操作的 `bootstrap-native` 工具槽也指向上述保留文件。首次执行这些操作前，先走同一候选安装入口；完成缓存释放后，构建前置继续消费已安装前端，不依赖 Cargo target 中的临时执行物。
 
-固定 Verus 下载在 `projects.json` 的 `host.verus-download` 操作中使用 GitHub 官方资产 API 的固定 ID `406260237`，以 `Accept: application/octet-stream` 获取原发布 ZIP，版本和 SHA-256 不变。这一个固定 GET 使用 curl 原生的 `--retry-all-errors`，覆盖 HTTP 504 被报为接收失败退出 56 的情况，最多重试 3 次；下载内容写入 `--output` 指定文件，由 curl 在重试前重置部分内容。连接上限为 15 秒，单次传输上限为 120 秒；启动重试的时间窗口为 120 秒，该窗口不限制已经开始的传输。原有操作／验收时限继续生效，下载后仍核固定 SHA-256。这里不重跑构建或验收，也不增加自研重试层；实际重试次数和耗时归原始输出。
+Verus 下载、摘要校验和失败原件见[固定执行入口](verus.md#固定执行入口)，缓存复用见[Verus 固定下载包](ci-cache.md#verus-archive)。
 
-下载启用 curl 的 `--verbose`，将重定向、响应状态和响应头写入已有原始 stderr，供区分 API 响应与最终资产服务的失败。失败不能仅凭 HTTP 403 归因为权限、限流或链接过期；须读实际响应及原退出码。额外诊断字节沿用现有输出上限和保留规则。
-
-本宿主只维护当前采用的安装 profile。薄 shell 入口省略配置时选择现有 `bootstrap-core.json`；
+本宿主只维护当前采用的安装 profile。薄 shell 入口必须明确传入 `HOST CONFIG`；普通构建的 Rust 前端使用相同参数，不另设 `bootstrap` 子命令。
 旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。
 detector、缓存和各单元仍消费各自显式登记的 profile，不因默认安装而取得额外工具。
 共享启动的 produce／install／verify 已登记到同一个 Rust 前端；produce 按所选 profile 的 `entrypoint` 和工具声明调用真实生产者。缓存、detector 和单元 profile 同样选择原生入口，操作 ID、原始回执、产物绑定及失败合同保留。消费者首次从源码准备前端的构建与存储成本仍须实测，不能把语言迁移算作性能收益。旧 Python 启动实现、伴生测试及导入专属断言已随入口退役。发布编排归现役 Rust 发布项目，详见[发布说明](release-ci.md)；外部宿主不运行本仓这项源码构建。

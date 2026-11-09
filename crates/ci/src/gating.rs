@@ -15,32 +15,51 @@ pub fn completed_native_job(
     mut read: impl FnMut(u64) -> Result<Value, String>,
 ) -> Result<Value, String> {
     let failed = || "latest native execution did not uniquely succeed".to_string();
-    if listed["status"] == "completed" {
-        return if listed["conclusion"] == "success" {
-            Ok(listed.clone())
-        } else {
-            Err(failed())
-        };
-    }
-    // needs has already succeeded. A nonterminal list row can lag the exact
-    // job resource; read that one resource once, without retrying failures.
-    if !matches!(
+    use crate::verified_literals::{self as policy, NativeJobState};
+    let id = match policy::native_job_state(
         listed["status"].as_str(),
-        Some("queued" | "in_progress" | "waiting" | "pending" | "requested")
-    ) || listed.get("conclusion") != Some(&Value::Null)
-    {
-        return Err(failed());
-    }
-    let id = listed["id"]
-        .as_u64()
-        .filter(|id| *id > 0)
-        .ok_or_else(failed)?;
+        listed["conclusion"].as_str(),
+        listed.get("conclusion").map(Value::is_null),
+        listed["id"].as_u64(),
+    ) {
+        NativeJobState::Succeeded => return Ok(listed.clone()),
+        NativeJobState::ReadDetail { id } => id,
+        NativeJobState::Rejected => return Err(failed()),
+    };
     let detail = read(id)?;
-    if ["id", "run_id", "run_attempt", "head_sha", "name"]
+    // JSON is decoded/encoded by the fixed Serde interface. Preserve missing
+    // separately from a present null, and compare the complete original fields.
+    let fields = ["id", "run_id", "run_attempt", "head_sha", "name"]
+        .map(|field| -> Result<_, String> {
+            Ok((
+                detail
+                    .get(field)
+                    .map(serde_json::to_vec)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+                listed
+                    .get(field)
+                    .map(serde_json::to_vec)
+                    .transpose()
+                    .map_err(|e| e.to_string())?,
+            ))
+        })
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()?;
+    let observed = fields
         .iter()
-        .any(|field| detail.get(*field) != listed.get(*field))
-        || detail["status"] != "completed"
-        || detail["conclusion"] != "success"
+        .map(|(a, b)| (a.as_deref(), b.as_deref()))
+        .collect::<Vec<_>>();
+    if !policy::native_job_binding(&observed)
+        || !matches!(
+            policy::native_job_state(
+                detail["status"].as_str(),
+                detail["conclusion"].as_str(),
+                detail.get("conclusion").map(Value::is_null),
+                detail["id"].as_u64(),
+            ),
+            NativeJobState::Succeeded
+        )
     {
         return Err(failed());
     }

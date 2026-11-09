@@ -276,7 +276,7 @@ impl Inventory {
         let Some(gate) = DirectoryLease::acquire(&directory, true, None)? else {
             return Ok(());
         };
-        let mut record = self.read_object(id)?;
+        let mut record = self.read_object(id, &directory)?;
         if record.output.is_some()
             || !record.incoming.is_empty()
             || !record.roles.is_empty()
@@ -385,7 +385,7 @@ impl Inventory {
         Ok(errors)
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
-        let (leases, directories) = self.path_gates(paths, true)?;
+        let (leases, directories) = self.path_gates(paths, true, true)?;
         let targets = paths
             .iter()
             .map(|path| Ok((path.clone(), self.path_directory(path)?)))
@@ -604,12 +604,21 @@ impl Inventory {
         )
     }
     fn read_metadata<T: for<'a> Deserialize<'a>>(&self, path: &Path) -> Result<Option<T>, String> {
-        let file = match fs::File::open(path) {
+        let mut options = fs::OpenOptions::new();
+        options.read(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            // Refuse links and avoid blocking on a FIFO before fstat can reject it.
+            options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+        }
+        let file = match options.open(path) {
             Ok(file) => file,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(e.to_string()),
         };
-        if !file.metadata().map_err(|e| e.to_string())?.is_file()
+        let metadata = file.metadata().map_err(|e| e.to_string())?;
+        if !metadata.is_file()
             || fs::symlink_metadata(path)
                 .map_err(|e| e.to_string())?
                 .file_type()
@@ -617,7 +626,13 @@ impl Inventory {
         {
             return Err("retention declaration must be a physical regular file".into());
         }
-        let mut raw = Vec::new();
+        if metadata.len() > MAX_STATE {
+            return Err("retention declaration byte bound".into());
+        }
+        // Take's default read_to_end otherwise probes and grows an empty buffer
+        // through several small reads. The observed length is only a capacity
+        // hint: retain the actual-read bound in case the file grows meanwhile.
+        let mut raw = Vec::with_capacity(metadata.len() as usize);
         file.take(MAX_STATE + 1)
             .read_to_end(&mut raw)
             .map_err(|e| e.to_string())?;
@@ -653,14 +668,13 @@ impl Inventory {
         self.charge_metadata(raw.len() as u64)?;
         write(path, &raw)
     }
-    fn read_object(&self, id: &str) -> Result<Object, String> {
-        let directory = self.object_directory(id)?;
+    fn read_object(&self, id: &str, directory: &Path) -> Result<Object, String> {
         let record: Object = self
-            .read_metadata(&no_symlink_parents(&directory, "record.json")?)?
+            .read_metadata(&no_symlink_parents(directory, "record.json")?)?
             .ok_or_else(|| format!("retained output unavailable: {id}"))?;
         if record.schema != "chrono-retained-output/v2"
             || record.id != id
-            || record.directory_identity != identity(&directory)?
+            || record.directory_identity != identity(directory)?
             || record
                 .output
                 .as_ref()
@@ -713,6 +727,7 @@ impl Inventory {
         &self,
         paths: &[String],
         wait: bool,
+        read_ancestor_addresses: bool,
     ) -> Result<(Vec<DirectoryLease>, BTreeMap<String, PathBuf>), String> {
         let mut requests = BTreeMap::<String, bool>::new();
         for path in paths {
@@ -732,8 +747,21 @@ impl Inventory {
             // descendants adds no exclusion and could reverse another lock order.
             let directory = self.path_directory(&path)?;
             fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-            let marker = no_symlink_parents(&directory, "address.json")?;
-            if self.read_metadata::<Address>(&marker)?.is_none() {
+            let marker = directory.join("address.json");
+            // Maintenance already holds the actual output declarations. It
+            // needs each target's mapping, plus physical ancestor exclusion.
+            // Ordinary publication also consumes ancestor mappings to detect
+            // overlapping reservations and therefore keeps reading them all.
+            let read_address = read_ancestor_addresses || exclusive;
+            // Birth needs only an absence observation here. Decode and validate
+            // an existing declaration once, under the acquired path lease.
+            let missing = read_address
+                && match fs::symlink_metadata(&marker) {
+                    Ok(_) => false,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                    Err(error) => return Err(error.to_string()),
+                };
+            if missing {
                 let initial = DirectoryLease::acquire(
                     &directory,
                     true,
@@ -757,11 +785,13 @@ impl Inventory {
                 wait.then(|| Duration::from_secs(5).saturating_sub(began.elapsed())),
             )?
             .ok_or_else(|| format!("retention path is busy: {path}"))?;
-            let address = self
-                .read_metadata::<Address>(&marker)?
-                .ok_or("retention path declaration disappeared")?;
-            if address.path != path {
-                return Err("retention path address changed".into());
+            if read_address {
+                let address = self
+                    .read_metadata::<Address>(&marker)?
+                    .ok_or("retention path declaration disappeared")?;
+                if address.path != path {
+                    return Err("retention path address changed".into());
+                }
             }
             directories.insert(path, directory);
             leases.push(lease);
@@ -810,7 +840,8 @@ impl Inventory {
         maintenance: bool,
         wait: bool,
     ) -> Result<Gate, String> {
-        let (mut leases, mut path_dirs) = self.path_gates(paths, wait)?;
+        let discover_under_lease = maintenance && !wait && birth.is_none();
+        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
         if birth.is_some() && !occupied.is_empty() {
@@ -840,15 +871,25 @@ impl Inventory {
         let mut observed = BTreeMap::new();
         let mut observed_roles = BTreeMap::<String, Option<Role>>::new();
         let mut wanted_roles: BTreeSet<String> = roles.iter().cloned().collect();
-        // Discover only declared relationships before taking metadata locks.
-        // Recheck the closed set under exclusion below; drift refuses this
-        // activity rather than silently inspecting an unlocked dependency.
+        // Nonblocking maintenance can hold each declaration while discovering
+        // its edges. A busy metadata or path lease refuses the activity, so this
+        // order never waits behind an ordinary publisher holding path locks.
+        // Waiting activities retain their path/role/object order and recheck
+        // the discovered closure under exclusion below.
         loop {
             let next_role = wanted_roles
                 .iter()
                 .find(|role| !observed_roles.contains_key(*role))
                 .cloned();
             if let Some(role) = next_role {
+                if discover_under_lease {
+                    let directory = self.role_directory(&role)?;
+                    fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+                    leases.push(
+                        DirectoryLease::acquire(&directory, true, None)?
+                            .ok_or("retention consumer metadata is busy")?,
+                    );
+                }
                 let record = self.read_role(&role)?;
                 // Maintenance needs the consumer's membership of the actual
                 // reference component, not every independent output sharing
@@ -872,7 +913,14 @@ impl Inventory {
             let Some(id) = next else {
                 break;
             };
-            let record = self.read_object(&id)?;
+            let directory = self.object_directory(&id)?;
+            if discover_under_lease {
+                leases.push(
+                    DirectoryLease::acquire(&directory, true, None)?
+                        .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
+                );
+            }
+            let record = self.read_object(&id, &directory)?;
             if let Some(output) = &record.output {
                 selected.extend(output.references.iter().cloned());
             }
@@ -887,30 +935,39 @@ impl Inventory {
         }
         if maintenance {
             let target_paths: Vec<_> = observed.values().map(|r| r.path.clone()).collect();
-            let (additional, dirs) = self.path_gates(&target_paths, wait)?;
+            let (additional, dirs) = self.path_gates(&target_paths, wait, !discover_under_lease)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
         }
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
             let directory = self.role_directory(&role)?;
-            fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-            leases.push(
-                DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
+            let actual = if discover_under_lease {
+                expected
+            } else {
+                fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
+                leases.push(
+                    DirectoryLease::acquire(
+                        &directory,
+                        true,
+                        wait.then(|| Duration::from_secs(5)),
+                    )?
                     .ok_or("retention consumer metadata is busy")?,
-            );
-            let actual = self.read_role(&role)?;
-            if actual
-                .as_ref()
-                .map(|r| (&r.ids, &r.attached, &r.observation))
-                != expected
+                );
+                let actual = self.read_role(&role)?;
+                if actual
                     .as_ref()
                     .map(|r| (&r.ids, &r.attached, &r.observation))
-            {
-                return Err(
-                    "addressed consumer changed during exclusion; retry this activity".into(),
-                );
-            }
+                    != expected
+                        .as_ref()
+                        .map(|r| (&r.ids, &r.attached, &r.observation))
+                {
+                    return Err(
+                        "addressed consumer changed during exclusion; retry this activity".into(),
+                    );
+                }
+                actual
+            };
             let fresh = actual.is_none();
             let record = actual.unwrap_or(Role {
                 observation: None,
@@ -929,15 +986,28 @@ impl Inventory {
         }
         let mut records = BTreeMap::new();
         for id in selected {
+            if discover_under_lease {
+                records.insert(
+                    id.clone(),
+                    observed.remove(&id).ok_or("excluded output was not read")?,
+                );
+                continue;
+            }
             let directory = self.object_directory(&id)?;
             let fresh = birth.as_ref().is_some_and(|b| b.0 == id);
             if fresh {
                 fs::create_dir(&directory).map_err(|e| format!("retention output birth: {e}"))?;
             }
-            leases.push(
-                DirectoryLease::acquire(&directory, true, wait.then(|| Duration::from_secs(5)))?
+            if !discover_under_lease {
+                leases.push(
+                    DirectoryLease::acquire(
+                        &directory,
+                        true,
+                        wait.then(|| Duration::from_secs(5)),
+                    )?
                     .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
-            );
+                );
+            }
             let record = if let Some((_, path)) = birth.as_ref().filter(|b| b.0 == id) {
                 Object {
                     schema: "chrono-retained-output/v2".into(),
@@ -955,7 +1025,7 @@ impl Inventory {
                     prune_path: Some(path.clone()),
                 }
             } else {
-                self.read_object(&id)?
+                self.read_object(&id, &directory)?
             };
             if fresh {
                 self.write_metadata(&directory.join("record.json"), &record)?;

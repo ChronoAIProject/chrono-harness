@@ -1,0 +1,30 @@
+name: 使用问题
+description: 说明正在完成的目标、已有尝试和具体疑问。
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先查阅 [README](https://github.com/ChronoAIProject/chrono-harness#readme)、[协作规范](https://github.com/ChronoAIProject/chrono-harness/blob/dev/CONTRIBUTING.md)及已有事项。
+        如果已发现可复现的行为错误，请使用缺陷报告。
+  - type: textarea
+    id: goal
+    attributes:
+      label: 正在完成的目标
+      description: 说明实际使用场景、版本或完整 SHA、环境及调用入口。
+    validations:
+      required: true
+  - type: textarea
+    id: attempts
+    attributes:
+      label: 已有尝试与结果
+      description: 已读文档、实际输入／命令和输出；日志请脱敏。
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: 具体疑问
+      description: 哪个行为、约束或操作需要解释？希望获得什么结果？
+    validations:
+      required: true

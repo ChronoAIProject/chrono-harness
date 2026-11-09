@@ -1094,6 +1094,28 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "verify_input_coverage": {
+          "operation": "verify.registration-input-coverage",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-input-coverage.rlib,dep-info=.chrono-harness/state/verify.registration-input-coverage.rlib.d",
+            "crates/judge-registration/src/verified_input_coverage.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-input-coverage.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -1194,6 +1216,28 @@
             "crates/judge-registration-tests/tests/verified_readiness.rs",
             "-o",
             ".chrono-harness/state/verify.registration-readiness-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_input_coverage": {
+          "operation": "verify.registration-input-coverage-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-input-coverage-tests.rlib,dep-info=.chrono-harness/state/verify.registration-input-coverage-tests.rlib.d",
+            "crates/judge-registration-tests/tests/verified_input_coverage.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-input-coverage-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -3227,16 +3271,6 @@
             "/usr/bin/curl",
             ".chrono-harness/state/verus-download.headers",
             "https://github.com/verus-lang/verus/releases/download/release/0.2026.04.24.f8e1704/verus-0.2026.04.24.f8e1704-arm64-macos.zip"
-          ]
-        },
-        "verus-checksum": {
-          "operation": "host.verus-checksum",
-          "tool": "shasum",
-          "argv": [
-            "-a",
-            "256",
-            "-c",
-            ".chrono-harness/ci/verus-macos-arm64.sha256"
           ]
         },
         "verus-extract-shared": {

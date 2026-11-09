@@ -136,10 +136,6 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
             json!([delivery["installation"]["publisher"], frontend.job])
         );
         assert_eq!(
-            installation["dependency_metadata"],
-            "CHRONO_RELEASE_DEPENDENCIES"
-        );
-        assert_eq!(
             installation["downloads"],
             json!([
             {"job":delivery["installation"]["publisher"],"directory":delivery["installation"]["directory"]},

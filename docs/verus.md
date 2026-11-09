@@ -67,6 +67,12 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 以及固定 Serde JSON 的字段读取、`as_str`／`as_u64`／`as_bool` 类型观察。
 这些接口只解码实际输入，不供应预先算好的合格标志；仓内字段判断由 Verus 执行。
 比较成本随实际字段字节和数量增长；新增构建、证明、CI 与存储总成本未测。
+本批把 registration 的 input-coverage 行状态准入迁入
+`verified_input_coverage.rs`，由 `verify.registration-input-coverage` 和
+`verify.registration-input-coverage-tests` 分别证明生产谓词及独立边界预期。
+JSON 解析仍由适配器负责，但 `bound`／`absent` 的绑定要求、无绑定状态、
+`declared-complete` 对 `unresolved` 的拒绝以及 `absent` 识别均直接消费同一份
+Verus 执行函数；本批仍只覆盖该登记状态闭包，不宣称全仓证明完成。
 
 ## runner 构建中的证明库与缓存
 
@@ -166,6 +172,26 @@ JSON、Unicode trim、原件读取、实际进程终结、租约与多文件发�
 局部证明不证明 GitHub 观察真实、跨中断自动恢复或完整 SPEC 已完成；新增 IO、构建及存储成本未测。
 
 ## CI 配置的字面文本
+
+CI 的原生 job 终态选择和发布者准入也直接消费本节的同源根。
+`native_job_state` 保留 completed 的原结论；只有已知非终态、明确存在的 null 结论和正 job ID
+才返回一次精确详情读取。适配器按返回 ID 调用 provider 一次，再由同源判断核成功终态，
+并逐项比较 id、run_id、run_attempt、head_sha、name 五个完整原字段。
+缺字段与存在的 null 分别保留；JSON 字段的原值编码由固定 Serde JSON 接口供应，
+比较由已有 identifiers 字节判断执行，不把字段先折成一个“已合格”标志。
+
+发布登记的 v2／触发方式、非空字段、首个完整 publisher 匹配、必需依赖和权限选择，
+以及 checkout 的固定源码表达式也由同一生产根拥有。独立根核终态失败不重读、
+缺失／非 null／零 ID 不读详情、原字段完整性、首个匹配及发布者依赖边界；
+原 Rust mock 仍核准确调用次数、参数、原错误和每个字段的替换拒绝。
+实际 provider、YAML 执行与整个生成器的原生验收仍须分别完成。
+
+**实现与宿主验证登记同改：**gating／release 的实际使用绑定到现有
+`verify.ci-literals`／`verify.ci-literals-tests`，复用已锁定工具和整 crate 参数。
+没有新 job、工具、预算、重试或审批。固定 Serde JSON 对实际 job 字段提供完整编码，
+标准 Option／Result 的 map、transpose 和错误传播只转发编码结果；
+普通适配器对发布 job 的 ID 数组保留输入顺序，实际搜索由 Verus 完成。
+每个待核 native job 编码五对字段；新增编译、证明、CI、分配与存储成本未测。
 
 `crates/ci/src/verified_literals.rs` 统一负责 full 与 release 的单行文本判断。
 输入为空或含普通 UTF-8 文本时允许；出现 NUL、LF、CR，或任意位置的精确 `${{` 字节序列时拒绝。
@@ -954,17 +980,15 @@ Rust 测试另外验证真实消费者，不替代证明。
 
 官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
-现有通用 bootstrap 消费明确登记的归档准备、SHA-256 校验和解包操作。
+现有通用 bootstrap 通过下载动作校验并准备归档，成功后解包。
 `host.verus-download` 委托当前 Rust 启动程序，先按 `verus-macos-arm64.sha256`
-核对本地包；匹配时输出 `cache-hit`，不启动 curl。包缺失或内容不符时才通过 GitHub
-固定发布资产 API 下载，唯一地址归 projects.json，请求采用 `Accept: application/octet-stream`。
+核对本地包；匹配时输出 `cache-hit`，不启动 curl。包缺失或内容不符时才从 projects.json
+登记的固定 GitHub release 地址下载，请求采用 `Accept: application/octet-stream`。
 下载使用 tempfile 的私有临时文件；core 和独立 Verus profile 都把 `TMPDIR`
 选为已登记可回收的 `bootstrap-owner-tooling/tmp`，不把临时字节放进保留归档目录。
 校验通过后原子替换归档并输出 `downloaded`；下载失败保留原退出和响应头，
 校验失败不覆盖原包。正常返回或报错时由 tempfile 回收；强制中断后的残留归现有工作树清理所有者。
 临时目录与归档须在同一文件系统；跨文件系统的原子发布失败，不另复制或覆盖旧包。
-后续独立校验仍读取同一份 SHA-256 声明，校验通过后才解包。
-冷下载使用固定版本的官方 release 下载地址，避免依赖匿名 API 的请求额度。
 原响应头保留在 `.chrono-harness/state/verus-download.headers`，由现有失败工件上传供下载故障排查。
 CI 由 detector 恢复归档并在启动成功后保存，检查单元复用已有共享原包；
 包身份及成本边界见[缓存说明](ci-cache.md#verus-archive)。

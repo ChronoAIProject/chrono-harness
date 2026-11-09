@@ -709,7 +709,6 @@
         "linux_release_frontend",
         "linux_build_runner",
         "linux_build_judge_ci",
-        "linux_build_ci",
         "linux_build_judge_registration",
         "linux_build_judge_filemap",
         "linux_build_judge_routes",
@@ -727,10 +726,6 @@
         {
           "job": "linux_build_judge_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-        },
-        {
-          "job": "linux_build_ci",
-          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
         },
         {
           "job": "linux_build_judge_registration",
@@ -1948,7 +1943,6 @@
         "macos_release_frontend",
         "macos_build_runner",
         "macos_build_judge_ci",
-        "macos_build_ci",
         "macos_build_judge_registration",
         "macos_build_judge_filemap",
         "macos_build_judge_routes",
@@ -1966,10 +1960,6 @@
         {
           "job": "macos_build_judge_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
-        },
-        {
-          "job": "macos_build_ci",
-          "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
         },
         {
           "job": "macos_build_judge_registration",
@@ -3042,8 +3032,7 @@
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
         }
-      ],
-      "dependency_metadata": "CHRONO_RELEASE_DEPENDENCIES"
+      ]
     },
     {
       "id": "macos_install",
@@ -3076,8 +3065,7 @@
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
         }
-      ],
-      "dependency_metadata": "CHRONO_RELEASE_DEPENDENCIES"
+      ]
     }
   ],
   "download_artifact_action": "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
