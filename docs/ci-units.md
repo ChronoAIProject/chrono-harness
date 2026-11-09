@@ -26,6 +26,8 @@ worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四�
 
 断言失败原件在最后一个使用方退出后即可回收的测试，复用现有 Rust 锁能力隔离工具，在独立测试进程中执行。其他测试的 fork 会短暂继承本进程的文件描述符，包括尚未 exec 关闭的 CLOEXEC 描述符；这段临时继承不能用来判定目标使用方未释放。原件保留、过期后的单轮回收和已有源码保全断言保持，并在回收失败时输出实际维护结果；不增加重试、测试时限或生产权限。
 
+分页登记迁移的替换检测也使用同一隔离工具：释放原分配者后，迁移必须能够取得 metadata 写锁，才可到达测试注入的登记替换边界。保留替换拒绝、原登记保全和后续迁移仍拒绝的全部断言。
+
 `worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
 projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。固定历史宿主解码器／迁移测试已退役，原 `judge-projects-migration` 和双组清单移除。当前 `consumer`、`execution`、`languages` 二进制保留断言、默认并发及 900 秒上限，新测试二进制由未过滤 action 纳入。CI／发布消费同一 action；旧断言明确退役，不能拿剩余测试证明旧行为。

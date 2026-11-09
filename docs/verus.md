@@ -52,6 +52,24 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 
 ## runner 构建中的证明库与缓存
 
+发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
+`verify.release-recipe`／`verify.release-recipe-tests` 整 crate 根。
+身份适配器把完整环境文本交给规范十进制、版本分量、channel 和显式版本判断；
+发布适配器把原 GitHub JSON 的可选文本、整数和布尔值直接交给逐字段判断，
+缺失或错型不与空文本、零或 false 混同。API 的原退出和精确 404 字段共同决定缺失，
+公开版本只有在全部声明资产已经存在时才允许沿用；草稿继续上传所缺资产。
+独立根列出缺字段、完整文本、数字、channel、名称和草稿状态边界，普通 Rust
+行为测试继续核实际环境与 mock 命令。这里的局部绑定不代表整个发布编排已证明。
+
+**实现与宿主验证登记同改：**复用固定 Verus、宏和两项现役证明操作，
+不增加安装器、证明过滤、测试时限或预算。采用固定 Rust 的 `str::split`、
+`strip_prefix` 提供原版本分量，`str::parse::<u64>` 对溢出返回错误，
+以及固定 Serde JSON 的字段读取、`as_str`／`as_u64`／`as_bool` 类型观察。
+这些接口只解码实际输入，不供应预先算好的合格标志；仓内字段判断由 Verus 执行。
+比较成本随实际字段字节和数量增长；新增构建、证明、CI 与存储总成本未测。
+
+## runner 构建中的证明库与缓存
+
 本宿主的 `build.runner` 由 Rust 启动程序读取
 `.chrono-harness/ci/runner-build.json`，调用固定版本的官方 Cargo-Verus。
 core bootstrap 先准备同一 Verus，再调用此登记操作；调用前端本身仍由普通 Cargo 构建。
