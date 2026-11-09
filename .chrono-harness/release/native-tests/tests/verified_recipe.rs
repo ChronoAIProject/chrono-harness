@@ -86,11 +86,23 @@ fn delivery_only_treats_the_original_explicit_404_as_absent() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn delivery_asset_names_do_not_allow_paths_or_parent_components() {
-    let valid = delivery::name(&[97u8,45,49,46,95]);
-    let parent = delivery::name(&[46u8,46]);
-    let current = delivery::name(&[46u8]);
-    let path = delivery::name(&[97u8,47,98]);
-    let newline = delivery::name(&[97u8,10]);
+    let name = [97u8,45,49,46,95];
+    let dots = [46u8,46];
+    let dot = [46u8];
+    let slashed = [97u8,47,98];
+    let line = [97u8,10];
+    proof {
+        assert(name@ =~= seq![97u8,45,49,46,95]);
+        assert(dots@ =~= seq![46u8,46]);
+        assert(dot@ =~= seq![46u8]);
+        assert(slashed@ =~= seq![97u8,47,98]);
+        assert(line@ =~= seq![97u8,10]);
+    }
+    let valid = delivery::name(&name);
+    let parent = delivery::name(&dots);
+    let current = delivery::name(&dot);
+    let path = delivery::name(&slashed);
+    let newline = delivery::name(&line);
     expect_recipe(valid && !parent && !current && !path && !newline);
 }
 
