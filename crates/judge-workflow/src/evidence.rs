@@ -1,3 +1,4 @@
+use crate::verified_evidence;
 use chrono_harness::{
     ProcessResult, sha256,
     wire::{self, Request, Response, Status},
@@ -36,14 +37,17 @@ pub fn record(v: &Value) -> Result<(Response, ProcessResult), String> {
     let p: ProcessResult = serde_json::from_value(v["process"].clone())
         .map_err(|e| format!("E_WORKFLOW_EVIDENCE: {e}"))?;
     process(&p)?;
-    if v["state"] != "executed"
-        || v["id"] != r.judge_id
-        || v["request_id"] != r.request_id
-        || v["request_digest"] != p.stdin_sha256
-        || v["exit_code"] != 0
-        || r.status >= Status::Fail
-        || chrono_harness::decode::<Value>(&p.stdout_bytes)? != v["response"]
-    {
+    let response = chrono_harness::decode::<Value>(&p.stdout_bytes)?;
+    let admitted = verified_evidence::admit_record(
+        v["state"] == "executed",
+        v["id"] == r.judge_id,
+        v["request_id"] == r.request_id,
+        v["request_digest"] == p.stdin_sha256,
+        v["exit_code"] == 0,
+        r.status < Status::Fail,
+        response == v["response"],
+    );
+    if !admitted {
         return Err("E_WORKFLOW_EVIDENCE: response/process identity".into());
     }
     Ok((r, p))

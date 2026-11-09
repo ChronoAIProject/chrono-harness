@@ -279,6 +279,7 @@
     {"path":"crates/judge-workflow/src/main.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"}]},
     {"path":"crates/judge-workflow/src/branch.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"}]},
     {"path":"crates/judge-workflow/src/verified_branch.rs","verification":{"role":"program","roots":[{"path":"crates/judge-workflow/src/verified_branch.rs","operation":"verify.judge-workflow"},{"path":"crates/judge-workflow-tests/tests/verified_branch.rs","operation":"verify.judge-workflow-tests"}]},"owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"}]},
+    {"path":"crates/judge-workflow/src/verified_evidence.rs","verification":{"role":"program","roots":[{"path":"crates/judge-workflow/src/verified_evidence.rs","operation":"verify.judge-workflow-evidence"}]},"owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"}]},
     {"path":"crates/judge-workflow/src/evidence.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"}]},
     {"path":"crates/judge-workflow/src/transition.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"}]},
     {"path":"crates/judge-workflow/src/certificate.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"}]},
@@ -286,6 +287,7 @@
     {"path":"crates/judge-workflow-tests/Cargo.lock","owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-workflow-tests"}]},
     {"path":"crates/judge-workflow-tests/tests/branch.rs","owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"}]},
     {"path":"crates/judge-workflow-tests/tests/verified_branch.rs","verification":{"role":"program","roots":[{"path":"crates/judge-workflow-tests/tests/verified_branch.rs","operation":"verify.judge-workflow-tests"}]},"owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"}]},
+    {"path":"crates/judge-workflow-tests/tests/verified_evidence.rs","verification":{"role":"program","roots":[{"path":"crates/judge-workflow-tests/tests/verified_evidence.rs","operation":"verify.judge-workflow-evidence-tests"}]},"owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"}]},
     {"path":"crates/judge-workflow-tests/tests/consumer.rs","owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"}]},
     {"path":"docs/workflow.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/inputs/Cargo.toml","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs"}]},
@@ -1396,7 +1398,9 @@
     "test:judge-workflow-tests": {
       "operations": [
         "verify.judge-workflow",
+        "verify.judge-workflow-evidence",
         "verify.judge-workflow-tests",
+        "verify.judge-workflow-evidence-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.runner",
@@ -2178,7 +2182,9 @@
       "verify.judge-cost": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.judge-cost-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.judge-workflow": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.judge-workflow-evidence": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.judge-workflow-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.judge-workflow-evidence-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "fmt.pr":{"resources":[],"outputs":[]},
       "fmt.pr-tests":{"resources":[],"outputs":[]},
       "test.pr-tests":{"resources":["worktree-test-inventory"],"outputs":["crates/pr-tests/target/"]}
