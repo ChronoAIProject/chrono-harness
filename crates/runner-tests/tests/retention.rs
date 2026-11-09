@@ -2250,6 +2250,54 @@ fn policy_migration_does_not_hold_descriptors_for_unrelated_outputs() {
 }
 
 #[test]
+fn policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_dependencies() {
+    if !isolated_capability_test(
+        "policy_migration_preserves_a_large_reverse_graph_with_bounded_forward_dependencies",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    let previous = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &previous).unwrap();
+    let shared_path = tree(h.path(), "shared-original");
+    fs::write(h.path().join(&shared_path).join("original"), b"preserved").unwrap();
+    let shared = inventory(h.path())
+        .begin_rooted("fixture", &shared_path, json!({"exit":9}), &["keep-shared".into()])
+        .unwrap();
+    let shared_id = shared.id().to_owned();
+    shared.complete(json!({"exit":9})).unwrap();
+    let mut paths = vec![shared_path];
+    for n in 0..4 {
+        let path = tree(h.path(), &format!("referencing-{n}"));
+        fs::write(h.path().join(&path).join("original"), b"preserved").unwrap();
+        let publication = inventory(h.path())
+            .begin_rooted("fixture", &path, json!({"exit":0}), &[format!("keep-{n}")])
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(json!({"exit":0})).unwrap();
+        inventory(h.path()).dependencies(&id, &[shared_id.clone()]).unwrap();
+        paths.push(path);
+    }
+    let original = ledger(h.path());
+    policy["producers"]["check-original"] = json!([".chrono-harness/state/preparation/"]);
+    let current = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+    let receipt = inventory(h.path()).migrate_policy(&previous).unwrap();
+    assert_eq!(receipt["outputs_preserved"], 5);
+    assert_eq!(receipt["roots_preserved"], 5);
+    assert_eq!(receipt["policy_sha256"], chrono_harness::sha256(&current));
+    let mut after = ledger(h.path());
+    after["policy_sha256"] = original["policy_sha256"].clone();
+    assert_eq!(after, original);
+    for path in paths {
+        assert_eq!(fs::read(h.path().join(path).join("original")).unwrap(), b"preserved");
+    }
+}
+
+#[test]
 fn explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes() {
     if !isolated_capability_test(
         "explicit_policy_migration_preserves_originals_and_refuses_live_readers_and_missing_scopes",
