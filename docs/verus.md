@@ -9,10 +9,14 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
-当前覆盖登记批次为：FILEMAP 的 `crates/runner/src/verified_verifier.rs`、
-`crates/runner/src/verified_sources.rs` 和独立预期
-`crates/runner-tests/tests/verified_verifier.rs` 已声明 `program` 角色、唯一
-Verus 根及现役 `verify.verus-result`／`verify.verus-result-tests` 操作。
+当前覆盖登记批次包括：FILEMAP 的 `crates/runner/src/verified_verifier.rs`、
+`crates/runner/src/verified_sources.rs` 及独立预期
+`crates/runner-tests/tests/verified_verifier.rs`，以及 runner 的
+`verified_paths.rs`、`verified_scope.rs`、`verified_status.rs`、`verified_limits.rs`
+和对应的 `runner-tests` 独立预期。它们均已声明 `program` 角色、唯一
+Verus 根及现役 `verify.verus-result`、`verify.runner-paths`、
+`verify.runner-status`、`verify.runner-limits` 与对应测试操作；`verified_scope.rs`
+沿 status 的真实整 crate 根验证，不另造重复操作。
 同源判断还要求根路径规范化、根路径唯一、program／specification 至少一个根、
 data 不得有根，以及每个登记操作存在于 execution plan。声明只建立待核的绑定关系；
 本批正式 CI 已核整 crate 证明，仍不代表全仓覆盖完成。
