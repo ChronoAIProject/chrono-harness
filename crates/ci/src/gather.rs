@@ -415,14 +415,15 @@ fn parent_units(
             .into_iter()
             .filter(|j| j["run_attempt"] == latest_attempt)
             .collect();
-        if latest.len() != 1
-            || latest[0]["status"] != "completed"
-            || latest[0]["conclusion"] != "success"
-        {
+        if latest.len() != 1 {
             return Err(format!(
                 "unit {unit} latest native execution did not uniquely succeed"
             ));
         }
+        let latest = super::gating::completed_native_job(latest[0], |id| {
+            transport.api(&format!("repos/{repository}/actions/jobs/{id}"), false)
+        })
+        .map_err(|error| format!("unit {unit} {error}"))?;
         // API attempts can describe carried jobs. needs outputs bind the actual
         // producer; API latest status remains a separate necessary predicate.
         let production: super::gating::Production = decode(
@@ -445,8 +446,8 @@ fn parent_units(
             return Err(format!("unit {unit} original producer binding invalid"));
         }
         let mut binding = run.clone();
-        binding["conclusion"] = latest[0]["conclusion"].clone();
-        binding["unit_job_id"] = latest[0]["id"].clone();
+        binding["conclusion"] = latest["conclusion"].clone();
+        binding["unit_job_id"] = latest["id"].clone();
         binding["run_attempt"] = json!(p.run_attempt);
         binding["latest_job_attempt"] = json!(latest_attempt);
         binding["production"] = json!(production);

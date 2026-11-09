@@ -1907,6 +1907,11 @@ fn adopt_lifecycle_retention(h: &Host) {
 
 #[test]
 fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window() {
+    if !isolated_capability::isolated_capability_test(
+        "adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window",
+    ) {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = Host::new("payload");
     adopt_lifecycle_retention(&h);
@@ -1949,13 +1954,8 @@ fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window
     assert!(original["expires"].as_u64().unwrap() > 0);
     original["expires"] = value!(0);
     retention_state::replace_output(&h.root, &original);
-    for _ in 0..8 {
-        inventory.maintain().unwrap();
-        if !h.root.join(report_path).exists() {
-            break;
-        }
-    }
-    assert!(!h.root.join(report_path).exists());
+    let round = inventory.maintain().unwrap();
+    assert!(!h.root.join(report_path).exists(), "{round}");
     assert_eq!(
         fs::read(occupied.join("original-source")).unwrap(),
         b"preserve existing target"
