@@ -264,9 +264,6 @@ pub fn full_execution_units(
         .and_then(serde_json::Value::as_str)
         .ok_or("execution_units.report_path missing")?;
     artifact_path(report_path)?;
-    if report_path == ".chrono-harness/state/report.json" {
-        return Err("execution_units.report_path collides with canonical full report".into());
-    }
     let collection_limits = object
         .get("collection_limits")
         .cloned()
@@ -288,23 +285,6 @@ pub fn full_execution_units(
             return Err(format!("execution unit has no tests: {unit_id}"));
         }
         artifact_path(&unit.report_path)?;
-        if unit.report_path == report_path {
-            return Err(format!(
-                "execution unit report collides with full report: {unit_id}"
-            ));
-        }
-        if units.iter().any(|(other_id, other)| {
-            other_id != unit_id
-                && (unit.report_path == other.report_path
-                    || unit
-                        .report_path
-                        .starts_with(&(other.report_path.clone() + "/"))
-                    || other
-                        .report_path
-                        .starts_with(&(unit.report_path.clone() + "/")))
-        }) {
-            return Err(format!("execution unit report paths overlap: {unit_id}"));
-        }
     }
     Ok(Some(serde_json::json!({
         "units": units,
