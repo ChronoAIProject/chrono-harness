@@ -8,6 +8,8 @@ use chrono_judge_registration::Registrations;
 use serde_json::{Map, Value, json};
 use std::collections::BTreeSet;
 
+mod verified_cost;
+
 pub const COST_SCHEMA: &str = "chrono-costs/v1";
 const COORDINATES: [&str; 4] = ["cpu_ms", "wall_ms", "peak_rss_bytes", "io_bytes"];
 fn escape(s: &str) -> String {
@@ -129,11 +131,20 @@ pub fn produce(
                     "coordinates":COORDINATES,"reason":"no declared member cost references"}));
             }
             for cost in costs {
+                let cpu_missing = cost["value"]["cpu_ms"].is_null();
+                let wall_missing = cost["value"]["wall_ms"].is_null();
+                let peak_rss_missing = cost["value"]["peak_rss_bytes"].is_null();
+                let io_missing = cost["value"]["io_bytes"].is_null();
                 let coordinates: Vec<_> = COORDINATES
                     .iter()
                     .filter(|k| cost["value"][**k].is_null())
                     .collect();
-                if !coordinates.is_empty() {
+                if verified_cost::has_unknown_coordinate(
+                    cpu_missing,
+                    wall_missing,
+                    peak_rss_missing,
+                    io_missing,
+                ) {
                     unknown.push(json!({"endpoint":endpoint,"node":subject,"member":cost["member"],
                         "reference":cost["reference"],"source":cost["source"],"coordinates":coordinates,
                         "reason":cost["value"]["basis"]}));

@@ -235,10 +235,12 @@
     {"path":"docs/execution.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/judge-cost/Cargo.toml","owner":"judge-cost","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-cost"}]},
     {"path":"crates/judge-cost/Cargo.lock","owner":"judge-cost","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-cost"}]},
+    {"path":"crates/judge-cost/src/verified_cost.rs","verification":{"role":"program","roots":[{"path":"crates/judge-cost/src/verified_cost.rs","operation":"verify.judge-cost"},{"path":"crates/judge-cost-tests/tests/verified_cost.rs","operation":"verify.judge-cost-tests"}]},"owner":"judge-cost","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-cost"},{"kind":"compile","to":"project:judge-cost-tests"},{"kind":"test-execution","to":"test:judge-cost-tests"}]},
     {"path":"crates/judge-cost/src/lib.rs","owner":"judge-cost","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-cost"}]},
     {"path":"crates/judge-cost/src/main.rs","owner":"judge-cost","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-cost"}]},
     {"path":"crates/judge-cost-tests/Cargo.toml","owner":"judge-cost-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-cost-tests"}]},
     {"path":"crates/judge-cost-tests/Cargo.lock","owner":"judge-cost-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-cost-tests"}]},
+    {"path":"crates/judge-cost-tests/tests/verified_cost.rs","verification":{"role":"program","roots":[{"path":"crates/judge-cost-tests/tests/verified_cost.rs","operation":"verify.judge-cost-tests"}]},"owner":"judge-cost-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-cost-tests"},{"kind":"test-execution","to":"test:judge-cost-tests"}]},
     {"path":"crates/judge-cost-tests/tests/costs.rs","owner":"judge-cost-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-cost-tests"}]},
     {"path":"crates/judge-cost-tests/tests/consumer.rs","owner":"judge-cost-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-cost-tests"}]},
     {"path":"docs/costs.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
@@ -1348,6 +1350,8 @@
     },
     "test:judge-cost-tests": {
       "operations": [
+        "verify.judge-cost",
+        "verify.judge-cost-tests",
         "fmt.judge-cost",
         "fmt.judge-cost-tests",
         "build.runner",
@@ -2151,7 +2155,9 @@
         ]
       },
       "verify.cache-planner": {"resources":[],"outputs":[".chrono-harness/state/"]},
-      "verify.cache-planner-tests": {"resources":[],"outputs":[".chrono-harness/state/"]}
+      "verify.cache-planner-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.judge-cost": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.judge-cost-tests": {"resources":[],"outputs":[".chrono-harness/state/"]}
     ,"fmt.pr":{"resources":[],"outputs":[]},"fmt.pr-tests":{"resources":[],"outputs":[]},"build.pr":{"resources":[],"outputs":["crates/pr/target/"]},"test.pr-tests":{"resources":[],"outputs":["crates/pr-tests/target/"]}
     }
   },
