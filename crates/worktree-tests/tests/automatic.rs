@@ -121,7 +121,7 @@ impl EnrollmentOriginalsFixture {
             sibling,
         }
     }
-    fn invoke(&self, operation: &str, select: bool) -> (i32, Value) {
+    fn invoke(&self, operation: &str, select: bool) -> (u8, Value) {
         let mut args = vec![
             operation.into(),
             "--host-root".into(),
