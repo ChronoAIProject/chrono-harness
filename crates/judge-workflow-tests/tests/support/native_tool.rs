@@ -137,7 +137,7 @@ fn native_inputs(args: &[std::ffi::OsString]) -> ExitCode {
     } else {
         io::stdout().write_all(&output.stdout).unwrap();
     }
-    ExitCode::from(output.status.code().unwrap().try_into().unwrap())
+    ExitCode::from(u8::try_from(output.status.code().unwrap()).unwrap())
 }
 
 fn copy_tree(source: &Path, destination: &Path) {
