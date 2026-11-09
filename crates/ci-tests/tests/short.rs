@@ -229,6 +229,7 @@ impl ShortHost {
                 .unwrap();
         check["judge"]["output_limit_bytes"] = json!(67108864);
         check["policy"]["registration_config"] = json!(".chrono-harness/config.json");
+        check["policy"].as_object_mut().unwrap().remove("tools");
         check["policy"]["facts_config"] = json!(".chrono-harness/config.json");
         check["policy"].as_object_mut().unwrap().remove("bindings");
         json_file(&root, ".chrono-harness/ci/check.json", &check);
