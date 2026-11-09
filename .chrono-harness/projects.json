@@ -1607,6 +1607,28 @@
       "lockfile": "crates/judge-cost/Cargo.lock",
       "root": "crates/judge-cost",
       "actions": {
+        "verify_cost": {
+          "operation": "verify.judge-cost",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-cost.rlib,dep-info=.chrono-harness/state/verify.judge-cost.rlib.d",
+            "crates/judge-cost/src/verified_cost.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-cost.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
         "build": {
           "operation": "build.judge-cost",
           "tool": "cargo",
@@ -1647,6 +1669,28 @@
       "lockfile": "crates/judge-cost-tests/Cargo.lock",
       "root": "crates/judge-cost-tests",
       "actions": {
+        "verify_cost": {
+          "operation": "verify.judge-cost-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-cost-tests.rlib,dep-info=.chrono-harness/state/verify.judge-cost-tests.rlib.d",
+            "crates/judge-cost-tests/tests/verified_cost.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-cost-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
         "format_check": {
           "operation": "fmt.judge-cost-tests",
           "tool": "cargo",
