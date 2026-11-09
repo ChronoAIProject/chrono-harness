@@ -694,7 +694,7 @@ fn migration_fixture_mode(selected: bool) -> (Host, Value) {
             .push(f);
         let p = h.values.get_mut(PROJECTS).unwrap();
         p["owners"].as_array_mut().unwrap().push(json!(id));
-        let mut script = json!({"id":id,"path":path,"language":"rust","actions":{"execute":{"operation":id,"tool":tool,"argv":[mode]}}});
+        let mut script = json!({"id":id,"path":path,"actions":{"execute":{"operation":id,"tool":tool,"argv":[mode]}}});
         script
             .as_object_mut()
             .unwrap()
