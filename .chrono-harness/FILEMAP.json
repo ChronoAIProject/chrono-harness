@@ -1730,6 +1730,10 @@
         "resources": [],
         "outputs": []
       },
+      "ci.verify-job-gating-example": {
+        "resources": [],
+        "outputs": []
+      },
       "fmt.ci": {
         "resources": [],
         "outputs": []
