@@ -60,15 +60,16 @@ impl Fixture {
         )
     }
     fn assert_disposable_download(&self) {
-        let args: Vec<String> = serde_json::from_slice(
-            &fs::read(self.0.path().join("download-calls.json")).unwrap(),
-        )
-        .unwrap();
+        let args: Vec<String> =
+            serde_json::from_slice(&fs::read(self.0.path().join("download-calls.json")).unwrap())
+                .unwrap();
         let output = Path::new(&args[args.iter().position(|arg| arg == "--output").unwrap() + 1]);
         assert_eq!(output.parent().unwrap(), self.0.path().join(TEMPORARIES));
         assert!(!output.exists());
         assert_eq!(
-            fs::read_dir(self.0.path().join(TEMPORARIES)).unwrap().count(),
+            fs::read_dir(self.0.path().join(TEMPORARIES))
+                .unwrap()
+                .count(),
             0
         );
     }
