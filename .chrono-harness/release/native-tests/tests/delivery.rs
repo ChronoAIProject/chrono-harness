@@ -171,6 +171,7 @@ fn accept(root: &Path, id: &Identity, commands: &mut InstallCommands) -> Result<
         &BTreeSet::from(["chrono-distribution".into(), "chrono-harness".into()]),
         "/bin/sh",
         "/usr/bin/curl",
+        "acme/project",
         "https://example.invalid/fixed/install.sh",
         commands,
     )
