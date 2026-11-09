@@ -96,7 +96,7 @@ Rust `test.host-release-native-tests` 运行全部发布行为测试。真实 di
 
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
 
-Linux 发行政策保留工作树所有者读取登记所需的完整结构；发布编排使用 Rust，仍使用 Python 的测试工具槽按当前使用方保留，未知 Python 版本仍为 `null`。该登记不声称完成 Linux canonical/full 采用。
+Linux 发行政策保留工作树所有者读取登记所需的完整结构。发布编排和登记验证操作使用 Rust 与薄 shell，不再在发布配方或宿主政策中保留无对应操作的 Python 工具槽。多语言接口测试样本使用各自的工具声明；该登记不声称完成 Linux canonical/full 采用。
 
 Linux 发行政策继承 schema4 必需的 `CHRONO_CHECK_SOURCE`；未设置时仍由现有入口选择 local。旧 Python custody 测试的发布采集声明随生产者退役；已保留失败原件仍按原使用方的诊断和验收期限保护，不因删除源码或声明而删除。
 
