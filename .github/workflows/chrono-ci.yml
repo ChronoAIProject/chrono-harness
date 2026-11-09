@@ -41,6 +41,9 @@ jobs:
       unit_runner: ${{ steps.detect.outputs.unit_runner }}
       unit_worktree: ${{ steps.detect.outputs.unit_worktree }}
       unit_worktree-adoption: ${{ steps.detect.outputs.unit_worktree-adoption }}
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Acquire declared detector source
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -56,6 +59,33 @@ jobs:
             .github/workflows/chrono-ci.yml
             .gitignore
           persist-credentials: true
+      - name: Restore download cache cargo.detect
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -134,9 +164,30 @@ jobs:
           CHRONO_WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
           '.chrono-harness/bin/chrono-ci' detect --host-root . --config '.chrono-harness/ci/units.json' --github-output "$GITHUB_OUTPUT"
+      - name: Save download cache cargo.detect
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+      - name: Save download cache rustup
+        if: ${{ success() && steps.chrono_download_1.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -144,7 +195,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.detect/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'detect' --bootstrap chrono_startup --save-after-bootstrap '["detect.ci","detect.judge-ci","detect.runner","detect.worktree","verus.archive"]' --save-caches '["detect.ci","detect.judge-ci","detect.runner","detect.worktree","verus.archive"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache detect.ci
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -152,7 +203,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache detect.judge-ci
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -160,7 +211,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_1_paths }}
       - name: Save registered cache detect.runner
         id: cache_2_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -168,7 +219,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Save registered cache detect.worktree
         id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -176,7 +227,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_3_paths }}
       - name: Save registered cache verus.archive
         id: cache_4_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key && (steps.chrono_cache_plan.outputs.cache_4_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_4_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_startup.outcome == 'success' && steps.cache_4_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_4_key && (steps.chrono_cache_plan.outputs.cache_4_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_4_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -198,6 +249,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_cache == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -206,6 +260,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.cache
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache-tests/Cargo.lock', 'crates/cache/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -270,7 +352,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'cache' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -278,7 +360,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_cache/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.cache","check.cache-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.cache
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -286,7 +368,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.cache-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -317,6 +399,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'cache' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.cache
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/cache-tests/Cargo.lock', 'crates/cache/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_ci:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -325,6 +419,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_ci == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -333,6 +430,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.ci
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci-tests/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -433,7 +558,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'ci' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -441,7 +566,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_ci/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.ci-tests","check.ci"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.ci
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -449,7 +574,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.ci-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -480,6 +605,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'ci' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.ci
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci-tests/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_diagnostics:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -488,6 +625,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_diagnostics == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -496,6 +636,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.diagnostics
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.diagnostics-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/diagnostics-tests/Cargo.lock', 'crates/diagnostics/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.diagnostics-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -560,7 +728,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'diagnostics' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -568,7 +736,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_diagnostics/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.diagnostics","check.diagnostics-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.diagnostics
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -576,7 +744,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.diagnostics-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -607,6 +775,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'diagnostics' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.diagnostics
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.diagnostics-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/diagnostics-tests/Cargo.lock', 'crates/diagnostics/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_distribution:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -615,6 +795,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_distribution == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -623,6 +806,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.distribution
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.distribution-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/distribution-tests/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.distribution-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -687,7 +898,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'distribution' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -695,7 +906,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_distribution/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.distribution","check.distribution-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.distribution
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -703,7 +914,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.distribution-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -734,6 +945,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'distribution' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.distribution
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.distribution-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/distribution-tests/Cargo.lock', 'crates/distribution/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_host-bootstrap:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -742,6 +965,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_host-bootstrap == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -750,6 +976,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.host-bootstrap
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.host-bootstrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native-tests/Cargo.lock', '.chrono-harness/ci/native/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.host-bootstrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -805,6 +1059,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'host-bootstrap' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.host-bootstrap
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.host-bootstrap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native-tests/Cargo.lock', '.chrono-harness/ci/native/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_inputs:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -813,6 +1079,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_inputs == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -821,6 +1090,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.inputs
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.inputs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/inputs-tests/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.inputs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -957,7 +1254,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'inputs' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -965,7 +1262,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_inputs/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.inputs","check.inputs-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.inputs
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -973,7 +1270,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.inputs-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1004,6 +1301,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'inputs' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.inputs
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.inputs-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/inputs-tests/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_instructions:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1012,6 +1321,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_instructions == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -1020,6 +1332,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.instructions
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.instructions-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/instructions-tests/Cargo.lock', 'crates/instructions/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.instructions-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1084,7 +1424,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'instructions' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -1092,7 +1432,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_instructions/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.instructions","check.instructions-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.instructions
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1100,7 +1440,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.instructions-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1131,6 +1471,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'instructions' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.instructions
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.instructions-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/instructions-tests/Cargo.lock', 'crates/instructions/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-ci:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1139,6 +1491,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-ci == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -1147,6 +1502,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-ci
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1220,7 +1603,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-ci' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -1228,7 +1611,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-ci/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-ci-tests","check.judge-ci"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-ci
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1236,7 +1619,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.judge-ci-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1267,6 +1650,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-ci' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-ci
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-ci-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci-tests/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-cost:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1275,6 +1670,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-cost == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -1283,6 +1681,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-cost
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-cost-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost-tests/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-cost-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1374,7 +1800,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-cost' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -1382,7 +1808,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-cost/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-cost","check.judge-cost-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-cost
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1390,7 +1816,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.judge-cost-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1421,6 +1847,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-cost' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-cost
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-cost-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost-tests/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-filemap:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1429,6 +1867,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-filemap == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -1437,6 +1878,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-filemap
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-filemap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-filemap-tests/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-filemap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1537,7 +2006,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-filemap' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -1545,7 +2014,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-filemap/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-filemap","check.judge-filemap-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-filemap
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1553,7 +2022,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.judge-filemap-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1584,6 +2053,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-filemap' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-filemap
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-filemap-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-filemap-tests/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-mixed:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1592,6 +2073,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-mixed == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -1600,6 +2084,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-mixed
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-mixed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed-tests/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-mixed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1700,7 +2212,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-mixed' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -1708,7 +2220,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-mixed/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-mixed","check.judge-mixed-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-mixed
         id: cache_2_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1716,7 +2228,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Save registered cache check.judge-mixed-tests
         id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1747,6 +2259,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-mixed' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-mixed
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-mixed-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed-tests/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-projects:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1755,6 +2279,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-projects == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -1763,6 +2290,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-projects
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-projects-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects-tests/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-projects-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -1872,7 +2427,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-projects' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -1880,7 +2435,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-projects/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-projects","check.judge-projects-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-projects
         id: cache_2_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1888,7 +2443,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Save registered cache check.judge-projects-tests
         id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1919,6 +2474,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-projects' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-projects
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-projects-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-ci/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-projects-tests/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-registration:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -1927,6 +2494,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-registration == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -1935,6 +2505,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-registration
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-registration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-registration-tests/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-registration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2008,7 +2606,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-registration' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -2016,7 +2614,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-registration/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-registration","check.judge-registration-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-registration
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2024,7 +2622,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.judge-registration-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2055,6 +2653,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-registration' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-registration
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-registration-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-registration-tests/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-routes:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2063,6 +2673,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-routes == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -2071,6 +2684,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-routes
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-routes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-routes-tests/Cargo.lock', 'crates/judge-routes/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-routes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2135,7 +2776,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-routes' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -2143,7 +2784,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-routes/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-routes","check.judge-routes-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-routes
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2151,7 +2792,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.judge-routes-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2182,6 +2823,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-routes' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-routes
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-routes-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/judge-routes-tests/Cargo.lock', 'crates/judge-routes/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-workflow:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2190,6 +2843,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-workflow == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -2198,6 +2854,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-workflow
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-workflow-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2352,7 +3036,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -2360,7 +3044,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-workflow/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow","check.judge-workflow-tests"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-workflow
         id: cache_8_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key && (steps.chrono_cache_plan.outputs.cache_8_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_8_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_8_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_8_key && (steps.chrono_cache_plan.outputs.cache_8_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_8_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2368,7 +3052,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_8_paths }}
       - name: Save registered cache check.judge-workflow-tests
         id: cache_9_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key && (steps.chrono_cache_plan.outputs.cache_9_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_9_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key && (steps.chrono_cache_plan.outputs.cache_9_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_9_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2399,6 +3083,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-workflow
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-workflow-short:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2407,6 +3103,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-workflow-short == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -2415,6 +3114,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-workflow-short
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-short-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-workflow-short-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2569,7 +3296,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow-short' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -2577,7 +3304,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-workflow-short/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-short"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-workflow-tests.judge-workflow-short
         id: cache_9_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key && (steps.chrono_cache_plan.outputs.cache_9_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_9_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key && (steps.chrono_cache_plan.outputs.cache_9_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_9_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2608,6 +3335,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow-short' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-workflow-short
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-short-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_judge-workflow-units:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2616,6 +3355,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_judge-workflow-units == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -2624,6 +3366,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.judge-workflow-units
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-units-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.judge-workflow-units-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2778,7 +3548,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'judge-workflow-units' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -2786,7 +3556,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_judge-workflow-units/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.judge-workflow-tests.judge-workflow-units"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.judge-workflow-tests.judge-workflow-units
         id: cache_9_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key && (steps.chrono_cache_plan.outputs.cache_9_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_9_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_9_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_9_key && (steps.chrono_cache_plan.outputs.cache_9_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_9_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2817,6 +3587,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow-units' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.judge-workflow-units
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.judge-workflow-units-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/inputs/Cargo.lock', 'crates/judge-cost/Cargo.lock', 'crates/judge-filemap/Cargo.lock', 'crates/judge-mixed/Cargo.lock', 'crates/judge-projects/Cargo.lock', 'crates/judge-registration/Cargo.lock', 'crates/judge-routes/Cargo.lock', 'crates/judge-workflow-tests/Cargo.lock', 'crates/judge-workflow/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_release-build:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -2825,6 +3607,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_release-build == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -2833,6 +3618,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.release-build
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.release-build-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2896,6 +3709,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_runner == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -2904,6 +3720,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.runner
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.runner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/identifiers-tests/Cargo.lock', 'crates/identifiers/Cargo.lock', 'crates/runner-tests/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.runner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -2968,7 +3812,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'runner' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -2976,7 +3820,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_runner/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.runner-tests","check.runner"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.runner
         id: cache_0_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_0_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_0_key && (steps.chrono_cache_plan.outputs.cache_0_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_0_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2984,7 +3828,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_0_paths }}
       - name: Save registered cache check.runner-tests
         id: cache_1_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_1_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_1_key && (steps.chrono_cache_plan.outputs.cache_1_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_1_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3015,6 +3859,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'runner' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.runner
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.runner-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/identifiers-tests/Cargo.lock', 'crates/identifiers/Cargo.lock', 'crates/runner-tests/Cargo.lock', 'crates/runner/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_worktree:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3023,6 +3879,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_worktree == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -3031,6 +3890,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.worktree
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/pr-tests/Cargo.lock', 'crates/pr/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.worktree-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -3113,7 +4000,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'worktree' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -3121,7 +4008,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_worktree/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests","check.worktree"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.worktree
         id: cache_2_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_2_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_2_key && (steps.chrono_cache_plan.outputs.cache_2_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_2_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3129,7 +4016,7 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_2_paths }}
       - name: Save registered cache check.worktree-tests
         id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3160,6 +4047,18 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'worktree' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.worktree
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/pr-tests/Cargo.lock', 'crates/pr/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   unit_worktree-adoption:
     outputs:
       production: ${{ steps.production.outputs.production }}
@@ -3168,6 +4067,9 @@ jobs:
     if: ${{ needs.detect.outputs.unit_worktree-adoption == 'true' }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -3176,6 +4078,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.worktree-adoption
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-adoption-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.worktree-adoption-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -3258,7 +4188,7 @@ jobs:
           '.chrono-harness/bin/chrono-ci' production --host-root . --config '.chrono-harness/ci/units.json' --unit 'worktree-adoption' --github-output "$GITHUB_OUTPUT"
       - name: Seal producer cache contents
         id: chrono_cache_seal
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outputs.cache_content_verification == 'producer-manifest/v1' }}
         shell: bash
         env:
           CHRONO_CACHE_PRODUCER_STEPS: ${{ toJSON(steps) }}
@@ -3266,7 +4196,7 @@ jobs:
           '.chrono-harness/bin/chrono-cache' seal --host-root . --config '.chrono-harness/cache.json' --plan '.chrono-harness/state/cache/check.unit_worktree-adoption/plan.json' --steps-env CHRONO_CACHE_PRODUCER_STEPS --work 'chrono_cache_work' --save-caches '["check.worktree-tests.worktree-adoption"]' --github-output "$GITHUB_OUTPUT"
       - name: Save registered cache check.worktree-tests.worktree-adoption
         id: cache_3_save
-        if: ${{ always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
+        if: ${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_cache_plan.outcome == 'success' && steps.chrono_cache_work.outcome == 'success' && steps.cache_3_restore.outputs.cache-matched-key != steps.chrono_cache_plan.outputs.cache_3_key && (steps.chrono_cache_plan.outputs.cache_3_verification != 'producer-manifest/v1' || steps.chrono_cache_seal.outputs.cache_3_sealed == 'true') }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3297,12 +4227,27 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'worktree-adoption' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.worktree-adoption
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.worktree-adoption-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock', 'crates/ci/Cargo.lock', 'crates/runner/Cargo.lock', 'crates/worktree-tests/Cargo.lock', 'crates/worktree/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
   aggregate:
     name: "chrono / collection"
     needs: ["detect","unit_cache","unit_ci","unit_diagnostics","unit_distribution","unit_host-bootstrap","unit_inputs","unit_instructions","unit_judge-ci","unit_judge-cost","unit_judge-filemap","unit_judge-mixed","unit_judge-projects","unit_judge-registration","unit_judge-routes","unit_judge-workflow","unit_judge-workflow-short","unit_judge-workflow-units","unit_release-build","unit_runner","unit_worktree","unit_worktree-adoption"]
     if: ${{ always() }}
     runs-on: "macos-26"
     timeout-minutes: 45
+    env:
+      CARGO_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/cargo"
+      RUSTUP_HOME: "${{ github.workspace }}/.chrono-harness/cache/bootstrap-owner-tooling/rustup"
     steps:
       - name: Check out exact candidate
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -3311,6 +4256,34 @@ jobs:
           fetch-depth: 2
           filter: blob:none
           persist-credentials: true
+      - name: Restore download cache cargo.aggregate
+        id: chrono_download_0
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.aggregate-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-cargo.aggregate-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+            chrono-download-v1-chrono-harness-cargo.detect-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
+      - name: Restore download cache rustup
+        id: chrono_download_1
+        continue-on-error: true
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/toolchains/
+            .chrono-harness/cache/bootstrap-owner-tooling/rustup/update-hashes/
+          restore-keys: |
+            chrono-download-v1-chrono-harness-rustup-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-
+          fail-on-cache-miss: false
       - name: Download registered startup artifact
         if: ${{ needs.detect.result == 'success' && needs.detect.outputs.startup_artifact != '' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -3355,3 +4328,15 @@ jobs:
           CHRONO_DELIVERED_DIGEST: ${{ steps.chrono_evidence_upload.outputs.artifact-digest }}
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'collect' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
+      - name: Save download cache cargo.aggregate
+        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          key: "chrono-download-v1-chrono-harness-cargo.aggregate-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.chrono-harness/ci/bootstrap-toolchains.json') }}-${{ hashFiles('.chrono-harness/ci/native/Cargo.lock') }}"
+          path: |
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/cache/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/index/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/registry/src/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
+            .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/

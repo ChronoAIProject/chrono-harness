@@ -108,6 +108,43 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 ## provider 的真实消费者
 
+原生缓存登记必须明确 `save_on_push_only`。为 true 时，编译产物仍在 PR 中恢复，
+但只在 push 事件按原成功条件保存；为 false 时，保存仍使用原事件范围。
+只为保存服务的内容封存使用相同事件条件，恢复时的内容核验继续执行。
+下载缓存不受这个字段限制，PR 可以保存自己的下载资料。
+本仓普通检查选择 true，避免每个 PR 都上传一套大编译目录，挤占下载缓存；
+发布工作流选择 false，因为其现役生产事件另有登记。
+恢复、内容核验、原构建和检查继续执行。此选择不保证后端永久保留归档，
+也不证明总编译、传输或存储成本已降低。
+
+### 首次编译前的下载缓存
+
+`persistent_cache.downloads` 使用已固定的原生 cache action，在 checkout 后、任何启动命令前恢复下载资料。
+这里不能先运行 `chrono-cache`：编译它本身就需要这些依赖和工具链。
+登记直接列出所有者、精确产物路径、兼容文件、源码文件、使用 job、唯一保存 job 和可选基础缓存。
+生成器重核现役产物登记和文件存在性；路径只接受字面文件名，不接受 glob 或表达式。
+原生 `hashFiles` 对明确文件列表求键，平台、架构及兼容文件限定恢复范围。
+基础缓存必须使用相同路径和兼容文件；缺登记或不相容时，在写投影前失败。
+
+本仓把初始 launcher、受保护 bootstrap 和业务 Cargo 调用统一到工作树自己的
+`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。缓存只运输包归档、索引、源码及 Git 依赖资料，
+不运输 Cargo 配置、凭据或本轮结果。各 job 保存自己的依赖集合；首次未命中时可恢复 detector 的基础依赖。
+固定 Rust 工具链由 detector 保存，各 job 在首次调用 Rustup 前恢复它。
+CI 使用工作树内的 `RUSTUP_HOME`；本地继续使用调用方选择的 Rustup 安装。
+
+命中后仍执行原构建和检查入口，由 Cargo 按锁文件及 checksum 校验依赖，bootstrap 继续核工具绑定。
+保存发生在已执行的原生产操作完成后；保存前失败或取消时不保存。后续步骤的失败仍保留其真实结果。
+原生步骤保留命中键、下载与保存观察。
+缓存动作的成功不能替代原构建结果，也不能证明后端归档仍存在。
+下载缓存的跨运行命中、冷／热下载次数及总时间收益须以当前原生运行验证，生成或本地测试通过不表示已验收。
+
+**产品与宿主政策同改：**下载恢复的登记、投影及 Verus 边界判断同时加入；
+生命周期清理由笼统的 cache 父目录改为当前生产者的精确目录，避免父子选择重叠。
+Cargo、本地专属 Rustup 下载目录及固定 Verus 包保留，临时 home、tmp、编译目录和发布中间目录继续回收。
+Cargo 下载内容由其已有自动清理管理；CI 的工具链目录随隔离 runner 结束，后端按 GitHub 缓存保留政策清理。
+固定工具链变更使兼容键失效；独立维护旧本地工具链时仍须核实际使用方，不能按目录年龄直接删除。
+恢复和保存的传输、存储及完整生命周期成本尚未测量。
+
 检查／发布 provider 可通过 `persistent_cache` 采用 `chrono-github-cache/v1`，包含登记 planner `program`、登记 `config`、固定 `restore_action`／`save_action` 和明确 `jobs` 映射。每个已有 job 点名 `need`、`output_use`、字面 `prepare` argv、`consumer` ID 及精确 `caches` 集合。前两个用途字段解释该 job 为何需要输出，不是实测使用证据。
 
 未知 job、缺失／空／多余／不匹配的缓存引用都在写输出前失败。本宿主缓存登记明确 `require_primary_checkout: true`；planner 在恢复前拒绝 linked worktree。这个文件系统保护不证明一般 Git 所有权或生命周期排除。
@@ -126,7 +163,9 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 
 detector 缓存绑定自身 bootstrap 配方，没有业务检查政策输入。检查编译缓存明确从检查配置选择 `/policy/environment`、`/policy/tools/cargo`；单元成员、报告位置不改这些键，环境或 Cargo 工具变化会改键。
 
-四项 `detect.*` 缓存的生产者使用 `bootstrap-core.json` 登记的专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。兼容输入用仓库相对路径声明其中 `config` 和 `config.toml` 缺失，存在任一配置时规划失败，避免恢复与实际构建配置不符的产物。默认 runner home 的配置声明仍供使用该环境的检查／发布生产者消费，其绝对路径迁移尚未完成；这两组输入不互相替代，也不证明其余构建输入完整。
+本仓编译缓存的生产者使用专属 `CARGO_HOME`：`.chrono-harness/cache/bootstrap-owner-tooling/cargo`。bootstrap 配方、四份检查政策和发布源中的缓存生产命令明确选择这个仓库相对目录；发布命令用已有 `/usr/bin/env` 转交变量，不新增调度入口。Cargo 子进程的工作目录是实际检出根，独立检出各自拥有该缓存。
+
+缓存的 Cargo／rustc 探测同样明确选择该目录，不再继承另一份 `CARGO_HOME`。所有相关编译缓存复用 `bootstrap.cargo.home-config`／`bootstrap.cargo.home-config-toml` 两项缺失声明；存在任一配置时规划失败，避免恢复与实际构建配置不符的产物。已删除 `/Users/runner`、`/home/runner` 的四条主机目录声明，不展开 HOME，也不另存主机观察。这些选择不证明祖先 Cargo 配置及其余构建输入完整；实际环境、失败和原件继续归本轮 state／线上 CI。
 
 专属 Rust 宿主采用回归覆盖这些区别，包括 detector 没有业务检查政策，以及 detector 构建参数变化。它们只验证这些声明依赖，不证明构建输入完整或所有登记都有必要。
 

@@ -15,6 +15,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -40,6 +42,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -65,6 +69,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -90,6 +96,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -115,6 +123,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -140,6 +150,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -165,6 +177,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -190,6 +204,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -215,6 +231,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -240,6 +258,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -265,6 +285,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -290,6 +312,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -315,6 +339,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -340,6 +366,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -365,6 +393,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -395,6 +425,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -435,6 +467,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -465,6 +499,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -535,6 +571,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -585,6 +623,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -620,6 +660,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -655,6 +697,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -715,6 +759,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -795,6 +841,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -820,6 +868,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -870,6 +920,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -895,6 +947,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -940,6 +994,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -990,6 +1046,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1196,6 +1254,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1221,6 +1281,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1246,6 +1308,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1271,6 +1335,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1296,6 +1362,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1321,6 +1389,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1346,6 +1416,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1371,6 +1443,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1396,6 +1470,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1421,6 +1497,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1446,6 +1524,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1471,6 +1551,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1496,6 +1578,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1521,6 +1605,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1546,6 +1632,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1576,6 +1664,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1616,6 +1706,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1646,6 +1738,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1716,6 +1810,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1766,6 +1862,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1801,6 +1899,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1836,6 +1936,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1896,6 +1998,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -1976,6 +2080,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2001,6 +2107,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2051,6 +2159,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2076,6 +2186,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2121,6 +2233,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2171,6 +2285,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2377,6 +2493,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2402,6 +2520,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2427,6 +2547,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2452,6 +2574,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2482,6 +2606,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2507,6 +2633,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2537,6 +2665,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2562,6 +2692,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2587,6 +2719,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2612,6 +2746,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2637,6 +2773,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2662,6 +2800,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2687,6 +2827,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2712,6 +2854,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2737,6 +2881,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/native.sh",
         ".",
@@ -2758,6 +2904,8 @@
       "runs_on": "ubuntu-24.04",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2788,6 +2936,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/native.sh",
         ".",
@@ -2809,6 +2959,8 @@
       "runs_on": "macos-26",
       "timeout_minutes": 45,
       "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
         "/bin/bash",
         ".chrono-harness/release/consume.sh",
         ".",
@@ -2843,6 +2995,7 @@
     "config": ".chrono-harness/cache.json",
     "restore_action": "actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830",
     "save_action": "actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830",
+    "save_on_push_only": false,
     "jobs": {
       "linux_build_runner": {
         "need": "This existing native release unit recompiles its registered project on a fresh ubuntu-24.04 runner.",

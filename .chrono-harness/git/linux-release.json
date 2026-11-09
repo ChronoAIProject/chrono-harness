@@ -248,6 +248,84 @@
       "owner": "identifiers-tests",
       "kind": "cargo-output",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/host-bootstrap-native/",
+      "owner": "host-bootstrap-native",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/host-bootstrap-native-tests/",
+      "owner": "host-bootstrap-native-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/identifiers/",
+      "owner": "identifiers",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/identifiers-tests/",
+      "owner": "identifiers-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release/",
+      "owner": "release-build",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release-dependencies/",
+      "owner": "release-build",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release-handoffs/",
+      "owner": "release-build",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release-results/",
+      "owner": "release-build",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/cargo/",
+      "owner": "repository",
+      "kind": "download-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/rustup/",
+      "owner": "repository",
+      "kind": "download-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/home/",
+      "owner": "host-bootstrap",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-owner-tooling/tmp/",
+      "owner": "host-bootstrap",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/bootstrap-verus/",
+      "owner": "repository",
+      "kind": "download-cache",
+      "tracked": false
     }
   ],
   "facts_git": {
@@ -345,7 +423,8 @@
     ],
     "values": {
       "CARGO_TERM_COLOR": "never",
-      "CARGO_INCREMENTAL": "1"
+      "CARGO_INCREMENTAL": "1",
+      "CARGO_HOME": ".chrono-harness/cache/bootstrap-owner-tooling/cargo"
     },
     "inputs": [
       {

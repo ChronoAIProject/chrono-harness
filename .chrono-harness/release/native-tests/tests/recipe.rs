@@ -99,6 +99,8 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
         assert_eq!(
             producer["command"],
             json!([
+                "/usr/bin/env",
+                "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
                 "/bin/bash",
                 ".chrono-harness/release/native.sh",
                 ".",
@@ -135,6 +137,8 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
                 .unwrap()
                 .trim_end_matches('/');
             let mut command = vec![
+                json!("/usr/bin/env"),
+                json!("CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo"),
                 json!("/bin/bash"),
                 json!(".chrono-harness/release/consume.sh"),
                 json!("."),
