@@ -874,6 +874,21 @@
       "path": ".chrono-harness/ci/bootstrap-toolchains.json",
       "presence": "present"
     },
+    "cache.producer": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/32/actions/build"
+    },
+    "cache-tests.producer": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/33/actions/execute"
+    },
+    "cache.cargo-registration": {
+      "kind": "json-value",
+      "path": ".chrono-harness/git/pinned-macos.json",
+      "pointer": "/tools/0"
+    },
     "verus.download": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
@@ -2666,6 +2681,108 @@
         "diagnostics-tests.sources"
       ],
       "restore": "compatible"
+    },
+    "check.cache": {
+      "owner": "cache",
+      "producer": "build.cache",
+      "consumers": [
+        "check.unit_cache"
+      ],
+      "artifacts": [
+        "cache.target"
+      ],
+      "compatibility_inputs": [
+        "rustc.file",
+        "cargo.file",
+        "rustc.version",
+        "platform",
+        "macos.sdk",
+        "macos.linker",
+        "macos.cc",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
+        "absent.RUSTFLAGS",
+        "absent.CARGO_ENCODED_RUSTFLAGS",
+        "absent.CARGO_BUILD_TARGET",
+        "absent.CARGO_TARGET_DIR",
+        "absent.RUSTC",
+        "absent.RUSTC_WRAPPER",
+        "absent.RUSTC_WORKSPACE_WRAPPER",
+        "root.cargo-config",
+        "root.cargo-config-toml",
+        "root.rust-toolchain",
+        "root.rust-toolchain-toml",
+        "cache.manifest",
+        "cache.lock",
+        "diagnostics.manifest",
+        "diagnostics.lock",
+        "runner.manifest",
+        "runner.lock",
+        "bootstrap.script",
+        "bootstrap.config",
+        "check.environment",
+        "check.cargo-tool",
+        "bootstrap.toolchains",
+        "cache.producer",
+        "cache.cargo-registration"
+      ],
+      "source_inputs": [
+        "cache.sources"
+      ],
+      "restore": "compatible",
+      "verify_contents": true
+    },
+    "check.cache-tests": {
+      "owner": "cache-tests",
+      "producer": "test.cache-tests",
+      "consumers": [
+        "check.unit_cache"
+      ],
+      "artifacts": [
+        "cache-tests.target"
+      ],
+      "compatibility_inputs": [
+        "rustc.file",
+        "cargo.file",
+        "rustc.version",
+        "platform",
+        "macos.sdk",
+        "macos.linker",
+        "macos.cc",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
+        "absent.RUSTFLAGS",
+        "absent.CARGO_ENCODED_RUSTFLAGS",
+        "absent.CARGO_BUILD_TARGET",
+        "absent.CARGO_TARGET_DIR",
+        "absent.RUSTC",
+        "absent.RUSTC_WRAPPER",
+        "absent.RUSTC_WORKSPACE_WRAPPER",
+        "root.cargo-config",
+        "root.cargo-config-toml",
+        "root.rust-toolchain",
+        "root.rust-toolchain-toml",
+        "cache.manifest",
+        "cache.lock",
+        "cache-tests.manifest",
+        "cache-tests.lock",
+        "diagnostics.manifest",
+        "diagnostics.lock",
+        "runner.manifest",
+        "runner.lock",
+        "bootstrap.script",
+        "bootstrap.config",
+        "check.environment",
+        "check.cargo-tool",
+        "bootstrap.toolchains",
+        "cache-tests.producer",
+        "cache.cargo-registration"
+      ],
+      "source_inputs": [
+        "cache-tests.sources"
+      ],
+      "restore": "compatible",
+      "verify_contents": true
     },
     "release.linux.release.runner": {
       "owner": "runner",
@@ -6242,6 +6359,12 @@
       {
         "registry": ".chrono-harness/FILEMAP.json",
         "pointer": "/execution_plans/test:diagnostics-tests/operations"
+      }
+    ],
+    "check.unit_cache": [
+      {
+        "registry": ".chrono-harness/FILEMAP.json",
+        "pointer": "/execution_plans/test:cache-tests/operations"
       }
     ],
     "release.linux_build_runner": [

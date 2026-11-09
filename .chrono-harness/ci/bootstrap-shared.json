@@ -92,6 +92,7 @@
       "core"
     ],
     "unit_cache": [
+      "cache",
       "core"
     ],
     "aggregate": [

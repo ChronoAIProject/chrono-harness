@@ -1024,25 +1024,9 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
         .unwrap()
         .parent()
         .unwrap();
-    let config: Value =
+    let mut config: Value =
         serde_json::from_slice(&fs::read(host.join(".chrono-harness/cache.json")).unwrap())
             .unwrap();
-    registered_cache_fixture(consumers, config)
-}
-
-fn compiler_cache_fixture() -> (Host, Value) {
-    registered_cache_fixture(
-        &["test.compiler"],
-        serde_json::from_slice(include_bytes!("fixtures/compiler-cache.json")).unwrap(),
-    )
-}
-
-fn registered_cache_fixture(consumers: &[&str], mut config: Value) -> (Host, Value) {
-    let host = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
     let root = Host::new();
     fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
     config["require_primary_checkout"] = json!(false);
@@ -1272,10 +1256,10 @@ fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() 
 
 #[test]
 fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality() {
-    let (root, config) = compiler_cache_fixture();
+    let (root, config) = host_cache_fixture(&["check.unit_cache"]);
     let projects = root.path().join(".chrono-harness/projects.json");
     let original: Value = serde_json::from_slice(&fs::read(&projects).unwrap()).unwrap();
-    let first = plan(root.path(), &config, "test.compiler").unwrap();
+    let first = plan(root.path(), &config, "check.unit_cache").unwrap();
     let mut unrelated = original.clone();
     unrelated["projects"]
         .as_array_mut()
@@ -1286,11 +1270,11 @@ fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality(
     fs::write(&projects, serde_json::to_vec(&unrelated).unwrap()).unwrap();
     assert_eq!(
         first["caches"],
-        plan(root.path(), &config, "test.compiler").unwrap()["caches"]
+        plan(root.path(), &config, "check.unit_cache").unwrap()["caches"]
     );
     for (project, action, cache) in [
-        ("cache", "build", "compiler.cache"),
-        ("cache-tests", "execute", "compiler.cache-tests"),
+        ("cache", "build", "check.cache"),
+        ("cache-tests", "execute", "check.cache-tests"),
     ] {
         for field in ["tool", "argv"] {
             let mut changed = original.clone();
@@ -1306,15 +1290,15 @@ fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality(
                 json!(["build", "--release"])
             };
             fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
-            let after = plan(root.path(), &config, "test.compiler").unwrap();
+            let after = plan(root.path(), &config, "check.unit_cache").unwrap();
             assert_ne!(
                 first["caches"][cache]["restore_keys"], after["caches"][cache]["restore_keys"],
                 "{project} {field}"
             );
-            let other = if cache == "compiler.cache" {
-                "compiler.cache-tests"
+            let other = if cache == "check.cache" {
+                "check.cache-tests"
             } else {
-                "compiler.cache"
+                "check.cache"
             };
             assert_eq!(first["caches"][other], after["caches"][other]);
         }
@@ -1323,7 +1307,7 @@ fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality(
 
 #[test]
 fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_domain() {
-    let (root, mut config) = compiler_cache_fixture();
+    let (root, mut config) = host_cache_fixture(&["check.unit_cache"]);
     let project = root.path().join("crates/cache");
     fs::create_dir_all(project.join("src")).unwrap();
     fs::write(project.join("Cargo.toml"), "[package]\nname = \"cache-compiler-acceptance\"\nversion = \"0.1.0\"\nedition = \"2024\"\n").unwrap();
@@ -1377,21 +1361,21 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         "fn main() { println!(\"original\"); }\n",
     )
     .unwrap();
-    let before = plan(root.path(), &config, "test.compiler").unwrap();
+    let before = plan(root.path(), &config, "check.unit_cache").unwrap();
     assert_eq!(build(), b"original\n");
     fs::write(
         project.join("src/main.rs"),
         "fn main() { println!(\"candidate-output\"); }\n",
     )
     .unwrap();
-    let after = plan(root.path(), &config, "test.compiler").unwrap();
+    let after = plan(root.path(), &config, "check.unit_cache").unwrap();
     assert_ne!(
-        before["caches"]["compiler.cache"]["key"],
-        after["caches"]["compiler.cache"]["key"]
+        before["caches"]["check.cache"]["key"],
+        after["caches"]["check.cache"]["key"]
     );
     assert_eq!(
-        before["caches"]["compiler.cache"]["restore_keys"],
-        after["caches"]["compiler.cache"]["restore_keys"]
+        before["caches"]["check.cache"]["restore_keys"],
+        after["caches"]["check.cache"]["restore_keys"]
     );
     assert_eq!(build(), b"candidate-output\n");
     assert!(
@@ -1415,9 +1399,9 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         serde_json::to_vec(&incompatible).unwrap(),
     )
     .unwrap();
-    let incompatible = plan(root.path(), &config, "test.compiler").unwrap();
+    let incompatible = plan(root.path(), &config, "check.unit_cache").unwrap();
     assert_ne!(
-        after["caches"]["compiler.cache"]["restore_keys"],
-        incompatible["caches"]["compiler.cache"]["restore_keys"]
+        after["caches"]["check.cache"]["restore_keys"],
+        incompatible["caches"]["check.cache"]["restore_keys"]
     );
 }

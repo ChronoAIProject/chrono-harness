@@ -13,9 +13,7 @@ runner 的编译缓存和原证明也沿同一个登记构建入口复用，损�
 
 ## 真实 CI 已验证的范围
 
-本宿主曾由 `cache` 单元消费 `check.cache`、`check.cache-tests`。这两项自缓存运输现已退役：采用普通入口自动清理后，恢复成功且内容匹配的约 1.05 GB 逻辑字节在 bootstrap 结束时被删除，业务编译没有消费命中；业务检查后的新输出也会在封存前清理。真实失败及原件见[落地运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/42561038857)。删除该 job 的恢复、封存和保存投影，同时保留原标准构建、测试及下载缓存。真实 Cargo action 的键绑定与重建验证迁到 `cache-tests` 的独立 JSON 样本，仍读取当前项目 action 并执行实际 Cargo。产品的内容核验、恢复、封存及失败验证继续由现役 Rust 专属测试负责。原两项 `producer-manifest/v1` 缓存的有限历史观察覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
-
-**宿主政策与产品验证同时变更。** 当前 cache job 删除两项编译缓存运输及专属共享 cache CLI 安装；标准构建／测试和仍有使用方的下载缓存继续执行。编译键契约的数据由测试项目独立维护，继续消费当前真实 Cargo action；构建、验证、传输和维护总成本仍未测量。
+本宿主的 `cache` 单元消费 `check.cache`、`check.cache-tests`。两项 `producer-manifest/v1` 缓存已有有限原生观察，覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
 
 这些观察只覆盖原候选和登记消费者，不能证明当前候选、其他消费者或完整缓存行为正确。不可用内容恢复、持久修复及修复后在原兼容范围健康精确命中的验收仍未完成；访问失败及部分观察见[退役说明](#retired-remote-acceptance-controls)。实验中的临时优化设置已移除，当前参数以现役登记为准；历史摘要、后端条目、artifact ID 和耗时归原运行。并发、linked 所有权、完整编译器／SDK／输入范围，以及传输、存储和总生命周期成本仍待验收或测量。
 
@@ -90,9 +88,9 @@ exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome �
 
 ## 可选的生产者内容核验
 
-`verify_contents: true` 是产品的可选 v2 合同，要求已有主检出失败／未确认恢复政策，不支持外部产物。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。当前本宿主已退役采用这项选项的两项自缓存运输；产品行为由独立样本验证，历史原生观察只保留其原范围含义。
+本宿主仅为已有 `check.unit_cache` job 消费的 `check.cache`、`check.cache-tests` 选择 `verify_contents: true`。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
 
-编译契约样本从当前 `projects.json` 选择真实生产 action（`build.cache` 或 `test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。回归分别核对 action 变化和无关项目 metadata 的局部性；独立实际 Cargo 构建核对源码重建、增量输出及兼容域分离。这些样本不证明原生缓存采用或编译器／SDK 输入完整。
+两项兼容范围还从 `projects.json` 选择真实生产 action（`build.cache` 或 `test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
 
 provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-cache seal`。它重核计划／登记和当前 planner 身份，要求原生产步骤 **outcome** 成功，并枚举明确选择的产物目录。
 
@@ -235,7 +233,7 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `check.*`。detector 兼容输入不含自身 bootstrap 不消费的检查政策。导入 startup 验证不是编译生产者，不能取得 `save_after_bootstrap` 资格。各消费者证据保留原生产报告和明确导入来源；startup 二进制不进入证据上传。传输成本单独测量，绑定源码的产物不证明构建输入来源完整。
 
-发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Rust 发布集成回归覆盖真实 CLI 的 plan／recover／staging，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
+发布验证在 Cargo test destination 消费 `chrono-cache` 资产；bootstrap 安装的传输执行物仍归 bootstrap。发布配方不再把资产放到同一 bin 路径。Python 发布集成回归覆盖真实 CLI 的 plan／recover／staging，以及 inode、摘要保留；本地证据不证明原生缓存后端或外层工作流成功。详见[发布说明](release-ci.md)。
 
 <a id="retired-remote-acceptance-controls"></a>
 
@@ -243,7 +241,7 @@ detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `che
 
 **产品与宿主政策曾同步删除：**可选原生 manifest 删除 fixture、对应 CLI／配置和 provider 登记、仓库 Variables 激活及实时 PR 正文读取器。provider 不再为激活增加 `pull-requests: read` 或读 PR metadata。不需要替代激活传输、变量管理、远端缓存删除或额外权限。退役字段按普通严格解码失败，不会静默当作激活成功。
 
-当前 `cache` job 执行原候选构建／测试，已移除未向业务编译提供命中、又在保存前失去输出的两项自缓存运输。原生 action 日志、恢复及清理回执保留原失败。产品恢复与封存的真实 CLI／文件系统回归继续执行；后续恢复该原生采用必须先建立贯穿恢复、生产、封存和保存的真实消费者保护，并另行验证收益。
+已有 `check.unit_cache` 仍计划、恢复两项登记编译归档，核 `producer-manifest/v1` 内容，通过普通恢复丢弃不可用宿主输出，执行原候选构建／测试，封存成功生产输出并经原生 action 保存。保存仍受必需生产者／封存 outcome 限制。原生 action 日志及恢复原件保留实际结果和原失败，其他构建／发布缓存行为不变。
 
 历史证据仍绑定精确 source／run／attempt。Variables GET／list HTTP 403 是真实历史失败。后续有限 C1 观察记录两项坏内容保存／恢复／拒绝、重建和替换缓存，但原兼容范围健康精确命中未达成：所选 rustup 身份改变，最新 collection 返回 HTTP 502。
 
