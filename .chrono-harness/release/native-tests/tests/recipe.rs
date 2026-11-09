@@ -6,6 +6,51 @@ use serde_json::{Value, json};
 use std::{fs, os::unix::fs::symlink};
 
 #[test]
+fn fixture_commands_isolate_parent_release_context_and_preserve_explicit_inputs() {
+    for channel in ["build", "preview", "stable"] {
+        for explicit in [false, true] {
+            let mut parent =
+                std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
+            parent.arg("--fixture-parent-context").envs([
+                ("CHRONO_RELEASE_LOCAL", "1"),
+                ("CHRONO_RELEASE_RUN", "outer-run"),
+                ("CHRONO_RELEASE_ATTEMPT", "7"),
+                ("CHRONO_RELEASE_JOB", "outer-verify"),
+                ("CHRONO_RELEASE_DEPENDENCIES", "{\"outer\":{}}"),
+                ("CHRONO_RELEASE_CHANNEL", channel),
+                (
+                    "CHRONO_RELEASE_SOURCE",
+                    "abcdef0123456789abcdef0123456789abcdef01",
+                ),
+                ("CHRONO_RELEASE_CI_RUN_ID", "1234"),
+                ("CHRONO_RELEASE_CI_ATTEMPT", "2"),
+                ("CHRONO_RELEASE_VERSION", "v1.2.3"),
+                ("CHRONO_FIXTURE_KEEP", "保留其他环境"),
+            ]);
+            if explicit {
+                parent.arg("explicit");
+            }
+            chrono_harness::process_fds::forward_command(&mut parent, &[]).unwrap();
+            let output = parent.output().unwrap();
+            assert!(
+                output.status.success(),
+                "{channel}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let observed: Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(
+                observed,
+                json!({
+                    "release":if explicit { json!({"CHRONO_RELEASE_RUN":"fixture-run"}) } else { json!({}) },
+                    "keep":"保留其他环境"
+                }),
+                "{channel}, explicit={explicit}"
+            );
+        }
+    }
+}
+
+#[test]
 fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumers() {
     use std::{collections::BTreeSet, path::Path};
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
