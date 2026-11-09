@@ -51,7 +51,7 @@
   ],
   "consumer_staging": {
     "release_plan": ".chrono-harness/release/plan.json",
-    "host_config": ".chrono-harness/git/pinned-macos.json",
+    "host_config": ".chrono-harness/git/macos-27.json",
     "bindings": [
       {
         "asset": "chrono-harness",
