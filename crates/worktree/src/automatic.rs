@@ -5,6 +5,7 @@ mod migration;
 mod owner_deployment;
 mod producer;
 mod retirement;
+use crate::verified_lifecycle::{Disposition, select_artifact};
 // Explicit file custody uses these same admission/enrollment capabilities, without
 // draining unrelated entries or migrating a historical checkout's policy.
 #[derive(Deserialize)]
@@ -250,13 +251,6 @@ struct TerminalHistory {
 struct Artifact {
     path: String,
     disposition: Disposition,
-}
-#[derive(Clone, Deserialize, PartialEq)]
-#[serde(rename_all = "kebab-case")]
-enum Disposition {
-    Dispose,
-    Retain,
-    EvidenceRetain,
 }
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -1083,7 +1077,7 @@ impl Manager {
                     paths.insert(path.into());
                 }
             }
-            for field in ["sealed_receipt", "recovered_receipt"] {
+            for field in ["sealed_receipt", "recovered_receipt", "cache_release"] {
                 if !e.enrollment[field].is_null() {
                     let receipt: Receipt = serde_json::from_value(e.enrollment[field].clone())
                         .map_err(|error| format!("invalid enrollment {field}: {error}"))?;
@@ -1486,7 +1480,7 @@ impl Manager {
                 .policy
                 .artifacts
                 .iter()
-                .filter(|a| a.disposition == Disposition::Dispose)
+                .filter(|a| select_artifact(&a.disposition, true, false))
                 .map(|a| a.path.as_str())
                 .collect();
             if owned.iter().collect::<BTreeSet<_>>().len() != owned.len()
@@ -1714,7 +1708,7 @@ impl Manager {
                 .policy
                 .artifacts
                 .iter()
-                .filter(|a| a.disposition == Disposition::Dispose)
+                .filter(|a| select_artifact(&a.disposition, true, false))
             {
                 let path = no_symlink_parents(&target, artifact.path.trim_end_matches('/'))?;
                 match fs::symlink_metadata(path) {
@@ -2130,6 +2124,7 @@ impl Manager {
         i: usize,
         token: &str,
         report: &mut Value,
+        release_for_age: bool,
     ) -> Result<(), String> {
         let e = self.ledger.entries[i].clone();
         let owner = e
@@ -2138,6 +2133,11 @@ impl Manager {
             .ok_or("cache disposal requires kernel ownership")?;
         let head = r.oid(&e.path, "HEAD")?;
         self.check_entry(r, &e, &head, None)?;
+        let release_reusable = crate::verified_lifecycle::reusable_release(
+            release_for_age,
+            owner.generation,
+            self.cache_release_generation(&e)?,
+        );
         let owned = if e.cache_only {
             Some(self.main_cache_owned(&e)?)
         } else {
@@ -2149,7 +2149,7 @@ impl Manager {
             .artifacts
             .iter()
             .filter(|a| {
-                a.disposition == Disposition::Dispose
+                select_artifact(&a.disposition, release_reusable, false)
                     && owned.as_ref().is_none_or(|paths| paths.contains(&a.path))
             })
             .map(|a| a.path.clone())
@@ -2182,7 +2182,8 @@ impl Manager {
             "anchor_registry_digest":self.inputs.anchor_filemap_digest,
             "policy_source_root":self.inputs.source_root,"policy_source_commit":self.inputs.source_head,
             "policy_registry_digest":self.inputs.registry_digest,
-            "target_registry_digest":target_digest,"artifacts":names,"generation":owner.generation});
+            "target_registry_digest":target_digest,"artifacts":names,"generation":owner.generation,
+            "release_reusable":release_reusable});
         if let Some(prior) = e
             .cache_attempts
             .last()
@@ -2264,11 +2265,18 @@ impl Manager {
             }
             let head = r.oid(&target, "HEAD")?;
             self.check_entry(r, &e, &head, None)?;
+            let generation = e
+                .ownership
+                .as_ref()
+                .ok_or("main cache ownership missing")?
+                .generation
+                .checked_add(1)
+                .ok_or("main cache release generation overflow")?;
             let receipt = self.immutable(
                 &format!("main-release-{token}.json"),
                 &value!({
                     "schema":"chrono-main-cache-release/v1","path":target,"head":head,"report_path":report["report_path"],
-                    "attachment":e.attachment,"ownership":e.ownership,
+                    "attachment":e.attachment,"ownership":e.ownership,"cache_generation":generation,
                     "worktree_removal":"not-authorized","task_completion":"not-claimed"
                 }),
             )?;
@@ -2282,6 +2290,10 @@ impl Manager {
                 .as_array_mut()
                 .ok_or("main cache release history")?
                 .push(value!(receipt));
+            self.ledger.entries[i].enrollment["cache_release"] = value!(receipt);
+            let owner = self.ledger.entries[i].ownership.as_mut().unwrap();
+            owner.generation = generation;
+            owner.cache_pending = true;
             self.save()?;
             crate::recovery::bind_report_inputs(&self.inputs.policy.coordinator_root, report)?;
             report["worktree_removal"] = value!("preserved");
@@ -2716,7 +2728,7 @@ impl Manager {
                     if age {
                         self.execute_age(r, i, token, attempt, true)
                     } else if cache {
-                        self.execute_cache(r, i, token, attempt)
+                        self.execute_cache(r, i, token, attempt, false)
                     } else {
                         self.execute_entry(r, i, token, attempt)
                     }
@@ -2773,6 +2785,11 @@ impl Manager {
                                     .as_mut()
                                     .unwrap()
                                     .cache_pending = false;
+                                self.ledger.entries[i]
+                                    .enrollment
+                                    .as_object_mut()
+                                    .ok_or("enrollment object")?
+                                    .remove("cache_release");
                             }
                         }
                     }
@@ -3499,10 +3516,7 @@ impl Manager {
             .policy
             .artifacts
             .iter()
-            .filter(|a| {
-                a.disposition == Disposition::Dispose
-                    || (a.disposition == Disposition::EvidenceRetain && t.dispose_evidence)
-            })
+            .filter(|a| select_artifact(&a.disposition, true, t.dispose_evidence))
             .map(|a| a.path.clone())
             .collect();
         let mut preserved = None;

@@ -13,6 +13,26 @@ struct Custody {
 }
 
 impl Manager {
+    pub(super) fn cache_release_generation(&self, e: &Entry) -> Result<Option<u64>, String> {
+        let Some(request) = e.enrollment.get("cache_release") else {
+            return Ok(None);
+        };
+        let receipt: Receipt =
+            serde_json::from_value(request.clone()).map_err(|e| e.to_string())?;
+        let record = json(&self.receipt(&receipt)?)?;
+        if record["schema"] != "chrono-main-cache-release/v1"
+            || record["path"] != value!(e.path)
+            || record["attachment"] != value!(e.attachment)
+        {
+            return Err("main cache release does not bind this enrollment".into());
+        }
+        Ok(Some(
+            record["cache_generation"]
+                .as_u64()
+                .ok_or("main cache release generation missing")?,
+        ))
+    }
+
     pub(super) fn main_cache_owned(&self, e: &Entry) -> Result<BTreeSet<String>, String> {
         let initial: Vec<String> = serde_json::from_value(
             e.enrollment["main_cache_artifacts"].clone(),
@@ -106,7 +126,7 @@ impl Manager {
                     .policy
                     .artifacts
                     .iter()
-                    .any(|a| a.path == *p && a.disposition == Disposition::Dispose)
+                    .any(|a| a.path == *p && select_artifact(&a.disposition, true, false))
             })
         {
             return Err("current custody selects repeated or undeclared disposable outputs".into());
