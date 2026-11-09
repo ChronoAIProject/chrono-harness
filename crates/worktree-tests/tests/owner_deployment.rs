@@ -581,6 +581,90 @@ fn owner_deployment_does_not_exclude_an_unrelated_physical_coordinator() {
 }
 
 #[test]
+fn owner_deployment_excludes_rebranched_checkout_without_adopting_its_identity() {
+    for detached in [false, true] {
+        let (h, exe, path, sha) = fixture();
+        let target = linked(&h);
+        let before = h.ledger();
+        let entry = before["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["path"] == value!(target))
+            .unwrap();
+        if detached {
+            git(&target, &["checkout", "-q", "--detach"]);
+        } else {
+            git(&target, &["checkout", "-q", "-b", "feature/current-work"]);
+        }
+        fs::write(target.join("payload"), "staged work\n").unwrap();
+        git(&target, &["add", "payload"]);
+        fs::write(target.join("payload"), "unstaged work\n").unwrap();
+        let index = Path::new(entry["attachment"]["metadata"].as_str().unwrap()).join("index");
+        let index_bytes = fs::read(&index).unwrap();
+        let reference = git(&target, &["rev-parse", "--symbolic-full-name", "HEAD"]);
+        let head = git(&target, &["rev-parse", "HEAD"]);
+        let refs = git(&h.root, &["show-ref"]);
+        let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
+        let selected_before = fs::read(&selected).unwrap();
+        let child = inherited_holder(&h, entry);
+        let (code, report, error) = deploy(&h, &exe, &path, &sha);
+        join_holder(child);
+        assert_ne!(code, 0, "{report} {error}");
+        assert!(
+            report.to_string().contains("live inherited consumers"),
+            "{report}"
+        );
+        assert_eq!(fs::read(&selected).unwrap(), selected_before);
+
+        let (code, report, error) = deploy(&h, &exe, &path, &sha);
+        assert_eq!(code, 0, "{report} {error}");
+        let exclusion = report["owner_deployment"]["original_protection"]["enrollments"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["path"] == value!(target))
+            .unwrap();
+        assert_eq!(exclusion["enrolled_branch"], entry["branch"]);
+        assert_eq!(exclusion["current_reference"], reference.trim());
+        assert_eq!(exclusion["attachment"], entry["attachment"]);
+        assert_eq!(exclusion["enrollment"]["id"], entry["ownership"]["id"]);
+        assert_eq!(
+            h.ledger(),
+            before,
+            "deployment does not adopt a new identity"
+        );
+        assert_eq!(
+            fs::read(target.join("payload")).unwrap(),
+            b"unstaged work\n"
+        );
+        assert_eq!(fs::read(&index).unwrap(), index_bytes);
+        assert_eq!(
+            git(&target, &["rev-parse", "--symbolic-full-name", "HEAD"]),
+            reference
+        );
+        assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+        assert_eq!(git(&h.root, &["show-ref"]), refs);
+
+        let (code, report, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
+        assert_ne!(code, 0, "{report} {error}");
+        assert!(
+            report
+                .to_string()
+                .contains("identity or ownership lock mismatch"),
+            "{report}"
+        );
+        assert!(target.is_dir());
+        assert_eq!(
+            fs::read(target.join("payload")).unwrap(),
+            b"unstaged work\n"
+        );
+        assert_eq!(fs::read(&index).unwrap(), index_bytes);
+        assert_eq!(git(&h.root, &["show-ref"]), refs);
+    }
+}
+
+#[test]
 fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
     for fault in ["unknown", "ownership", "lease", "attachment"] {
         let (h, exe, path, sha) = fixture();

@@ -2291,6 +2291,19 @@
             "--test-threads=1"
           ]
         },
+        "probe_owner_exclusion": {
+          "operation": "test.worktree.owner-exclusion",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "owner_deployment::owner_deployment_excludes_rebranched_checkout_without_adopting_its_identity",
+            "--",
+            "--test-threads=1"
+          ]
+        },
         "verify_attention": {
           "operation": "verify.worktree-attention-tests",
           "tool": "verus",
