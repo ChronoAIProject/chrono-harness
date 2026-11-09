@@ -1205,7 +1205,6 @@
             "unit_judge-workflow-units",
             "unit_judge-workflow-short",
             "unit_release-build",
-            "unit_release-build-integration",
             "unit_worktree-adoption",
             "unit_diagnostics",
             "unit_host-bootstrap",
