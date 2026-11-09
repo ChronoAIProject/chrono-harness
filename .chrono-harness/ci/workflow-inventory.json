@@ -11,11 +11,13 @@
   "binaries": {
     "execute": [
       "branch",
-      "consumer"
+      "consumer",
+      "verified_evidence"
     ],
     "execute_core": [
       "branch",
-      "consumer"
+      "consumer",
+      "verified_evidence"
     ],
     "execute_units": [
       "consumer"
