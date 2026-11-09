@@ -31,6 +31,45 @@ fn emit(value: &Value) {
     serde_json::to_writer(io::stdout().lock(), value).unwrap();
 }
 
+fn transition_command(name: &OsStr, args: &[std::ffi::OsString]) -> ExitCode {
+    if args.len() == 1 && args[0] == "--version" {
+        println!("chrono-workflow-transition 0.1.0");
+        return ExitCode::SUCCESS;
+    }
+    if let Some(trace) = env::var_os("CHRONO_WORKFLOW_TRANSITION_TRACE") {
+        let mut line = name.as_bytes().to_vec();
+        line.push(b'\n');
+        append(Path::new(&trace), &line);
+    }
+    let execute = || -> Result<(), String> {
+        if name == "decoder-tests" {
+            if !args.is_empty() {
+                return Err("unexpected compatibility arguments".into());
+            }
+            transition_decoder_tests::check(&read_json(Path::new(".chrono-harness/case.json")));
+        } else {
+            match args {
+                [] => (),
+                [flag, path] if flag == "--write" => {
+                    fs::write(path, "decoder output").map_err(|error| error.to_string())?;
+                }
+                _ => return Err("unexpected decoder arguments".into()),
+            }
+            let input: Value =
+                serde_json::from_reader(io::stdin().lock()).map_err(|error| error.to_string())?;
+            emit(&transition_decoder::convert(&input)?);
+        }
+        Ok(())
+    };
+    match execute() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("E_MIGRATION: {error}");
+            ExitCode::from(1)
+        }
+    }
+}
+
 fn prepared_producer(args: &[std::ffi::OsString]) -> ExitCode {
     if args.first().is_some_and(|arg| arg == "--version") {
         println!("chrono-worktree 0.1.0");
@@ -110,6 +149,9 @@ fn main() -> ExitCode {
     let parent = executable.parent().unwrap();
     let args: Vec<_> = env::args_os().skip(1).collect();
     let name = executable.file_name().unwrap();
+    if name == "decoder" || name == "decoder-tests" {
+        return transition_command(name, &args);
+    }
     if name == "fixture-producer" {
         return prepared_producer(&args);
     }

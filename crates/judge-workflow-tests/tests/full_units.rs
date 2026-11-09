@@ -1349,6 +1349,31 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         &python,
         &["judge:projects"],
     );
+    native_tools::bind(
+        &mut h,
+        "CHRONO_WORKFLOW_TRANSITION_TRACE",
+        &tool_root.join("business-launches"),
+        &["judge:registration", "judge:projects"],
+    );
+    for (tool, consumer) in [
+        ("transition-decoder", "judge:registration"),
+        ("transition-checks", "judge:projects"),
+    ] {
+        let node = format!("tool:{tool}");
+        h.values.get_mut(CONFIG).unwrap()["input_closure"]["bindings"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|binding| binding["consumer"] == consumer)
+            .unwrap()["inputs"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!(node));
+        h.values.get_mut(FM).unwrap()["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(edge(&node, "runtime-input", consumer));
+    }
     h.tool = wrapper.clone();
     h.values.get_mut(CONFIG).unwrap()["tools"]
         .as_array_mut()
@@ -1381,6 +1406,15 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
         passed(e, &r);
         assert_eq!(workflow(&r)["completion"], "pending collection");
     }
+    let launches = marker(&tool_root);
+    assert!(
+        launches.contains("decoder\n"),
+        "conversion trace is missing"
+    );
+    assert!(
+        launches.contains("decoder-tests\n"),
+        "compatibility trace is missing"
+    );
     manifest(&h.root(), &["one", "two"]);
     fs::remove_file(&wrapper).unwrap();
     let before = marker(&tool_root);
