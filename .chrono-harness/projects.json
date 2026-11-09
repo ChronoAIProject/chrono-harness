@@ -1909,6 +1909,18 @@
             "crates/inputs-tests/Cargo.toml"
           ]
         },
+        "decoder_contract": {
+          "operation": "test.inputs-decoder-contract",
+          "tool": "cargo",
+          "argv": [
+            "test",
+            "--locked",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml",
+            "--test",
+            "decoder_contract"
+          ]
+        },
         "update_lockfile": {
           "operation": "lock.inputs-tests",
           "tool": "cargo",
