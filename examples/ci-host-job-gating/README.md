@@ -6,7 +6,7 @@
 
 变更检测 job 只通过薄 Shell 拷贝这些已安装的 harness 工具，读取明确登记的稀疏源码路径。harness 单元直接验证 Rust 生成器输出；这两处都不需要 Python。Python 只用于本例的 `message.py` 业务和 `check.py` 测试，由选中的业务单元使用。
 
-示例明确选择 macOS Git `/usr/bin/git`、系统 Shell，以及业务 Python `/usr/bin/python3`。首次提交前，在 config.json、worktree.json 登记实际 Git 可执行文件的 SHA-256／版本，在 config.json 登记实际业务 Python 版本。验证转发脚本由登记的 `/bin/bash` 执行，版本由程序观察，预期版本未绑定。这些是宿主选择，不是可跨平台使用的产品默认值。无需 Rust 源码检出；安装的版本须包含条件父工作流和原 `production` 输出合同，旧版本不兼容。公开版本发布和真实原生 Actions 验证仍由调用方负责。
+示例明确选择 macOS Git `/usr/bin/git`、系统 Shell，以及业务 Python `/usr/bin/python3`，复制时按实际宿主选择这些工具路径。Git、Python 和 Shell 的版本、字节由本次运行观察，后续调用使用已绑定的执行物；仓库不维护主机摘要或版本观察表。harness 工具版本继续约束本例实际使用的接口。无需 Rust 源码检出；安装的版本须包含条件父工作流和原 `production` 输出合同，旧版本不兼容。公开版本发布和真实原生 Actions 验证仍由调用方负责。
 
 完成上述配置后，初始化并验证生成结果：
 

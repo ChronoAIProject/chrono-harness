@@ -32,19 +32,13 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
-#[allow(unexpected_cfgs)]
 pub mod verified_git_binding;
 pub use chrono_identifiers as verified_identifiers;
-#[allow(unexpected_cfgs)]
 pub mod verified_limits;
-#[allow(unexpected_cfgs)]
 pub mod verified_paths;
-#[allow(unexpected_cfgs)]
 #[path = "retained_artifacts/verified_release.rs"]
 pub mod verified_release;
-#[allow(unexpected_cfgs)]
 pub mod verified_status;
-#[allow(unexpected_cfgs)]
 pub mod verified_verifier;
 pub use verified_status::{CheckResult, Status};
 pub use verus_builtin_macros::verus;

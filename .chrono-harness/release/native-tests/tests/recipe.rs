@@ -73,11 +73,20 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
                     owner["manifest"].clone()
                 ]
             );
+            let output_arguments = if owner["id"] == "worktree-tests" {
+                assert_eq!(
+                    &argv[argv.len() - 2..],
+                    &[json!("--"), json!("--test-threads=2")]
+                );
+                &argv[4..argv.len() - 2]
+            } else {
+                &argv[4..]
+            };
             assert!(
-                argv.len() == 4
-                    || (argv.len() == 6
-                        && argv[4] == "--target-dir"
-                        && !argv[5].as_str().unwrap().is_empty())
+                output_arguments.is_empty()
+                    || (output_arguments.len() == 2
+                        && output_arguments[0] == "--target-dir"
+                        && !output_arguments[1].as_str().unwrap().is_empty())
             );
         }
     }
