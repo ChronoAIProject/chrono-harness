@@ -548,6 +548,8 @@
     {"path":"crates/judge-registration-tests/tests/verified_nodes.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration-tests/tests/verified_nodes.rs","operation":"verify.registration-nodes-tests"}]},"owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
     {"path":"crates/judge-registration/src/verified_consumption.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration/src/verified_consumption.rs","operation":"verify.registration-preparation"},{"path":"crates/judge-registration-tests/tests/verified_consumption.rs","operation":"verify.registration-preparation-tests"}]},"owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/verified_consumption.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration-tests/tests/verified_consumption.rs","operation":"verify.registration-preparation-tests"}]},"owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
+    {"path":"crates/judge-registration/src/verified_input_coverage.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration/src/verified_input_coverage.rs","operation":"verify.registration-input-coverage"},{"path":"crates/judge-registration-tests/tests/verified_input_coverage.rs","operation":"verify.registration-input-coverage-tests"}]},"owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"compile","to":"project:judge-registration-tests"}]},
+    {"path":"crates/judge-registration-tests/tests/verified_input_coverage.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration-tests/tests/verified_input_coverage.rs","operation":"verify.registration-input-coverage-tests"}]},"owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
     {"path":"crates/judge-ci/src/verified_collection.rs","verification":{"role":"program","roots":[{"path":"crates/judge-ci/src/verified_collection.rs","operation":"verify.ci-collection"},{"path":"crates/judge-ci-tests/tests/verified_collection.rs","operation":"verify.ci-collection-tests"}]},"owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci"},{"kind":"test-execution","to":"test:judge-ci-tests"},{"kind":"compile","to":"project:judge-ci-tests"}]},
     {"path":"crates/judge-ci-tests/tests/verified_collection.rs","verification":{"role":"program","roots":[{"path":"crates/judge-ci-tests/tests/verified_collection.rs","operation":"verify.ci-collection-tests"}]},"owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"}]},
     {"path":"crates/worktree/src/verified_owner_publication.rs","verification":{"role":"program","roots":[{"path":"crates/worktree/src/verified_owner_publication.rs","operation":"verify.owner-publication"},{"path":"crates/worktree-tests/tests/verified_owner_publication.rs","operation":"verify.owner-publication-tests"}]},"owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"test-execution","to":"test:worktree-tests"},{"kind":"test-execution","to":"test:worktree-adoption"},{"kind":"compile","to":"project:host-bootstrap-native"}]},
@@ -1290,6 +1292,8 @@
         "verify.registration-nodes-tests",
         "verify.registration-preparation-tests",
         "verify.registration-preparation",
+        "verify.registration-input-coverage",
+        "verify.registration-input-coverage-tests",
         "fmt.judge-registration",
         "fmt.judge-registration-tests",
         "build.runner",
@@ -2089,6 +2093,18 @@
         ]
       },
       "verify.registration-preparation-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.registration-input-coverage": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.registration-input-coverage-tests": {
         "resources": [],
         "outputs": [
           ".chrono-harness/state/"
