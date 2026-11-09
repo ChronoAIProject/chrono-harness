@@ -55,7 +55,8 @@ pub fn prepare(
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     fs::create_dir_all(header_path.parent().ok_or("missing headers parent")?)
         .map_err(|error| error.to_string())?;
-    let temporary = tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
+    // 正式 profile 将 TMPDIR 交给已有可回收目录；保留包目录不收容中断残留。
+    let temporary = tempfile::NamedTempFile::new().map_err(|error| error.to_string())?;
     let output = temporary
         .path()
         .to_str()

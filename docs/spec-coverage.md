@@ -42,6 +42,8 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 
 固定 Verus 下载包的候选采用改用 `bootstrap-owner-tooling/verus/package.zip` 单槽，保留当前 checksum、原子发布、失败保全和证明消费者。旧版本目录仅由现有生命周期入口回收，不增加 TTL 或清理器；候选 bootstrap、标准检查、原生消费和真实协调者迁移尚待验收。路径和政策变更本身不证明旧目录已回收。
 
+下载临时文件改用现有 `TMPDIR` 选择，core 和独立 Verus profile 均指向已登记 dispose 的目录；不随保留归档进入下载缓存。既有 mock 回归核实际输出位置、失败保全和正常回收；强制中断、生命周期恢复及真实入口采用仍须分别验收。
+
 ## 按 SPEC 章节查看
 
 | SPEC 章节 | 状态 | 生产者与直接证据 | 仍需完成 |
