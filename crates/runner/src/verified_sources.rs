@@ -950,17 +950,21 @@ pub open spec fn classifications_error(
 pub open spec fn registry_classification_error(
     current: &SourceRegistry, previous: Result<Option<&SourceRegistry>, &str>,
 ) -> Option<(Seq<char>, Seq<char>)> {
-    if !matches!(current.require_new_file_classification, Some(true)) { None }
-    else {
-        match previous {
-            Err(message) => Some(("E_VERUS_COVERAGE: base file classifications unavailable: "@, message@)),
-            Ok(None) => classifications_error(current.files@, Seq::empty(), 0),
-            Ok(Some(base)) => classifications_error(current.files@, base.files@, 0),
-        }
+    let enabled = matches!(current.require_new_file_classification, Some(true));
+    match previous {
+        Err(message) => Some(("E_VERUS_COVERAGE: base file classifications unavailable: "@, message@)),
+        Ok(None) => if enabled { classifications_error(current.files@, Seq::empty(), 0) } else { None },
+        Ok(Some(base)) => {
+            if enabled { classifications_error(current.files@, base.files@, 0) }
+            else if matches!(base.require_new_file_classification, Some(true)) {
+                Some(("E_VERUS_COVERAGE: existing classification requirement cannot be disabled: "@,
+                    "require_new_file_classification"@))
+            } else { None }
+        },
     }
 }
 
-/// 只消费候选与固定基线的显式行；新行必须分类，已有分类不得退回未知。
+/// 固定基线启用后，候选不得关闭分类检查；新行必须分类，已有分类不得退回未知。
 /// 未分类存量仍未知，完整生产调用对应继续由各自的证明与原结果负责。
 pub fn validate_file_classifications<'a>(
     current: &'a SourceRegistry, previous: Result<Option<&SourceRegistry>, &'a str>,
@@ -970,16 +974,25 @@ pub fn validate_file_classifications<'a>(
         Err(error) => registry_classification_error(current, previous) == Some(error.view()),
     },
 {
-    if !matches!(current.require_new_file_classification, Some(true)) { return Ok(()); }
     let empty = Vec::new();
+    let enabled = matches!(current.require_new_file_classification, Some(true));
     let base = match previous {
         Err(message) => {
             return Err(CoverageError { message: "E_VERUS_COVERAGE: base file classifications unavailable: ",
                 path: message });
         },
         Ok(None) => &empty,
-        Ok(Some(base)) => &base.files,
+        Ok(Some(base)) => {
+            if !enabled && matches!(base.require_new_file_classification, Some(true)) {
+                return Err(CoverageError {
+                    message: "E_VERUS_COVERAGE: existing classification requirement cannot be disabled: ",
+                    path: "require_new_file_classification",
+                });
+            }
+            &base.files
+        },
     };
+    if !enabled { return Ok(()); }
     assert(registry_classification_error(current, previous)
         == classifications_error(current.files@, base@, 0));
     let mut i = 0;
