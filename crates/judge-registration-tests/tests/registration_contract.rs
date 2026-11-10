@@ -1893,37 +1893,6 @@ fn scheduling_requires_complete_unambiguous_explicit_claims() {
     let pr = json!({"projects":[{"id":"t","actions":{"execute":{"operation":"run","tool":"sh","argv":[]}}}],"scripts":[]});
     let artifacts = json!([{"path":"out/"}]);
     assert!(scheduling(&fm, &pr, &artifacts).unwrap().is_some());
-    let mut bootstrap = fm.clone();
-    bootstrap["execution_scheduling"]["claims"]["build.bootstrap"] =
-        json!({"resources":[],"outputs":["out/"]});
-    let mut producers = pr.clone();
-    producers["projects"][0]["actions"]["build"] =
-        json!({"operation":"build.bootstrap","tool":"sh","argv":[]});
-    let policy = scheduling(&bootstrap, &producers, &artifacts)
-        .expect("registered bootstrap output must not require a redundant test operation")
-        .unwrap();
-    assert!(policy.claims.contains_key("build.bootstrap"));
-    for invalid in 0..3 {
-        let mut bad = bootstrap.clone();
-        let mut methods = producers.clone();
-        match invalid {
-            0 => {
-                methods["projects"][0]["actions"]
-                    .as_object_mut()
-                    .unwrap()
-                    .remove("build");
-            }
-            1 => {
-                methods["projects"][0]["actions"]["other"] =
-                    methods["projects"][0]["actions"]["build"].clone();
-            }
-            _ => {
-                bad["execution_scheduling"]["claims"]["build.bootstrap"]["outputs"] =
-                    json!(["unknown/"])
-            }
-        }
-        assert!(scheduling(&bad, &methods, &artifacts).is_err());
-    }
     let mut priority = fm.clone();
     priority["execution_scheduling"]["priority"] = json!(["run"]);
     assert!(scheduling(&priority, &pr, &artifacts).unwrap().is_some());

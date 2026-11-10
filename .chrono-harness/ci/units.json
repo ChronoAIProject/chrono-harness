@@ -999,10 +999,12 @@
         "caches": [
           "check.ci",
           "check.runner",
+          "check.worktree",
           "check.worktree-tests"
         ],
         "save_caches": [
-          "check.worktree-tests"
+          "check.worktree-tests",
+          "check.worktree"
         ]
       },
       "unit_judge-workflow-units": {
@@ -1078,6 +1080,7 @@
         "caches": [
           "check.ci",
           "check.runner",
+          "check.worktree",
           "check.worktree-tests.worktree-adoption"
         ],
         "save_caches": [
