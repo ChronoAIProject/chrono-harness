@@ -14,14 +14,16 @@
       "consumer",
       "verified_certificate",
       "verified_evidence",
-      "verified_execution"
+      "verified_execution",
+      "verified_transition"
     ],
     "execute_core": [
       "branch",
       "consumer",
       "verified_certificate",
       "verified_evidence",
-      "verified_execution"
+      "verified_execution",
+      "verified_transition"
     ],
     "execute_units": [
       "consumer"

@@ -967,6 +967,30 @@ JSON 解码器和进程原件适配器先提供执行状态、judge／request �
 与测试根加入现有 `verify.judge-workflow`／`verify.judge-workflow-tests` 整 crate 计划。
 本批不把 JSON 语义、进程字节真实性或完整 workflow 事务宣称为已证明。
 
+### 工作流 schema migration 准入
+
+`crates/judge-workflow/src/verified_transition.rs` 拥有 schema migration 的唯一准入谓词
+`migration_admissible`。它要求恰有一条声明；无 `script` 时必须没有实际 conversion；有
+`script` 时同时要求 replacement test 通过、conversion 存在、声明的 script／test 与实际
+输入一致、进程成功、输入／输出摘要一致、解码后的输出等于实际 stdout，且 mappings 与声明
+一致。`admit_declaration` 直接读取实际筛选结果的数量，先拒绝零条、多条及数量上界；
+`admit_migration` 读取同一数量及 `MigrationFacts`，拥有准入、五类拒绝原因及其诊断文本。
+script／test 和两份输入摘要的条件组合，以及缺少回执、摘要计算失败、stdout 解码失败的
+拒绝判断都在该证明根内。适配器只转发已证明的结果，不再另行选择 migration 错误分类。
+
+生产根和独立边界根分别登记为 `verify.judge-workflow-transition` 与
+`verify.judge-workflow-transition-tests`，并加入 `test:judge-workflow-tests` 的正式执行计划。
+独立预期覆盖无 script／有 conversion、零／一／多条／`usize::MAX` 声明、各项事实缺失及
+错误优先级；同一预期在普通 Rust 中通过真实分支和 panic 检查返回分类，不依赖被擦除的
+证明断言。Rust `consumer` 测试继续核实际 migration 消费。
+
+`transition.rs` 的匹配记录筛选、JSON 字段读取及结构比较、`results.tests` 状态观察、
+ProcessResult 解码、既有进程回执校验、摘要计算和 stdout JSON 解码仍属于外围未证明范围。
+这些实际观察分别进入事实字段，失败的摘要／解码保留为 `None`；标准 `Option`／`Result`
+转发和 JSON／进程接口不授予仓内准入豁免。FILEMAP 只把新生产根及独立预期列为
+`verification`，不把整份 `transition.rs` 宣称为已证明。本批不宣称完整 workflow 或全仓
+`E_VERUS_COVERAGE` 已完成；构建、证明、CI 与存储总成本未测。
+
 ## 专属测试的语言配对
 
 projects 的实际 `dedicated_pair` 直接把登记中的 implementation／testing 字符串借给
