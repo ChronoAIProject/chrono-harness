@@ -13,6 +13,19 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
+pub fn producer_can_seal(save_on_failure: bool, outcome: Option<&str>) -> (allowed: bool)
+    ensures allowed <==> match outcome {
+        Some(value) => value@ == "success"@ || (save_on_failure && value@ == "failure"@),
+        None => false,
+    },
+{
+    match outcome {
+        Some(value) => identifiers::equal_text(value, "success")
+            || (save_on_failure && identifiers::equal_text(value, "failure")),
+        None => false,
+    }
+}
+
 pub fn refresh_sources(enabled: bool, reason: &str) -> (refresh: bool)
     ensures refresh <==> (enabled && reason@ == "compatible"@),
 {

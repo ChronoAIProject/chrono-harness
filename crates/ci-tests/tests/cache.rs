@@ -754,6 +754,19 @@ fn content_sealing_follows_original_work_and_gates_native_saving() {
             .unwrap()
             .contains("steps.chrono_cache_work.outcome == 'success'")
     );
+    assert!(
+        save["if"]
+            .as_str()
+            .unwrap()
+            .contains("(steps.chrono_cache_plan.outputs.cache_0_save_on_failure == 'true' && steps.chrono_cache_work.outcome == 'failure')")
+    );
+    assert_eq!(
+        steps
+            .iter()
+            .filter(|s| s["name"] == "Canonical harness check")
+            .count(),
+        1
+    );
 }
 
 #[test]
