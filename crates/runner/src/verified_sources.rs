@@ -6,6 +6,15 @@ use vstd::prelude::*;
 
 use super::{append_bytes, equal_bytes};
 
+/// 只解码实际存在的布尔字段；缺失由 Serde 保留为 None，启用选择归 Verus。
+#[cfg(not(verus_keep_ghost))]
+fn deserialize_classification_policy<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    <bool as serde::Deserialize<'de>>::deserialize(deserializer).map(Some)
+}
+
 verus! {
 
 /// 仅获取指定路径的原字节；准入、路径选择和长度判断由下方实现负责。
@@ -555,6 +564,8 @@ pub struct SourceBinding {
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
 pub struct SourceRegistry {
     pub files: Vec<SourceFile>,
+    #[cfg_attr(not(verus_keep_ghost), serde(default, deserialize_with = "deserialize_classification_policy"))]
+    pub require_new_file_classification: Option<bool>,
 }
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
@@ -847,6 +858,145 @@ impl<'a> CoverageError<'a> {
     {
         format_error(self.message, self.path)
     }
+}
+
+pub open spec fn previous_file(files: Seq<SourceFile>, path: Seq<char>, end: int) -> bool {
+    exists|i: int| 0 <= i < end && (#[trigger] files[i]).path@ == path
+}
+
+pub open spec fn previously_classified(files: Seq<SourceFile>, path: Seq<char>, end: int) -> bool {
+    exists|i: int| 0 <= i < end && (#[trigger] files[i]).path@ == path
+        && files[i].verification.is_some()
+}
+
+fn classification_history(files: &Vec<SourceFile>, path: &str) -> (history: (bool, bool))
+    ensures history.0 == previous_file(files@, path@, files.len() as int),
+        history.1 == previously_classified(files@, path@, files.len() as int),
+{
+    let mut found = false;
+    let mut classified = false;
+    let mut i = 0;
+    while i < files.len()
+        invariant 0 <= i <= files.len(),
+            found == previous_file(files@, path@, i as int),
+            classified == previously_classified(files@, path@, i as int),
+        decreases files.len() - i,
+    {
+        if super::equal_text(files[i].path.as_str(), path) {
+            found = true;
+            classified = classified || files[i].verification.is_some();
+        }
+        i += 1;
+    }
+    (found, classified)
+}
+
+pub open spec fn classification_file_error(
+    file: &SourceFile, previous: Seq<SourceFile>,
+) -> Option<Seq<char>> {
+    if file.verification.is_none() {
+        if !previous_file(previous, file.path@, previous.len() as int) {
+            Some("E_VERUS_COVERAGE: new file lacks explicit verification classification: "@)
+        } else if previously_classified(previous, file.path@, previous.len() as int) {
+            Some("E_VERUS_COVERAGE: existing verification classification was removed: "@)
+        } else { None }
+    } else if !source_declaration_valid(file)
+        && !previous_file(previous, file.path@, previous.len() as int) {
+        Some("E_VERUS_COVERAGE: invalid new file proof declaration: "@)
+    } else { None }
+}
+
+fn validate_file_classification<'a>(
+    file: &'a SourceFile, previous: &Vec<SourceFile>,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => classification_file_error(file, previous@).is_none(),
+        Err(error) => classification_file_error(file, previous@) == Some(error.message@)
+            && error.path@ == file.path@,
+    },
+{
+    if file.verification.is_some() && valid_source_declaration(file) { return Ok(()); }
+    let history = classification_history(previous, file.path.as_str());
+    if file.verification.is_none() {
+        if !history.0 {
+            return Err(CoverageError { message: "E_VERUS_COVERAGE: new file lacks explicit verification classification: ",
+                path: file.path.as_str() });
+        }
+        if history.1 {
+            return Err(CoverageError { message: "E_VERUS_COVERAGE: existing verification classification was removed: ",
+                path: file.path.as_str() });
+        }
+    } else if !history.0 {
+        return Err(CoverageError { message: "E_VERUS_COVERAGE: invalid new file proof declaration: ",
+            path: file.path.as_str() });
+    }
+    Ok(())
+}
+
+pub open spec fn classifications_error(
+    files: Seq<SourceFile>, previous: Seq<SourceFile>, index: int,
+) -> Option<(Seq<char>, Seq<char>)>
+    decreases files.len() - index,
+{
+    if index < 0 || index >= files.len() { None }
+    else {
+        match classification_file_error(&files[index], previous) {
+            Some(message) => Some((message, files[index].path@)),
+            None => classifications_error(files, previous, index + 1),
+        }
+    }
+}
+
+pub open spec fn registry_classification_error(
+    current: &SourceRegistry, previous: Result<Option<&SourceRegistry>, &str>,
+) -> Option<(Seq<char>, Seq<char>)> {
+    if !matches!(current.require_new_file_classification, Some(true)) { None }
+    else {
+        match previous {
+            Err(message) => Some(("E_VERUS_COVERAGE: base file classifications unavailable: "@, message@)),
+            Ok(None) => classifications_error(current.files@, Seq::empty(), 0),
+            Ok(Some(base)) => classifications_error(current.files@, base.files@, 0),
+        }
+    }
+}
+
+/// 只消费候选与固定基线的显式行；新行必须分类，已有分类不得退回未知。
+/// 未分类存量仍未知，完整生产调用对应继续由各自的证明与原结果负责。
+pub fn validate_file_classifications<'a>(
+    current: &'a SourceRegistry, previous: Result<Option<&SourceRegistry>, &'a str>,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => registry_classification_error(current, previous).is_none(),
+        Err(error) => registry_classification_error(current, previous) == Some(error.view()),
+    },
+{
+    if !matches!(current.require_new_file_classification, Some(true)) { return Ok(()); }
+    let empty = Vec::new();
+    let base = match previous {
+        Err(message) => {
+            return Err(CoverageError { message: "E_VERUS_COVERAGE: base file classifications unavailable: ",
+                path: message });
+        },
+        Ok(None) => &empty,
+        Ok(Some(base)) => &base.files,
+    };
+    assert(registry_classification_error(current, previous)
+        == classifications_error(current.files@, base@, 0));
+    let mut i = 0;
+    while i < current.files.len()
+        invariant 0 <= i <= current.files.len(),
+            registry_classification_error(current, previous)
+                == classifications_error(current.files@, base@, i as int),
+        decreases current.files.len() - i,
+    {
+        reveal_with_fuel(classifications_error, 2);
+        match validate_file_classification(&current.files[i], base) {
+            Ok(()) => {},
+            Err(error) => { return Err(error); },
+        }
+        i += 1;
+    }
+    Ok(())
 }
 
 pub open spec fn file_binding_error(
