@@ -2184,20 +2184,38 @@ fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
     }
     expect_status_true(out.is_ok());
     let copied = path.to_owned();
-    expect_index_lookup(&stages, copied.as_str(), "1", true);
-    expect_index_lookup(&stages, copied.as_str(), "3", true);
-    expect_index_lookup(&stages, copied.as_str(), "0", false);
-    expect_index_lookup(&stages, copied.as_str(), "2", false);
-    expect_index_lookup(&stages, copied.as_str(), "00", false);
-    expect_index_lookup(&stages, copied.as_str(), "1\0", false);
+    let copied_path = copied.as_str();
+    proof {
+        assert(copied_path.spec_bytes() == path.spec_bytes());
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "1" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "3" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "1".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "3".spec_bytes());
+    }
+    expect_index_lookup(&stages, copied_path, "1", true);
+    expect_index_lookup(&stages, copied_path, "3", true);
+    expect_index_lookup(&stages, copied_path, "0", false);
+    expect_index_lookup(&stages, copied_path, "2", false);
+    expect_index_lookup(&stages, copied_path, "00", false);
+    expect_index_lookup(&stages, copied_path, "1\0", false);
     let out = policy::record_git_index_stage(&mut stages, path, "2");
     expect_status_true(out.is_ok());
     let out = policy::record_git_index_stage(&mut stages, path, "0");
     expect_status_true(out.is_ok());
-    expect_index_lookup(&stages, copied.as_str(), "0", true);
-    expect_index_lookup(&stages, copied.as_str(), "1", true);
-    expect_index_lookup(&stages, copied.as_str(), "2", true);
-    expect_index_lookup(&stages, copied.as_str(), "3", true);
+    proof {
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "0" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "2" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "0".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "2".spec_bytes());
+    }
+    expect_index_lookup(&stages, copied_path, "0", true);
+    expect_index_lookup(&stages, copied_path, "1", true);
+    expect_index_lookup(&stages, copied_path, "2", true);
+    expect_index_lookup(&stages, copied_path, "3", true);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -2219,13 +2237,21 @@ fn index_lookup_distinguishes_full_paths_and_owns_a_stable_snapshot() {
         assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("a\0")
             && vstd::string::is_ascii("A\0") && vstd::string::is_ascii("a\0tail")
             && vstd::string::is_ascii("0") && vstd::string::is_ascii("3"));
+        assert("a\0".spec_bytes()[0] != "A\0".spec_bytes()[0]);
     }
     expect_index_lookup(&stages, "a", "0", false);
     expect_index_lookup(&stages, "A\0", "0", false);
     expect_index_lookup(&stages, "a\0tail", "0", false);
     let lookup = policy::snapshot_git_index_stages(&stages);
     let copied = "a\0".to_owned();
-    expect_status_true(lookup.contains(copied.as_str(), "0"));
+    let copied_path = copied.as_str();
+    proof {
+        assert(copied_path.spec_bytes() == "a\0".spec_bytes());
+        let key = policy::GitIndexStage { path: "a\0", stage: "0" };
+        assert(lookup.view().to_set().contains(key));
+        assert(lookup.contains_spec(copied_path, "0"));
+    }
+    expect_status_true(lookup.contains(copied_path, "0"));
     let out = policy::record_git_index_stage(&mut stages, "a", "3");
     expect_status_true(out.is_ok());
     expect_status_true(!lookup.contains("a", "3"));

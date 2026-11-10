@@ -768,7 +768,12 @@ impl<'a> GitIndexStageLookup<'a> {
             Ordering::Equal => {
                 proof {
                     git_index_stage_order_laws(&self.keys@[mid as int], &query, &query);
-                    assert(self.view().to_set().contains(self.keys@[mid as int]));
+                    let key = self.keys@[mid as int];
+                    assert(key.same(&query));
+                    assert(self.view().to_set().contains(key));
+                    assert(exists|key: GitIndexStage| (#[trigger] self.view().to_set().contains(key))
+                        && key.path.spec_bytes() == path.spec_bytes()
+                        && key.stage.spec_bytes() == stage.spec_bytes());
                 }
                 return true;
             },
