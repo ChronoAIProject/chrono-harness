@@ -1069,10 +1069,16 @@ proof fn tree_fixture_row(raw: &str, path: &str)
     reveal_strlit("blob 0000000000000000000000000000000000000001");
     reveal_strlit("0000000000000000000000000000000000000001");
     reveal_strlit("100644"); reveal_strlit("blob");
-    broadcast use vstd::string::is_ascii_spec_bytes;
     assert(vstd::string::is_ascii(meta) && vstd::string::is_ascii(tail)
         && vstd::string::is_ascii(oid) && vstd::string::is_ascii("100644")
         && vstd::string::is_ascii("blob"));
+    vstd::string::is_ascii_spec_bytes(raw);
+    vstd::string::is_ascii_spec_bytes(path);
+    vstd::string::is_ascii_spec_bytes(meta);
+    vstd::string::is_ascii_spec_bytes(tail);
+    vstd::string::is_ascii_spec_bytes(oid);
+    vstd::string::is_ascii_spec_bytes("100644");
+    vstd::string::is_ascii_spec_bytes("blob");
     scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 52);
     assert(raw.spec_bytes().take(52) =~= meta.spec_bytes());
     assert(raw.spec_bytes().skip(53) =~= path.spec_bytes());
