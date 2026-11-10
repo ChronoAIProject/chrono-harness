@@ -2199,6 +2199,14 @@ fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
             && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "1".spec_bytes());
         assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
             && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "3".spec_bytes());
+        assert forall|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            implies key == policy::GitIndexStage { path, stage: "1" }
+                || key == policy::GitIndexStage { path, stage: "3" } by {};
+        assert forall|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            implies key.stage.spec_bytes() != "2".spec_bytes() by {
+            assert(key == policy::GitIndexStage { path, stage: "1" }
+                || key == policy::GitIndexStage { path, stage: "3" });
+        }
     }
     expect_index_lookup(&stages, copied_path, "1", true);
     expect_index_lookup(&stages, copied_path, "3", true);
@@ -2212,11 +2220,17 @@ fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
     expect_status_true(out.is_ok());
     proof {
         assert(stages@.contains_key(policy::GitIndexStage { path, stage: "0" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "1" }));
         assert(stages@.contains_key(policy::GitIndexStage { path, stage: "2" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "3" }));
         assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
             && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "0".spec_bytes());
         assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
             && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "2".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "1".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "3".spec_bytes());
     }
     expect_index_lookup(&stages, copied_path, "0", true);
     expect_index_lookup(&stages, copied_path, "1", true);

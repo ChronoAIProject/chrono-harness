@@ -756,6 +756,7 @@ impl<'a> GitIndexStageLookup<'a> {
         while low < high
             invariant
                 0 <= low <= high <= self.keys.len(), self.valid(),
+                query.path == path, query.stage == stage,
                 forall|i: int| 0 <= i < low
                     ==> (#[trigger] self.keys@[i]).order_spec(&query) == Ordering::Less,
                 forall|i: int| high <= i < self.keys.len()
