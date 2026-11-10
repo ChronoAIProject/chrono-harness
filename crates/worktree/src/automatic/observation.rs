@@ -280,6 +280,9 @@ impl Observation<'_> {
         Ok(paths)
     }
     fn enrollment_snapshot(&self, path: &Path) -> Result<Option<Ledger>, String> {
+        use crate::verified_attention::{
+            SnapshotProtocol, snapshot_owned, snapshot_protocol, snapshot_stable,
+        };
         let record = record_directory(self.directory, path)?;
         match fs::symlink_metadata(&record) {
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
@@ -293,34 +296,41 @@ impl Observation<'_> {
             fs::read(&marker).map_err(|e| format!("unreadable enrollment owner: {e}"))?;
         let bytes = fs::read(&file).map_err(|e| format!("unreadable enrollment ledger: {e}"))?;
         let ledger: Ledger = decode(&bytes)?;
-        let expected_owner = match ledger.schema.as_str() {
-            "chrono-worktree-enrollment-state/v1" if ledger.admission_id.is_none() => {
+        let protocol = snapshot_protocol(&ledger.schema, ledger.admission_id.is_some());
+        let (expected_owner, admission_matches) = match &protocol {
+            SnapshotProtocol::Unleased => (
                 value!({"schema":"chrono-worktree-enrollment-owner/v1",
-                    "coordinator_root":self.inputs.policy.coordinator_root,"common":self.inputs.common,"path":path})
-            }
-            "chrono-worktree-enrollment-state/v2" => {
+                    "coordinator_root":self.inputs.policy.coordinator_root,"common":self.inputs.common,"path":path}),
+                true,
+            ),
+            SnapshotProtocol::Kernel => {
                 let admission = ledger
                     .admission_id
                     .as_deref()
                     .ok_or("missing enrollment metadata identity")?;
-                if chrono_harness::ownership::identity(&no_symlink_parents(
+                let observed = chrono_harness::ownership::identity(&no_symlink_parents(
                     &record,
                     "metadata.lease",
-                )?)? != admission
-                {
-                    return Err("enrollment metadata identity changed".into());
-                }
-                value!({"schema":"chrono-worktree-enrollment-owner/v2",
+                )?)?;
+                (
+                    value!({"schema":"chrono-worktree-enrollment-owner/v2",
                     "coordinator_root":self.inputs.policy.coordinator_root,"common":self.inputs.common,
-                    "path":path,"admission_id":admission})
+                    "path":path,"admission_id":admission}),
+                    observed == admission,
+                )
             }
-            _ => return Err("unknown enrollment snapshot schema or admission identity".into()),
+            SnapshotProtocol::Invalid => {
+                return Err("unknown enrollment snapshot schema or admission identity".into());
+            }
         };
-        if json(&owner_bytes)? != expected_owner
-            || ledger.coordinator_root != self.inputs.policy.coordinator_root
-            || ledger.common != self.inputs.common
-            || ledger.entries.iter().any(|entry| entry.path != path)
-        {
+        if !snapshot_owned(
+            &protocol,
+            json(&owner_bytes)? == expected_owner,
+            ledger.coordinator_root == self.inputs.policy.coordinator_root,
+            ledger.common == self.inputs.common,
+            ledger.entries.iter().all(|entry| entry.path == path),
+            admission_matches,
+        ) {
             return Err("enrollment snapshot belongs to a different owner".into());
         }
         for entry in &ledger.entries {
@@ -329,10 +339,11 @@ impl Observation<'_> {
         for pending in &ledger.retired_leases {
             pending.check_agent()?;
         }
-        if directory_id(&record)? != identity
-            || fs::read(&marker).map_err(|e| e.to_string())? != owner_bytes
-            || fs::read(&file).map_err(|e| e.to_string())? != bytes
-        {
+        if !snapshot_stable(
+            directory_id(&record)? == identity,
+            fs::read(&marker).map_err(|e| e.to_string())? == owner_bytes,
+            fs::read(&file).map_err(|e| e.to_string())? == bytes,
+        ) {
             return Err("enrollment snapshot changed during observation; retry status".into());
         }
         Ok(Some(ledger))

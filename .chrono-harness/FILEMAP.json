@@ -430,7 +430,7 @@
     {"path":"examples/ci-host-job-gating/message.txt","owner":"repository","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":".chrono-harness/ci/workflow-inventory.json","owner":"ci","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:judge-workflow-tests"},{"kind":"test-execution","to":"test:workflow-units"},{"kind":"test-execution","to":"test:workflow-short"},{"kind":"runtime-input","to":"project:ci"}]},
     {"path":"crates/worktree/src/automatic.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
-    {"path":"crates/worktree/src/automatic/observation.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
+    {"path":"crates/worktree/src/automatic/observation.rs","verification":{"role":"program","roots":[{"path":"crates/worktree/src/verified_attention.rs","operation":"verify.worktree-attention"},{"path":"crates/worktree-tests/tests/verified_attention.rs","operation":"verify.worktree-attention-tests"}]},"owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/automatic/age.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/artifact_disposal.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/automatic.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},

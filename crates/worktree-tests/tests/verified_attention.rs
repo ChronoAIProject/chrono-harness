@@ -13,6 +13,45 @@ use vstd::prelude::*;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_protocol_requires_the_matching_admission_contract() {
+    let v1 = policy::snapshot_protocol("chrono-worktree-enrollment-state/v1", false);
+    let v2 = policy::snapshot_protocol("chrono-worktree-enrollment-state/v2", true);
+    let extra = policy::snapshot_protocol("chrono-worktree-enrollment-state/v1", true);
+    let missing = policy::snapshot_protocol("chrono-worktree-enrollment-state/v2", false);
+    let unknown = policy::snapshot_protocol("unknown", true);
+    proof {
+        reveal_strlit("chrono-worktree-enrollment-state/v1");
+        reveal_strlit("chrono-worktree-enrollment-state/v2");
+        reveal_strlit("unknown");
+        assert("chrono-worktree-enrollment-state/v1"@[34] != "chrono-worktree-enrollment-state/v2"@[34]);
+        assert("unknown"@.len() != "chrono-worktree-enrollment-state/v2"@.len());
+    }
+    assert(v1 is Unleased);
+    assert(v2 is Kernel);
+    assert(extra is Invalid);
+    assert(missing is Invalid);
+    assert(unknown is Invalid);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_owner_and_original_bytes_must_all_match() {
+    let valid = policy::snapshot_owned(&policy::SnapshotProtocol::Kernel, true, true, true, true, true);
+    let marker = policy::snapshot_owned(&policy::SnapshotProtocol::Kernel, false, true, true, true, true);
+    let coordinator = policy::snapshot_owned(&policy::SnapshotProtocol::Kernel, true, false, true, true, true);
+    let common = policy::snapshot_owned(&policy::SnapshotProtocol::Kernel, true, true, false, true, true);
+    let address = policy::snapshot_owned(&policy::SnapshotProtocol::Kernel, true, true, true, false, true);
+    let admission = policy::snapshot_owned(&policy::SnapshotProtocol::Kernel, true, true, true, true, false);
+    let invalid = policy::snapshot_owned(&policy::SnapshotProtocol::Invalid, true, true, true, true, true);
+    let unleased = policy::snapshot_owned(&policy::SnapshotProtocol::Unleased, true, true, true, true, false);
+    assert(valid && unleased && !marker && !coordinator && !common && !address && !admission && !invalid);
+    let stable = policy::snapshot_stable(true, true, true);
+    let moved = policy::snapshot_stable(false, true, true);
+    let changed_owner = policy::snapshot_stable(true, false, true);
+    let changed_ledger = policy::snapshot_stable(true, true, false);
+    assert(stable && !moved && !changed_owner && !changed_ledger);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn active_and_retained_work_still_need_attention() {
     let active = policy::classify("active", false, true, true, true, true, true, false);
     let retained = policy::classify("retained", false, true, true, true, true, true, true);
