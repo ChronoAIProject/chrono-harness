@@ -521,7 +521,7 @@ fn tree_keys_have_unique_text<V>(tree: &BTreeMap<TreePath, V>)
     let iterator = tree.iter();
     proof {
         let rows = iterator@.1;
-        let keys = rows.map(|i: int, row: (TreePath, TreeEntry)| row.0);
+        let keys = rows.map(|i: int, row: (TreePath, V)| row.0);
         vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
         assert forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
             tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@
