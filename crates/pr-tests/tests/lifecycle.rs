@@ -120,17 +120,15 @@ fn unavailable_child_exit_keeps_the_original_operation_unknown() {
     // neither those bytes nor a kernel exit observation supply Child::wait.
     let previous = unsafe { libc::signal(libc::SIGCHLD, libc::SIG_IGN) };
     assert_ne!(previous, libc::SIG_ERR);
-    let output = chrono_pr::run(
-        &[
-            "pr-status".into(),
-            "--pr".into(),
-            "42".into(),
-            "--head-sha".into(),
-            HEAD.into(),
-            "--host-root".into(),
-            h.root.path().as_os_str().to_owned(),
-        ],
-    );
+    let output = chrono_pr::run(&[
+        "pr-status".into(),
+        "--pr".into(),
+        "42".into(),
+        "--head-sha".into(),
+        HEAD.into(),
+        "--host-root".into(),
+        h.root.path().as_os_str().to_owned(),
+    ]);
     assert_ne!(
         unsafe { libc::signal(libc::SIGCHLD, previous) },
         libc::SIG_ERR
@@ -162,7 +160,11 @@ fn unavailable_child_exit_keeps_the_original_operation_unknown() {
         path,
     ]);
     assert_eq!(code, 2, "{continued}");
-    assert_eq!(h.calls().len(), 2, "unknown continuation never redispatches");
+    assert_eq!(
+        h.calls().len(),
+        2,
+        "unknown continuation never redispatches"
+    );
 }
 
 #[test]
