@@ -43,6 +43,8 @@ fn coverage_requires_all_participants_and_allows_production_claims() {
     assert(false_value_is_still_a_claim);
 
     operations.insert(1);
+    assert(operations@.contains(1usize));
+    assert(!claims@.contains_key(1usize));
     let missing_first = policy::claims_cover_operations(&operations, &claims);
     assert(!missing_first);
 }
