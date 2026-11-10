@@ -17,7 +17,7 @@ verus! {
 fn expect(out: Result<(), MigrationError>, expected: Option<MigrationError>)
     requires match expected {
         None => out.is_ok(),
-        Some(error) => out == Err(error),
+        Some(error) => out == Err::<(), MigrationError>(error),
     },
 {
     match (out, expected) {
