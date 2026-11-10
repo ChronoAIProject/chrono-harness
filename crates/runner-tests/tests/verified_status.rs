@@ -2219,6 +2219,119 @@ fn checkout_changed_paths_preserve_full_order_and_exact_cardinality() {
     expect_status_text(paths[3].as_str(), "目录/é");
 }
 
+fn expect_normalized_single_path(first: Vec<String>, second: Vec<String>, expected: &str)
+    requires first@.len() + second@.len() > 0,
+        forall|i: int| 0 <= i < first@.len() + second@.len()
+            ==> (#[trigger] (first@ + second@)[i])@ == expected@,
+{
+    let ghost all = first@ + second@;
+    let paths = policy::normalize_checkout_paths(first, second);
+    proof {
+        assert(policy::checkout_path_prefix(all, all.len() as int, expected@)) by {
+            assert(all[0]@ == expected@);
+        }
+        assert(policy::checkout_path_prefix(paths@, paths.len() as int, expected@));
+        assert(paths.len() > 0);
+        assert forall|i: int| 0 <= i < paths.len() implies
+            (#[trigger] paths@[i])@ == expected@ by {
+            assert(policy::checkout_path_prefix(paths@, paths.len() as int, paths@[i]@));
+            assert(policy::checkout_path_prefix(all, all.len() as int, paths@[i]@));
+            let source = choose|j: int| 0 <= j < all.len() && (#[trigger] all[j])@ == paths@[i]@;
+            assert(all[source]@ == expected@);
+        }
+        if paths.len() > 1 {
+            assert(paths@[0]@ == expected@ && paths@[1]@ == expected@);
+            assert(scope_text::byte_lt(vstd::utf8::encode_utf8(paths@[0]@),
+                vstd::utf8::encode_utf8(paths@[1]@)));
+            scope_text::byte_lt_asymmetric(expected.spec_bytes(), expected.spec_bytes());
+            assert(scope_text::byte_lt(expected.spec_bytes(), expected.spec_bytes()));
+        }
+        assert(paths.len() == 1);
+    }
+    expect_status_true(paths.len() == 1);
+    expect_status_text(paths[0].as_str(), expected);
+}
+
+fn expect_normalized_pair(left: &str, right: &str)
+    requires scope_text::byte_lt(left.spec_bytes(), right.spec_bytes()),
+{
+    let first = vec![right.to_owned()];
+    let second = vec![left.to_owned()];
+    let ghost all = first@ + second@;
+    let paths = policy::normalize_checkout_paths(first, second);
+    proof {
+        assert(all.len() == 2 && all[0]@ == right@ && all[1]@ == left@);
+        assert(policy::checkout_path_prefix(all, 2, left@));
+        assert(policy::checkout_path_prefix(all, 2, right@));
+        assert(policy::checkout_path_prefix(paths@, paths.len() as int, left@));
+        assert(policy::checkout_path_prefix(paths@, paths.len() as int, right@));
+        let a = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == left@;
+        let b = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == right@;
+        scope_text::byte_lt_asymmetric(left.spec_bytes(), right.spec_bytes());
+        assert(a < b);
+        assert(paths.len() == 2 && a == 0 && b == 1);
+    }
+    expect_status_true(paths.len() == 2);
+    expect_status_text(paths[0].as_str(), left);
+    expect_status_text(paths[1].as_str(), right);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_keeps_empty_inventory_empty() {
+    let first: Vec<String> = Vec::new();
+    let second: Vec<String> = Vec::new();
+    let paths = policy::normalize_checkout_paths(first, second);
+    expect_status_true(paths.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_keeps_either_inventory_and_empty_paths() {
+    expect_normalized_single_path(vec!["".to_owned()], Vec::new(), "");
+    expect_normalized_single_path(Vec::new(), vec!["目录/é\n ".to_owned()], "目录/é\n ");
+}
+
+fn expect_cross_inventory_duplicates(path: &str) {
+    expect_normalized_single_path(vec![path.to_owned(), path.to_owned()], vec![path.to_owned()], path);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_deduplicates_full_text_across_inventories() {
+    expect_cross_inventory_duplicates("");
+    expect_cross_inventory_duplicates("a\0");
+    expect_cross_inventory_duplicates("目录/é\n ");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_preserves_exact_byte_order_and_prefixes() {
+    proof {
+        reveal_strlit(""); reveal_strlit("A"); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("a\n"); reveal_strlit("a "); reveal_strlit("目录/é");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("A")
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("a\0")
+            && vstd::string::is_ascii("a\n") && vstd::string::is_ascii("a "));
+        assert('目' as u32 == 30446u32);
+        assert(vstd::utf8::encode_scalar(30446u32) == seq![231u8, 155u8, 174u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 2);
+        assert("目录/é".spec_bytes()[0] == 231u8);
+        assert(scope_text::byte_prefix("".spec_bytes(), "A".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("A".spec_bytes(), "a".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("a".spec_bytes(), "a\0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a\n".spec_bytes(), "a ".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a\0".spec_bytes(), "目录/é".spec_bytes(), 0));
+        assert(scope_text::byte_lt("".spec_bytes(), "A".spec_bytes()));
+        assert(scope_text::byte_lt("A".spec_bytes(), "a".spec_bytes()));
+        assert(scope_text::byte_lt("a".spec_bytes(), "a\0".spec_bytes()));
+        assert(scope_text::byte_lt("a\n".spec_bytes(), "a ".spec_bytes()));
+        assert(scope_text::byte_lt("a\0".spec_bytes(), "目录/é".spec_bytes()));
+    }
+    expect_normalized_pair("", "A");
+    expect_normalized_pair("A", "a");
+    expect_normalized_pair("a", "a\0");
+    expect_normalized_pair("a\n", "a ");
+    expect_normalized_pair("a\0", "目录/é");
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_index_changes_empty_and_exact_stage_zero_are_empty() {
     let mut tree = policy::Tree::new();
@@ -3362,18 +3475,124 @@ fn index_flag_framing_ignores_empty_records_and_keeps_unterminated_tail() {
         assert(scope_text::ascii_split_records(raw, 0, false)
             =~= seq!["H a".spec_bytes(), "h b".spec_bytes(), "H a".spec_bytes()]);
     }
-    let records = policy::git_index_flag_records("\0H a\0\0h b\0H a".as_bytes());
+    let records = policy::git_nul_records("\0H a\0\0h b\0H a".as_bytes());
     expect_status_true(records.len() == 3);
     expect_status_true(scope_text::equal_bytes(records[0], "H a".as_bytes()));
     expect_status_true(scope_text::equal_bytes(records[1], "h b".as_bytes()));
     expect_status_true(scope_text::equal_bytes(records[2], "H a".as_bytes()));
-    expect_status_true(policy::git_index_flag_records("\0\0".as_bytes()).len() == 0);
-    expect_status_true(policy::git_index_flag_records("".as_bytes()).len() == 0);
+    expect_status_true(policy::git_nul_records("\0\0".as_bytes()).len() == 0);
+    expect_status_true(policy::git_nul_records("".as_bytes()).len() == 0);
     let rows: Vec<policy::GitIndexFlagObservation> = Vec::new();
     match policy::parse_git_index_flag_rows(rows.as_slice()) {
         Ok(flags) => { expect_status_true(flags.len() == 0); },
         Err(_) => { panic!(); },
     }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_path_records_filter_only_empty_items_and_keep_original_bytes() {
+    proof {
+        reveal_strlit("\0z\0\0a\n \0z"); reveal_strlit("z"); reveal_strlit("a\n ");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("\0z\0\0a\n \0z")
+            && vstd::string::is_ascii("z") && vstd::string::is_ascii("a\n "));
+        let raw = "\0z\0\0a\n \0z".spec_bytes();
+        scope_text::ascii_separator_end_is(raw, 0, 0);
+        scope_text::ascii_separator_end_is(raw.skip(1), 0, 1);
+        scope_text::ascii_separator_end_is(raw.skip(3), 0, 0);
+        scope_text::ascii_separator_end_is(raw.skip(4), 0, 3);
+        scope_text::ascii_separator_end_is(raw.skip(8), 0, 1);
+        assert(raw.skip(1).skip(2) =~= raw.skip(3));
+        assert(raw.skip(3).skip(1) =~= raw.skip(4));
+        assert(raw.skip(4).skip(4) =~= raw.skip(8));
+        assert(raw.skip(1).take(1) =~= "z".spec_bytes());
+        assert(raw.skip(4).take(3) =~= "a\n ".spec_bytes());
+        assert(raw.skip(8).take(1) =~= "z".spec_bytes());
+        reveal_with_fuel(scope_text::ascii_split_records, 6);
+        assert(scope_text::ascii_split_records(raw, 0, false)
+            =~= seq!["z".spec_bytes(), "a\n ".spec_bytes(), "z".spec_bytes()]);
+    }
+    let records = policy::git_nul_records("\0z\0\0a\n \0z".as_bytes());
+    expect_status_true(records.len() == 3);
+    expect_status_true(scope_text::equal_bytes(records[0], "z".as_bytes()));
+    expect_status_true(scope_text::equal_bytes(records[1], "a\n ".as_bytes()));
+    expect_status_true(scope_text::equal_bytes(records[2], "z".as_bytes()));
+    let raw = vec![255u8, 0u8, 254u8];
+    proof {
+        assert(raw@.take(1) =~= seq![255u8]);
+        assert(raw@.skip(2) =~= seq![254u8]);
+        assert(raw@.skip(2).take(1) =~= seq![254u8]);
+        scope_text::ascii_separator_end_is(raw@, 0, 1);
+        scope_text::ascii_separator_end_is(raw@.skip(2), 0, 1);
+        reveal_with_fuel(scope_text::ascii_split_records, 3);
+        assert(scope_text::ascii_split_records(raw@, 0, false) =~= seq![seq![255u8], seq![254u8]]);
+    }
+    let records = policy::git_nul_records(raw.as_slice());
+    expect_status_true(records.len() == 2);
+    expect_status_true(records[0].len() == 1 && records[0][0] == 255);
+    expect_status_true(records[1].len() == 1 && records[1][0] == 254);
+}
+
+fn expect_complete_git_text(text: &str) {
+    match policy::git_output_text(Some(text.to_owned())) {
+        Ok(actual) => { expect_status_text(actual.as_str(), text); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_output_text_keeps_empty_and_complete_decoded_output() {
+    expect_complete_git_text("");
+    expect_complete_git_text(" a\0目录/é\n ");
+    match policy::git_output_text(None) {
+        Ok(_) => { panic!(); },
+        Err(message) => {
+            expect_status_text(message.as_str(), "E_INPUT_UNSUPPORTED: non UTF-8 Git output");
+        },
+    }
+}
+
+fn expect_git_text_row_sequence(first: &str, second: &str) {
+    let rows = vec![Some(first.to_owned()), Some(second.to_owned()), Some(first.to_owned())];
+    match policy::parse_git_text_rows(rows) {
+        Ok(paths) => {
+            expect_status_true(paths.len() == 3);
+            expect_status_text(paths[0].as_str(), first);
+            expect_status_text(paths[1].as_str(), second);
+            expect_status_text(paths[2].as_str(), first);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_text_rows_keep_complete_order_duplicates_and_empty_text() {
+    let rows: Vec<Option<String>> = Vec::new();
+    match policy::parse_git_text_rows(rows) {
+        Ok(paths) => { expect_status_true(paths.len() == 0); },
+        Err(_) => { panic!(); },
+    }
+    expect_git_text_row_sequence("z", "a");
+    expect_git_text_row_sequence("", "目录/é\0\n ");
+}
+
+fn expect_git_text_row_failure(rows: Vec<Option<String>>)
+    requires exists|i: int| 0 <= i < rows.len() && (#[trigger] rows@[i]).is_none(),
+{
+    match policy::parse_git_text_rows(rows) {
+        Ok(_) => { panic!(); },
+        Err(message) => {
+            expect_status_text(message.as_str(), "E_INPUT_UNSUPPORTED: non UTF-8 Git output");
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_text_rows_reject_missing_decodes_at_every_boundary() {
+    expect_git_text_row_failure(vec![None]);
+    expect_git_text_row_failure(vec![None, Some("later".to_owned()), None]);
+    expect_git_text_row_failure(vec![Some("first".to_owned()), None, Some("later".to_owned())]);
+    expect_git_text_row_failure(vec![Some("first".to_owned()), Some("second".to_owned()), None]);
 }
 
 }

@@ -152,7 +152,7 @@ pub fn parse_git_index_flag_rows(rows: &[GitIndexFlagObservation]) -> (out: Resu
     Ok(flags)
 }
 
-fn index_flag_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
+fn git_nul_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
     ensures ({ let end = identifiers::ascii_separator_end(raw@, 0);
         identifiers::first_ascii_separator(raw@, 0, end)
             && out.0@ == raw@.take(end)
@@ -174,13 +174,13 @@ fn index_flag_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
     (head, Some(tail))
 }
 
-pub open spec fn index_flag_record_views(rows: Seq<&[u8]>) -> Seq<Seq<u8>> {
+pub open spec fn git_nul_record_views(rows: Seq<&[u8]>) -> Seq<Seq<u8>> {
     rows.map(|i: int, row: &[u8]| row@)
 }
 
 /// 按原字节的 NUL 拆分；忽略空项，末尾无 NUL 仍保留，不提前解码后续行。
-pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
-    ensures index_flag_record_views(out@) == identifiers::ascii_split_records(raw@, 0, false),
+pub fn git_nul_records(raw: &[u8]) -> (out: Vec<&[u8]>)
+    ensures git_nul_record_views(out@) == identifiers::ascii_split_records(raw@, 0, false),
         out.len() == identifiers::ascii_split_records(raw@, 0, false).len(),
         forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i])@
             == identifiers::ascii_split_records(raw@, 0, false)[i],
@@ -188,13 +188,13 @@ pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
     let mut remaining = raw;
     let mut out: Vec<&[u8]> = Vec::new();
     loop
-        invariant index_flag_record_views(out@)
+        invariant git_nul_record_views(out@)
             + identifiers::ascii_split_records(remaining@, 0, false)
             == identifiers::ascii_split_records(raw@, 0, false),
         decreases remaining.len(),
     {
-        let ghost previous = index_flag_record_views(out@);
-        let (head, rest) = index_flag_record_head(remaining);
+        let ghost previous = git_nul_record_views(out@);
+        let (head, rest) = git_nul_record_head(remaining);
         proof {
             reveal_with_fuel(identifiers::ascii_split_records, 1);
             assert(identifiers::ascii_split_records(remaining@, 0, false)
@@ -206,11 +206,74 @@ pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
         }
         if head.len() > 0 {
             out.push(head);
-            proof { assert(index_flag_record_views(out@) =~= previous + seq![head@]); }
+            proof { assert(git_nul_record_views(out@) =~= previous + seq![head@]); }
         }
         match rest {
             None => { return out; },
             Some(tail) => { remaining = tail; },
+        }
+    }
+}
+
+/// 标准解码观察的成功值原样移交，失败只产生原有完整错误。
+pub fn git_output_text(decoded: Option<String>) -> (out: Result<String, String>)
+    ensures match (decoded, out) {
+        (Some(original), Ok(text)) => text@ == original@,
+        (None, Err(message)) => message@ == "E_INPUT_UNSUPPORTED: non UTF-8 Git output"@,
+        _ => false,
+    },
+{
+    match decoded {
+        Some(text) => Ok(text),
+        None => Err("E_INPUT_UNSUPPORTED: non UTF-8 Git output".to_owned()),
+    }
+}
+
+/// 逐项消费完整解码观察；成功保留数量、顺序和重复，失败只来自首个缺失解码。
+pub fn parse_git_text_rows(decoded: Vec<Option<String>>) -> (out: Result<Vec<String>, String>)
+    ensures match out {
+        Ok(paths) => paths.len() == decoded.len()
+            && forall|i: int| 0 <= i < decoded.len() ==> match (#[trigger] decoded@[i]) {
+                Some(text) => text@ == paths@[i]@,
+                None => false,
+            },
+        Err(message) => message@ == "E_INPUT_UNSUPPORTED: non UTF-8 Git output"@
+            && exists|i: int| 0 <= i < decoded.len() && (#[trigger] decoded@[i]).is_none()
+                && forall|j: int| 0 <= j < i ==> (#[trigger] decoded@[j]).is_some(),
+    },
+{
+    let ghost all = decoded@;
+    let mut iterator = decoded.into_iter();
+    let mut paths: Vec<String> = Vec::new();
+    loop
+        invariant all == decoded@,
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            paths.len() == iterator@.0,
+            forall|i: int| 0 <= i < paths.len() ==> match (#[trigger] all[i]) {
+                Some(text) => text@ == paths@[i]@,
+                None => false,
+            },
+        decreases all.len() - iterator@.0,
+    {
+        let ghost at = iterator@.0;
+        match iterator.next() {
+            None => { return Ok(paths); },
+            Some(row) => {
+                let path = match git_output_text(row) {
+                    Ok(path) => path,
+                    Err(message) => {
+                        proof {
+                            assert(all[at].is_none());
+                            assert forall|j: int| 0 <= j < at implies
+                                (#[trigger] all[j]).is_some() by {
+                                assert(match all[j] { Some(text) => text@ == paths@[j]@, None => false });
+                            }
+                        }
+                        return Err(message);
+                    },
+                };
+                paths.push(path);
+            },
         }
     }
 }
@@ -1511,14 +1574,14 @@ pub open spec fn checkout_index_prefix_changed(
 }
 
 /// 只保存完整路径；重复标记不增加成员，原有路径始终保留。
-pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
+pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
     ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
         changes@.len() == old(changes)@.len()
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     proof { tree_path_obeys_cmp(); }
-    let key = TreePath::from_text(path);
+    let key = TreePath::from_owned(path);
     let ghost before = changes@;
     changes.insert(key, ());
     tree_keys_have_unique_text(changes);
@@ -1543,6 +1606,72 @@ pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
                 assert(changes@.contains_key(found));
             }
             if text == path@ { assert(changes@.contains_key(key)); }
+        }
+    }
+}
+
+pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+        == (checkout_change_has_path(old(changes)@, text) || text == path@),
+        changes@.len() == old(changes)@.len()
+            + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
+{
+    record_checkout_owned_change(changes, path.to_owned());
+}
+
+pub open spec fn checkout_path_prefix(paths: Seq<String>, end: int, path: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < end && i < paths.len() && (#[trigger] paths[i])@ == path
+}
+
+/// 完整合并两个实际库存，按全文字节排序去重；不归一化或过滤路径。
+pub fn normalize_checkout_paths(first: Vec<String>, second: Vec<String>) -> (out: Vec<String>)
+    ensures
+        forall|path: Seq<char>| #[trigger] checkout_path_prefix(out@, out.len() as int, path)
+            == checkout_path_prefix(first@ + second@, (first@.len() + second@.len()) as int, path),
+        forall|i: int, j: int| 0 <= i < j < out.len()
+            ==> identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] out@[i])@),
+                vstd::utf8::encode_utf8((#[trigger] out@[j])@)),
+        out.len() <= first@.len() + second@.len(),
+{
+    let ghost all = first@ + second@;
+    let mut pending = first;
+    let mut additional = second;
+    pending.append(&mut additional);
+    let mut iterator = pending.into_iter();
+    let mut changes = CheckoutChanges::new();
+    loop
+        invariant all == first@ + second@,
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            changes@.len() <= iterator@.0,
+            forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == checkout_path_prefix(all, iterator@.0, path),
+        decreases all.len() - iterator@.0,
+    {
+        let ghost at = iterator@.0;
+        match iterator.next() {
+            None => {
+                assert(iterator@.0 == all.len());
+                let out = checkout_changed_paths(&changes);
+                proof {
+                    assert forall|text: Seq<char>|
+                        #[trigger] checkout_path_prefix(out@, out.len() as int, text)
+                            == checkout_path_prefix(all, all.len() as int, text) by {
+                        assert(checkout_change_has_path(changes@, text)
+                            == checkout_path_prefix(all, all.len() as int, text));
+                    }
+                }
+                return out;
+            },
+            Some(path) => {
+                record_checkout_owned_change(&mut changes, path);
+                proof {
+                    assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+                        == checkout_path_prefix(all, iterator@.0, text) by {
+                        assert(checkout_path_prefix(all, at + 1, text)
+                            == (checkout_path_prefix(all, at, text) || all[at]@ == text));
+                    }
+                }
+            },
         }
     }
 }
