@@ -123,7 +123,11 @@ exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome �
 
 两项兼容范围还从 `projects.json` 选择真实生产 action（`build.cache` 或 `test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
 
-provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-cache seal`。它重核计划／登记和当前 planner 身份，要求原生产步骤 **outcome** 成功，并枚举明确选择的产物目录。
+provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-cache seal`。它重核计划／登记和当前 planner 身份，默认要求原生产步骤 **outcome** 成功，并枚举明确选择的产物目录。
+
+缓存可明确选择 `save_on_failure: true`，前提是采用内容核验。本仓仅为上述两个编译目录采用：同一步中的测试失败后，仍可封存实际留下的编译文件。只接受原 outcome 的 success／failure；skipped、cancelled、缺失或未知结果都拒绝，不按可能被 `continue-on-error` 改写的 conclusion 判断。封存报告保留生产步骤、原 outcome 和原生步骤原字节；封存成功只说明文件已列清，不改变原构建／测试失败。保存政策进入计划及 provider 输出，不改变内容兼容键。恢复后仍须运行原登记构建和测试。
+
+**产品与宿主采用同时变更：**新增明确保存选择、同源封存判断及回归，宿主只采用上述两项已有编译缓存。原业务操作、断言、退出及恢复条件继续执行。新增条件及原件字段的成本有限，内容枚举、原生保存和完整失败恢复的总成本仍待实测；本地行为不证明远端后端已保存。
 
 每个产物得到 `.chrono-cache-content-v1.json`，绑定缓存 ID、生产操作、实际源码键、产物声明和内容。清单记录普通文件 SHA-256／长度／执行位、目录（含空目录）、字面符号链接目标，不跟随链接；特殊文件和非 UTF-8 名称失败。只排除该方法自己的标记。标记包含输出身份，不含测试结果、judge 响应或缓存的通过状态。原生步骤、manifest 和封存观察保存在宿主执行证据中。
 
@@ -140,7 +144,7 @@ provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-ca
 ## provider 的真实消费者
 
 原生缓存登记必须明确 `save_on_push_only`。为 true 时，编译产物仍在 PR 中恢复，
-但只在 push 事件按原成功条件保存；为 false 时，保存仍使用原事件范围。
+但只在 push 事件按登记的生产结果条件保存；为 false 时，保存仍使用原事件范围。
 只为保存服务的内容封存使用相同事件条件，恢复时的内容核验继续执行。
 下载缓存不受这个字段限制，PR 可以保存自己的下载资料。
 本仓普通检查选择 true，避免每个 PR 都上传一套大编译目录，挤占下载缓存；

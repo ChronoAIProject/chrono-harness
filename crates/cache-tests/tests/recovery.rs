@@ -726,6 +726,130 @@ fn producer_seal_refuses_failure_and_compatible_restore_checks_original_source_k
 }
 
 #[test]
+fn opted_in_failed_producer_seals_bytes_and_preserves_the_original_failure() {
+    for outcome in [
+        json!("success"),
+        json!("failure"),
+        json!("skipped"),
+        json!("cancelled"),
+        json!("unknown"),
+        json!("success\n"),
+        json!(""),
+        Value::Null,
+        json!(true),
+    ] {
+        let (root, mut config, original) = verified_host();
+        config["caches"]["project"]["save_on_failure"] = json!(true);
+        let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+        bind_installed_planner(&mut prepared);
+        assert_eq!(
+            original["caches"]["project"]["key"],
+            prepared["caches"]["project"]["key"]
+        );
+        assert_eq!(prepared["caches"]["project"]["save_on_failure"], true);
+        for (path, value) in [
+            (".chrono-harness/cache.json", &config),
+            (".chrono-harness/state/restore/plan.json", &prepared),
+        ] {
+            fs::write(root.path().join(path), serde_json::to_vec(value).unwrap()).unwrap();
+        }
+        if outcome == "failure" {
+            let github_output = root
+                .path()
+                .join(".chrono-harness/state/restore/github-output");
+            let output = Command::new(
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"),
+            )
+            .args([
+                "plan",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--config",
+                ".chrono-harness/cache.json",
+                "--consumer",
+                "check.one",
+                "--github-output",
+                github_output.to_str().unwrap(),
+            ])
+            .output()
+            .unwrap();
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                fs::read_to_string(github_output)
+                    .unwrap()
+                    .contains("cache_0_save_on_failure=true\n")
+            );
+        }
+        // conclusion may be rewritten by continue-on-error; only outcome is authoritative.
+        let steps = json!({"work":{"outcome":outcome,"conclusion":"success"}});
+        let output = seal(root.path(), &steps);
+        let accepted = outcome == "success" || outcome == "failure";
+        assert_eq!(
+            output.status.success(),
+            accepted,
+            "{outcome}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let marker = root
+            .path()
+            .join("out/project/.chrono-cache-content-v1.json");
+        assert_eq!(marker.exists(), accepted);
+        if !accepted {
+            continue;
+        }
+        let sealed: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let report = &sealed["observation"];
+        assert_eq!(report["caches"]["project"]["producer_step"], "work");
+        assert_eq!(report["caches"]["project"]["producer_outcome"], outcome);
+        let original_steps = root
+            .path()
+            .join(report["native_steps"]["path"].as_str().unwrap());
+        assert_eq!(
+            fs::read(original_steps).unwrap(),
+            serde_json::to_vec(&steps).unwrap()
+        );
+        let restored = recover(
+            root.path(),
+            &json!({"cache_0_restore":{"outcome":"success","outputs":{"cache-matched-key":prepared["caches"]["project"]["key"]}}}),
+        );
+        assert!(
+            restored.status.success(),
+            "{}",
+            String::from_utf8_lossy(&restored.stderr)
+        );
+        assert_eq!(
+            result(root.path())["caches"]["project"]["verification"]["status"],
+            "matched"
+        );
+        assert_eq!(
+            fs::read(root.path().join("out/project/partial")).unwrap(),
+            b"partial archive"
+        );
+        assert_eq!(
+            prepared["caches"]["project"]["handling"],
+            "registered-build-required"
+        );
+    }
+}
+
+#[test]
+fn failed_producer_saving_requires_content_verification() {
+    let (_, mut config, _) = verified_host();
+    config["caches"]["project"]["save_on_failure"] = json!(true);
+    config["caches"]["project"]["verify_contents"] = json!(false);
+    let parsed = serde_json::from_value::<chrono_cache::Config>(config).unwrap();
+    let error = chrono_cache::validate(&parsed).unwrap_err();
+    assert!(
+        error.contains("save_on_failure requires content verification"),
+        "{error}"
+    );
+}
+
+#[test]
 fn retired_acceptance_registration_and_cli_fail_without_changing_outputs() {
     let (root, mut config, _) = verified_host();
     config["acceptance_fixtures"] = json!({"native-unusable":{

@@ -15,6 +15,34 @@ use vstd::vpanic as panic;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn only_observed_success_or_opted_in_failure_can_seal() {
+    proof {
+        reveal_strlit("success"); reveal_strlit("failure");
+        reveal_strlit("skipped"); reveal_strlit("cancelled");
+        reveal_strlit("success\n"); reveal_strlit("");
+        assert("success"@[0] != "failure"@[0]);
+        assert("success"@[1] != "skipped"@[1]);
+        assert("failure"@[0] != "skipped"@[0]);
+        assert("success"@.len() != "cancelled"@.len());
+        assert("failure"@.len() != "cancelled"@.len());
+        assert("success"@.len() != "success\n"@.len());
+        assert("failure"@.len() != "success\n"@.len());
+        assert("success"@.len() != ""@.len());
+        assert("failure"@.len() != ""@.len());
+    }
+    expect_cache_true(policy::producer_can_seal(false, Some("success")));
+    expect_cache_true(policy::producer_can_seal(true, Some("success")));
+    expect_cache_true(!policy::producer_can_seal(false, Some("failure")));
+    expect_cache_true(policy::producer_can_seal(true, Some("failure")));
+    expect_cache_true(!policy::producer_can_seal(true, Some("skipped")));
+    expect_cache_true(!policy::producer_can_seal(true, Some("cancelled")));
+    expect_cache_true(!policy::producer_can_seal(true, Some("success\n")));
+    expect_cache_true(!policy::producer_can_seal(true, Some("")));
+    expect_cache_true(!policy::producer_can_seal(false, None));
+    expect_cache_true(!policy::producer_can_seal(true, None));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_adopted_compatible_restores_refresh_inputs() {
     proof {
         reveal_strlit("compatible"); reveal_strlit("exact");

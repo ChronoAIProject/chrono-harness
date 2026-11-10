@@ -2649,7 +2649,8 @@
       ],
       "restore": "compatible",
       "verify_contents": true,
-      "refresh_sources": true
+      "refresh_sources": true,
+      "save_on_failure": true
     },
     "check.cache-tests": {
       "owner": "cache-tests",
@@ -2701,7 +2702,8 @@
       ],
       "restore": "compatible",
       "verify_contents": true,
-      "refresh_sources": true
+      "refresh_sources": true,
+      "save_on_failure": true
     },
     "release.linux.release.runner": {
       "owner": "runner",
