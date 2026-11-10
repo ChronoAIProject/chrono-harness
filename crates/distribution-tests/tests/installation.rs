@@ -401,17 +401,13 @@ fn rejects_duplicate_json_members_unknown_cli_and_lock_contention() {
 #[test]
 fn real_generated_bootstrap_installs_from_unrelated_cwd_and_spaced_host() {
     let fixture = Fixture::new();
-    let installer = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../distribution/target/debug/chrono-distribution");
-    assert!(
-        installer.is_file(),
-        "build registered distribution prerequisite first"
-    );
+    let installer = Path::new(env!("CARGO_BIN_EXE_chrono-distribution-test-cli"));
+    assert!(installer.is_file(), "Cargo did not build the test CLI");
     let target = fixture
         .release
         .path()
         .join(format!("chrono-distribution-{}", platform()));
-    fs::copy(&installer, &target).unwrap();
+    fs::copy(installer, &target).unwrap();
     let (hash, size) = file_identity(&target).unwrap();
     let mut r: Value = serde_json::from_slice(&fs::read(&fixture.manifest).unwrap()).unwrap();
     r["platforms"][platform()]["chrono-distribution"]["sha256"] = json!(hash);
@@ -500,8 +496,7 @@ fn assemble_rejects_different_sources_and_corrupt_members_without_output() {
 }
 
 fn real_installer(f: &Fixture) {
-    let installer = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../distribution/target/debug/chrono-distribution");
+    let installer = Path::new(env!("CARGO_BIN_EXE_chrono-distribution-test-cli"));
     let target = f
         .release
         .path()

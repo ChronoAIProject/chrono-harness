@@ -326,7 +326,7 @@
     {"path":"crates/distribution/Cargo.toml","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/Cargo.lock","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/src/lib.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"}]},
-    {"path":"crates/distribution/src/main.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":"crates/distribution/src/main.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"},{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"},{"kind":"compile","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/Cargo.toml","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/Cargo.lock","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/installation.rs","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
@@ -975,7 +975,6 @@
     {"from":"project:runner","kind":"compile","to":"project:distribution"},
     {"from":"project:runner","kind":"compile","to":"project:distribution-tests"},
     {"from":"project:distribution","kind":"compile","to":"project:distribution-tests"},
-    {"from":"project:distribution","kind":"runtime-input","to":"project:distribution-tests"},
     {"from":"project:distribution","kind":"test-execution","to":"test:distribution-tests"},
     {"from":"project:distribution-tests","kind":"test-execution","to":"test:distribution-tests"},
     {"from":"tool:cargo","kind":"runtime-input","to":"project:distribution"},
@@ -1466,7 +1465,6 @@
       "operations": [
         "fmt.distribution",
         "fmt.distribution-tests",
-        "build.distribution",
         "test.distribution-tests"
       ],
       "timeout_seconds": 600,
