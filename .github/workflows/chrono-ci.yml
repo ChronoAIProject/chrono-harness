@@ -522,15 +522,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_4_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_4_restore }}
           fail-on-cache-miss: false
-      - name: Restore registered cache check.worktree
-        id: cache_5_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_5_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_5_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_5_restore }}
-          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -2949,15 +2940,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_10_restore }}
           fail-on-cache-miss: false
-      - name: Restore registered cache check.worktree
-        id: cache_11_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_11_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_11_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_11_restore }}
-          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -3209,15 +3191,6 @@ jobs:
           path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_10_restore }}
           fail-on-cache-miss: false
-      - name: Restore registered cache check.worktree
-        id: cache_11_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_11_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_11_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_11_restore }}
-          fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}
         shell: bash
@@ -3460,15 +3433,6 @@ jobs:
           key: ${{ steps.chrono_cache_plan.outputs.cache_10_key }}
           path: ${{ steps.chrono_cache_plan.outputs.cache_10_paths }}
           restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_10_restore }}
-          fail-on-cache-miss: false
-      - name: Restore registered cache check.worktree
-        id: cache_11_restore
-        continue-on-error: true
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          key: ${{ steps.chrono_cache_plan.outputs.cache_11_key }}
-          path: ${{ steps.chrono_cache_plan.outputs.cache_11_paths }}
-          restore-keys: ${{ steps.chrono_cache_plan.outputs.cache_11_restore }}
           fail-on-cache-miss: false
       - name: Recover failed cache restores
         if: ${{ steps.chrono_cache_plan.outputs.cache_recovery == 'discard-failed-host-restores' }}

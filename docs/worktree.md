@@ -98,6 +98,17 @@ Rust 消费者先用 `full::expand_process` 展开；宿主 bootstrap 用
 
 专属测试使用真实 bare remote、前进远端、任意布局、空格／Unicode 路径、脏／锁工作树、两端政策变化、remote 缺失、工具不符、真实 hook。采用政策有真实子进程消费者，宿主明确登记二进制及测试计划。
 
+`ci-tests`、`judge-workflow-tests` 将生产 `src/main.rs` 编译为
+`chrono-worktree-test-cli`，通过 Cargo 的 `CARGO_BIN_EXE_chrono-worktree-test-cli`
+调用或复制真实 CLI；FILEMAP 明确登记两处源码别名。四个 CI／workflow 测试计划不再额外执行
+`build.worktree`。worktree 的两个测试单元、bootstrap、owner-stage 和发布继续消费正式生产构建。
+
+**测试编译路径与宿主政策同时变更：**四个测试单元同步退役重复构建和
+`check.worktree` 缓存恢复订阅，并通过现役生成入口更新工作流；worktree 使用方的缓存及测试项目自身的
+缓存继续保留。原测试、断言、分组、线程数和时限不变，各测试根沿用既有开发配置，
+不宣称与独立生产构建严格同输入。真实 CLI、部署和中断行为仍由原有测试验收；
+完整构建、CI、存储及维护的净成本收益未测。
+
 [示例宿主](examples.md)明确采用工具和政策，实际版本与采用范围见示例索引；不靠语言或目录推断。
 
 下文增加恢复及明确清理。AI 语义协调、PR provider 操作、合并／落地编排仍未完成。后续治理仍用本地／CI 同一 `chrono-harness check`。此增量曾同改产品和采用政策，验证增加新项目／测试对及 bootstrap／发布登记；成本未知，不增加确认或人审。
