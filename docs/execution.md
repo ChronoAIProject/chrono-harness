@@ -128,6 +128,8 @@ action 名可为任意明确非空值，每项绑定全局唯一操作；测试 
 
 routes 专属测试直接编译真实库和自己的 Rust 工具，不读取生产二进制，因此自己的计划和单元缓存只消费测试 target。其他测试计划仍实际调用 routes 二进制，保留其 `build.judge-routes`、共享缓存及调度声明。
 
+cache 专属测试同样将生产 `main.rs` 编译为 `chrono-cache-test-cli`，CLI 调用和 planner 路径／摘要／长度绑定一起迁移。自己的计划只保留原证明、格式检查及未过滤测试，不再另构建或缓存生产 target。native 发布测试仍消费生产 cache，生产 claim 保留，完整成本收益未测。
+
 runner 专属测试通过 Cargo 将生产 `main.rs` 编译为 `chrono-harness-test-cli`，CLI 合同和日志测试直接调用这份执行物。自己的计划和单元缓存不再消费 `build.runner` 或生产 target；其他现役测试、bootstrap 和发布打包仍使用原生产构建。原测试、断言、线程、时限和开发优化配置保留，完整成本收益未测。
 
 只登记自身、未接入计划或操作说明的临时过滤测试动作已经移除；测试本体继续由原未过滤操作或现役分组执行。macOS 27 政策也不再单独登记没有 action、输入绑定或 FILEMAP 使用方的 linker 工具；真实编译归原 Cargo 操作。

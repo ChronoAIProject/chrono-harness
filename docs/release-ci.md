@@ -42,6 +42,8 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 CI 与 workflow 测试项目已由 Cargo 从生产 `main.rs` 编译 worktree 测试 CLI。两平台的 `verify_ci_tests`、`verify_judge_workflow_tests` 因而不再依赖、下载或暂存 worktree 发布资产；配方的 `needs`、使用方声明与 CI 下载登记同步删除这项无使用方的依赖。worktree 专属验证和最终打包仍消费生产资产，原测试、断言、线程、时限与生产构建保留。完整发布耗时、传输和维护的净成本收益未测。
 
+cache 专属测试直接编译生产 CLI，恢复及封存样本绑定同一执行物的真实身份。两平台 `verify_cache_tests` 不再等待、下载或暂存 cache 发布资产，原未过滤操作保留；native 发布测试与最终打包仍消费生产 cache，完整发布成本收益未测。
+
 runner 专属测试也直接编译生产 `main.rs`，通过 Cargo 提供的路径调用测试 CLI。两平台的 `verify_runner_tests` 不再依赖、下载或暂存 runner 发布资产，仍执行原未过滤操作。其他验证和最终打包继续消费生产 runner；完整发布成本收益未测。
 
 每个验证只登记实际消费的构建子集。instructions、routes、diagnostics 不消费发布二进制，`needs` 为空且 `rust_toolchain=true`，可独立启动。原生输入准备的行为验证归 Rust `ci-tests`，随原始未过滤 `test.ci-tests` 执行，复用其既有构建和发布资产依赖，不再单独启动 Python 验证 job。原 IO、执行物解析、凭据省略、纳秒时间顺序和有界失败回执均在 Rust 配对测试中核对；完整种子和转发链仍由 workflow 测试验证。新增验证／传输成本未测，原生两平台验收和公开发行须核对应候选的实际结果。
