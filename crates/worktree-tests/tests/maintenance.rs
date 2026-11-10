@@ -9,7 +9,7 @@ impl Host {
         let path = ".chrono-harness/state/maintenance.json";
         fs::create_dir_all(self.root.join(".chrono-harness/state")).unwrap();
         fs::write(self.root.join(path), serde_json::to_vec(&plan).unwrap()).unwrap();
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -417,7 +417,17 @@ fn maintenance_cleanup_accepts_squash_tree_preservation_and_explicit_retry() {
 #[test]
 fn maintenance_cleanup_rejects_wrong_dirty_locked_main_and_nested_worktrees() {
     for fault in [
-        "head", "branch", "retained", "dirty", "ignored", "lock", "main", "nested", "artifact",
+        "head",
+        "head-tree",
+        "head-tag",
+        "branch",
+        "retained",
+        "dirty",
+        "ignored",
+        "lock",
+        "main",
+        "nested",
+        "artifact",
     ] {
         let h = Host::new("payload");
         let target = h.parent.join("saved");
@@ -425,6 +435,25 @@ fn maintenance_cleanup_rejects_wrong_dirty_locked_main_and_nested_worktrees() {
         let mut plan = h.cleanup(&target);
         match fault {
             "head" => plan["head"] = value!("0".repeat(40)),
+            "head-tree" => plan["head"] = value!(git(&target, &["rev-parse", "HEAD^{tree}"])),
+            "head-tag" => {
+                git(
+                    &h.root,
+                    &[
+                        "-c",
+                        "user.name=fixture",
+                        "-c",
+                        "user.email=fixture@example.invalid",
+                        "tag",
+                        "-a",
+                        "cleanup-head",
+                        "-m",
+                        "tag is not a commit",
+                        "HEAD",
+                    ],
+                );
+                plan["head"] = value!(git(&h.root, &["rev-parse", "refs/tags/cleanup-head"]));
+            }
             "branch" => plan["branch"] = value!("feature/other"),
             "retained" => plan["retained_commit"] = value!("0".repeat(40)),
             "dirty" => fs::write(target.join("payload"), "unsaved").unwrap(),

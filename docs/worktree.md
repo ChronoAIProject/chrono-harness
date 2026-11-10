@@ -100,14 +100,15 @@ Rust 消费者先用 `full::expand_process` 展开；宿主 bootstrap 用
 
 专属测试使用真实 bare remote、前进远端、任意布局、空格／Unicode 路径、脏／锁工作树、两端政策变化、remote 缺失、工具不符、真实 hook。采用政策有真实子进程消费者，宿主明确登记二进制及测试计划。
 
-`ci-tests`、`judge-workflow-tests` 将生产 `src/main.rs` 编译为
+`worktree-tests`、`ci-tests`、`judge-workflow-tests` 将生产 `src/main.rs` 编译为
 `chrono-worktree-test-cli`，通过 Cargo 的 `CARGO_BIN_EXE_chrono-worktree-test-cli`
-调用或复制真实 CLI；FILEMAP 明确登记两处源码别名。四个 CI／workflow 测试计划不再额外执行
-`build.worktree`。worktree 的两个测试单元、bootstrap、owner-stage 和发布继续消费正式生产构建。
+调用或复制真实 CLI；FILEMAP 明确登记三处源码别名。六个 CI 测试单元不再额外执行
+`build.worktree`。worktree 专属测试的只读副本、所有者阶段发布和中断用例均使用该执行物；
+bootstrap、正式 owner-stage 和生产发布继续消费各自登记的生产构建。
 
-**测试编译路径与宿主政策同时变更：**四个测试单元同步退役重复构建和
-`check.worktree` 缓存恢复订阅，并通过现役生成入口更新工作流；worktree 使用方的缓存及测试项目自身的
-缓存继续保留。原测试、断言、分组、线程数和时限不变，各测试根沿用既有开发配置，
+**测试编译路径与宿主政策同时变更：**六个测试单元同步退役重复构建和
+`check.worktree` 缓存订阅；该缓存已无使用方，声明一并删除。测试项目自身的缓存及生产发布缓存继续保留，
+工作流由现役生成入口更新。原测试、断言、分组、线程数和时限不变，各测试根沿用既有开发配置，
 不宣称与独立生产构建严格同输入。真实 CLI、部署和中断行为仍由原有测试验收；
 完整构建、CI、存储及维护的净成本收益未测。
 
@@ -205,6 +206,8 @@ cleanup 点名精确工作树，以及另一个保留其提交的本地分支。
 `retention: ancestor` 证明 HEAD 是固定 retained commit 祖先；`same-tree` 用精确树相等支持 squash 交付。两者都保留位于声明提交的具名本地分支，不证明远端合并、测试或不同树语义等价。
 
 工作分支须匹配明确 feature／integration 前缀。主／源码工作树、带锁、嵌套、外来、身份不符、脏或未知目标都失败。每个可丢目录须是源码／目标 HEAD 两端登记的未跟踪产物；未列产物也阻止删除，登记本身不授权丢弃。产物路径下已跟踪变化仍错误。清理使用有限字面清单查询，不逐个列构建缓存文件。
+
+每次核对保留条件时，用一次 Git 调用读取当前保留 ref、HEAD 的提交身份，以及 `same-tree` 所需的两端 tree。结果须逐项为完整 OID 且数量准确；不存在的 revision 即使返回退出码 0，也必须拒绝。`ancestor` 继续核真实祖先关系，各效果前的检查点照常重新读取。
 
 程序核精确检出、HEAD、分支、保留 ref，取得调用锁再核，只释放自有锁，再核保存工作／内容后移除工作树。可选删分支前先验证路径／inventory 缺失；按预期 OID 删分支，核无登记工作树仍使用它。
 

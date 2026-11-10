@@ -296,8 +296,7 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
         (&target, "linked-reader", "maintain"),
         (&target, "linked-use-reader", "use"),
     ] {
-        let mut command =
-            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        let mut command = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
         command
             .current_dir(root)
             .env_clear()
@@ -465,7 +464,7 @@ fn linked_report_reservation_failure_does_not_dispatch_managed_work() {
     let ledger = fs::read(h.ledger_path(&target)).unwrap();
     let obstruction = h.root.join(blocked);
     fs::write(&obstruction, b"original report obstruction").unwrap();
-    let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+    let mut command = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
     command
         .current_dir(&target)
         .env_clear()
@@ -530,7 +529,7 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
                     .unwrap();
             reclaim_reports(&h.root, &previous, inventory.maintain().unwrap());
         }
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let output = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
             .current_dir(&target)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -563,7 +562,7 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
         }
     }
     let destination = h.parent.join("linked-start-report");
-    let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let output = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
         .current_dir(&target)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
@@ -1832,7 +1831,7 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
     let fixture = native_git(&h, "birth-interrupt", value!({"ledger":ledger}));
     fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
     let interrupted = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree")).args([
+        Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))).args([
             "start",
             "--host-root",
             h.root.to_str().unwrap(),
@@ -2054,7 +2053,7 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
     fs::write(h.parent.join("interrupt-admission"), "kill owner").unwrap();
     let target = h.parent.join("interrupted-birth");
     let mut start = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .args([
@@ -2260,25 +2259,46 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
 
 #[test]
 fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
-    let h = Host::retained("payload");
+    // This test consumes one allocation, not the real repository's other work.
+    // Retain the coordinator too: its scope follows the native descendant and
+    // preserves the entire fixture if this test is interrupted.
+    let coordinator = super::bounded_cleanup::configure_main(Host::retained("payload"), "noop");
+    let policy_path = coordinator.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    let source_policy =
+        json(&fs::read(source().join(".chrono-harness/cleanup.json")).unwrap()).unwrap();
+    policy["retained_producers"] = value!([source_policy["retained_producers"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|producer| producer["id"] == "worktree-test-host")
+        .unwrap()]);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&coordinator.root);
+    let allocation = chrono_worktree::TemporaryHost::registered_allocate(
+        &coordinator.root,
+        POLICY,
+        "worktree-test-host",
+        "native cargo fixture λ ",
+    )
+    .unwrap();
+    let h = Host::in_directory("payload", HostDirectory::Retained(allocation));
     let allocation = h._dir.path().to_owned();
-    let coordinator = source();
     let maintain_allocation = || {
-        let mut command =
-            Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
-        command.current_dir(&coordinator).arg("maintain");
+        let mut command = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
+        command.current_dir(&coordinator.root).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         // Maintenance already publishes its original at the surviving owner.
         // Capturing here must not recreate the allocation after its handoff.
         let output = command.output().unwrap();
         let report = json(&output.stdout).unwrap();
         let failures = report["cleanup_failures"].as_array().unwrap();
-        assert_eq!(
-            output.status.code(),
-            Some(if failures.is_empty() { 0 } else { 2 }),
+        assert!(
+            output.status.success() && failures.is_empty(),
             "allocation maintenance failed: {}",
             allocation.display()
         );
+        assert_eq!(report["source_root"], value!(coordinator.root));
         producer_objects(&report)
             .as_array()
             .unwrap()

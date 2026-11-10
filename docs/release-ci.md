@@ -40,7 +40,11 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 当前本宿主采用 `chrono-github-release/v2` 和 `chrono-release-build/v5`：每平台的 build、verification 和 `always()` collector/package 均逐项登记。每个 job 和整个平台均受登记的 45 分钟时限约束。Rust 验证仍跑原始未过滤操作；测试清单与原生输入适配的验证归 Rust `ci-tests`，宿主 bootstrap 与 Rust 发布测试继续各自登记，真实打包和 cache 消费回归由同一未过滤发布测试操作覆盖。
 
-CI 与 workflow 测试项目已由 Cargo 从生产 `main.rs` 编译 worktree 测试 CLI。两平台的 `verify_ci_tests`、`verify_judge_workflow_tests` 因而不再依赖、下载或暂存 worktree 发布资产；配方的 `needs`、使用方声明与 CI 下载登记同步删除这项无使用方的依赖。worktree 专属验证和最终打包仍消费生产资产，原测试、断言、线程、时限与生产构建保留。完整发布耗时、传输和维护的净成本收益未测。
+CI、workflow 和 worktree 专属测试项目由 Cargo 从生产 `main.rs` 编译 worktree 测试 CLI。
+两平台的 `verify_ci_tests`、`verify_judge_workflow_tests`、`verify_worktree_tests` 不再依赖、下载或暂存
+worktree 发布资产；配方的 `needs`、使用方声明与 CI 下载登记同步删除这项无使用方的依赖。
+worktree 专属测试仍复制并运行实际 CLI，保留只读安装、所有者发布和中断断言；原测试、分组、线程及限制不变。
+正式生产构建、最终打包和真实安装继续消费生产资产。测试根沿用原开发配置，完整发布耗时、传输和维护的净成本收益未测。
 
 cache 专属测试直接编译生产 CLI，恢复及封存样本绑定同一执行物的真实身份。两平台 `verify_cache_tests` 不再等待、下载或暂存 cache 发布资产，原未过滤操作保留；native 发布测试与最终打包仍消费生产 cache，完整发布成本收益未测。
 

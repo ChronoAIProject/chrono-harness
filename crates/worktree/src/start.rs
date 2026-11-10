@@ -797,16 +797,17 @@ pub(crate) fn with_report_for_consumer<T>(
         Ok(()) => report["status"] = value!(success),
         Err(e) => report["error"] = value!(e),
     }
-    report["processes"] = value!(runner.processes.clone());
     if matches!(operation, "start" | "reconstruct") && report["status"] == success {
+        // Birth sealing consumes a snapshot before its own Git observations.
+        report["processes"] = value!(&runner.processes);
         if let Err(error) =
             crate::automatic::seal_birth(&mut runner, root, config_path, bytes, &report)
         {
             report["status"] = value!("failed");
             report["error"] = value!(error);
         }
-        report["processes"] = value!(runner.processes);
     }
+    report["processes"] = Value::Array(runner.processes);
     // Enrollment ownership spans the separate producer/sealing phases. A later
     // entrant may reconcile only after this owner and inherited consumers close.
     drop(runner.birth_lease.take());
