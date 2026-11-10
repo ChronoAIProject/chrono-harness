@@ -250,9 +250,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         } else {
             required("--work")?
         };
-        if steps[work]["outcome"] != "success" {
+        let outcome = steps[work]["outcome"].as_str();
+        if !super::verified_planner::producer_can_seal(cache["save_on_failure"] == true, outcome) {
             return Err(format!(
-                "E_CACHE_CONTENT: producer step {work} did not succeed for {id}"
+                "E_CACHE_CONTENT: producer step {work} has no accepted outcome for {id}: {outcome:?}"
             ));
         }
         let start = Instant::now();
@@ -280,7 +281,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 super::retain_original(&root, &directory, "producer-manifest", &raw)?,
             );
         }
-        report["caches"][id] = json!({"status":"sealed","producer":cache["producer"],"manifests":manifests,"elapsed_seconds":start.elapsed().as_secs_f64(),"measurement":"wall-clock content hashing and manifest publication"});
+        report["caches"][id] = json!({"status":"sealed","producer":cache["producer"],"producer_step":work,"producer_outcome":outcome,"manifests":manifests,"elapsed_seconds":start.elapsed().as_secs_f64(),"measurement":"wall-clock content hashing and manifest publication"});
         outputs.push_str(&format!("cache_{index}_sealed=true\n"));
     }
     let raw = serde_json::to_vec(&report).map_err(|e| e.to_string())?;

@@ -317,6 +317,7 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
     config["recover_unconfirmed_restores"] = json!(false);
     for cache in config["caches"].as_object_mut().unwrap().values_mut() {
         cache["verify_contents"] = json!(false);
+        cache["save_on_failure"] = json!(false);
         cache["refresh_sources"] = json!(false);
     }
     for input in config["inputs"].as_object_mut().unwrap().values_mut() {
@@ -1034,6 +1035,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     config["recover_unconfirmed_restores"] = json!(false);
     for cache in config["caches"].as_object_mut().unwrap().values_mut() {
         cache["verify_contents"] = json!(false);
+        cache["save_on_failure"] = json!(false);
         cache["refresh_sources"] = json!(false);
     }
     // Vary actual host policy files while keeping unrelated compiler/source
