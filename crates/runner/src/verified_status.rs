@@ -764,13 +764,15 @@ impl<'a> GitIndexStageLookup<'a> {
         {
             let mid = low + (high - low) / 2;
             let order = self.keys[mid].cmp(&query);
-            if order == Ordering::Equal {
+            match order {
+            Ordering::Equal => {
                 proof {
                     git_index_stage_order_laws(&self.keys@[mid as int], &query, &query);
                     assert(self.view().to_set().contains(self.keys@[mid as int]));
                 }
                 return true;
-            } else if order == Ordering::Less {
+            },
+            Ordering::Less => {
                 proof {
                     assert forall|i: int| 0 <= i < mid + 1
                         implies (#[trigger] self.keys@[i]).order_spec(&query) == Ordering::Less by {
@@ -780,7 +782,8 @@ impl<'a> GitIndexStageLookup<'a> {
                     }
                 }
                 low = mid + 1;
-            } else {
+            },
+            Ordering::Greater => {
                 proof {
                     git_index_stage_order_laws(&query, &self.keys@[mid as int], &query);
                     assert forall|i: int| mid <= i < self.keys.len()
@@ -791,6 +794,7 @@ impl<'a> GitIndexStageLookup<'a> {
                     }
                 }
                 high = mid;
+            },
             }
         }
         proof {
