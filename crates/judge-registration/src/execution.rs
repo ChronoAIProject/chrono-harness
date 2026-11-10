@@ -137,8 +137,14 @@ pub fn scheduling(
         .values()
         .flat_map(|p| p.operations.iter().cloned())
         .collect();
-    if policy.claims.keys().cloned().collect::<BTreeSet<_>>() != participating {
-        return Err("E_SCHEDULING: claims must name every participating operation exactly once, including empty claims".into());
+    if participating
+        .iter()
+        .any(|op| !policy.claims.contains_key(op))
+    {
+        return Err(
+            "E_SCHEDULING: claims must name every participating operation, including empty claims"
+                .into(),
+        );
     }
     let methods = methods(projects)?;
     for (operation, claims) in &policy.claims {

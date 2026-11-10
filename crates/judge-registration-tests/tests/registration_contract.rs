@@ -1917,8 +1917,10 @@ fn scheduling_requires_complete_unambiguous_explicit_claims() {
                 methods["projects"][0]["actions"]["other"] =
                     methods["projects"][0]["actions"]["build"].clone();
             }
-            _ => bad["execution_scheduling"]["claims"]["build.bootstrap"]["outputs"] =
-                json!(["unknown/"]),
+            _ => {
+                bad["execution_scheduling"]["claims"]["build.bootstrap"]["outputs"] =
+                    json!(["unknown/"])
+            }
         }
         assert!(scheduling(&bad, &methods, &artifacts).is_err());
     }
