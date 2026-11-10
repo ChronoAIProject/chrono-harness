@@ -2151,6 +2151,79 @@ fn expect_index_stage_slot<'a>(stages: &policy::GitIndexStages<'a>, path: &'a st
     expect_status_true(stages.contains_key(&policy::GitIndexStage { path, stage }));
 }
 
+fn expect_index_lookup(stages: &policy::GitIndexStages<'_>, path: &str, stage: &str, expected: bool)
+    requires expected == (exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+        && key.path.spec_bytes() == path.spec_bytes() && key.stage.spec_bytes() == stage.spec_bytes()),
+{
+    let lookup = policy::snapshot_git_index_stages(stages);
+    let actual = lookup.contains(path, stage);
+    expect_status_true(actual == expected);
+    proof { policy::git_index_stage_obeys_cmp(); }
+    expect_status_true(lookup.len() == stages.len());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_lookup_empty_rejects_every_text_key() {
+    let stages = policy::GitIndexStages::new();
+    expect_index_lookup(&stages, "", "", false);
+    expect_index_lookup(&stages, "数据\0path", "0", false);
+}
+
+fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
+    let mut stages = policy::GitIndexStages::new();
+    let out = policy::record_git_index_stage(&mut stages, path, "1");
+    expect_status_true(out.is_ok());
+    let out = policy::record_git_index_stage(&mut stages, path, "3");
+    proof {
+        reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
+        reveal_strlit("00"); reveal_strlit("1\0");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("0") && vstd::string::is_ascii("1")
+            && vstd::string::is_ascii("2") && vstd::string::is_ascii("3")
+            && vstd::string::is_ascii("00") && vstd::string::is_ascii("1\0"));
+    }
+    expect_status_true(out.is_ok());
+    let copied = path.to_owned();
+    expect_index_lookup(&stages, copied.as_str(), "1", true);
+    expect_index_lookup(&stages, copied.as_str(), "3", true);
+    expect_index_lookup(&stages, copied.as_str(), "0", false);
+    expect_index_lookup(&stages, copied.as_str(), "2", false);
+    expect_index_lookup(&stages, copied.as_str(), "00", false);
+    expect_index_lookup(&stages, copied.as_str(), "1\0", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_lookup_nonzero_stages_do_not_supply_stage_zero() {
+    index_lookup_keeps_full_path_and_stage_text("");
+    index_lookup_keeps_full_path_and_stage_text("a");
+    index_lookup_keeps_full_path_and_stage_text("数据\0path");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_lookup_distinguishes_full_paths_and_owns_a_stable_snapshot() {
+    let mut stages = policy::GitIndexStages::new();
+    let out = policy::record_git_index_stage(&mut stages, "a\0", "0");
+    expect_status_true(out.is_ok());
+    proof {
+        reveal_strlit("a"); reveal_strlit("a\0"); reveal_strlit("A\0");
+        reveal_strlit("a\0tail"); reveal_strlit("0"); reveal_strlit("3");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("a\0")
+            && vstd::string::is_ascii("A\0") && vstd::string::is_ascii("a\0tail")
+            && vstd::string::is_ascii("0") && vstd::string::is_ascii("3"));
+    }
+    expect_index_lookup(&stages, "a", "0", false);
+    expect_index_lookup(&stages, "A\0", "0", false);
+    expect_index_lookup(&stages, "a\0tail", "0", false);
+    let lookup = policy::snapshot_git_index_stages(&stages);
+    let copied = "a\0".to_owned();
+    expect_status_true(lookup.contains(copied.as_str(), "0"));
+    let out = policy::record_git_index_stage(&mut stages, "a", "3");
+    expect_status_true(out.is_ok());
+    expect_status_true(!lookup.contains("a", "3"));
+    expect_status_true(lookup.len() == 1);
+}
+
 // 独立列出五个预期键、数量、完整重复错误及失败后的原集合。
 fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
     requires a@ != b@,
