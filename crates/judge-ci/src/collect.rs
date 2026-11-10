@@ -89,7 +89,7 @@ pub fn unit_originals(
             Ok(raw)
         };
     let published = json(bytes)?;
-    let retained_streams = chrono_harness::units::stream_publication(config);
+    let retained_streams = chrono_harness::units::reference_publication(config)?;
     let report_schema = if retained_streams {
         chrono_harness::scoped_report::SCHEMA
     } else {
@@ -104,7 +104,7 @@ pub fn unit_originals(
         .map_err(|e| e.to_string())?
         .unwrap_or_default();
     let mut retained_report_path = None;
-    let (report, mut remaining) = if chrono_harness::units::reference_publication(config)? {
+    let (report, mut remaining) = if retained_streams {
         let reference: chrono_harness::units::ReportReference =
             serde_json::from_value(published).map_err(|e| e.to_string())?;
         if reference.schema != chrono_harness::units::REPORT_REFERENCE {
@@ -241,7 +241,7 @@ pub(super) fn collect(
     }];
     let mut verified = vec![];
     let mut retained_originals = Vec::new();
-    let retained_streams = chrono_harness::units::stream_publication(config);
+    let retained_streams = chrono_harness::units::reference_publication(config)?;
     for input in &inputs.reports {
         let bytes = read(
             &req.host_root,

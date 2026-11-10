@@ -504,7 +504,7 @@ fn inner(
     let stream_profile = if c.schema == units::SCHEMA {
         let profile =
             chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
-        chrono_harness::units::stream_publication(&profile).then_some(profile)
+        chrono_harness::units::reference_publication(&profile)?.then_some(profile)
     } else {
         None
     };

@@ -2173,7 +2173,8 @@ fn execute_check(
         return Err("CI profile does not accept --context".into());
     }
     let c = load_config(&root.join(&config_path))?;
-    if units::reference_publication(&c)? && preparation.is_none() {
+    let retained_streams = units::reference_publication(&c)?;
+    if retained_streams && preparation.is_none() {
         return Err(
             "retained-reference publication requires the prepared short check entry".into(),
         );
@@ -2220,7 +2221,6 @@ fn execute_check(
         })
         .transpose()
         .map_err(|e| e.to_string())?;
-    let retained_streams = units::stream_publication(&c);
     let report_path = prepare_publication(&root, &output_path)?;
     // Register all retained process originals before launching the judge.  A
     // lifecycle owner may terminate this runner as soon as the child starts;
@@ -2467,7 +2467,7 @@ fn execute_check(
             &originals,
             pending_native,
         )?;
-        if units::reference_publication(&c)? {
+        if retained_streams {
             let reference = units::ReportReference {
                 schema: units::REPORT_REFERENCE.into(),
                 original: prepared::Original {

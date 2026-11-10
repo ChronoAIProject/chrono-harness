@@ -538,7 +538,7 @@ fn short_units_are_independent_and_value_less_collection_runs_zero_business() {
     );
 }
 
-fn referenced_report(root: &Path, path: &str, out: &std::process::Output) -> Value {
+fn stream_report(root: &Path, path: &str, out: &std::process::Output) -> Value {
     let published = fs::read(root.join(path)).unwrap();
     let reference: Value = serde_json::from_slice(&published).unwrap();
     assert_eq!(reference["schema"], "chrono-check-reference/v1");
@@ -547,30 +547,6 @@ fn referenced_report(root: &Path, path: &str, out: &std::process::Output) -> Val
         "publication must not duplicate evidence"
     );
     assert_eq!(reference.as_object().unwrap().len(), 2);
-    let original = reference["original"]["path"].as_str().unwrap();
-    let raw = fs::read(root.join(original)).unwrap();
-    assert_eq!(reference["original"]["sha256"], sha256(&raw));
-    let report: Value = serde_json::from_slice(&raw).unwrap();
-    assert_eq!(report["retained_report"], original);
-    assert!(String::from_utf8_lossy(&out.stdout).contains(original));
-    assert_eq!(
-        serde_json::from_slice::<Value>(
-            &report["judge"]["stdout_bytes"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|b| b.as_u64().unwrap() as u8)
-                .collect::<Vec<_>>()
-        )
-        .unwrap(),
-        report["response"]
-    );
-    report
-}
-
-fn stream_report(root: &Path, path: &str, out: &std::process::Output) -> Value {
-    let reference: Value = serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
-    assert_eq!(reference["schema"], "chrono-check-reference/v1");
     let original = reference["original"]["path"].as_str().unwrap();
     let raw = fs::read(root.join(original)).unwrap();
     assert_eq!(reference["original"]["sha256"], sha256(&raw));
@@ -811,12 +787,12 @@ fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
 fn scoped_report_references_retain_originals_and_reject_missing_or_changed_evidence() {
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/ci/check.json", |c| {
-        c["policy"]["report_publication"] = json!("retained-reference/v1");
+        c["policy"]["report_publication"] = json!("retained-reference/v2");
     });
     let check = |args: &[&str], path: &str, exit: i32| {
         let out = h.command(args).output().unwrap();
         assert_eq!(out.status.code(), Some(exit), "{out:?}");
-        referenced_report(&h.root, path, &out)
+        stream_report(&h.root, path, &out)
     };
     let path = ".chrono-harness/state/alpha/check.json";
     let first = check(&["check", "--unit", "alpha"], path, 0);
@@ -900,7 +876,7 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
             fs::write(h.root.join("a.case"), "business-failure\n").unwrap();
         }
         h.modify(".chrono-harness/ci/check.json", |c| {
-            c["policy"]["report_publication"] = json!("retained-reference/v1");
+            c["policy"]["report_publication"] = json!("retained-reference/v2");
             if limited {
                 c["policy"]["collection_limits"] =
                     json!({"manifest_bytes":1048576,"report_bytes":1024});
@@ -915,7 +891,7 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
                 "{out:?}"
             );
             let path = format!(".chrono-harness/state/{unit}/check.json");
-            let report = referenced_report(&h.root, &path, &out);
+            let report = stream_report(&h.root, &path, &out);
             original_size = fs::metadata(h.root.join(report["retained_report"].as_str().unwrap()))
                 .unwrap()
                 .len();
@@ -929,7 +905,7 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
         }
         let out = h.command(&["check", "--collect"]).output().unwrap();
         assert_eq!(out.status.code(), Some(1), "{out:?}");
-        let report = referenced_report(&h.root, ".chrono-harness/state/check.json", &out);
+        let report = stream_report(&h.root, ".chrono-harness/state/check.json", &out);
         if limited {
             let cause = report["response"]["results"][0]["cause"].as_str().unwrap();
             assert!(
