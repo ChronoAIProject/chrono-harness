@@ -386,8 +386,7 @@ impl Host {
         }
     }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
-        let mut command =
-            Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
         command
             .current_dir("/")
             .env_clear()

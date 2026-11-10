@@ -26,7 +26,10 @@ fn adopt_short_host(
 ) -> (Host, host::FixtureDirectory) {
     let root = h.root();
     for (original, binary) in [
-        (source().join("crates/ci/target/debug/chrono-ci"), "chrono-ci"),
+        (
+            source().join("crates/ci/target/debug/chrono-ci"),
+            "chrono-ci",
+        ),
         (
             std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")),
             "chrono-worktree",

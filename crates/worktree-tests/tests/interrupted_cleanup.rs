@@ -296,8 +296,7 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
         (&target, "linked-reader", "maintain"),
         (&target, "linked-use-reader", "use"),
     ] {
-        let mut command =
-            Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
         command
             .current_dir(root)
             .env_clear()
@@ -2259,8 +2258,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let allocation = h._dir.path().to_owned();
     let coordinator = source();
     let maintain_allocation = || {
-        let mut command =
-            Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         // Maintenance already publishes its original at the surviving owner.
