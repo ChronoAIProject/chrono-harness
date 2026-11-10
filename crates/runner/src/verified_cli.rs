@@ -31,7 +31,7 @@ pub fn decoded_arguments<'a>(arguments: &[Option<&'a str>])
             && forall|j: int| 0 <= j < error.argv_index ==> arguments[j].is_some(),
     },
 {
-    let mut texts = Vec::new();
+    let mut texts: Vec<&'a str> = Vec::new();
     let mut i = 0;
     while i < arguments.len()
         invariant
