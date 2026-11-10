@@ -932,6 +932,212 @@ pub fn parse_git_index_row(raw: &str) -> (out: Result<GitIndexRow<'_>, GitInvent
     Ok(GitIndexRow { path, mode: fields[0], oid: fields[1], stage: fields[2] })
 }
 
+pub struct GitIndexInventory<'a> {
+    pub rows: Vec<GitIndexRow<'a>>,
+    pub stages: GitIndexStages<'a>,
+}
+
+pub open spec fn git_index_row_at(rows: Seq<&str>, i: int) -> Result<GitIndexRowBytes, GitInventoryErrorView> {
+    git_index_row_spec(rows[i].spec_bytes())
+}
+
+pub open spec fn git_index_same_stage(a: GitIndexRowBytes, b: GitIndexRowBytes) -> bool {
+    a.0 == b.0 && a.3 == b.3
+}
+
+pub open spec fn git_index_prefix_valid(rows: Seq<&str>, count: int) -> bool {
+    0 <= count <= rows.len()
+        && (forall|i: int| 0 <= i < count ==> (#[trigger] git_index_row_at(rows, i)).is_ok())
+        && (forall|i: int, j: int| 0 <= i < j < count ==>
+            !git_index_same_stage((#[trigger] git_index_row_at(rows, i)->Ok_0),
+                (#[trigger] git_index_row_at(rows, j)->Ok_0)))
+}
+
+/// 全部字段和顺序与输入逐项对应，不只保留 path／stage。
+pub open spec fn git_index_prefix_rows(parsed: Seq<GitIndexRow>, rows: Seq<&str>, count: int) -> bool {
+    parsed.len() == count && (forall|i: int| 0 <= i < count ==>
+        (#[trigger] git_index_row_at(rows, i)) == Ok::<GitIndexRowBytes, GitInventoryErrorView>(parsed[i].bytes()))
+}
+
+/// 实际借用键与全部解析行双向对应；精确基数排除遗漏和额外键。
+pub open spec fn git_index_inventory_stages(stages: Map<GitIndexStage, ()>, parsed: Seq<GitIndexRow>) -> bool {
+    stages.len() == parsed.len()
+        && (forall|key: GitIndexStage| stages.contains_key(key) ==> exists|i: int| 0 <= i < parsed.len()
+            && key == GitIndexStage { path: parsed[i].path, stage: parsed[i].stage })
+        && (forall|i: int| 0 <= i < parsed.len() ==> #[trigger] stages.contains_key(
+            GitIndexStage { path: parsed[i].path, stage: parsed[i].stage }))
+}
+
+pub open spec fn git_index_error_at(rows: Seq<&str>, i: int, error: GitInventoryErrorView) -> bool {
+    match git_index_row_at(rows, i) {
+        Err(expected) => error == expected,
+        Ok(row) => error == GitInventoryErrorView::Message("duplicate Git index stage"@)
+            && exists|j: int| 0 <= j < i && git_index_same_stage((git_index_row_at(rows, j)->Ok_0), row),
+    }
+}
+
+pub proof fn git_index_error_blocks_prefix(rows: Seq<&str>, i: int,
+    error: GitInventoryErrorView, count: int)
+    requires 0 <= i < count <= rows.len(), git_index_error_at(rows, i, error),
+    ensures !git_index_prefix_valid(rows, count),
+{
+    if git_index_prefix_valid(rows, count) {
+        match git_index_row_at(rows, i) {
+            Err(_) => {},
+            Ok(row) => {
+                let j = choose|j: int| 0 <= j < i && git_index_same_stage((git_index_row_at(rows, j)->Ok_0), row);
+                assert(!git_index_same_stage((git_index_row_at(rows, j)->Ok_0), (git_index_row_at(rows, i)->Ok_0)));
+            },
+        }
+    }
+}
+
+pub proof fn git_index_first_error_unique(rows: Seq<&str>, i: int, error: GitInventoryErrorView,
+    j: int, other: GitInventoryErrorView)
+    requires 0 <= i < rows.len(), git_index_prefix_valid(rows, i), git_index_error_at(rows, i, error),
+        0 <= j < rows.len(), git_index_prefix_valid(rows, j), git_index_error_at(rows, j, other),
+    ensures i == j, error == other,
+{
+    if i < j { git_index_error_blocks_prefix(rows, i, error, j); }
+    if j < i { git_index_error_blocks_prefix(rows, j, other, i); }
+}
+
+proof fn git_index_next_stage_is_new(stages: Map<GitIndexStage, ()>, parsed: Seq<GitIndexRow>,
+    rows: Seq<&str>, count: int, row: GitIndexRowBytes)
+    requires git_index_prefix_rows(parsed, rows, count), git_index_inventory_stages(stages, parsed),
+        !(exists|key: GitIndexStage| (#[trigger] stages.contains_key(key))
+            && key.path.spec_bytes() == row.0 && key.stage.spec_bytes() == row.3),
+    ensures forall|j: int| 0 <= j < count ==>
+        !git_index_same_stage((#[trigger] git_index_row_at(rows, j)->Ok_0), row),
+{
+    assert forall|j: int| 0 <= j < count implies
+        !git_index_same_stage((#[trigger] git_index_row_at(rows, j)->Ok_0), row) by {
+        let key = GitIndexStage { path: parsed[j].path, stage: parsed[j].stage };
+        assert(stages.contains_key(key));
+        if git_index_same_stage((git_index_row_at(rows, j)->Ok_0), row) {
+            assert(exists|key: GitIndexStage| (#[trigger] stages.contains_key(key))
+                && key.path.spec_bytes() == row.0 && key.stage.spec_bytes() == row.3);
+        }
+    }
+}
+
+proof fn git_index_extend_valid_prefix(rows: Seq<&str>, count: int, row: GitIndexRowBytes)
+    requires 0 <= count < rows.len(), git_index_prefix_valid(rows, count),
+        git_index_row_at(rows, count) == Ok::<GitIndexRowBytes, GitInventoryErrorView>(row),
+        forall|j: int| 0 <= j < count ==>
+            !git_index_same_stage((#[trigger] git_index_row_at(rows, j)->Ok_0), row),
+    ensures git_index_prefix_valid(rows, count + 1),
+{
+    assert forall|j: int| 0 <= j < count + 1 implies (#[trigger] git_index_row_at(rows, j)).is_ok() by {
+        if j < count {} else { assert(j == count); }
+    }
+    assert forall|i: int, j: int| 0 <= i < j < count + 1 implies
+        !git_index_same_stage((#[trigger] git_index_row_at(rows, i)->Ok_0),
+            (#[trigger] git_index_row_at(rows, j)->Ok_0)) by {
+        if j < count {} else { assert(j == count); }
+    }
+}
+
+proof fn git_index_extend_inventory_stages(stages: Map<GitIndexStage, ()>, parsed: Seq<GitIndexRow>,
+    row: GitIndexRow)
+    requires git_index_inventory_stages(stages, parsed), stages.dom().finite(),
+        !stages.contains_key(GitIndexStage { path: row.path, stage: row.stage }),
+    ensures git_index_inventory_stages(stages.insert(GitIndexStage { path: row.path, stage: row.stage }, ()),
+        parsed.push(row)),
+{
+    let inserted = GitIndexStage { path: row.path, stage: row.stage };
+    let next = stages.insert(inserted, ());
+    let all = parsed.push(row);
+    assert(next.len() == all.len());
+    assert forall|key: GitIndexStage| (#[trigger] next.contains_key(key)) implies exists|j: int|
+        0 <= j < all.len() && key == GitIndexStage { path: all[j].path, stage: all[j].stage } by {
+        if key == inserted {
+            assert(key == GitIndexStage { path: all[parsed.len() as int].path, stage: all[parsed.len() as int].stage });
+        } else {
+            let j = choose|j: int| 0 <= j < parsed.len()
+                && key == GitIndexStage { path: parsed[j].path, stage: parsed[j].stage };
+            assert(key == GitIndexStage { path: all[j].path, stage: all[j].stage });
+        }
+    }
+    assert forall|j: int| 0 <= j < all.len() implies #[trigger] next.contains_key(
+        GitIndexStage { path: all[j].path, stage: all[j].stage }) by {
+        if j < parsed.len() {
+            assert(stages.contains_key(GitIndexStage { path: parsed[j].path, stage: parsed[j].stage }));
+        } else { assert(j == parsed.len()); }
+    }
+}
+
+proof fn git_index_duplicate_error(stages: Map<GitIndexStage, ()>, parsed: Seq<GitIndexRow>,
+    rows: Seq<&str>, count: int, row: GitIndexRowBytes)
+    requires 0 <= count < rows.len(), git_index_prefix_rows(parsed, rows, count),
+        git_index_inventory_stages(stages, parsed),
+        git_index_row_at(rows, count) == Ok::<GitIndexRowBytes, GitInventoryErrorView>(row),
+        exists|key: GitIndexStage| (#[trigger] stages.contains_key(key))
+            && key.path.spec_bytes() == row.0 && key.stage.spec_bytes() == row.3,
+    ensures git_index_error_at(rows, count, GitInventoryErrorView::Message("duplicate Git index stage"@)),
+{
+    let key = choose|key: GitIndexStage| (#[trigger] stages.contains_key(key))
+        && key.path.spec_bytes() == row.0 && key.stage.spec_bytes() == row.3;
+    let j = choose|j: int| 0 <= j < parsed.len()
+        && key == GitIndexStage { path: parsed[j].path, stage: parsed[j].stage };
+    assert(git_index_same_stage((git_index_row_at(rows, j)->Ok_0), row));
+}
+
+/// 完整逐行解析和 stage 库存：只发布完整成功，错误保持首个失败及原字段。
+pub fn parse_git_index_rows<'a>(rows: &[&'a str]) -> (out: Result<GitIndexInventory<'a>, GitInventoryError<'a>>)
+    ensures match out {
+        Ok(inventory) => git_index_prefix_valid(rows@, rows.len() as int)
+            && git_index_prefix_rows(inventory.rows@, rows@, rows.len() as int)
+            && git_index_inventory_stages(inventory.stages@, inventory.rows@),
+        Err(error) => exists|i: int| 0 <= i < rows.len() && git_index_prefix_valid(rows@, i)
+            && git_index_error_at(rows@, i, error.view()),
+    },
+{
+    let mut parsed: Vec<GitIndexRow<'a>> = Vec::new();
+    let mut stages = GitIndexStages::new();
+    let mut i = 0;
+    while i < rows.len()
+        invariant
+            0 <= i <= rows.len(),
+            git_index_prefix_valid(rows@, i as int),
+            git_index_prefix_rows(parsed@, rows@, i as int),
+            git_index_inventory_stages(stages@, parsed@),
+        decreases rows.len() - i,
+    {
+        let row = match parse_git_index_row(rows[i]) {
+            Ok(row) => row,
+            Err(error) => {
+                proof { assert(git_index_error_at(rows@, i as int, error.view())); }
+                return Err(error);
+            },
+        };
+        let ghost before = stages@;
+        proof { vstd::std_specs::btree::axiom_btree_map_view_finite_dom(stages); }
+        match record_git_index_stage(&mut stages, row.path, row.stage) {
+            Err(message) => {
+                proof { git_index_duplicate_error(before, parsed@, rows@, i as int, row.bytes()); }
+                return Err(GitInventoryError::Message(message));
+            },
+            Ok(()) => {},
+        }
+        proof {
+            git_index_next_stage_is_new(before, parsed@, rows@, i as int, row.bytes());
+            git_index_extend_valid_prefix(rows@, i as int, row.bytes());
+            git_index_extend_inventory_stages(before, parsed@, row);
+            assert(git_index_prefix_rows(parsed@.push(row), rows@, i as int + 1)) by {
+                assert forall|j: int| 0 <= j < i + 1 implies
+                    (#[trigger] git_index_row_at(rows@, j)) ==
+                        Ok::<GitIndexRowBytes, GitInventoryErrorView>(parsed@.push(row)[j].bytes()) by {
+                    if j < i {} else { assert(j == i); }
+                }
+            }
+        }
+        parsed.push(row);
+        i += 1;
+    }
+    Ok(GitIndexInventory { rows: parsed, stages })
+}
+
 /// 与原 checkout 一致：只比较 stage、mode 和 OID，不增加 kind／mode 准入。
 pub fn git_index_entry_changed(row: &GitIndexRow<'_>, entry: Option<&TreeEntry>) -> (changed: bool)
     ensures changed == !(row.stage@ == "0"@ && match entry {

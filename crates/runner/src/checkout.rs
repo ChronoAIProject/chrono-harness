@@ -6,10 +6,9 @@ use crate::{
         equal_text, git_inventory_records, git_inventory_termination, git_inventory_text,
     },
     verified_status::{
-        GitIndexStage, GitIndexStages, checkout_entry_supported, checkout_hash_advance,
-        checkout_hash_complete, checkout_opened_file_matches, checkout_regular_file_matches,
-        checkout_symbolic_link, git_index_entry_changed, parse_git_index_row, parse_git_tree_rows,
-        record_git_index_stage,
+        GitIndexStage, checkout_entry_supported, checkout_hash_advance, checkout_hash_complete,
+        checkout_opened_file_matches, checkout_regular_file_matches, checkout_symbolic_link,
+        git_index_entry_changed, parse_git_index_rows, parse_git_tree_rows,
     },
 };
 use sha1::Sha1;
@@ -40,17 +39,15 @@ pub fn tree(raw: &[u8]) -> Result<Tree, String> {
 /// Index stages are compared as data; Git filters/configuration never decide equality.
 pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>, String> {
     let mut changed = BTreeSet::new();
-    let mut stages = GitIndexStages::new();
-    for raw in rows(index)? {
-        let row = parse_git_index_row(raw)
-            .map_err(|error| error.render(|path| format!("invalid relative path: {path:?}")))?;
-        record_git_index_stage(&mut stages, row.path, row.stage)?;
+    let inventory = parse_git_index_rows(&rows(index)?)
+        .map_err(|error| error.render(|path| format!("invalid relative path: {path:?}")))?;
+    for row in inventory.rows {
         if git_index_entry_changed(&row, expected.get(row.path)) {
             changed.insert(row.path.to_string());
         }
     }
     for (path, entry) in expected {
-        if !stages.contains_key(&GitIndexStage {
+        if !inventory.stages.contains_key(&GitIndexStage {
             path: path.as_str(),
             stage: "0",
         }) || !matches_entry(root, path, entry)?
