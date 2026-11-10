@@ -442,7 +442,7 @@ tree 与 index 复用 `GitInventoryError` 的原消息／原路径及已证明�
 复用现有 runner-status 生产／独立整 crate 根及未过滤测试，不增加证明操作或预算。
 解析扫描完整行并保存三个借用字段；普通行保留原 map 查询，非零 stage 行现在也取得预期条目后
 交给同源比较，增加一次 O(log K) 路径查询。完整证明、构建、运行与 CI 成本未测。
-stage-zero 的全文查询由下述有序库存维护；changed 集合维护、完整循环、文件系统观察和编译／实际调用完整绑定仍待证明。
+stage-zero 的全文查询与 changed 集合由下述同源入口维护；文件系统外层循环、观察和编译／实际调用完整绑定仍待证明。
 
 index 的实际 stage 键由同源 `GitIndexStage` 持有，仍借用完整 path／stage 字符串。
 相等要求两个字段的完整 UTF-8 字节都相等；排序先比较完整 path，再比较完整 stage。
@@ -475,8 +475,8 @@ index 的完整逐行解析和 stage 库存由同根 `parse_git_index_rows` 维�
 复用现有两项状态整 crate 根、FILEMAP 消费边及原未过滤行为测试，无新外部假设、操作、过滤或预算。
 完整解析仍进行 K 次 O(log K) map 插入，字符串比较与原字段扫描另计；
 新增 Vec 保存 K 个四字段借用记录，为 O(K) 额外空间，不复制字段文本，也不重复解析原行。
-证明、构建、CI 与完整生命周期成本未测；changed 集合和
-文件系统外层循环仍待证明，不能据此宣称完整 checkout 或全仓覆盖。
+证明、构建、CI 与完整生命周期成本未测；文件系统外层循环仍待证明，
+不能据此宣称完整 checkout 或全仓覆盖。
 
 `snapshot_git_index_stages` 从实际 map 的有序 keys 迭代一次生成借用键向量，
 证明完整键集合、精确基数、全文严格排序与循环终止。`GitIndexStageLookup` 的向量字段私有，
@@ -493,6 +493,31 @@ checkout 的真实 stage-zero 查询直接调用该方法。
 向量额外保存 K 个两字段借用键，不复制文本；构造为 O(K) 遍历，峰值同时持有原 map 与新向量，
 解析返回后 map 释放。每次查询按二分缩小区间，键比较次数为 O(log K)，字节比较另计；
 这里没有机械成本证明，完整构建、验证、CI、运行和存储成本未测。
+
+checkout 的 changed 集合由同根 `CheckoutChanges`／`record_checkout_change` 维护。
+标记后成员恰为原完整路径集合加入本次路径，其他路径保留；只有原路径不存在时基数增加一。
+`checkout_changed_paths` 从实际 map 的全部 keys 导出完整路径，证明成员双向对应、精确基数、
+UTF-8 字节严格排序及终止。`checkout_index_changes` 遍历全部解析行，结果包含某路径当且仅当
+至少一行在该完整路径的 stage／条目／mode／OID 判断为变化；不要求输入排序或去重。
+实际 `checkout::changes` 直接消费该结果，文件系统外层发现变化时调用同一标记入口，
+最后直接返回已证明的完整排序输出，移除原普通 Rust 的 index 遍历及 BTreeSet 状态维护。
+
+预期树复用已有 `tree_rows` 的完整有序借用库存，`lookup_tree_rows` 以完整 UTF-8 字节二分，
+证明返回原条目的全部字段、缺失与终止。固定 vstd 的异型借用 `BTreeMap::get::<str>`
+没有提供可用的全文对应，因此采用现有库存，不增加仓内受信查询或外部假设。
+标准 map 的 new／insert／keys 及迭代器、Vec 存取、String 克隆／构造继续采用已列的固定 vstd 合同；
+全文身份、实际比较定律、状态更新、查询与结果完整性均在本仓 Verus 内证明。
+四项独立 Verus 预期同时作为普通 Rust 测试运行，核空输入、完整匹配的 stage 0、每一行参与、
+非排序与重复路径、不同存储的同文、完整 mode／OID／path、大小写／NUL／Unicode 及非零 stage，
+并固定四个输出位置和去重后的精确数量。复用原两个 runner-status 整 crate 根、真实消费边、
+未过滤测试和原预算；Python 迁移继续暂缓。
+
+新增树库存为 O(T) 个键值引用，不复制字段文本；K 行查询各用 O(log T) 次完整字节比较，
+集合插入另计 O(log C) 次比较。changed 集合持有 C 个完整路径，导出 Vec 时再次复制路径文本，
+峰值同时保留两份；固定 vstd 未提供可用的消费式 IntoIter 规格，故保留已有 keys 合同。
+这是算法上界估计，不是机械成本证明或实测；完整构建、验证、CI、存储与运行成本未测。
+文件系统外层循环、完整哈希循环、外围错误／IO 组合和全仓覆盖门仍待证明，
+不把这些局部入口登记为整个 `checkout.rs` 已证明。
 
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
