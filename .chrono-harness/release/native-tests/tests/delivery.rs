@@ -149,7 +149,8 @@ fn install_fixture(channel: Channel) -> (tempfile::TempDir, Identity, InstallCom
         "receipt.json",
         &json!({
         "schema":"chrono-release-publication/v1","status":"passed","identity":id,
-        "processes":[{"exit_code":0,"stdout":empty,"stderr":empty}],
+        "processes":[{"exit_code":0,"stdout":empty,"stderr":empty,
+            "observation":{"failure":null,"exit_signal":null,"engine_exit_code":0}}],
         "result":{"mode":"build","release":{"draft":false,"tag_name":id.version},"assets":assets}}),
     );
     let commands = InstallCommands {
@@ -165,6 +166,12 @@ fn install_fixture(channel: Channel) -> (tempfile::TempDir, Identity, InstallCom
 fn accept(root: &Path, id: &Identity, commands: &mut InstallCommands) -> Result<Value, String> {
     delivery::install_release(
         &root.join("publication"),
+        &chrono_host_release::publication::Config {
+            repository: "example/product".into(),
+            workflow_id: 99,
+            workflow_path: ".github/workflows/ci.yml".into(),
+            branch: "dev".into(),
+        },
         &commands.host.clone(),
         id,
         "linux-x86_64",
@@ -174,6 +181,155 @@ fn accept(root: &Path, id: &Identity, commands: &mut InstallCommands) -> Result<
         "https://example.invalid/fixed/install.sh",
         commands,
     )
+}
+
+fn missing_lookup(root: &Path, id: &Identity, release: bool) {
+    let directory = root.join("publication");
+    let file = if release { "release" } else { "tag" };
+    let stdout: &[u8] = if release {
+        include_bytes!("data/release-not-found.json")
+    } else {
+        include_bytes!("data/tag-not-found.json")
+    };
+    let stderr = include_bytes!("data/github-not-found.stderr");
+    let original = |stream: &str, bytes: &[u8]| {
+        let path = format!("{file}.{stream}");
+        fs::write(directory.join(&path), bytes).unwrap();
+        json!({"path":path,"size":bytes.len(),"sha256":chrono_harness::sha256(bytes)})
+    };
+    let endpoint = format!(
+        "repos/example/product/{}/{}",
+        if release {
+            "releases/tags"
+        } else {
+            "git/ref/tags"
+        },
+        id.version
+    );
+    let mut report: Value =
+        serde_json::from_slice(&fs::read(directory.join("receipt.json")).unwrap()).unwrap();
+    report["processes"].as_array_mut().unwrap().push(json!({
+        "tool":"gh","argv":["/usr/bin/gh","api","--method","GET",endpoint],
+        "exit_code":1,"stdout":original("stdout",stdout),"stderr":original("stderr",stderr),
+        "observation":{"failure":null,"exit_signal":null,"engine_exit_code":1,"executable":"/usr/bin/gh"}
+    }));
+    fixture::write(&directory, "receipt.json", &report);
+}
+
+#[test]
+fn first_publication_missing_release_and_tag_can_be_installed() {
+    for channel in [Channel::Preview, Channel::Stable] {
+        let (root, id, mut commands) = install_fixture(channel);
+        missing_lookup(root.path(), &id, true);
+        missing_lookup(root.path(), &id, false);
+        let installed = accept(root.path(), &id, &mut commands).unwrap();
+        assert_eq!(installed["source_commit"], id.source_commit);
+        assert_eq!(commands.calls.len(), 2);
+    }
+}
+
+#[test]
+fn only_bound_missing_queries_with_valid_originals_allow_nonzero_exit() {
+    for failure in [
+        "upload",
+        "method",
+        "repository",
+        "version",
+        "arguments",
+        "tool",
+        "executable",
+        "403",
+        "500",
+        "numeric-status",
+        "message",
+        "malformed",
+        "exit",
+        "unknown-exit",
+        "engine-exit",
+        "signal",
+        "engine-failure",
+        "incomplete",
+        "stdout",
+        "stderr",
+    ] {
+        let (root, id, mut commands) = install_fixture(Channel::Preview);
+        missing_lookup(root.path(), &id, true);
+        let directory = root.path().join("publication");
+        let mut report: Value =
+            serde_json::from_slice(&fs::read(directory.join("receipt.json")).unwrap()).unwrap();
+        let process = report["processes"]
+            .as_array_mut()
+            .unwrap()
+            .last_mut()
+            .unwrap();
+        let mut response: Value =
+            serde_json::from_slice(include_bytes!("data/release-not-found.json")).unwrap();
+        match failure {
+            "upload" => {
+                process["argv"] = json!([
+                    "/usr/bin/gh",
+                    "release",
+                    "upload",
+                    id.version,
+                    "asset",
+                    "--repo",
+                    "example/product"
+                ])
+            }
+            "method" => process["argv"][3] = json!("POST"),
+            "repository" => {
+                process["argv"][4] =
+                    json!(format!("repos/other/product/releases/tags/{}", id.version))
+            }
+            "version" => process["argv"][4] = json!("repos/example/product/releases/tags/other"),
+            "arguments" => process["argv"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!("--paginate")),
+            "tool" => process["tool"] = json!("git"),
+            "executable" => process["observation"]["executable"] = json!("/other/gh"),
+            "403" | "500" => response["status"] = json!(failure),
+            "numeric-status" => response["status"] = json!(404),
+            "message" => response["message"] = json!("Forbidden"),
+            "malformed" | "stdout" | "stderr" => {}
+            "exit" => {
+                process["exit_code"] = json!(2);
+                process["observation"]["engine_exit_code"] = json!(2);
+            }
+            "unknown-exit" => process["exit_code"] = Value::Null,
+            "engine-exit" => process["observation"]["engine_exit_code"] = json!(101),
+            "signal" => process["observation"]["exit_signal"] = json!(15),
+            "engine-failure" => process["observation"]["failure"] = json!("original timeout"),
+            "incomplete" => process["stdout"]["status"] = json!("incomplete"),
+            _ => unreachable!(),
+        }
+        let bytes = if failure == "malformed" {
+            b"not JSON".to_vec()
+        } else {
+            serde_json::to_vec(&response).unwrap()
+        };
+        fs::write(directory.join("release.stdout"), &bytes).unwrap();
+        process["stdout"]["size"] = json!(bytes.len());
+        process["stdout"]["sha256"] = json!(chrono_harness::sha256(&bytes));
+        if ["stdout", "stderr"].contains(&failure) {
+            fs::write(
+                directory.join(format!("release.{failure}")),
+                b"changed original",
+            )
+            .unwrap();
+        }
+        fixture::write(&directory, "receipt.json", &report);
+        assert!(
+            accept(root.path(), &id, &mut commands).is_err(),
+            "{failure}"
+        );
+        assert!(commands.calls.is_empty(), "{failure}");
+        assert!(!commands.host.exists(), "{failure}");
+    }
+    let (root, id, mut commands) = install_fixture(Channel::Build);
+    missing_lookup(root.path(), &id, true);
+    assert!(accept(root.path(), &id, &mut commands).is_err());
+    assert!(commands.calls.is_empty());
 }
 
 #[test]
