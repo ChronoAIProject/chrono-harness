@@ -436,11 +436,26 @@ pub fn participate(
         return Ok(false);
     }
     let anchor = owner::coordinator_root(root, profile, environment)?;
-    let program = profile::path(
-        &anchor,
+    let local = profile::path(
+        root,
         &profile.participation.program,
         b".chrono-harness/bin/",
     )?;
+    let local_present = match fs::symlink_metadata(&local) {
+        Ok(_) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.to_string().into()),
+    };
+    let program =
+        if crate::verified_bindings::bootstrap_uses_local_owner(anchor == root, local_present) {
+            local
+        } else {
+            profile::path(
+                &anchor,
+                &profile.participation.program,
+                b".chrono-harness/bin/",
+            )?
+        };
     if anchor == root && root.join(".git").is_dir() && !program.exists() {
         return Ok(false);
     }

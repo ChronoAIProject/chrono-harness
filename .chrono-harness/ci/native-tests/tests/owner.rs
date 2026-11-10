@@ -604,8 +604,17 @@ fn assert_no_local_build(fixture: &Fixture) {
 
 #[test]
 fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without_local_build() {
-    for exit in [0, 7] {
+    for (exit, linked) in [(0, false), (7, false), (0, true), (7, true)] {
         let fixture = participating_fixture();
+        let coordinator = tempfile::tempdir().unwrap();
+        let selected = coordinator
+            .path()
+            .join(".chrono-harness/bin/chrono-worktree");
+        if linked {
+            fixture.inventory(coordinator.path());
+            fs::create_dir_all(selected.parent().unwrap()).unwrap();
+            fs::write(&selected, b"unavailable coordinator executable").unwrap();
+        }
         let reminder = b"W_WORKTREE_ATTENTION: agent work remains\0\xfe\n";
         let report = json!({
             "status":if exit == 0 {"used"} else {"failed"},
@@ -631,6 +640,12 @@ fn delegated_bootstrap_forwards_capabilities_and_original_binary_streams_without
         assert!(output.stderr.starts_with(&expected_stderr), "{output:?}");
         assert!(String::from_utf8_lossy(&output.stderr).contains("worktrees/original.json"));
         assert_no_local_build(&fixture);
+        if linked {
+            assert_eq!(
+                fs::read(&selected).unwrap(),
+                b"unavailable coordinator executable"
+            );
+        }
     }
 }
 
