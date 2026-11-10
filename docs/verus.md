@@ -110,6 +110,20 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 `verify.verus-result-tests` 独立预期。三项源码均已有真实 Verus invocation、整 crate
 结果和 Rust 消费者；本批只补 FILEMAP 绑定，不新增证明源或 Python 迁移。
 
+## projects 执行原件状态
+
+`judge-projects/src/verified_state.rs` 拥有完整状态文本与原进程终态的组合、
+`completed`／`unknown` 选择、全部操作的终态汇总、原件摘要和长度的精确核验，
+以及输入交接后解除依赖／恢复保护的条件。`state.rs` 的真实原件路径直接消费这些函数；
+进程终态继续复用现役已证明的 `process_exit_known`，不以回执存在或状态声称成功代替。
+`verify.project-state`／`verify.project-state-tests` 使用固定 Verus 和整 crate 参数，
+独立预期同时作为普通 Rust 测试运行，并与既有执行／中断／原件行为测试同次验收。
+
+本批源码与宿主验证登记同时修改，沿用工具、CI 单元和预算。JSON、文件、时钟与保留
+接口仍由现有适配器调用；外围原件发布事务和完整执行器尚未证明，`state.rs` 仍保持
+未知整文件覆盖，不把局部内核声明成整个外围文件已证明。汇总额外保留每项操作的借用观察，
+时间与临时空间随操作数量线性增长，构建／证明／CI 的完整总成本未测。Python 迁移暂缓。
+
 ## 发布交付字段判断
 
 发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
@@ -782,11 +796,12 @@ runner、registration 和 routes 的登记计划把两项整 crate 证明放在�
 
 `crates/worktree/src/verified_lifecycle.rs` 直接供自动清理所有者调用：终态进入清理，活跃记录仅在有缓存责任时进入，等待整树回收的保留项仅由显式维护重试；指定 artifacts-only 的已完成处置不重试。证据阻挡要求实际存在且未经释放。清理原结果失败时记失败，缓存成功仅记缓存释放，整树成功还须有 `verified-absent` 或 `already-absent` 才记移除。
 
-同一源码定义产物处置时机：普通释放可选择 dispose，finish-dispose 须有明确释放或合格年龄，
+同一源码定义产物处置时机：普通释放可选择 dispose，finish-dispose 在独立工作树明确 finish、
+主检出明确释放当前代际或实际检出处置时才可回收；复用年龄本身不释放缓存。
 retain 不选，evidence-retain 只由证据权限选择。主检出释放请求须与当前缓存代际相等，
 过去或未来代际不能授权当前删除。独立预期覆盖普通／完成／证据权限组合、无请求、
 旧／未来代际与 u64 最大值。真实回归另核跨操作保留、主检出失败后恢复、新消费、
-独立工作树 finish 及原年龄回收；JSON、原件引用和物理删除仍属适配器验收范围。
+独立工作树 finish、连续年龄维护保留缓存及过龄 finish 释放缓存；JSON、原件引用和物理删除仍属适配器验收范围。
 
 分支采用的待办判断也由同一源码负责：取得原独占租约后，仅活跃且没有终态、未交接 use 和待交接结果的记录可以采用分支。上次清理的进度不参与这个判断，也不被迁移改写。独立预期核每项阻断条件及状态全文边界；真实生命周期回归核等待租约和缓存回收后复用同一检出，并保留清理原件及缓存历史。
 

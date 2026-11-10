@@ -476,17 +476,12 @@
       "artifact_name": "chrono-release-linux-verify_runner_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_runner_tests/",
       "needs": [
-        "linux_release_frontend",
-        "linux_build_runner"
+        "linux_release_frontend"
       ],
       "downloads": [
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
         }
       ]
     },
@@ -1700,17 +1695,12 @@
       "artifact_name": "chrono-release-macos-verify_runner_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_runner_tests/",
       "needs": [
-        "macos_release_frontend",
-        "macos_build_runner"
+        "macos_release_frontend"
       ],
       "downloads": [
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
         }
       ]
     },

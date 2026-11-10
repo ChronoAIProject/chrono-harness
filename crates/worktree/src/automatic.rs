@@ -2168,7 +2168,6 @@ impl Manager {
         i: usize,
         token: &str,
         report: &mut Value,
-        release_for_age: bool,
     ) -> Result<(), String> {
         let e = self.ledger.entries[i].clone();
         let owner = e
@@ -2178,7 +2177,7 @@ impl Manager {
         let head = r.oid(&e.path, "HEAD")?;
         self.check_entry(r, &e, &head, None)?;
         let release_reusable = crate::verified_lifecycle::reusable_release(
-            release_for_age,
+            e.terminal.is_some(),
             owner.generation,
             self.cache_release_generation(&e)?,
         );
@@ -2788,7 +2787,7 @@ impl Manager {
                     if age {
                         self.execute_age(r, i, token, attempt)
                     } else if cache {
-                        self.execute_cache(r, i, token, attempt, false)
+                        self.execute_cache(r, i, token, attempt)
                     } else {
                         self.execute_entry(r, i, token, attempt)
                     }
@@ -2813,8 +2812,7 @@ impl Manager {
                         .ok_or("cleanup report path")?
                         .to_owned();
                     let b = crate::recovery::state_bytes(&root, &path)?;
-                    let cache_outcome = result["age_outcome"]
-                        == "reusable-source-preserved-caches-reclaimed"
+                    let cache_outcome = result["age_outcome"] == "reusable-source-preserved"
                         || (cache
                             && result["age_outcome"]
                                 != "expired-checkout-verified-absent-source-branches-retained");

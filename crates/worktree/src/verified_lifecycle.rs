@@ -38,12 +38,12 @@ pub fn select_artifact(disposition: &Disposition, release_reusable: bool,
     }
 }
 
-pub fn reusable_release(age_eligible: bool, generation: u64,
+pub fn reusable_release(terminal_handoff: bool, generation: u64,
     requested_generation: Option<u64>) -> (release: bool)
-    ensures release <==> (age_eligible || (requested_generation.is_some()
+    ensures release <==> (terminal_handoff || (requested_generation.is_some()
         && requested_generation.unwrap() == generation)),
 {
-    age_eligible || match requested_generation {
+    terminal_handoff || match requested_generation {
         Some(requested) => requested == generation,
         None => false,
     }
