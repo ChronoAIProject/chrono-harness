@@ -5,7 +5,7 @@ use serde_json::{Value, json as value};
 use std::{fs, path::Path, process::Command};
 use support::*;
 fn invoke(root: &Path, args: &[&str]) -> (i32, Value, String) {
-    let mut cmd = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"));
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"));
     cmd.current_dir("/")
         .env_clear()
         .env("DECLARED_EMPTY", "")
@@ -85,7 +85,7 @@ fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_str
     c["input_closure"] = value!({"status":"incomplete","unresolved":["fixture"]});
     write_values(d.path(), &v);
     let oid = commit(d.path());
-    let out = Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+    let out = Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
         .env("GH_TOKEN", "fixture-secret-not-a-business-input")
         .env_remove("CHRONO_CHECK_SOURCE")
         .args([

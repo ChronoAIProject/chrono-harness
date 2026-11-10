@@ -1693,7 +1693,7 @@ jobs:
           include-hidden-files: true
   linux_verify_inputs_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1773,14 +1773,6 @@ jobs:
           artifact-ids: ${{ needs.linux_build_judge_workflow.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - &chrono_release_download_2
-        name: Download selected original artifact from linux_build_inputs
-        if: ${{ always() && needs.linux_build_inputs.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.linux_build_inputs.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -2291,7 +2283,14 @@ jobs:
       - *chrono_release_download_4
       - *chrono_release_download_6
       - *chrono_release_download_10
-      - *chrono_release_download_2
+      - &chrono_release_download_2
+        name: Download selected original artifact from linux_build_inputs
+        if: ${{ always() && needs.linux_build_inputs.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.linux_build_inputs.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -4754,7 +4753,7 @@ jobs:
           include-hidden-files: true
   macos_verify_inputs_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -4834,14 +4833,6 @@ jobs:
           artifact-ids: ${{ needs.macos_build_judge_workflow.outputs.artifact_id }}
           merge-multiple: true
           path: ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
-      - &chrono_release_download_16
-        name: Download selected original artifact from macos_build_inputs
-        if: ${{ always() && needs.macos_build_inputs.outputs.artifact_id != '' }}
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ needs.macos_build_inputs.outputs.artifact_id }}
-          merge-multiple: true
-          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5352,7 +5343,14 @@ jobs:
       - *chrono_release_download_18
       - *chrono_release_download_20
       - *chrono_release_download_24
-      - *chrono_release_download_16
+      - &chrono_release_download_16
+        name: Download selected original artifact from macos_build_inputs
+        if: ${{ always() && needs.macos_build_inputs.outputs.artifact_id != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.macos_build_inputs.outputs.artifact_id }}
+          merge-multiple: true
+          path: ".chrono-harness/cache/release-handoffs/build_inputs/"
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash

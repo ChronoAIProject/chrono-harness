@@ -353,8 +353,7 @@
         "build_judge_projects",
         "build_judge_cost",
         "build_judge_mixed",
-        "build_judge_workflow",
-        "build_inputs"
+        "build_judge_workflow"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_inputs_tests",
       "rust_toolchain": true
@@ -772,7 +771,7 @@
       "release_assets": []
     },
     "verify_inputs_tests": {
-      "need": "crates/inputs-tests/tests/consumer.rs runs chrono-inputs to capture/compose declared snapshots, then runner with registration, filemap, routes, projects, cost, mixed and workflow judges from the shared project host. Assertions inspect retained inputs and the resulting full check evidence; snapshots.rs also runs the inputs CLI.",
+      "need": "inputs 专属测试由 Cargo 从唯一生产 main.rs 编译测试 CLI，执行快照采集与配对；consumer.rs 仍运行生产 runner 及 registration、filemap、routes、projects、cost、mixed、workflow 七个判官，核对保留输入和完整检查证据。",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-registration",
@@ -781,8 +780,7 @@
         "chrono-judge-projects",
         "chrono-judge-cost",
         "chrono-judge-mixed",
-        "chrono-judge-workflow",
-        "chrono-inputs"
+        "chrono-judge-workflow"
       ]
     },
     "verify_ci_tests": {
