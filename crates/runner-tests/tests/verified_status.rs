@@ -2343,6 +2343,199 @@ proof fn index_fixture_row(raw: &str, path: &str, stage: &str)
     assert(scope_text::oid(oid.spec_bytes()));
 }
 
+// 完整库存预期由原输入和独立字段给出，不调用生产解析器构造预期。
+fn expect_index_inventory_rows(raw: &[&str], expected: &[policy::GitIndexRow])
+    requires
+        raw.len() == expected.len(), policy::git_index_prefix_valid(raw@, raw.len() as int),
+        forall|i: int| 0 <= i < raw.len() ==> policy::git_index_row_at(raw@, i)
+            == Ok::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(expected@[i].bytes()),
+{
+    proof { policy::git_index_stage_obeys_cmp(); }
+    match policy::parse_git_index_rows(raw) {
+        Ok(inventory) => {
+            expect_status_true(inventory.rows.len() == expected.len());
+            expect_status_true(inventory.stages.len() == expected.len());
+            let mut i = 0;
+            while i < expected.len()
+                invariant
+                    0 <= i <= expected.len(), raw.len() == expected.len(),
+                    policy::git_index_prefix_rows(inventory.rows@, raw@, raw.len() as int),
+                    policy::git_index_inventory_stages(inventory.stages@, inventory.rows@),
+                    forall|j: int| 0 <= j < raw.len() ==> policy::git_index_row_at(raw@, j)
+                        == Ok::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(expected@[j].bytes()),
+                decreases expected.len() - i,
+            {
+                let actual = &inventory.rows[i];
+                let wanted = &expected[i];
+                proof {
+                    assert(policy::git_index_row_at(raw@, i as int)
+                        == Ok::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(actual.bytes()));
+                    assert(actual.bytes() == wanted.bytes());
+                }
+                expect_status_true(scope_text::equal_bytes(actual.path.as_bytes(), wanted.path.as_bytes())
+                    && scope_text::equal_bytes(actual.mode.as_bytes(), wanted.mode.as_bytes())
+                    && scope_text::equal_bytes(actual.oid.as_bytes(), wanted.oid.as_bytes())
+                    && scope_text::equal_bytes(actual.stage.as_bytes(), wanted.stage.as_bytes()));
+                expect_index_stage_slot(&inventory.stages, actual.path, actual.stage);
+                i += 1;
+            }
+        },
+        Err(error) => {
+            proof {
+                let i = choose|i: int| 0 <= i < raw.len() && policy::git_index_prefix_valid(raw@, i)
+                    && policy::git_index_error_at(raw@, i, error.view());
+                policy::git_index_error_blocks_prefix(raw@, i, error.view(), raw.len() as int);
+            }
+            panic!();
+        },
+    }
+}
+
+fn expect_index_inventory_error(raw: &[&str], first: usize, expected: policy::GitInventoryError)
+    requires first < raw.len(), policy::git_index_prefix_valid(raw@, first as int),
+        policy::git_index_error_at(raw@, first as int, expected.view()),
+{
+    match policy::parse_git_index_rows(raw) {
+        Err(error) => {
+            proof {
+                let i = choose|i: int| 0 <= i < raw.len() && policy::git_index_prefix_valid(raw@, i)
+                    && policy::git_index_error_at(raw@, i, error.view());
+                policy::git_index_first_error_unique(raw@, first as int, expected.view(), i, error.view());
+            }
+            match (error, expected) {
+                (policy::GitInventoryError::Message(actual), policy::GitInventoryError::Message(wanted)) => {
+                    expect_status_text(actual.as_str(), wanted.as_str());
+                },
+                (policy::GitInventoryError::InvalidPath(actual), policy::GitInventoryError::InvalidPath(wanted)) => {
+                    expect_status_true(scope_text::equal_bytes(actual.as_bytes(), wanted.as_bytes()));
+                },
+                _ => { panic!(); },
+            }
+        },
+        Ok(_) => {
+            proof { policy::git_index_error_blocks_prefix(raw@, first as int, expected.view(), raw.len() as int); }
+            panic!();
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_inventory_keeps_empty_input() {
+    let raw: Vec<&str> = Vec::new();
+    let expected: Vec<policy::GitIndexRow> = Vec::new();
+    expect_index_inventory_rows(raw.as_slice(), expected.as_slice());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_inventory_preserves_order_fields_and_all_four_stages() {
+    let zero = "100644 0000000000000000000000000000000000000001 0\ta";
+    let one = "100644 0000000000000000000000000000000000000001 1\ta";
+    let two = "100644 0000000000000000000000000000000000000001 2\ta";
+    let three = "100644 0000000000000000000000000000000000000001 3\ta";
+    let tail = "100644 0000000000000000000000000000000000000001 0\ta\tpath";
+    proof {
+        reveal_strlit("100644 0000000000000000000000000000000000000001 0\ta");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 1\ta");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 2\ta");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 3\ta");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 0\ta\tpath");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 ");
+        reveal_strlit("a"); reveal_strlit("a\tpath"); reveal_strlit("\t");
+        reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(zero) && vstd::string::is_ascii(one)
+            && vstd::string::is_ascii(two) && vstd::string::is_ascii(three)
+            && vstd::string::is_ascii(tail));
+        vstd::string::is_ascii_spec_bytes("a"); vstd::string::is_ascii_spec_bytes("a\tpath");
+        vstd::string::is_ascii_spec_bytes("0"); vstd::string::is_ascii_spec_bytes("1");
+        vstd::string::is_ascii_spec_bytes("2"); vstd::string::is_ascii_spec_bytes("3");
+        assert(zero@ =~= "100644 0000000000000000000000000000000000000001 "@ + "0"@ + "\t"@ + "a"@);
+        assert(one@ =~= "100644 0000000000000000000000000000000000000001 "@ + "1"@ + "\t"@ + "a"@);
+        assert(two@ =~= "100644 0000000000000000000000000000000000000001 "@ + "2"@ + "\t"@ + "a"@);
+        assert(three@ =~= "100644 0000000000000000000000000000000000000001 "@ + "3"@ + "\t"@ + "a"@);
+        assert(tail@ =~= "100644 0000000000000000000000000000000000000001 "@ + "0"@ + "\t"@ + "a\tpath"@);
+        index_fixture_row(zero, "a", "0"); index_fixture_row(one, "a", "1");
+        index_fixture_row(two, "a", "2"); index_fixture_row(three, "a", "3");
+        index_fixture_row(tail, "a\tpath", "0");
+        assert(policy::paths::relative_path("a".spec_bytes()));
+        assert(policy::paths::relative_path("a\tpath".spec_bytes()));
+        assert("a".spec_bytes().len() != "a\tpath".spec_bytes().len());
+        assert("0".spec_bytes()[0] == 48 && "1".spec_bytes()[0] == 49
+            && "2".spec_bytes()[0] == 50 && "3".spec_bytes()[0] == 51);
+    }
+    // 顺序刻意不按 stage 排序；原路径中的第二个 TAB 必须保留。
+    let raw = vec![three, zero, tail, two, one];
+    let oid = "0000000000000000000000000000000000000001";
+    let expected = vec![
+        policy::GitIndexRow { path: "a", mode: "100644", oid, stage: "3" },
+        policy::GitIndexRow { path: "a", mode: "100644", oid, stage: "0" },
+        policy::GitIndexRow { path: "a\tpath", mode: "100644", oid, stage: "0" },
+        policy::GitIndexRow { path: "a", mode: "100644", oid, stage: "2" },
+        policy::GitIndexRow { path: "a", mode: "100644", oid, stage: "1" }];
+    proof {
+        assert forall|i: int, j: int| 0 <= i < j < raw.len() implies
+            !policy::git_index_same_stage((policy::git_index_row_at(raw@, i)->Ok_0),
+                (policy::git_index_row_at(raw@, j)->Ok_0)) by {
+            if i == 0 {} else if i == 1 {} else if i == 2 {} else { assert(i == 3); }
+            if j == 1 {} else if j == 2 {} else if j == 3 {} else { assert(j == 4); }
+        }
+    }
+    expect_index_inventory_rows(raw.as_slice(), expected.as_slice());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_inventory_duplicate_precedes_later_malformed_row() {
+    let zero = "100644 0000000000000000000000000000000000000001 0\ta";
+    let copy = zero.to_owned();
+    let other_storage = copy.as_str();
+    let raw = vec![zero, other_storage, ""];
+    proof {
+        reveal_strlit("100644 0000000000000000000000000000000000000001 0\ta");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 ");
+        reveal_strlit("a"); reveal_strlit("0"); reveal_strlit("\t");
+        vstd::string::is_ascii_spec_bytes(zero);
+        assert(vstd::string::is_ascii(zero) && vstd::string::is_ascii("a") && vstd::string::is_ascii("0"));
+        assert(zero@ =~= "100644 0000000000000000000000000000000000000001 "@ + "0"@ + "\t"@ + "a"@);
+        index_fixture_row(zero, "a", "0");
+        assert(policy::paths::relative_path("a".spec_bytes()));
+        assert(other_storage.spec_bytes() == zero.spec_bytes());
+        assert(policy::git_index_row_at(raw@, 1) == policy::git_index_row_at(raw@, 0));
+        assert(policy::git_index_same_stage((policy::git_index_row_at(raw@, 0)->Ok_0),
+            (policy::git_index_row_at(raw@, 1)->Ok_0)));
+        assert(exists|j: int| 0 <= j < 1 && policy::git_index_same_stage(
+            (policy::git_index_row_at(raw@, j)->Ok_0), (policy::git_index_row_at(raw@, 1)->Ok_0)));
+    }
+    expect_index_inventory_error(raw.as_slice(), 1,
+        policy::GitInventoryError::Message("duplicate Git index stage".to_owned()));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_inventory_first_row_error_precedes_later_duplicate() {
+    let zero = "100644 0000000000000000000000000000000000000001 0\ta";
+    let raw = vec!["", zero, zero];
+    proof {
+        reveal(policy::git_index_row_spec); reveal_strlit("");
+        vstd::string::is_ascii_spec_bytes("");
+        scope_text::ascii_separator_end_is("".spec_bytes(), 9, 0);
+    }
+    expect_index_inventory_error(raw.as_slice(), 0,
+        policy::GitInventoryError::Message("invalid Git index row".to_owned()));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_inventory_keeps_invalid_path_before_oid_and_later_rows() {
+    let raw = vec!["m x 0\t/a\0suffix", "m x 0\ta", ""];
+    proof {
+        reveal_strlit("m x 0\t/a\0suffix"); reveal_strlit("m x 0\t"); reveal_strlit("/a\0suffix");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("m x 0\t/a\0suffix") && vstd::string::is_ascii("/a\0suffix"));
+        assert("m x 0\t/a\0suffix"@ =~= "m x 0\t"@ + "/a\0suffix"@);
+        invalid_oid_index_fixture("m x 0\t/a\0suffix", "/a\0suffix");
+        assert(!policy::paths::relative_path("/a\0suffix".spec_bytes()));
+    }
+    expect_index_inventory_error(raw.as_slice(), 0, policy::GitInventoryError::InvalidPath("/a\0suffix"));
+}
+
 fn expect_index_row_fields(raw: &str, path: &str, mode: &str, oid: &str, stage: &str)
     requires policy::git_index_row_spec(raw.spec_bytes()) ==
         Ok::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(
