@@ -11,13 +11,17 @@ Git index 的完整单行解析和 stage／mode／OID 比较由同源 Verus 维�
 由同源 `GitIndexStage`／`record_git_index_stage` 拥有，checkout 直接消费；独立预期核全部 stage、
 不同路径、重复错误与完整集合保留。stage-zero 查询直接消费有序键库存的已证明全文二分查找，
 转换证明完整键集合、基数和严格排序；独立预期核非零 stage、全部四种 stage、不同存储及完整路径。
-changed 集合维护、完整循环、
-文件系统比较及完整编译／调用绑定仍待证明，不把局部行解析与插入扩大为整个 checkout 已覆盖。
+changed 集合的全文成员、插入／去重、精确基数、完整排序输出及 index 全行变化集合也由同源
+Verus 维护；真实 checkout 直接消费，预期树查询使用完整有序借用库存的已证明二分查找。
+四项独立预期同时普通运行，覆盖全部行、重复、完整字段及大小写／NUL／Unicode 排序。
+文件系统外层循环、比较及完整编译／调用绑定仍待证明，不把局部入口扩大为整个 checkout 已覆盖。
 
 checkout 的 blob／模式准入、符号链接识别、普通文件与 owner execute 位、打开后完整权限和长度
 比较，以及哈希计数的溢出／增长优先级和结束长度判断由同源 Verus 维护，真实 IO 路径直接消费。
 独立 Verus 预期同时作为普通 Rust 测试执行，沿用 runner-status 的两项严格整 crate 根；
-路径遍历、IO 组合、摘要算法选择、完整哈希循环及 index 状态组合仍待证明。
+路径遍历、IO 组合、摘要算法选择、完整哈希循环及文件系统状态组合仍待证明。
+
+Git 索引标记的实际类型、完整字段克隆／相等、NUL 原字节拆分、单行准入和完整行遍历已接入同源 Verus，真实 `Reader::index_flags` 消费该实现。规格核完整 tag／path、数量／顺序／重复和最早格式／UTF-8 错误；五项独立预期同时在 Rust 运行。标准安全 UTF-8 解码及原行／观察的一对一搬运为明确外部接口，尚未机械精化；整 crate 证明及 Reader／registration 原行为测试仍按同次 DELTA 验收，不据此宣称全仓覆盖。
 
 FILEMAP 已提供显式新增文件分类要求；同源 Verus 的候选门核对两端登记的新行分类、
 已有分类保留、初始范围和基线读取错误。新判断与独立预期沿 runner 现有两项整 crate 根
@@ -83,7 +87,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。实际配对准入由同源 `verified_languages.rs` 定义并已登记整 crate 根，独立预期核完整字面相等、shell→python 的方向及非法边界。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；owner 字节发布与 stage 原件核验迁入现有 Rust worktree 所有者，构建／资格读取及原件核验也由 Rust bootstrap 承担，旧 Python 实现及专属测试退役；Rust 用例验证现役边界，候选验收另记。Python 构建配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
 | 2.2 routes 回归 helper 迁移 | 已实现，范围有限 | 八项 judge-routes-tests 回归改用 Rust 测试自有子进程 helper。`tests/support/tool.rs` 是明确 Cargo binary 和 FILEMAP compile 输入，原 test:judge-routes-tests 计划沿用 Cargo test。保留字面／空／换行 argv、cwd／环境、回执篡改、错版本／执行物替换、PATH、版本观察复用、循环／预检拒绝、标准调用、汇总身份。真实标准 DELTA 消费沿原报告验证，运行事实不在表内复制 | 仅限此测试所有者。其余跨语言逻辑／helper、外部接口 fixture 登记、完整输入、启用、同判仍缺 |
 | 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入仍缺；有限配对、routes、迁移和快照已实现 |
-| 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail`。原 commit 的 parent 物理头选择已接入同源 Verus，证明首个空行前精确前缀选择的完整原字节序列、顺序及终止，独立预期核完整长度与字节。`facts::full_oid` 重导出同源 Verus 文本准入，成功条件及原错误全文由同一实现拥有；独立预期核边界及任意位置非法字节。Git 库存终止、UTF-8 错误分类、NUL 记录选择、首 TAB 分割、空格字段拆分、三字段及单字节 stage 0–3 判断也直接使用同根 Verus，证明完整结果序列、顺序、重复、空字段规则及终止，保留原错误和检查顺序；独立预期同时普通运行并逐项核完整字节。tree 实际条目构造、map 插入及重复拒绝也由同源 Verus 证明，精确保留其他全部键值、原错误和失败后的替换状态，独立预期核完整字段与数量。tree 完整逐行解析也由同源 Verus 维护，规格核全部有效前缀、首错、完整 map 双向对应及数量，非法路径全文经已证明分支转交标准 Debug 格式化；独立预期在普通 Rust 核完整字段、原路径及错误顺序。index 完整逐行解析与 stage 库存也已接入同根 Verus，成功保持全部原字段及顺序，map 与解析行双向精确对应且基数相同；失败保留首个行错误或重复 stage，之前前缀完整有效。独立预期在普通 Rust 核四种 stage、完整字段、首错及原非法路径。标准安全 UTF-8 解码和 Debug 格式化为明确外部接口，stage 库存转为完整有序的借用键向量，真实 stage-zero 查询直接使用已证明的全文二分查找；构造保持全部键、基数和排序，独立预期同时普通执行。外围解码组合、changed 集合、文件系统外层循环及 Git 获取仍待证明 | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
+| 4 固定快照／上下文／CI | 部分 | runner facts.rs、registration lib.rs；G `context_and_config_identity_mismatch`、`ignored_untracked_staged_and_wrong_checkout_fail`。原 commit 的 parent 物理头选择已接入同源 Verus，证明首个空行前精确前缀选择的完整原字节序列、顺序及终止，独立预期核完整长度与字节。`facts::full_oid` 重导出同源 Verus 文本准入，成功条件及原错误全文由同一实现拥有；独立预期核边界及任意位置非法字节。Git 库存终止、UTF-8 错误分类、NUL 记录选择、首 TAB 分割、空格字段拆分、三字段及单字节 stage 0–3 判断也直接使用同根 Verus，证明完整结果序列、顺序、重复、空字段规则及终止，保留原错误和检查顺序；独立预期同时普通运行并逐项核完整字节。tree 实际条目构造、map 插入及重复拒绝也由同源 Verus 证明，精确保留其他全部键值、原错误和失败后的替换状态，独立预期核完整字段与数量。tree 完整逐行解析也由同源 Verus 维护，规格核全部有效前缀、首错、完整 map 双向对应及数量，非法路径全文经已证明分支转交标准 Debug 格式化；独立预期在普通 Rust 核完整字段、原路径及错误顺序。index 完整逐行解析与 stage 库存也已接入同根 Verus，成功保持全部原字段及顺序，map 与解析行双向精确对应且基数相同；失败保留首个行错误或重复 stage，之前前缀完整有效。独立预期在普通 Rust 核四种 stage、完整字段、首错及原非法路径。标准安全 UTF-8 解码和 Debug 格式化为明确外部接口，stage 库存转为完整有序的借用键向量，真实 stage-zero 查询直接使用已证明的全文二分查找；构造保持全部键、基数和排序，独立预期同时普通执行。changed 集合的完整成员、标记／去重、精确基数、排序输出及 index 全行变化集合由同根 Verus 维护，真实 checkout 直接消费；预期树查询复用完整有序借用库存的已证明二分查找，四项独立预期在普通 Rust 也核全部行、完整字段、大小写／NUL／Unicode 及固定输出顺序。外围解码组合、文件系统外层循环及 Git 获取仍待证明 | config v3 已为完整／初始消费者、明确 scoped v2、当前 provider v4 事件读取／fetch 绑定 Git，见 git-facts.md。完整原生 CI／同判及 Git／委托／Cargo／SDK 输入仍缺 |
 | 4.2 CI 缓存及增量构建 | 部分：编译缓存已有键、生产／内容绑定及有限原生冷／保存、兼容源码重建、健康精确命中、不兼容环境分域／重建 | 独立 Rust chrono-cache plan 消费明确消费者／输入／产物，分开源码／兼容键；JSON pointer 只绑定所选值，整文件来源在键外，回归区分单元 metadata／构建参数。v2 探测前解析消费操作引用，只改消费者不改生产键。引用原输出登记，拒绝重叠或缓存证据／源码。Rust 失效、选择、缺失、路径、真实 CLI 环境、planner 不符回归；check.unit_cache 的现役 check.cache-tests 绑定真实 action／Cargo，消费命中前核 producer manifest。真实 Cargo 重建／恢复仍属本地证据，见[缓存合同](ci-cache.md)。bootstrap／check／release 明确增量，发布汇总核值。provider 为 main 消费者生成固定 restore／save，保存成功不确认后端；持续后端查询及额外传输报告、CLI、上传目录政策已退役，排障直接查原生日志与线上 API。普通 CI 复用失败原件上传，发布以独立失败 artifact 保留 state，正式发布根和 collector 合同保持。声明启动缓存可在后续失败后保存，每键至多一保存 job，冲突在生成前拒绝。[有限原生验收](ci-cache.md#bounded-native-acceptance)保留此前两项缓存的原标准操作／汇总 | 不可用内容恢复及修复后健康精确命中的完整原生验收仍缺。Variables／PR 正文控制和专用 fixture 已退役。并发、完整后端生命周期、依赖／当前判官／bootstrap／逐项目输入仍缺，须扩大真实消费者验收 |
 | 5 DELTA 图 | 部分 | 实际 Tree DELTA 已由同源 Verus 完整枚举并线性合并两棵原树，逐路径结果与完整 UTF-8 严格顺序均有证明；独立预期核完整长度、六字段、顺序、空／Unicode／NUL 及反向变化。Git 原始事实获取／解析仍待证明。filemap 类型化合并／记录／传递及 CI 适配；F 全部，P actual_runner_registration_filemap_*。SPEC §5.1 固定两态局部性及定理 6 有条件节点集结论（trureturing PR #10868 已合），复用冻结 ConsequenceClosure，保留先前精确应用编译和旧 execution-edge 反例 | 同源 Verus 图内核覆盖类型并集、名称／槽位索引、FIFO 最短前驱、有限原因链、行投影、原因集合、逐 seed 迭代状态／根对应及真实遍历记录选测；两处诊断按完整 seed ID 查找首个原记录也由同源根证明。返回集合沿用明确列出的外部标准库转换。外层原因关联与合并、seed-ID 生产及关联完整性、JSON 适配、额外选测和完整 SPEC 对应仍待证明；完整宿主输入及原生启用未完成 |
 | 5.2 从消费者需要出发重构依赖 | 部分 | 已有 DELTA 合并／传递／所有者检查。无独立结构报告或自检，未用 SCC／深度／排名／claim 摘要已退役，循环、类型边、有限见证保留 | 真实消费者重构、适用本地／原生验证及核实落地 |

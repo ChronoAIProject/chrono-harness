@@ -28,6 +28,194 @@ pub mod scopes;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct IndexFlag {
+    pub path: String,
+    pub tag: String,
+}
+
+impl Clone for IndexFlag {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    { Self { path: self.path.clone(), tag: self.tag.clone() } }
+}
+
+pub open spec fn index_flags_equal(a: &IndexFlag, b: &IndexFlag) -> bool {
+    a.path@ == b.path@ && a.tag@ == b.tag@
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for IndexFlag {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { index_flags_equal(self, other) }
+}
+
+impl PartialEq for IndexFlag {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == index_flags_equal(self, other),
+    {
+        identifiers::equal_text(self.path.as_str(), other.path.as_str())
+            && identifiers::equal_text(self.tag.as_str(), other.tag.as_str())
+    }
+}
+impl Eq for IndexFlag {}
+
+/// 原字节与安全标准 UTF-8 解码的观察。适配层只搬运这两个值。
+pub struct GitIndexFlagObservation<'a> {
+    pub raw: &'a [u8],
+    pub text: Option<&'a str>,
+}
+
+pub open spec fn index_flag_observation_bound(row: &GitIndexFlagObservation) -> bool {
+    match row.text { Some(text) => text.spec_bytes() == row.raw@, None => true }
+}
+
+pub open spec fn index_flag_observations_bound(rows: Seq<GitIndexFlagObservation>) -> bool {
+    forall|i: int| 0 <= i < rows.len() ==> #[trigger] index_flag_observation_bound(&rows[i])
+}
+
+#[cfg(verus_keep_ghost)]
+pub type IndexFlagBytes = (Seq<u8>, Seq<u8>);
+
+pub open spec fn index_flag_bytes(flag: &IndexFlag) -> IndexFlagBytes {
+    (vstd::utf8::encode_utf8(flag.tag@), vstd::utf8::encode_utf8(flag.path@))
+}
+
+pub open spec fn index_flag_header(raw: Seq<u8>) -> bool {
+    raw.len() >= 3 && raw[1] == 32
+        && (65 <= raw[0] <= 90 || 97 <= raw[0] <= 122)
+}
+
+pub open spec fn index_flag_row_spec(row: &GitIndexFlagObservation)
+    -> Result<IndexFlagBytes, Seq<char>>
+{
+    if !index_flag_header(row.raw@) { Err("invalid Git index flag record"@) }
+    else { match row.text {
+        None => Err("E_INPUT_UNSUPPORTED: non UTF-8 Git output"@),
+        Some(_) => Ok((row.raw@.take(1), row.raw@.skip(2))),
+    } }
+}
+
+/// 先核原字节头部，再采用 UTF-8 观察；首错次序与原 Git 接口一致。
+pub fn parse_git_index_flag_row(row: &GitIndexFlagObservation) -> (out: Result<IndexFlag, String>)
+    requires index_flag_observation_bound(row),
+    ensures match out {
+        Ok(flag) => index_flag_row_spec(row) == Ok::<IndexFlagBytes, Seq<char>>(index_flag_bytes(&flag)),
+        Err(message) => index_flag_row_spec(row) == Err::<IndexFlagBytes, Seq<char>>(message@),
+    },
+{
+    let raw = row.raw;
+    if raw.len() < 3 || raw[1] != 32
+        || !((65 <= raw[0] && raw[0] <= 90) || (97 <= raw[0] && raw[0] <= 122)) {
+        return Err("invalid Git index flag record".to_owned());
+    }
+    let text = match row.text {
+        None => { return Err("E_INPUT_UNSUPPORTED: non UTF-8 Git output".to_owned()); },
+        Some(text) => text,
+    };
+    proof { identifiers::ascii_separator_end_is(text.spec_bytes(), 32, 1); }
+    let (tag, rest) = identifiers::ascii_split_head(text, 32);
+    match rest {
+        Some(path) => Ok(IndexFlag { path: path.to_owned(), tag: tag.to_owned() }),
+        None => Err("invalid Git index flag record".to_owned()),
+    }
+}
+
+/// 完整行序列逐项解释；保留顺序和重复，错误严格来自最早失败行。
+pub fn parse_git_index_flag_rows(rows: &[GitIndexFlagObservation]) -> (out: Result<Vec<IndexFlag>, String>)
+    requires index_flag_observations_bound(rows@),
+    ensures match out {
+        Ok(flags) => flags.len() == rows.len()
+            && forall|i: int| 0 <= i < rows.len() ==>
+                index_flag_row_spec(&rows@[i]) == Ok::<IndexFlagBytes, Seq<char>>(index_flag_bytes(&flags@[i])),
+        Err(message) => exists|i: int| 0 <= i < rows.len()
+            && (forall|j: int| 0 <= j < i ==> index_flag_row_spec(&rows@[j]).is_ok())
+            && index_flag_row_spec(&rows@[i]) == Err::<IndexFlagBytes, Seq<char>>(message@),
+    },
+{
+    let mut flags: Vec<IndexFlag> = Vec::new();
+    let mut i = 0usize;
+    while i < rows.len()
+        invariant i <= rows.len(), flags.len() == i,
+            index_flag_observations_bound(rows@),
+            forall|j: int| 0 <= j < i ==> index_flag_row_spec(&rows@[j])
+                == Ok::<IndexFlagBytes, Seq<char>>(index_flag_bytes(&flags@[j])),
+        decreases rows.len() - i,
+    {
+        let flag = match parse_git_index_flag_row(&rows[i]) {
+            Ok(flag) => flag,
+            Err(message) => { return Err(message); },
+        };
+        flags.push(flag);
+        i += 1;
+    }
+    Ok(flags)
+}
+
+fn index_flag_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
+    ensures ({ let end = identifiers::ascii_separator_end(raw@, 0);
+        identifiers::first_ascii_separator(raw@, 0, end)
+            && out.0@ == raw@.take(end)
+            && match out.1 {
+                Some(tail) => end < raw.len() && tail@ == raw@.skip(end + 1),
+                None => end == raw.len(),
+            }
+    }),
+{
+    let mut end = 0usize;
+    while end < raw.len() && raw[end] != 0
+        invariant end <= raw.len(), forall|i: int| 0 <= i < end ==> raw@[i] != 0,
+        decreases raw.len() - end,
+    { end += 1; }
+    proof { identifiers::ascii_separator_end_is(raw@, 0, end as int); }
+    if end == raw.len() { return (raw, None); }
+    let (head, rest) = raw.split_at(end);
+    let (_, tail) = rest.split_at(1);
+    (head, Some(tail))
+}
+
+pub open spec fn index_flag_record_views(rows: Seq<&[u8]>) -> Seq<Seq<u8>> {
+    rows.map(|i: int, row: &[u8]| row@)
+}
+
+/// 按原字节的 NUL 拆分；忽略空项，末尾无 NUL 仍保留，不提前解码后续行。
+pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
+    ensures index_flag_record_views(out@) == identifiers::ascii_split_records(raw@, 0, false),
+        out.len() == identifiers::ascii_split_records(raw@, 0, false).len(),
+        forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i])@
+            == identifiers::ascii_split_records(raw@, 0, false)[i],
+{
+    let mut remaining = raw;
+    let mut out: Vec<&[u8]> = Vec::new();
+    loop
+        invariant index_flag_record_views(out@)
+            + identifiers::ascii_split_records(remaining@, 0, false)
+            == identifiers::ascii_split_records(raw@, 0, false),
+        decreases remaining.len(),
+    {
+        let ghost previous = index_flag_record_views(out@);
+        let (head, rest) = index_flag_record_head(remaining);
+        proof {
+            reveal_with_fuel(identifiers::ascii_split_records, 1);
+            assert(identifiers::ascii_split_records(remaining@, 0, false)
+                == (if head.len() > 0 { seq![head@] } else { seq![] })
+                    + match rest {
+                        Some(tail) => identifiers::ascii_split_records(tail@, 0, false),
+                        None => seq![],
+                    });
+        }
+        if head.len() > 0 {
+            out.push(head);
+            proof { assert(index_flag_record_views(out@) =~= previous + seq![head@]); }
+        }
+        match rest {
+            None => { return out; },
+            Some(tail) => { remaining = tail; },
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
 pub enum Status {
     Passed,
@@ -513,7 +701,7 @@ pub open spec fn tree_entry_fields(entry: &TreeEntry) -> TreeEntryFields {
 
 /// 标准迭代器的完整、严格有序库存连接实际 map 键与全文身份。
 /// 只创建迭代器，不遍历或复制库存。
-fn tree_keys_have_unique_text(tree: &Tree)
+fn tree_keys_have_unique_text<V>(tree: &BTreeMap<TreePath, V>)
     ensures forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
         tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@ ==> a == b,
 {
@@ -521,7 +709,7 @@ fn tree_keys_have_unique_text(tree: &Tree)
     let iterator = tree.iter();
     proof {
         let rows = iterator@.1;
-        let keys = rows.map(|i: int, row: (TreePath, TreeEntry)| row.0);
+        let keys = rows.map(|i: int, row: (TreePath, V)| row.0);
         vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
         assert forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
             tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@
@@ -1300,6 +1488,226 @@ pub fn git_index_entry_changed(row: &GitIndexRow<'_>, entry: Option<&TreeEntry>)
             || !identifiers::equal_text(value.oid.as_str(), row.oid),
         None => true,
     }
+}
+
+pub type CheckoutChanges = BTreeMap<TreePath, ()>;
+
+pub open spec fn checkout_change_has_path(changes: Map<TreePath, ()>, path: Seq<char>) -> bool {
+    exists|key: TreePath| (#[trigger] changes.contains_key(key)) && key@ == path
+}
+
+pub open spec fn checkout_index_row_changed(tree: Map<TreePath, TreeEntry>, row: GitIndexRow) -> bool {
+    !(row.stage@ == "0"@ && match map_entry_fields(tree, row.path@) {
+        Some(fields) => fields.0 == row.mode@ && fields.1 == row.oid@,
+        None => false,
+    })
+}
+
+pub open spec fn checkout_index_prefix_changed(
+    tree: Map<TreePath, TreeEntry>, rows: Seq<GitIndexRow>, end: int, path: Seq<char>,
+) -> bool {
+    exists|i: int| 0 <= i < end && (#[trigger] rows[i]).path@ == path
+        && checkout_index_row_changed(tree, rows[i])
+}
+
+/// 只保存完整路径；重复标记不增加成员，原有路径始终保留。
+pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+        == (checkout_change_has_path(old(changes)@, text) || text == path@),
+        changes@.len() == old(changes)@.len()
+            + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
+{
+    proof { tree_path_obeys_cmp(); }
+    let key = TreePath::from_text(path);
+    let ghost before = changes@;
+    changes.insert(key, ());
+    tree_keys_have_unique_text(changes);
+    proof {
+        if checkout_change_has_path(before, path@) {
+            let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == path@;
+            assert(changes@.contains_key(found));
+            assert(changes@.contains_key(key));
+            assert(found == key);
+            assert(before.contains_key(key));
+        }
+        if before.contains_key(key) { assert(checkout_change_has_path(before, path@)); }
+        assert(before.contains_key(key) == checkout_change_has_path(before, path@));
+        assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+            == (checkout_change_has_path(before, text) || text == path@) by {
+            if checkout_change_has_path(changes@, text) {
+                let found = choose|found: TreePath| (#[trigger] changes@.contains_key(found)) && found@ == text;
+                if found != key { assert(before.contains_key(found)); }
+            }
+            if checkout_change_has_path(before, text) {
+                let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == text;
+                assert(changes@.contains_key(found));
+            }
+            if text == path@ { assert(changes@.contains_key(key)); }
+        }
+    }
+}
+
+/// 结果完整且按 UTF-8 字节严格排序；不把 map 中的键遗漏或重复输出。
+pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
+    ensures
+        forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+            == (exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text),
+        forall|i: int, j: int| 0 <= i < j < paths.len()
+            ==> identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] paths@[i])@),
+                vstd::utf8::encode_utf8((#[trigger] paths@[j])@)),
+        paths.len() == changes@.len(),
+{
+    proof { tree_path_obeys_cmp(); }
+    let mut iterator = changes.keys();
+    let ghost all = iterator@.1;
+    proof { all.unique_seq_to_set(); }
+    let mut paths: Vec<String> = Vec::new();
+    loop
+        invariant
+            iterator@.1 == all, iterator@.0 == paths.len(),
+            0 <= iterator@.0 <= all.len(), all.to_set() == changes@.dom(),
+            all.len() == changes@.len(),
+            vstd::std_specs::btree::increasing_seq(all),
+            forall|i: int| 0 <= i < paths.len() ==> (#[trigger] paths@[i])@ == all[i]@,
+        decreases all.len() - paths.len(),
+    {
+        match iterator.next() {
+            Some(key) => { paths.push(key.text.clone()); },
+            None => {
+                proof {
+                    tree_path_obeys_cmp();
+                    vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
+                    assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+                        == (exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text) by {
+                        if checkout_change_has_path(changes@, text) {
+                            let key = choose|key: TreePath| (#[trigger] changes@.contains_key(key)) && key@ == text;
+                            assert(all.contains(key));
+                            let i = all.lemma_contains_to_index(key);
+                            assert(paths@[i]@ == text);
+                        }
+                        if exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text {
+                            let i = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text;
+                            assert(all.to_set().contains(all[i]));
+                            assert(changes@.contains_key(all[i]));
+                        }
+                    }
+                    assert forall|i: int, j: int| 0 <= i < j < paths.len()
+                        implies identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] paths@[i])@),
+                            vstd::utf8::encode_utf8((#[trigger] paths@[j])@)) by {
+                        assert(all[i].cmp_spec(&all[j]) is Less);
+                        assert(all[i].order_spec(&all[j]) is Less);
+                    }
+                }
+                return paths;
+            },
+        }
+    }
+}
+
+proof fn tree_rows_entry_at(rows: Seq<(&TreePath, &TreeEntry)>, index: int)
+    requires tree_rows_ordered(rows), 0 <= index < rows.len(),
+    ensures rows_entry(rows, 0, rows[index].0@) == Some(tree_entry_fields(rows[index].1)),
+{
+    rows_entry_witness(rows, 0, rows[index].0@);
+    assert(rows_has_path(rows, 0, rows[index].0@));
+    let fields = rows_entry(rows, 0, rows[index].0@)->Some_0;
+    let found = choose|found: int| 0 <= found < rows.len()
+        && rows[found].0@ == rows[index].0@ && tree_entry_fields(rows[found].1) == fields;
+    if found < index { identifiers::byte_lt_strict(rows[found].0.bytes(), rows[index].0.bytes()); }
+    if index < found { identifiers::byte_lt_strict(rows[index].0.bytes(), rows[found].0.bytes()); }
+    assert(found == index);
+}
+
+/// 查询实际树的借用库存；不采用缺少全文解释的异型借用 map 查询。
+fn lookup_tree_rows<'a>(rows: &Vec<(&'a TreePath, &'a TreeEntry)>, path: &str)
+    -> (entry: Option<&'a TreeEntry>)
+    requires tree_rows_ordered(rows@),
+    ensures optional_entry_fields(entry) == rows_entry(rows@, 0, path@),
+{
+    let mut low: usize = 0;
+    let mut high = rows.len();
+    while low < high
+        invariant 0 <= low <= high <= rows.len(), tree_rows_ordered(rows@),
+            forall|i: int| 0 <= i < low
+                ==> identifiers::byte_lt((#[trigger] rows@[i]).0.bytes(), path.spec_bytes()),
+            forall|i: int| high <= i < rows.len()
+                ==> identifiers::byte_lt(path.spec_bytes(), (#[trigger] rows@[i]).0.bytes()),
+        decreases high - low,
+    {
+        let mid = low + (high - low) / 2;
+        let order = identifiers::compare_bytes(rows[mid].0.as_str().as_bytes(), path.as_bytes());
+        if order == 0 {
+            proof {
+                vstd::utf8::encode_utf8_decode_utf8(rows@[mid as int].0@);
+                vstd::utf8::encode_utf8_decode_utf8(path@);
+                assert(rows@[mid as int].0@ == path@);
+                tree_rows_entry_at(rows@, mid as int);
+            }
+            return Some(rows[mid].1);
+        } else if order < 0 {
+            proof {
+                assert forall|i: int| 0 <= i < mid + 1
+                    implies identifiers::byte_lt((#[trigger] rows@[i]).0.bytes(), path.spec_bytes()) by {
+                    if low <= i < mid {
+                        identifiers::byte_lt_transitive(rows@[i].0.bytes(), rows@[mid as int].0.bytes(), path.spec_bytes());
+                    }
+                }
+            }
+            low = mid + 1;
+        } else {
+            proof {
+                assert forall|i: int| mid <= i < rows.len()
+                    implies identifiers::byte_lt(path.spec_bytes(), (#[trigger] rows@[i]).0.bytes()) by {
+                    if mid < i < high {
+                        identifiers::byte_lt_transitive(path.spec_bytes(), rows@[mid as int].0.bytes(), rows@[i].0.bytes());
+                    }
+                }
+            }
+            high = mid;
+        }
+    }
+    proof {
+        assert forall|i: int| 0 <= i < rows.len() implies (#[trigger] rows@[i]).0@ != path@ by {
+            if i < low { identifiers::byte_lt_strict(rows@[i].0.bytes(), path.spec_bytes()); }
+            else { identifiers::byte_lt_strict(path.spec_bytes(), rows@[i].0.bytes()); }
+        }
+        rows_entry_absent(rows@, 0, path@);
+    }
+    None
+}
+
+/// 真实 index 的每一行参与判断；changed 集合精确包含至少有一条变化行的完整路径。
+pub fn checkout_index_changes(tree: &Tree, rows: &[GitIndexRow<'_>]) -> (changes: CheckoutChanges)
+    ensures forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+        == checkout_index_prefix_changed(tree@, rows@, rows.len() as int, path),
+{
+    let inventory = tree_rows(tree);
+    let mut changes = CheckoutChanges::new();
+    let mut i: usize = 0;
+    while i < rows.len()
+        invariant 0 <= i <= rows.len(), tree_rows_ordered(inventory@),
+            tree_rows_view(inventory@).to_set() == tree@.kv_pairs(),
+            forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == checkout_index_prefix_changed(tree@, rows@, i as int, path),
+        decreases rows.len() - i,
+    {
+        let entry = lookup_tree_rows(&inventory, rows[i].path);
+        proof { map_rows_entry(tree@, inventory@, rows@[i as int].path@); }
+        let changed = git_index_entry_changed(&rows[i], entry);
+        let ghost before = changes@;
+        if changed { record_checkout_change(&mut changes, rows[i].path); }
+        proof {
+            assert(changed == checkout_index_row_changed(tree@, rows@[i as int]));
+            assert forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == checkout_index_prefix_changed(tree@, rows@, i + 1, path) by {
+                assert(checkout_index_prefix_changed(tree@, rows@, i + 1, path)
+                    == (checkout_index_prefix_changed(tree@, rows@, i as int, path)
+                        || (rows@[i as int].path@ == path && changed)));
+            }
+        }
+        i += 1;
+    }
+    changes
 }
 
 /// checkout 只支持原有三种 blob 模式，完整文本决定支持与否。
