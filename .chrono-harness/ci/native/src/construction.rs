@@ -452,9 +452,12 @@ impl<'a> Construction<'a> {
         }
         let parent = target.parent().ok_or("missing install parent")?;
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        let temporary = tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
+        let temporary =
+            tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
         fs::copy(source, temporary.path()).map_err(|error| error.to_string())?;
-        temporary.persist(&target).map_err(|error| error.to_string())?;
+        temporary
+            .persist(&target)
+            .map_err(|error| error.to_string())?;
         self.report.installed.push(Installed {
             path: destination.into(),
             sha256: file_identity(&target)?.0,
