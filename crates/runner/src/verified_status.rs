@@ -731,7 +731,7 @@ pub struct GitIndexStageLookup<'a> {
 }
 
 impl<'a> GitIndexStageLookup<'a> {
-    pub open spec fn view(&self) -> Seq<GitIndexStage<'a>> { self.keys@ }
+    pub closed spec fn view(&self) -> Seq<GitIndexStage<'a>> { self.keys@ }
 
     pub open spec fn valid(&self) -> bool { git_index_stages_ordered(self.view()) }
 
