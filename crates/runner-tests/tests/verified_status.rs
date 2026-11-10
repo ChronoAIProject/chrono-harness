@@ -1058,7 +1058,7 @@ proof fn tree_fixture_row(raw: &str, path: &str)
         if policy::paths::relative_path(path.spec_bytes()) {
             Ok((path.spec_bytes(), "100644".spec_bytes(),
                 "0000000000000000000000000000000000000001".spec_bytes(), "blob".spec_bytes()))
-        } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
+        } else { Err(policy::GitInventoryErrorView::InvalidPath(path.spec_bytes())) },
 {
     reveal(policy::git_tree_row_spec);
     let meta = "100644 blob 0000000000000000000000000000000000000001";
@@ -1097,21 +1097,21 @@ proof fn tree_fixture_row(raw: &str, path: &str)
 
 fn expect_tree_parse_error(rows: &[&str], first: usize, expected: &str)
     requires first < rows.len(), policy::git_tree_prefix_valid(rows@, first as int),
-        policy::git_tree_error_at(rows@, first as int, policy::GitTreeErrorView::Message(expected@)),
+        policy::git_tree_error_at(rows@, first as int, policy::GitInventoryErrorView::Message(expected@)),
 {
     proof { policy::git_tree_error_blocks_prefix(rows@, first as int,
-        policy::GitTreeErrorView::Message(expected@), rows.len() as int); }
+        policy::GitInventoryErrorView::Message(expected@), rows.len() as int); }
     match policy::parse_git_tree_rows(rows) {
         Err(error) => {
             proof {
                 let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
                     && policy::git_tree_error_at(rows@, j, error.view());
                 policy::git_tree_first_error_unique(rows@, first as int,
-                    policy::GitTreeErrorView::Message(expected@), j, error.view());
+                    policy::GitInventoryErrorView::Message(expected@), j, error.view());
             }
             match error {
-                policy::GitTreeError::Message(message) => {
-                    let rendered = policy::GitTreeError::Message(message).render(copy_tree_fixture_path);
+                policy::GitInventoryError::Message(message) => {
+                    let rendered = policy::GitInventoryError::Message(message).render(copy_tree_fixture_path);
                     expect_status_text(rendered.as_str(), expected);
                 },
                 _ => { panic!(); },
@@ -1127,26 +1127,26 @@ fn copy_tree_fixture_path(path: &str) -> (out: String)
 
 fn expect_tree_path_error(rows: &[&str], first: usize, expected: &str)
     requires first < rows.len(), policy::git_tree_prefix_valid(rows@, first as int),
-        policy::git_tree_error_at(rows@, first as int, policy::GitTreeErrorView::InvalidPath(expected.spec_bytes())),
+        policy::git_tree_error_at(rows@, first as int, policy::GitInventoryErrorView::InvalidPath(expected.spec_bytes())),
 {
     proof { policy::git_tree_error_blocks_prefix(rows@, first as int,
-        policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), rows.len() as int); }
+        policy::GitInventoryErrorView::InvalidPath(expected.spec_bytes()), rows.len() as int); }
     match policy::parse_git_tree_rows(rows) {
         Err(error) => {
             proof {
                 let j = choose|j: int| 0 <= j < rows.len() && policy::git_tree_prefix_valid(rows@, j)
                     && policy::git_tree_error_at(rows@, j, error.view());
                 policy::git_tree_first_error_unique(rows@, first as int,
-                    policy::GitTreeErrorView::InvalidPath(expected.spec_bytes()), j, error.view());
+                    policy::GitInventoryErrorView::InvalidPath(expected.spec_bytes()), j, error.view());
             }
             match error {
-                policy::GitTreeError::InvalidPath(path) => {
+                policy::GitInventoryError::InvalidPath(path) => {
                     proof {
                         vstd::utf8::encode_utf8_decode_utf8(path@);
                         vstd::utf8::encode_utf8_decode_utf8(expected@);
                     }
                     expect_status_text(path, expected);
-                    let rendered = policy::GitTreeError::InvalidPath(path).render(copy_tree_fixture_path);
+                    let rendered = policy::GitInventoryError::InvalidPath(path).render(copy_tree_fixture_path);
                     expect_status_text(rendered.as_str(), expected);
                 },
                 _ => { panic!(); },
@@ -1160,9 +1160,9 @@ proof fn empty_metadata_tree_fixture(raw: &str, path: &str)
     requires vstd::string::is_ascii(raw), vstd::string::is_ascii(path), raw@ == "  \t"@ + path@,
     ensures policy::git_tree_row_spec(raw.spec_bytes()) ==
         if policy::paths::relative_path(path.spec_bytes()) {
-            Err::<policy::GitTreeRowBytes, policy::GitTreeErrorView>(
-                policy::GitTreeErrorView::Message("expected full nonzero lowercase commit OID"@))
-        } else { Err(policy::GitTreeErrorView::InvalidPath(path.spec_bytes())) },
+            Err::<policy::GitTreeRowBytes, policy::GitInventoryErrorView>(
+                policy::GitInventoryErrorView::Message("expected full nonzero lowercase commit OID"@))
+        } else { Err(policy::GitInventoryErrorView::InvalidPath(path.spec_bytes())) },
 {
     reveal(policy::git_tree_row_spec);
     reveal_strlit("  \t"); reveal_strlit("  "); reveal_strlit(" "); reveal_strlit("");
@@ -1238,7 +1238,7 @@ fn tree_parser_keeps_first_error_and_exact_path() {
                 == (policy::git_tree_row_at(duplicate@, 1)->Ok_0).0);
         }
         assert(policy::git_tree_error_at(duplicate@, 1,
-            policy::GitTreeErrorView::Message("duplicate Git tree path"@)));
+            policy::GitInventoryErrorView::Message("duplicate Git tree path"@)));
     }
     expect_tree_parse_error(&duplicate, 1, "duplicate Git tree path");
     expect_tree_parse_error(&[good, "missing", good], 1, "invalid Git tree row");
@@ -2124,6 +2124,229 @@ fn retained_response_preserves_exact_status_errors() {
     let bad_error = policy::validate_record_response("p", "r", "j", &WireStatus::Error, 2,
         "p", "r", "j", info.as_slice());
     expect_response_error(bad_error, "response findings/status disagree");
+}
+
+fn expect_index_row_message(raw: &str, expected: &str)
+    requires policy::git_index_row_spec(raw.spec_bytes()) ==
+        Err::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(
+            policy::GitInventoryErrorView::Message(expected@)),
+{
+    match policy::parse_git_index_row(raw) {
+        Err(policy::GitInventoryError::Message(message)) => {
+            expect_status_text(message.as_str(), expected);
+        },
+        _ => { panic!(); },
+    }
+}
+
+// 显式固定分隔位置和字段，预期不由生产解析器生成。
+proof fn index_fixture_row(raw: &str, path: &str, stage: &str)
+    requires
+        vstd::string::is_ascii(raw), vstd::string::is_ascii(path), vstd::string::is_ascii(stage),
+        stage@.len() == 1, '0' <= stage@[0] <= '3',
+        raw@ == "100644 0000000000000000000000000000000000000001 "@ + stage@ + "\t"@ + path@,
+    ensures policy::git_index_row_spec(raw.spec_bytes()) ==
+        if policy::paths::relative_path(path.spec_bytes()) {
+            Ok((path.spec_bytes(), "100644".spec_bytes(),
+                "0000000000000000000000000000000000000001".spec_bytes(), stage.spec_bytes()))
+        } else { Err(policy::GitInventoryErrorView::InvalidPath(path.spec_bytes())) },
+{
+    reveal(policy::git_index_row_spec);
+    reveal_strlit("100644 0000000000000000000000000000000000000001 ");
+    reveal_strlit("100644"); reveal_strlit("\t");
+    reveal_strlit("0000000000000000000000000000000000000001");
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    let oid = "0000000000000000000000000000000000000001";
+    let ghost meta = raw.spec_bytes().take(49);
+    let ghost tail = meta.skip(7);
+    assert(vstd::string::is_ascii(oid) && vstd::string::is_ascii("100644"));
+    scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 49);
+    assert(raw.spec_bytes().skip(50) =~= path.spec_bytes());
+    scope_text::ascii_separator_end_is(meta, 32, 6);
+    scope_text::ascii_separator_end_is(tail, 32, 40);
+    scope_text::ascii_separator_end_is(stage.spec_bytes(), 32, 1);
+    assert(meta.take(6) =~= "100644".spec_bytes());
+    assert(tail.take(40) =~= oid.spec_bytes());
+    assert(tail.skip(41) =~= stage.spec_bytes());
+    assert(stage.spec_bytes().take(1) =~= stage.spec_bytes());
+    reveal_with_fuel(scope_text::ascii_split_records, 4);
+    assert(scope_text::ascii_split_records(meta, 32, true)
+        =~= seq!["100644".spec_bytes(), oid.spec_bytes(), stage.spec_bytes()]);
+    assert forall|i: int| 0 <= i < oid.spec_bytes().len()
+        implies scope_text::oid_byte(#[trigger] oid.spec_bytes()[i]) by {
+        assert(oid.spec_bytes()[i] == 48 || oid.spec_bytes()[i] == 49);
+    }
+    assert(oid.spec_bytes()[39] == 49);
+    assert(scope_text::oid(oid.spec_bytes()));
+}
+
+fn expect_index_row_fields(raw: &str, path: &str, mode: &str, oid: &str, stage: &str)
+    requires policy::git_index_row_spec(raw.spec_bytes()) ==
+        Ok::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(
+            (path.spec_bytes(), mode.spec_bytes(), oid.spec_bytes(), stage.spec_bytes())),
+{
+    match policy::parse_git_index_row(raw) {
+        Ok(row) => {
+            let same = scope_text::equal_bytes(row.path.as_bytes(), path.as_bytes())
+                && scope_text::equal_bytes(row.mode.as_bytes(), mode.as_bytes())
+                && scope_text::equal_bytes(row.oid.as_bytes(), oid.as_bytes())
+                && scope_text::equal_bytes(row.stage.as_bytes(), stage.as_bytes());
+            expect_status_true(same);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_parser_preserves_all_fields_and_stage_boundaries() {
+    let zero = "100644 0000000000000000000000000000000000000001 0\ta\tpath";
+    let three = "100644 0000000000000000000000000000000000000001 3\ta\tpath";
+    proof {
+        reveal_strlit("100644 0000000000000000000000000000000000000001 0\ta\tpath");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 3\ta\tpath");
+        reveal_strlit("100644 0000000000000000000000000000000000000001 ");
+        reveal_strlit("a\tpath"); reveal_strlit("0"); reveal_strlit("3"); reveal_strlit("\t");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(zero) && vstd::string::is_ascii(three)
+            && vstd::string::is_ascii("a\tpath") && vstd::string::is_ascii("0")
+            && vstd::string::is_ascii("3"));
+        assert(zero@ =~= "100644 0000000000000000000000000000000000000001 "@ + "0"@ + "\t"@ + "a\tpath"@);
+        assert(three@ =~= "100644 0000000000000000000000000000000000000001 "@ + "3"@ + "\t"@ + "a\tpath"@);
+        index_fixture_row(zero, "a\tpath", "0");
+        index_fixture_row(three, "a\tpath", "3");
+        assert(policy::paths::relative_path("a\tpath".spec_bytes()));
+    }
+    expect_index_row_fields(zero, "a\tpath", "100644", "0000000000000000000000000000000000000001", "0");
+    expect_index_row_fields(three, "a\tpath", "100644", "0000000000000000000000000000000000000001", "3");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_parser_keeps_row_and_metadata_errors_before_path_and_oid() {
+    proof {
+        reveal(policy::git_index_row_spec);
+        reveal_strlit(""); reveal_strlit("bad\t/"); reveal_strlit("bad");
+        reveal_strlit("m x 4\t/"); reveal_strlit("m x 4"); reveal_strlit("x 4");
+        reveal_strlit("m"); reveal_strlit("x"); reveal_strlit("4");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("bad\t/")
+            && vstd::string::is_ascii("m x 4\t/"));
+        assert(vstd::string::is_ascii("bad") && vstd::string::is_ascii("m x 4")
+            && vstd::string::is_ascii("x 4") && vstd::string::is_ascii("4")
+            && vstd::string::is_ascii("m") && vstd::string::is_ascii("x"));
+        scope_text::ascii_separator_end_is("".spec_bytes(), 9, 0);
+        scope_text::ascii_separator_end_is("bad\t/".spec_bytes(), 9, 3);
+        scope_text::ascii_separator_end_is("bad".spec_bytes(), 32, 3);
+        scope_text::ascii_separator_end_is("m x 4\t/".spec_bytes(), 9, 5);
+        scope_text::ascii_separator_end_is("m x 4".spec_bytes(), 32, 1);
+        scope_text::ascii_separator_end_is("x 4".spec_bytes(), 32, 1);
+        scope_text::ascii_separator_end_is("4".spec_bytes(), 32, 1);
+        assert("m x 4".spec_bytes().take(1) =~= "m".spec_bytes());
+        assert("m x 4".spec_bytes().skip(2) =~= "x 4".spec_bytes());
+        assert("x 4".spec_bytes().take(1) =~= "x".spec_bytes());
+        assert("x 4".spec_bytes().skip(2) =~= "4".spec_bytes());
+        assert("m x 4\t/".spec_bytes().take(5) =~= "m x 4".spec_bytes());
+        assert("bad\t/".spec_bytes().take(3) =~= "bad".spec_bytes());
+        reveal_with_fuel(scope_text::ascii_split_records, 4);
+    }
+    expect_index_row_message("", "invalid Git index row");
+    expect_index_row_message("bad\t/", "invalid Git index metadata");
+    expect_index_row_message("m x 4\t/", "invalid Git index metadata");
+}
+
+proof fn invalid_oid_index_fixture(raw: &str, path: &str)
+    requires vstd::string::is_ascii(raw), vstd::string::is_ascii(path),
+        raw@ == "m x 0\t"@ + path@,
+    ensures policy::git_index_row_spec(raw.spec_bytes()) ==
+        if policy::paths::relative_path(path.spec_bytes()) {
+            Err::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(
+                policy::GitInventoryErrorView::Message("expected full nonzero lowercase commit OID"@))
+        } else { Err(policy::GitInventoryErrorView::InvalidPath(path.spec_bytes())) },
+{
+    reveal(policy::git_index_row_spec);
+    reveal_strlit("m x 0\t"); reveal_strlit("m x 0"); reveal_strlit("x 0");
+    reveal_strlit("m"); reveal_strlit("x"); reveal_strlit("0");
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    assert(vstd::string::is_ascii("m x 0") && vstd::string::is_ascii("x 0")
+        && vstd::string::is_ascii("m") && vstd::string::is_ascii("x")
+        && vstd::string::is_ascii("0"));
+    scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 5);
+    scope_text::ascii_separator_end_is("m x 0".spec_bytes(), 32, 1);
+    scope_text::ascii_separator_end_is("x 0".spec_bytes(), 32, 1);
+    scope_text::ascii_separator_end_is("0".spec_bytes(), 32, 1);
+    assert(raw.spec_bytes().take(5) =~= "m x 0".spec_bytes());
+    assert(raw.spec_bytes().skip(6) =~= path.spec_bytes());
+    assert("m x 0".spec_bytes().take(1) =~= "m".spec_bytes());
+    assert("m x 0".spec_bytes().skip(2) =~= "x 0".spec_bytes());
+    assert("x 0".spec_bytes().take(1) =~= "x".spec_bytes());
+    assert("x 0".spec_bytes().skip(2) =~= "0".spec_bytes());
+    reveal_with_fuel(scope_text::ascii_split_records, 4);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_parser_keeps_path_error_before_oid_and_preserves_exact_error() {
+    proof {
+        reveal_strlit("m x 0\t"); reveal_strlit("m x 0\t/"); reveal_strlit("m x 0\ta");
+        reveal_strlit("/"); reveal_strlit("a");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("m x 0\t/") && vstd::string::is_ascii("m x 0\ta")
+            && vstd::string::is_ascii("/") && vstd::string::is_ascii("a"));
+        assert("m x 0\t/"@ =~= "m x 0\t"@ + "/"@);
+        assert("m x 0\ta"@ =~= "m x 0\t"@ + "a"@);
+        invalid_oid_index_fixture("m x 0\t/", "/");
+        invalid_oid_index_fixture("m x 0\ta", "a");
+        assert(!policy::paths::relative_path("/".spec_bytes()));
+        assert(policy::paths::relative_path("a".spec_bytes()));
+    }
+    match policy::parse_git_index_row("m x 0\t/") {
+        Err(policy::GitInventoryError::InvalidPath(path)) => {
+            let same = scope_text::equal_bytes(path.as_bytes(), "/".as_bytes());
+            expect_status_true(same);
+        },
+        _ => { panic!(); },
+    }
+    expect_index_row_message("m x 0\ta", "expected full nonzero lowercase commit OID");
+}
+
+fn index_entry_uses_complete_mode_oid_and_ignores_path_kind(a: &str, b: &str)
+    requires a@ != b@,
+{
+    let row = policy::GitIndexRow { path: b, mode: a, oid: a, stage: "0" };
+    let same = policy::TreeEntry { mode: a.to_owned(), oid: a.to_owned(), kind: b.to_owned() };
+    expect_status_true(!policy::git_index_entry_changed(&row, Some(&same)));
+    expect_status_true(policy::git_index_entry_changed(&row, None));
+    let other_mode = policy::TreeEntry { mode: b.to_owned(), oid: a.to_owned(), kind: b.to_owned() };
+    let other_oid = policy::TreeEntry { mode: a.to_owned(), oid: b.to_owned(), kind: b.to_owned() };
+    expect_status_true(policy::git_index_entry_changed(&row, Some(&other_mode)));
+    expect_status_true(policy::git_index_entry_changed(&row, Some(&other_oid)));
+}
+
+fn index_nonzero_stage_always_changes(stage: &str, text: &str)
+    requires stage@ != "0"@,
+{
+    let row = policy::GitIndexRow { path: text, mode: text, oid: text, stage };
+    let same = policy::TreeEntry { mode: text.to_owned(), oid: text.to_owned(), kind: text.to_owned() };
+    expect_status_true(policy::git_index_entry_changed(&row, None));
+    expect_status_true(policy::git_index_entry_changed(&row, Some(&same)));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_entry_matching_preserves_complete_identity_and_stage_decision() {
+    proof {
+        reveal_strlit(""); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("é"); reveal_strlit("e\u{301}");
+        reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
+        assert("a"@.len() != "a\0"@.len());
+        assert("é"@.len() != "e\u{301}"@.len());
+        assert("1"@[0] != "0"@[0]);
+        assert("2"@[0] != "0"@[0]);
+        assert("3"@[0] != "0"@[0]);
+    }
+    index_entry_uses_complete_mode_oid_and_ignores_path_kind("", "a");
+    index_entry_uses_complete_mode_oid_and_ignores_path_kind("a", "a\0");
+    index_entry_uses_complete_mode_oid_and_ignores_path_kind("é", "e\u{301}");
+    index_nonzero_stage_always_changes("1", "");
+    index_nonzero_stage_always_changes("2", "a\0");
+    index_nonzero_stage_always_changes("3", "目录/é");
 }
 
 }

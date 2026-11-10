@@ -5,6 +5,11 @@ projects 原件状态由 `verified_state.rs` 与独立 Verus 预期负责：
 正式整 crate 证明、独立预期与真实消费者行为由同次 DELTA 验收；外围原件发布事务和完整执行器
 保持未证明，不能据局部内核声明 `state.rs` 整文件覆盖。范围与登记见 [Verus 实施范围](verus.md)。
 
+Git index 的完整单行解析和 stage／mode／OID 比较由同源 Verus 维护，真实 checkout 直接消费；
+独立预期核完整字段、缺条目、stage 边界及错误文字／优先级。tree／index 共用原错误载体，
+标准 Debug 格式化仍是明确外部边界。重复 stage、changed 集合维护、完整循环、文件系统比较
+及完整编译／调用绑定仍待证明，不把局部行解析扩大为整个 checkout 已覆盖。
+
 FILEMAP 已提供显式新增文件分类要求；同源 Verus 的候选门核对两端登记的新行分类、
 已有分类保留、初始范围和基线读取错误。新判断与独立预期沿 runner 现有两项整 crate 根
 验收，真实 routes／CI 入口共同消费。本宿主 FILEMAP 已采用该字段；实际使用方须先经
