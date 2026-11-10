@@ -257,6 +257,25 @@ fn observation_binding_requires_the_actual_role_output_epoch_and_nonzero_attempt
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn absent_or_conflicting_native_exit_does_not_complete_the_operation() {
+    let success = policy::process_exit_known(0,None);
+    let failure = policy::process_exit_known(17,None);
+    let largest_unix_exit = policy::process_exit_known(255,None);
+    let killed = policy::process_exit_known(-1,Some(9));
+    let terminated = policy::process_exit_known(-1,Some(15));
+    let missing = policy::process_exit_known(-1,None);
+    let invalid_code = policy::process_exit_known(-2,None);
+    let conflicting = policy::process_exit_known(0,Some(9));
+    let zero_signal = policy::process_exit_known(-1,Some(0));
+    let invalid_signal = policy::process_exit_known(-1,Some(-1));
+    expect_true(success && failure && largest_unix_exit && killed && terminated);
+    expect_true(!missing && !invalid_code && !conflicting && !zero_signal && !invalid_signal);
+    let unknown = policy::unknown_pr_operation(!missing,false);
+    let settled = policy::settled_pr_command(!missing,false,true);
+    expect_true(unknown && !settled);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn replay_or_missing_observation_keeps_the_current_original() {
     broadcast use vstd::array::group_array_axioms;
     proof { reveal_strlit("current"); reveal_strlit("unknown"); assert("current"@[0] != "unknown"@[0]); }
