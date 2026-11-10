@@ -75,7 +75,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 10.3 AI 的 PR 操作 | 源码实现，范围有限 | 独立 `pr`／`pr-tests`；`pr-open` 核远端 SHA、创建／复用及回读，`pr-status` 核完整必需检查，`pr-watch` 原生等待后重核身份；JSON 与原进程回执。合同见 [PR 工具](pr.md) | 本地 Rust CLI／子进程测试覆盖已登记边界；真实 GitHub 创建／等待、公开分发、自动合并、落地核验仍待验收，不证明完整生命周期或 SPEC |
 | 11 脚本／插件 | 部分 | 直接 argv 外部传输，R 原生协议／进程、L 外部脚本子进程；真实脚本配对／routes 有有限完整链证据 | 插件／完整外部输入 |
 | 12 bootstrap／初始 | 部分 | 登记 bootstrap、明确 root profile、无伪 base 的候选清单；公开 macOS arm64 宿主核生成 v2 首 push／普通 DELTA | 完整源码／工具链来源、跨平台初始 profile、启用迁移 |
-| 12.2 CI 驱动的公开交付 | 候选实现，未完成远端采用 | 发布身份绑定源码和 CI run／attempt；v2 delivery 投影成功落地事件、固定检出和独立发布权限；Rust 核平台原件，复用 assemble，draft 续传、公开资产摘要与标签核验。见[发布说明](release-ci.md#持续交付与恢复) | integration 原生构建、自动触发、实际公开发布、两平台安装与 dev 落地仍待验收；单元测试不代替远端行为 |
+| 12.2 CI 驱动的公开交付 | 有限实现，按固定源码验收 | 发布身份绑定源码和 CI run／attempt；v2 delivery 投影成功落地事件、固定检出和独立发布权限；Rust 核平台原件，复用 assemble，draft 续传、公开资产摘要与标签核验。本仓 integration 两平台 build、原生自动合并、dev 落地及公开安装的分阶段实际结果见[交付验收记录 #638](https://github.com/ChronoAIProject/chrono-harness/pull/638)；合同见[发布说明](release-ci.md#持续交付与恢复) | 只按记录中已核对的固定源码、版本和原生回执确认采用；未完成或失败阶段不能算通过。稳定版、其他宿主、完整恢复场景及总成本仍须分别验收；单元测试不代替远端行为 |
 | 13 验收 | 部分，见下表 | 逐项映射 | 全部未完成项仍必需 |
 | 14 边界 | 文档已实现 | README／SPEC／本表 | 后续落地时更新 |
 | 15 通用参考经验 | 部分 | 已有固定来源引用，不改参考仓 | 应用其余通用工作经验 |

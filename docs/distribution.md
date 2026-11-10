@@ -124,7 +124,7 @@ curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v
 
 运行需要 POSIX `sh`、`uname`、`mktemp`、`cp`、`chmod`、`rm`、`wc`、`sha256sum` 或 `shasum -a 256`，HTTPS 源另需登记的 curl；无需 Python、Rust/Cargo、sudo 或修改全局配置。脚本来自所选固定版本，是首次信任入口；内嵌摘要固定字节，不单独认证发布者身份。临时下载在退出时清理，失败诊断留在原 stderr。
 
-公开安装已有 macOS arm64 实际消费，Linux x86_64 的原生构建和登记验证不能代替公开安装验收。具体资产、摘要、构建结果及安装观察直接查所选发布、原 PR 和线上 CI，不在本文维护副本。
+本仓公开安装由 Linux x86_64／macOS arm64 作业消费固定版本的 HTTPS 资产；build 通道消费本次组合包。各阶段实际状态见[交付验收记录 #638](https://github.com/ChronoAIProject/chrono-harness/pull/638)，按其中固定的源码、版本、资产和两平台原安装回执判断采用。源码构建、打包或单个平台通过，不能代替两平台公开安装验收。具体字节、摘要和运行结果保留在所选发布及原生 CI，不在本文维护副本。
 
 ## 宿主采用
 
