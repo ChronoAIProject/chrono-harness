@@ -2262,37 +2262,6 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
 fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let h = Host::retained("payload");
     let allocation = h._dir.path().to_owned();
-    let coordinator = source();
-    let maintain_allocation = || {
-        let mut command =
-            Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
-        command.current_dir(&coordinator).arg("maintain");
-        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        // Maintenance already publishes its original at the surviving owner.
-        // Capturing here must not recreate the allocation after its handoff.
-        let output = command.output().unwrap();
-        let report = json(&output.stdout).unwrap();
-        let failures = report["cleanup_failures"].as_array().unwrap();
-        assert_eq!(
-            output.status.code(),
-            Some(if failures.is_empty() { 0 } else { 2 }),
-            "allocation maintenance failed: {}",
-            allocation.display()
-        );
-        producer_objects(&report)
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|row| {
-                row["producer"] == "worktree-test-host"
-                    && row["path"]
-                        .as_str()
-                        .unwrap()
-                        .ends_with(allocation.file_name().unwrap().to_str().unwrap())
-            })
-            .expect("actual fixture allocation maintenance record")
-            .clone()
-    };
     h.kernel_cleanup();
     super::automatic::native_consumer_actions(&h, "cargo-run", "cargo-prepare");
     // Compile and list the native tests under the registered fixture action, with the same
@@ -2376,11 +2345,19 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
         fs::read_to_string(target.join(".chrono-harness/state/native-io-error"))
             .unwrap_or_default()
     );
-    assert_eq!(h.auto("maintain", &[]).0, 0);
+    let (code, protected, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{protected} {error}");
+    assert!(
+        protected["drain"].as_array().unwrap().iter().any(|row| {
+            row["path"] == target.to_str().unwrap()
+                && row["status"] == "preserved"
+                && row["preserved_reason"] == "live registered consumers hold enrollment lease"
+        }),
+        "the actual native child must keep its target protected: {protected}"
+    );
     let preserved_while_native_live = target.join("output λ/cache").exists();
-    let protected = maintain_allocation();
+    assert!(allocation.is_dir(), "{protected}");
     assert!(cargo_output.is_dir(), "{protected}");
-    assert_eq!(protected["status"], "protected", "{protected}");
     fs::write(target.join(".chrono-harness/state/native-release"), "join").unwrap();
     native_completion.write_all(b"join").unwrap();
     let mut done = [0; 4];
@@ -2417,11 +2394,14 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     assert_eq!(fs::read(target.join("payload")).unwrap(), original_payload);
     assert_eq!(fs::read(manifest).unwrap(), original_manifest);
     assert_eq!(fs::read(library).unwrap(), original_library);
+    // The allocation's existing finish owns its exact directory. Unrelated
+    // coordinator-wide maintenance must not delay this child's release or be
+    // needed to reclaim a fixture after its final consumer has returned.
     drop(h);
-    let reclaimed = maintain_allocation();
-    assert!(!cargo_output.exists(), "{reclaimed}");
+    assert!(!cargo_output.exists());
     assert!(
         !allocation.exists(),
-        "released fixture rolls as a whole: {reclaimed}"
+        "released fixture must roll as a whole through its own finish: {}",
+        allocation.display()
     );
 }
