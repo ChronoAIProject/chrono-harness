@@ -6,7 +6,7 @@ use crate::{
         equal_text, git_inventory_records, git_inventory_termination, git_inventory_text,
     },
     verified_status::{
-        GitIndexStage, checkout_entry_supported, checkout_hash_advance, checkout_hash_complete,
+        checkout_entry_supported, checkout_hash_advance, checkout_hash_complete,
         checkout_opened_file_matches, checkout_regular_file_matches, checkout_symbolic_link,
         git_index_entry_changed, parse_git_index_rows, parse_git_tree_rows,
     },
@@ -47,11 +47,7 @@ pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>
         }
     }
     for (path, entry) in expected {
-        if !inventory.stages.contains_key(&GitIndexStage {
-            path: path.as_str(),
-            stage: "0",
-        }) || !matches_entry(root, path, entry)?
-        {
+        if !inventory.stages.contains(path.as_str(), "0") || !matches_entry(root, path, entry)? {
             changed.insert(path.text.clone());
         }
     }
