@@ -332,10 +332,6 @@
       "worktree.inventory": [
         "worktree",
         "worktree-adoption"
-      ],
-      "build.cache": [
-        "cache",
-        "release-build"
       ]
     },
     "facts_config": ".chrono-harness/config.json",

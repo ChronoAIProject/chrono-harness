@@ -2543,17 +2543,12 @@
       "artifact_name": "chrono-release-linux-verify_cache_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
       "needs": [
-        "linux_release_frontend",
-        "linux_build_cache"
+        "linux_release_frontend"
       ],
       "downloads": [
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_cache",
-          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
         }
       ]
     },
@@ -2602,17 +2597,12 @@
       "artifact_name": "chrono-release-macos-verify_cache_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_cache_tests/",
       "needs": [
-        "macos_release_frontend",
-        "macos_build_cache"
+        "macos_release_frontend"
       ],
       "downloads": [
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_cache",
-          "directory": ".chrono-harness/cache/release-handoffs/build_cache/"
         }
       ]
     },
