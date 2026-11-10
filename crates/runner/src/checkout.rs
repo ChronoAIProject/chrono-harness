@@ -3,12 +3,15 @@ use crate::{
     facts::{Entry, Tree, full_oid},
     relative_path,
     verified_identifiers::{git_inventory_records, git_inventory_termination, git_inventory_text},
-    verified_status::{git_index_entry_changed, parse_git_index_row, parse_git_tree_rows},
+    verified_status::{
+        GitIndexStage, GitIndexStages, git_index_entry_changed, parse_git_index_row,
+        parse_git_tree_rows, record_git_index_stage,
+    },
 };
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fs,
     io::{self, Read},
     os::unix::{
@@ -33,19 +36,21 @@ pub fn tree(raw: &[u8]) -> Result<Tree, String> {
 /// Index stages are compared as data; Git filters/configuration never decide equality.
 pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>, String> {
     let mut changed = BTreeSet::new();
-    let mut stages = BTreeMap::new();
+    let mut stages = GitIndexStages::new();
     for raw in rows(index)? {
         let row = parse_git_index_row(raw)
             .map_err(|error| error.render(|path| format!("invalid relative path: {path:?}")))?;
-        if stages.insert((row.path, row.stage), ()).is_some() {
-            return Err("duplicate Git index stage".into());
-        }
+        record_git_index_stage(&mut stages, row.path, row.stage)?;
         if git_index_entry_changed(&row, expected.get(row.path)) {
             changed.insert(row.path.to_string());
         }
     }
     for (path, entry) in expected {
-        if !stages.contains_key(&(path.as_str(), "0")) || !matches_entry(root, path, entry)? {
+        if !stages.contains_key(&GitIndexStage {
+            path: path.as_str(),
+            stage: "0",
+        }) || !matches_entry(root, path, entry)?
+        {
             changed.insert(path.text.clone());
         }
     }

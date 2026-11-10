@@ -7,8 +7,10 @@ projects 原件状态由 `verified_state.rs` 与独立 Verus 预期负责：
 
 Git index 的完整单行解析和 stage／mode／OID 比较由同源 Verus 维护，真实 checkout 直接消费；
 独立预期核完整字段、缺条目、stage 边界及错误文字／优先级。tree／index 共用原错误载体，
-标准 Debug 格式化仍是明确外部边界。重复 stage、changed 集合维护、完整循环、文件系统比较
-及完整编译／调用绑定仍待证明，不把局部行解析扩大为整个 checkout 已覆盖。
+标准 Debug 格式化仍是明确外部边界。实际 stage 键的全文比较、排序定律及集合插入状态
+由同源 `GitIndexStage`／`record_git_index_stage` 拥有，checkout 直接消费；独立预期核全部 stage、
+不同路径、重复错误与完整集合保留。stage-zero 查询的全文对应、changed 集合维护、完整循环、
+文件系统比较及完整编译／调用绑定仍待证明，不把局部行解析与插入扩大为整个 checkout 已覆盖。
 
 FILEMAP 已提供显式新增文件分类要求；同源 Verus 的候选门核对两端登记的新行分类、
 已有分类保留、初始范围和基线读取错误。新判断与独立预期沿 runner 现有两项整 crate 根

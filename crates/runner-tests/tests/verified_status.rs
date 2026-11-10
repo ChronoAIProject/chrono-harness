@@ -2126,6 +2126,163 @@ fn retained_response_preserves_exact_status_errors() {
     expect_response_error(bad_error, "response findings/status disagree");
 }
 
+fn expect_index_stage_duplicate(out: Result<(), String>)
+    requires match out {
+        Err(message) => message@ == "duplicate Git index stage"@,
+        Ok(()) => false,
+    },
+{
+    match out {
+        Err(message) => { expect_status_text(message.as_str(), "duplicate Git index stage"); },
+        Ok(()) => { panic!(); },
+    }
+}
+
+fn expect_index_stage_slot<'a>(stages: &policy::GitIndexStages<'a>, path: &'a str, stage: &'a str)
+    requires stages@.contains_key(policy::GitIndexStage { path, stage }),
+{
+    proof { policy::git_index_stage_obeys_cmp(); }
+    expect_status_true(stages.contains_key(&policy::GitIndexStage { path, stage }));
+}
+
+// 独立列出五个预期键、数量、完整重复错误及失败后的原集合。
+fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
+    requires a@ != b@,
+{
+    proof {
+        policy::git_index_stage_obeys_cmp();
+        vstd::utf8::encode_utf8_decode_utf8(a@);
+        vstd::utf8::encode_utf8_decode_utf8(b@);
+        reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("0") && vstd::string::is_ascii("1")
+            && vstd::string::is_ascii("2") && vstd::string::is_ascii("3"));
+    }
+    let copied_a = a.to_owned();
+    let copied_b = b.to_owned();
+    let mut stages = policy::GitIndexStages::new();
+    expect_status_true(stages.is_empty());
+    let out = policy::record_git_index_stage(&mut stages, a, "0");
+    expect_tree_insert_ok(out);
+    let out = policy::record_git_index_stage(&mut stages, a, "1");
+    expect_tree_insert_ok(out);
+    let out = policy::record_git_index_stage(&mut stages, a, "2");
+    expect_tree_insert_ok(out);
+    let out = policy::record_git_index_stage(&mut stages, a, "3");
+    expect_tree_insert_ok(out);
+    let out = policy::record_git_index_stage(&mut stages, b, "0");
+    expect_tree_insert_ok(out);
+    expect_status_true(stages.len() == 5);
+    expect_index_stage_slot(&stages, a, "0");
+    expect_index_stage_slot(&stages, a, "1");
+    expect_index_stage_slot(&stages, a, "2");
+    expect_index_stage_slot(&stages, a, "3");
+    expect_index_stage_slot(&stages, b, "0");
+
+    let ghost before = stages@;
+    let copied_path = copied_a.as_str();
+    proof {
+        assert(copied_path.spec_bytes() == a.spec_bytes());
+        assert(stages@.contains_key(policy::GitIndexStage { path: a, stage: "0" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes()
+            && key.stage.spec_bytes() == "0".spec_bytes());
+    }
+    let out = policy::record_git_index_stage(&mut stages, copied_path, "0");
+    expect_index_stage_duplicate(out);
+    assert(stages@ == before);
+    expect_status_true(stages.len() == 5);
+    let copied_path = copied_b.as_str();
+    proof {
+        assert(copied_path.spec_bytes() == b.spec_bytes());
+        assert(stages@.contains_key(policy::GitIndexStage { path: b, stage: "0" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes()
+            && key.stage.spec_bytes() == "0".spec_bytes());
+    }
+    let out = policy::record_git_index_stage(&mut stages, copied_path, "0");
+    expect_index_stage_duplicate(out);
+    assert(stages@ == before);
+    let out = policy::record_git_index_stage(&mut stages, a, "3");
+    expect_index_stage_duplicate(out);
+    assert(stages@ == before);
+    expect_index_stage_slot(&stages, a, "0");
+    expect_index_stage_slot(&stages, a, "1");
+    expect_index_stage_slot(&stages, a, "2");
+    expect_index_stage_slot(&stages, a, "3");
+    expect_index_stage_slot(&stages, b, "0");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_stage_state_preserves_full_identity_and_duplicate_state() {
+    proof {
+        reveal_strlit(""); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("目录/é"); reveal_strlit("目录/e\u{301}");
+        assert(""@.len() != "a"@.len());
+        assert("a"@.len() != "a\0"@.len());
+        assert("目录/é"@.len() != "目录/e\u{301}"@.len());
+    }
+    index_stage_insertion_keeps_all_paths_and_stages("", "a");
+    index_stage_insertion_keeps_all_paths_and_stages("a", "a\0");
+    index_stage_insertion_keeps_all_paths_and_stages("目录/é", "目录/e\u{301}");
+}
+
+fn index_stage_path_order_precedes_stage(a: &str, b: &str)
+    requires scope_text::byte_lt(a.spec_bytes(), b.spec_bytes()),
+{
+    proof {
+        scope_text::byte_lt_strict(a.spec_bytes(), b.spec_bytes());
+        scope_text::byte_lt_asymmetric(a.spec_bytes(), b.spec_bytes());
+    }
+    let left = policy::GitIndexStage { path: a, stage: "3" };
+    let right = policy::GitIndexStage { path: b, stage: "0" };
+    expect_status_true(matches!(left.cmp(&right), Ordering::Less));
+    expect_status_true(matches!(right.cmp(&left), Ordering::Greater));
+    expect_status_true(!left.eq(&right));
+}
+
+fn index_stage_orders_complete_stage_after_equal_path(path: &str, a: &str, b: &str)
+    requires scope_text::byte_lt(a.spec_bytes(), b.spec_bytes()),
+{
+    proof {
+        scope_text::byte_lt_strict(a.spec_bytes(), b.spec_bytes());
+        scope_text::byte_lt_asymmetric(a.spec_bytes(), b.spec_bytes());
+    }
+    let left = policy::GitIndexStage { path, stage: a };
+    let right = policy::GitIndexStage { path, stage: b };
+    expect_status_true(matches!(left.cmp(&right), Ordering::Less));
+    expect_status_true(matches!(right.cmp(&left), Ordering::Greater));
+    expect_status_true(!left.eq(&right));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_stage_order_keeps_path_priority_and_full_stage_bytes() {
+    proof {
+        reveal_strlit(""); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("a0"); reveal_strlit("0"); reveal_strlit("0\0"); reveal_strlit("1");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("a")
+            && vstd::string::is_ascii("a\0") && vstd::string::is_ascii("a0")
+            && vstd::string::is_ascii("0") && vstd::string::is_ascii("0\0")
+            && vstd::string::is_ascii("1"));
+        assert(scope_text::byte_prefix("".spec_bytes(), "a".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("a".spec_bytes(), "a\0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a\0".spec_bytes(), "a0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("0".spec_bytes(), "0\0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("0\0".spec_bytes(), "1".spec_bytes(), 0));
+        assert(scope_text::byte_lt("".spec_bytes(), "a".spec_bytes()));
+        assert(scope_text::byte_lt("a".spec_bytes(), "a\0".spec_bytes()));
+        assert(scope_text::byte_lt("a\0".spec_bytes(), "a0".spec_bytes()));
+        assert(scope_text::byte_lt("0".spec_bytes(), "0\0".spec_bytes()));
+        assert(scope_text::byte_lt("0\0".spec_bytes(), "1".spec_bytes()));
+    }
+    index_stage_path_order_precedes_stage("", "a");
+    index_stage_path_order_precedes_stage("a", "a\0");
+    index_stage_path_order_precedes_stage("a\0", "a0");
+    index_stage_orders_complete_stage_after_equal_path("目录/é", "0", "0\0");
+    index_stage_orders_complete_stage_after_equal_path("目录/é", "0\0", "1");
+}
+
 fn expect_index_row_message(raw: &str, expected: &str)
     requires policy::git_index_row_spec(raw.spec_bytes()) ==
         Err::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(
