@@ -3475,18 +3475,124 @@ fn index_flag_framing_ignores_empty_records_and_keeps_unterminated_tail() {
         assert(scope_text::ascii_split_records(raw, 0, false)
             =~= seq!["H a".spec_bytes(), "h b".spec_bytes(), "H a".spec_bytes()]);
     }
-    let records = policy::git_index_flag_records("\0H a\0\0h b\0H a".as_bytes());
+    let records = policy::git_nul_records("\0H a\0\0h b\0H a".as_bytes());
     expect_status_true(records.len() == 3);
     expect_status_true(scope_text::equal_bytes(records[0], "H a".as_bytes()));
     expect_status_true(scope_text::equal_bytes(records[1], "h b".as_bytes()));
     expect_status_true(scope_text::equal_bytes(records[2], "H a".as_bytes()));
-    expect_status_true(policy::git_index_flag_records("\0\0".as_bytes()).len() == 0);
-    expect_status_true(policy::git_index_flag_records("".as_bytes()).len() == 0);
+    expect_status_true(policy::git_nul_records("\0\0".as_bytes()).len() == 0);
+    expect_status_true(policy::git_nul_records("".as_bytes()).len() == 0);
     let rows: Vec<policy::GitIndexFlagObservation> = Vec::new();
     match policy::parse_git_index_flag_rows(rows.as_slice()) {
         Ok(flags) => { expect_status_true(flags.len() == 0); },
         Err(_) => { panic!(); },
     }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_path_records_filter_only_empty_items_and_keep_original_bytes() {
+    proof {
+        reveal_strlit("\0z\0\0a\n \0z"); reveal_strlit("z"); reveal_strlit("a\n ");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("\0z\0\0a\n \0z")
+            && vstd::string::is_ascii("z") && vstd::string::is_ascii("a\n "));
+        let raw = "\0z\0\0a\n \0z".spec_bytes();
+        scope_text::ascii_separator_end_is(raw, 0, 0);
+        scope_text::ascii_separator_end_is(raw.skip(1), 0, 1);
+        scope_text::ascii_separator_end_is(raw.skip(3), 0, 0);
+        scope_text::ascii_separator_end_is(raw.skip(4), 0, 3);
+        scope_text::ascii_separator_end_is(raw.skip(8), 0, 1);
+        assert(raw.skip(1).skip(2) =~= raw.skip(3));
+        assert(raw.skip(3).skip(1) =~= raw.skip(4));
+        assert(raw.skip(4).skip(4) =~= raw.skip(8));
+        assert(raw.skip(1).take(1) =~= "z".spec_bytes());
+        assert(raw.skip(4).take(3) =~= "a\n ".spec_bytes());
+        assert(raw.skip(8).take(1) =~= "z".spec_bytes());
+        reveal_with_fuel(scope_text::ascii_split_records, 6);
+        assert(scope_text::ascii_split_records(raw, 0, false)
+            =~= seq!["z".spec_bytes(), "a\n ".spec_bytes(), "z".spec_bytes()]);
+    }
+    let records = policy::git_nul_records("\0z\0\0a\n \0z".as_bytes());
+    expect_status_true(records.len() == 3);
+    expect_status_true(scope_text::equal_bytes(records[0], "z".as_bytes()));
+    expect_status_true(scope_text::equal_bytes(records[1], "a\n ".as_bytes()));
+    expect_status_true(scope_text::equal_bytes(records[2], "z".as_bytes()));
+    let raw = vec![255u8, 0u8, 254u8];
+    proof {
+        assert(raw@.take(1) =~= seq![255u8]);
+        assert(raw@.skip(2) =~= seq![254u8]);
+        assert(raw@.skip(2).take(1) =~= seq![254u8]);
+        scope_text::ascii_separator_end_is(raw@, 0, 1);
+        scope_text::ascii_separator_end_is(raw@.skip(2), 0, 1);
+        reveal_with_fuel(scope_text::ascii_split_records, 3);
+        assert(scope_text::ascii_split_records(raw@, 0, false) =~= seq![seq![255u8], seq![254u8]]);
+    }
+    let records = policy::git_nul_records(raw.as_slice());
+    expect_status_true(records.len() == 2);
+    expect_status_true(records[0].len() == 1 && records[0][0] == 255);
+    expect_status_true(records[1].len() == 1 && records[1][0] == 254);
+}
+
+fn expect_complete_git_text(text: &str) {
+    match policy::git_output_text(Some(text.to_owned())) {
+        Ok(actual) => { expect_status_text(actual.as_str(), text); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_output_text_keeps_empty_and_complete_decoded_output() {
+    expect_complete_git_text("");
+    expect_complete_git_text(" a\0目录/é\n ");
+    match policy::git_output_text(None) {
+        Ok(_) => { panic!(); },
+        Err(message) => {
+            expect_status_text(message.as_str(), "E_INPUT_UNSUPPORTED: non UTF-8 Git output");
+        },
+    }
+}
+
+fn expect_git_text_row_sequence(first: &str, second: &str) {
+    let rows = vec![Some(first.to_owned()), Some(second.to_owned()), Some(first.to_owned())];
+    match policy::parse_git_text_rows(rows) {
+        Ok(paths) => {
+            expect_status_true(paths.len() == 3);
+            expect_status_text(paths[0].as_str(), first);
+            expect_status_text(paths[1].as_str(), second);
+            expect_status_text(paths[2].as_str(), first);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_text_rows_keep_complete_order_duplicates_and_empty_text() {
+    let rows: Vec<Option<String>> = Vec::new();
+    match policy::parse_git_text_rows(rows) {
+        Ok(paths) => { expect_status_true(paths.len() == 0); },
+        Err(_) => { panic!(); },
+    }
+    expect_git_text_row_sequence("z", "a");
+    expect_git_text_row_sequence("", "目录/é\0\n ");
+}
+
+fn expect_git_text_row_failure(rows: Vec<Option<String>>)
+    requires exists|i: int| 0 <= i < rows.len() && (#[trigger] rows@[i]).is_none(),
+{
+    match policy::parse_git_text_rows(rows) {
+        Ok(_) => { panic!(); },
+        Err(message) => {
+            expect_status_text(message.as_str(), "E_INPUT_UNSUPPORTED: non UTF-8 Git output");
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn git_text_rows_reject_missing_decodes_at_every_boundary() {
+    expect_git_text_row_failure(vec![None]);
+    expect_git_text_row_failure(vec![None, Some("later".to_owned()), None]);
+    expect_git_text_row_failure(vec![Some("first".to_owned()), None, Some("later".to_owned())]);
+    expect_git_text_row_failure(vec![Some("first".to_owned()), Some("second".to_owned()), None]);
 }
 
 }

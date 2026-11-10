@@ -116,8 +116,11 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 runner 的 `normalize_checkout_paths` 及四项独立 Verus 预期覆盖未跟踪／忽略库存的完整并集、
 全文严格排序、去重与数量上界；`Reader::checkout` 和 `Reader::untracked_excluding` 直接消费
 同源实现，沿现有两个 runner-status 整 crate 根及原未过滤测试验收。
-新增固定 vstd 的 Vec 追加与消费迭代接口假设、存储取舍及尚未证明的原字节拆分／解码、
-IO 与外围判断，见 [Verus 实施范围](verus.md)。此范围不构成整个 facts 文件或全仓覆盖证明。
+固定 vstd 的 Vec 追加与消费迭代接口假设、存储取舍及剩余 IO 与外围判断，
+见 [Verus 实施范围](verus.md)。共享 `git_nul_records`、`git_output_text` 和 `parse_git_text_rows`
+也直接供真实路径库存及 `facts::utf8` 使用，证明原字节拆分、完整解码观察的结果序列与首错选择；
+标准 UTF-8 解码及逐项搬运采用明确外部接口，四项独立预期与消费者测试沿原登记验收。
+此范围不构成整个 facts 文件或全仓覆盖证明。
 
 ## 按 §13 验收场景查看
 
