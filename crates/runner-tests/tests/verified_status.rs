@@ -2157,6 +2157,18 @@ fn checkout_changed_paths_preserve_full_order_and_exact_cardinality() {
         assert("A"@[0] != "a\0"@[0]);
         assert("目录/é"@[0] != "a"@[0] && "目录/é"@[0] != "A"@[0]);
         assert("目录/é"@[0] != "a\0"@[0]);
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("A") && vstd::string::is_ascii("a")
+            && vstd::string::is_ascii("a\0"));
+        assert(vstd::utf8::encode_scalar('目' as u32) == seq![231u8, 155u8, 174u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 2);
+        assert("目录/é".spec_bytes()[0] == 231u8);
+        assert(scope_text::byte_prefix("A".spec_bytes(), "a".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("a".spec_bytes(), "a\0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a\0".spec_bytes(), "目录/é".spec_bytes(), 0));
+        assert(scope_text::byte_lt("A".spec_bytes(), "a".spec_bytes()));
+        assert(scope_text::byte_lt("a".spec_bytes(), "a\0".spec_bytes()));
+        assert(scope_text::byte_lt("a\0".spec_bytes(), "目录/é".spec_bytes()));
     }
     let mut changes = policy::CheckoutChanges::new();
     policy::record_checkout_change(&mut changes, "目录/é");
@@ -2168,9 +2180,19 @@ fn checkout_changed_paths_preserve_full_order_and_exact_cardinality() {
     let paths = policy::checkout_changed_paths(&changes);
     expect_status_true(paths.len() == 4);
     proof {
-        assert forall|i: int| 0 <= i < paths.len() implies
-            (#[trigger] paths@[i])@ == "A"@ || paths@[i]@ == "a"@
-                || paths@[i]@ == "a\0"@ || paths@[i]@ == "目录/é"@ by {};
+        assert(policy::checkout_change_has_path(changes@, "A"@));
+        assert(policy::checkout_change_has_path(changes@, "a"@));
+        assert(policy::checkout_change_has_path(changes@, "a\0"@));
+        assert(policy::checkout_change_has_path(changes@, "目录/é"@));
+        let a = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == "A"@;
+        let b = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == "a"@;
+        let c = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == "a\0"@;
+        let d = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == "目录/é"@;
+        scope_text::byte_lt_asymmetric("A".spec_bytes(), "a".spec_bytes());
+        scope_text::byte_lt_asymmetric("a".spec_bytes(), "a\0".spec_bytes());
+        scope_text::byte_lt_asymmetric("a\0".spec_bytes(), "目录/é".spec_bytes());
+        assert(a < b && b < c && c < d);
+        assert(a == 0 && b == 1 && c == 2 && d == 3);
     }
     expect_status_text(paths[0].as_str(), "A");
     expect_status_text(paths[1].as_str(), "a");
