@@ -11,7 +11,6 @@ use std::collections::BTreeSet;
 mod verified_cost;
 
 pub const COST_SCHEMA: &str = "chrono-costs/v1";
-const COORDINATES: [&str; 4] = ["cpu_ms", "wall_ms", "peak_rss_bytes", "io_bytes"];
 fn escape(s: &str) -> String {
     s.replace('~', "~0").replace('/', "~1")
 }
@@ -88,7 +87,7 @@ pub fn produce(
     candidate: &Registrations,
     impact: &Impact,
 ) -> Result<Value, String> {
-    if impact.schema != IMPACT_SCHEMA {
+    if !verified_cost::identifiers::equal_text(&impact.schema, IMPACT_SCHEMA) {
         return Err("E_IMPACT: unsupported cost input schema".into());
     }
     let mut subjects: BTreeSet<String> = impact
@@ -114,31 +113,33 @@ pub fn produce(
     for subject in subjects {
         let a = entry(base, &subject)?;
         let b = entry(candidate, &subject)?;
-        if a.is_null() && b.is_null() {
-            return Err(format!(
-                "E_COST_REFERENCE: no declaration at either endpoint for {subject}"
-            ));
-        }
-        if !a.is_null() && b.is_null() {
-            removed.push(subject.clone());
-        }
+        verified_cost::record_subject_presence(
+            !a.is_null(),
+            !b.is_null(),
+            subject.clone(),
+            &mut removed,
+        )
+        .map_err(|error| format!("{}{}", error.message, error.subject))?;
         for (endpoint, value) in [("base", &a), ("candidate", &b)] {
             let Some(costs) = value["costs"].as_array() else {
                 continue;
             };
             if costs.is_empty() {
                 unknown.push(json!({"endpoint":endpoint,"node":subject,"reference":null,
-                    "coordinates":COORDINATES,"reason":"no declared member cost references"}));
+                    "coordinates":verified_cost::missing_coordinate_names(true, true, true, true),
+                    "reason":"no declared member cost references"}));
             }
             for cost in costs {
                 let cpu_missing = cost["value"]["cpu_ms"].is_null();
                 let wall_missing = cost["value"]["wall_ms"].is_null();
                 let peak_rss_missing = cost["value"]["peak_rss_bytes"].is_null();
                 let io_missing = cost["value"]["io_bytes"].is_null();
-                let coordinates: Vec<_> = COORDINATES
-                    .iter()
-                    .filter(|k| cost["value"][**k].is_null())
-                    .collect();
+                let coordinates = verified_cost::missing_coordinate_names(
+                    cpu_missing,
+                    wall_missing,
+                    peak_rss_missing,
+                    io_missing,
+                );
                 if verified_cost::has_unknown_coordinate(
                     cpu_missing,
                     wall_missing,
