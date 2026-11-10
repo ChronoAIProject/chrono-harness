@@ -886,13 +886,13 @@ pub open spec fn classification_file_error(
     file: &SourceFile, previous: Seq<SourceFile>,
 ) -> Option<Seq<char>> {
     if file.verification.is_none() {
-        if !previous_file(previous, file.path@, previous.len()) {
+        if !previous_file(previous, file.path@, previous.len() as int) {
             Some("E_VERUS_COVERAGE: new file lacks explicit verification classification: "@)
-        } else if previously_classified(previous, file.path@, previous.len()) {
+        } else if previously_classified(previous, file.path@, previous.len() as int) {
             Some("E_VERUS_COVERAGE: existing verification classification was removed: "@)
         } else { None }
     } else if !source_declaration_valid(file)
-        && !previous_file(previous, file.path@, previous.len()) {
+        && !previous_file(previous, file.path@, previous.len() as int) {
         Some("E_VERUS_COVERAGE: invalid new file proof declaration: "@)
     } else { None }
 }
