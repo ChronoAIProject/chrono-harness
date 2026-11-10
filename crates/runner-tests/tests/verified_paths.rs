@@ -34,6 +34,89 @@ fn expect_path_text(actual: &str, expected: &str)
     expect_path_true(matched);
 }
 
+use policy::ArtifactDeclarationError;
+
+fn declared_paths<'a>(rows: Option<&'a [Option<&'a str>]>)
+    -> (out: Result<Vec<&'a str>, ArtifactDeclarationError>)
+    ensures match (rows, out) {
+        (None, Err(ArtifactDeclarationError::Missing)) => true,
+        (Some(rows), Ok(paths)) => paths.len() == rows.len()
+            && forall|i: int| 0 <= i < rows.len() ==> #[trigger] rows@[i] == Some(paths@[i]),
+        (Some(rows), Err(ArtifactDeclarationError::Invalid { row })) => row < rows.len()
+            && rows@[row as int].is_none()
+            && forall|j: int| 0 <= j < row ==> #[trigger] rows@[j].is_some(),
+        _ => false,
+    },
+{
+    let observe = |row: &'a Option<&'a str>| -> (path: Option<&'a str>)
+        ensures path == *row,
+    { *row };
+    let result = policy::collect_artifact_declarations(rows, observe);
+    proof {
+        match (rows, &result) {
+            (Some(rows), Ok(paths)) => {
+                assert forall|i: int| 0 <= i < rows.len()
+                    implies #[trigger] rows@[i] == Some(paths@[i]) by {
+                    assert(observe.ensures((&rows@[i],), Some(paths@[i])));
+                }
+            },
+            (Some(rows), Err(ArtifactDeclarationError::Invalid { row })) => {
+                assert forall|j: int| 0 <= j < *row implies #[trigger] rows@[j].is_some() by {
+                    assert(policy::artifact_path_observed(observe, &rows@[j]));
+                    let path = choose|path: &'a str| #[trigger] observe.ensures((&rows@[j],), Some(path));
+                    assert(rows@[j] == Some(path));
+                }
+            },
+            _ => {},
+        }
+    }
+    result
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn artifact_declaration_read_preserves_all_strings_in_original_order() {
+    let rows = [Some(""), Some("目录/"), Some("../a\0"), Some("目录/")];
+    match declared_paths(Some(&rows)) {
+        Ok(paths) => {
+            expect_path_true(paths.len() == 4);
+            expect_path_text(paths[0], "");
+            expect_path_text(paths[1], "目录/");
+            expect_path_text(paths[2], "../a\0");
+            expect_path_text(paths[3], "目录/");
+        },
+        Err(_) => { proof { assert(false); } panic!(); },
+    }
+    match declared_paths(Some(&[])) {
+        Ok(paths) => expect_path_true(paths.len() == 0),
+        Err(_) => { proof { assert(false); } panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn artifact_declaration_read_distinguishes_missing_list_and_missing_path() {
+    match declared_paths(None) {
+        Err(error) => expect_path_text(error.message(), "missing artifact declarations"),
+        Ok(_) => { proof { assert(false); } panic!(); },
+    }
+    let rows = [Some("a/"), None, Some("b/"), None];
+    match declared_paths(Some(&rows)) {
+        Err(error @ ArtifactDeclarationError::Invalid { row }) => {
+            proof {
+                assert(rows@[1].is_none());
+                if row == 0 { assert(rows@[0].is_some()); }
+                if row > 1 { assert(rows@[1].is_some()); }
+            }
+            expect_path_true(row == 1);
+            expect_path_text(error.message(), "invalid artifact path");
+        },
+        Err(ArtifactDeclarationError::Missing) => { proof { assert(false); } panic!(); },
+        Ok(paths) => {
+            proof { assert(rows@[1] == Some(paths@[1])); assert(false); }
+            panic!();
+        },
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn literal_exclusions_filter_components_and_keep_order_and_duplicates() {
     proof {

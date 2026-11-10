@@ -37,16 +37,9 @@ pub fn artifact_exclusions(artifacts: &[&str]) -> Vec<String> {
 /// Read explicit host declarations; ownership and schema admission stay with
 /// registration. This never discovers output directories or dependency edges.
 pub fn artifact_directories(config: &Value) -> Result<Vec<&str>, String> {
-    config["artifacts"]
-        .as_array()
-        .ok_or("missing artifact declarations")?
-        .iter()
-        .map(|artifact| {
-            artifact["path"]
-                .as_str()
-                .ok_or("invalid artifact path".into())
-        })
-        .collect()
+    let rows = config["artifacts"].as_array().map(Vec::as_slice);
+    crate::verified_paths::collect_artifact_declarations(rows, |artifact| artifact["path"].as_str())
+        .map_err(|error| error.message().to_owned())
 }
 pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     git_inventory(root, args, false)
