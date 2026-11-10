@@ -166,18 +166,13 @@ fn install_fixture(channel: Channel) -> (tempfile::TempDir, Identity, InstallCom
 fn accept(root: &Path, id: &Identity, commands: &mut InstallCommands) -> Result<Value, String> {
     delivery::install_release(
         &root.join("publication"),
-        &chrono_host_release::publication::Config {
-            repository: "example/product".into(),
-            workflow_id: 99,
-            workflow_path: ".github/workflows/ci.yml".into(),
-            branch: "dev".into(),
-        },
         &commands.host.clone(),
         id,
         "linux-x86_64",
         &BTreeSet::from(["chrono-distribution".into(), "chrono-harness".into()]),
         "/bin/sh",
         "/usr/bin/curl",
+        "example/product",
         "https://example.invalid/fixed/install.sh",
         commands,
     )
@@ -187,7 +182,7 @@ fn missing_lookup(root: &Path, id: &Identity, release: bool) {
     let directory = root.join("publication");
     let file = if release { "release" } else { "tag" };
     let stdout: &[u8] = if release {
-        include_bytes!("data/release-not-found.json")
+        include_bytes!("data/github-release-not-found.json")
     } else {
         include_bytes!("data/tag-not-found.json")
     };
@@ -225,6 +220,7 @@ fn first_publication_missing_release_and_tag_can_be_installed() {
         let installed = accept(root.path(), &id, &mut commands).unwrap();
         assert_eq!(installed["source_commit"], id.source_commit);
         assert_eq!(commands.calls.len(), 2);
+        assert_eq!(commands.calls[0].0, "/usr/bin/curl");
     }
 }
 
@@ -235,9 +231,11 @@ fn only_bound_missing_queries_with_valid_originals_allow_nonzero_exit() {
         "method",
         "repository",
         "version",
+        "endpoint",
         "arguments",
         "tool",
         "executable",
+        "relative-executable",
         "403",
         "500",
         "numeric-status",
@@ -263,7 +261,7 @@ fn only_bound_missing_queries_with_valid_originals_allow_nonzero_exit() {
             .last_mut()
             .unwrap();
         let mut response: Value =
-            serde_json::from_slice(include_bytes!("data/release-not-found.json")).unwrap();
+            serde_json::from_slice(include_bytes!("data/github-release-not-found.json")).unwrap();
         match failure {
             "upload" => {
                 process["argv"] = json!([
@@ -282,12 +280,17 @@ fn only_bound_missing_queries_with_valid_originals_allow_nonzero_exit() {
                     json!(format!("repos/other/product/releases/tags/{}", id.version))
             }
             "version" => process["argv"][4] = json!("repos/example/product/releases/tags/other"),
+            "endpoint" => process["argv"][4] = json!("repos/example/product/releases/123/assets"),
             "arguments" => process["argv"]
                 .as_array_mut()
                 .unwrap()
                 .push(json!("--paginate")),
             "tool" => process["tool"] = json!("git"),
             "executable" => process["observation"]["executable"] = json!("/other/gh"),
+            "relative-executable" => {
+                process["argv"][0] = json!("gh");
+                process["observation"]["executable"] = json!("gh");
+            }
             "403" | "500" => response["status"] = json!(failure),
             "numeric-status" => response["status"] = json!(404),
             "message" => response["message"] = json!("Forbidden"),

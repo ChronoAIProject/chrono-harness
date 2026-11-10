@@ -89,6 +89,46 @@ fn api(
     )))
 }
 
+/// 安装消费者沿用发布 API 的缺失判法，只接受当前仓库、版本的两个 GET 查询。
+pub(crate) fn original_absence(
+    process: &Value,
+    stdout: &[u8],
+    repository: &str,
+    identity: &Identity,
+) -> bool {
+    if process["exit_code"] != 1 || identity.channel == Channel::Build || process["tool"] != "gh" {
+        return false;
+    }
+    let Some(argv) = process["argv"].as_array() else {
+        return false;
+    };
+    if argv.len() != 5 || argv[1] != "api" || argv[2] != "--method" || argv[3] != "GET" {
+        return false;
+    }
+    let Some(executable) = argv[0].as_str() else {
+        return false;
+    };
+    if !std::path::Path::new(executable).is_absolute()
+        || process["observation"]["executable"] != executable
+    {
+        return false;
+    }
+    let endpoints = [
+        format!("repos/{repository}/releases/tags/{}", identity.version),
+        format!("repos/{repository}/git/ref/tags/{}", identity.version),
+    ];
+    if !endpoints
+        .iter()
+        .any(|endpoint| argv[4] == endpoint.as_str())
+    {
+        return false;
+    }
+    let Ok(value) = chrono_harness::json(stdout) else {
+        return false;
+    };
+    policy::api_outcome(1, value["status"].as_str(), value["message"].as_str(), true) == 1
+}
+
 pub fn verify_ci(
     config: &Config,
     identity: &Identity,

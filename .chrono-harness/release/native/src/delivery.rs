@@ -5,7 +5,6 @@ use crate::{
     publication::{self, Commands, Reply},
     receipt,
     recipe::{self, Loaded},
-    verified_recipe::delivery as policy,
 };
 use chrono_harness::{file_identity, no_symlink_parents};
 use serde::Deserialize;
@@ -516,17 +515,16 @@ pub fn run(
 /// 安装使用原发布产物；命令边界在测试中模拟，安装结果由实际安装器产生。
 pub fn install_release(
     publication: &Path,
-    config: &publication::Config,
     host: &Path,
     identity: &identity::Identity,
     platform: &str,
     members: &BTreeSet<String>,
     shell: &str,
     curl: &str,
+    repository: &str,
     public_launcher: &str,
     commands: &mut impl Commands,
 ) -> Result<Value, String> {
-    config.validate()?;
     let published = recipe::read_json(publication, "receipt.json")?;
     if published["schema"] != "chrono-release-publication/v1"
         || published["status"] != "passed"
@@ -569,30 +567,9 @@ pub fn install_release(
         if exit == 0 {
             continue;
         }
-        let argv: Vec<String> = serde_json::from_value(process["argv"].clone()).map_err(error)?;
-        let absent = identity.channel != identity::Channel::Build
-            && process["tool"] == "gh"
-            && argv.len() == 5
-            && Path::new(&argv[0]).is_absolute()
-            && observation["executable"] == argv[0]
-            && argv[1..4] == ["api", "--method", "GET"]
-            && ["releases/tags", "git/ref/tags"].iter().any(|endpoint| {
-                argv[4]
-                    == format!(
-                        "repos/{}/{endpoint}/{}",
-                        config.repository, identity.version
-                    )
-            });
-        let value = chrono_harness::json(
-            &fs::read(stdout.ok_or("missing original publication stdout")?).map_err(error)?,
-        )?;
-        if policy::api_outcome(
-            exit,
-            value["status"].as_str(),
-            value["message"].as_str(),
-            absent,
-        ) != 1
-        {
+        let stdout =
+            fs::read(stdout.ok_or("missing original publication stdout")?).map_err(error)?;
+        if !publication::original_absence(process, &stdout, repository, identity) {
             return Err(error("failed original publication process"));
         }
     }
@@ -830,13 +807,13 @@ pub fn install(
         );
         let installed = install_release(
             &publication,
-            &config.publication,
             &output.join("host"),
             &identity,
             platform,
             &loaded.plan.assets.keys().cloned().collect(),
             shell.to_str().ok_or("invalid shell path")?,
             curl.to_str().ok_or("invalid curl path")?,
+            &config.publication.repository,
             &public_launcher,
             &mut executor,
         )?;
