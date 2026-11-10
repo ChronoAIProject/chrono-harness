@@ -2160,7 +2160,8 @@ fn checkout_changed_paths_preserve_full_order_and_exact_cardinality() {
         broadcast use vstd::string::is_ascii_spec_bytes;
         assert(vstd::string::is_ascii("A") && vstd::string::is_ascii("a")
             && vstd::string::is_ascii("a\0"));
-        assert(vstd::utf8::encode_scalar('目' as u32) == seq![231u8, 155u8, 174u8]) by (compute);
+        assert('目' as u32 == 30446u32);
+        assert(vstd::utf8::encode_scalar(30446u32) == seq![231u8, 155u8, 174u8]) by (compute);
         reveal_with_fuel(vstd::utf8::encode_utf8, 2);
         assert("目录/é".spec_bytes()[0] == 231u8);
         assert(scope_text::byte_prefix("A".spec_bytes(), "a".spec_bytes(), 0));
