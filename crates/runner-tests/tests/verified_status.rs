@@ -2433,7 +2433,8 @@ fn expect_index_inventory_rows(raw: &[&str], expected: &[policy::GitIndexRow])
                 invariant
                     0 <= i <= expected.len(), raw.len() == expected.len(),
                     policy::git_index_prefix_rows(inventory.rows@, raw@, raw.len() as int),
-                    policy::git_index_inventory_stages(inventory.stages@, inventory.rows@),
+                    inventory.stages.valid(),
+                    policy::git_index_lookup_inventory(inventory.stages.view(), inventory.rows@),
                     forall|j: int| 0 <= j < raw.len() ==> policy::git_index_row_at(raw@, j)
                         == Ok::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(expected@[j].bytes()),
                 decreases expected.len() - i,
@@ -2449,7 +2450,11 @@ fn expect_index_inventory_rows(raw: &[&str], expected: &[policy::GitIndexRow])
                     && scope_text::equal_bytes(actual.mode.as_bytes(), wanted.mode.as_bytes())
                     && scope_text::equal_bytes(actual.oid.as_bytes(), wanted.oid.as_bytes())
                     && scope_text::equal_bytes(actual.stage.as_bytes(), wanted.stage.as_bytes()));
-                expect_index_stage_slot(&inventory.stages, actual.path, actual.stage);
+                proof {
+                    assert(inventory.stages.view().to_set().contains(
+                        policy::GitIndexStage { path: actual.path, stage: actual.stage }));
+                }
+                expect_status_true(inventory.stages.contains(actual.path, actual.stage));
                 i += 1;
             }
         },
