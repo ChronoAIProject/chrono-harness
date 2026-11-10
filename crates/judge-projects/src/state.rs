@@ -98,7 +98,7 @@ pub(crate) struct Run {
 pub(crate) fn address(plan: &Execution) -> Result<&str, String> {
     plan.binding["operation_state"]
         .as_str()
-        .ok_or("E_OPERATION_STATE: missing registered operation state address")
+        .ok_or("E_OPERATION_STATE: missing registered operation state address".into())
 }
 
 fn terminal(row: &OperationResult) -> bool {
