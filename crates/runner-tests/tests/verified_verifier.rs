@@ -714,6 +714,10 @@ fn planned_source() -> (file: policy::sources::SourceFile)
         vstd::string::is_ascii_spec_bytes("root");
         reveal_with_fuel(policy::sources::path_scan, 8);
         reveal_with_fuel(policy::sources::joined_components, 4);
+        assert("root"@ =~= seq!['r', 'o', 'o', 't']);
+        assert(vstd::utf8::encode_utf8(seq!['r', 'o', 'o', 't'])
+            == seq![114u8, 111u8, 111u8, 116u8]) by (compute);
+        assert(policy::sources::canonical_source_path(seq![114u8, 111u8, 111u8, 116u8])) by (compute);
         assert(policy::sources::canonical_source_path(vstd::utf8::encode_utf8("root"@)));
     }
     let file = source_declaration(SourceRole::Program, vec![declared_source_root("root", "proof")]);
