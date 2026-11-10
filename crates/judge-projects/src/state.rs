@@ -1,6 +1,6 @@
 //! Execution originals belong to projects; retention only protects their lifetime.
-use crate::{OperationResult, Results};
 use crate::verified_state::{self, OperationObservation};
+use crate::{OperationResult, Results};
 use chrono_harness::retained_artifacts::retention::{self, Inventory, Publication};
 use chrono_harness::{ProcessEvidence, file_identity, no_symlink_parents, sha256};
 use chrono_judge_routes::Execution;
