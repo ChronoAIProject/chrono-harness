@@ -2190,6 +2190,14 @@ fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
     expect_index_lookup(&stages, copied.as_str(), "2", false);
     expect_index_lookup(&stages, copied.as_str(), "00", false);
     expect_index_lookup(&stages, copied.as_str(), "1\0", false);
+    let out = policy::record_git_index_stage(&mut stages, path, "2");
+    expect_status_true(out.is_ok());
+    let out = policy::record_git_index_stage(&mut stages, path, "0");
+    expect_status_true(out.is_ok());
+    expect_index_lookup(&stages, copied.as_str(), "0", true);
+    expect_index_lookup(&stages, copied.as_str(), "1", true);
+    expect_index_lookup(&stages, copied.as_str(), "2", true);
+    expect_index_lookup(&stages, copied.as_str(), "3", true);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

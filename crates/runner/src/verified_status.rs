@@ -766,7 +766,7 @@ impl<'a> GitIndexStageLookup<'a> {
             let order = self.keys[mid].cmp(&query);
             if order == Ordering::Equal {
                 proof {
-                    git_index_stage_order_laws(&self.keys[mid], &query, &query);
+                    git_index_stage_order_laws(&self.keys@[mid as int], &query, &query);
                     assert(self.view().to_set().contains(self.keys@[mid as int]));
                 }
                 return true;
