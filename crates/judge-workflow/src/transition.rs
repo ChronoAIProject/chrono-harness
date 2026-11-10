@@ -144,41 +144,44 @@ pub fn evaluate(
             .iter()
             .filter(|m| m["from_version"] == from && m["to_version"] == to)
             .collect();
-        if rows.len() != 1 {
-            return Err("E_MIGRATION_EVIDENCE: missing/ambiguous schema migration".into());
-        }
+        super::verified_transition::admit_declaration(rows.len())
+            .map_err(super::verified_transition::MigrationError::message)?;
         let m = rows[0];
         let c = &view["conversion"];
-        if m.get("script").is_none() {
-            if !c.is_null() {
-                return Err("E_MIGRATION_EVIDENCE: actual data conversion requires its declared script/test pair".into());
-            }
-            migrations.push(m.clone());
-            continue;
-        }
-        let test = format!("test:{}", m["test"].as_str().unwrap());
-        if results.tests.get(&test).map(String::as_str) != Some("passed") || c.is_null() {
-            return Err("E_MIGRATION_EVIDENCE: declared data conversion requires its retained execution and passing test".into());
-        }
-        if m["script"] != c["input"]["profile"]["script"]
-            || m["test"] != c["input"]["profile"]["test"]
-        {
-            return Err(
-                "E_MIGRATION_EVIDENCE: declared script/test differs from actual conversion pair"
-                    .into(),
-            );
-        }
-        let p: chrono_harness::ProcessResult =
-            serde_json::from_value(c["process"].clone()).map_err(|e| e.to_string())?;
-        super::evidence::process(&p)?;
-        if c["output_digest"] != p.stdout_sha256
-            || c["input_digest"] != p.stdin_sha256
-            || chrono_harness::wire::digest(&c["input"])? != p.stdin_sha256
-            || c["output"] != chrono_harness::decode::<Value>(&p.stdout_bytes)?
-            || c["output"]["mappings"] != m["mappings"]
-        {
-            return Err("E_MIGRATION_EVIDENCE: conversion differs from declaration".into());
-        }
+        let test = m
+            .get("test")
+            .and_then(Value::as_str)
+            .map(|name| format!("test:{name}"));
+        let replacement_test_passed = test
+            .as_ref()
+            .and_then(|test| results.tests.get(test))
+            .map(String::as_str)
+            == Some("passed");
+        let conversion =
+            serde_json::from_value::<chrono_harness::ProcessResult>(c["process"].clone())
+                .ok()
+                .map(|p| super::verified_transition::ConversionFacts {
+                    process_succeeded: super::evidence::process(&p).is_ok(),
+                    declared_input_digest_matches: c["input_digest"] == p.stdin_sha256,
+                    actual_input_digest_matches: chrono_harness::wire::digest(&c["input"])
+                        .map(|digest| digest == p.stdin_sha256)
+                        .ok(),
+                    output_digest_matches: c["output_digest"] == p.stdout_sha256,
+                    decoded_output_matches: chrono_harness::decode::<Value>(&p.stdout_bytes)
+                        .map(|output| c["output"] == output)
+                        .ok(),
+                    mappings_match: c["output"]["mappings"] == m["mappings"],
+                });
+        super::verified_transition::admit_migration(super::verified_transition::MigrationFacts {
+            declaration_count: rows.len(),
+            has_script: m.get("script").is_some(),
+            conversion_present: !c.is_null(),
+            replacement_test_passed,
+            script_matches: m["script"] == c["input"]["profile"]["script"],
+            test_matches: m["test"] == c["input"]["profile"]["test"],
+            conversion,
+        })
+        .map_err(super::verified_transition::MigrationError::message)?;
         migrations.push(m.clone());
     }
     Ok(
