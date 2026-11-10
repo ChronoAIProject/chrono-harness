@@ -687,10 +687,33 @@ pub(crate) fn saved_commit(
     retained_commit: &str,
     retention: &Retention,
 ) -> Result<(), String> {
-    if r.oid(root, retained_ref)? != retained_commit {
+    let commit = format!("{head}^{{commit}}");
+    let head_tree = format!("{head}^{{tree}}");
+    let retained_tree = format!("{retained_commit}^{{tree}}");
+    let mut argv = vec![
+        "rev-parse",
+        "--revs-only",
+        "--end-of-options",
+        retained_ref,
+        &commit,
+    ];
+    if matches!(retention, Retention::SameTree) {
+        argv.extend([head_tree.as_str(), retained_tree.as_str()]);
+    }
+    // Resolve these read-only inputs together at every existing guard. Missing
+    // revisions can exit zero under --revs-only, so require the exact result set.
+    let observed = r.text(root, &argv)?;
+    let oids: Vec<_> = observed.lines().collect();
+    if oids.len() != argv.len() - 3 {
+        return Err("cleanup retention inputs did not resolve to the expected object IDs".into());
+    }
+    for oid in &oids {
+        facts::full_oid(oid)?;
+    }
+    if oids[0] != retained_commit {
         return Err("retained reference changed".into());
     }
-    if r.oid(root, &format!("{}^{{commit}}", head))? != head {
+    if oids[1] != head {
         return Err("cleanup HEAD is not a commit".into());
     }
     match retention {
@@ -701,9 +724,7 @@ pub(crate) fn saved_commit(
             )?;
         }
         Retention::SameTree => {
-            if r.oid(root, &format!("{}^{{tree}}", head))?
-                != r.oid(root, &format!("{}^{{tree}}", retained_commit))?
-            {
+            if oids[2] != oids[3] {
                 return Err("retained commit does not preserve the exact worktree tree".into());
             }
         }
