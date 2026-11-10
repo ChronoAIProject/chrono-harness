@@ -1,6 +1,7 @@
 {
   "schema_version": 2,
   "status": "proposed",
+  "require_new_file_classification": true,
   "cost_models": {
     "unmeasured": {
       "cpu_ms": null,
