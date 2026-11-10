@@ -168,9 +168,11 @@ impl EnrollmentOriginalsFixture {
 }
 
 #[test]
-fn enrollment_originals_survive_failed_absent_policy_read() {
+fn status_keeps_enrollment_originals_after_failed_absent_policy_read() {
     let h = EnrollmentOriginalsFixture::new();
-    let (code, report) = h.invoke("status", true);
+    // The mutating lifecycle owner establishes the original consumers before
+    // trying to interpret the absent checkout's policy. Observation only reads.
+    let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 2, "{report}");
     assert!(
         report["error"]
@@ -188,6 +190,22 @@ fn enrollment_originals_survive_failed_absent_policy_read() {
         state["roots"][&role].as_array().map(Vec::len),
         Some(1),
         "a policy failure must not prevent the verified ledger from protecting its original"
+    );
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let owner = fs::read(h.record.join("owner.json")).unwrap();
+    let (code, observed) = h.invoke("status", true);
+    assert_eq!(code, 0, "{observed}");
+    assert_eq!(attention_row(&observed, &h.target)["work_state"], "unknown");
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_eq!(fs::read(h.record.join("owner.json")).unwrap(), owner);
+    assert_eq!(
+        retention_state::snapshot(&h.root)["roots"][&role],
+        state["roots"][&role],
+        "observation must preserve the lifecycle owner's original consumers"
+    );
+    assert_eq!(
+        fs::read(h.root.join(&h.original)).unwrap(),
+        b"original failure bytes\n"
     );
 }
 

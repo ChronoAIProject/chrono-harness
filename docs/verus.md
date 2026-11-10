@@ -923,7 +923,7 @@ retain 不选，evidence-retain 只由证据权限选择。主检出释放请求
 
 ## 本地工作树提醒
 
-`crates/worktree/src/verified_attention.rs` 是本地提醒分类的唯一判断实现。`automatic/observation.rs` 把现役账本状态、终态交接有无、可读性、Git 登记、物理路径及已观察附件匹配交给该函数，并直接消费分类与提醒判断。普通生命周期入口复用同一观察器。正常协调者无需终结；任务 active、终态清理待办、retained、未登记和 unknown 均需关注。只有 disposed、已有终态交接且两处都已缺失才取消清理提醒；单凭 disposed 字符串不够。
+`crates/worktree/src/verified_attention.rs` 是本地提醒分类的唯一判断实现。`automatic.rs` 把现役账本状态、终态交接有无、可读性、Git 登记、物理路径及已观察附件匹配交给该函数，并直接消费分类与提醒判断。普通生命周期入口复用同一观察器。正常协调者无需终结；任务 active、终态清理待办、retained、未登记和 unknown 均需关注。只有 disposed、已有终态交接且两处都已缺失才取消清理提醒；单凭 disposed 字符串不够。
 
 只读快照的协议选择、所有权组合和原字节稳定条件也由该根定义并证明：v1 不带 admission，v2 必须带 admission；所有者、协调者、Git common、条目地址均须匹配，v2 还须匹配原 metadata 租约身份；目录身份、owner 和 ledger 字节在读取期间均须不变。观察器直接消费这些结果。文件系统、Git、JSON 及路径比较提供实际观测值，证明不保证这些外部观测的原子性或排除后续变化；真实 Rust 回归另核忙碌租约、原件保全、未知归属和查询无写入。沿用原两项证明操作及其独立边界根，新增验证成本未测。
 
