@@ -25,6 +25,37 @@ pub struct Operation {
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
 }
+
+/// 只借用现役计划字段；证明资格由同源 Verus 内核判断。
+pub fn proof_invocations(
+    operations: &[Operation],
+) -> Vec<chrono_harness::verified_verifier::ProofInvocation<'_>> {
+    operations
+        .iter()
+        .map(
+            |operation| chrono_harness::verified_verifier::ProofInvocation {
+                operation: &operation.method.operation,
+                argv: &operation.method.argv,
+                output_contract: &operation.method.output_contract,
+                output_limit_bytes: operation.output_limit_bytes,
+            },
+        )
+        .collect()
+}
+
+/// JSON 和显式影响集合仅作投影；缺证明、参数或根不符由 Verus 拒绝。
+pub fn validate_proof_plan(
+    registry: &chrono_harness::verified_verifier::sources::SourceRegistry,
+    affected_nodes: &BTreeSet<String>,
+    operations: &[Operation],
+) -> Result<(), String> {
+    chrono_harness::verified_verifier::sources::validate_selected_roots(
+        &registry.files,
+        &affected_nodes.iter().cloned().collect(),
+        &proof_invocations(operations),
+    )
+    .map_err(|error| error.render(|message, path| format!("{message}{path}")))
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Execution {
@@ -727,6 +758,11 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
         &global_plans,
         &chrono_judge_registration::execution::methods(r.projects())?,
         &execute_actions(&r),
+    )?;
+    validate_proof_plan(
+        &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
+        &impact.closure.reached.keys().cloned().collect(),
+        &global_operations,
     )?;
     let global_selected = selected.clone();
     let selected = unit_selection(req, &selected, &global_plans)?;
