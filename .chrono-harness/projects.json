@@ -1171,6 +1171,28 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "verify_scheduling": {
+          "operation": "verify.registration-scheduling",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-scheduling.rlib,dep-info=.chrono-harness/state/verify.registration-scheduling.rlib.d",
+            "crates/judge-registration/src/verified_scheduling.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-scheduling.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
@@ -1293,6 +1315,28 @@
             "crates/judge-registration-tests/tests/verified_input_coverage.rs",
             "-o",
             ".chrono-harness/state/verify.registration-input-coverage-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_scheduling": {
+          "operation": "verify.registration-scheduling-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.registration-scheduling-tests.rlib,dep-info=.chrono-harness/state/verify.registration-scheduling-tests.rlib.d",
+            "crates/judge-registration-tests/tests/verified_scheduling.rs",
+            "-o",
+            ".chrono-harness/state/verify.registration-scheduling-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {

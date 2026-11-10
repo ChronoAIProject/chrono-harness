@@ -13,6 +13,8 @@ pub mod verified_input_coverage;
 pub mod verified_nodes;
 #[allow(unexpected_cfgs)]
 pub mod verified_readiness;
+#[allow(unexpected_cfgs)]
+pub mod verified_scheduling;
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, interpret_scheduling_with_reader,
     interpret_with_reader, replacements, retirement_declaration, retirement_requests, reused_tools,
