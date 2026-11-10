@@ -83,6 +83,8 @@ filemap 图内核及其独立预期也分别注册 `verify.ci-literals`、
 
 CI 判官的同一 collection 证明根还定义 action 工具引用的来源准入：采用完整登记时，工具必须存在于有效配置，profile 副本不能补齐缺失；独立 scoped 宿主继续使用其明确工具表。实际 snapshot 校验调用该 Verus 函数，独立预期覆盖两种来源的全部存在／缺失组合。工具声明解码、两端变化传播及实际进程由相应行为测试与正式检查验证，不由这个局部谓词证明；沿用现有两项整 crate 证明操作。
 
+原生缓存每个使用方的准入接入同一 CI 字面量根：名字字节及长度、准备命令、完整文本成员关系、非相邻重复、保存子集和启动后保存子集由 `verified_literals.rs` 定义，`cache.rs::validate` 直接使用组合结果。独立预期覆盖名字的128字节边界、非法字节、空参数与空程序、重复与不在集合中的项、空保存列表和各项必需条件，沿用 `verify.ci-literals`／`verify.ci-literals-tests`，普通 Rust 测试执行相同预期。JSON、job集合查找、原 `trim`、字段借用投影和跨 job保存者状态仍是外围边界，不把这批局部证明扩大为整个缓存生成器。有限列表比较的最坏工作随列表长度乘积增长；完整验证及运行成本未测。
+
 本批把已有整 crate Verus 根补入 FILEMAP 的同源绑定：`chrono-identifiers` 的
 `verify.identifiers`／`verify.identifiers-tests`，runner 的
 `verify.retention-release`／`verify.retention-release-tests` 与

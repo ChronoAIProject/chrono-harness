@@ -9,6 +9,8 @@ use chrono_ci::verified_literals as policy;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
 
@@ -168,6 +170,110 @@ fn cache_registry_requires_current_schema_and_primary_checkout() {
     expect_cache_registry(Some(""), true, false);
     expect_cache_registry(None, true, false);
     expect_cache_registry(None, false, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cache_names_keep_the_ascii_alphabet_and_128_byte_limit() {
+    let alphabet = policy::valid_cache_name(&[48u8, 57, 65, 90, 97, 122, 45, 95, 46, 58]);
+    let longest = policy::valid_cache_name(&[97u8; 128]);
+    let too_long = policy::valid_cache_name(&[97u8; 129]);
+    let empty = policy::valid_cache_name(&[]);
+    let slash = policy::valid_cache_name(&[97u8, 47, 98]);
+    let space = policy::valid_cache_name(&[97u8, 32]);
+    let unicode = policy::valid_cache_name(&[228u8, 184, 173]);
+    let nul = policy::valid_cache_name(&[97u8, 0]);
+    assert(alphabet && longest && !too_long && !empty && !slash && !space && !unicode && !nul);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cache_text_membership_preserves_full_fields_and_nonadjacent_duplicates() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("bb"); reveal_strlit("ccc");
+        assert("a"@.len() != "bb"@.len());
+        assert("a"@.len() != "ccc"@.len());
+        assert("bb"@.len() != "ccc"@.len());
+    }
+    let values = ["a", "bb", "ccc"];
+    let duplicate = ["a", "bb", "a"];
+    proof {
+        assert(values@ =~= seq!["a", "bb", "ccc"]);
+        assert(duplicate@ =~= seq!["a", "bb", "a"]);
+    }
+    let found = policy::cache_has_text(&values, "bb");
+    let absent = policy::cache_has_text(&["bb", "ccc"], "a");
+    let unique = policy::cache_has_unique_text(&values);
+    let repeated = policy::cache_has_unique_text(&duplicate);
+    let empty_unique = policy::cache_has_unique_text(&[]);
+    let reordered = policy::cache_is_subset(&["ccc", "a"], &values);
+    let outside = policy::cache_is_subset(&["a"], &["bb", "ccc"]);
+    let no_saves = policy::cache_is_subset(&[], &values);
+    assert(found && !absent && unique && !repeated && empty_unique && reordered && !outside && no_saves);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cache_preparation_keeps_empty_arguments_but_requires_a_literal_program() {
+    proof {
+        reveal_strlit("a"); reveal_strlit(""); reveal_strlit("${{");
+        reveal_strlit("a\n"); reveal_strlit("a\r"); reveal_strlit("a\0");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("")
+            && vstd::string::is_ascii("${{") && vstd::string::is_ascii("a\n")
+            && vstd::string::is_ascii("a\r") && vstd::string::is_ascii("a\0"));
+        assert("a".spec_bytes() =~= seq![97u8]);
+        assert("".spec_bytes() =~= Seq::<u8>::empty());
+        assert("${{".spec_bytes() =~= seq![36u8, 123, 123]);
+        assert("a\n".spec_bytes() =~= seq![97u8, 10]);
+        assert("a\r".spec_bytes() =~= seq![97u8, 13]);
+        assert("a\0".spec_bytes() =~= seq![97u8, 0]);
+    }
+    let valid = policy::valid_cache_preparation(&["a", ""]);
+    let no_program = policy::valid_cache_preparation(&[]);
+    let empty_program = policy::valid_cache_preparation(&["", "a"]);
+    let template = policy::valid_cache_preparation(&["a", "${{"]);
+    let newline = policy::valid_cache_preparation(&["a", "a\n"]);
+    let carriage = policy::valid_cache_preparation(&["a", "a\r"]);
+    let nul = policy::valid_cache_preparation(&["a", "a\0"]);
+    assert(valid && !no_program && !empty_program && !template && !newline && !carriage && !nul);
+}
+
+fn expect_native_cache_consumer(
+    known_job: bool, name: &str, need: &str, output_use: &str, preparation: &[&str],
+    caches: &[&str], saves: &[&str], after_bootstrap: &[&str], expected: bool,
+)
+    requires expected == policy::cache_consumer(known_job, name, need, output_use,
+        preparation@, caches@, saves@, after_bootstrap@),
+{
+    let actual = policy::valid_cache_consumer(known_job, name, need, output_use,
+        preparation, caches, saves, after_bootstrap);
+    assert(actual == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn native_cache_consumers_require_each_obligation_and_keep_read_only_jobs() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("bb"); reveal_strlit("");
+        assert("a"@.len() != "bb"@.len());
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("bb")
+            && vstd::string::is_ascii(""));
+        assert("a".spec_bytes() =~= seq![97u8]);
+        assert("bb".spec_bytes() =~= seq![98u8, 98]);
+        assert("".spec_bytes() =~= Seq::<u8>::empty());
+    }
+    expect_native_cache_consumer(true, "a", "a", "a", &["a", ""], &["a", "bb"], &["bb", "a"], &["a"], true);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &["a"], &[], &[], true);
+    expect_native_cache_consumer(false, "a", "a", "a", &["a"], &["a"], &[], &[], false);
+    expect_native_cache_consumer(true, "", "a", "a", &["a"], &["a"], &[], &[], false);
+    expect_native_cache_consumer(true, "a", "", "a", &["a"], &["a"], &[], &[], false);
+    expect_native_cache_consumer(true, "a", "a", "", &["a"], &["a"], &[], &[], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &[], &["a"], &[], &[], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &[], &[], &[], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &["a", "a"], &[], &[], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &["a"], &["a", "a"], &[], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &["a"], &["bb"], &[], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &["a"], &["a"], &["a", "a"], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &["a", "bb"], &["a"], &["bb"], false);
+    expect_native_cache_consumer(true, "a", "a", "a", &["a"], &["a"], &[], &["a"], false);
 }
 
 fn expect(bytes: &[u8], expected: bool)
