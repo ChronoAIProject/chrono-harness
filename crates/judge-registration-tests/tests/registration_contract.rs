@@ -1887,6 +1887,49 @@ fn explicit_same_project_group_bindings_and_legacy_scripts_have_one_owner() {
 }
 
 #[test]
+fn scheduling_accepts_valid_production_claims_outside_test_plans() {
+    use chrono_judge_registration::execution::scheduling;
+    let fm = json!({"execution_plans":{"test:t":{"operations":["run"],"timeout_seconds":30,"output_limit_bytes":4096}},"execution_scheduling":{"max_running":2,"resources":[],"claims":{"run":{"resources":[],"outputs":[]},"build.bootstrap":{"resources":[],"outputs":["out/"]}}}});
+    let projects = json!({"projects":[{"id":"t","actions":{"execute":{"operation":"run","tool":"sh","argv":[]},"build":{"operation":"build.bootstrap","tool":"sh","argv":[]}}}],"scripts":[]});
+    let artifacts = json!([{"path":"out/"}]);
+    let policy = scheduling(&fm, &projects, &artifacts)
+        .expect("a valid production output claim must not require a redundant test operation")
+        .unwrap();
+    assert!(policy.claims.contains_key("build.bootstrap"));
+    for invalid in 0..5 {
+        let mut bad = fm.clone();
+        let mut methods = projects.clone();
+        match invalid {
+            0 => {
+                methods["projects"][0]["actions"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("build");
+            }
+            1 => {
+                methods["projects"][0]["actions"]["other"] =
+                    methods["projects"][0]["actions"]["build"].clone();
+            }
+            2 => {
+                bad["execution_scheduling"]["claims"]["build.bootstrap"]["outputs"] =
+                    json!(["unknown/"]);
+            }
+            3 => {
+                bad["execution_scheduling"]["claims"]["build.bootstrap"]["resources"] =
+                    json!(["unknown"]);
+            }
+            _ => {
+                bad["execution_scheduling"]["claims"]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("run");
+            }
+        }
+        assert!(scheduling(&bad, &methods, &artifacts).is_err());
+    }
+}
+
+#[test]
 fn scheduling_requires_complete_unambiguous_explicit_claims() {
     use chrono_judge_registration::execution::scheduling;
     let fm = json!({"execution_plans":{"test:t":{"operations":["run"],"timeout_seconds":30,"output_limit_bytes":4096}},"execution_scheduling":{"max_running":2,"resources":["db"],"claims":{"run":{"resources":["db"],"outputs":["out/"]}}}});
