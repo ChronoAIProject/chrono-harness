@@ -211,6 +211,12 @@ fn inputs_owned(
 }
 #[test]
 fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
+    // Keep this last-close boundary independent of other tests' forked descriptors.
+    if !super::isolated_capability::isolated_capability_test(
+        "check_inputs::local_input_original_survives_child_exit_until_exact_parent_handoff",
+    ) {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::{Consumer, Inventory, POLICY_PATH};
     let h = Host::new("payload");
     bind(&h);
