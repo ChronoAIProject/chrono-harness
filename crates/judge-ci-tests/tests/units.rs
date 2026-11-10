@@ -820,6 +820,83 @@ fn collection_supports_explicit_judge_resolved_through_recorded_path() {
 }
 
 #[test]
+fn scheduling_priority_delta_selects_all_plans_and_preserves_unchanged_order() {
+    for (before, after, changed) in [
+        (
+            vec!["test.suite", "test.other"],
+            vec!["test.other", "test.suite"],
+            true,
+        ),
+        (vec![], vec!["test.suite"], true),
+        (vec!["test.suite"], vec![], true),
+        (
+            vec!["test.suite", "test.other"],
+            vec!["test.suite", "test.other"],
+            false,
+        ),
+        (vec![], vec![], false),
+    ] {
+        let h = host();
+        explicit_plans(&h);
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            v["execution_scheduling"] = json!({"max_running":2,"priority":before,"resources":[],"claims":{"test.suite":{"resources":[],"outputs":[]},"test.other":{"resources":[],"outputs":[]}}});
+        });
+        let b = h.commit();
+        h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+            v["execution_scheduling"]["priority"] = json!(after);
+        });
+        let c = h.commit();
+        let selection = chrono_judge_ci::scheduling_requirements(
+            h.root(),
+            CONFIG,
+            Some(b.clone()),
+            c.clone(),
+            false,
+        )
+        .unwrap();
+        let expected = if changed {
+            json!(["test:other", "test:suite"])
+        } else {
+            json!([])
+        };
+        assert_eq!(
+            selection["global_selected"], expected,
+            "{before:?} -> {after:?}"
+        );
+        assert_eq!(
+            selection["required_units"],
+            if changed {
+                json!(["alpha", "beta"])
+            } else {
+                json!([])
+            }
+        );
+        assert_eq!(h.calls(), 0);
+        let alpha = unit(&h, &b, &c, "alpha");
+        pass(&alpha);
+        if changed {
+            assert_eq!(alpha.evidence["selected"], json!(["test:suite"]));
+            assert_eq!(
+                alpha.evidence["selection_explanation"]["extra_selections"]["test:other"],
+                json!(["changed execution scheduling declaration"])
+            );
+            assert_eq!(alpha.evidence["executed"].as_array().unwrap().len(), 1);
+            assert_eq!(alpha.evidence["executed"][0]["operation"], "test.suite");
+            let beta = unit(&h, &b, &c, "beta");
+            pass(&beta);
+            assert_eq!(beta.evidence["selected"], json!(["test:other"]));
+            assert_eq!(beta.evidence["executed"].as_array().unwrap().len(), 1);
+            assert_eq!(beta.evidence["executed"][0]["operation"], "test.other");
+            assert_eq!(h.calls(), 1);
+        } else {
+            assert_eq!(alpha.evidence["selected"], json!([]));
+            assert_eq!(alpha.evidence["executed"], json!([]));
+            assert_eq!(h.calls(), 0);
+        }
+    }
+}
+
+#[test]
 fn scheduling_delta_selects_complete_plans_and_collection_rejects_rewritten_policy() {
     let h = report_host();
     explicit_plans(&h);

@@ -343,7 +343,8 @@ fn native_auth_failure_and_failed_readback_remain_unknown() {
         watch(0),
         json!({"prefix":["api","graphql"],"stdout":"bad"}),
     ]);
-    assert_eq!(h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]).0, 2);
+    let (code, result) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
+    assert_eq!(code, 2, "{result}");
 }
 
 #[test]

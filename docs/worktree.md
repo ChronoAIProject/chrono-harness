@@ -50,6 +50,8 @@
 
 本地政策须匹配源码提交。程序读取 workflow 目标，将该精确远端分支 fetch 到唯一临时 ref，记录 commit／tree，再用观察 OID 只删该 ref。创建前读取获取端登记，要求政策字节及目标分支兼容。不保证 fetch 后远端不再移动，回执只固定观察顶端。不重置已前进源码检出或无关脏文件。
 
+创建与本地输入准备的 fetch 显式使用空 `--refmap=`，只采用命令行指定的临时目标，不更新共享的远端跟踪引用。这样获取新基线无需额外写入 `origin/dev` 等共享引用，也不会因这次无关更新与其他 fetch 争用。原 Git 失败、临时 ref 恢复和进程限制保持原合同。
+
 源码登记在 fetch 前获取一次，复用于政策检查及摘要。两端登记摘要覆盖完整解析快照，含稳定选择器及有效目标；原字节和失败保留在固定 Git 进程观察。回执／intent 的 `config_path`／`config_sha256` 继续指工作树政策。重建、恢复、rebind、清理都共用该快照获取模块。
 
 ### 有限读取与复用
@@ -98,14 +100,15 @@ Rust 消费者先用 `full::expand_process` 展开；宿主 bootstrap 用
 
 专属测试使用真实 bare remote、前进远端、任意布局、空格／Unicode 路径、脏／锁工作树、两端政策变化、remote 缺失、工具不符、真实 hook。采用政策有真实子进程消费者，宿主明确登记二进制及测试计划。
 
-`ci-tests`、`judge-workflow-tests` 将生产 `src/main.rs` 编译为
+`worktree-tests`、`ci-tests`、`judge-workflow-tests` 将生产 `src/main.rs` 编译为
 `chrono-worktree-test-cli`，通过 Cargo 的 `CARGO_BIN_EXE_chrono-worktree-test-cli`
-调用或复制真实 CLI；FILEMAP 明确登记两处源码别名。四个 CI／workflow 测试计划不再额外执行
-`build.worktree`。worktree 的两个测试单元、bootstrap、owner-stage 和发布继续消费正式生产构建。
+调用或复制真实 CLI；FILEMAP 明确登记三处源码别名。六个 CI 测试单元不再额外执行
+`build.worktree`。worktree 专属测试的只读副本、所有者阶段发布和中断用例均使用该执行物；
+bootstrap、正式 owner-stage 和生产发布继续消费各自登记的生产构建。
 
-**测试编译路径与宿主政策同时变更：**四个测试单元同步退役重复构建和
-`check.worktree` 缓存恢复订阅，并通过现役生成入口更新工作流；worktree 使用方的缓存及测试项目自身的
-缓存继续保留。原测试、断言、分组、线程数和时限不变，各测试根沿用既有开发配置，
+**测试编译路径与宿主政策同时变更：**六个测试单元同步退役重复构建和
+`check.worktree` 缓存订阅；该缓存已无使用方，声明一并删除。测试项目自身的缓存及生产发布缓存继续保留，
+工作流由现役生成入口更新。原测试、断言、分组、线程数和时限不变，各测试根沿用既有开发配置，
 不宣称与独立生产构建严格同输入。真实 CLI、部署和中断行为仍由原有测试验收；
 完整构建、CI、存储及维护的净成本收益未测。
 
