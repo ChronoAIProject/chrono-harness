@@ -301,26 +301,23 @@ impl Reader {
         checkout_changes(root, &tree, &index)
     }
     pub fn index_flags(&self, root: &Path) -> Result<Vec<IndexFlag>, String> {
-        self.git(root, &["ls-files", "-v", "-z"])?
-            .split(|b| *b == 0)
-            .filter(|s| !s.is_empty())
-            .map(|row| {
-                if row.len() < 3 || row[1] != b' ' || !row[0].is_ascii_alphabetic() {
-                    return Err("invalid Git index flag record".into());
-                }
-                Ok(IndexFlag {
-                    path: utf8(row[2..].to_vec())?,
-                    tag: (row[0] as char).to_string(),
-                })
+        let raw = self.git(root, &["ls-files", "-v", "-z"])?;
+        let records = crate::verified_status::git_index_flag_records(&raw);
+        let observations: Vec<_> = records
+            .into_iter()
+            .map(|raw| crate::verified_status::GitIndexFlagObservation {
+                raw,
+                text: std::str::from_utf8(raw).ok(),
             })
-            .collect()
+            .collect();
+        crate::verified_status::parse_git_index_flag_rows(&observations)
     }
     pub fn checkout(&self, root: &Path, candidate: &str) -> Result<Checkout, String> {
         let head = utf8(self.git(root, &["rev-parse", "HEAD"])?)?.trim().into();
         let tracked = self.tracked_changes(root, candidate)?;
-        let mut untracked =
+        let untracked =
             paths(self.git(root, &["ls-files", "--others", "--exclude-standard", "-z"])?)?;
-        untracked.extend(paths(self.git(
+        let ignored = paths(self.git(
             root,
             &[
                 "ls-files",
@@ -329,9 +326,8 @@ impl Reader {
                 "--exclude-standard",
                 "-z",
             ],
-        )?)?);
-        untracked.sort();
-        untracked.dedup();
+        )?)?;
+        let untracked = crate::verified_status::normalize_checkout_paths(untracked, ignored);
         Ok(Checkout {
             head,
             tracked,
@@ -347,10 +343,11 @@ impl Reader {
         let exclusions = artifact_exclusions(artifacts);
         let mut args = vec!["ls-files", "--others", "-z", "--", "."];
         args.extend(exclusions.iter().map(String::as_str));
-        let mut paths = paths(self.literal_inventory(root, &args)?)?;
-        paths.sort();
-        paths.dedup();
-        Ok(paths)
+        let paths = paths(self.literal_inventory(root, &args)?)?;
+        Ok(crate::verified_status::normalize_checkout_paths(
+            paths,
+            Vec::new(),
+        ))
     }
     pub fn checkout_excluding(
         &self,
