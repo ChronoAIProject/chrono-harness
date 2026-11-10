@@ -513,7 +513,7 @@ pub open spec fn tree_entry_fields(entry: &TreeEntry) -> TreeEntryFields {
 
 /// 标准迭代器的完整、严格有序库存连接实际 map 键与全文身份。
 /// 只创建迭代器，不遍历或复制库存。
-fn tree_keys_have_unique_text(tree: &Tree)
+fn tree_keys_have_unique_text<V>(tree: &BTreeMap<TreePath, V>)
     ensures forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
         tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@ ==> a == b,
 {
@@ -1326,12 +1326,24 @@ pub open spec fn checkout_index_prefix_changed(
 pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
     ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
+        changes@.len() == old(changes)@.len()
+            + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     proof { tree_path_obeys_cmp(); }
     let key = TreePath::from_text(path);
     let ghost before = changes@;
     changes.insert(key, ());
+    tree_keys_have_unique_text(changes);
     proof {
+        if checkout_change_has_path(before, path@) {
+            let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == path@;
+            assert(changes@.contains_key(found));
+            assert(changes@.contains_key(key));
+            assert(found == key);
+            assert(before.contains_key(key));
+        }
+        if before.contains_key(key) { assert(checkout_change_has_path(before, path@)); }
+        assert(before.contains_key(key) == checkout_change_has_path(before, path@));
         assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
             == (checkout_change_has_path(before, text) || text == path@) by {
             if checkout_change_has_path(changes@, text) {

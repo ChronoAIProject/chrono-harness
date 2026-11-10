@@ -2150,6 +2150,35 @@ fn expect_checkout_path(changes: &policy::CheckoutChanges, path: &str, wanted: b
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_changed_paths_preserve_full_order_and_exact_cardinality() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("a\0"); reveal_strlit("A"); reveal_strlit("目录/é");
+        assert("a"@.len() != "a\0"@.len()); assert("A"@[0] != "a"@[0]);
+        assert("A"@[0] != "a\0"@[0]);
+        assert("目录/é"@[0] != "a"@[0] && "目录/é"@[0] != "A"@[0]);
+        assert("目录/é"@[0] != "a\0"@[0]);
+    }
+    let mut changes = policy::CheckoutChanges::new();
+    policy::record_checkout_change(&mut changes, "目录/é");
+    policy::record_checkout_change(&mut changes, "a\0");
+    policy::record_checkout_change(&mut changes, "a");
+    policy::record_checkout_change(&mut changes, "A");
+    let other = "a".to_owned();
+    policy::record_checkout_change(&mut changes, other.as_str());
+    let paths = policy::checkout_changed_paths(&changes);
+    expect_status_true(paths.len() == 4);
+    proof {
+        assert forall|i: int| 0 <= i < paths.len() implies
+            (#[trigger] paths@[i])@ == "A"@ || paths@[i]@ == "a"@
+                || paths@[i]@ == "a\0"@ || paths@[i]@ == "目录/é"@ by {};
+    }
+    expect_status_text(paths[0].as_str(), "A");
+    expect_status_text(paths[1].as_str(), "a");
+    expect_status_text(paths[2].as_str(), "a\0");
+    expect_status_text(paths[3].as_str(), "目录/é");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_index_changes_empty_and_exact_stage_zero_are_empty() {
     let mut tree = policy::Tree::new();
     let out = policy::insert_git_tree_entry(&mut tree,
