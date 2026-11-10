@@ -973,9 +973,9 @@ fn affected_file(file: &SourceFile, nodes: &Vec<String>) -> (affected: bool)
             forall|j: int| 0 <= j < i ==> (#[trigger] nodes[j])@ != "file:"@ + file.path@,
         decreases nodes.len() - i,
     {
-        proof { vstd::utf8::encode_utf8_decode_utf8(nodes[i]@); }
+        proof { vstd::utf8::encode_utf8_decode_utf8(nodes[i as int]@); }
         let same = equal_bytes(nodes[i].as_str().as_bytes(), name.as_slice());
-        assert(same == (nodes[i]@ == "file:"@ + file.path@));
+        assert(same == (nodes[i as int]@ == "file:"@ + file.path@));
         if same { return true; }
         i += 1;
     }

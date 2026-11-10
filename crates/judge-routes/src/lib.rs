@@ -32,12 +32,14 @@ pub fn proof_invocations(
 ) -> Vec<chrono_harness::verified_verifier::ProofInvocation<'_>> {
     operations
         .iter()
-        .map(|operation| chrono_harness::verified_verifier::ProofInvocation {
-            operation: &operation.method.operation,
-            argv: &operation.method.argv,
-            output_contract: &operation.method.output_contract,
-            output_limit_bytes: operation.output_limit_bytes,
-        })
+        .map(
+            |operation| chrono_harness::verified_verifier::ProofInvocation {
+                operation: &operation.method.operation,
+                argv: &operation.method.argv,
+                output_contract: &operation.method.output_contract,
+                output_limit_bytes: operation.output_limit_bytes,
+            },
+        )
         .collect()
 }
 
