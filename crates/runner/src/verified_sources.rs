@@ -959,15 +959,24 @@ pub open spec fn file_affected(file: &SourceFile, nodes: Seq<String>) -> bool {
 fn affected_file(file: &SourceFile, nodes: &Vec<String>) -> (affected: bool)
     ensures affected == file_affected(file, nodes@),
 {
-    let mut name = "file:".to_string();
-    name.push_str(file.path.as_str());
+    let mut name = Vec::new();
+    append_bytes(&mut name, "file:".as_bytes());
+    append_bytes(&mut name, file.path.as_str().as_bytes());
+    proof {
+        super::encode_concat("file:"@, file.path@);
+        vstd::utf8::encode_utf8_decode_utf8("file:"@ + file.path@);
+    }
     let mut i = 0;
     while i < nodes.len()
-        invariant 0 <= i <= nodes.len(), name@ == "file:"@ + file.path@,
-            forall|j: int| 0 <= j < i ==> (#[trigger] nodes[j])@ != name@,
+        invariant 0 <= i <= nodes.len(),
+            name@ == vstd::utf8::encode_utf8("file:"@ + file.path@),
+            forall|j: int| 0 <= j < i ==> (#[trigger] nodes[j])@ != "file:"@ + file.path@,
         decreases nodes.len() - i,
     {
-        if super::equal_text(nodes[i].as_str(), name.as_str()) { return true; }
+        proof { vstd::utf8::encode_utf8_decode_utf8(nodes[i]@); }
+        let same = equal_bytes(nodes[i].as_str().as_bytes(), name.as_slice());
+        assert(same == (nodes[i]@ == "file:"@ + file.path@));
+        if same { return true; }
         i += 1;
     }
     false
