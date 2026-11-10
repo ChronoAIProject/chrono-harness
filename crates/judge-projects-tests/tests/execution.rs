@@ -213,9 +213,7 @@ fn failing_pass_text_blocks_dependents_and_independent_branch_continues() {
     assert_eq!(actual.stdout, "PASS\n");
 }
 
-fn retain_operations(
-    mut plan: chrono_judge_routes::Execution,
-) -> chrono_judge_routes::Execution {
+fn retain_operations(mut plan: chrono_judge_routes::Execution) -> chrono_judge_routes::Execution {
     plan.binding["operation_state"] = json!(".chrono-harness/state/projects-run");
     std::fs::create_dir_all(plan.root.join(".chrono-harness/state")).unwrap();
     let scheduling = plan.scheduling.clone();
@@ -235,8 +233,12 @@ fn completed_operations_have_independent_durable_originals() {
     let results = execute(&plan).unwrap();
     let returned = serde_json::to_value(&results).unwrap();
     let original = &returned["operation_state"];
-    assert!(original["path"].is_string(), "missing durable operation state");
-    let manifest_bytes = std::fs::read(directory.path().join(original["path"].as_str().unwrap())).unwrap();
+    assert!(
+        original["path"].is_string(),
+        "missing durable operation state"
+    );
+    let manifest_bytes =
+        std::fs::read(directory.path().join(original["path"].as_str().unwrap())).unwrap();
     assert_eq!(original["sha256"], chrono_harness::sha256(&manifest_bytes));
     let manifest: serde_json::Value = serde_json::from_slice(&manifest_bytes).unwrap();
     assert_eq!(manifest["plan"], plan.identity);
@@ -244,9 +246,13 @@ fn completed_operations_have_independent_durable_originals() {
     for (index, (name, code, output, error)) in [
         ("a", 7, vec![0, 255, 10], Vec::<u8>::new()),
         ("z", 0, Vec::<u8>::new(), vec![254]),
-    ].into_iter().enumerate() {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         let reference = &manifest["operations"][index];
-        let bytes = std::fs::read(directory.path().join(reference["path"].as_str().unwrap())).unwrap();
+        let bytes =
+            std::fs::read(directory.path().join(reference["path"].as_str().unwrap())).unwrap();
         assert_eq!(reference["sha256"], chrono_harness::sha256(&bytes));
         let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(saved["operation"], name);
@@ -266,8 +272,15 @@ fn unavailable_operation_state_rejects_before_dispatch() {
         &[("test:t", vec!["effect"])],
     );
     let plan = retain_operations(plan);
-    std::fs::write(directory.path().join(".chrono-harness/state/projects-run"), b"occupied").unwrap();
-    assert!(execute(&plan).is_err(), "state publication must precede dispatch");
+    std::fs::write(
+        directory.path().join(".chrono-harness/state/projects-run"),
+        b"occupied",
+    )
+    .unwrap();
+    assert!(
+        execute(&plan).is_err(),
+        "state publication must precede dispatch"
+    );
     assert!(!directory.path().join("effects").exists());
 }
 #[test]
