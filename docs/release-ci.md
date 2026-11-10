@@ -46,6 +46,8 @@ cache 专属测试直接编译生产 CLI，恢复及封存样本绑定同一执�
 
 runner 专属测试也直接编译生产 `main.rs`，通过 Cargo 提供的路径调用测试 CLI。两平台的 `verify_runner_tests` 不再依赖、下载或暂存 runner 发布资产，仍执行原未过滤操作。其他验证和最终打包继续消费生产 runner；完整发布成本收益未测。
 
+distribution 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，再经真实安装入口核对字节、权限和回执。两平台的 `verify_distribution_tests` 不再依赖、下载或暂存 distribution 发布资产，原未过滤操作与断言保留。生产 `build_distribution`、最终打包和实际安装仍消费发布资产；完整发布成本收益未测。
+
 每个验证只登记实际消费的构建子集。instructions、routes、diagnostics 不消费发布二进制，`needs` 为空且 `rust_toolchain=true`，可独立启动。原生输入准备的行为验证归 Rust `ci-tests`，随原始未过滤 `test.ci-tests` 执行，复用其既有构建和发布资产依赖，不再单独启动 Python 验证 job。原 IO、执行物解析、凭据省略、纳秒时间顺序和有界失败回执均在 Rust 配对测试中核对；完整种子和转发链仍由 workflow 测试验证。新增验证／传输成本未测，原生两平台验收和公开发行须核对应候选的实际结果。
 
 宿主 Rust bootstrap 的 `test.host-bootstrap-native-tests` 也纳入两平台发布验证。它直接编译源码与 Rust 测试工具，不消费发布二进制，`needs` 为空且 `rust_toolchain=true`；原始未过滤操作保留登记的独立 `--target-dir`。这只新增发布验证 job，日常 scoped 检查仍归现有 `host-bootstrap` 单元，成本未测。

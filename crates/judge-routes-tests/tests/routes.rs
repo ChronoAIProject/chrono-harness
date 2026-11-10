@@ -257,9 +257,9 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     let startup_operations = startup.operations.clone();
     assert!(startup_operations.contains(&"test.host-bootstrap-native-tests".into()));
     assert!(startup.operation_bounds.is_empty());
-    startup.operations.insert(0, "build.distribution".into());
+    startup.operations.insert(0, "build.cache".into());
     startup.operation_bounds.insert(
-        "build.distribution".into(),
+        "build.cache".into(),
         Bounds {
             timeout_seconds: 600,
             output_limit_bytes: 1048576,
@@ -285,12 +285,12 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     assert_eq!(
         operations
             .iter()
-            .filter(|o| o.method.operation == "build.distribution")
+            .filter(|o| o.method.operation == "build.cache")
             .count(),
         1
     );
     for (operation, timeout) in [
-        ("build.distribution", 600),
+        ("build.cache", 600),
         ("test.distribution-tests", 600),
         ("test.host-release-native-tests", 600),
     ]
@@ -306,7 +306,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     }
     assert_eq!(
         plans["test:host-bootstrap-native-tests"].operations,
-        std::iter::once("build.distribution".to_owned())
+        std::iter::once("build.cache".to_owned())
             .chain(startup_operations)
             .collect::<Vec<_>>()
     );
@@ -326,7 +326,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
     assert!(
         order(&selected, &plans, &methods(&projects).unwrap(), &execute)
             .unwrap_err()
-            .contains("E_PLAN_BOUNDS: inconsistent shared operation build.distribution")
+            .contains("E_PLAN_BOUNDS: inconsistent shared operation build.cache")
     );
 }
 #[test]

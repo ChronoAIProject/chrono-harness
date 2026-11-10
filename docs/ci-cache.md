@@ -191,6 +191,8 @@ Cargo 下载内容由其已有自动清理管理；CI 的工具链目录随隔�
 
 本仓 detector 构建共享启动 profile，选择登记的编译缓存。检查单元和汇总安装绑定源码的 startup 产物，当前单元与缓存集合分别归 units.json／cache.json。单元缓存登记只选择各 FILEMAP 计划仍实际存在的 Cargo 生产者；汇总和没有编译操作的单元不订阅编译缓存。
 
+distribution 测试项目直接编译生产 `main.rs`，其单元仅订阅 `check.distribution-tests`。测试专用的 `build.distribution` 前置和 `check.distribution` 已移除；两平台发布构建仍使用 `distribution.target` 及各自缓存。完整编译、传输、存储和生命周期成本收益未测。
+
 发布缓存按登记选择项目输出，验证与包收集操作由现役 Rust 发布配方执行。分组测试中不同生产者使用不同条目。
 
 缓存种子运行 `host.bootstrap-cache`，通过已有 bootstrap 所有者和 `build.cache` 构建候选 planner，再安装二进制。其配方明确 `report_path: .chrono-harness/state/cache-bootstrap.json`；之后 core bootstrap 保留默认 `.chrono-harness/state/bootstrap.json`。

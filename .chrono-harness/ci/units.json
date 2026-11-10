@@ -975,11 +975,9 @@
         ],
         "consumer": "check.unit_distribution",
         "caches": [
-          "check.distribution",
           "check.distribution-tests"
         ],
         "save_caches": [
-          "check.distribution",
           "check.distribution-tests"
         ]
       },
