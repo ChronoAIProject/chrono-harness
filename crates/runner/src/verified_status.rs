@@ -28,6 +28,194 @@ pub mod scopes;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct IndexFlag {
+    pub path: String,
+    pub tag: String,
+}
+
+impl Clone for IndexFlag {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    { Self { path: self.path.clone(), tag: self.tag.clone() } }
+}
+
+pub open spec fn index_flags_equal(a: &IndexFlag, b: &IndexFlag) -> bool {
+    a.path@ == b.path@ && a.tag@ == b.tag@
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for IndexFlag {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { index_flags_equal(self, other) }
+}
+
+impl PartialEq for IndexFlag {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == index_flags_equal(self, other),
+    {
+        identifiers::equal_text(self.path.as_str(), other.path.as_str())
+            && identifiers::equal_text(self.tag.as_str(), other.tag.as_str())
+    }
+}
+impl Eq for IndexFlag {}
+
+/// 原字节与安全标准 UTF-8 解码的观察。适配层只搬运这两个值。
+pub struct GitIndexFlagObservation<'a> {
+    pub raw: &'a [u8],
+    pub text: Option<&'a str>,
+}
+
+pub open spec fn index_flag_observation_bound(row: &GitIndexFlagObservation) -> bool {
+    match row.text { Some(text) => text.spec_bytes() == row.raw@, None => true }
+}
+
+pub open spec fn index_flag_observations_bound(rows: Seq<GitIndexFlagObservation>) -> bool {
+    forall|i: int| 0 <= i < rows.len() ==> #[trigger] index_flag_observation_bound(&rows[i])
+}
+
+#[cfg(verus_keep_ghost)]
+pub type IndexFlagBytes = (Seq<u8>, Seq<u8>);
+
+pub open spec fn index_flag_bytes(flag: &IndexFlag) -> IndexFlagBytes {
+    (vstd::utf8::encode_utf8(flag.tag@), vstd::utf8::encode_utf8(flag.path@))
+}
+
+pub open spec fn index_flag_header(raw: Seq<u8>) -> bool {
+    raw.len() >= 3 && raw[1] == 32
+        && (65 <= raw[0] <= 90 || 97 <= raw[0] <= 122)
+}
+
+pub open spec fn index_flag_row_spec(row: &GitIndexFlagObservation)
+    -> Result<IndexFlagBytes, Seq<char>>
+{
+    if !index_flag_header(row.raw@) { Err("invalid Git index flag record"@) }
+    else { match row.text {
+        None => Err("E_INPUT_UNSUPPORTED: non UTF-8 Git output"@),
+        Some(_) => Ok((row.raw@.take(1), row.raw@.skip(2))),
+    } }
+}
+
+/// 先核原字节头部，再采用 UTF-8 观察；首错次序与原 Git 接口一致。
+pub fn parse_git_index_flag_row(row: &GitIndexFlagObservation) -> (out: Result<IndexFlag, String>)
+    requires index_flag_observation_bound(row),
+    ensures match out {
+        Ok(flag) => index_flag_row_spec(row) == Ok::<IndexFlagBytes, Seq<char>>(index_flag_bytes(&flag)),
+        Err(message) => index_flag_row_spec(row) == Err::<IndexFlagBytes, Seq<char>>(message@),
+    },
+{
+    let raw = row.raw;
+    if raw.len() < 3 || raw[1] != 32
+        || !((65 <= raw[0] && raw[0] <= 90) || (97 <= raw[0] && raw[0] <= 122)) {
+        return Err("invalid Git index flag record".to_owned());
+    }
+    let text = match row.text {
+        None => { return Err("E_INPUT_UNSUPPORTED: non UTF-8 Git output".to_owned()); },
+        Some(text) => text,
+    };
+    proof { identifiers::ascii_separator_end_is(text.spec_bytes(), 32, 1); }
+    let (tag, rest) = identifiers::ascii_split_head(text, 32);
+    match rest {
+        Some(path) => Ok(IndexFlag { path: path.to_owned(), tag: tag.to_owned() }),
+        None => Err("invalid Git index flag record".to_owned()),
+    }
+}
+
+/// 完整行序列逐项解释；保留顺序和重复，错误严格来自最早失败行。
+pub fn parse_git_index_flag_rows(rows: &[GitIndexFlagObservation]) -> (out: Result<Vec<IndexFlag>, String>)
+    requires index_flag_observations_bound(rows@),
+    ensures match out {
+        Ok(flags) => flags.len() == rows.len()
+            && forall|i: int| 0 <= i < rows.len() ==>
+                index_flag_row_spec(&rows@[i]) == Ok::<IndexFlagBytes, Seq<char>>(index_flag_bytes(&flags@[i])),
+        Err(message) => exists|i: int| 0 <= i < rows.len()
+            && (forall|j: int| 0 <= j < i ==> index_flag_row_spec(&rows@[j]).is_ok())
+            && index_flag_row_spec(&rows@[i]) == Err::<IndexFlagBytes, Seq<char>>(message@),
+    },
+{
+    let mut flags: Vec<IndexFlag> = Vec::new();
+    let mut i = 0usize;
+    while i < rows.len()
+        invariant i <= rows.len(), flags.len() == i,
+            index_flag_observations_bound(rows@),
+            forall|j: int| 0 <= j < i ==> index_flag_row_spec(&rows@[j])
+                == Ok::<IndexFlagBytes, Seq<char>>(index_flag_bytes(&flags@[j])),
+        decreases rows.len() - i,
+    {
+        let flag = match parse_git_index_flag_row(&rows[i]) {
+            Ok(flag) => flag,
+            Err(message) => { return Err(message); },
+        };
+        flags.push(flag);
+        i += 1;
+    }
+    Ok(flags)
+}
+
+fn index_flag_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
+    ensures ({ let end = identifiers::ascii_separator_end(raw@, 0);
+        identifiers::first_ascii_separator(raw@, 0, end)
+            && out.0@ == raw@.take(end)
+            && match out.1 {
+                Some(tail) => end < raw.len() && tail@ == raw@.skip(end + 1),
+                None => end == raw.len(),
+            }
+    }),
+{
+    let mut end = 0usize;
+    while end < raw.len() && raw[end] != 0
+        invariant end <= raw.len(), forall|i: int| 0 <= i < end ==> raw@[i] != 0,
+        decreases raw.len() - end,
+    { end += 1; }
+    proof { identifiers::ascii_separator_end_is(raw@, 0, end as int); }
+    if end == raw.len() { return (raw, None); }
+    let (head, rest) = raw.split_at(end);
+    let (_, tail) = rest.split_at(1);
+    (head, Some(tail))
+}
+
+pub open spec fn index_flag_record_views(rows: Seq<&[u8]>) -> Seq<Seq<u8>> {
+    rows.map(|i: int, row: &[u8]| row@)
+}
+
+/// 按原字节的 NUL 拆分；忽略空项，末尾无 NUL 仍保留，不提前解码后续行。
+pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
+    ensures index_flag_record_views(out@) == identifiers::ascii_split_records(raw@, 0, false),
+        out.len() == identifiers::ascii_split_records(raw@, 0, false).len(),
+        forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i])@
+            == identifiers::ascii_split_records(raw@, 0, false)[i],
+{
+    let mut remaining = raw;
+    let mut out: Vec<&[u8]> = Vec::new();
+    loop
+        invariant index_flag_record_views(out@)
+            + identifiers::ascii_split_records(remaining@, 0, false)
+            == identifiers::ascii_split_records(raw@, 0, false),
+        decreases remaining.len(),
+    {
+        let ghost previous = index_flag_record_views(out@);
+        let (head, rest) = index_flag_record_head(remaining);
+        proof {
+            reveal_with_fuel(identifiers::ascii_split_records, 1);
+            assert(identifiers::ascii_split_records(remaining@, 0, false)
+                == (if head.len() > 0 { seq![head@] } else { seq![] })
+                    + match rest {
+                        Some(tail) => identifiers::ascii_split_records(tail@, 0, false),
+                        None => seq![],
+                    });
+        }
+        if head.len() > 0 {
+            out.push(head);
+            proof { assert(index_flag_record_views(out@) =~= previous + seq![head@]); }
+        }
+        match rest {
+            None => { return out; },
+            Some(tail) => { remaining = tail; },
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
 pub enum Status {
     Passed,
@@ -1323,14 +1511,14 @@ pub open spec fn checkout_index_prefix_changed(
 }
 
 /// 只保存完整路径；重复标记不增加成员，原有路径始终保留。
-pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
+pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
     ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
         changes@.len() == old(changes)@.len()
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     proof { tree_path_obeys_cmp(); }
-    let key = TreePath::from_text(path);
+    let key = TreePath::from_owned(path);
     let ghost before = changes@;
     changes.insert(key, ());
     tree_keys_have_unique_text(changes);
@@ -1355,6 +1543,72 @@ pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
                 assert(changes@.contains_key(found));
             }
             if text == path@ { assert(changes@.contains_key(key)); }
+        }
+    }
+}
+
+pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+        == (checkout_change_has_path(old(changes)@, text) || text == path@),
+        changes@.len() == old(changes)@.len()
+            + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
+{
+    record_checkout_owned_change(changes, path.to_owned());
+}
+
+pub open spec fn checkout_path_prefix(paths: Seq<String>, end: int, path: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < end && i < paths.len() && (#[trigger] paths[i])@ == path
+}
+
+/// 完整合并两个实际库存，按全文字节排序去重；不归一化或过滤路径。
+pub fn normalize_checkout_paths(first: Vec<String>, second: Vec<String>) -> (out: Vec<String>)
+    ensures
+        forall|path: Seq<char>| #[trigger] checkout_path_prefix(out@, out.len() as int, path)
+            == checkout_path_prefix(first@ + second@, (first@.len() + second@.len()) as int, path),
+        forall|i: int, j: int| 0 <= i < j < out.len()
+            ==> identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] out@[i])@),
+                vstd::utf8::encode_utf8((#[trigger] out@[j])@)),
+        out.len() <= first@.len() + second@.len(),
+{
+    let ghost all = first@ + second@;
+    let mut pending = first;
+    let mut additional = second;
+    pending.append(&mut additional);
+    let mut iterator = pending.into_iter();
+    let mut changes = CheckoutChanges::new();
+    loop
+        invariant all == first@ + second@,
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            changes@.len() <= iterator@.0,
+            forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == checkout_path_prefix(all, iterator@.0, path),
+        decreases all.len() - iterator@.0,
+    {
+        let ghost at = iterator@.0;
+        match iterator.next() {
+            None => {
+                assert(iterator@.0 == all.len());
+                let out = checkout_changed_paths(&changes);
+                proof {
+                    assert forall|text: Seq<char>|
+                        #[trigger] checkout_path_prefix(out@, out.len() as int, text)
+                            == checkout_path_prefix(all, all.len() as int, text) by {
+                        assert(checkout_change_has_path(changes@, text)
+                            == checkout_path_prefix(all, all.len() as int, text));
+                    }
+                }
+                return out;
+            },
+            Some(path) => {
+                record_checkout_owned_change(&mut changes, path);
+                proof {
+                    assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+                        == checkout_path_prefix(all, iterator@.0, text) by {
+                        assert(checkout_path_prefix(all, at + 1, text)
+                            == (checkout_path_prefix(all, at, text) || all[at]@ == text));
+                    }
+                }
+            },
         }
     }
 }
