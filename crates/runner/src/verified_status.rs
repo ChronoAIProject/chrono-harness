@@ -152,7 +152,7 @@ pub fn parse_git_index_flag_rows(rows: &[GitIndexFlagObservation]) -> (out: Resu
     Ok(flags)
 }
 
-fn index_flag_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
+fn git_nul_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
     ensures ({ let end = identifiers::ascii_separator_end(raw@, 0);
         identifiers::first_ascii_separator(raw@, 0, end)
             && out.0@ == raw@.take(end)
@@ -174,13 +174,13 @@ fn index_flag_record_head(raw: &[u8]) -> (out: (&[u8], Option<&[u8]>))
     (head, Some(tail))
 }
 
-pub open spec fn index_flag_record_views(rows: Seq<&[u8]>) -> Seq<Seq<u8>> {
+pub open spec fn git_nul_record_views(rows: Seq<&[u8]>) -> Seq<Seq<u8>> {
     rows.map(|i: int, row: &[u8]| row@)
 }
 
 /// 按原字节的 NUL 拆分；忽略空项，末尾无 NUL 仍保留，不提前解码后续行。
-pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
-    ensures index_flag_record_views(out@) == identifiers::ascii_split_records(raw@, 0, false),
+pub fn git_nul_records(raw: &[u8]) -> (out: Vec<&[u8]>)
+    ensures git_nul_record_views(out@) == identifiers::ascii_split_records(raw@, 0, false),
         out.len() == identifiers::ascii_split_records(raw@, 0, false).len(),
         forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i])@
             == identifiers::ascii_split_records(raw@, 0, false)[i],
@@ -188,13 +188,13 @@ pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
     let mut remaining = raw;
     let mut out: Vec<&[u8]> = Vec::new();
     loop
-        invariant index_flag_record_views(out@)
+        invariant git_nul_record_views(out@)
             + identifiers::ascii_split_records(remaining@, 0, false)
             == identifiers::ascii_split_records(raw@, 0, false),
         decreases remaining.len(),
     {
-        let ghost previous = index_flag_record_views(out@);
-        let (head, rest) = index_flag_record_head(remaining);
+        let ghost previous = git_nul_record_views(out@);
+        let (head, rest) = git_nul_record_head(remaining);
         proof {
             reveal_with_fuel(identifiers::ascii_split_records, 1);
             assert(identifiers::ascii_split_records(remaining@, 0, false)
@@ -206,11 +206,74 @@ pub fn git_index_flag_records(raw: &[u8]) -> (out: Vec<&[u8]>)
         }
         if head.len() > 0 {
             out.push(head);
-            proof { assert(index_flag_record_views(out@) =~= previous + seq![head@]); }
+            proof { assert(git_nul_record_views(out@) =~= previous + seq![head@]); }
         }
         match rest {
             None => { return out; },
             Some(tail) => { remaining = tail; },
+        }
+    }
+}
+
+/// 标准解码观察的成功值原样移交，失败只产生原有完整错误。
+pub fn git_output_text(decoded: Option<String>) -> (out: Result<String, String>)
+    ensures match (decoded, out) {
+        (Some(original), Ok(text)) => text@ == original@,
+        (None, Err(message)) => message@ == "E_INPUT_UNSUPPORTED: non UTF-8 Git output"@,
+        _ => false,
+    },
+{
+    match decoded {
+        Some(text) => Ok(text),
+        None => Err("E_INPUT_UNSUPPORTED: non UTF-8 Git output".to_owned()),
+    }
+}
+
+/// 逐项消费完整解码观察；成功保留数量、顺序和重复，失败只来自首个缺失解码。
+pub fn parse_git_text_rows(decoded: Vec<Option<String>>) -> (out: Result<Vec<String>, String>)
+    ensures match out {
+        Ok(paths) => paths.len() == decoded.len()
+            && forall|i: int| 0 <= i < decoded.len() ==> match (#[trigger] decoded@[i]) {
+                Some(text) => text@ == paths@[i]@,
+                None => false,
+            },
+        Err(message) => message@ == "E_INPUT_UNSUPPORTED: non UTF-8 Git output"@
+            && exists|i: int| 0 <= i < decoded.len() && (#[trigger] decoded@[i]).is_none()
+                && forall|j: int| 0 <= j < i ==> (#[trigger] decoded@[j]).is_some(),
+    },
+{
+    let ghost all = decoded@;
+    let mut iterator = decoded.into_iter();
+    let mut paths: Vec<String> = Vec::new();
+    loop
+        invariant all == decoded@,
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            paths.len() == iterator@.0,
+            forall|i: int| 0 <= i < paths.len() ==> match (#[trigger] all[i]) {
+                Some(text) => text@ == paths@[i]@,
+                None => false,
+            },
+        decreases all.len() - iterator@.0,
+    {
+        let ghost at = iterator@.0;
+        match iterator.next() {
+            None => { return Ok(paths); },
+            Some(row) => {
+                let path = match git_output_text(row) {
+                    Ok(path) => path,
+                    Err(message) => {
+                        proof {
+                            assert(all[at].is_none());
+                            assert forall|j: int| 0 <= j < at implies
+                                (#[trigger] all[j]).is_some() by {
+                                assert(match all[j] { Some(text) => text@ == paths@[j]@, None => false });
+                            }
+                        }
+                        return Err(message);
+                    },
+                };
+                paths.push(path);
+            },
         }
     }
 }
