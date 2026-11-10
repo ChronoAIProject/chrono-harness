@@ -856,7 +856,7 @@ workflow 原生工具、历史迁移各有有限声明，源码、外部输入�
 
 公开 bootstrap-core 选择 `.chrono-harness/ci/bootstrap-owner-upgrade.json`，使用 `chrono-bootstrap-owner-upgrade/v1`。仅输入 selected_original（普通 bootstrap 报告）和 stage_config（当前构建 profile）；执行物来自已有 participation program，不用固定历史签发者、外部启动包或执行物 hash 准入表。
 
-Git main 工具缺失保留原 seed 行为；linked 缺协调者或不兼容，在构建前拒绝。
+Git main 工具缺失保留原 seed 行为。linked 已安装本树工具时，普通 bootstrap 使用本树程序保护构建，仍核实际协调状态和所有权；本树尚无工具才由协调者保护首次构建。两处工具都缺失或实际所有权不兼容，在构建前拒绝；本树程序拒绝不触发改用协调程序重试。
 
 构建前，候选从真实保留生产者核已安装所有者资格。普通安装读取原干净 bootstrap 报告及生产者固定 commit／tree／登记为数据，核执行、原流、全部安装内容、所选工具物理身份。生产者须属于本物理宿主且唯一安装该目标，变化的现用候选不能替换原生产者配置／事实。
 
@@ -870,7 +870,7 @@ core 用 `reuse_owner_operations` 明确列所有者 fetch／build。当前候�
 
 **产品与宿主政策曾同步修改：**去掉已采用 main 的重复 owner 构建，避免临时重建替换部署字节。登记 bootstrap 测试覆盖复用、选择、原绑定拒绝，再验源码 bootstrap 及受影响标准／原生范围；总节时未测。
 
-普通共享 bootstrap 复用相同协调者字节，改变须走现有 owner 部署入口。linked 在原登记保护下安装自己的本地工具。bootstrap 先解析 Git main inventory，再分类目标；拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
+Git main 的普通 bootstrap 复用相同协调者字节，改变须走现有 owner 部署入口。linked 在原登记保护下安装并复用自己的本地工具，后续构建不要求先升级共享程序。Rust bootstrap 解析 Git main inventory，区分状态协调根和本次调用程序；本树工具的选择由现有 `verified_bindings` 根定义，并随同一 DELTA 的独立边界预期和真实 CLI mock 验收。安装继续拒绝符号链接，对共享 inode 的本地硬链接也应用协调者字节门。
 
 候选回归以明确的 Git mock 覆盖初装、本地替换、协调者字节／身份不变、直接／祖先符号链接和 inode 别名；文件系统观察仍由真实 Rust 实现完成。本宿主的阶段、core 和 shared 入口均通过薄 shell 选择 Rust 实现；旧 Python 实现和专属测试随入口退役。Rust 的现有部署所有者直接核构建报告、登记摘要、工具链绑定、原操作与两流，并负责原 inode 保全、原子替换、中断发布重入、原准入／登记 EX 和采用检查。发布不再调用构建解释器，不生成不存在的 managed_process；不可变 intent／result 继续由实际发布者产生。
 

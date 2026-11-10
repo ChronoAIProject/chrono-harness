@@ -301,6 +301,15 @@ fn profile_modes_require_registry_bound_current_schema_and_one_owner_phase() {
     assert(!cargo && !compiler && custom && prerequisite);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn bootstrap_keeps_local_owners_and_uses_coordinator_only_to_seed_linked_hosts() {
+    let initial_main = policy::bootstrap_uses_local_owner(true, false);
+    let installed_main = policy::bootstrap_uses_local_owner(true, true);
+    let initial_linked = policy::bootstrap_uses_local_owner(false, false);
+    let installed_linked = policy::bootstrap_uses_local_owner(false, true);
+    assert(initial_main && installed_main && !initial_linked && installed_linked);
+}
+
 fn source_observation(commit: &str, tree: &str, dirty: bool, error: Option<String>) -> (out: policy::SourceObservation)
     ensures
         out.commit is Some, out.commit.unwrap()@ == commit@,

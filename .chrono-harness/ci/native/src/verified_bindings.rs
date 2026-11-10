@@ -106,6 +106,12 @@ pub fn participation_mode(coordinator: &str, absolute_git: bool) -> (valid: bool
     equal_text(coordinator, "git-main-worktree") && absolute_git
 }
 
+pub fn bootstrap_uses_local_owner(main: bool, local_present: bool) -> (local: bool)
+    ensures local <==> (main || local_present),
+{
+    main || local_present
+}
+
 pub fn needs_configured_tool(prerequisite: bool, tool: &str) -> (required: bool)
     ensures required <==> (prerequisite || (tool@ != "cargo"@ && tool@ != "rustc"@)),
 {

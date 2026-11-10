@@ -46,10 +46,13 @@ pub fn proof_invocations(
 /// JSON 和显式影响集合仅作投影；缺证明、参数或根不符由 Verus 拒绝。
 pub fn validate_proof_plan(
     registry: &chrono_harness::verified_verifier::sources::SourceRegistry,
+    previous: Result<Option<&chrono_harness::verified_verifier::sources::SourceRegistry>, &str>,
     affected_nodes: &BTreeSet<String>,
     methods: &BTreeMap<String, Vec<Method>>,
     operations: &[Operation],
 ) -> Result<(), String> {
+    chrono_harness::verified_verifier::sources::validate_file_classifications(registry, previous)
+        .map_err(|error| error.render(|message, path| format!("{message}{path}")))?;
     let scopes = methods
         .values()
         .flatten()
@@ -776,8 +779,11 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     let methods = chrono_judge_registration::execution::methods(r.projects())?;
     let (global_chosen, global_operations) =
         order(&selected, &global_plans, &methods, &execute_actions(&r))?;
+    let previous_registry =
+        serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
     validate_proof_plan(
         &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
+        previous_registry.as_ref().map(Some).map_err(String::as_str),
         &impact.closure.reached.keys().cloned().collect(),
         &methods,
         &global_operations,

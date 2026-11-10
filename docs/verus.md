@@ -1,5 +1,29 @@
 # Verus 实施范围
 
+FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
+本地 routes、scoped CI、full 调度和 collection 准备共用
+`validate_file_classifications`：固定基线未登记的新行必须给出有效分类；已有分类不得
+退回未知，删除整行则沿既有删除登记验收。缺基线原件保留原错误并返回
+`E_VERUS_COVERAGE`；初始输入将全部行视为新增。其它宿主未采用时沿用其明确范围。
+数据声明仍不得有根，program／specification 必须有有效根，并继续接受现有严格计划、
+编译源码、原证明及真实消费者的绑定检查。独立预期同为 Verus，并作为 Rust 测试运行。
+
+本批先交付字段支持与同源判断；本宿主尚未启用该字段。公开 bootstrap 的已部署
+协调者须先支持新登记格式，再通过后续批次启用并验收真实消费；局部能力不代表已强制。
+本批沿用已有两项整 crate 根、固定工具、CI 单元及预算，
+不按文件名、语言或扫描推断分类。未分类存量、已有文件中全部新逻辑的分类完整性、
+声明角色的语义真实性和生产调用的完整对应仍须继续验收。当前查找直接比较两端显式行，
+最坏工作随两端文件数的乘积增长，不增加持久索引；构建、证明、CI 和完整成本未测。
+
+本批新增边界采用固定 lockfile 的 `serde_json::from_value::<SourceRegistry>` 与
+Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为 None；字段存在时，
+纯转发适配器用 `<bool as Deserialize>::deserialize` 解码后经 `Result::map(Some)`
+保留原布尔值，显式 null 及错型仍报错。None、Some(false)、Some(true) 的启用选择
+直接由 Verus 定义并证明；路径、分类和根不由解码器推断。固定 Rust 的 `Option::as_ref`、`Result::as_ref`、
+`Option::map`、`Result::map`、`Result::map_err` 和 `Option<Result<T, E>>::transpose`
+仅保留或借用原值：无基线保持 `Ok(None)`，成功保持同一基线，失败保持原错误全文。
+是否采用、初始范围、首个错误与具体错误类别全部由 Verus 内核决定。
+
 规范性权威、真实消费理由、证明与生产调用的绑定，以及 `E_VERUS_COVERAGE` 的目标失败语义，由 [SPEC 第 2.1.1 节](../SPEC.md#211-verus-规范性权威与实际调用)统一维护。当前结果合同只覆盖已登记操作，全仓覆盖门仍未实现，不能把局部检查通过当作全仓证明。
 
 本仓按批次把实际决策和状态逻辑迁到 Verus。完整目标是所有 SPEC 与仓内程序逻辑都有证明，
@@ -139,9 +163,18 @@ Verus 执行函数；本批仍只覆盖该登记状态闭包，不宣称全仓�
 本批把 `judge-cost` 的声明成本未知坐标判定迁入
 `crates/judge-cost/src/verified_cost.rs`，由 `verify.judge-cost` 和
 `verify.judge-cost-tests` 分别验证生产谓词与独立边界预期。`produce` 在生成
-`unknown` 成本记录前直接调用该 Verus 函数；JSON 字段读取和坐标列表编码仍是
-明确的适配器。现役 cost judge 的消费者回归同时核对已知、缺失和混合坐标，
-本批只覆盖四个资源坐标的未知判定，不宣称成本模型、测量或全仓覆盖已完成。
+`unknown` 成本记录前直接调用该 Verus 函数。固定顺序的缺失坐标列表也由同一根生成，
+空成员的全部未知坐标复用该函数；JSON 适配器不再自行过滤或维护第二份坐标列表。
+`record_subject_presence` 拒绝两端都缺失的声明，保留完整错误主体；仅基线存在时向
+已有删除列表追加原主体，其余情况保持列表。schema 文本比较复用 identifiers 的同源函数。
+独立 Verus 预期覆盖每个坐标、混合及全空列表、两端全部存在组合、已有删除条目及
+Unicode／NUL 主体，普通 Rust 测试也实际执行这些断言。原消费者回归继续核实际报告。
+
+外部接口沿用固定 lockfile 的 serde_json 字段读取、null 观察与 JSON 编码，以及 Rust
+字符串格式化；这些接口只投影存在性、原文本和坐标布尔值并编码已证明的结果。
+FILEMAP 显式登记 identifiers 对 cost 的生产／测试依赖；复用原两项严格整 crate 证明，
+不增加工具、证明根或预算。坐标生成至多追加四项；删除条目复制完整主体，构建、证明、
+CI 和完整生命周期成本未测。成本声明查找、成员选择、完整报告及全仓覆盖仍未证明。
 
 ## runner 构建中的证明库与缓存
 
