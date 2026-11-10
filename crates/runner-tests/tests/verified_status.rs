@@ -804,6 +804,24 @@ fn delta_equality_distinguishes_each_complete_field(left: &str, right: &str)
     expect_status_true(!equal);
 }
 
+proof fn finding_reference_member_at(entries: &[policy::Delta], at: int, reference: Seq<char>)
+    requires 0 <= at < entries.len(), entries[at].path@ == reference,
+    ensures policy::reference_allowed(reference, Some(entries)),
+{
+    let delta = Some(entries);
+    match delta {
+        Some(rows) => {
+            assert(rows == entries);
+            assert(rows[at].path@ == reference);
+            assert(exists|i: int| 0 <= i < rows.len() && #[trigger] rows[i].path@ == reference) by {
+                assert(0 <= at < rows.len() && rows[at].path@ == reference);
+            }
+            assert(policy::reference_allowed(reference, delta));
+        },
+        None => {},
+    }
+}
+
 fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
     let entry = policy::Delta { kind: kind.to_owned(), path: path.to_owned(),
         old_blob: Some(metadata.to_owned()), new_blob: None,
@@ -813,7 +831,7 @@ fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
     let slice = entries.as_slice();
     proof {
         assert(slice@.len() == 1 && slice@[0].path@ == path@);
-        assert(exists|i: int| 0 <= i < slice.len() && #[trigger] slice[i].path@ == path@);
+        finding_reference_member_at(slice, 0, path@);
         assert(policy::reference_allowed(path@, Some(slice)));
     }
     let accepted = policy::valid_finding_reference(path, Some(slice));
@@ -2012,7 +2030,7 @@ fn response_preflight_preserves_ordinary_and_initial_reference_scope() {
     let slice = delta.as_slice();
     proof {
         assert(slice.len() == 1 && slice[0].path@ == "x"@);
-        assert(exists|i: int| 0 <= i < slice.len() && #[trigger] slice[i].path@ == "x"@);
+        finding_reference_member_at(slice, 0, "x"@);
         assert(policy::reference_allowed("x"@, Some(slice)));
         assert forall|i: int| 0 <= i < first.len()
             implies policy::finding_fields(&(#[trigger] first@[i]))
@@ -3254,6 +3272,221 @@ fn index_entry_matching_preserves_complete_identity_and_stage_decision() {
     index_nonzero_stage_always_changes("1", "");
     index_nonzero_stage_always_changes("2", "a\0");
     index_nonzero_stage_always_changes("3", "目录/é");
+}
+
+fn expect_index_flag_error(rows: &[policy::GitIndexFlagObservation], first: usize, expected: &str)
+    requires policy::index_flag_observations_bound(rows@),
+        first < rows.len(),
+        forall|j: int| 0 <= j < first ==> policy::index_flag_row_spec(&rows@[j]).is_ok(),
+        policy::index_flag_row_spec(&rows@[first as int]) == Err::<policy::IndexFlagBytes, Seq<char>>(expected@),
+{
+    match policy::parse_git_index_flag_rows(rows) {
+        Err(message) => {
+            proof {
+                let found = choose|i: int| 0 <= i < rows.len()
+                    && (forall|j: int| 0 <= j < i ==> policy::index_flag_row_spec(&rows@[j]).is_ok())
+                    && policy::index_flag_row_spec(&rows@[i]) == Err::<policy::IndexFlagBytes, Seq<char>>(message@);
+                if found < first { assert(policy::index_flag_row_spec(&rows@[found]).is_ok()); }
+                if first < found { assert(policy::index_flag_row_spec(&rows@[first as int]).is_ok()); }
+                assert(found == first);
+            }
+            expect_status_text(message.as_str(), expected);
+        },
+        Ok(_) => { panic!(); },
+    }
+}
+
+fn expect_index_flag_fields(flag: &policy::IndexFlag, tag: &str, path: &str)
+    requires policy::index_flag_bytes(flag) == (tag.spec_bytes(), path.spec_bytes()),
+{
+    proof {
+        vstd::utf8::encode_utf8_decode_utf8(flag.tag@);
+        vstd::utf8::encode_utf8_decode_utf8(flag.path@);
+        vstd::utf8::encode_utf8_decode_utf8(tag@);
+        vstd::utf8::encode_utf8_decode_utf8(path@);
+    }
+    expect_status_text(flag.tag.as_str(), tag);
+    expect_status_text(flag.path.as_str(), path);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_flags_keep_order_duplicates_case_and_complete_unicode_paths() {
+    let first = "H 目录/é\n ";
+    let second = "h A";
+    proof {
+        reveal_strlit("H 目录/é\n "); reveal_strlit("目录/é\n ");
+        reveal_strlit("h A"); reveal_strlit("A"); reveal_strlit("H"); reveal_strlit("h");
+        assert(first@.drop_first().drop_first() =~= "目录/é\n "@);
+        assert(second@.drop_first().drop_first() =~= "A"@);
+        assert(vstd::utf8::encode_scalar(72) == seq![72u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(104) == seq![104u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(32) == seq![32u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 3);
+        assert(first.spec_bytes() =~= seq![72u8, 32u8] + "目录/é\n ".spec_bytes());
+        assert(second.spec_bytes() =~= seq![104u8, 32u8] + "A".spec_bytes());
+        assert(first.spec_bytes().take(1) =~= "H".spec_bytes());
+        assert(first.spec_bytes().skip(2) =~= "目录/é\n ".spec_bytes());
+        assert(second.spec_bytes().take(1) =~= "h".spec_bytes());
+        assert(second.spec_bytes().skip(2) =~= "A".spec_bytes());
+    }
+    let rows = vec![
+        policy::GitIndexFlagObservation { raw: first.as_bytes(), text: Some(first) },
+        policy::GitIndexFlagObservation { raw: second.as_bytes(), text: Some(second) },
+        policy::GitIndexFlagObservation { raw: first.as_bytes(), text: Some(first) },
+    ];
+    match policy::parse_git_index_flag_rows(rows.as_slice()) {
+        Ok(flags) => {
+            expect_status_true(flags.len() == 3);
+            expect_index_flag_fields(&flags[0], "H", "目录/é\n ");
+            expect_index_flag_fields(&flags[1], "h", "A");
+            expect_index_flag_fields(&flags[2], "H", "目录/é\n ");
+            let copy = flags[0].clone();
+            expect_status_true(copy.eq(&flags[0]));
+            expect_status_true(!copy.eq(&flags[1]));
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+fn expect_invalid_index_flag_header(text: &str)
+    requires !policy::index_flag_header(text.spec_bytes()),
+{
+    let rows = vec![policy::GitIndexFlagObservation { raw: text.as_bytes(), text: Some(text) }];
+    expect_index_flag_error(rows.as_slice(), 0, "invalid Git index flag record");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_flag_header_rejects_short_nonletters_and_wrong_separator() {
+    proof {
+        reveal_strlit(""); reveal_strlit("H"); reveal_strlit("H ");
+        reveal_strlit("@ a"); reveal_strlit("[ a"); reveal_strlit("` a");
+        reveal_strlit("{ a"); reveal_strlit("0 a"); reveal_strlit("é a"); reveal_strlit("H\ta");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("H")
+            && vstd::string::is_ascii("H ") && vstd::string::is_ascii("@ a")
+            && vstd::string::is_ascii("[ a") && vstd::string::is_ascii("` a")
+            && vstd::string::is_ascii("{ a") && vstd::string::is_ascii("0 a")
+            && vstd::string::is_ascii("H\ta"));
+        reveal_with_fuel(vstd::utf8::encode_utf8, 2);
+        assert(vstd::utf8::encode_scalar(233) == seq![195u8, 169u8]) by (compute);
+    }
+    expect_invalid_index_flag_header("");
+    expect_invalid_index_flag_header("H");
+    expect_invalid_index_flag_header("H ");
+    expect_invalid_index_flag_header("@ a");
+    expect_invalid_index_flag_header("[ a");
+    expect_invalid_index_flag_header("` a");
+    expect_invalid_index_flag_header("{ a");
+    expect_invalid_index_flag_header("0 a");
+    expect_invalid_index_flag_header("é a");
+    expect_invalid_index_flag_header("H\ta");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_flag_format_and_utf8_errors_select_the_first_record() {
+    let invalid_bytes = vec![72u8, 32u8, 255u8];
+    let malformed_bytes = vec![255u8, 32u8, 120u8];
+    let valid = "Z path";
+    proof {
+        reveal_strlit("Z path");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(valid));
+    }
+    let rows = vec![
+        policy::GitIndexFlagObservation { raw: valid.as_bytes(), text: Some(valid) },
+        policy::GitIndexFlagObservation { raw: invalid_bytes.as_slice(), text: None },
+        policy::GitIndexFlagObservation { raw: malformed_bytes.as_slice(), text: None },
+    ];
+    proof {
+        assert(policy::index_flag_row_spec(&rows@[0]).is_ok());
+        assert(policy::index_flag_row_spec(&rows@[1]) ==
+            Err::<policy::IndexFlagBytes, Seq<char>>("E_INPUT_UNSUPPORTED: non UTF-8 Git output"@));
+    }
+    expect_index_flag_error(rows.as_slice(), 1, "E_INPUT_UNSUPPORTED: non UTF-8 Git output");
+    let reversed = vec![
+        policy::GitIndexFlagObservation { raw: malformed_bytes.as_slice(), text: None },
+        policy::GitIndexFlagObservation { raw: invalid_bytes.as_slice(), text: None },
+    ];
+    expect_index_flag_error(reversed.as_slice(), 0, "invalid Git index flag record");
+}
+
+fn expect_single_index_flag(text: &str, tag: &str, path: &str)
+    requires policy::index_flag_header(text.spec_bytes()),
+        text.spec_bytes().take(1) == tag.spec_bytes(),
+        text.spec_bytes().skip(2) == path.spec_bytes(),
+{
+    let row = policy::GitIndexFlagObservation { raw: text.as_bytes(), text: Some(text) };
+    match policy::parse_git_index_flag_row(&row) {
+        Ok(flag) => { expect_index_flag_fields(&flag, tag, path); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_flag_ascii_letter_endpoints_are_all_accepted() {
+    proof {
+        reveal_strlit("A a"); reveal_strlit("Z z"); reveal_strlit("a a"); reveal_strlit("z z");
+        reveal_strlit("A"); reveal_strlit("Z"); reveal_strlit("a"); reveal_strlit("z");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("A a") && vstd::string::is_ascii("Z z")
+            && vstd::string::is_ascii("a a") && vstd::string::is_ascii("z z")
+            && vstd::string::is_ascii("A") && vstd::string::is_ascii("Z")
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("z"));
+        assert("A a".spec_bytes().take(1) =~= "A".spec_bytes());
+        assert("A a".spec_bytes().skip(2) =~= "a".spec_bytes());
+        assert("Z z".spec_bytes().take(1) =~= "Z".spec_bytes());
+        assert("Z z".spec_bytes().skip(2) =~= "z".spec_bytes());
+        assert("a a".spec_bytes().take(1) =~= "a".spec_bytes());
+        assert("a a".spec_bytes().skip(2) =~= "a".spec_bytes());
+        assert("z z".spec_bytes().take(1) =~= "z".spec_bytes());
+        assert("z z".spec_bytes().skip(2) =~= "z".spec_bytes());
+    }
+    expect_single_index_flag("A a", "A", "a");
+    expect_single_index_flag("Z z", "Z", "z");
+    expect_single_index_flag("a a", "a", "a");
+    expect_single_index_flag("z z", "z", "z");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_flag_framing_ignores_empty_records_and_keeps_unterminated_tail() {
+    proof {
+        reveal_strlit("\0H a\0\0h b\0H a"); reveal_strlit("H a"); reveal_strlit("h b");
+        reveal_strlit("\0\0"); reveal_strlit("");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("\0H a\0\0h b\0H a")
+            && vstd::string::is_ascii("H a") && vstd::string::is_ascii("h b")
+            && vstd::string::is_ascii("\0\0") && vstd::string::is_ascii(""));
+        let raw = "\0H a\0\0h b\0H a".spec_bytes();
+        scope_text::ascii_separator_end_is(raw, 0, 0);
+        scope_text::ascii_separator_end_is(raw.skip(1), 0, 3);
+        scope_text::ascii_separator_end_is(raw.skip(5), 0, 0);
+        scope_text::ascii_separator_end_is(raw.skip(6), 0, 3);
+        scope_text::ascii_separator_end_is(raw.skip(10), 0, 3);
+        assert(raw.skip(1).skip(4) =~= raw.skip(5));
+        assert(raw.skip(5).skip(1) =~= raw.skip(6));
+        assert(raw.skip(6).skip(4) =~= raw.skip(10));
+        assert(raw.skip(1).take(3) =~= "H a".spec_bytes());
+        assert(raw.skip(6).take(3) =~= "h b".spec_bytes());
+        assert(raw.skip(10).take(3) =~= "H a".spec_bytes());
+        scope_text::ascii_separator_end_is("\0\0".spec_bytes(), 0, 0);
+        scope_text::ascii_separator_end_is("\0\0".spec_bytes().skip(1), 0, 0);
+        scope_text::ascii_separator_end_is("".spec_bytes(), 0, 0);
+        reveal_with_fuel(scope_text::ascii_split_records, 6);
+        assert(scope_text::ascii_split_records(raw, 0, false)
+            =~= seq!["H a".spec_bytes(), "h b".spec_bytes(), "H a".spec_bytes()]);
+    }
+    let records = policy::git_index_flag_records("\0H a\0\0h b\0H a".as_bytes());
+    expect_status_true(records.len() == 3);
+    expect_status_true(scope_text::equal_bytes(records[0], "H a".as_bytes()));
+    expect_status_true(scope_text::equal_bytes(records[1], "h b".as_bytes()));
+    expect_status_true(scope_text::equal_bytes(records[2], "H a".as_bytes()));
+    expect_status_true(policy::git_index_flag_records("\0\0".as_bytes()).len() == 0);
+    expect_status_true(policy::git_index_flag_records("".as_bytes()).len() == 0);
+    let rows: Vec<policy::GitIndexFlagObservation> = Vec::new();
+    match policy::parse_git_index_flag_rows(rows.as_slice()) {
+        Ok(flags) => { expect_status_true(flags.len() == 0); },
+        Err(_) => { panic!(); },
+    }
 }
 
 }
