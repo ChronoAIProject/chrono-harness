@@ -1094,6 +1094,20 @@ CI 由 detector 恢复归档并在启动成功后保存，检查单元复用已�
 
 ## 此批使用的外部接口
 
+调度声明覆盖由 `judge-registration/src/verified_scheduling.rs` 的
+`claims_cover_operations` 直接判断：参与操作集合必须包含在声明键集合中，
+允许额外的真实生产声明。登记解释器消费同一返回值；方法唯一性、资源和产物的原校验仍执行。
+源码所有者登记 `verify.registration-scheduling` 与独立的
+`verify.registration-scheduling-tests` 两项整 crate 证明，边界覆盖空集合、缺少首尾操作、
+同数量但键不同、额外声明及声明值与覆盖无关。
+
+这个局部证明复用固定 vstd 的 `BTreeSet::iter`、迭代器 `next` 和
+`BTreeMap::contains_key` 合同，要求键遵守 `obeys_cmp<K>`。
+生产键 `String` 的完整内容比较及标准容器／`FromIterator` 转换采用固定 Rust 1.95.0 的外部接口合同；
+不新增仓内受信比较器或集合层。独立证明以标准整数键核通用判断，Rust 消费测试另核真实字符串及 JSON 边界。
+实际判断不再复制全部声明键，最多遍历 P 个参与操作并查询 C 个声明，比较次数上界为 O(P log(C+1))；
+字符串比较成本另计。新增两项证明的构建、CI 和完整生命周期成本未测。
+
 本批新增生产逻辑采用下表的具体外部接口。证明内的标准接口合同来自固定 Verus／vstd；
 边界转发采用固定 Rust 1.95.0，以及各使用方 lockfile 绑定的 Serde 接口。
 类型或库名本身不授予其他仓内逻辑豁免。没有新增 `external_body`、`assume` 或证明过滤。

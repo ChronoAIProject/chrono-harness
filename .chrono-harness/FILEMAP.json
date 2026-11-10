@@ -570,6 +570,8 @@
     {"path":"crates/runner-tests/tests/verified_status.rs","verification":{"role":"program","roots":[{"path":"crates/runner-tests/tests/verified_status.rs","operation":"verify.runner-status-tests"}]},"owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/judge-registration/src/verified_nodes.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration/src/verified_nodes.rs","operation":"verify.registration-nodes"},{"path":"crates/judge-registration-tests/tests/verified_nodes.rs","operation":"verify.registration-nodes-tests"}]},"owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"compile","to":"project:judge-filemap"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"}]},
     {"path":"crates/judge-registration/src/verified_readiness.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration/src/verified_readiness.rs","operation":"verify.registration-readiness"},{"path":"crates/judge-registration-tests/tests/verified_readiness.rs","operation":"verify.registration-readiness-tests"}]},"owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
+    {"path":"crates/judge-registration-tests/tests/verified_scheduling.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration-tests/tests/verified_scheduling.rs","operation":"verify.registration-scheduling-tests"}]},"owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
+    {"path":"crates/judge-registration/src/verified_scheduling.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration/src/verified_scheduling.rs","operation":"verify.registration-scheduling"},{"path":"crates/judge-registration-tests/tests/verified_scheduling.rs","operation":"verify.registration-scheduling-tests"}]},"owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/verified_readiness.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration-tests/tests/verified_readiness.rs","operation":"verify.registration-readiness-tests"}]},"owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/verified_nodes.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration-tests/tests/verified_nodes.rs","operation":"verify.registration-nodes-tests"}]},"owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}]},
     {"path":"crates/judge-registration/src/verified_consumption.rs","verification":{"role":"program","roots":[{"path":"crates/judge-registration/src/verified_consumption.rs","operation":"verify.registration-preparation"},{"path":"crates/judge-registration-tests/tests/verified_consumption.rs","operation":"verify.registration-preparation-tests"}]},"owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"compile","to":"project:judge-registration-tests"}]},
@@ -1315,6 +1317,8 @@
       "operations": [
         "verify.registration-readiness",
         "verify.registration-readiness-tests",
+        "verify.registration-scheduling",
+        "verify.registration-scheduling-tests",
         "verify.registration-nodes",
         "verify.registration-nodes-tests",
         "verify.registration-preparation-tests",
@@ -2095,7 +2099,19 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.registration-scheduling": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
       "verify.registration-readiness-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.registration-scheduling-tests": {
         "resources": [],
         "outputs": [
           ".chrono-harness/state/"

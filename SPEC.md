@@ -304,7 +304,7 @@ Config v3 可显式采用版本化 `input_closure.coverage`，合同为`{schema:
 | Edge | `{kind, to}`；from 隐含为 `file:<path>` |
 | project_edges | `{from, kind, to}[]`；显式项目/脚本/外部输入关系 |
 | execution_plans | FILEMAP v2：`test:ID` → `{operations: string[], timeout_seconds, output_limit_bytes, operation_bounds?}`。可按已列操作 ID 另给完整正值 `{timeout_seconds, output_limit_bytes}`，输出不得超过 64 MiB；缺项沿用默认值，映射缺失／空时保留历史序列化。操作 ID 有序、非空、唯一，必须含测试 execute。启动前，共享操作顺序和实际上限必须一致 |
-| execution_scheduling | FILEMAP v2 可选：`{max_running: positive integer, resources: string[], claims: {operation: {resources: string[], outputs: artifact-path[]}}}`。每个参与操作都须声明 claim，空列表也要写明；资源独占，输出命名空间不得重叠。省略保留串行计划身份 |
+| execution_scheduling | FILEMAP v2 可选：`{max_running: positive integer, resources: string[], claims: {operation: {resources: string[], outputs: artifact-path[]}}}`。每个参与操作都须声明 claim，空列表也要写明；计划外真实生产操作也可声明，但仍须通过唯一方法、资源与产物核验，声明不选择或启动操作。资源独占，输出命名空间不得重叠。省略保留串行计划身份 |
 | test_costs | `{test, cost}[]`；每个可执行测试项目或脚本有成本引用 |
 
 symlink/projection 是明确的文件表示及所有权说明，不自动增加编译或测试执行边。
