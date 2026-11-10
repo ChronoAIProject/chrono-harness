@@ -4,7 +4,9 @@ mod certificate;
 mod evidence;
 mod transition;
 mod verified_branch;
+mod verified_certificate;
 mod verified_evidence;
+mod verified_execution;
 pub use branch::{branch, current_observation_age, observation_age};
 use chrono_harness::{
     facts, json,

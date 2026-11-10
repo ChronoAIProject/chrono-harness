@@ -274,6 +274,42 @@
       "tracked": false
     },
     {
+      "path": ".chrono-harness/cache/host-release-native/",
+      "owner": "host-release-native",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/host-release-native-tests/",
+      "owner": "host-release-native-tests",
+      "kind": "cargo-output",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release/",
+      "owner": "host-release-native",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release-publication/",
+      "owner": "host-release-native",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release-install-linux/",
+      "owner": "host-release-native",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/cache/release-install-macos/",
+      "owner": "host-release-native",
+      "kind": "build-cache",
+      "tracked": false
+    },
+    {
       "path": ".chrono-harness/cache/release-frontend/",
       "owner": "host-release-native",
       "kind": "build-cache",

@@ -1892,6 +1892,50 @@
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
         },
+        "verify_execution": {
+          "operation": "verify.judge-workflow-execution",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-workflow-execution.rlib,dep-info=.chrono-harness/state/verify.judge-workflow-execution.rlib.d",
+            "crates/judge-workflow/src/verified_execution.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-workflow-execution.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_certificate": {
+          "operation": "verify.judge-workflow-certificate",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-workflow-certificate.rlib,dep-info=.chrono-harness/state/verify.judge-workflow-certificate.rlib.d",
+            "crates/judge-workflow/src/verified_certificate.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-workflow-certificate.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
         "build": {
           "operation": "build.judge-workflow",
           "tool": "cargo",
@@ -1976,6 +2020,50 @@
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
         },
+        "verify_execution": {
+          "operation": "verify.judge-workflow-execution-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-workflow-execution-tests.rlib,dep-info=.chrono-harness/state/verify.judge-workflow-execution-tests.rlib.d",
+            "crates/judge-workflow-tests/tests/verified_execution.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-workflow-execution-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_certificate": {
+          "operation": "verify.judge-workflow-certificate-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.judge-workflow-certificate-tests.rlib,dep-info=.chrono-harness/state/verify.judge-workflow-certificate-tests.rlib.d",
+            "crates/judge-workflow-tests/tests/verified_certificate.rs",
+            "-o",
+            ".chrono-harness/state/verify.judge-workflow-certificate-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
         "format_check": {
           "operation": "fmt.judge-workflow-tests",
           "tool": "cargo",
@@ -2010,6 +2098,10 @@
             "consumer",
             "--test",
             "verified_evidence",
+            "--test",
+            "verified_execution",
+            "--test",
+            "verified_certificate",
             "--",
             "--skip",
             "full_units::"

@@ -12,12 +12,16 @@
     "execute": [
       "branch",
       "consumer",
-      "verified_evidence"
+      "verified_certificate",
+      "verified_evidence",
+      "verified_execution"
     ],
     "execute_core": [
       "branch",
       "consumer",
-      "verified_evidence"
+      "verified_certificate",
+      "verified_evidence",
+      "verified_execution"
     ],
     "execute_units": [
       "consumer"

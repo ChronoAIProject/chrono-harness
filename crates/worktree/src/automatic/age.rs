@@ -237,7 +237,6 @@ impl Manager {
         i: usize,
         token: &str,
         report: &mut Value,
-        allow_delete: bool,
     ) -> Result<(), String> {
         let e = self.ledger.entries[i].clone();
         if !self.age_eligible(&e, false)? {
@@ -248,7 +247,7 @@ impl Manager {
         report["age_policy"] = value!({"reuse_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().reuse_after_seconds,
             "delete_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().delete_after_seconds,
             "clock":"physical-checkout-creation","task_completion":"not-claimed"});
-        if allow_delete && self.age_eligible(&e, true)? {
+        if self.age_eligible(&e, true)? {
             let names: Vec<_> = self
                 .inputs
                 .policy
@@ -427,77 +426,6 @@ impl Manager {
             },
         )?;
         report["age_outcome"] = value!("expired-checkout-verified-absent-source-branches-retained");
-        Ok(())
-    }
-
-    pub(super) fn prepare_age_use(
-        &mut self,
-        r: &mut Runner,
-        target: &Path,
-        report: &mut Value,
-    ) -> Result<(), String> {
-        let Some(i) = self.current_entry(target) else {
-            return Ok(());
-        };
-        let e = self.ledger.entries[i].clone();
-        if e.status != "active" || !self.age_eligible(&e, false)? {
-            return Ok(());
-        }
-        let Some(lease) = self.lease(&e, true)? else {
-            report["age_reuse"] =
-                value!({"status":"deferred","reason":"live registered consumers"});
-            return Ok(());
-        };
-        self.reconcile_uses(i, &lease)?;
-        self.reconcile_birth(r, i, &lease)?;
-        let root = self.inputs.policy.coordinator_root.clone();
-        let config_path = self.inputs.config_path.clone();
-        let (config, bytes) = crate::configuration(&root, &config_path)?;
-        let result = start::with_report(
-            &root,
-            &config_path,
-            config,
-            &bytes,
-            "age-reuse",
-            "cleaned",
-            |r, token, attempt| {
-                attempt["automatic_cleanup"] = value!(true);
-                self.execute_age(r, i, token, attempt, false)
-            },
-        )?;
-        if let Some(a) = self.ledger.entries[i].cache_attempts.last_mut() {
-            if a.path == result["report_path"] {
-                a.receipt = Some(Receipt {
-                    path: a.path.clone(),
-                    sha256: sha256(&crate::recovery::state_bytes(&root, &a.path)?),
-                });
-                if result["status"] == "cleaned" {
-                    a.completed_at = Some(
-                        SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .map_err(|error| error.to_string())?
-                            .as_secs(),
-                    );
-                    self.ledger.entries[i]
-                        .ownership
-                        .as_mut()
-                        .unwrap()
-                        .cache_pending = false;
-                }
-            }
-        }
-        self.save()?;
-        let path = result["report_path"]
-            .as_str()
-            .ok_or("age reuse report path")?;
-        let bytes = crate::recovery::state_bytes(&root, path)?;
-        report["age_reuse"] = value!({"status":result["status"],"error":result["error"],
-            "receipt":{"path":path,"sha256":sha256(&bytes)},
-            "input":self.retained_input(path,&bytes,"receipt"),
-            "source_preservation":result["source_preservation"],"age_outcome":result["age_outcome"]});
-        if report["age_reuse"]["status"] != "cleaned" {
-            return Err("age reuse failed; original result retained".into());
-        }
         Ok(())
     }
 }
