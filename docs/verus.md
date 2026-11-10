@@ -442,13 +442,13 @@ tree 与 index 复用 `GitInventoryError` 的原消息／原路径及已证明�
 复用现有 runner-status 生产／独立整 crate 根及未过滤测试，不增加证明操作或预算。
 解析扫描完整行并保存三个借用字段；普通行保留原 map 查询，非零 stage 行现在也取得预期条目后
 交给同源比较，增加一次 O(log K) 路径查询。完整证明、构建、运行与 CI 成本未测。
-stage-zero 查询的全文对应、changed 集合维护、完整循环、文件系统观察和编译／实际调用完整绑定仍待证明。
+stage-zero 的全文查询与 changed 集合由下述同源入口维护；文件系统外层循环、观察和编译／实际调用完整绑定仍待证明。
 
 index 的实际 stage 键由同源 `GitIndexStage` 持有，仍借用完整 path／stage 字符串。
 相等要求两个字段的完整 UTF-8 字节都相等；排序先比较完整 path，再比较完整 stage。
 实际 Eq／Ord／PartialOrd、对称性、传递性和容器要求的顺序定律均在同一根证明，
 不以原 Rust tuple／字符串比较的声明代替仓内比较器证明。
-`record_git_index_stage` 直接更新 checkout 的 `GitIndexStages`：结果集合恰为原集合加入
+`record_git_index_stage` 更新解析过程的临时 `GitIndexStages`：结果集合恰为原集合加入
 该完整键，其他键均保留；只有完整 path／stage 已存在时返回原 `duplicate Git index stage`，
 并证明失败后的集合与原集合完全相同。行准入仍由上述解析器拥有，不在插入处重复验证字段。
 
@@ -457,15 +457,16 @@ index 的实际 stage 键由同源 `GitIndexStage` 持有，仍借用完整 path
 排序预期核 path 优先于 stage，stage 使用完整字段；同一预期进入普通 Rust 测试。
 沿用现有两项 runner-status 整 crate 根、FILEMAP 依赖、严格工具及预算，无新增受信函数或外部假设。
 标准 BTreeMap 的 new／insert／iter 和同类型键的 contains_key 合同来自固定 vstd，
-其 `obeys_cmp<GitIndexStage>` 前提由本仓实际比较器及定律证明；外围 stage-zero 查询的
-全文语义与完整循环仍须继续证明，不由该局部插入合同推导。
+其 `obeys_cmp<GitIndexStage>` 前提由本仓实际比较器及定律证明；stage-zero 查询另由
+下述完整有序库存证明，不由局部插入合同推导；外围完整循环仍待证明。
 实际键保持原两个借用字段，不新增文本复制；每行仍执行一次 BTreeMap 插入，
-另创建标准迭代器以连接原集合的完整、有序键视图，不遍历或复制库存。
+插入函数另创建标准迭代器以连接原集合的完整、有序键视图，不遍历或复制库存。
 比较扫描实际字段字节，原生运行、构建、证明、CI 与存储的完整成本未测。
 
 index 的完整逐行解析和 stage 库存由同根 `parse_git_index_rows` 维护。
-成功结果包含按原顺序借用的全部 path／mode／OID／stage，以及原 stage map；
-规格逐项对应输入、证明完整 path／stage 不重复，并核 map 与全部解析行的双向精确对应及基数。
+成功结果包含按原顺序借用的全部 path／mode／OID／stage，以及完整有序的 stage 键库存；
+规格逐项对应输入、证明完整 path／stage 不重复，并核临时 map 和最终键向量分别与全部解析行
+双向精确对应且基数相同。
 失败必须是首个行准入错误或首个重复 stage，之前整个前缀有效且无重复；后续行不能覆盖原错。
 失败不发布局部库存，原非法路径全文继续交给现有标准 Debug 格式化边界。
 `checkout::changes` 直接消费这个完整入口，随后沿用原条目比较和文件系统观察。
@@ -474,8 +475,49 @@ index 的完整逐行解析和 stage 库存由同根 `parse_git_index_rows` 维�
 复用现有两项状态整 crate 根、FILEMAP 消费边及原未过滤行为测试，无新外部假设、操作、过滤或预算。
 完整解析仍进行 K 次 O(log K) map 插入，字符串比较与原字段扫描另计；
 新增 Vec 保存 K 个四字段借用记录，为 O(K) 额外空间，不复制字段文本，也不重复解析原行。
-证明、构建、CI 与完整生命周期成本未测；stage-zero 查询的全文语义、changed 集合和
-文件系统外层循环仍待证明，不能据此宣称完整 checkout 或全仓覆盖。
+证明、构建、CI 与完整生命周期成本未测；文件系统外层循环仍待证明，
+不能据此宣称完整 checkout 或全仓覆盖。
+
+`snapshot_git_index_stages` 从实际 map 的有序 keys 迭代一次生成借用键向量，
+证明完整键集合、精确基数、全文严格排序与循环终止。`GitIndexStageLookup` 的向量字段私有，
+只有该构造入口发布；解析返回时丢弃临时 map，保留输入原顺序的解析行和查询向量。
+`contains` 的二分循环证明返回真当且仅当完整 path 和 stage 字节都存在，
+在每轮保持原查询字段及两侧已排除的严格顺序；空集合、缺失和不同存储的同文均遵守同一合同。
+checkout 的真实 stage-zero 查询直接调用该方法。
+
+独立 Verus 预期同时作为普通 Rust 测试运行，核空库存、四种 stage、只有非零 stage 时拒绝 0、
+完整路径的大小写／NUL／后缀差异、不同字符串存储，以及原 map 后续变化不改变已发布快照。
+复用现有两项 runner-status 整 crate 根、真实消费者、原线程数和预算，没有新增仓内受信函数。
+新增采用固定 vstd 的 `BTreeMap::keys`／`btree_map::Keys::next` 合同：按严格比较顺序恰好提供
+全部键、无重复、逐步推进并保留原序列；本仓另证明比较定律、复制、基数及查询语义。
+向量额外保存 K 个两字段借用键，不复制文本；构造为 O(K) 遍历，峰值同时持有原 map 与新向量，
+解析返回后 map 释放。每次查询按二分缩小区间，键比较次数为 O(log K)，字节比较另计；
+这里没有机械成本证明，完整构建、验证、CI、运行和存储成本未测。
+
+checkout 的 changed 集合由同根 `CheckoutChanges`／`record_checkout_change` 维护。
+标记后成员恰为原完整路径集合加入本次路径，其他路径保留；只有原路径不存在时基数增加一。
+`checkout_changed_paths` 从实际 map 的全部 keys 导出完整路径，证明成员双向对应、精确基数、
+UTF-8 字节严格排序及终止。`checkout_index_changes` 遍历全部解析行，结果包含某路径当且仅当
+至少一行在该完整路径的 stage／条目／mode／OID 判断为变化；不要求输入排序或去重。
+实际 `checkout::changes` 直接消费该结果，文件系统外层发现变化时调用同一标记入口，
+最后直接返回已证明的完整排序输出，移除原普通 Rust 的 index 遍历及 BTreeSet 状态维护。
+
+预期树复用已有 `tree_rows` 的完整有序借用库存，`lookup_tree_rows` 以完整 UTF-8 字节二分，
+证明返回原条目的全部字段、缺失与终止。固定 vstd 的异型借用 `BTreeMap::get::<str>`
+没有提供可用的全文对应，因此采用现有库存，不增加仓内受信查询或外部假设。
+标准 map 的 new／insert／keys 及迭代器、Vec 存取、String 克隆／构造继续采用已列的固定 vstd 合同；
+全文身份、实际比较定律、状态更新、查询与结果完整性均在本仓 Verus 内证明。
+四项独立 Verus 预期同时作为普通 Rust 测试运行，核空输入、完整匹配的 stage 0、每一行参与、
+非排序与重复路径、不同存储的同文、完整 mode／OID／path、大小写／NUL／Unicode 及非零 stage，
+并固定四个输出位置和去重后的精确数量。复用原两个 runner-status 整 crate 根、真实消费边、
+未过滤测试和原预算；Python 迁移继续暂缓。
+
+新增树库存为 O(T) 个键值引用，不复制字段文本；K 行查询各用 O(log T) 次完整字节比较，
+集合插入另计 O(log C) 次比较。changed 集合持有 C 个完整路径，导出 Vec 时再次复制路径文本，
+峰值同时保留两份；固定 vstd 未提供可用的消费式 IntoIter 规格，故保留已有 keys 合同。
+这是算法上界估计，不是机械成本证明或实测；完整构建、验证、CI、存储与运行成本未测。
+文件系统外层循环、完整哈希循环、外围错误／IO 组合和全仓覆盖门仍待证明，
+不把这些局部入口登记为整个 `checkout.rs` 已证明。
 
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
