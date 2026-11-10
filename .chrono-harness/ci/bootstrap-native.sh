@@ -1,5 +1,5 @@
 #!/bin/sh
-# 本宿主的薄启动入口；已部署所有者保护前端编译，首次主检出可初始化。
+# 本宿主的薄启动入口；本树已安装的所有者保护前端编译，首次关联检出由协调者初始化。
 set -eu
 test "$#" -ge 2 || { echo 'usage: bootstrap-native.sh HOST CONFIG [ARGUMENTS]' >&2; exit 2; }
 task_root=$(CDPATH= cd -- "$1" && pwd -P)
@@ -10,9 +10,13 @@ if [ "${CHRONO_WORKTREE_BOOTSTRAP+x}" = x ]; then
         echo 'bootstrap reentry requires the original root and ownership capabilities' >&2; exit 2;
     }
 else
-    task_common=$(/usr/bin/git -C "$task_root" rev-parse --path-format=absolute --git-common-dir)
-    case "$task_common" in */.git) task_anchor=${task_common%/.git} ;; *) echo 'unsupported bootstrap Git owner' >&2; exit 2 ;; esac
-    task_owner="$task_anchor/.chrono-harness/bin/chrono-worktree"
+    task_anchor=$task_root
+    task_owner="$task_root/.chrono-harness/bin/chrono-worktree"
+    if [ ! -e "$task_owner" ] && [ ! -L "$task_owner" ]; then
+        task_common=$(/usr/bin/git -C "$task_root" rev-parse --path-format=absolute --git-common-dir)
+        case "$task_common" in */.git) task_anchor=${task_common%/.git} ;; *) echo 'unsupported bootstrap Git owner' >&2; exit 2 ;; esac
+        task_owner="$task_anchor/.chrono-harness/bin/chrono-worktree"
+    fi
     if [ -e "$task_owner" ] || [ -L "$task_owner" ]; then
         "$task_owner" bootstrap --host-root "$task_root" --config .chrono-harness/worktree.json --bootstrap-config .chrono-harness/ci/bootstrap-frontend.json
         exec rustup run 1.95.0 "$task_root/.chrono-harness/bin/chrono-host-bootstrap" "$@"
