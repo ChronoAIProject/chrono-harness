@@ -45,15 +45,7 @@ impl CompilerReportRead for CandidateIo<'_> {
 
 /// 只借用现役计划及同一原回执的字段；选择、比较和准入都由 Verus 所有者执行。
 pub(super) fn invocations(operations: &[Operation]) -> Vec<ProofInvocation<'_>> {
-    operations
-        .iter()
-        .map(|operation| ProofInvocation {
-            operation: &operation.method.operation,
-            argv: &operation.method.argv,
-            output_contract: &operation.method.output_contract,
-            output_limit_bytes: operation.output_limit_bytes,
-        })
-        .collect()
+    chrono_judge_routes::proof_invocations(operations)
 }
 
 pub(super) fn bind_output(

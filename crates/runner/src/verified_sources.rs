@@ -951,6 +951,154 @@ pub fn bind_registered_roots<'a>(
     Ok(())
 }
 
+pub open spec fn file_affected(file: &SourceFile, nodes: Seq<String>) -> bool {
+    exists|i: int| 0 <= i < nodes.len()
+        && (#[trigger] nodes[i])@ == "file:"@ + file.path@
+}
+
+fn affected_file(file: &SourceFile, nodes: &Vec<String>) -> (affected: bool)
+    ensures affected == file_affected(file, nodes@),
+{
+    let mut name = "file:".to_string();
+    name.push_str(file.path.as_str());
+    let mut i = 0;
+    while i < nodes.len()
+        invariant 0 <= i <= nodes.len(), name@ == "file:"@ + file.path@,
+            forall|j: int| 0 <= j < i ==> (#[trigger] nodes[j])@ != name@,
+        decreases nodes.len() - i,
+    {
+        if super::equal_text(nodes[i].as_str(), name.as_str()) { return true; }
+        i += 1;
+    }
+    false
+}
+
+/// 使用已选中计划中的真实方法；登记存在不能代替本次选择。
+pub open spec fn root_planned(root: &SourceProofRoot, methods: Seq<super::ProofInvocation>) -> bool {
+    exists|i: int| super::unique_proof_invocation(methods, root.operation@, i)
+        && methods[i].output_contract.is_some()
+        && super::valid_contract(methods[i].output_contract)
+        && super::verifier_arguments(methods[i].argv@)
+        && methods[i].argv[8]@ == root.path@
+}
+
+fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -> (planned: bool)
+    ensures planned == root_planned(root, methods@),
+{
+    let index = match super::find_proof_invocation(methods, root.operation.as_str()) {
+        Ok(index) => index,
+        Err(_) => { return false; },
+    };
+    proof {
+        if root_planned(root, methods@) {
+            let witness = choose|i: int| super::unique_proof_invocation(methods@, root.operation@, i)
+                && methods[i].output_contract.is_some()
+                && super::valid_contract(methods[i].output_contract)
+                && super::verifier_arguments(methods[i].argv@)
+                && methods[i].argv[8]@ == root.path@;
+            assert(witness == index as int);
+        }
+    }
+    let method = &methods[index];
+    if method.output_contract.is_none() || super::validate_contract(method.output_contract).is_err()
+        || !super::canonical_verifier_arguments(method.argv) { return false; }
+    super::equal_text(method.argv[8].as_str(), root.path.as_str())
+}
+
+pub open spec fn file_plan_error(
+    file: &SourceFile, nodes: Seq<String>, methods: Seq<super::ProofInvocation>, index: int,
+) -> Option<(Seq<char>, Seq<char>)>
+    decreases match &file.verification { Some(value) => value.roots.len() - index, None => 0int },
+{
+    if !file_affected(file, nodes) { None }
+    else if !source_declaration_valid(file) {
+        Some(("E_VERUS_COVERAGE: invalid affected file proof declaration: "@, file.path@))
+    } else {
+        match &file.verification {
+            None => None,
+            Some(declaration) => {
+                if index < 0 || index >= declaration.roots.len() { None }
+                else if !root_planned(&declaration.roots[index], methods) {
+                    Some(("E_VERUS_COVERAGE: declared root lacks a unique strict Verus invocation in the selected plan: "@, file.path@))
+                } else { file_plan_error(file, nodes, methods, index + 1) }
+            },
+        }
+    }
+}
+
+fn validate_file_plan<'a>(
+    file: &'a SourceFile, nodes: &Vec<String>, methods: &Vec<super::ProofInvocation>,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => file_plan_error(file, nodes@, methods@, 0).is_none(),
+        Err(error) => file_plan_error(file, nodes@, methods@, 0) == Some(error.view()),
+    },
+{
+    reveal_with_fuel(file_plan_error, 2);
+    if !affected_file(file, nodes) { return Ok(()); }
+    if !valid_source_declaration(file) {
+        return Err(CoverageError { message: "E_VERUS_COVERAGE: invalid affected file proof declaration: ",
+            path: file.path.as_str() });
+    }
+    let declaration = match &file.verification { None => { return Ok(()); }, Some(value) => value };
+    let mut i = 0;
+    while i < declaration.roots.len()
+        invariant 0 <= i <= declaration.roots.len(),
+            file_affected(file, nodes@), source_declaration_valid(file),
+            file.verification.is_some(), file.verification.unwrap() == *declaration,
+            file_plan_error(file, nodes@, methods@, 0)
+                == file_plan_error(file, nodes@, methods@, i as int),
+        decreases declaration.roots.len() - i,
+    {
+        if !planned_root(&declaration.roots[i], methods) {
+            return Err(CoverageError { message: "E_VERUS_COVERAGE: declared root lacks a unique strict Verus invocation in the selected plan: ",
+                path: file.path.as_str() });
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
+pub open spec fn selected_plan_error(
+    files: Seq<SourceFile>, nodes: Seq<String>, methods: Seq<super::ProofInvocation>, index: int,
+) -> Option<(Seq<char>, Seq<char>)>
+    decreases files.len() - index,
+{
+    if index < 0 || index >= files.len() { None }
+    else {
+        match file_plan_error(&files[index], nodes, methods, 0) {
+            Some(error) => Some(error),
+            None => selected_plan_error(files, nodes, methods, index + 1),
+        }
+    }
+}
+
+/// 全局计划在单元拆分前核对每个受影响的已声明根。
+/// 未声明存量文件仍是未知；成功不授予全仓覆盖或原进程执行资格。
+pub fn validate_selected_roots<'a>(
+    files: &'a Vec<SourceFile>, nodes: &Vec<String>, methods: &Vec<super::ProofInvocation>,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => selected_plan_error(files@, nodes@, methods@, 0).is_none(),
+        Err(error) => selected_plan_error(files@, nodes@, methods@, 0) == Some(error.view()),
+    },
+{
+    let mut i = 0;
+    while i < files.len()
+        invariant 0 <= i <= files.len(),
+            selected_plan_error(files@, nodes@, methods@, 0)
+                == selected_plan_error(files@, nodes@, methods@, i as int),
+        decreases files.len() - i,
+    {
+        match validate_file_plan(&files[i], nodes, methods) {
+            Ok(()) => {},
+            Err(error) => { return Err(error); },
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
 pub fn process_arguments(argv: &Vec<String>) -> (args: Result<Vec<String>, String>)
     ensures args.is_ok() == (argv.len() > 0),
         args.is_ok() ==> args.unwrap()@ == argv@.skip(1),
