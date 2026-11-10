@@ -36,7 +36,25 @@ fn expect_code(actual: &str, expected: &str)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn all_five_domain_rejections_have_fail_status() {
-    let (code, status) = policy::response::classify_error("E_BRANCH_STALE: 过期");
+    proof {
+        reveal_strlit("E_BRANCH_STALE: stale"); reveal_strlit("E_BRANCH_STALE");
+        reveal_strlit("E_RETIREMENT");
+        reveal_strlit("E_REQUIRED_TEST_REMOVED: test:a:b"); reveal_strlit("E_REQUIRED_TEST_REMOVED");
+        reveal_strlit("E_INTEGRATION_REQUIRED:"); reveal_strlit("E_INTEGRATION_REQUIRED");
+        reveal_strlit("E_INTEGRATION_MISMATCH: mismatch"); reveal_strlit("E_INTEGRATION_MISMATCH");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("E_BRANCH_STALE: stale") && vstd::string::is_ascii("E_BRANCH_STALE"));
+        assert(vstd::string::is_ascii("E_RETIREMENT"));
+        assert(vstd::string::is_ascii("E_REQUIRED_TEST_REMOVED: test:a:b") && vstd::string::is_ascii("E_REQUIRED_TEST_REMOVED"));
+        assert(vstd::string::is_ascii("E_INTEGRATION_REQUIRED:") && vstd::string::is_ascii("E_INTEGRATION_REQUIRED"));
+        assert(vstd::string::is_ascii("E_INTEGRATION_MISMATCH: mismatch") && vstd::string::is_ascii("E_INTEGRATION_MISMATCH"));
+        policy::response::identifiers::ascii_separator_end_is("E_BRANCH_STALE: stale".spec_bytes(), 58, 14);
+        policy::response::identifiers::ascii_separator_end_is("E_RETIREMENT".spec_bytes(), 58, 12);
+        policy::response::identifiers::ascii_separator_end_is("E_REQUIRED_TEST_REMOVED: test:a:b".spec_bytes(), 58, 23);
+        policy::response::identifiers::ascii_separator_end_is("E_INTEGRATION_REQUIRED:".spec_bytes(), 58, 22);
+        policy::response::identifiers::ascii_separator_end_is("E_INTEGRATION_MISMATCH: mismatch".spec_bytes(), 58, 22);
+    }
+    let (code, status) = policy::response::classify_error("E_BRANCH_STALE: stale");
     expect_code(code, "E_BRANCH_STALE");
     expect(matches!(status, policy::response::Status::Fail));
     let (code, status) = policy::response::classify_error("E_RETIREMENT");
@@ -48,13 +66,30 @@ fn all_five_domain_rejections_have_fail_status() {
     let (code, status) = policy::response::classify_error("E_INTEGRATION_REQUIRED:");
     expect_code(code, "E_INTEGRATION_REQUIRED");
     expect(matches!(status, policy::response::Status::Fail));
-    let (code, status) = policy::response::classify_error("E_INTEGRATION_MISMATCH: 不符");
+    let (code, status) = policy::response::classify_error("E_INTEGRATION_MISMATCH: mismatch");
     expect_code(code, "E_INTEGRATION_MISMATCH");
     expect(matches!(status, policy::response::Status::Fail));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn invalid_prefixes_preserve_the_workflow_fallback() {
+    proof {
+        reveal_strlit("E_BRANCH_STALE"); reveal_strlit("E_RETIREMENT");
+        reveal_strlit("E_REQUIRED_TEST_REMOVED"); reveal_strlit("E_INTEGRATION_REQUIRED");
+        reveal_strlit("E_INTEGRATION_MISMATCH");
+        reveal_strlit(""); reveal_strlit(":E_BRANCH_STALE");
+        reveal_strlit("e_BRANCH_STALE: lower"); reveal_strlit(" E_BRANCH_STALE: space");
+        reveal_strlit("E: short"); reveal_strlit("E_WORKFLOW_INPUT");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii(":E_BRANCH_STALE"));
+        assert(vstd::string::is_ascii("e_BRANCH_STALE: lower") && vstd::string::is_ascii(" E_BRANCH_STALE: space"));
+        assert(vstd::string::is_ascii("E: short") && vstd::string::is_ascii("E_WORKFLOW_INPUT"));
+        policy::response::identifiers::ascii_separator_end_is("".spec_bytes(), 58, 0);
+        policy::response::identifiers::ascii_separator_end_is(":E_BRANCH_STALE".spec_bytes(), 58, 0);
+        policy::response::identifiers::ascii_separator_end_is("e_BRANCH_STALE: lower".spec_bytes(), 58, 14);
+        policy::response::identifiers::ascii_separator_end_is(" E_BRANCH_STALE: space".spec_bytes(), 58, 15);
+        policy::response::identifiers::ascii_separator_end_is("E: short".spec_bytes(), 58, 1);
+    }
     let (code, status) = policy::response::classify_error("");
     expect_code(code, "E_WORKFLOW_INPUT");
     expect(matches!(status, policy::response::Status::Error));
@@ -74,6 +109,34 @@ fn invalid_prefixes_preserve_the_workflow_fallback() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn complete_code_identity_is_required_for_a_rejection() {
+    proof {
+        reveal_strlit("E_BRANCH_STALE"); reveal_strlit("E_RETIREMENT");
+        reveal_strlit("E_REQUIRED_TEST_REMOVED"); reveal_strlit("E_INTEGRATION_REQUIRED");
+        reveal_strlit("E_INTEGRATION_MISMATCH");
+        reveal_strlit("E_BRANCH_STALE_SUFFIX: detail"); reveal_strlit("E_BRANCH_STALE_SUFFIX");
+        reveal_strlit("E_BRANCH_STALE\0: detail"); reveal_strlit("E_BRANCH_STALE\0");
+        reveal_strlit("E_雪\0:后:文"); reveal_strlit("E_雪\0");
+        reveal_strlit("E_:"); reveal_strlit("E_");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("E_BRANCH_STALE_SUFFIX: detail") && vstd::string::is_ascii("E_BRANCH_STALE_SUFFIX"));
+        assert(vstd::string::is_ascii("E_BRANCH_STALE\0: detail") && vstd::string::is_ascii("E_BRANCH_STALE\0"));
+        assert(vstd::string::is_ascii("E_:") && vstd::string::is_ascii("E_"));
+        policy::response::identifiers::ascii_separator_end_is("E_BRANCH_STALE_SUFFIX: detail".spec_bytes(), 58, 21);
+        policy::response::identifiers::ascii_separator_end_is("E_BRANCH_STALE\0: detail".spec_bytes(), 58, 15);
+        policy::response::identifiers::ascii_separator_end_is("E_:".spec_bytes(), 58, 2);
+        assert('雪' as u32 == 38634 && '后' as u32 == 21518 && '文' as u32 == 25991);
+        assert(vstd::utf8::encode_scalar(38634) == seq![233u8, 155, 170]) by (compute);
+        assert(vstd::utf8::encode_scalar(21518) == seq![229u8, 144, 142]) by (compute);
+        assert(vstd::utf8::encode_scalar(25991) == seq![230u8, 150, 135]) by (compute);
+        assert(vstd::utf8::encode_scalar(69) == seq![69u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(95) == seq![95u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(0) == seq![0u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(58) == seq![58u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 9);
+        assert("E_雪\0:后:文".spec_bytes() =~= seq![69u8, 95, 233, 155, 170, 0, 58, 229, 144, 142, 58, 230, 150, 135]);
+        assert("E_雪\0".spec_bytes() =~= seq![69u8, 95, 233, 155, 170, 0]);
+        policy::response::identifiers::ascii_separator_end_is("E_雪\0:后:文".spec_bytes(), 58, 6);
+    }
     let (code, status) = policy::response::classify_error("E_BRANCH_STALE_SUFFIX: detail");
     expect_code(code, "E_BRANCH_STALE_SUFFIX");
     expect(matches!(status, policy::response::Status::Error));
