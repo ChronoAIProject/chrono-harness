@@ -30,6 +30,8 @@ worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四�
 
 `worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
 
+本地调度在共享构建就绪后，优先执行 worktree 清单、核心组和采用组，再执行 workflow 清单与各组。这样可让耗时较长的 worktree 链与其他项目检查重叠；现有依赖、cap=2、资源声明、动作、线程和时限均保留。优先级只影响已经就绪的操作，不跳过前置或放宽并发冲突。
+
 projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。固定历史宿主解码器／迁移测试已退役，原 `judge-projects-migration` 和双组清单移除。当前 `consumer`、`execution`、`languages` 二进制保留断言、默认并发及 900 秒上限，新测试二进制由未过滤 action 纳入。CI／发布消费同一 action；旧断言明确退役，不能拿剩余测试证明旧行为。
 
 CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
