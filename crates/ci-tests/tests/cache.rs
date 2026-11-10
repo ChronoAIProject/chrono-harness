@@ -78,7 +78,7 @@ fn push_only_target_saving_preserves_downloads_and_pr_restores() {
         .unwrap();
     assert_eq!(
         download_save["if"],
-        "${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
+        "${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
     );
 }
 
@@ -109,7 +109,7 @@ fn downloads_restore_before_compiling_the_planner_and_keep_the_original_check() 
         );
         assert_eq!(
             steps.last().unwrap()["if"],
-            "${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
+            "${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
         );
     }
     let steps = yaml["jobs"]["unit_example"]["steps"].as_array().unwrap();
