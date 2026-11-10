@@ -525,9 +525,7 @@
       "id": "verify_cache_tests",
       "kind": "verify",
       "operation": "test.cache-tests",
-      "needs": [
-        "build_cache"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_cache_tests",
       "rust_toolchain": true
     },
@@ -876,10 +874,8 @@
       ]
     },
     "verify_cache_tests": {
-      "need": "The original test.cache-tests Rust suite runs the candidate chrono-cache CLI and checks its registered key/output behavior.",
-      "release_assets": [
-        "chrono-cache"
-      ]
+      "need": "cache 专属测试在自己的 target 编译生产 main.rs，验证原键、恢复、封存、CLI 和执行物身份合同，不消费发布二进制。",
+      "release_assets": []
     },
     "verify_host_bootstrap_native_tests": {
       "need": "原始未过滤的 test.host-bootstrap-native-tests 编译宿主 Rust bootstrap 及其 Rust 测试工具，验证工具绑定、构建、原报告与所有者阶段；不调用发布二进制。",

@@ -13,7 +13,7 @@ runner 的编译缓存和原证明也沿同一个登记构建入口复用，损�
 
 ## 真实 CI 已验证的范围
 
-本宿主的 `cache` 单元消费 `check.cache`、`check.cache-tests`。两项 `producer-manifest/v1` 缓存已有有限原生观察，覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
+本宿主的 `cache` 单元只消费 `check.cache-tests`；测试项目直接编译生产 CLI，不再恢复或保存生产 target。此前两项 `producer-manifest/v1` 缓存的有限原生观察覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
 
 这些观察只覆盖原候选和登记消费者，不能证明当前候选、其他消费者或完整缓存行为正确。不可用内容恢复、持久修复及修复后在原兼容范围健康精确命中的验收仍未完成；访问失败及部分观察见[退役说明](#retired-remote-acceptance-controls)。实验中的临时优化设置已移除，当前参数以现役登记为准；历史摘要、后端条目、artifact ID 和耗时归原运行。并发、linked 所有权、完整编译器／SDK／输入范围，以及传输、存储和总生命周期成本仍待验收或测量。
 
@@ -119,9 +119,9 @@ exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome �
 
 ## 可选的生产者内容核验
 
-本宿主仅为已有 `check.unit_cache` job 消费的 `check.cache`、`check.cache-tests` 选择 `verify_contents: true`。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
+本宿主为已有 `check.unit_cache` job 消费的 `check.cache-tests` 选择 `verify_contents: true`。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
 
-两项兼容范围还从 `projects.json` 选择真实生产 action（`build.cache` 或 `test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
+这项兼容范围还从 `projects.json` 选择真实生产 action（`test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
 
 provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-cache seal`。它重核计划／登记和当前 planner 身份，要求原生产步骤 **outcome** 成功，并枚举明确选择的产物目录。
 
@@ -235,6 +235,8 @@ provider 从 `chrono-cache plan --github-output` 取得输出键，保留计划�
 同一 provider 配置内，每个缓存 ID 至多一个保存 job。生成／验证用 `E_CACHE_SAVE_OWNERSHIP` 拒绝冲突，指出缓存和两个 job。其他消费者明确只恢复；流程也可刻意没有写入者。独立登记生产范围使用不同缓存身份，包含不同发布平台。
 
 本宿主把四项共享启动缓存交给已有 detector 保存，其他缓存交给登记生产单元。消费者仍恢复、重建、检查，不增加 job 或前置等待。写入者跳过或未完成生产时，该运行不提供新归档。
+
+cache 专属测试也在自己的 target 编译生产 CLI，自己的计划不再执行 `build.cache`，`check.cache` 及其独用输入 `cache.producer` 随无使用方的恢复／保存路径退役。测试 target 仍走原内容核验、源码刷新和原未过滤检查；native 发布测试、bootstrap 和发行打包继续使用生产 cache 构建，完整成本收益未测。
 
 runner 专属测试直接在自己的 target 编译生产 CLI，不再恢复或保存 `check.runner`。仍执行 `build.runner` 的现有 CI 测试单元接手这项缓存的唯一保存权；其他实际使用方继续恢复它，测试 target 的缓存和原检查操作保留。完整缓存与构建成本收益未测。
 
