@@ -1069,10 +1069,16 @@ proof fn tree_fixture_row(raw: &str, path: &str)
     reveal_strlit("blob 0000000000000000000000000000000000000001");
     reveal_strlit("0000000000000000000000000000000000000001");
     reveal_strlit("100644"); reveal_strlit("blob");
-    broadcast use vstd::string::is_ascii_spec_bytes;
     assert(vstd::string::is_ascii(meta) && vstd::string::is_ascii(tail)
         && vstd::string::is_ascii(oid) && vstd::string::is_ascii("100644")
         && vstd::string::is_ascii("blob"));
+    vstd::string::is_ascii_spec_bytes(raw);
+    vstd::string::is_ascii_spec_bytes(path);
+    vstd::string::is_ascii_spec_bytes(meta);
+    vstd::string::is_ascii_spec_bytes(tail);
+    vstd::string::is_ascii_spec_bytes(oid);
+    vstd::string::is_ascii_spec_bytes("100644");
+    vstd::string::is_ascii_spec_bytes("blob");
     scope_text::ascii_separator_end_is(raw.spec_bytes(), 9, 52);
     assert(raw.spec_bytes().take(52) =~= meta.spec_bytes());
     assert(raw.spec_bytes().skip(53) =~= path.spec_bytes());
@@ -2475,6 +2481,167 @@ fn index_entry_uses_complete_mode_oid_and_ignores_path_kind(a: &str, b: &str)
     let other_oid = policy::TreeEntry { mode: a.to_owned(), oid: b.to_owned(), kind: b.to_owned() };
     expect_status_true(policy::git_index_entry_changed(&row, Some(&other_mode)));
     expect_status_true(policy::git_index_entry_changed(&row, Some(&other_oid)));
+}
+
+fn checkout_rejects_other_kind(kind: &str)
+    requires kind@ != "blob"@,
+{
+    expect_status_true(!policy::checkout_entry_supported(kind, "100644"));
+    expect_status_true(!policy::checkout_entry_supported(kind, "100755"));
+    expect_status_true(!policy::checkout_entry_supported(kind, "120000"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_support_preserves_complete_kind_and_mode() {
+    proof {
+        reveal_strlit(""); reveal_strlit("blob"); reveal_strlit("Blob");
+        reveal_strlit("blob\0"); reveal_strlit("blob/目录");
+        reveal_strlit("100644"); reveal_strlit("100755"); reveal_strlit("120000");
+        reveal_strlit("100644\0"); reveal_strlit("0100644"); reveal_strlit("100755\n");
+        reveal_strlit("120000/é"); reveal_strlit("160000");
+        assert(""@.len() != "blob"@.len());
+        assert("Blob"@[0] != "blob"@[0]);
+        assert("blob\0"@.len() != "blob"@.len());
+        assert("blob/目录"@.len() != "blob"@.len());
+        assert("100644"@[1] != "120000"@[1]);
+        assert("100755"@[1] != "120000"@[1]);
+        assert("160000"@[1] != "100644"@[1]);
+        assert("160000"@[1] != "100755"@[1]);
+        assert("160000"@[1] != "120000"@[1]);
+        assert(""@.len() != "100644"@.len());
+        assert("100644\0"@.len() != "100644"@.len());
+        assert("0100644"@.len() != "100644"@.len());
+        assert("100755\n"@.len() != "100644"@.len());
+        assert("120000/é"@.len() != "100644"@.len());
+    }
+    expect_status_true(policy::checkout_entry_supported("blob", "100644"));
+    expect_status_true(policy::checkout_entry_supported("blob", "100755"));
+    expect_status_true(policy::checkout_entry_supported("blob", "120000"));
+    checkout_rejects_other_kind("");
+    checkout_rejects_other_kind("Blob");
+    checkout_rejects_other_kind("blob\0");
+    checkout_rejects_other_kind("blob/目录");
+    expect_status_true(!policy::checkout_entry_supported("blob", ""));
+    expect_status_true(!policy::checkout_entry_supported("blob", "100644\0"));
+    expect_status_true(!policy::checkout_entry_supported("blob", "0100644"));
+    expect_status_true(!policy::checkout_entry_supported("blob", "100755\n"));
+    expect_status_true(!policy::checkout_entry_supported("blob", "120000/é"));
+    expect_status_true(!policy::checkout_entry_supported("blob", "160000"));
+    expect_status_true(policy::checkout_symbolic_link("120000"));
+    expect_status_true(!policy::checkout_symbolic_link("100644"));
+    expect_status_true(!policy::checkout_symbolic_link("100755"));
+    expect_status_true(!policy::checkout_symbolic_link("120000/é"));
+    expect_status_true(!policy::checkout_symbolic_link(""));
+}
+
+fn checkout_non_file_never_matches(permissions: u32, mode: &str) {
+    expect_status_true(!policy::checkout_regular_file_matches(false, permissions, mode));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_regular_permissions_keep_only_owner_execute_decision() {
+    proof {
+        reveal_strlit("100644"); reveal_strlit("100755");
+        reveal_strlit("100755\0"); reveal_strlit("");
+        assert("100644"@[3] != "100755"@[3]);
+        assert("100755\0"@.len() != "100755"@.len());
+        assert(""@.len() != "100755"@.len());
+        assert((0u32 & 0o100) == 0) by(bit_vector);
+        assert((0o644u32 & 0o100) == 0) by(bit_vector);
+        assert((0o011u32 & 0o100) == 0) by(bit_vector);
+        assert((0o100u32 & 0o100) != 0) by(bit_vector);
+        assert((0o755u32 & 0o100) != 0) by(bit_vector);
+        assert((u32::MAX & 0o100) != 0) by(bit_vector);
+    }
+    expect_status_true(policy::checkout_regular_file_matches(true, 0, "100644"));
+    expect_status_true(policy::checkout_regular_file_matches(true, 0o644, "100644"));
+    expect_status_true(policy::checkout_regular_file_matches(true, 0o011, "100644"));
+    expect_status_true(!policy::checkout_regular_file_matches(true, 0o100, "100644"));
+    expect_status_true(!policy::checkout_regular_file_matches(true, 0o755, "100644"));
+    expect_status_true(!policy::checkout_regular_file_matches(true, 0, "100755"));
+    expect_status_true(!policy::checkout_regular_file_matches(true, 0o644, "100755"));
+    expect_status_true(policy::checkout_regular_file_matches(true, 0o100, "100755"));
+    expect_status_true(policy::checkout_regular_file_matches(true, 0o755, "100755"));
+    expect_status_true(policy::checkout_regular_file_matches(true, u32::MAX, "100755"));
+    expect_status_true(!policy::checkout_regular_file_matches(true, u32::MAX, "100755\0"));
+    expect_status_true(policy::checkout_regular_file_matches(true, 0, "100755\0"));
+    expect_status_true(policy::checkout_regular_file_matches(true, 0, ""));
+    checkout_non_file_never_matches(0, "100644");
+    checkout_non_file_never_matches(0o100, "100755");
+    checkout_non_file_never_matches(u32::MAX, "100755\0");
+}
+
+fn checkout_open_identity_cases(size: u64, other_size: u64, permissions: u32, other_permissions: u32)
+    requires size != other_size, permissions != other_permissions,
+{
+    expect_status_true(policy::checkout_opened_file_matches(true, size, permissions, size, permissions));
+    expect_status_true(!policy::checkout_opened_file_matches(false, size, permissions, size, permissions));
+    expect_status_true(!policy::checkout_opened_file_matches(true, other_size, permissions, size, permissions));
+    expect_status_true(!policy::checkout_opened_file_matches(true, size, other_permissions, size, permissions));
+    expect_status_true(!policy::checkout_opened_file_matches(true, other_size, other_permissions, size, permissions));
+    expect_status_true(!policy::checkout_opened_file_matches(false, other_size, permissions, size, permissions));
+    expect_status_true(!policy::checkout_opened_file_matches(false, size, other_permissions, size, permissions));
+    expect_status_true(!policy::checkout_opened_file_matches(false, other_size, other_permissions, size, permissions));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_open_identity_requires_full_permissions_and_size() {
+    checkout_open_identity_cases(0, u64::MAX, 0, u32::MAX);
+    checkout_open_identity_cases(u64::MAX, 0, u32::MAX, 0);
+    checkout_open_identity_cases(7, 8, 0o644, 0o600);
+    checkout_open_identity_cases(7, 8, 0o755, 0o754);
+}
+
+fn expect_checkout_hash_count(out: Result<u64, String>, expected: u64)
+    requires out matches Ok(value) && value == expected,
+{
+    match out { Ok(value) => expect_status_true(value == expected), Err(_) => panic!() }
+}
+
+fn expect_checkout_hash_error(out: Result<u64, String>, expected: &str)
+    requires out matches Err(message) && message@ == expected@,
+{
+    match out {
+        Err(message) => expect_status_text(message.as_str(), expected),
+        Ok(_) => panic!(),
+    }
+}
+
+fn expect_checkout_hash_finished(out: Result<(), String>, expected: &str)
+    requires out matches Err(message) && message@ == expected@,
+{
+    match out {
+        Err(message) => expect_status_text(message.as_str(), expected),
+        Ok(()) => panic!(),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_hash_count_preserves_limits_and_error_priority() {
+    expect_checkout_hash_count(policy::checkout_hash_advance(0, 0, 0), 0);
+    expect_checkout_hash_count(policy::checkout_hash_advance(0, 8, 3), 3);
+    expect_checkout_hash_count(policy::checkout_hash_advance(3, 8, 5), 8);
+    expect_checkout_hash_count(policy::checkout_hash_advance(u64::MAX, u64::MAX, 0), u64::MAX);
+    expect_checkout_hash_count(policy::checkout_hash_advance(u64::MAX - 1, u64::MAX, 1), u64::MAX);
+    expect_checkout_hash_error(policy::checkout_hash_advance(0, 0, 1), "checkout file grew during observation");
+    expect_checkout_hash_error(policy::checkout_hash_advance(8, 8, 1), "checkout file grew during observation");
+    expect_checkout_hash_error(policy::checkout_hash_advance(9, 8, 0), "checkout file grew during observation");
+    expect_checkout_hash_error(policy::checkout_hash_advance(u64::MAX - 1, u64::MAX - 1, 1),
+        "checkout file grew during observation");
+    expect_checkout_hash_error(policy::checkout_hash_advance(u64::MAX, u64::MAX, 1), "checkout file size overflow");
+    expect_checkout_hash_error(policy::checkout_hash_advance(u64::MAX, 0, 1), "checkout file size overflow");
+    expect_checkout_hash_error(policy::checkout_hash_advance(1, 0, u64::MAX), "checkout file size overflow");
+    expect_checkout_hash_error(policy::checkout_hash_advance(u64::MAX, u64::MAX, u64::MAX),
+        "checkout file size overflow");
+    let out = policy::checkout_hash_complete(0, 0);
+    expect_tree_insert_ok(out);
+    let out = policy::checkout_hash_complete(u64::MAX, u64::MAX);
+    expect_tree_insert_ok(out);
+    expect_checkout_hash_finished(policy::checkout_hash_complete(0, 1), "checkout file shrank during observation");
+    expect_checkout_hash_finished(policy::checkout_hash_complete(u64::MAX - 1, u64::MAX),
+        "checkout file shrank during observation");
+    expect_checkout_hash_finished(policy::checkout_hash_complete(u64::MAX, u64::MAX - 1),
+        "checkout file shrank during observation");
 }
 
 fn index_nonzero_stage_always_changes(stage: &str, text: &str)

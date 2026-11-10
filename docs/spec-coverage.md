@@ -12,6 +12,11 @@ Git index 的完整单行解析和 stage／mode／OID 比较由同源 Verus 维�
 不同路径、重复错误与完整集合保留。stage-zero 查询的全文对应、changed 集合维护、完整循环、
 文件系统比较及完整编译／调用绑定仍待证明，不把局部行解析与插入扩大为整个 checkout 已覆盖。
 
+checkout 的 blob／模式准入、符号链接识别、普通文件与 owner execute 位、打开后完整权限和长度
+比较，以及哈希计数的溢出／增长优先级和结束长度判断由同源 Verus 维护，真实 IO 路径直接消费。
+独立 Verus 预期同时作为普通 Rust 测试执行，沿用 runner-status 的两项严格整 crate 根；
+路径遍历、IO 组合、摘要算法选择、完整哈希循环及 index 状态组合仍待证明。
+
 FILEMAP 已提供显式新增文件分类要求；同源 Verus 的候选门核对两端登记的新行分类、
 已有分类保留、初始范围和基线读取错误。新判断与独立预期沿 runner 现有两项整 crate 根
 验收，真实 routes／CI 入口共同消费。本宿主 FILEMAP 已采用该字段；实际使用方须先经

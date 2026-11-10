@@ -946,6 +946,71 @@ pub fn git_index_entry_changed(row: &GitIndexRow<'_>, entry: Option<&TreeEntry>)
     }
 }
 
+/// checkout 只支持原有三种 blob 模式，完整文本决定支持与否。
+pub fn checkout_entry_supported(kind: &str, mode: &str) -> (supported: bool)
+    ensures supported == (kind@ == "blob"@
+        && (mode@ == "100644"@ || mode@ == "100755"@ || mode@ == "120000"@)),
+{
+    identifiers::equal_text(kind, "blob") && (identifiers::equal_text(mode, "100644")
+        || identifiers::equal_text(mode, "100755") || identifiers::equal_text(mode, "120000"))
+}
+
+pub fn checkout_symbolic_link(mode: &str) -> (symbolic: bool)
+    ensures symbolic == (mode@ == "120000"@),
+{ identifiers::equal_text(mode, "120000") }
+
+/// 与原消费一致：只核普通文件与 owner execute 位，不增加其他权限准入。
+pub fn checkout_regular_file_matches(is_file: bool, permissions: u32, mode: &str) -> (matches: bool)
+    ensures matches == (is_file && ((permissions & 0o100 != 0) == (mode@ == "100755"@))),
+{
+    is_file && ((permissions & 0o100 != 0) == identifiers::equal_text(mode, "100755"))
+}
+
+/// 打开后必须仍是普通文件，长度和完整权限字必须与打开前相同。
+pub fn checkout_opened_file_matches(
+    is_file: bool, opened_size: u64, opened_permissions: u32,
+    observed_size: u64, observed_permissions: u32,
+) -> (matches: bool)
+    ensures matches == (is_file && opened_size == observed_size
+        && opened_permissions == observed_permissions),
+{
+    is_file && opened_size == observed_size && opened_permissions == observed_permissions
+}
+
+pub open spec fn checkout_hash_advance_spec(total: u64, size: u64, chunk: u64)
+    -> Result<u64, Seq<char>>
+{
+    let next = total as int + chunk as int;
+    if next > u64::MAX { Err("checkout file size overflow"@) }
+    else if next > size { Err("checkout file grew during observation"@) }
+    else { Ok(next as u64) }
+}
+
+/// 先判计数溢出，再判相对本次原观察长度增长；保留原错误优先级。
+pub fn checkout_hash_advance(total: u64, size: u64, chunk: u64) -> (out: Result<u64, String>)
+    ensures match out {
+        Ok(next) => checkout_hash_advance_spec(total, size, chunk) == Ok::<u64, Seq<char>>(next),
+        Err(message) => checkout_hash_advance_spec(total, size, chunk) == Err::<u64, Seq<char>>(message@),
+    },
+{
+    match total.checked_add(chunk) {
+        None => Err("checkout file size overflow".to_owned()),
+        Some(next) => {
+            if next > size { Err("checkout file grew during observation".to_owned()) }
+            else { Ok(next) }
+        },
+    }
+}
+
+pub fn checkout_hash_complete(total: u64, size: u64) -> (out: Result<(), String>)
+    ensures
+        out.is_ok() == (total == size),
+        match out { Ok(()) => true, Err(message) => message@ == "checkout file shrank during observation"@ },
+{
+    if total == size { Ok(()) }
+    else { Err("checkout file shrank during observation".to_owned()) }
+}
+
 pub open spec fn git_tree_row_at(rows: Seq<&str>, i: int) -> Result<GitTreeRowBytes, GitInventoryErrorView> {
     git_tree_row_spec(rows[i].spec_bytes())
 }
