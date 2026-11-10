@@ -37,13 +37,20 @@ fn reusable_outputs_wait_for_release_and_evidence_keeps_its_own_permission() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn release_requests_bind_only_the_requested_cache_generation() {
-    expect(!policy::reusable_release(7, None));
-    expect(policy::reusable_release(7, Some(7)));
-    expect(!policy::reusable_release(8, Some(7)));
-    expect(!policy::reusable_release(7, Some(8)));
-    expect(!policy::reusable_release(u64::MAX, None));
-    expect(!policy::reusable_release(u64::MAX, Some(0)));
-    expect(policy::reusable_release(u64::MAX, Some(u64::MAX)));
+    expect(!policy::reusable_release(false, 7, None));
+    expect(policy::reusable_release(false, 7, Some(7)));
+    expect(!policy::reusable_release(false, 8, Some(7)));
+    expect(!policy::reusable_release(false, 7, Some(8)));
+    expect(!policy::reusable_release(false, u64::MAX, None));
+    expect(!policy::reusable_release(false, u64::MAX, Some(0)));
+    expect(policy::reusable_release(false, u64::MAX, Some(u64::MAX)));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_linked_work_releases_reusable_outputs_without_a_main_release_request() {
+    expect(policy::reusable_release(true, 0, None));
+    expect(policy::reusable_release(true, 7, None));
+    expect(policy::reusable_release(true, u64::MAX, None));
 }
 
 fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)

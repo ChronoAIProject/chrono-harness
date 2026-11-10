@@ -2177,6 +2177,7 @@ impl Manager {
         let head = r.oid(&e.path, "HEAD")?;
         self.check_entry(r, &e, &head, None)?;
         let release_reusable = crate::verified_lifecycle::reusable_release(
+            e.terminal.is_some(),
             owner.generation,
             self.cache_release_generation(&e)?,
         );

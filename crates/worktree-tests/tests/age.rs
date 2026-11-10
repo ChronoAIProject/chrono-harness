@@ -385,6 +385,17 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
             .map(drain_report)
             .any(|r| !r["age_deletion_deferred"].is_null())
     );
+    let (code, finished, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--artifacts-only"],
+    );
+    assert_eq!(code, 0, "{finished} {error}");
+    assert!(target.exists());
+    assert!(!target.join("output λ").exists(), "{finished}");
+    assert_eq!(
+        fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
+        b"needed original\0\xff"
+    );
 }
 
 #[test]
