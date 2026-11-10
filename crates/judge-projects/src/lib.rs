@@ -1,6 +1,6 @@
 //! Pair admissibility and actual operation/test evidence. Selection remains FILEMAP-owned.
-mod verified_languages;
 mod state;
+mod verified_languages;
 use chrono_harness::{
     CommandSpec, facts, run_process_observed_retained,
     wire::{self, Binding, Finding, Request, Response, Status},
@@ -276,8 +276,13 @@ fn execute_operation(plan: &Execution, index: usize, plan_original: &Value) -> O
             output_limit_bytes: op.output_limit_bytes,
         };
         state = Some(state::Operation::begin(plan, index, plan_original)?);
-        let process = run_process_observed_retained(&plan.root, &spec, &[], &tool.sha256,
-            &state.as_ref().unwrap().evidence())?;
+        let process = run_process_observed_retained(
+            &plan.root,
+            &spec,
+            &[],
+            &tool.sha256,
+            &state.as_ref().unwrap().evidence(),
+        )?;
         Receipt::new(plan, op, process)
     })();
     let (receipt, error, status) = match result {
@@ -310,8 +315,13 @@ fn execute_operation(plan: &Execution, index: usize, plan_original: &Value) -> O
         match state.finish(&row) {
             Ok(original) => row.original = Some(original),
             Err(error) => {
-                row.error = Some(format!("{}operation original publication: {error}",
-                    row.error.as_ref().map(|e| format!("{e}; ")).unwrap_or_default()));
+                row.error = Some(format!(
+                    "{}operation original publication: {error}",
+                    row.error
+                        .as_ref()
+                        .map(|e| format!("{e}; "))
+                        .unwrap_or_default()
+                ));
                 row.status = "error".into();
             }
         }

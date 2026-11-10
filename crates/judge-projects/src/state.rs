@@ -30,17 +30,33 @@ impl Original {
         fs::create_dir_all(absolute.parent().ok_or("operation state parent missing")?)
             .map_err(|e| e.to_string())?;
         no_symlink_parents(&plan.root, &path)?;
-        let mut original = Self { root: plan.root.clone(), path, publication: None };
+        let mut original = Self {
+            root: plan.root.clone(),
+            path,
+            publication: None,
+        };
         if let Some(inventory) = Inventory::adopted(&plan.root)? {
             if !inventory.accepts("check-original", &original.path) {
-                return Err("operation originals require the registered check-original retention scope".into());
+                return Err(
+                    "operation originals require the registered check-original retention scope"
+                        .into(),
+                );
             }
-            let publication = inventory.plan("check-original", &original.path, true,
-                json!({"kind":"project-execution", "plan":plan.identity, "state":"unknown"}))?;
+            let publication = inventory.plan(
+                "check-original",
+                &original.path,
+                true,
+                json!({"kind":"project-execution", "plan":plan.identity, "state":"unknown"}),
+            )?;
             publication.materialize_for_reference(&original.recovery())?;
             original.publication = Some(publication);
         } else {
-            fs::create_dir(&absolute).map_err(|e| format!("operation state {}: {e}; preserve originals, do not redispatch", original.path))?;
+            fs::create_dir(&absolute).map_err(|e| {
+                format!(
+                    "operation state {}: {e}; preserve originals, do not redispatch",
+                    original.path
+                )
+            })?;
         }
         original.write("intent.json", &intent)?;
         Ok(original)
@@ -51,7 +67,8 @@ impl Original {
         let path = format!("{}/{name}", self.path);
         retention::write_adopted(self.publication.as_ref(), &self.root.join(&path), &bytes)?;
         fs::File::open(self.root.join(&self.path))
-            .and_then(|directory| directory.sync_all()).map_err(|e| e.to_string())?;
+            .and_then(|directory| directory.sync_all())
+            .map_err(|e| e.to_string())?;
         Ok(json!({"path":path,"sha256":sha256(&bytes),"length":bytes.len()}))
     }
 
@@ -79,64 +96,105 @@ pub(crate) struct Run {
 }
 
 pub(crate) fn address(plan: &Execution) -> Result<&str, String> {
-    plan.binding["operation_state"].as_str()
+    plan.binding["operation_state"]
+        .as_str()
         .ok_or("E_OPERATION_STATE: missing registered operation state address")
 }
 
 fn terminal(row: &OperationResult) -> bool {
-    row.status == "blocked" || row.receipt.as_ref().is_some_and(|receipt| {
-        chrono_harness::verified_release::process_exit_known(
-            receipt.process.exit_code, receipt.process.exit_signal,
-        )
-    })
+    row.status == "blocked"
+        || row.receipt.as_ref().is_some_and(|receipt| {
+            chrono_harness::verified_release::process_exit_known(
+                receipt.process.exit_code,
+                receipt.process.exit_signal,
+            )
+        })
 }
 
 fn encoded(row: &OperationResult) -> Result<Value, String> {
     let mut value = serde_json::to_value(row).map_err(|e| e.to_string())?;
     if row.receipt.is_some() {
-        value["receipt"]["process"] = chrono_harness::full::compact_process(&value["receipt"]["process"])?;
+        value["receipt"]["process"] =
+            chrono_harness::full::compact_process(&value["receipt"]["process"])?;
     }
     value["schema"] = json!("chrono-project-operation-result/v1");
     value["updated_at_unix_millis"] = json!(now()?);
-    value["state"] = json!(if terminal(row) {"completed"} else {"unknown"});
+    value["state"] = json!(if terminal(row) {
+        "completed"
+    } else {
+        "unknown"
+    });
     Ok(value)
 }
 
 impl Run {
     pub(crate) fn begin(plan: &Execution) -> Result<Self, String> {
         let path = address(plan)?.to_owned();
-        let original = Original::begin(plan, path, json!({
-            "schema":"chrono-project-execution/v1", "producer":"chrono-judge-projects",
-            "plan":plan.identity, "state":"intent", "updated_at_unix_millis":now()?,
-            "handle":null, "result":null,
-            "recovery":"read this execution and its independent operation originals; absent results remain unknown; never redispatch the same identity"
-        }))?;
-        let plan_original = original.write("plan.json", &serde_json::to_value(plan).map_err(|e| e.to_string())?)?;
-        Ok(Self { original, plan_original })
+        let original = Original::begin(
+            plan,
+            path,
+            json!({
+                "schema":"chrono-project-execution/v1", "producer":"chrono-judge-projects",
+                "plan":plan.identity, "state":"intent", "updated_at_unix_millis":now()?,
+                "handle":null, "result":null,
+                "recovery":"read this execution and its independent operation originals; absent results remain unknown; never redispatch the same identity"
+            }),
+        )?;
+        let plan_original = original.write(
+            "plan.json",
+            &serde_json::to_value(plan).map_err(|e| e.to_string())?,
+        )?;
+        Ok(Self {
+            original,
+            plan_original,
+        })
     }
 
     pub(crate) fn finish(self, results: &mut Results) -> Result<(), String> {
         let mut originals = Vec::new();
         let mut inputs = Vec::new();
-        for (index, row) in results.executed.iter_mut().chain(&mut results.blocked).enumerate() {
+        for (index, row) in results
+            .executed
+            .iter_mut()
+            .chain(&mut results.blocked)
+            .enumerate()
+        {
             let reference = match &row.original {
                 Some(original) => original.clone(),
-                None => self.original.write(&format!("undelivered-{index}.json"), &encoded(row)?)?,
+                None => self
+                    .original
+                    .write(&format!("undelivered-{index}.json"), &encoded(row)?)?,
             };
             if row.original.is_some() {
-                inputs.push(reference["path"].as_str().ok_or("operation original path")?.to_owned());
+                inputs.push(
+                    reference["path"]
+                        .as_str()
+                        .ok_or("operation original path")?
+                        .to_owned(),
+                );
             }
             row.original = Some(reference.clone());
             originals.push(reference);
         }
-        let terminal = results.executed.iter().chain(&results.blocked).all(terminal);
-        let reference = self.original.write("result.json", &json!({
-            "schema":"chrono-project-execution-result/v1", "producer":"chrono-judge-projects",
-            "plan":results.plan, "state":"returned", "terminal":terminal,
-            "updated_at_unix_millis":now()?, "plan_original":self.plan_original,
-            "operations":originals, "tests":results.tests,
-        }))?;
-        self.original.finish(terminal, json!({"kind":"project-execution","state":"returned","terminal":terminal}), &inputs)?;
+        let terminal = results
+            .executed
+            .iter()
+            .chain(&results.blocked)
+            .all(terminal);
+        let reference = self.original.write(
+            "result.json",
+            &json!({
+                "schema":"chrono-project-execution-result/v1", "producer":"chrono-judge-projects",
+                "plan":results.plan, "state":"returned", "terminal":terminal,
+                "updated_at_unix_millis":now()?, "plan_original":self.plan_original,
+                "operations":originals, "tests":results.tests,
+            }),
+        )?;
+        self.original.finish(
+            terminal,
+            json!({"kind":"project-execution","state":"returned","terminal":terminal}),
+            &inputs,
+        )?;
         results.operation_state = Some(reference);
         Ok(())
     }
@@ -148,22 +206,35 @@ pub(crate) struct Operation {
 }
 
 impl Operation {
-    pub(crate) fn begin(plan: &Execution, index: usize, plan_original: &Value) -> Result<Self, String> {
+    pub(crate) fn begin(
+        plan: &Execution,
+        index: usize,
+        plan_original: &Value,
+    ) -> Result<Self, String> {
         let path = format!("{}.operation-{index}", address(plan)?);
-        let streams = ["stdout", "stderr", "launch.json"].map(|suffix| plan.root.join(format!("{path}.{suffix}")));
+        let streams = ["stdout", "stderr", "launch.json"]
+            .map(|suffix| plan.root.join(format!("{path}.{suffix}")));
         let op = &plan.operations[index];
-        let original = Original::begin(plan, path, json!({
-            "schema":"chrono-project-operation/v1", "producer":"chrono-judge-projects",
-            "plan":plan.identity, "plan_original":plan_original, "operation":op,
-            "state":"intent", "updated_at_unix_millis":now()?, "handle":null, "result":null,
-            "process_originals":streams.iter().map(|p| p.strip_prefix(&plan.root).unwrap()).collect::<Vec<_>>(),
-            "recovery":"the native runner owns the only wait; inspect launch and partial streams; missing result remains unknown"
-        }))?;
+        let original = Original::begin(
+            plan,
+            path,
+            json!({
+                "schema":"chrono-project-operation/v1", "producer":"chrono-judge-projects",
+                "plan":plan.identity, "plan_original":plan_original, "operation":op,
+                "state":"intent", "updated_at_unix_millis":now()?, "handle":null, "result":null,
+                "process_originals":streams.iter().map(|p| p.strip_prefix(&plan.root).unwrap()).collect::<Vec<_>>(),
+                "recovery":"the native runner owns the only wait; inspect launch and partial streams; missing result remains unknown"
+            }),
+        )?;
         Ok(Self { original, streams })
     }
 
     pub(crate) fn evidence(&self) -> ProcessEvidence<'_> {
-        ProcessEvidence { stdout:&self.streams[0], stderr:&self.streams[1], launch:&self.streams[2] }
+        ProcessEvidence {
+            stdout: &self.streams[0],
+            stderr: &self.streams[1],
+            launch: &self.streams[2],
+        }
     }
 
     pub(crate) fn finish(self, row: &OperationResult) -> Result<Value, String> {
@@ -171,14 +242,27 @@ impl Operation {
         if let Some(receipt) = &row.receipt {
             chrono_harness::validate_launch_evidence(&self.streams[2], &receipt.process)?;
             for (path, expected) in self.streams.iter().zip([
-                Some((&receipt.process.stdout_sha256, receipt.process.stdout_bytes.len() as u64)),
-                Some((&receipt.process.stderr_sha256, receipt.process.stderr_bytes.len() as u64)), None,
+                Some((
+                    &receipt.process.stdout_sha256,
+                    receipt.process.stdout_bytes.len() as u64,
+                )),
+                Some((
+                    &receipt.process.stderr_sha256,
+                    receipt.process.stderr_bytes.len() as u64,
+                )),
+                None,
             ]) {
                 let identity = file_identity(path)?;
                 if expected.is_some_and(|(digest, length)| identity != (digest.clone(), length)) {
                     return Err("operation original differs from the actual process result".into());
                 }
-                inputs.push(path.strip_prefix(&self.original.root).map_err(|e| e.to_string())?.to_str().ok_or("operation original UTF-8")?.to_owned());
+                inputs.push(
+                    path.strip_prefix(&self.original.root)
+                        .map_err(|e| e.to_string())?
+                        .to_str()
+                        .ok_or("operation original UTF-8")?
+                        .to_owned(),
+                );
             }
         }
         let reference = self.original.write("result.json", &encoded(row)?)?;
@@ -187,13 +271,24 @@ impl Operation {
         // The sealed lossless result takes custody before temporary live streams
         // are released. Unknown results keep both originals and their recovery root.
         let known = terminal(row);
-        self.original.finish(false, json!({"kind":"project-operation", "operation":row.operation, "terminal":known}), &inputs)?;
+        self.original.finish(
+            false,
+            json!({"kind":"project-operation", "operation":row.operation, "terminal":known}),
+            &inputs,
+        )?;
         if let Some(inventory) = Inventory::adopted(&root)? {
             if !inputs.is_empty() {
                 inventory.settle_publication_inputs(&path, &inputs)?;
-                if known { inventory.dependencies_paths(&path, &[])?; }
+                if known {
+                    inventory.dependencies_paths(&path, &[])?;
+                }
             }
-            if known { inventory.reference_paths(&format!("projects-recovery:{}",sha256(path.as_bytes())), &[])?; }
+            if known {
+                inventory.reference_paths(
+                    &format!("projects-recovery:{}", sha256(path.as_bytes())),
+                    &[],
+                )?;
+            }
         }
         Ok(reference)
     }
