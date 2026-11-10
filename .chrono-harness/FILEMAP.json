@@ -1714,6 +1714,12 @@
           ".chrono-harness/state/"
         ]
       },
+      "build.worktree": {
+        "resources": [],
+        "outputs": [
+          "crates/worktree/target/"
+        ]
+      },
       "ci.release.verify": {
         "resources": [],
         "outputs": []
