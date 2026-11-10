@@ -45,7 +45,7 @@ impl Host {
             ("judge-ci", "chrono-judge-ci"),
         ] {
             fs::copy(
-                product.join(format!("crates/{project}/target/debug/{name}")),
+                crate::tools::fixture_binary(project, name),
                 root.join(format!(".chrono-harness/bin/{name}")),
             )
             .expect("registered production prerequisite");

@@ -229,7 +229,6 @@ fn install_retained_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
     install_tools_owned(root, tools, true);
 }
 fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained: bool) {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
     // Test the current product outputs; deployed host tools have a separate
@@ -238,7 +237,7 @@ fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained:
     // child keeps writable descriptors out of concurrently forked test children.
     let mut copy = Command::new("/bin/cp");
     for (project, name, _) in tools {
-        let built = source.join(format!("crates/{project}/target/debug/{name}"));
+        let built = crate::tools::fixture_binary(project, name);
         assert!(matches!(
             fs::symlink_metadata(bin.join(name)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound
