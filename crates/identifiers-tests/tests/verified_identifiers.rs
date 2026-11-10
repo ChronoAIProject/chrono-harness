@@ -16,6 +16,108 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn commit_parent_parser_preserves_the_first_error() {
+    let invalid_text = [112u8, 97, 114, 101, 110, 116, 32, 255, 10, 112, 97, 114, 101, 110, 116, 32, 10];
+    let invalid_oid = [112u8, 97, 114, 101, 110, 116, 32, 10, 112, 97, 114, 101, 110, 116, 32, 255, 10];
+    proof {
+        let non_utf8 = seq![255u8];
+        assert(policy::first_header_line(invalid_text@, 8)) by {
+            assert forall|i: int| 0 <= i < 8 implies invalid_text@[i] != 10 by {}
+        }
+        assert(policy::first_header_line(invalid_oid@, 7)) by {
+            assert forall|i: int| 0 <= i < 7 implies invalid_oid@[i] != 10 by {}
+        }
+        policy::header_line_end_is(invalid_text@, 8);
+        policy::header_line_end_is(invalid_oid@, 7);
+        reveal_with_fuel(policy::commit_parent_lines, 1);
+        assert(invalid_text@.take(8).skip(7) =~= non_utf8);
+        assert(invalid_oid@.take(7).skip(7) =~= Seq::<u8>::empty());
+        assert(policy::commit_parent_lines(invalid_text@)[0] =~= non_utf8);
+        assert(policy::commit_parent_lines(invalid_oid@)[0] =~= Seq::<u8>::empty());
+        reveal_strlit("");
+        assert("".spec_bytes() =~= Seq::<u8>::empty());
+    }
+    expect_commit_parent_error(&invalid_text, "invalid parent OID");
+    expect_commit_parent_error(&invalid_oid,
+        "expected full nonzero lowercase commit OID");
+}
+
+fn expect_commit_parent_error<'a>(raw: &'a [u8], expected: &str)
+    requires policy::commit_parent_lines(raw@).len() > 0,
+        policy::commit_parent_error(empty_fixture_text(policy::commit_parent_lines(raw@)[0]))
+            == Some(expected@),
+{
+    let decode = |row: &'a [u8]| -> (text: Option<&'a str>)
+        ensures text == empty_fixture_text(row@),
+    { if row.len() == 0 { Some("") } else { None } };
+    let ghost rows = policy::commit_parent_lines(raw@);
+    proof {
+        reveal_strlit("");
+        assert("".spec_bytes() =~= Seq::<u8>::empty());
+        assert forall|row: &'a [u8], text: &'a str| decode.ensures((row,), Some(text))
+            implies text.spec_bytes() == row@ by {
+            assert(row@.len() == 0 && text@ == ""@);
+        }
+    }
+    match policy::parse_commit_parents(raw, decode) {
+        Err(error) => {
+            let i = error.row;
+            let message = error.into_message();
+            proof {
+                assert(policy::parent_decode_first_error(decode, rows, i as int, message@));
+                if i > 0 {
+                    assert(policy::parent_decode_observed(decode, rows[0], None));
+                    assert_fixture_error(decode, rows[0], None);
+                }
+                assert(i == 0);
+                assert_fixture_error(decode, rows[0], Some(message@));
+            }
+            expect_identifier_true(i == 0);
+            expect_identifier_true(policy::equal_text(message.as_str(), expected));
+        },
+        Ok(parents) => {
+            proof {
+                assert(parents.len() == rows.len());
+                assert(policy::parent_decode_observed(decode, rows[0], None));
+                assert_fixture_error(decode, rows[0], None);
+            }
+            panic!();
+        },
+    }
+}
+
+spec fn empty_fixture_text<'a>(bytes: Seq<u8>) -> Option<&'a str> {
+    if bytes.len() == 0 { Some("") } else { None }
+}
+
+proof fn assert_fixture_error<'a, F>(decode: F, bytes: Seq<u8>, error: Option<Seq<char>>)
+    where F: Fn(&'a [u8]) -> Option<&'a str>,
+    requires policy::parent_decode_observed(decode, bytes, error),
+        forall|row: &'a [u8], text: Option<&'a str>| #[trigger] decode.ensures((row,), text)
+            ==> text == empty_fixture_text(row@),
+    ensures policy::commit_parent_error(empty_fixture_text(bytes)) == error,
+{
+    let (row, text) = choose|row: &'a [u8], text: Option<&'a str>| row@ == bytes
+        && #[trigger] decode.ensures((row,), text) && policy::commit_parent_error(text) == error;
+    assert(text == empty_fixture_text(row@));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn commit_parent_parser_ignores_body_after_empty_header_line() {
+    let raw = [10u8, 112, 97, 114, 101, 110, 116, 32, 255];
+    proof {
+        policy::header_line_end_is(raw@, 0);
+        reveal_with_fuel(policy::commit_parent_lines, 1);
+        assert(policy::commit_parent_lines(raw@).len() == 0);
+    }
+    let unavailable = |_row: &[u8]| -> (text: Option<&str>) ensures text.is_none(), { None };
+    match policy::parse_commit_parents(&raw, unavailable) {
+        Ok(parents) => expect_identifier_true(parents.len() == 0),
+        Err(_) => panic!(),
+    }
+}
+
 // 同一预期也在普通 Rust 中执行；Verus 的 assert 只检查证明。
 fn expect_identifier_true(actual: bool)
     requires actual,
