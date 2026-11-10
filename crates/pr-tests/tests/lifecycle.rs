@@ -108,6 +108,65 @@ fn status_passes_only_for_the_bound_head_and_required_success() {
     assert!(r["receipts"][0].get("environment").is_none());
 }
 
+#[cfg(unix)]
+#[test]
+fn unavailable_child_exit_keeps_the_original_operation_unknown() {
+    if !isolated_capability_test("unavailable_child_exit_keeps_the_original_operation_unknown") {
+        return;
+    }
+    let h = Host::new(vec![api(snapshot()), api(snapshot())]);
+    // This process alone relinquishes native child statuses to the kernel.
+    // The real gh fixture still runs and publishes its actual response, but
+    // neither those bytes nor a kernel exit observation supply Child::wait.
+    let previous = unsafe { libc::signal(libc::SIGCHLD, libc::SIG_IGN) };
+    assert_ne!(previous, libc::SIG_ERR);
+    let output = chrono_pr::run(&[
+        "pr-status".into(),
+        "--pr".into(),
+        "42".into(),
+        "--head-sha".into(),
+        HEAD.into(),
+        "--host-root".into(),
+        h.root.path().as_os_str().to_owned(),
+    ]);
+    assert_ne!(
+        unsafe { libc::signal(libc::SIGCHLD, previous) },
+        libc::SIG_ERR
+    );
+    let result: Value = serde_json::from_str(&output.stdout).unwrap();
+    assert_eq!(output.exit_code, 2, "{result}");
+    assert_eq!(h.calls().len(), 1, "the original gh actually ran");
+    assert_eq!(result["receipts"].as_array().unwrap().len(), 1);
+    assert_eq!(result["receipts"][0]["exit_code"], -1, "{result}");
+    assert!(result["receipts"][0]["exit_signal"].is_null());
+    assert!(result["receipts"][0]["failure"].is_string());
+    assert_eq!(result["operation_state"], "unknown", "{result}");
+    let path = result["operation"].as_str().unwrap();
+    let saved = fs::read(h.root.path().join(path).join("result.json")).unwrap();
+    assert_eq!(h.status().0, 0, "independent work can continue");
+    maintain_after_diagnostics(&h);
+    assert_eq!(
+        fs::read(h.root.path().join(path).join("result.json")).unwrap(),
+        saved,
+        "a newer PR observation cannot establish this original exit"
+    );
+    let (code, continued) = h.run(&[
+        "pr-status",
+        "--pr",
+        "42",
+        "--head-sha",
+        HEAD,
+        "--continue-operation",
+        path,
+    ]);
+    assert_eq!(code, 2, "{continued}");
+    assert_eq!(
+        h.calls().len(),
+        2,
+        "unknown continuation never redispatches"
+    );
+}
+
 #[test]
 fn failure_skipped_and_missing_checks_cannot_pass() {
     for state in [

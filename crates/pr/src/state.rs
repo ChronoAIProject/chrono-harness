@@ -391,7 +391,7 @@ impl State {
     }
 
     pub(crate) fn receipt(&mut self, n: usize, process: &ProcessResult) -> Result<Value, String> {
-        self.unreturned = false; // Actual engine returned; storage failure keeps its complete embedded result.
+        self.unreturned = !verified::process_exit_known(process.exit_code, process.exit_signal);
         let paths = self.process_paths(n);
         let inventory = Inventory::adopted(&self.root)?.ok_or("PR retention owner disappeared")?;
         let mut originals = Vec::new();
