@@ -207,6 +207,8 @@ cleanup 点名精确工作树，以及另一个保留其提交的本地分支。
 
 工作分支须匹配明确 feature／integration 前缀。主／源码工作树、带锁、嵌套、外来、身份不符、脏或未知目标都失败。每个可丢目录须是源码／目标 HEAD 两端登记的未跟踪产物；未列产物也阻止删除，登记本身不授权丢弃。产物路径下已跟踪变化仍错误。清理使用有限字面清单查询，不逐个列构建缓存文件。
 
+每次核对保留条件时，用一次 Git 调用读取当前保留 ref、HEAD 的提交身份，以及 `same-tree` 所需的两端 tree。结果须逐项为完整 OID 且数量准确；不存在的 revision 即使返回退出码 0，也必须拒绝。`ancestor` 继续核真实祖先关系，各效果前的检查点照常重新读取。
+
 程序核精确检出、HEAD、分支、保留 ref，取得调用锁再核，只释放自有锁，再核保存工作／内容后移除工作树。可选删分支前先验证路径／inventory 缺失；按预期 OID 删分支，核无登记工作树仍使用它。
 
 失败保留实际进程及明确部分效果，不承诺回滚。`worktree_removal`、`branch_removal` 区分 `not-attempted`、`attempted-unverified`、`verified-absent`、`already-absent`，计划保留分支为 `not-requested`。只有本次移除且核缺失后，`*_removed` 才 true。false 不证明失败 Git 无效果，应读状态和原进程。
