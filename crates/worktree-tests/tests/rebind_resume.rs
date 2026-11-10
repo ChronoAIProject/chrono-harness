@@ -8,7 +8,7 @@ fn wrapper(h: &Host) {
 }
 fn invoke(h: &Host, op: &str, path: &str, plan: &Value) -> std::process::Output {
     fs::write(h.root.join(path), serde_json::to_vec(plan).unwrap()).unwrap();
-    Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
         .current_dir("/")
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())

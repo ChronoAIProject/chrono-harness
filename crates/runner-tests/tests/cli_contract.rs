@@ -216,6 +216,35 @@ fn invalid_utf8_cli_argument_emits_structured_domain_error_on_stderr() {
     assert_eq!(record["error"]["error"]["code"], "E_USAGE");
     assert_eq!(record["error"]["error"]["source"], serde_json::Value::Null);
     assert_eq!(record["error"]["error"]["context"]["argument_index"], 0);
+    assert_eq!(record["error"]["error"]["context"]["argv_index"], 1);
+    assert_eq!(
+        record["error"]["error"]["context"]["argument_bytes"],
+        json!([255])
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn invalid_utf8_program_name_is_a_domain_error_before_help_dispatch() {
+    use std::os::unix::{ffi::OsStringExt, process::CommandExt};
+    let root = TempDir::new().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
+        .arg0(std::ffi::OsString::from_vec(vec![0xff]))
+        .arg("--help")
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let record: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(record["producer"], "chrono-harness");
+    assert_eq!(record["event"], "cli.invalid_argument");
+    assert_eq!(record["error"]["error"]["code"], "E_USAGE");
+    assert_eq!(record["error"]["error"]["context"]["argv_index"], 0);
+    assert_eq!(
+        record["error"]["error"]["context"]["argument_index"],
+        json!(null)
+    );
     assert_eq!(
         record["error"]["error"]["context"]["argument_bytes"],
         json!([255])

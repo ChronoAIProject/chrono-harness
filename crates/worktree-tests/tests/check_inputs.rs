@@ -40,19 +40,20 @@ pub(super) fn install(root: &Path) {
 }
 fn install_owned(root: &Path, owner: Option<&Host>) {
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
-    for (project, name) in [
-        ("runner", "chrono-harness"),
-        ("worktree", "chrono-worktree"),
-    ] {
-        let built = source().join(format!("crates/{project}/target/debug/{name}"));
-        install_readonly_file_owned(
-            root,
-            &built,
-            name,
-            format!("{name} 0.1.0\n").as_bytes(),
-            owner,
-        );
-    }
+    install_readonly_file_owned(
+        root,
+        &source().join("crates/runner/target/debug/chrono-harness"),
+        "chrono-harness",
+        b"chrono-harness 0.1.0\n",
+        owner,
+    );
+    install_readonly_file_owned(
+        root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")),
+        "chrono-worktree",
+        b"chrono-worktree 0.1.0\n",
+        owner,
+    );
     install_readonly_file_owned(
         root,
         Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-judge")),
@@ -60,10 +61,6 @@ fn install_owned(root: &Path, owner: Option<&Host>) {
         b"fixture\n",
         owner,
     );
-}
-pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str) {
-    let built = source().join(format!("crates/{project}/target/debug/{name}"));
-    install_readonly_file(root, &built, name, format!("{name} 0.1.0\n").as_bytes());
 }
 pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]) {
     ready_version_program_owned(root, program, expected, None);
@@ -254,16 +251,19 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
     let raw = fs::read(dest.join(&original.path)).unwrap();
     let unrelated = ".chrono-harness/state/worktrees/unrelated-ended.json";
     fs::write(dest.join(unrelated), b"unrelated ended original").unwrap();
-    Inventory::adopted(&dest)
+    let unrelated_publication = Inventory::adopted(&dest)
         .unwrap()
         .unwrap()
         .begin("lifecycle-original", unrelated, value!(null))
-        .unwrap()
-        .complete(value!({"exit":7}))
         .unwrap();
+    let unrelated_id = unrelated_publication.id().to_owned();
+    unrelated_publication.complete(value!({"exit":7})).unwrap();
+    // The fixture knows both originals. Visit them directly instead of spending
+    // the bounded pass on unrelated diagnostic metadata in directory order.
+    let maintenance_targets = [unrelated_id, original.id.clone()];
     let mut rounds = Vec::new();
     for _ in 0..8 {
-        rounds.push(inventory.maintain().unwrap());
+        rounds.push(inventory.maintain_originals(&maintenance_targets).unwrap());
         assert_eq!(
             fs::read(dest.join(&original.path)).unwrap(),
             raw,
@@ -445,9 +445,12 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0));
+    let tracking = "refs/remotes/warehouse/dev";
+    let previous_tracking = git(&dest, &["rev-parse", tracking]);
     fs::write(h.root.join("anything/data.txt"), "advanced dev").unwrap();
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    git(&dest, &["update-ref", tracking, &previous_tracking]);
     let (o, p) = inputs(&dest);
     assert_eq!(
         o.status.code(),
@@ -459,6 +462,11 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     let ctx = json(&p.context.unwrap().raw).unwrap();
     assert_eq!(ctx["fork_point"], birth["base"]);
     assert_eq!(ctx["base"], git(&h.root, &["rev-parse", "HEAD"]));
+    assert_eq!(
+        git(&dest, &["rev-parse", tracking]),
+        previous_tracking,
+        "preparing a private base must leave shared remote-tracking refs unchanged"
+    );
 }
 #[test]
 fn local_preparation_rejects_clean_replacement_after_candidate_head_observation() {

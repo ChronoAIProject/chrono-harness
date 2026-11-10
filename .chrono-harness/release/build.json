@@ -317,8 +317,7 @@
       "operation": "test.worktree-tests",
       "needs": [
         "build_runner",
-        "build_ci",
-        "build_worktree"
+        "build_ci"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_worktree_tests",
       "rust_toolchain": true
@@ -759,11 +758,10 @@
       "release_assets": []
     },
     "verify_worktree_tests": {
-      "need": "crates/worktree-tests/tests/creation.rs and cleanup/check-input consumers run the worktree CLI and runner; check_inputs.rs also runs the CI event producer. Assertions consume actual Git state, retained contexts, ownership and cleanup results.",
+      "need": "worktree 专属测试由 Cargo 从唯一生产 main.rs 编译测试 CLI，保留原只读复制、所有者发布和中断回归；仍运行生产 runner 和 CI 输入程序，核对真实 Git 状态、上下文及清理结果。",
       "release_assets": [
         "chrono-harness",
-        "chrono-ci",
-        "chrono-worktree"
+        "chrono-ci"
       ]
     },
     "verify_runner_tests": {

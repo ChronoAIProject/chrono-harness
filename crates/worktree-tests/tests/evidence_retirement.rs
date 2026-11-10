@@ -39,7 +39,7 @@ fn custody_plan(h: &Host, target: &Path) -> Value {
 fn retire(target: &Path, plan: &Value) -> (i32, Value) {
     let path = ".chrono-harness/state/custody/plan.json";
     fs::write(target.join(path), serde_json::to_vec(plan).unwrap()).unwrap();
-    let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let out = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .args([

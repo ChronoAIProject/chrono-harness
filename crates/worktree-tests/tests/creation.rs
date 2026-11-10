@@ -386,8 +386,7 @@ impl Host {
         }
     }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
-        let mut command =
-            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        let mut command = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
         command
             .current_dir("/")
             .env_clear()
@@ -656,6 +655,8 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
     select_config(&h.root, SOURCE_CONFIG);
     let source_head = commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let tracking = "refs/remotes/warehouse/dev";
+    let previous_tracking = git(&h.root, &["rev-parse", tracking]);
     let other = h.parent.join("other writer");
     git(
         &h.root,
@@ -703,6 +704,11 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
     assert_eq!(report["source_commit"], source_head);
     assert_eq!(report["base"], latest);
     assert_eq!(report["branch_ref"], "selected/task");
+    assert_eq!(
+        git(&h.root, &["rev-parse", tracking]),
+        previous_tracking,
+        "fetching a private base must leave shared remote-tracking refs unchanged"
+    );
     assert_eq!(
         report["source_registry_digest"],
         chrono_harness::wire::digest(&value!(source_values)).unwrap()
@@ -1308,7 +1314,7 @@ impl Host {
         let path = ".chrono-harness/state/reconstruction.json";
         fs::create_dir_all(self.root.join(".chrono-harness/state")).unwrap();
         fs::write(self.root.join(path), serde_json::to_vec(&plan).unwrap()).unwrap();
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let output = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())

@@ -1,6 +1,5 @@
 use std::io::{Read, Write};
-fn run() -> u8 {
-    let args: Vec<_> = std::env::args().skip(1).collect();
+fn run(args: &[String]) -> u8 {
     if args == ["--version"] {
         println!("chrono-judge-projects {}", env!("CARGO_PKG_VERSION"));
         return 0;
@@ -46,5 +45,8 @@ fn run() -> u8 {
 }
 
 fn main() -> std::process::ExitCode {
-    std::process::ExitCode::from(chrono_harness::logged_main("chrono-judge-projects", run))
+    std::process::ExitCode::from(chrono_harness::logged_text_main(
+        "chrono-judge-projects",
+        run,
+    ))
 }

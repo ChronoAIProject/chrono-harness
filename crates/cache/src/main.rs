@@ -1,5 +1,5 @@
-fn run() -> u8 {
-    match chrono_cache::dispatch(&std::env::args().skip(1).collect::<Vec<_>>()) {
+fn run(args: &[String]) -> u8 {
+    match chrono_cache::dispatch(args) {
         Ok(plan) => {
             print!("{plan}");
             0
@@ -13,5 +13,5 @@ fn run() -> u8 {
 }
 
 fn main() -> std::process::ExitCode {
-    std::process::ExitCode::from(chrono_harness::logged_main("chrono-cache", run))
+    std::process::ExitCode::from(chrono_harness::logged_text_main("chrono-cache", run))
 }

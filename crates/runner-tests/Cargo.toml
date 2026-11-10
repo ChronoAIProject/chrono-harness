@@ -105,6 +105,10 @@ name = "verified_limits"
 path = "tests/verified_limits.rs"
 
 [[test]]
+name = "verified_cli"
+path = "tests/verified_cli.rs"
+
+[[test]]
 name = "verified_verifier"
 path = "tests/verified_verifier.rs"
 

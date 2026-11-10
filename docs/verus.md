@@ -35,6 +35,19 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+字符串 CLI 的参数顺序与首个解码失败由 runner 的 `verified_cli.rs` 拥有，
+`logged_text_main` 把标准库 `OsStr::to_str` 的完整观察序列交给该内核。
+成功保留全部原文、空串、Unicode、顺序和重复；失败返回首个无效位置。
+`argv_index` 包含启动名称，`argument_index` 仅对其后的用户参数从零计数；
+启动名称失败时后者为 null。调用边界保留该位置的原始 OS 编码字节，
+发布 `cli.invalid_argument`／`E_USAGE` 并退出 2，不进入业务派发。
+runner、CI、cache、inputs、worktree、distribution 及七个字符串参数判官共用此边界；
+已有 OS 路径入口继续使用原 `logged_main`，不把字符串限制施加给原生路径使用方。
+`verify.runner-cli`／`verify.runner-cli-tests` 沿现有 Verus 工具和 runner 测试计划执行，
+独立预期也作为普通 Rust 测试运行。标准库 OS 解码、参数搬运、错误记录和日志 IO
+仍是外围接口；这项局部证明不代表完整 CLI、诊断体系或全仓已经证明。
+新增两项证明及真实 CLI 回归扩大相应 DELTA 验证成本，总成本未测。
+
 workflow 的错误分类由 `verified_response.rs::classify_error` 拥有，并加入现有
 `verify.judge-workflow-execution`／独立预期根的整 crate 证明。
 真实 `judge` 将原消息交给此函数，直接使用返回的实际协议 `Status` 与完整错误码；
@@ -463,6 +476,20 @@ index 的实际 stage 键由同源 `GitIndexStage` 持有，仍借用完整 path
 另创建标准迭代器以连接原集合的完整、有序键视图，不遍历或复制库存。
 比较扫描实际字段字节，原生运行、构建、证明、CI 与存储的完整成本未测。
 
+index 的完整逐行解析和 stage 库存由同根 `parse_git_index_rows` 维护。
+成功结果包含按原顺序借用的全部 path／mode／OID／stage，以及原 stage map；
+规格逐项对应输入、证明完整 path／stage 不重复，并核 map 与全部解析行的双向精确对应及基数。
+失败必须是首个行准入错误或首个重复 stage，之前整个前缀有效且无重复；后续行不能覆盖原错。
+失败不发布局部库存，原非法路径全文继续交给现有标准 Debug 格式化边界。
+`checkout::changes` 直接消费这个完整入口，随后沿用原条目比较和文件系统观察。
+独立 Verus 预期核空库存、全部四种 stage、原行顺序和字段、路径内的后续 TAB、
+不同字符串存储的重复拒绝、首错优先级，以及非法路径中的 NUL 和完整后缀；同一预期在 Rust 中执行。
+复用现有两项状态整 crate 根、FILEMAP 消费边及原未过滤行为测试，无新外部假设、操作、过滤或预算。
+完整解析仍进行 K 次 O(log K) map 插入，字符串比较与原字段扫描另计；
+新增 Vec 保存 K 个四字段借用记录，为 O(K) 额外空间，不复制字段文本，也不重复解析原行。
+证明、构建、CI 与完整生命周期成本未测；stage-zero 查询的全文语义、changed 集合和
+文件系统外层循环仍待证明，不能据此宣称完整 checkout 或全仓覆盖。
+
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
 证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；
@@ -492,7 +519,7 @@ tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 **产品与宿主登记同步修改：**路径根被状态证明直接使用，FILEMAP 补齐其真实编译与测试使用方；
 沿用原两项状态整 crate 证明及未过滤测试，无新工具、操作、预算或 Python 迁移。
 新增迭代器只建立借用状态，不收集行；整体仍按 K 次 O(log K) map 操作及原字符串扫描计，
-完整证明、构建、CI 与存储成本未测。index 重复 stage、文件系统比较与全仓覆盖门仍未完成。
+完整证明、构建、CI 与存储成本未测。文件系统比较与全仓覆盖门仍未完成。
 
 原始 commit 物理头的 parent 行选择也由同一根的 `commit_parent_records` 实现。
 以 LF 字节分行，在首个空行停止；仅选择精确 `parent ` 前缀，完整借用原后缀，

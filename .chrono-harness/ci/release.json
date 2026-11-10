@@ -431,8 +431,7 @@
       "needs": [
         "linux_release_frontend",
         "linux_build_runner",
-        "linux_build_ci",
-        "linux_build_worktree"
+        "linux_build_ci"
       ],
       "downloads": [
         {
@@ -446,10 +445,6 @@
         {
           "job": "linux_build_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
-        },
-        {
-          "job": "linux_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
         }
       ]
     },
@@ -1640,8 +1635,7 @@
       "needs": [
         "macos_release_frontend",
         "macos_build_runner",
-        "macos_build_ci",
-        "macos_build_worktree"
+        "macos_build_ci"
       ],
       "downloads": [
         {
@@ -1655,10 +1649,6 @@
         {
           "job": "macos_build_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
-        },
-        {
-          "job": "macos_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
         }
       ]
     },
