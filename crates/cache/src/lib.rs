@@ -138,6 +138,8 @@ pub struct Cache {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub verify_contents: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub save_on_failure: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub refresh_sources: bool,
 }
 
@@ -298,6 +300,9 @@ pub fn validate(c: &Config) -> Result<(), String> {
         })?;
     }
     for (id, cache) in &c.caches {
+        if cache.save_on_failure && !cache.verify_contents {
+            return Err("E_CACHE_CONTENT: save_on_failure requires content verification".into());
+        }
         if cache.refresh_sources && !c.recover_failed_restores {
             return Err(
                 "E_CACHE_FRESHNESS: source refresh requires primary-checkout restore recovery"
@@ -712,6 +717,9 @@ fn prepare_with_inputs(
         if cache.verify_contents {
             entries.get_mut(id).unwrap()["content_verification"] = json!(content::METHOD);
         }
+        if cache.save_on_failure {
+            entries.get_mut(id).unwrap()["save_on_failure"] = json!(true);
+        }
         if cache.refresh_sources {
             entries.get_mut(id).unwrap()["source_freshness"] = json!(freshness::METHOD);
         }
@@ -880,6 +888,9 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
             let prefix = format!("cache_{index}");
             if let Some(method) = cache["content_verification"].as_str() {
                 text.push_str(&format!("{prefix}_verification={method}\n"));
+            }
+            if cache["save_on_failure"] == true {
+                text.push_str(&format!("{prefix}_save_on_failure=true\n"));
             }
             let paths = cache["artifacts"]
                 .as_object()
