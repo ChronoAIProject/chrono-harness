@@ -53,6 +53,11 @@ fn all_five_domain_rejections_have_fail_status() {
         policy::response::identifiers::ascii_separator_end_is("E_REQUIRED_TEST_REMOVED: test:a:b".spec_bytes(), 58, 23);
         policy::response::identifiers::ascii_separator_end_is("E_INTEGRATION_REQUIRED:".spec_bytes(), 58, 22);
         policy::response::identifiers::ascii_separator_end_is("E_INTEGRATION_MISMATCH: mismatch".spec_bytes(), 58, 22);
+        assert("E_BRANCH_STALE: stale".spec_bytes().take(14) =~= "E_BRANCH_STALE".spec_bytes());
+        assert("E_RETIREMENT".spec_bytes().take(12) =~= "E_RETIREMENT".spec_bytes());
+        assert("E_REQUIRED_TEST_REMOVED: test:a:b".spec_bytes().take(23) =~= "E_REQUIRED_TEST_REMOVED".spec_bytes());
+        assert("E_INTEGRATION_REQUIRED:".spec_bytes().take(22) =~= "E_INTEGRATION_REQUIRED".spec_bytes());
+        assert("E_INTEGRATION_MISMATCH: mismatch".spec_bytes().take(22) =~= "E_INTEGRATION_MISMATCH".spec_bytes());
     }
     let (code, status) = policy::response::classify_error("E_BRANCH_STALE: stale");
     expect_code(code, "E_BRANCH_STALE");
@@ -136,6 +141,10 @@ fn complete_code_identity_is_required_for_a_rejection() {
         assert("E_雪\0:后:文".spec_bytes() =~= seq![69u8, 95, 233, 155, 170, 0, 58, 229, 144, 142, 58, 230, 150, 135]);
         assert("E_雪\0".spec_bytes() =~= seq![69u8, 95, 233, 155, 170, 0]);
         policy::response::identifiers::ascii_separator_end_is("E_雪\0:后:文".spec_bytes(), 58, 6);
+        assert("E_BRANCH_STALE_SUFFIX: detail".spec_bytes().take(21) =~= "E_BRANCH_STALE_SUFFIX".spec_bytes());
+        assert("E_BRANCH_STALE\0: detail".spec_bytes().take(15) =~= "E_BRANCH_STALE\0".spec_bytes());
+        assert("E_:".spec_bytes().take(2) =~= "E_".spec_bytes());
+        assert("E_雪\0:后:文".spec_bytes().take(6) =~= "E_雪\0".spec_bytes());
     }
     let (code, status) = policy::response::classify_error("E_BRANCH_STALE_SUFFIX: detail");
     expect_code(code, "E_BRANCH_STALE_SUFFIX");
