@@ -483,6 +483,11 @@ fn linked_report_reservation_failure_does_not_dispatch_managed_work() {
 
 #[test]
 fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
+    if !super::isolated_capability::isolated_capability_test(
+        "interrupted_cleanup::linked_report_keeps_producer_originals_until_publication_without_consumer",
+    ) {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let cleanup = h.root.join(AUTO_POLICY);
