@@ -54,6 +54,8 @@ pub fn missing_coordinate_names(cpu: bool, wall: bool, peak: bool, io: bool)
     -> (out: Vec<&'static str>)
     ensures coordinate_names(out@) == missing_names(cpu, wall, peak, io),
         out.len() == missing_names(cpu, wall, peak, io).len(),
+        forall|i: int| 0 <= i < out.len() ==> (#[trigger] out@[i])@
+            == missing_names(cpu, wall, peak, io)[i],
 {
     let mut names = Vec::new();
     if cpu { names.push("cpu_ms"); }
