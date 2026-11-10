@@ -625,11 +625,12 @@ pub(crate) fn with_report(
         operation,
         success,
         None,
-        execute,
+        |_, _| Ok((root.to_owned(), ())),
+        |r, token, report, ()| execute(r, token, report),
     )
 }
 
-pub(crate) fn with_report_for_consumer(
+pub(crate) fn with_report_for_consumer<T>(
     root: &Path,
     config_path: &str,
     config: Config,
@@ -637,14 +638,12 @@ pub(crate) fn with_report_for_consumer(
     operation: &str,
     success: &str,
     consumer: Option<&str>,
-    execute: impl FnOnce(&mut Runner, &str, &mut Value) -> Result<(), String>,
+    prepare: impl FnOnce(&mut Runner, &mut Value) -> Result<(PathBuf, T), String>,
+    execute: impl FnOnce(&mut Runner, &str, &mut Value, T) -> Result<(), String>,
 ) -> Result<Value, String> {
     if fs::canonicalize(root).map_err(|e| e.to_string())? != root {
         return Err("host root must be canonical".into());
     }
-    // Reclaim before this invocation starts protecting its report family.
-    // Admission below also resumes bounded work before reserving the result.
-    let dir = no_symlink_parents(&root, config.report_directory.trim_end_matches('/'))?;
     let mut inherited = serde_json::Map::new();
     let mut environment = BTreeMap::new();
     let mut names = BTreeSet::new();
@@ -704,42 +703,9 @@ pub(crate) fn with_report_for_consumer(
         config.timeout_seconds,
         config.output_limit_bytes,
     )?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let output_path = chrono_harness::retained_artifacts::retention::unique_path(
-        &dir,
-        &format!("{operation}-"),
-        ".json",
-    )?;
-    let name = output_path
-        .file_stem()
-        .ok_or("report name")?
-        .to_str()
-        .ok_or("report name UTF8")?
-        .to_string();
-    let report_path = output_path
-        .strip_prefix(&root)
-        .map_err(|e| e.to_string())?
-        .to_str()
-        .ok_or("report path UTF8")?
-        .to_string();
-    let report_publication = chrono_harness::retained_artifacts::retention::create_adopted(
-        root,
-        "lifecycle-original",
-        &output_path,
-        false,
-        value!({"operation":operation,"outcome":"not-established"}),
-    )?;
-    // The publication capability and durable recovery root protect this output.
-    // This caller retains only its actual inputs and child-produced originals
-    // through their handoff to the completed report.
-    let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(root)?;
-    let mut output = fs::OpenOptions::new()
-        .write(true)
-        .open(&output_path)
-        .map_err(|e| e.to_string())?;
     let mut tool_record = value!(&tool);
     tool_record["version"] = chrono_harness::full::compact_process(&tool_record["version"])?;
-    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"report_path":report_path,"lock_reason":name,"environment":{"inherited":inherited,"effective":environment},"tool":tool_record,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
+    let mut report = value!({"schema":"chrono-worktree-report/v1","operation":operation,"status":"failed","governance":"not-evaluated","parity":"unestablished","source_root":root,"config_path":config_path,"config_sha256":sha256(&bytes),"environment":{"inherited":inherited,"effective":environment},"tool":tool_record,"fetch_ref_removed":false,"recovery":"Failed creation preserves worktrees and branches; inspect recorded identities before recovery."});
     report["agent"] = crate::AgentIdentity::context(&config);
     let version_error = tool.version.failure.clone().or_else(|| {
         if tool.version.exit_code != 0 {
@@ -775,10 +741,57 @@ pub(crate) fn with_report_for_consumer(
         immutable_blobs: BTreeMap::new(),
         immutable_trees: BTreeMap::new(),
     };
-    let result = match version_error {
-        Some(e) => Err(e),
-        None => execute(&mut runner, &name, &mut report),
+    // Preparation reads and validates ownership before choosing the one report
+    // producer. The durable reservation still precedes manager effects/dispatch.
+    let prepared = match version_error {
+        Some(error) => Err(error),
+        None => prepare(&mut runner, &mut report),
     };
+    let publication_root = prepared
+        .as_ref()
+        .map(|(root, _)| root.clone())
+        .unwrap_or_else(|_| root.to_owned());
+    let dir = no_symlink_parents(
+        &publication_root,
+        runner.config.report_directory.trim_end_matches('/'),
+    )?;
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let output_path = chrono_harness::retained_artifacts::retention::unique_path(
+        &dir,
+        &format!("{operation}-"),
+        ".json",
+    )?;
+    let name = output_path
+        .file_stem()
+        .ok_or("report name")?
+        .to_str()
+        .ok_or("report name UTF8")?
+        .to_string();
+    let report_path = output_path
+        .strip_prefix(&publication_root)
+        .map_err(|e| e.to_string())?
+        .to_str()
+        .ok_or("report path UTF8")?
+        .to_string();
+    let report_publication = chrono_harness::retained_artifacts::retention::create_adopted(
+        &publication_root,
+        "lifecycle-original",
+        &output_path,
+        false,
+        value!({"operation":operation,"outcome":"not-established"}),
+    )?;
+    // The publication capability and durable recovery root protect this output.
+    // This caller retains only its actual inputs and child-produced originals
+    // through their handoff to the completed report.
+    let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(root)?;
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .open(&output_path)
+        .map_err(|e| e.to_string())?;
+    report["source_root"] = value!(publication_root);
+    report["report_path"] = value!(report_path);
+    report["lock_reason"] = value!(name);
+    let result = prepared.and_then(|(_, inputs)| execute(&mut runner, &name, &mut report, inputs));
     match result {
         Ok(()) => report["status"] = value!(success),
         Err(e) => report["error"] = value!(e),
@@ -796,18 +809,6 @@ pub(crate) fn with_report_for_consumer(
     // Enrollment ownership spans the separate producer/sealing phases. A later
     // entrant may reconcile only after this owner and inherited consumers close.
     drop(runner.birth_lease.take());
-    if matches!(
-        operation,
-        "finish" | "maintain" | "import" | "use" | "check" | "bootstrap" | "status"
-    ) {
-        if let Some(coordinator) = report["lifecycle_coordinator_root"].as_str() {
-            if Path::new(coordinator) != root {
-                let coordinator = Path::new(coordinator).to_owned();
-                crate::automatic::publish_result(&coordinator, &mut report, consumer)?;
-                return Ok(report);
-            }
-        }
-    }
     crate::recovery::protect_report_consumer(&mut report, report_publication.as_ref(), consumer)?;
     let mut data = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
     data.push(b'\n');
@@ -819,7 +820,7 @@ pub(crate) fn with_report_for_consumer(
     if let Some(publication) = report_publication {
         publication.complete(crate::recovery::publication_outcome(&report, &data))?;
     }
-    crate::recovery::settle_report(root, &report)?;
+    crate::recovery::settle_report(&publication_root, &report)?;
     Ok(report)
 }
 

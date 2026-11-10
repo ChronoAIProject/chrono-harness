@@ -855,6 +855,12 @@ routes 复用现役 `no_symlink_parents`／`file_identity`，
 入口读取现役计划的借用投影和同一原回执，按完整操作文本查找唯一方法；缺失或重复均拒绝。
 实际 argv 去掉执行物后，必须逐项、按序等于该方法的参数，原回执操作名也必须相同，
 原进程必须退出 0 且没有失败。报告、库和依赖先共同准入，再绑定固定候选源码。
+对本次操作的每条已有文件声明，入口还要求声明根等于实际 invocation 的根，
+且声明文件出现在已绑定的候选编译源码中。任一错绑返回完整 `E_VERUS_COVERAGE` 原因；
+按文件及根的登记顺序保留首错，先判根错绑，再判该文件未参与编译。
+同源错误类型保留已选原因和完整借用路径；渲染只转交标准库 `format!("{message}{path}")`，
+沿用已有动态路径错误的边界，不增加信任假设。Verus 核错误字段和原参数转交，
+普通 Rust 回归核完整渲染文本；标准格式化算法属于明确的外部接口。
 只有明确声明证明合同、且全部准入成功，才返回含原类型化报告和源码绑定的 `ProofAdmission`。
 普通成功、原失败或阻断只返回空条目，不能充当证明。构造器不接收自由的“已通过”布尔值或 token。
 CI 的结果生产者直接接收此类型化结果；准入错误仍使原 passed 变为 Failed，
@@ -892,6 +898,9 @@ routes 原比较继续保留原结果合同；统一入口另从相同原 stdout
 
 独立 Verus 预期覆盖解析、规范化、根缺失、一致／冲突别名、摘要／长度、完整 checksum、原报告与观察的组合、
 上限两端、原失败、真实 argv、缺成功回执，以及源码失败后的终态／原因／退出码保全。
+独立 Verus 预期另核声明根与实际根的完整身份、文件参与编译、空声明、无关操作、
+UTF-8 路径、同文件的后续根和首错顺序。Rust 组合回归用真实 SHA-256、完整合成 dep-info
+和类型化报告解码，验证正常证明成功，以及根错绑和未编译文件的两种覆盖拒绝。
 统一入口的独立 Verus 预期另核方法的缺失、重复、大小写与 NUL 完整身份，
 普通成功不产生证明、失败进程不能取得通过，以及任意实际证明条目的原报告、库、根与候选关联。
 **产品与宿主政策同时变更：**FILEMAP 连接实际新适配器，并把原结果两项整 crate 根加到 projects 测试的必需前置；
@@ -899,7 +908,14 @@ projects 原生单元同步选择现有 Verus bootstrap，先核共享 core 再�
 其余实际消费者复用原登记证明。候选正式检查与原生 CI 尚须各自验收。
 每项证明增加一份有界原观察；每次源码绑定按实际编译依赖读取固定候选字节，复用现役 Reader，
 完整运行、构建、验证、CI 和存储成本未知。
-此处只绑定已经声明的证明调用及其编译库身份；文件到证明根的完整登记、编译产物与实际生产调用的完整对应、
+**产品与宿主政策同改：**FILEMAP 移除 `ci/src/release.rs`、`ci/src/gating.rs`，以及
+`release/native/src/publication.rs`、`release/native/src/identity.rs` 的不实文件级证明声明。
+它们调用了已证明辅助函数，自身未进入所声明根的编译依赖；调用辅助函数不能证明整个调用文件。
+原编译／测试依赖、辅助函数证明和行为测试保留，四个文件恢复未知覆盖，外围逻辑仍须迁移和验收。
+没有把它们改成 data，也没有据此宣称完整覆盖。新绑定沿现有证明、组合入口和 DELTA 检查验收；
+按实际登记及编译依赖增加比较，总构建、验证、CI 和运行成本未测。
+
+此处只绑定已经声明的证明调用、所声明文件的编译参与及编译库身份；文件到证明根的完整登记、编译产物与实际生产调用的完整对应、
 其余 SPEC 与逻辑及 `E_VERUS_COVERAGE` 全仓覆盖门仍未完成，Python 迁移继续暂缓。
 
 ## 实际节点与类型关系
@@ -957,14 +973,23 @@ JSON 解码器和进程原件适配器先提供执行状态、judge／request �
 `migration_admissible`。它要求恰有一条声明；无 `script` 时必须没有实际 conversion；有
 `script` 时同时要求 replacement test 通过、conversion 存在、声明的 script／test 与实际
 输入一致、进程成功、输入／输出摘要一致、解码后的输出等于实际 stdout，且 mappings 与声明
-一致。`transition.rs` 只负责读取 JSON、进程回执、摘要和 stdout 等明确外部接口，把这些
-适配器事实交给 `admit_migration`；准入结果和既有错误分类仍由该 Verus 结果决定。
+一致。`admit_declaration` 直接读取实际筛选结果的数量，先拒绝零条、多条及数量上界；
+`admit_migration` 读取同一数量及 `MigrationFacts`，拥有准入、五类拒绝原因及其诊断文本。
+script／test 和两份输入摘要的条件组合，以及缺少回执、摘要计算失败、stdout 解码失败的
+拒绝判断都在该证明根内。适配器只转发已证明的结果，不再另行选择 migration 错误分类。
 
 生产根和独立边界根分别登记为 `verify.judge-workflow-transition` 与
 `verify.judge-workflow-transition-tests`，并加入 `test:judge-workflow-tests` 的正式执行计划。
-独立预期覆盖无 script／有 conversion、零或多条声明，以及 scripted fact 的逐项缺失；Rust
-`consumer` 测试继续核实际 migration 消费。JSON 解码、进程、摘要和文件／外部 IO 仍是逐项
-登记的适配器假设；本批不宣称完整 workflow 或全仓 `E_VERUS_COVERAGE` 已完成。
+独立预期覆盖无 script／有 conversion、零／一／多条／`usize::MAX` 声明、各项事实缺失及
+错误优先级；同一预期在普通 Rust 中通过真实分支和 panic 检查返回分类，不依赖被擦除的
+证明断言。Rust `consumer` 测试继续核实际 migration 消费。
+
+`transition.rs` 的匹配记录筛选、JSON 字段读取及结构比较、`results.tests` 状态观察、
+ProcessResult 解码、既有进程回执校验、摘要计算和 stdout JSON 解码仍属于外围未证明范围。
+这些实际观察分别进入事实字段，失败的摘要／解码保留为 `None`；标准 `Option`／`Result`
+转发和 JSON／进程接口不授予仓内准入豁免。FILEMAP 只把新生产根及独立预期列为
+`verification`，不把整份 `transition.rs` 宣称为已证明。本批不宣称完整 workflow 或全仓
+`E_VERUS_COVERAGE` 已完成；构建、证明、CI 与存储总成本未测。
 
 ## 专属测试的语言配对
 

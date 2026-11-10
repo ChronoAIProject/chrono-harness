@@ -96,13 +96,21 @@ pub(crate) fn original_absence(
     repository: &str,
     identity: &Identity,
 ) -> bool {
-    if process["exit_code"] != 1 || identity.channel == Channel::Build {
+    if process["exit_code"] != 1 || identity.channel == Channel::Build || process["tool"] != "gh" {
         return false;
     }
     let Some(argv) = process["argv"].as_array() else {
         return false;
     };
     if argv.len() != 5 || argv[1] != "api" || argv[2] != "--method" || argv[3] != "GET" {
+        return false;
+    }
+    let Some(executable) = argv[0].as_str() else {
+        return false;
+    };
+    if !std::path::Path::new(executable).is_absolute()
+        || process["observation"]["executable"] != executable
+    {
         return false;
     }
     let endpoints = [

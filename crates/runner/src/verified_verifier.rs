@@ -517,6 +517,8 @@ pub open spec fn proof_bound(
             process.exit, process.failed)
         && sources::dependency_observed(method.output_contract, process.dependency, method.output_limit_bytes)
         && artifact_observed(method.output_contract, process.artifact, process.argv@.skip(1))
+        && sources::binding_error(registry.files@, method.operation@, method.argv[8]@,
+            proof.sources.candidate@, 0).is_none()
         && match process.dependency {
             Some(Ok(bytes)) => sources::admission_matches(&proof.sources,
                 process.argv@.skip(1), bytes@, registry.files@),
@@ -545,10 +547,13 @@ pub open spec fn ordinary_output_accepted(
 
 /// 成功报告、原 argv、库、完整依赖和固定候选源码在此共同准入。
 /// 普通成功与非 passed 操作只返回 None，不能用作全仓覆盖的证明条目。
-pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRead>(
+pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRead,
+    F: Fn(&str, &str) -> String>(
     state: &str, operation: &str, methods: &Vec<ProofInvocation>,
     original: Option<ProofProcess>, registry: &Result<sources::SourceRegistry, String>, io: &I,
+    format_error: F,
 ) -> (out: Result<Option<ProofAdmission>, String>)
+    requires forall|message: &str, path: &str| format_error.requires((message, path)),
     ensures state@ != "passed"@ ==> out.is_ok() && out.unwrap().is_none(),
         state@ == "passed"@ ==> ((match out { Ok(None) => true, _ => false })
             == ordinary_output_accepted(operation@, methods@, &original)),
@@ -607,6 +612,15 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
         Err(error) => { return Err(error); },
         Ok(None) => { return Err("E_VERUS_RESULT: proof has no bound compiler sources".to_string()); },
     };
+    let source_registry = match registry {
+        Ok(registry) => registry,
+        Err(error) => { return Err(error.clone()); },
+    };
+    match sources::bind_registered_roots(&source_registry.files, operation,
+        args[8].as_str(), &source_admission.candidate) {
+        Ok(()) => {},
+        Err(error) => { return Err(error.render(format_error)); },
+    }
     let report = match decoded {
         Some(report) => report,
         None => { return Err("E_VERUS_RESULT: proof has no original typed report".to_string()); },

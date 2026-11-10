@@ -1015,6 +1015,28 @@ fn automatic_attention_linked_query_publishes_its_original_at_the_coordinator() 
     assert_eq!(report["source_root"], value!(h.root));
     assert_eq!(attention_row(&report, &target)["attention_required"], true);
     assert!(stderr.contains("WORKTREE_ATTENTION"), "{stderr}");
+    assert!(
+        !target
+            .join(report["report_path"].as_str().unwrap())
+            .exists()
+    );
+
+    let policy_path = target.join(AUTO_POLICY);
+    let original_policy = fs::read(&policy_path).unwrap();
+    fs::write(&policy_path, b"uncommitted policy input").unwrap();
+    let output = h.native_output(&mut command);
+    let (code, failed, stderr) = h.received(output);
+    assert_eq!(code, 2, "{failed} {stderr}");
+    assert_eq!(failed["source_root"], value!(target));
+    assert_eq!(failed["status"], "failed");
+    assert!(
+        failed["error"]
+            .as_str()
+            .unwrap()
+            .contains("policy differs from source commit")
+    );
+    assert_eq!(fs::read(&policy_path).unwrap(), b"uncommitted policy input");
+    fs::write(policy_path, original_policy).unwrap();
 }
 
 #[test]
