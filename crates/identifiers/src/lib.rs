@@ -49,7 +49,7 @@ pub open spec fn inventory_record_views(records: Seq<&str>) -> Seq<Seq<u8>> {
 }
 
 /// ASCII 分隔字节一定是 UTF-8 边界，之后恰可安全跳过一个字节。
-fn ascii_split_head(text: &str, separator: u8) -> (out: (&str, Option<&str>))
+pub fn ascii_split_head(text: &str, separator: u8) -> (out: (&str, Option<&str>))
     requires separator < 128,
     ensures ({
         let end = ascii_separator_end(text.spec_bytes(), separator);
