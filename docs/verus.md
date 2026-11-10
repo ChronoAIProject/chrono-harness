@@ -48,6 +48,15 @@ CI 判官的同一 collection 证明根还定义 action 工具引用的来源准
 Verus 版本与整 crate 参数；Rust workflow 核心测试同时核真实 consumer。JSON、进程
 回执和每项 operation 的外部解码仍由适配器及其既有所有者负责，本批不扩大证明边界。
 
+本批继续把 workflow 集成证书的字段绑定准入接入同源 Verus：
+`crates/judge-workflow/src/verified_certificate.rs` 定义并证明字段数量与精确字段集合
+必须同时满足，`certificate.rs` 的真实 `validate_bind` 路径直接消费
+`admit_binding`。独立边界预期位于
+`crates/judge-workflow-tests/tests/verified_certificate.rs`，分别登记为
+`verify.judge-workflow-certificate`／`verify.judge-workflow-certificate-tests`，固定
+Verus 版本与整 crate 参数；workflow 核心测试和 inventory 同次验收真实测试消费者。
+JSON 解码和集合构造仍是明确登记的适配器输入，本批不把外部接口假设当作仓内证明。
+
 本批继续补齐宿主原生边界的既有证明根：`.chrono-harness/ci/native-tests/tests/verified_cargo.rs`
 登记 `verify.bootstrap-cargo-tests`，release 原生实现及独立预期登记
 `verify.release-recipe`／`verify.release-recipe-tests`。三项操作均已存在于 execution plan，

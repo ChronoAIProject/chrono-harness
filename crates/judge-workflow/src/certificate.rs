@@ -1,4 +1,4 @@
-use crate::evidence;
+use crate::{evidence, verified_certificate};
 use chrono_harness::{
     json, no_symlink_parents, sha256,
     wire::{self, Request},
@@ -31,7 +31,11 @@ fn location(req: &Request, r: &Registrations) -> Result<std::path::PathBuf, Stri
 pub fn validate_bind(r: &Registrations) -> Result<(), String> {
     let keys = r.workflow()["integration"]["bind"].as_array().unwrap();
     let supplied: BTreeSet<_> = keys.iter().filter_map(Value::as_str).collect();
-    if keys.len() != FIELDS.len() || supplied != FIELDS.into_iter().collect() {
+    let admitted = verified_certificate::admit_binding(
+        keys.len() == FIELDS.len(),
+        supplied == FIELDS.into_iter().collect(),
+    );
+    if !admitted {
         return Err(
             "E_INTEGRATION_BINDING: all specified evidence fields must be bound exactly once"
                 .into(),
