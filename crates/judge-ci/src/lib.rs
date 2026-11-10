@@ -1558,13 +1558,15 @@ pub struct PreparedExecution {
 impl PreparedExecution {
     pub fn execute(&self) -> Result<chrono_judge_projects::Results, String> {
         let root = fs::canonicalize(&self.request.host_root).map_err(|e| e.to_string())?;
-        let config = Profile::load(&self.request)?.config;
         if self.plan.root != root
             || self.plan.binding["candidate"] != self.request.candidate
             || self.plan.binding["config"] != self.request.config_sha256
             || self.plan.binding["run"] != self.request.request_id
-            || self.plan.binding["operation_state"] != operation_state_path(&self.request, &config)?
         {
+            return Err("prepared CI execution request/plan binding differs".into());
+        }
+        let config = Profile::load(&self.request)?.config;
+        if self.plan.binding["operation_state"] != operation_state_path(&self.request, &config)? {
             return Err("prepared CI execution request/plan binding differs".into());
         }
         execute_plan(&self.request, &self.plan)
