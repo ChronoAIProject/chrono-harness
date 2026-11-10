@@ -678,7 +678,7 @@
         ]
       },
       "unit_runner": {
-        "need": "This job executes the explicitly referenced build and test operations.",
+        "need": "This job compiles the production library and CLI source in its dedicated test target.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/bin/bash",
@@ -690,12 +690,10 @@
         ],
         "consumer": "check.unit_runner",
         "caches": [
-          "check.runner",
           "check.runner-tests"
         ],
         "save_caches": [
-          "check.runner-tests",
-          "check.runner"
+          "check.runner-tests"
         ]
       },
       "unit_instructions": {
@@ -760,7 +758,8 @@
         ],
         "save_caches": [
           "check.ci-tests",
-          "check.ci"
+          "check.ci",
+          "check.runner"
         ]
       },
       "unit_judge-registration": {

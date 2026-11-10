@@ -14,11 +14,17 @@ serde_json = "1"
 libc = "0.2"
 sha2 = "0.10"
 chrono-harness = { path = "../runner", features = ["retention-test"] }
+chrono-diagnostics = { path = "../diagnostics" }
 
 [dev-dependencies]
-chrono-diagnostics = { path = "../diagnostics" }
 tempfile = "3"
 verus_builtin_macros = "=0.0.0-2026-04-20-1748"
+
+[[bin]]
+name = "chrono-harness-test-cli"
+path = "../runner/src/main.rs"
+test = false
+bench = false
 
 [[test]]
 name = "cli_contract"
