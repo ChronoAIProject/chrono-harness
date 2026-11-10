@@ -585,21 +585,21 @@ pub fn insert_git_tree_entry(
 }
 
 #[cfg(verus_keep_ghost)]
-pub enum GitTreeErrorView {
+pub enum GitInventoryErrorView {
     Message(Seq<char>),
     InvalidPath(Seq<u8>),
 }
 
-pub enum GitTreeError<'a> {
+pub enum GitInventoryError<'a> {
     Message(String),
     InvalidPath(&'a str),
 }
 
-impl<'a> GitTreeError<'a> {
-    pub open spec fn view(&self) -> GitTreeErrorView {
+impl<'a> GitInventoryError<'a> {
+    pub open spec fn view(&self) -> GitInventoryErrorView {
         match self {
-            Self::Message(message) => GitTreeErrorView::Message(message@),
-            Self::InvalidPath(path) => GitTreeErrorView::InvalidPath(path.spec_bytes()),
+            Self::Message(message) => GitInventoryErrorView::Message(message@),
+            Self::InvalidPath(path) => GitInventoryErrorView::InvalidPath(path.spec_bytes()),
         }
     }
 
@@ -636,45 +636,116 @@ impl<'a> GitTreeRow<'a> {
 
 /// 输入字节独立定义原准入次序：首 TAB、三字段、路径、完整 OID。
 #[verifier::opaque]
-pub open spec fn git_tree_row_spec(raw: Seq<u8>) -> Result<GitTreeRowBytes, GitTreeErrorView> {
+pub open spec fn git_tree_row_spec(raw: Seq<u8>) -> Result<GitTreeRowBytes, GitInventoryErrorView> {
     let end = identifiers::ascii_separator_end(raw, 9);
-    if end == raw.len() { Err(GitTreeErrorView::Message("invalid Git tree row"@)) }
+    if end == raw.len() { Err(GitInventoryErrorView::Message("invalid Git tree row"@)) }
     else {
         let fields = identifiers::ascii_split_records(raw.take(end), 32, true);
         let path = raw.skip(end + 1);
-        if fields.len() != 3 { Err(GitTreeErrorView::Message("invalid Git tree metadata"@)) }
-        else if !paths::relative_path(path) { Err(GitTreeErrorView::InvalidPath(path)) }
+        if fields.len() != 3 { Err(GitInventoryErrorView::Message("invalid Git tree metadata"@)) }
+        else if !paths::relative_path(path) { Err(GitInventoryErrorView::InvalidPath(path)) }
         else if !identifiers::oid(fields[2]) {
-            Err(GitTreeErrorView::Message("expected full nonzero lowercase commit OID"@))
+            Err(GitInventoryErrorView::Message("expected full nonzero lowercase commit OID"@))
         } else { Ok((path, fields[0], fields[2], fields[1])) }
     }
 }
 
-pub fn parse_git_tree_row(raw: &str) -> (out: Result<GitTreeRow<'_>, GitTreeError<'_>>)
+pub fn parse_git_tree_row(raw: &str) -> (out: Result<GitTreeRow<'_>, GitInventoryError<'_>>)
     ensures match out {
-        Ok(row) => git_tree_row_spec(raw.spec_bytes()) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row.bytes()),
-        Err(error) => git_tree_row_spec(raw.spec_bytes()) == Err::<GitTreeRowBytes, GitTreeErrorView>(error.view()),
+        Ok(row) => git_tree_row_spec(raw.spec_bytes()) == Ok::<GitTreeRowBytes, GitInventoryErrorView>(row.bytes()),
+        Err(error) => git_tree_row_spec(raw.spec_bytes()) == Err::<GitTreeRowBytes, GitInventoryErrorView>(error.view()),
     },
 {
     proof { reveal(git_tree_row_spec); }
     let (meta, path) = match identifiers::git_inventory_row(raw, "invalid Git tree row") {
         Ok(parts) => parts,
-        Err(message) => return Err(GitTreeError::Message(message)),
+        Err(message) => return Err(GitInventoryError::Message(message)),
     };
     let fields = identifiers::git_inventory_fields(meta);
     match identifiers::git_tree_metadata(&fields) {
         Ok(()) => {},
-        Err(message) => return Err(GitTreeError::Message(message)),
+        Err(message) => return Err(GitInventoryError::Message(message)),
     }
-    if !paths::valid_relative_path(path.as_bytes()) { return Err(GitTreeError::InvalidPath(path)); }
+    if !paths::valid_relative_path(path.as_bytes()) { return Err(GitInventoryError::InvalidPath(path)); }
     match identifiers::full_oid(fields[2]) {
         Ok(()) => {},
-        Err(message) => return Err(GitTreeError::Message(message)),
+        Err(message) => return Err(GitInventoryError::Message(message)),
     }
     Ok(GitTreeRow { path, mode: fields[0], oid: fields[2], kind: fields[1] })
 }
 
-pub open spec fn git_tree_row_at(rows: Seq<&str>, i: int) -> Result<GitTreeRowBytes, GitTreeErrorView> {
+pub struct GitIndexRow<'a> {
+    pub path: &'a str,
+    pub mode: &'a str,
+    pub oid: &'a str,
+    pub stage: &'a str,
+}
+
+#[cfg(verus_keep_ghost)]
+pub type GitIndexRowBytes = (Seq<u8>, Seq<u8>, Seq<u8>, Seq<u8>);
+
+impl<'a> GitIndexRow<'a> {
+    pub open spec fn bytes(&self) -> GitIndexRowBytes {
+        (self.path.spec_bytes(), self.mode.spec_bytes(), self.oid.spec_bytes(), self.stage.spec_bytes())
+    }
+}
+
+/// 实际 index 行的完整输入合同：首 TAB、三字段／单字节 stage、路径、完整 OID。
+#[verifier::opaque]
+pub open spec fn git_index_row_spec(raw: Seq<u8>) -> Result<GitIndexRowBytes, GitInventoryErrorView> {
+    let end = identifiers::ascii_separator_end(raw, 9);
+    if end == raw.len() { Err(GitInventoryErrorView::Message("invalid Git index row"@)) }
+    else {
+        let fields = identifiers::ascii_split_records(raw.take(end), 32, true);
+        let path = raw.skip(end + 1);
+        if fields.len() != 3 || fields[2].len() != 1 || fields[2][0] < 48 || fields[2][0] > 51 {
+            Err(GitInventoryErrorView::Message("invalid Git index metadata"@))
+        } else if !paths::relative_path(path) { Err(GitInventoryErrorView::InvalidPath(path)) }
+        else if !identifiers::oid(fields[1]) {
+            Err(GitInventoryErrorView::Message("expected full nonzero lowercase commit OID"@))
+        } else { Ok((path, fields[0], fields[1], fields[2])) }
+    }
+}
+
+pub fn parse_git_index_row(raw: &str) -> (out: Result<GitIndexRow<'_>, GitInventoryError<'_>>)
+    ensures match out {
+        Ok(row) => git_index_row_spec(raw.spec_bytes()) == Ok::<GitIndexRowBytes, GitInventoryErrorView>(row.bytes()),
+        Err(error) => git_index_row_spec(raw.spec_bytes()) == Err::<GitIndexRowBytes, GitInventoryErrorView>(error.view()),
+    },
+{
+    proof { reveal(git_index_row_spec); }
+    let (meta, path) = match identifiers::git_inventory_row(raw, "invalid Git index row") {
+        Ok(parts) => parts,
+        Err(message) => return Err(GitInventoryError::Message(message)),
+    };
+    let fields = identifiers::git_inventory_fields(meta);
+    match identifiers::git_index_metadata(&fields) {
+        Ok(()) => {},
+        Err(message) => return Err(GitInventoryError::Message(message)),
+    }
+    if !paths::valid_relative_path(path.as_bytes()) { return Err(GitInventoryError::InvalidPath(path)); }
+    match identifiers::full_oid(fields[1]) {
+        Ok(()) => {},
+        Err(message) => return Err(GitInventoryError::Message(message)),
+    }
+    Ok(GitIndexRow { path, mode: fields[0], oid: fields[1], stage: fields[2] })
+}
+
+/// 与原 checkout 一致：只比较 stage、mode 和 OID，不增加 kind／mode 准入。
+pub fn git_index_entry_changed(row: &GitIndexRow<'_>, entry: Option<&TreeEntry>) -> (changed: bool)
+    ensures changed == !(row.stage@ == "0"@ && match entry {
+        Some(value) => value.mode@ == row.mode@ && value.oid@ == row.oid@,
+        None => false,
+    }),
+{
+    !identifiers::equal_text(row.stage, "0") || match entry {
+        Some(value) => !identifiers::equal_text(value.mode.as_str(), row.mode)
+            || !identifiers::equal_text(value.oid.as_str(), row.oid),
+        None => true,
+    }
+}
+
+pub open spec fn git_tree_row_at(rows: Seq<&str>, i: int) -> Result<GitTreeRowBytes, GitInventoryErrorView> {
     git_tree_row_spec(rows[i].spec_bytes())
 }
 
@@ -702,16 +773,16 @@ pub open spec fn git_tree_prefix_map(tree: Map<TreePath, TreeEntry>, rows: Seq<&
             && git_tree_entry_matches(key, tree[key], (git_tree_row_at(rows, i)->Ok_0)))
 }
 
-pub open spec fn git_tree_error_at(rows: Seq<&str>, i: int, error: GitTreeErrorView) -> bool {
+pub open spec fn git_tree_error_at(rows: Seq<&str>, i: int, error: GitInventoryErrorView) -> bool {
     match git_tree_row_at(rows, i) {
         Err(expected) => error == expected,
-        Ok(row) => error == GitTreeErrorView::Message("duplicate Git tree path"@)
+        Ok(row) => error == GitInventoryErrorView::Message("duplicate Git tree path"@)
             && exists|j: int| 0 <= j < i && (git_tree_row_at(rows, j)->Ok_0).0 == row.0,
     }
 }
 
 pub proof fn git_tree_error_blocks_prefix(rows: Seq<&str>, i: int,
-    error: GitTreeErrorView, count: int)
+    error: GitInventoryErrorView, count: int)
     requires 0 <= i < count <= rows.len(), git_tree_error_at(rows, i, error),
     ensures !git_tree_prefix_valid(rows, count),
 {
@@ -726,8 +797,8 @@ pub proof fn git_tree_error_blocks_prefix(rows: Seq<&str>, i: int,
     }
 }
 
-pub proof fn git_tree_first_error_unique(rows: Seq<&str>, i: int, error: GitTreeErrorView,
-    j: int, other: GitTreeErrorView)
+pub proof fn git_tree_first_error_unique(rows: Seq<&str>, i: int, error: GitInventoryErrorView,
+    j: int, other: GitInventoryErrorView)
     requires 0 <= i < rows.len(), git_tree_prefix_valid(rows, i), git_tree_error_at(rows, i, error),
         0 <= j < rows.len(), git_tree_prefix_valid(rows, j), git_tree_error_at(rows, j, other),
     ensures i == j, error == other,
@@ -759,7 +830,7 @@ proof fn git_tree_next_path_is_new(tree: Map<TreePath, TreeEntry>, rows: Seq<&st
 proof fn git_tree_extend_valid_prefix(rows: Seq<&str>, count: int, row: GitTreeRowBytes)
     requires
         0 <= count < rows.len(), git_tree_prefix_valid(rows, count),
-        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row),
+        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitInventoryErrorView>(row),
         forall|j: int| 0 <= j < count ==> (#[trigger] git_tree_row_at(rows, j)->Ok_0).0 != row.0,
     ensures git_tree_prefix_valid(rows, count + 1),
 {
@@ -778,7 +849,7 @@ proof fn git_tree_extend_prefix_map(tree: Map<TreePath, TreeEntry>, rows: Seq<&s
     count: int, inserted: TreePath, entry: TreeEntry, row: GitTreeRowBytes)
     requires
         0 <= count < rows.len(), git_tree_prefix_map(tree, rows, count), tree.dom().finite(),
-        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row),
+        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitInventoryErrorView>(row),
         git_tree_entry_matches(inserted, entry, row), !tree.contains_key(inserted),
     ensures git_tree_prefix_map(tree.insert(inserted, entry), rows, count + 1),
 {
@@ -817,10 +888,10 @@ proof fn git_tree_duplicate_error(tree: Map<TreePath, TreeEntry>, rows: Seq<&str
     count: int, path: TreePath, row: GitTreeRowBytes)
     requires
         0 <= count < rows.len(), git_tree_prefix_map(tree, rows, count),
-        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitTreeErrorView>(row),
+        git_tree_row_at(rows, count) == Ok::<GitTreeRowBytes, GitInventoryErrorView>(row),
         path.bytes() == row.0,
         exists|key: TreePath| (#[trigger] tree.contains_key(key)) && key@ == path@,
-    ensures git_tree_error_at(rows, count, GitTreeErrorView::Message("duplicate Git tree path"@)),
+    ensures git_tree_error_at(rows, count, GitInventoryErrorView::Message("duplicate Git tree path"@)),
 {
     let key = choose|key: TreePath| (#[trigger] tree.contains_key(key)) && key@ == path@;
     let j = choose|j: int| 0 <= j < count && git_tree_entry_matches(
@@ -830,7 +901,7 @@ proof fn git_tree_duplicate_error(tree: Map<TreePath, TreeEntry>, rows: Seq<&str
 }
 
 /// 完整逐行解析：返回全部原字段，或首个失败；失败后的局部树不发布。
-pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitTreeError<'a>>)
+pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitInventoryError<'a>>)
     ensures match out {
         Ok(tree) => git_tree_prefix_valid(rows@, rows.len() as int)
             && git_tree_prefix_map(tree@, rows@, rows.len() as int),
@@ -864,7 +935,7 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitTreeEr
                 proof {
                     git_tree_duplicate_error(before, rows@, i as int, inserted, row.bytes());
                 }
-                return Err(GitTreeError::Message(message));
+                return Err(GitInventoryError::Message(message));
             },
             Ok(()) => {},
         }
