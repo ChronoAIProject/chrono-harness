@@ -65,6 +65,28 @@ task_calls=$(cat "$CHRONO_LAUNCHER_CALLS")
 case "$task_calls" in *rustup*|*chrono-host-bootstrap*) fail 'coordinator refusal fell back to execution' ;; esac
 unset CHRONO_LAUNCHER_OWNER_EXIT
 
+# 已安装的本树程序独立保护后续构建；不可用的协调程序不参与。
+mkdir -p "$task_linked/.chrono-harness/bin"
+cp "$task_fixture" "$task_linked/.chrono-harness/bin/chrono-worktree"
+printf '%s\n' 'unavailable coordinator executable' > "$task_main/.chrono-harness/bin/chrono-worktree"
+chmod 600 "$task_main/.chrono-harness/bin/chrono-worktree"
+reset_calls
+export CHRONO_LAUNCHER_NATIVE_EXIT=29
+invoke "$task_linked" .chrono-harness/ci/bootstrap-core.json
+test "$task_status" -eq 29 || fail 'local owner did not preserve the native exit independently'
+task_calls=$(cat "$CHRONO_LAUNCHER_CALLS")
+case "$task_calls" in 'chrono-worktree
+'*'chrono-host-bootstrap
+'*) ;; *) fail 'local owner did not protect the frontend' ;; esac
+unset CHRONO_LAUNCHER_NATIVE_EXIT
+reset_calls
+export CHRONO_LAUNCHER_OWNER_EXIT=31
+invoke "$task_linked" .chrono-harness/ci/bootstrap-core.json
+test "$task_status" -eq 31 || fail 'local owner refusal was lost'
+task_calls=$(cat "$CHRONO_LAUNCHER_CALLS")
+case "$task_calls" in *rustup*|*chrono-host-bootstrap*) fail 'local refusal fell back to execution' ;; esac
+unset CHRONO_LAUNCHER_OWNER_EXIT
+
 # 原所有者的重入标记须与物理根和实际传递的使用凭据一起出现。
 reset_calls
 export CHRONO_WORKTREE_BOOTSTRAP="$task_main"
