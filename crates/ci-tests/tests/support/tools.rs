@@ -1,5 +1,13 @@
 use std::path::{Path, PathBuf};
 
+pub fn fixture_binary(project: &str, binary: &str) -> PathBuf {
+    match (project, binary) {
+        ("worktree", "chrono-worktree") => env!("CARGO_BIN_EXE_chrono-worktree-test-cli").into(),
+        _ => Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join(format!("../{project}/target/debug/{binary}")),
+    }
+}
+
 pub fn fixture_git() -> PathBuf {
     if let Some(program) = std::env::var_os("CHRONO_CI_FIXTURE_GIT") {
         return program.into();

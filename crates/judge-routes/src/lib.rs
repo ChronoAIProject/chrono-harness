@@ -84,7 +84,14 @@ impl Execution {
     }
 }
 pub fn binding(req: &Request, inputs: &Value) -> Value {
-    json!({"base":req.base.commit,"base_tree":req.base.tree,"candidate":req.candidate.commit,"candidate_tree":req.candidate.tree,"registry":req.registries.digest,"context":req.context.sha256,"inputs":inputs,"entry":req.observations["entry"],"run":req.observations["run"]})
+    json!({"base":req.base.commit,"base_tree":req.base.tree,"candidate":req.candidate.commit,"candidate_tree":req.candidate.tree,"registry":req.registries.digest,"context":req.context.sha256,"inputs":inputs,"entry":req.observations["entry"],"run":req.observations["run"],"operation_state":req.observations["report_path"].as_str().map(|path| operation_state_path(path, &req.observations["run"]))})
+}
+/// Keep operation originals beside the report selected by the existing owner.
+pub fn operation_state_path(report_path: &str, run: &Value) -> String {
+    format!(
+        "{report_path}.operations-{}",
+        wire::digest(run).expect("JSON run identity serializes")
+    )
 }
 pub fn expand(argv: &[String], binding: &Value) -> Vec<String> {
     argv.iter()

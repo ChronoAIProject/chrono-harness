@@ -4,6 +4,7 @@ use serde_json::{Value, json};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tempfile::TempDir;
 const CONFIG: &str = ".chrono-harness/ci/check.json";
 const OPERATION_TOOL: &str = env!("CARGO_BIN_EXE_chrono-test-ci-diagnostics");
@@ -72,10 +73,12 @@ mod retirement;
 mod units;
 struct Host {
     dir: TempDir,
+    next_request: AtomicU64,
 }
 impl Host {
     fn new() -> Self {
         let h = Self {
+            next_request: AtomicU64::new(0),
             dir: tempfile::Builder::new()
                 .prefix("judge host ")
                 .tempdir()
@@ -146,7 +149,10 @@ impl Host {
             scope: None,
             observations: Value::Null,
             protocol: PROTOCOL.into(),
-            request_id: "fixture-request".into(),
+            request_id: format!(
+                "fixture-request-{}",
+                self.next_request.fetch_add(1, Ordering::Relaxed)
+            ),
             host_root: self.root().to_path_buf(),
             config_path: CONFIG.into(),
             config_sha256: sha256(&fs::read(self.root().join(CONFIG)).unwrap()),

@@ -538,8 +538,16 @@ fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects
     assert_eq!(h.calls(), 0);
     assert!(prepared.execute().unwrap().passed());
     assert_eq!(h.calls(), 1);
-    let mut canonical = prepared;
-    canonical.request.host_root = canonical.plan.root.clone();
+    assert!(
+        prepared
+            .execute()
+            .unwrap_err()
+            .contains("do not redispatch")
+    );
+    assert_eq!(h.calls(), 1);
+    let mut canonical_req = unit_request(&h, req.base.as_deref().unwrap(), &req.candidate);
+    canonical_req.host_root = prepared.plan.root.clone();
+    let canonical = chrono_judge_ci::prepare_execution(&canonical_req).unwrap();
     assert!(canonical.execute().unwrap().passed());
     assert_eq!(h.calls(), 2);
 }
@@ -712,7 +720,8 @@ fn execution_diagnostics_success_and_unselected_sink_preserve_verdicts() {
         "passed"
     );
     // A configured failed sink cannot turn a passing business result into success.
-    let failed = chrono_judge_ci::judge_with_diagnostic_sink(&req, Reject);
+    let next = unit_request(&h, req.base.as_deref().unwrap(), &req.candidate);
+    let failed = chrono_judge_ci::judge_with_diagnostic_sink(&next, Reject);
     fail(&failed, "ci.execution-diagnostics");
     assert_eq!(
         failed.evidence["executed"][0]["receipt"]["process"]["exit_code"],

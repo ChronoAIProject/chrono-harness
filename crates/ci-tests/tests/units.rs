@@ -229,7 +229,6 @@ fn install_retained_tools(root: &Path, tools: &[(&str, &str, ToolProbe)]) {
     install_tools_owned(root, tools, true);
 }
 fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained: bool) {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let bin = root.join(".chrono-harness/bin");
     fs::create_dir_all(&bin).unwrap();
     // Test the current product outputs; deployed host tools have a separate
@@ -238,7 +237,7 @@ fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained:
     // child keeps writable descriptors out of concurrently forked test children.
     let mut copy = Command::new("/bin/cp");
     for (project, name, _) in tools {
-        let built = source.join(format!("crates/{project}/target/debug/{name}"));
+        let built = crate::tools::fixture_binary(project, name);
         assert!(matches!(
             fs::symlink_metadata(bin.join(name)),
             Err(error) if error.kind() == std::io::ErrorKind::NotFound
@@ -269,7 +268,12 @@ fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained:
     }
     // Finish fixture setup before fault injection and bounded check execution.
     // Each caller declares the program's real readiness protocol.
-    for (_, name, probe) in tools {
+    for (project, name, probe) in tools {
+        let original = crate::tools::fixture_binary(project, name);
+        let copied_name = original.file_name().unwrap();
+        if copied_name != std::ffi::OsStr::new(name) {
+            fs::rename(bin.join(copied_name), bin.join(name)).unwrap();
+        }
         let mut command = Command::new(bin.join(name));
         command
             .current_dir(root)

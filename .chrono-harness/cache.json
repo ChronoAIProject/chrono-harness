@@ -1206,10 +1206,6 @@
       "owner": "worktree",
       "producer": "build.worktree",
       "consumers": [
-        "check.unit_ci",
-        "check.unit_judge-workflow",
-        "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units",
         "check.unit_worktree",
         "check.unit_worktree-adoption"
       ],
