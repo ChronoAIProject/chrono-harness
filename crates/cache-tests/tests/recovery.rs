@@ -758,19 +758,19 @@ fn opted_in_failed_producer_seals_bytes_and_preserves_the_original_failure() {
                 .path()
                 .join(".chrono-harness/state/restore/github-output");
             let output = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli")))
-            .args([
-                "plan",
-                "--host-root",
-                root.path().to_str().unwrap(),
-                "--config",
-                ".chrono-harness/cache.json",
-                "--consumer",
-                "check.one",
-                "--github-output",
-                github_output.to_str().unwrap(),
-            ])
-            .output()
-            .unwrap();
+                .args([
+                    "plan",
+                    "--host-root",
+                    root.path().to_str().unwrap(),
+                    "--config",
+                    ".chrono-harness/cache.json",
+                    "--consumer",
+                    "check.one",
+                    "--github-output",
+                    github_output.to_str().unwrap(),
+                ])
+                .output()
+                .unwrap();
             assert!(
                 output.status.success(),
                 "{}",
