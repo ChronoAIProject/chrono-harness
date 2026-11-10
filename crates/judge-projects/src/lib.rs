@@ -1,6 +1,7 @@
 //! Pair admissibility and actual operation/test evidence. Selection remains FILEMAP-owned.
 mod state;
 mod verified_languages;
+mod verified_state;
 use chrono_harness::{
     CommandSpec, facts, run_process_observed_retained,
     wire::{self, Binding, Finding, Request, Response, Status},
