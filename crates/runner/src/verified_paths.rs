@@ -76,6 +76,80 @@ pub fn literal_artifact_directories<'a>(paths: &[&'a str]) -> (out: Vec<&'a str>
     out
 }
 
+pub enum ArtifactDeclarationError {
+    Missing,
+    Invalid { row: usize },
+}
+
+impl ArtifactDeclarationError {
+    pub fn message(self) -> (out: &'static str)
+        ensures out@ == match self {
+            Self::Missing => "missing artifact declarations"@,
+            Self::Invalid { .. } => "invalid artifact path"@,
+        },
+    {
+        match self {
+            Self::Missing => "missing artifact declarations",
+            Self::Invalid { .. } => "invalid artifact path",
+        }
+    }
+}
+
+pub open spec fn artifact_path_observed<'a, T, F>(observe: F, row: &'a T) -> bool
+    where F: Fn(&'a T) -> Option<&'a str>,
+{
+    exists|path: &'a str| #[trigger] observe.ensures((row,), Some(path))
+}
+
+/// 按原顺序观察声明，遇到首个非字符串字段就停止。成功保留完整借用序列。
+pub fn collect_artifact_declarations<'a, T, F>(rows: Option<&'a [T]>, observe: F)
+    -> (out: Result<Vec<&'a str>, ArtifactDeclarationError>)
+    where F: Fn(&'a T) -> Option<&'a str>,
+    requires forall|row: &'a T| observe.requires((row,)),
+    ensures match (rows, out) {
+        (None, Err(ArtifactDeclarationError::Missing)) => true,
+        (Some(rows), Ok(paths)) => paths.len() == rows.len()
+            && forall|i: int| 0 <= i < rows.len() ==>
+                #[trigger] observe.ensures((&rows@[i],), Some(paths@[i])),
+        (Some(rows), Err(ArtifactDeclarationError::Invalid { row })) => row < rows.len()
+            && observe.ensures((&rows@[row as int],), None)
+            && forall|j: int| 0 <= j < row ==> #[trigger] artifact_path_observed(observe, &rows@[j]),
+        _ => false,
+    },
+{
+    let declarations = match rows {
+        Some(declarations) => declarations,
+        None => return Err(ArtifactDeclarationError::Missing),
+    };
+    let mut paths = Vec::new();
+    let mut i = 0;
+    while i < declarations.len()
+        invariant
+            rows == Some(declarations), i <= declarations.len(), paths.len() == i,
+            forall|row: &'a T| observe.requires((row,)),
+            forall|j: int| 0 <= j < i ==>
+                #[trigger] observe.ensures((&declarations@[j],), Some(paths@[j])),
+        decreases declarations.len() - i,
+    {
+        let observed = observe(&declarations[i]);
+        match observed {
+            Some(path) => paths.push(path),
+            None => {
+                proof {
+                    assert(observe.ensures((&declarations@[i as int],), None));
+                    assert forall|j: int| 0 <= j < i implies
+                        #[trigger] artifact_path_observed(observe, &declarations@[j]) by {
+                        assert(observe.ensures((&declarations@[j],), Some(paths@[j])));
+                    }
+                }
+                return Err(ArtifactDeclarationError::Invalid { row: i });
+            },
+        }
+        i += 1;
+    }
+    Ok(paths)
+}
+
 #[verifier::inline]
 pub open spec fn path_byte(byte: u8) -> bool {
     byte != 0 && byte != 10 && byte != 13 && byte != 92
