@@ -2,8 +2,14 @@
 use crate::{
     facts::{Entry, Tree, full_oid},
     relative_path,
-    verified_identifiers::{git_inventory_records, git_inventory_termination, git_inventory_text},
-    verified_status::{git_index_entry_changed, parse_git_index_row, parse_git_tree_rows},
+    verified_identifiers::{
+        equal_text, git_inventory_records, git_inventory_termination, git_inventory_text,
+    },
+    verified_status::{
+        checkout_entry_supported, checkout_hash_advance, checkout_hash_complete,
+        checkout_opened_file_matches, checkout_regular_file_matches, checkout_symbolic_link,
+        git_index_entry_changed, parse_git_index_row, parse_git_tree_rows,
+    },
 };
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
@@ -80,17 +86,10 @@ fn hash<D: Digest>(size: u64, source: &mut impl Read) -> Result<String, String> 
         if n == 0 {
             break;
         }
-        total = total
-            .checked_add(n as u64)
-            .ok_or("checkout file size overflow")?;
-        if total > size {
-            return Err("checkout file grew during observation".into());
-        }
+        total = checkout_hash_advance(total, size, n as u64)?;
         digest.update(&buffer[..n]);
     }
-    if total != size {
-        return Err("checkout file shrank during observation".into());
-    }
+    checkout_hash_complete(total, size)?;
     Ok(digest
         .finalize()
         .iter()
@@ -106,7 +105,7 @@ fn object_hash(oid: &str, size: u64, source: &mut impl Read) -> Result<String, S
     }
 }
 fn matches_entry(root: &Path, name: &str, entry: &Entry) -> Result<bool, String> {
-    if entry.kind != "blob" || !matches!(entry.mode.as_str(), "100644" | "100755" | "120000") {
+    if !checkout_entry_supported(entry.kind.as_str(), entry.mode.as_str()) {
         // Unsupported entries never match. Keep observations available so the
         // registration judge can emit its structured unsupported-input finding.
         return Ok(false);
@@ -119,17 +118,22 @@ fn matches_entry(root: &Path, name: &str, entry: &Entry) -> Result<bool, String>
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
         Err(e) => return Err(format!("checkout file {name}: {e}")),
     };
-    if entry.mode == "120000" {
+    if checkout_symbolic_link(entry.mode.as_str()) {
         if !metadata.is_symlink() {
             return Ok(false);
         }
         let target = fs::read_link(path).map_err(|e| e.to_string())?;
         let bytes = target.as_os_str().as_bytes();
-        return Ok(object_hash(&entry.oid, bytes.len() as u64, &mut &bytes[..])? == entry.oid);
+        return Ok(equal_text(
+            object_hash(&entry.oid, bytes.len() as u64, &mut &bytes[..])?.as_str(),
+            entry.oid.as_str(),
+        ));
     }
-    if !metadata.is_file()
-        || (metadata.permissions().mode() & 0o100 != 0) != (entry.mode == "100755")
-    {
+    if !checkout_regular_file_matches(
+        metadata.is_file(),
+        metadata.permissions().mode(),
+        entry.mode.as_str(),
+    ) {
         return Ok(false);
     }
     // Never open a symlink or block on a FIFO substituted after the type observation.
@@ -139,13 +143,19 @@ fn matches_entry(root: &Path, name: &str, entry: &Entry) -> Result<bool, String>
         .open(path)
         .map_err(|e| format!("checkout file {name}: {e}"))?;
     let opened = file.metadata().map_err(|e| e.to_string())?;
-    if !opened.is_file()
-        || opened.len() != metadata.len()
-        || opened.permissions().mode() != metadata.permissions().mode()
-    {
+    if !checkout_opened_file_matches(
+        opened.is_file(),
+        opened.len(),
+        opened.permissions().mode(),
+        metadata.len(),
+        metadata.permissions().mode(),
+    ) {
         return Err(format!(
             "checkout file identity changed while opening: {name}"
         ));
     }
-    Ok(object_hash(&entry.oid, opened.len(), &mut file)? == entry.oid)
+    Ok(equal_text(
+        object_hash(&entry.oid, opened.len(), &mut file)?.as_str(),
+        entry.oid.as_str(),
+    ))
 }
