@@ -1612,9 +1612,16 @@ pub fn prepare_execution(req: &Request) -> Result<PreparedExecution, String> {
 }
 
 fn operation_state_path(req: &Request, config: &CheckConfig) -> Result<String, String> {
-    let report = req.scope.as_ref().map(|scope| scope.report_path(config)).transpose()?
+    let report = req
+        .scope
+        .as_ref()
+        .map(|scope| scope.report_path(config))
+        .transpose()?
         .unwrap_or_else(|| config.report_path.clone());
-    Ok(chrono_judge_routes::operation_state_path(&report, &object!(req.request_id)))
+    Ok(chrono_judge_routes::operation_state_path(
+        &report,
+        &object!(req.request_id),
+    ))
 }
 
 fn prepare_plan(
