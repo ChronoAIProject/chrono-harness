@@ -5,6 +5,7 @@ use crate::{
     publication::{self, Commands, Reply},
     receipt,
     recipe::{self, Loaded},
+    verified_recipe::delivery as policy,
 };
 use chrono_harness::{file_identity, no_symlink_parents};
 use serde::Deserialize;
@@ -205,6 +206,7 @@ struct Executor<'a> {
 
 impl Commands for Executor<'_> {
     fn execute(&mut self, program: &str, args: &[String]) -> Result<Reply, String> {
+        let tool = program;
         let program = if let Some(tool) = self.tools.get(program) {
             tool.clone()
         } else {
@@ -249,10 +251,12 @@ impl Commands for Executor<'_> {
             std::io::stdout(),
             std::io::stderr(),
         )?;
+        let mut original = captured.receipt("delivery", None);
+        original["tool"] = json!(tool);
         self.report["processes"]
             .as_array_mut()
             .ok_or("invalid process list")?
-            .push(captured.receipt("delivery", None));
+            .push(original);
         if captured.auxiliary_failed() {
             return Err(error(
                 "delivery process or original stream retention failed",
@@ -512,6 +516,7 @@ pub fn run(
 /// 安装使用原发布产物；命令边界在测试中模拟，安装结果由实际安装器产生。
 pub fn install_release(
     publication: &Path,
+    config: &publication::Config,
     host: &Path,
     identity: &identity::Identity,
     platform: &str,
@@ -521,6 +526,7 @@ pub fn install_release(
     public_launcher: &str,
     commands: &mut impl Commands,
 ) -> Result<Value, String> {
+    config.validate()?;
     let published = recipe::read_json(publication, "receipt.json")?;
     if published["schema"] != "chrono-release-publication/v1"
         || published["status"] != "passed"
@@ -539,11 +545,55 @@ pub fn install_release(
         .filter(|p| !p.is_empty())
         .ok_or_else(|| error("missing original publication processes"))?
     {
-        if process["exit_code"] != 0 {
+        let mut stdout = None;
+        for stream in ["stdout", "stderr"] {
+            if process[stream].get("status").is_some() {
+                return Err(error("incomplete original publication stream"));
+            }
+            let original = receipt::original(publication, &process[stream])?;
+            if stream == "stdout" {
+                stdout = Some(original);
+            }
+        }
+        let exit = process["exit_code"]
+            .as_i64()
+            .and_then(|exit| i32::try_from(exit).ok())
+            .ok_or_else(|| error("missing original publication exit"))?;
+        let observation = &process["observation"];
+        if observation.get("failure") != Some(&Value::Null)
+            || observation.get("exit_signal") != Some(&Value::Null)
+            || observation["engine_exit_code"] != exit
+        {
             return Err(error("failed original publication process"));
         }
-        for stream in ["stdout", "stderr"] {
-            receipt::original(publication, &process[stream])?;
+        if exit == 0 {
+            continue;
+        }
+        let argv: Vec<String> = serde_json::from_value(process["argv"].clone()).map_err(error)?;
+        let absent = identity.channel != identity::Channel::Build
+            && process["tool"] == "gh"
+            && argv.len() == 5
+            && Path::new(&argv[0]).is_absolute()
+            && observation["executable"] == argv[0]
+            && argv[1..4] == ["api", "--method", "GET"]
+            && ["releases/tags", "git/ref/tags"].iter().any(|endpoint| {
+                argv[4]
+                    == format!(
+                        "repos/{}/{endpoint}/{}",
+                        config.repository, identity.version
+                    )
+            });
+        let value = chrono_harness::json(
+            &fs::read(stdout.ok_or("missing original publication stdout")?).map_err(error)?,
+        )?;
+        if policy::api_outcome(
+            exit,
+            value["status"].as_str(),
+            value["message"].as_str(),
+            absent,
+        ) != 1
+        {
+            return Err(error("failed original publication process"));
         }
     }
     let directory = no_symlink_parents(publication, "release")?;
@@ -780,6 +830,7 @@ pub fn install(
         );
         let installed = install_release(
             &publication,
+            &config.publication,
             &output.join("host"),
             &identity,
             platform,
