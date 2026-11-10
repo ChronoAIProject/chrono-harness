@@ -218,7 +218,6 @@
         "worktree-adoption"
       ],
       "build.inputs": [
-        "inputs",
         "judge-workflow",
         "judge-workflow-short",
         "judge-workflow-units"

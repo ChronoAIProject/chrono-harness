@@ -2166,7 +2166,6 @@
       "owner": "inputs",
       "producer": "build.inputs",
       "consumers": [
-        "check.unit_inputs",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
         "check.unit_judge-workflow-units"
