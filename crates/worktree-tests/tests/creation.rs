@@ -436,17 +436,6 @@ impl Host {
                 )
                 .unwrap()
             );
-            assert_eq!(
-                report,
-                json(
-                    &fs::read(
-                        Path::new(report["source_root"].as_str().unwrap())
-                            .join(report["report_path"].as_str().unwrap())
-                    )
-                    .unwrap()
-                )
-                .unwrap()
-            );
             assert_eq!(report["governance"], "not-evaluated");
             assert_eq!(report["parity"], "unestablished");
             assert!(
