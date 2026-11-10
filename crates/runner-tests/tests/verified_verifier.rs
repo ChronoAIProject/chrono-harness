@@ -732,6 +732,9 @@ fn selected_plan_requires_every_affected_declared_proof() {
         reveal_with_fuel(policy::sources::selected_plan_error, 3);
         reveal_with_fuel(policy::sources::file_plan_error, 3);
         reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
         reveal(policy::sources::root_planned);
         reveal(policy::unique_proof_invocation);
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
@@ -739,7 +742,7 @@ fn selected_plan_requires_every_affected_declared_proof() {
     }
     let files = vec![planned_source()];
     let affected = vec!["file:file".to_string()];
-    let missing = policy::sources::validate_selected_roots(&files, &affected, &Vec::new());
+    let missing = policy::sources::validate_selected_roots(&files, &affected, &Vec::new(), &Vec::new());
     expect_verifier_true(missing.is_err());
     let args = arguments();
     let output = contract();
@@ -747,8 +750,160 @@ fn selected_plan_requires_every_affected_declared_proof() {
         output_contract: &output, output_limit_bytes: 4096 }];
     assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
     assert(policy::sources::root_planned(&files[0].verification.unwrap().roots[0], methods@));
-    let admitted = policy::sources::validate_selected_roots(&files, &affected, &methods);
+    let admitted = policy::sources::validate_selected_roots(&files, &affected, &methods, &Vec::new());
     expect_verifier_true(admitted.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn changed_declared_root_requires_its_proof_without_a_source_file_seed() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 3);
+        reveal_with_fuel(policy::sources::file_plan_error, 3);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
+        reveal(policy::sources::root_planned);
+        reveal(policy::unique_proof_invocation);
+        reveal_strlit("file:"); reveal_strlit("root"); reveal_strlit("file:root");
+        assert("file:root"@ =~= "file:"@ + "root"@);
+    }
+    let files = vec![planned_source()];
+    let affected = vec!["file:root".to_string()];
+    let missing = policy::sources::validate_selected_roots(&files, &affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(missing.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn changed_proof_owner_or_tool_requires_the_selected_proof() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 3);
+        reveal_with_fuel(policy::sources::file_plan_error, 3);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
+        reveal(policy::sources::root_planned);
+        reveal(policy::unique_proof_invocation);
+        reveal_strlit(""); reveal_strlit("tool:"); reveal_strlit("verifier");
+        reveal_strlit("project:owner"); reveal_strlit("tool:verifier");
+        assert("tool:verifier"@ =~= "tool:"@ + "verifier"@);
+    }
+    let files = vec![planned_source()];
+    let scopes = vec![policy::sources::SourceMethodScope {
+        operation: "proof", owner: "project:owner", tool: "verifier" }];
+    let owner = vec!["project:owner".to_string()];
+    let tool = vec!["tool:verifier".to_string()];
+    let missing_owner = policy::sources::validate_selected_roots(&files, &owner, &Vec::new(), &scopes);
+    expect_verifier_true(missing_owner.is_err());
+    let missing_tool = policy::sources::validate_selected_roots(&files, &tool, &Vec::new(), &scopes);
+    expect_verifier_true(missing_tool.is_err());
+    let args = arguments();
+    let output = contract();
+    let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
+        output_contract: &output, output_limit_bytes: 4096 }];
+    assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
+    assert(policy::sources::root_planned(&files[0].verification.unwrap().roots[0], methods@));
+    let admitted = policy::sources::validate_selected_roots(&files, &tool, &methods, &scopes);
+    expect_verifier_true(admitted.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn proof_impact_uses_complete_nodes_and_the_matching_registered_operation() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 3);
+        reveal_with_fuel(policy::sources::file_plan_error, 3);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
+        reveal_strlit(""); reveal_strlit("file:"); reveal_strlit("tool:");
+        reveal_strlit("file"); reveal_strlit("root"); reveal_strlit("proof"); reveal_strlit("other");
+        reveal_strlit("verifier"); reveal_strlit("project:owner");
+        reveal_strlit("project:Owner"); reveal_strlit("project:owner\0");
+        reveal_strlit("tool:Verifier"); reveal_strlit("tool:verifier\0");
+        reveal_strlit("file:rooted"); reveal_strlit("tool:verifier");
+        reveal_strlit("file:file"); reveal_strlit("file:root");
+        assert("file:file"@ =~= "file:"@ + "file"@);
+        assert("file:root"@ =~= "file:"@ + "root"@);
+        assert("tool:verifier"@ =~= "tool:"@ + "verifier"@);
+        assert("project:Owner"@[8] != "project:owner"@[8]);
+        assert("project:owner\0"@.len() != "project:owner"@.len());
+        assert("tool:Verifier"@[5] != "tool:verifier"@[5]);
+        assert("tool:verifier\0"@.len() != "tool:verifier"@.len());
+        assert("proof"@[0] != "other"@[0]);
+    }
+    let files = vec![planned_source()];
+    let scopes = vec![policy::sources::SourceMethodScope {
+        operation: "proof", owner: "project:owner", tool: "verifier" }];
+    let unrelated = vec!["project:Owner".to_string(), "project:owner\0".to_string(),
+        "tool:Verifier".to_string(), "tool:verifier\0".to_string(), "file:rooted".to_string()];
+    let unchanged = policy::sources::validate_selected_roots(&files, &unrelated, &Vec::new(), &scopes);
+    expect_verifier_true(unchanged.is_ok());
+    let different = vec![policy::sources::SourceMethodScope {
+        operation: "other", owner: "project:owner", tool: "verifier" }];
+    let tool = vec!["tool:verifier".to_string()];
+    let other_operation = policy::sources::validate_selected_roots(&files, &tool, &Vec::new(), &different);
+    expect_verifier_true(other_operation.is_ok());
+}
+
+fn planned_pair() -> (file: policy::sources::SourceFile)
+    ensures file.path@ == "file"@, file.verification.is_some(),
+        file.verification.unwrap().roots.len() == 2,
+        file.verification.unwrap().roots[0].path@ == "r"@,
+        file.verification.unwrap().roots[0].operation@ == "proof"@,
+        file.verification.unwrap().roots[1].path@ == "R"@,
+        file.verification.unwrap().roots[1].operation@ == "other"@,
+        policy::sources::source_declaration_valid(&file),
+{
+    proof {
+        reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("proof"); reveal_strlit("other");
+        assert("r"@[0] != "R"@[0]);
+        vstd::string::is_ascii_spec_bytes("r"); vstd::string::is_ascii_spec_bytes("R");
+        reveal_with_fuel(policy::sources::path_scan, 8);
+        reveal_with_fuel(policy::sources::joined_components, 4);
+    }
+    let file = source_declaration(SourceRole::Program,
+        vec![declared_source_root("r", "proof"), declared_source_root("R", "other")]);
+    assert(policy::sources::source_declaration_valid(&file));
+    file
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn changing_one_root_preserves_other_roots_scope_but_source_changes_require_both() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 3);
+        reveal_with_fuel(policy::sources::file_plan_error, 4);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
+        reveal(policy::sources::root_planned);
+        reveal(policy::unique_proof_invocation);
+        reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
+        reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("file:r"); reveal_strlit("file:R");
+        reveal_strlit("proof"); reveal_strlit("other");
+        assert("file:file"@ =~= "file:"@ + "file"@);
+        assert("file:r"@ =~= "file:"@ + "r"@);
+        assert("file:R"@ =~= "file:"@ + "R"@);
+        assert("file:r"@[5] != "file:R"@[5]);
+        assert("file:r"@ != "file:"@ + "file"@);
+        assert("file:r"@ != "file:"@ + "R"@);
+    }
+    let files = vec![planned_pair()];
+    let root = vec!["file:r".to_string()];
+    let source = vec!["file:file".to_string()];
+    let mut args = arguments();
+    args[8] = "r".to_string();
+    let output = contract();
+    let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
+        output_contract: &output, output_limit_bytes: 4096 }];
+    assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
+    assert(policy::sources::root_planned(&files[0].verification.unwrap().roots[0], methods@));
+    let only_changed_root = policy::sources::validate_selected_roots(&files, &root, &methods, &Vec::new());
+    expect_verifier_true(only_changed_root.is_ok());
+    let both_required = policy::sources::validate_selected_roots(&files, &source, &methods, &Vec::new());
+    expect_verifier_true(both_required.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -757,6 +912,9 @@ fn selected_ordinary_operation_cannot_satisfy_a_declared_proof() {
         reveal_with_fuel(policy::sources::selected_plan_error, 3);
         reveal_with_fuel(policy::sources::file_plan_error, 3);
         reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
         reveal(policy::sources::root_planned);
         reveal(policy::unique_proof_invocation);
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
@@ -768,7 +926,7 @@ fn selected_ordinary_operation_cannot_satisfy_a_declared_proof() {
     let ordinary = None;
     let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
         output_contract: &ordinary, output_limit_bytes: 4096 }];
-    let rejected = policy::sources::validate_selected_roots(&files, &affected, &methods);
+    let rejected = policy::sources::validate_selected_roots(&files, &affected, &methods, &Vec::new());
     expect_verifier_true(rejected.is_err());
 }
 
@@ -778,6 +936,9 @@ fn selected_proof_rejects_duplicate_methods_wrong_roots_and_noncanonical_argumen
         reveal_with_fuel(policy::sources::selected_plan_error, 3);
         reveal_with_fuel(policy::sources::file_plan_error, 3);
         reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
         reveal(policy::sources::root_planned);
         reveal(policy::unique_proof_invocation);
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
@@ -794,18 +955,18 @@ fn selected_proof_rejects_duplicate_methods_wrong_roots_and_noncanonical_argumen
             output_contract: &output, output_limit_bytes: 4096 },
         policy::ProofInvocation { operation: "proof", argv: &args,
             output_contract: &output, output_limit_bytes: 4096 }];
-    let ambiguous = policy::sources::validate_selected_roots(&files, &affected, &duplicates);
+    let ambiguous = policy::sources::validate_selected_roots(&files, &affected, &duplicates, &Vec::new());
     expect_verifier_true(ambiguous.is_err());
     let mut other_root = arguments();
     other_root[8] = "Root".to_string();
     let wrong = vec![policy::ProofInvocation { operation: "proof", argv: &other_root,
         output_contract: &output, output_limit_bytes: 4096 }];
-    let mismatch = policy::sources::validate_selected_roots(&files, &affected, &wrong);
+    let mismatch = policy::sources::validate_selected_roots(&files, &affected, &wrong, &Vec::new());
     expect_verifier_true(mismatch.is_err());
     let invalid = Vec::new();
     let malformed = vec![policy::ProofInvocation { operation: "proof", argv: &invalid,
         output_contract: &output, output_limit_bytes: 4096 }];
-    let rejected = policy::sources::validate_selected_roots(&files, &affected, &malformed);
+    let rejected = policy::sources::validate_selected_roots(&files, &affected, &malformed, &Vec::new());
     expect_verifier_true(rejected.is_err());
 }
 
@@ -815,28 +976,34 @@ fn proof_plan_preserves_explicit_scope_data_and_unknown_boundaries() {
         reveal_with_fuel(policy::sources::selected_plan_error, 5);
         reveal_with_fuel(policy::sources::file_plan_error, 3);
         reveal(policy::sources::file_affected);
+        reveal(policy::sources::file_plan_affected);
+        reveal(policy::sources::root_affected);
+        reveal(policy::sources::node_affected);
         reveal(policy::sources::source_declaration_valid);
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
-        reveal_strlit("file:other");
+        reveal_strlit("file:other"); reveal_strlit("root"); reveal_strlit("file:root");
         assert("file:file"@ =~= "file:"@ + "file"@);
+        assert("file:root"@ =~= "file:"@ + "root"@);
+        assert("file:other"@[5] != "file:root"@[5]);
         assert("file:other"@ != "file:"@ + "file"@);
+        assert("file:other"@ != "file:"@ + "root"@);
     }
     let files = vec![planned_source()];
     expect_verifier_true(policy::sources::can_validate_selected_plan(&Vec::new()));
     let blocked = vec!["missing required input".to_string()];
     expect_verifier_true(!policy::sources::can_validate_selected_plan(&blocked));
     let unrelated = vec!["file:other".to_string()];
-    let unselected = policy::sources::validate_selected_roots(&files, &unrelated, &Vec::new());
+    let unselected = policy::sources::validate_selected_roots(&files, &unrelated, &Vec::new(), &Vec::new());
     expect_verifier_true(unselected.is_ok());
     let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
     let data = source_declaration(SourceRole::Data, Vec::new());
     let inventory = vec![unknown, data];
     let affected = vec!["file:file".to_string()];
-    let no_proof_claim = policy::sources::validate_selected_roots(&inventory, &affected, &Vec::new());
+    let no_proof_claim = policy::sources::validate_selected_roots(&inventory, &affected, &Vec::new(), &Vec::new());
     expect_verifier_true(no_proof_claim.is_ok());
     let invalid = source_declaration(SourceRole::Program, Vec::new());
     let bad = vec![invalid];
-    let rejected = policy::sources::validate_selected_roots(&bad, &affected, &Vec::new());
+    let rejected = policy::sources::validate_selected_roots(&bad, &affected, &Vec::new(), &Vec::new());
     expect_verifier_true(rejected.is_err());
 }
 

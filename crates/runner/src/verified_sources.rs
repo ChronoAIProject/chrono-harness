@@ -952,8 +952,12 @@ pub fn bind_registered_roots<'a>(
 }
 
 pub open spec fn file_affected(file: &SourceFile, nodes: Seq<String>) -> bool {
+    node_affected("file:"@, file.path@, nodes)
+}
+
+pub open spec fn node_affected(prefix: Seq<char>, value: Seq<char>, nodes: Seq<String>) -> bool {
     exists|i: int| 0 <= i < nodes.len()
-        && (#[trigger] nodes[i])@ == "file:"@ + file.path@
+        && (#[trigger] nodes[i])@ == prefix + value
 }
 
 /// 仅无现存阻碍的库存准备可执行计划；阻碍原文由调用方保留。
@@ -963,30 +967,102 @@ pub fn can_validate_selected_plan(blocked: &Vec<String>) -> (ready: bool)
     blocked.len() == 0
 }
 
-fn affected_file(file: &SourceFile, nodes: &Vec<String>) -> (affected: bool)
-    ensures affected == file_affected(file, nodes@),
+fn affected_node(prefix: &str, value: &str, nodes: &Vec<String>) -> (affected: bool)
+    ensures affected == node_affected(prefix@, value@, nodes@),
 {
     let mut name = Vec::new();
-    append_bytes(&mut name, "file:".as_bytes());
-    append_bytes(&mut name, file.path.as_str().as_bytes());
+    append_bytes(&mut name, prefix.as_bytes());
+    append_bytes(&mut name, value.as_bytes());
     proof {
-        super::encode_concat("file:"@, file.path@);
-        vstd::utf8::encode_utf8_decode_utf8("file:"@ + file.path@);
+        super::encode_concat(prefix@, value@);
+        vstd::utf8::encode_utf8_decode_utf8(prefix@ + value@);
     }
     let mut i = 0;
     while i < nodes.len()
         invariant 0 <= i <= nodes.len(),
-            name@ == vstd::utf8::encode_utf8("file:"@ + file.path@),
-            forall|j: int| 0 <= j < i ==> (#[trigger] nodes[j])@ != "file:"@ + file.path@,
+            name@ == vstd::utf8::encode_utf8(prefix@ + value@),
+            forall|j: int| 0 <= j < i ==> (#[trigger] nodes[j])@ != prefix@ + value@,
         decreases nodes.len() - i,
     {
         proof {
             vstd::utf8::encode_utf8_decode_utf8(nodes[i as int]@);
-            vstd::utf8::encode_utf8_decode_utf8("file:"@ + file.path@);
+            vstd::utf8::encode_utf8_decode_utf8(prefix@ + value@);
         }
         let same = equal_bytes(nodes[i].as_str().as_bytes(), name.as_slice());
-        assert(same == (nodes[i as int]@ == "file:"@ + file.path@));
+        assert(same == (nodes[i as int]@ == prefix@ + value@));
         if same { return true; }
+        i += 1;
+    }
+    false
+}
+
+/// 来自现役完整方法登记的借用字段，不从已选中方法反推影响。
+pub struct SourceMethodScope<'a> {
+    pub operation: &'a str,
+    pub owner: &'a str,
+    pub tool: &'a str,
+}
+
+pub open spec fn root_affected(
+    root: &SourceProofRoot, nodes: Seq<String>, scopes: Seq<SourceMethodScope>,
+) -> bool {
+    node_affected("file:"@, root.path@, nodes)
+        || exists|i: int| 0 <= i < scopes.len()
+            && (#[trigger] scopes[i]).operation@ == root.operation@
+            && (node_affected(""@, scopes[i].owner@, nodes)
+                || node_affected("tool:"@, scopes[i].tool@, nodes))
+}
+
+fn affected_root(
+    root: &SourceProofRoot, nodes: &Vec<String>, scopes: &Vec<SourceMethodScope>,
+) -> (affected: bool)
+    ensures affected == root_affected(root, nodes@, scopes@),
+{
+    if affected_node("file:", root.path.as_str(), nodes) { return true; }
+    let mut i = 0;
+    while i < scopes.len()
+        invariant 0 <= i <= scopes.len(),
+            !node_affected("file:"@, root.path@, nodes@),
+            forall|j: int| 0 <= j < i ==> (#[trigger] scopes[j]).operation@ != root.operation@
+                || (!node_affected(""@, scopes[j].owner@, nodes@)
+                    && !node_affected("tool:"@, scopes[j].tool@, nodes@)),
+        decreases scopes.len() - i,
+    {
+        if super::equal_text(scopes[i].operation, root.operation.as_str())
+            && (affected_node("", scopes[i].owner, nodes)
+                || affected_node("tool:", scopes[i].tool, nodes)) { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub open spec fn file_plan_affected(
+    file: &SourceFile, nodes: Seq<String>, scopes: Seq<SourceMethodScope>,
+) -> bool {
+    file_affected(file, nodes) || match &file.verification {
+        None => false,
+        Some(declaration) => exists|i: int| 0 <= i < declaration.roots.len()
+            && root_affected(#[trigger] &declaration.roots[i], nodes, scopes),
+    }
+}
+
+fn affected_file_plan(
+    file: &SourceFile, nodes: &Vec<String>, scopes: &Vec<SourceMethodScope>,
+) -> (affected: bool)
+    ensures affected == file_plan_affected(file, nodes@, scopes@),
+{
+    if affected_node("file:", file.path.as_str(), nodes) { return true; }
+    let declaration = match &file.verification { None => { return false; }, Some(value) => value };
+    let mut i = 0;
+    while i < declaration.roots.len()
+        invariant 0 <= i <= declaration.roots.len(),
+            !file_affected(file, nodes@),
+            file.verification.is_some(), file.verification.unwrap() == *declaration,
+            forall|j: int| 0 <= j < i ==>
+                !root_affected(#[trigger] &declaration.roots[j], nodes@, scopes@),
+        decreases declaration.roots.len() - i,
+    {
+        if affected_root(&declaration.roots[i], nodes, scopes) { return true; }
         i += 1;
     }
     false
@@ -1025,11 +1101,12 @@ fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -
 }
 
 pub open spec fn file_plan_error(
-    file: &SourceFile, nodes: Seq<String>, methods: Seq<super::ProofInvocation>, index: int,
+    file: &SourceFile, nodes: Seq<String>, methods: Seq<super::ProofInvocation>,
+    scopes: Seq<SourceMethodScope>, index: int,
 ) -> Option<(Seq<char>, Seq<char>)>
     decreases match &file.verification { Some(value) => value.roots.len() - index, None => 0int },
 {
-    if !file_affected(file, nodes) { None }
+    if !file_plan_affected(file, nodes, scopes) { None }
     else if !source_declaration_valid(file) {
         Some(("E_VERUS_COVERAGE: invalid affected file proof declaration: "@, file.path@))
     } else {
@@ -1037,9 +1114,10 @@ pub open spec fn file_plan_error(
             None => None,
             Some(declaration) => {
                 if index < 0 || index >= declaration.roots.len() { None }
-                else if !root_planned(&declaration.roots[index], methods) {
+                else if (file_affected(file, nodes) || root_affected(&declaration.roots[index], nodes, scopes))
+                    && !root_planned(&declaration.roots[index], methods) {
                     Some(("E_VERUS_COVERAGE: declared root lacks a unique strict Verus invocation in the selected plan: "@, file.path@))
-                } else { file_plan_error(file, nodes, methods, index + 1) }
+                } else { file_plan_error(file, nodes, methods, scopes, index + 1) }
             },
         }
     }
@@ -1047,14 +1125,15 @@ pub open spec fn file_plan_error(
 
 fn validate_file_plan<'a>(
     file: &'a SourceFile, nodes: &Vec<String>, methods: &Vec<super::ProofInvocation>,
+    scopes: &Vec<SourceMethodScope>,
 ) -> (out: Result<(), CoverageError<'a>>)
     ensures match out {
-        Ok(()) => file_plan_error(file, nodes@, methods@, 0).is_none(),
-        Err(error) => file_plan_error(file, nodes@, methods@, 0) == Some(error.view()),
+        Ok(()) => file_plan_error(file, nodes@, methods@, scopes@, 0).is_none(),
+        Err(error) => file_plan_error(file, nodes@, methods@, scopes@, 0) == Some(error.view()),
     },
 {
     reveal_with_fuel(file_plan_error, 2);
-    if !affected_file(file, nodes) { return Ok(()); }
+    if !affected_file_plan(file, nodes, scopes) { return Ok(()); }
     if !valid_source_declaration(file) {
         return Err(CoverageError { message: "E_VERUS_COVERAGE: invalid affected file proof declaration: ",
             path: file.path.as_str() });
@@ -1063,13 +1142,15 @@ fn validate_file_plan<'a>(
     let mut i = 0;
     while i < declaration.roots.len()
         invariant 0 <= i <= declaration.roots.len(),
-            file_affected(file, nodes@), source_declaration_valid(file),
+            file_plan_affected(file, nodes@, scopes@), source_declaration_valid(file),
             file.verification.is_some(), file.verification.unwrap() == *declaration,
-            file_plan_error(file, nodes@, methods@, 0)
-                == file_plan_error(file, nodes@, methods@, i as int),
+            file_plan_error(file, nodes@, methods@, scopes@, 0)
+                == file_plan_error(file, nodes@, methods@, scopes@, i as int),
         decreases declaration.roots.len() - i,
     {
-        if !planned_root(&declaration.roots[i], methods) {
+        if (affected_node("file:", file.path.as_str(), nodes)
+            || affected_root(&declaration.roots[i], nodes, scopes))
+            && !planned_root(&declaration.roots[i], methods) {
             return Err(CoverageError { message: "E_VERUS_COVERAGE: declared root lacks a unique strict Verus invocation in the selected plan: ",
                 path: file.path.as_str() });
         }
@@ -1079,15 +1160,16 @@ fn validate_file_plan<'a>(
 }
 
 pub open spec fn selected_plan_error(
-    files: Seq<SourceFile>, nodes: Seq<String>, methods: Seq<super::ProofInvocation>, index: int,
+    files: Seq<SourceFile>, nodes: Seq<String>, methods: Seq<super::ProofInvocation>,
+    scopes: Seq<SourceMethodScope>, index: int,
 ) -> Option<(Seq<char>, Seq<char>)>
     decreases files.len() - index,
 {
     if index < 0 || index >= files.len() { None }
     else {
-        match file_plan_error(&files[index], nodes, methods, 0) {
+        match file_plan_error(&files[index], nodes, methods, scopes, 0) {
             Some(error) => Some(error),
-            None => selected_plan_error(files, nodes, methods, index + 1),
+            None => selected_plan_error(files, nodes, methods, scopes, index + 1),
         }
     }
 }
@@ -1096,20 +1178,21 @@ pub open spec fn selected_plan_error(
 /// 未声明存量文件仍是未知；成功不授予全仓覆盖或原进程执行资格。
 pub fn validate_selected_roots<'a>(
     files: &'a Vec<SourceFile>, nodes: &Vec<String>, methods: &Vec<super::ProofInvocation>,
+    scopes: &Vec<SourceMethodScope>,
 ) -> (out: Result<(), CoverageError<'a>>)
     ensures match out {
-        Ok(()) => selected_plan_error(files@, nodes@, methods@, 0).is_none(),
-        Err(error) => selected_plan_error(files@, nodes@, methods@, 0) == Some(error.view()),
+        Ok(()) => selected_plan_error(files@, nodes@, methods@, scopes@, 0).is_none(),
+        Err(error) => selected_plan_error(files@, nodes@, methods@, scopes@, 0) == Some(error.view()),
     },
 {
     let mut i = 0;
     while i < files.len()
         invariant 0 <= i <= files.len(),
-            selected_plan_error(files@, nodes@, methods@, 0)
-                == selected_plan_error(files@, nodes@, methods@, i as int),
+            selected_plan_error(files@, nodes@, methods@, scopes@, 0)
+                == selected_plan_error(files@, nodes@, methods@, scopes@, i as int),
         decreases files.len() - i,
     {
-        match validate_file_plan(&files[i], nodes, methods) {
+        match validate_file_plan(&files[i], nodes, methods, scopes) {
             Ok(()) => {},
             Err(error) => { return Err(error); },
         }
