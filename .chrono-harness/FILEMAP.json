@@ -336,7 +336,7 @@
     {"path":"crates/worktree/Cargo.toml","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:worktree"}]},
     {"path":"crates/worktree/Cargo.lock","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:worktree"}]},
     {"path":"crates/worktree/src/lib.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
-    {"path":"crates/worktree/src/main.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
+    {"path":"crates/worktree/src/main.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"},{"kind":"compile","to":"project:ci-tests"},{"kind":"compile","to":"project:judge-workflow-tests"}]},
     {"path":"crates/worktree/src/start.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/reconstruct.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/Cargo.toml","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:worktree-tests"}]},
@@ -1302,7 +1302,6 @@
         "build.judge-registration",
         "build.judge-ci",
         "build.ci",
-        "build.worktree",
         "test.ci-tests",
         "ci.verify",
         "ci.release.verify",
@@ -1422,7 +1421,6 @@
         "build.judge-projects",
         "build.ci",
         "build.judge-workflow",
-        "build.worktree",
         "build.inputs",
         "workflow.inventory",
         "test.workflow.core"
@@ -1490,7 +1488,6 @@
         "build.judge-projects",
         "build.ci",
         "build.judge-workflow",
-        "build.worktree",
         "build.inputs",
         "workflow.inventory",
         "test.workflow.units"
@@ -1511,7 +1508,6 @@
         "build.judge-projects",
         "build.ci",
         "build.judge-workflow",
-        "build.worktree",
         "build.inputs",
         "workflow.inventory",
         "test.workflow.short"
