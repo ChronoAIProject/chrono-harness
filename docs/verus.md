@@ -583,6 +583,31 @@ Verus 内继续使用固定 vstd 的 Vec 存取和消费迭代合同，循环终
 与原短路 collect 不同，出现错误时也先解码后续记录；没有性能收益声明，完整构建、证明、
 运行、CI 及存储成本未测。原 Git 进程、其余 facts／IO 组合、完整源码绑定与全仓覆盖仍未完成。
 
+`collect_registry_paths` 在同一 runner-status 根证明登记快照的完整路径库存。
+真实 `facts::registry_paths` 显式读取四个固定字段，将观察直接交给该函数；
+成功精确返回五项：入口原文本、judges、projects、filemap、workflow，保留顺序与重复。
+入口不增加相对路径校验；每个登记字段先判缺失，再复用 `verified_paths::relative_path`，
+错误来自最早失败字段，缺失消息保留四个原完整文本，非法路径保留原全文，不发布部分库存。
+`admit_relative_path` 证明同一相对路径谓词的 Ok／Err 结果，公共 `relative_path` 直接消费；
+`RegistryPathError::render` 的缺失／非法分支、原消息复制和完整非法文本转交也直接由 Verus 定义。
+
+外部边界采用固定 lockfile 的 serde_json `Value` 只读字符串索引与 `as_str`：
+先取得 registries，再逐一取得 judges、projects、filemap、workflow；字符串返回完整原借用，
+缺字段、非对象或非字符串返回 None。四个只读观察在适配层完整构造，不执行仓内准入。
+固定 Rust 的 `Result::map_err` 保持 Ok 全值，仅将原 Err 交给渲染器；标准
+`format!("invalid relative path: {invalid:?}")` 保留原前缀，并按 Rust `str` Debug 合同
+给原字符串加引号和转义。这些 JSON 及格式化算法为明确接口假设，未在本仓机械精化；
+不授予仓内函数 `external_body` 例外。Verus 内的字符串复制与 Vec 操作沿用固定 vstd 合同。
+
+四项独立 Verus 预期同时作为普通 Rust 测试执行，核空／非法入口仍原样保留、
+固定五项全文与顺序、重复路径、全部缺失字段及其优先级、非法路径先于后续缺失，
+以及空、绝对、开头当前目录、父分量、NUL／LF／CR／反斜杠边界。
+独立 identity 格式化器核非法路径完整转交和缺失消息直接返回，不据此声称证明标准 Debug 算法。
+沿用原两个 runner-status 整 crate 根、实际消费者与未过滤 Rust 测试，无新工具、操作或预算。
+最多检查四条登记路径，扫描与成功复制的工作随这些路径的总字节数增长；
+相比原短路读取，JSON 适配总是先取得四个只读观察。完整构建、证明、运行、CI 及存储成本未测。
+其余登记快照、IO 组合、完整源码对应与全仓覆盖门仍未完成，不扩大整个 facts／lib 文件的证明范围。
+
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
 证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；

@@ -122,15 +122,14 @@ pub fn checkout(root: &Path, candidate: &str) -> Result<Checkout, String> {
     Reader::legacy().checkout(root, candidate)
 }
 pub fn registry_paths(config: &Value, path: &str) -> Result<Vec<String>, String> {
-    let mut paths = vec![path.to_string()];
-    for k in ["judges", "projects", "filemap", "workflow"] {
-        let p = config["registries"][k]
-            .as_str()
-            .ok_or_else(|| format!("missing registry path {k}"))?;
-        relative_path(p)?;
-        paths.push(p.into());
-    }
-    Ok(paths)
+    let paths = [
+        config["registries"]["judges"].as_str(),
+        config["registries"]["projects"].as_str(),
+        config["registries"]["filemap"].as_str(),
+        config["registries"]["workflow"].as_str(),
+    ];
+    crate::verified_status::collect_registry_paths(path, &paths)
+        .map_err(|error| error.render(|invalid| format!("invalid relative path: {invalid:?}")))
 }
 pub fn registry_values(
     root: &Path,
