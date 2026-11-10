@@ -516,7 +516,9 @@ chrono-worktree migrate --path /exact/enrolled-worktree
 
 ### 本地状态与 AI 提醒
 
-`status` 从协调者已有的逐工作树账本和 Git inventory 观察本地状态。默认查看该协调者全部登记地址，包括物理检出已缺失的地址；`--path` 只查看指定地址。查询不导入、清理或补写任务终态。结果沿用生命周期报告及其现役保留政策，不另建成员清单或永久快照。
+`status` 从协调者已有的逐工作树账本和 Git inventory 观察本地状态。默认查看该协调者全部登记地址，包括物理检出已缺失的地址；`--path` 只查看指定地址。查询不创建协调者状态或登记目录，不导入、清理、恢复结果交接或补写任务终态。结果沿用生命周期报告及其现役保留政策，不另建成员清单或永久快照。
+
+查询持有共享部署租约，读取时核对已有记录的身份和原字节。维护持有元数据的目录或文件独占租约时，仍可观察已有账本。命名空间身份或政策输入变化时查询失败；单条 `owner.json`／`ledger.json` 缺失、损坏、身份不符或读取期间变化时，保留错误并报告未知，不等待维护结束或制造空账本。
 
 报告的 `worktree_status.worktrees` 分别给出 `work_state`、`cleanup_state`、`attention_required`、`next_action`，并引用已有终态和清理原件。`active` 表示任务尚未交接，不能由空闲、缓存已清或构建成功推断完成。`terminal` 配合 `retained` 仍有保留事项；只有已有终态交接、账本记为 `disposed`，且物理路径与 Git 登记都已核实缺失，才停止该对象的清理提醒。长驻协调主检出正常时无需终结。
 
@@ -710,7 +712,7 @@ v2 政策可登记 `terminal_history` 的 `keep_seconds`、`max_entries`、`max_
 
 自动所有者发布的不可变回执和保留字节，现也使用 `lifecycle-original`。物理字节出现前，将原件加入同一地址的 `worktree-enrollment` 引用；随后按 typed 输入字段登记依赖并封存发布。调用方实际读取／产生的原件能力持续保护报告交接，use 释放令牌前先把原结果依赖接到原报告。账本收窄或终态轮转后，仍被报告或其他使用方引用的原件继续保留，其余沿 retention 的有限维护回收。中断留下的现有登记按原身份恢复，不据新政策扫描、认领或删除未登记的历史文件。
 
-use 结果及 main-cache release 在最终报告交接前，暂存在所属 enrollment 的 `completed_uses`／`main_cache_releases`。后续 status 或清理准入核对精确原回执、最终报告的绑定、retention 生产者封存的摘要／长度和物理身份，再登记报告依赖并释放临时引用；部署和政策迁移的拒绝不顺带改写这项登记。待交接结果本身也引用最终报告，避免独立原件维护先回收它；已有保留图会回收失去全部根的循环引用。报告缺失、部分写入、字节变化或尚未封存时继续保留，并阻止该条目滚出历史；即使工作树已移除，仍用 `report_handoff_pending` 和 `recover-result-handoff` 提醒后续处理。这不是永久操作历史，也不改变工作树的工作终态。
+use 结果及 main-cache release 在最终报告交接前，暂存在所属 enrollment 的 `completed_uses`／`main_cache_releases`。后续清理准入核对精确原回执、最终报告的绑定、retention 生产者封存的摘要／长度和物理身份，再登记报告依赖并释放临时引用；部署和政策迁移的拒绝不顺带改写这项登记。待交接结果本身也引用最终报告，避免独立原件维护先回收它；已有保留图会回收失去全部根的循环引用。报告缺失、部分写入、字节变化或尚未封存时继续保留，并阻止该条目滚出历史；即使工作树已移除，仍用 `report_handoff_pending` 和 `recover-result-handoff` 提醒后续处理。这不是永久操作历史，也不改变工作树的工作终态。
 
 **产品与宿主政策同改：**宿主 `retention.json` 为 `lifecycle-original` 增加已采用的 automatic state 地址，只覆盖该生产者实际发布的文件。新增共享引用的原件发布行为及工作树回归；DELTA 沿 runner 和 worktree 的明确依赖验证。额外 IO、维护耗时和存储收益尚未实测。旧协调宿主仍须配套迁移，不能据候选提交宣称已部署。
 
