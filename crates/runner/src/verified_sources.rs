@@ -829,6 +829,128 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
     Ok(Some(SourceAdmission { compiled, candidate, modes }))
 }
 
+
+pub struct CoverageError<'a> {
+    pub message: &'static str,
+    pub path: &'a str,
+}
+
+impl<'a> CoverageError<'a> {
+    pub open spec fn view(&self) -> (Seq<char>, Seq<char>) {
+        (self.message@, self.path@)
+    }
+
+    /// 标准格式化是唯一外部边界；错误原因和完整路径由已证明分支选择。
+    pub fn render<F: Fn(&str, &str) -> String>(self, format_error: F) -> (out: String)
+        requires forall|message: &str, path: &str| format_error.requires((message, path)),
+        ensures format_error.ensures((self.message, self.path), out),
+    {
+        format_error(self.message, self.path)
+    }
+}
+
+pub open spec fn file_binding_error(
+    file: &SourceFile, operation: Seq<char>, invoked: Seq<char>,
+    candidate: Seq<SourceBinding>, index: int,
+) -> Option<(Seq<char>, Seq<char>)>
+    decreases match &file.verification {
+        Some(declaration) => declaration.roots.len() - index,
+        None => 0int,
+    },
+{
+    match &file.verification {
+        None => None,
+        Some(declaration) => {
+            if index < 0 || index >= declaration.roots.len() { None }
+            else if declaration.roots[index].operation@ == operation
+                && declaration.roots[index].path@ != invoked {
+                Some(("E_VERUS_COVERAGE: declared root differs from the invoked root: "@, file.path@))
+            } else if declaration.roots[index].operation@ == operation
+                && !listed_source_path(candidate,
+                    vstd::utf8::encode_utf8(file.path@), candidate.len() as int) {
+                Some(("E_VERUS_COVERAGE: declared file is absent from compiler sources: "@, file.path@))
+            } else {
+                file_binding_error(file, operation, invoked, candidate, index + 1)
+            }
+        },
+    }
+}
+
+fn bind_file_roots<'a>(
+    file: &'a SourceFile, operation: &str, invoked: &str, candidate: &Vec<SourceBinding>,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => file_binding_error(file, operation@, invoked@, candidate@, 0).is_none(),
+        Err(message) => file_binding_error(file, operation@, invoked@, candidate@, 0)
+            == Some(message.view()),
+    },
+{
+    reveal_with_fuel(file_binding_error, 2);
+    let declaration = match &file.verification { None => { return Ok(()); }, Some(value) => value };
+    let mut i = 0;
+    while i < declaration.roots.len()
+        invariant 0 <= i <= declaration.roots.len(),
+            file.verification.is_some(), file.verification.unwrap() == *declaration,
+            file_binding_error(file, operation@, invoked@, candidate@, 0)
+                == file_binding_error(file, operation@, invoked@, candidate@, i as int),
+        decreases declaration.roots.len() - i,
+    {
+        if super::identifiers::equal_text(declaration.roots[i].operation.as_str(), operation) {
+            if !super::identifiers::equal_text(declaration.roots[i].path.as_str(), invoked) {
+                return Err(CoverageError { message: "E_VERUS_COVERAGE: declared root differs from the invoked root: ",
+                    path: file.path.as_str() });
+            }
+            if !contains_source_path(candidate, file.path.as_str().as_bytes(), candidate.len()) {
+                return Err(CoverageError { message: "E_VERUS_COVERAGE: declared file is absent from compiler sources: ",
+                    path: file.path.as_str() });
+            }
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
+pub open spec fn binding_error(
+    files: Seq<SourceFile>, operation: Seq<char>, invoked: Seq<char>,
+    candidate: Seq<SourceBinding>, index: int,
+) -> Option<(Seq<char>, Seq<char>)>
+    decreases files.len() - index,
+{
+    if index < 0 || index >= files.len() { None }
+    else {
+        match file_binding_error(&files[index], operation, invoked, candidate, 0) {
+            Some(error) => Some(error),
+            None => binding_error(files, operation, invoked, candidate, index + 1),
+        }
+    }
+}
+
+/// 只核对本次操作的已有声明；未知文件不因此取得证明资格。
+/// 根必须等于实际调用根，文件必须属于已绑定的候选编译源码。
+pub fn bind_registered_roots<'a>(
+    files: &'a Vec<SourceFile>, operation: &str, invoked: &str, candidate: &Vec<SourceBinding>,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => binding_error(files@, operation@, invoked@, candidate@, 0).is_none(),
+        Err(message) => binding_error(files@, operation@, invoked@, candidate@, 0) == Some(message.view()),
+    },
+{
+    let mut i = 0;
+    while i < files.len()
+        invariant 0 <= i <= files.len(),
+            binding_error(files@, operation@, invoked@, candidate@, 0)
+                == binding_error(files@, operation@, invoked@, candidate@, i as int),
+        decreases files.len() - i,
+    {
+        match bind_file_roots(&files[i], operation, invoked, candidate) {
+            Ok(()) => {},
+            Err(error) => { return Err(error); },
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
 pub fn process_arguments(argv: &Vec<String>) -> (args: Result<Vec<String>, String>)
     ensures args.is_ok() == (argv.len() > 0),
         args.is_ok() ==> args.unwrap()@ == argv@.skip(1),

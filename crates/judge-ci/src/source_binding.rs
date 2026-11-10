@@ -79,5 +79,6 @@ pub(super) fn bind_output(
         }),
         registry,
         io,
+        |message, path| format!("{message}{path}"),
     )
 }
