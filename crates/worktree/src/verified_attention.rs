@@ -12,6 +12,44 @@ use identifiers::equal_text;
 
 verus! {
 
+pub enum SnapshotProtocol {
+    Unleased,
+    Kernel,
+    Invalid,
+}
+
+pub open spec fn expected_snapshot_protocol(schema: Seq<char>, admission: bool) -> SnapshotProtocol {
+    if schema == "chrono-worktree-enrollment-state/v1"@ && !admission { SnapshotProtocol::Unleased }
+    else if schema == "chrono-worktree-enrollment-state/v2"@ && admission { SnapshotProtocol::Kernel }
+    else { SnapshotProtocol::Invalid }
+}
+
+pub fn snapshot_protocol(schema: &str, admission: bool) -> (protocol: SnapshotProtocol)
+    ensures protocol == expected_snapshot_protocol(schema@, admission),
+{
+    if equal_text(schema, "chrono-worktree-enrollment-state/v1") && !admission { SnapshotProtocol::Unleased }
+    else if equal_text(schema, "chrono-worktree-enrollment-state/v2") && admission { SnapshotProtocol::Kernel }
+    else { SnapshotProtocol::Invalid }
+}
+
+pub fn snapshot_owned(protocol: &SnapshotProtocol, owner: bool, coordinator: bool,
+    common: bool, addresses: bool, admission: bool) -> (valid: bool)
+    ensures valid <==> !(protocol is Invalid) && owner && coordinator && common && addresses
+        && (!(protocol is Kernel) || admission),
+{
+    match protocol {
+        SnapshotProtocol::Invalid => false,
+        SnapshotProtocol::Unleased => owner && coordinator && common && addresses,
+        SnapshotProtocol::Kernel => owner && coordinator && common && addresses && admission,
+    }
+}
+
+pub fn snapshot_stable(directory: bool, owner: bool, ledger: bool) -> (stable: bool)
+    ensures stable <==> directory && owner && ledger,
+{
+    directory && owner && ledger
+}
+
 pub enum Attention {
     Coordinator,
     Active,
