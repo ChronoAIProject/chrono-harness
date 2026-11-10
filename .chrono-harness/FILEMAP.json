@@ -2184,6 +2184,18 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.runner-cli": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.runner-cli-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
       "verify.runner-status": {
         "resources": [],
         "outputs": [
