@@ -88,7 +88,10 @@ pub fn binding(req: &Request, inputs: &Value) -> Value {
 }
 /// Keep operation originals beside the report selected by the existing owner.
 pub fn operation_state_path(report_path: &str, run: &Value) -> String {
-    format!("{report_path}.operations-{}", wire::digest(run).expect("JSON run identity serializes"))
+    format!(
+        "{report_path}.operations-{}",
+        wire::digest(run).expect("JSON run identity serializes")
+    )
 }
 pub fn expand(argv: &[String], binding: &Value) -> Vec<String> {
     argv.iter()
