@@ -113,6 +113,19 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 15 通用参考经验 | 部分 | 已有固定来源引用，不改参考仓 | 应用其余通用工作经验 |
 | 16 指令 | 已实现，限当前 manifest、可移植默认、宿主采用 | 中英文原子／工作流布局提供产品默认、本仓根、完整中文 Markdown、中文聚焦技能；instructions.md 定义保留定制的采用。生成测试覆盖不支持 manifest 拒绝且不发布、当前原方法字节／mode、别名身份、无变化／回滚。历史自动格式转换及专属测试已退役；当前内容所有者、宿主采用和实际载荷边界见 methodology-extraction.md | 运行／公开／原生消费、平台／崩溃／并发限制、干净候选／原生／PR／落地；不新增完整启用／输入／发布保证 |
 
+runner 的 `normalize_checkout_paths` 及四项独立 Verus 预期覆盖未跟踪／忽略库存的完整并集、
+全文严格排序、去重与数量上界；`Reader::checkout` 和 `Reader::untracked_excluding` 直接消费
+同源实现，沿现有两个 runner-status 整 crate 根及原未过滤测试验收。
+固定 vstd 的 Vec 追加与消费迭代接口假设、存储取舍及剩余 IO 与外围判断，
+见 [Verus 实施范围](verus.md)。共享 `git_nul_records`、`git_output_text` 和 `parse_git_text_rows`
+也直接供真实路径库存及 `facts::utf8` 使用，证明原字节拆分、完整解码观察的结果序列与首错选择；
+标准 UTF-8 解码及逐项搬运采用明确外部接口，四项独立预期与消费者测试沿原登记验收。
+`collect_registry_paths` 及共享 `admit_relative_path` 也由同一生产根拥有，真实
+`facts::registry_paths`／`relative_path` 直接消费。四项独立预期核入口原样、固定五项顺序、
+重复保留、每个缺失字段及首错、非法路径边界、完整错误文本转交；同为 Verus 并执行普通 Rust 断言。
+JSON 字符串观察与标准 Debug 格式化是明确外部接口，剩余登记快照及 IO 组合仍未证明。
+此范围不构成整个 facts 文件或全仓覆盖证明。
+
 ## 按 §13 验收场景查看
 
 以下顺序与 SPEC §13 相同；按范围证据只证明对应 profile。
