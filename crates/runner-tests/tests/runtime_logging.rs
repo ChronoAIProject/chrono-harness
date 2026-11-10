@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 use std::{fs, path::Path, process::Command};
 
 fn binary() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../runner/target/debug/chrono-harness")
+    env!("CARGO_BIN_EXE_chrono-harness-test-cli").into()
 }
 fn policy(root: &Path, max_bytes: u64) {
     fs::create_dir_all(root.join(".chrono-harness")).unwrap();

@@ -204,8 +204,7 @@ fn scoped_stream_storage_preserves_raw_process_identity_and_detects_bad_original
 #[cfg(unix)]
 fn invalid_utf8_cli_argument_emits_structured_domain_error_on_stderr() {
     use std::os::unix::ffi::OsStringExt;
-    let binary = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../runner/target/debug/chrono-harness");
+    let binary = Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"));
     let output = std::process::Command::new(binary)
         .arg(std::ffi::OsString::from_vec(vec![0xff]))
         .output()
@@ -233,8 +232,7 @@ fn runner_binary_read_only_stdout_is_a_native_publication_failure() {
     use sha2::{Digest, Sha256};
     use std::process::Stdio;
 
-    let binary =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../runner/target/debug/chrono-harness");
+    let binary = Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"));
     let expected = dispatch(&["--help"]);
     assert_eq!(expected.exit_code, 0);
     assert!(!expected.stdout.is_empty());
@@ -402,8 +400,7 @@ fn runner_binary_publication_preserves_bytes_and_reports_broken_stdout() {
         drop(reader);
         Stdio::from(std::os::fd::OwnedFd::from(writer))
     }
-    let binary =
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../runner/target/debug/chrono-harness");
+    let binary = Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"));
     for args in [vec!["--help"], vec!["--version"], vec!["unknown-command"]] {
         let expected = dispatch(&args);
         let actual = Command::new(&binary).args(&args).output().unwrap();
@@ -1890,21 +1887,18 @@ fn scoped_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_pass
     for (bytes, expected_exit) in [(vec![239u8, 191, 189], 0), (vec![255], 2)] {
         let (_dir, p) = fixture(json!({"echo_protocol":true,"replacement_bytes":bytes,
             "fields":{"results":[{"id":"encoding","status":"passed","cause":"MARKER","exit_code":0}]}}));
-        let output = std::process::Command::new(
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../runner/target/debug/chrono-harness"),
-        )
-        .args([
-            "check",
-            "--config",
-            &p,
-            "--base",
-            &"a".repeat(40),
-            "--candidate",
-            &"b".repeat(40),
-        ])
-        .output()
-        .unwrap();
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
+            .args([
+                "check",
+                "--config",
+                &p,
+                "--base",
+                &"a".repeat(40),
+                "--candidate",
+                &"b".repeat(40),
+            ])
+            .output()
+            .unwrap();
         assert_eq!(
             output.status.code(),
             Some(expected_exit),
@@ -2047,8 +2041,7 @@ fn selector_alias_and_parent_traversal_preserve_below_root_guards() {
         symlink("config.json", root.join(".chrono-harness/linked.json")).unwrap();
         fs::create_dir(root.join(".chrono-harness/real-dir")).unwrap();
         symlink("real-dir", root.join(".chrono-harness/linked-dir")).unwrap();
-        let runner = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../runner/target/debug/chrono-harness");
+        let runner = Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"));
         let invoke = |cwd: &std::path::Path, path: &std::path::Path| {
             std::process::Command::new(&runner)
                 .current_dir(cwd)

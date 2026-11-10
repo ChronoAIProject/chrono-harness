@@ -339,9 +339,7 @@
       "id": "verify_runner_tests",
       "kind": "verify",
       "operation": "test.runner-tests",
-      "needs": [
-        "build_runner"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_runner_tests",
       "rust_toolchain": true
     },
@@ -776,10 +774,8 @@
       ]
     },
     "verify_runner_tests": {
-      "need": "crates/runner-tests/tests/cli_contract.rs runs the released runner CLI and checks exits, reports and raw process outputs. Protocol peers are this test project’s Rust fixture executables.",
-      "release_assets": [
-        "chrono-harness"
-      ]
+      "need": "runner 专属测试将生产 main.rs 编译为测试 CLI，验证原 CLI 合同、日志和进程输出，不消费发布二进制。协议样本由同一测试项目编译。",
+      "release_assets": []
     },
     "verify_inputs_tests": {
       "need": "crates/inputs-tests/tests/consumer.rs runs chrono-inputs to capture/compose declared snapshots, then runner with registration, filemap, routes, projects, cost, mixed and workflow judges from the shared project host. Assertions inspect retained inputs and the resulting full check evidence; snapshots.rs also runs the inputs CLI.",
