@@ -120,6 +120,10 @@ runner 的 `normalize_checkout_paths` 及四项独立 Verus 预期覆盖未跟�
 见 [Verus 实施范围](verus.md)。共享 `git_nul_records`、`git_output_text` 和 `parse_git_text_rows`
 也直接供真实路径库存及 `facts::utf8` 使用，证明原字节拆分、完整解码观察的结果序列与首错选择；
 标准 UTF-8 解码及逐项搬运采用明确外部接口，四项独立预期与消费者测试沿原登记验收。
+`collect_registry_paths` 及共享 `admit_relative_path` 也由同一生产根拥有，真实
+`facts::registry_paths`／`relative_path` 直接消费。四项独立预期核入口原样、固定五项顺序、
+重复保留、每个缺失字段及首错、非法路径边界、完整错误文本转交；同为 Verus 并执行普通 Rust 断言。
+JSON 字符串观察与标准 Debug 格式化是明确外部接口，剩余登记快照及 IO 组合仍未证明。
 此范围不构成整个 facts 文件或全仓覆盖证明。
 
 ## 按 §13 验收场景查看

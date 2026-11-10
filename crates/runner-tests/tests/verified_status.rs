@@ -3595,4 +3595,185 @@ fn git_text_rows_reject_missing_decodes_at_every_boundary() {
     expect_git_text_row_failure(vec![Some("first".to_owned()), Some("second".to_owned()), None]);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_inventory_keeps_entry_order_and_repeated_paths() {
+    proof {
+        registry_fixture_paths();
+    }
+    let rows = [Some("z"), Some("a//./"), Some("z"), Some("目录/é")];
+    match policy::collect_registry_paths("", &rows) {
+        Ok(paths) => {
+            expect_status_true(paths.len() == 5);
+            expect_status_text(paths[0].as_str(), "");
+            expect_status_text(paths[1].as_str(), "z");
+            expect_status_text(paths[2].as_str(), "a//./");
+            expect_status_text(paths[3].as_str(), "z");
+            expect_status_text(paths[4].as_str(), "目录/é");
+        },
+        Err(_) => { panic!(); },
+    }
+    let rows = [Some("a"); 4];
+    match policy::collect_registry_paths("../entry\0", &rows) {
+        Ok(paths) => {
+            expect_status_true(paths.len() == 5);
+            expect_status_text(paths[0].as_str(), "../entry\0");
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+proof fn registry_fixture_paths()
+    ensures policy::paths::relative_path("a".spec_bytes()),
+        policy::paths::relative_path("z".spec_bytes()),
+        policy::paths::relative_path("a//./".spec_bytes()),
+        policy::paths::relative_path("目录/é".spec_bytes()),
+{
+    reveal_strlit("a"); reveal_strlit("z"); reveal_strlit("a//./");
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("z")
+        && vstd::string::is_ascii("a//./"));
+    reveal_strlit("目录/é");
+    assert("目录/é"@ =~= seq!['目', '录', '/', 'é']);
+    assert('目' as u32 == 30446 && '录' as u32 == 24405
+        && 'é' as u32 == 233 && '/' as u32 == 47);
+    assert(vstd::utf8::encode_scalar(30446) == seq![231u8, 155, 174]) by (compute);
+    assert(vstd::utf8::encode_scalar(24405) == seq![229u8, 189, 149]) by (compute);
+    assert(vstd::utf8::encode_scalar(233) == seq![195u8, 169]) by (compute);
+    assert(vstd::utf8::encode_scalar(47) == seq![47u8]) by (compute);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 5);
+    assert("目录/é".spec_bytes() =~= seq![231u8, 155, 174, 229, 189, 149, 47, 195, 169]);
+}
+
+proof fn registry_error_is_first(error: &policy::RegistryPathError, rows: Seq<Option<&str>>, first: int)
+    requires rows.len() == 4, 0 <= first < 4,
+        !policy::registry_path_valid(rows[first]),
+        forall|j: int| 0 <= j < first ==> policy::registry_path_valid(rows[j]),
+        exists|i: int| 0 <= i < 4
+            && (forall|j: int| 0 <= j < i ==> policy::registry_path_valid(rows[j]))
+            && policy::registry_error_at(error, i, rows[i]),
+    ensures policy::registry_error_at(error, first, rows[first]),
+{
+    let found = choose|i: int| 0 <= i < 4
+        && (forall|j: int| 0 <= j < i ==> policy::registry_path_valid(rows[j]))
+        && policy::registry_error_at(error, i, rows[i]);
+    assert(!policy::registry_path_valid(rows[found]));
+    if found < first { assert(policy::registry_path_valid(rows[found])); }
+    if first < found { assert(policy::registry_path_valid(rows[first])); }
+    assert(found == first);
+}
+
+fn expect_missing_registry(rows: [Option<&str>; 4], first: usize, expected: &str)
+    requires first < 4, rows@[first as int].is_none(),
+        forall|j: int| 0 <= j < first ==> policy::registry_path_valid(rows@[j]),
+        policy::registry_missing_message(first as int) == expected@,
+{
+    match policy::collect_registry_paths("entry", &rows) {
+        Err(error) => {
+            proof { registry_error_is_first(&error, rows@, first as int); }
+            match error {
+                policy::RegistryPathError::Missing { message } => {
+                    expect_status_text(message, expected);
+                },
+                _ => { panic!(); },
+            }
+        },
+        Ok(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_inventory_reports_first_missing_field_in_fixed_order() {
+    proof { registry_fixture_paths(); }
+    expect_missing_registry([None, Some("../bad"), None, None], 0, "missing registry path judges");
+    expect_missing_registry([Some("a"), None, Some("/bad"), None], 1, "missing registry path projects");
+    expect_missing_registry([Some("a"), Some("a"), None, Some("")], 2, "missing registry path filemap");
+    expect_missing_registry([Some("a"), Some("a"), Some("a"), None], 3, "missing registry path workflow");
+}
+
+fn expect_invalid_registry(path: &str)
+    requires !policy::paths::relative_path(path.spec_bytes()),
+{
+    proof { registry_fixture_paths(); }
+    let rows = [Some("a"), Some(path), None, Some("../later")];
+    match policy::collect_registry_paths("entry", &rows) {
+        Err(error) => {
+            proof { registry_error_is_first(&error, rows@, 1); }
+            match error {
+                policy::RegistryPathError::Invalid { path: actual } => {
+                    expect_status_text(actual, path);
+                },
+                _ => { panic!(); },
+            }
+        },
+        _ => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_inventory_rejects_invalid_path_before_later_missing_field() {
+    proof {
+        reveal_strlit(""); reveal_strlit("/a"); reveal_strlit("./a"); reveal_strlit("a/../b");
+        reveal_strlit("a\0b"); reveal_strlit("a\nb"); reveal_strlit("a\rb"); reveal_strlit("a\\b");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("/a")
+            && vstd::string::is_ascii("./a") && vstd::string::is_ascii("a/../b")
+            && vstd::string::is_ascii("a\0b") && vstd::string::is_ascii("a\nb")
+            && vstd::string::is_ascii("a\rb") && vstd::string::is_ascii("a\\b"));
+        assert(policy::paths::parent_component_at("a/../b".spec_bytes(), 2));
+        assert("a/../b".spec_bytes()[2] == 46);
+        assert("a\0b".spec_bytes()[1] == 0);
+        assert("a\nb".spec_bytes()[1] == 10);
+        assert("a\rb".spec_bytes()[1] == 13);
+        assert("a\\b".spec_bytes()[1] == 92);
+    }
+    expect_invalid_registry("");
+    expect_invalid_registry("/a");
+    expect_invalid_registry("./a");
+    expect_invalid_registry("a/../b");
+    expect_invalid_registry("a\0b");
+    expect_invalid_registry("a\nb");
+    expect_invalid_registry("a\rb");
+    expect_invalid_registry("a\\b");
+}
+
+fn expect_relative_admission(path: &str, valid: bool)
+    requires valid == policy::paths::relative_path(path.spec_bytes()),
+{
+    match policy::admit_relative_path(path) {
+        Ok(()) => { expect_status_true(valid); },
+        Err(actual) => {
+            expect_status_true(!valid);
+            expect_status_text(actual, path);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn relative_path_results_and_registry_renderer_keep_complete_text() {
+    proof {
+        registry_fixture_paths();
+        reveal_strlit(""); reveal_strlit("./a"); reveal_strlit("a/../b");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("./a")
+            && vstd::string::is_ascii("a/../b"));
+        assert(policy::paths::parent_component_at("a/../b".spec_bytes(), 2));
+        assert("a/../b".spec_bytes()[2] == 46);
+    }
+    expect_relative_admission("a//./", true);
+    expect_relative_admission("目录/é", true);
+    expect_relative_admission("", false);
+    expect_relative_admission("./a", false);
+    expect_relative_admission("a/../b", false);
+    let invalid = policy::RegistryPathError::Invalid { path: "../目录\0\n" };
+    let message = invalid.render(|path: &str| -> (out: String)
+        ensures out@ == path@,
+    { path.to_owned() });
+    expect_status_text(message.as_str(), "../目录\0\n");
+    let missing = policy::RegistryPathError::Missing { message: "missing registry path filemap" };
+    let message = missing.render(|path: &str| -> (out: String)
+        ensures out@ == path@,
+    { path.to_owned() });
+    expect_status_text(message.as_str(), "missing registry path filemap");
+}
+
 }

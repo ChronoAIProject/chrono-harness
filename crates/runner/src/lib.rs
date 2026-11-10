@@ -282,10 +282,8 @@ pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     copy_hashed(file, std::io::sink())
 }
 pub fn relative_path(value: &str) -> Result<(), String> {
-    if !verified_paths::valid_relative_path(value.as_bytes()) {
-        return Err(format!("invalid relative path: {value:?}"));
-    }
-    Ok(())
+    verified_status::admit_relative_path(value)
+        .map_err(|invalid| format!("invalid relative path: {invalid:?}"))
 }
 pub fn no_symlink_parents(root: &Path, relative: &str) -> Result<PathBuf, String> {
     no_symlink_parents_detailed(root, relative).map_err(|error| error.message)

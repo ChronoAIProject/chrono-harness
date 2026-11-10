@@ -27,6 +27,112 @@ pub mod scopes;
 
 verus! {
 
+/// 标准 JSON 解码仅提供四个固定字段的原字符串观察。
+pub enum RegistryPathError<'a> {
+    Missing { message: &'static str },
+    Invalid { path: &'a str },
+}
+
+impl<'a> RegistryPathError<'a> {
+    /// 标准 Debug 格式化为外部接口；错误类别和完整原路径由本模块选择。
+    pub fn render<F: Fn(&str) -> String>(self, format_invalid: F) -> (out: String)
+        requires forall|path: &str| format_invalid.requires((path,)),
+        ensures match self {
+            Self::Missing { message } => out@ == message@,
+            Self::Invalid { path } => format_invalid.ensures((path,), out),
+        },
+    {
+        match self {
+            Self::Missing { message } => message.to_owned(),
+            Self::Invalid { path } => format_invalid(path),
+        }
+    }
+}
+
+pub fn admit_relative_path(value: &str) -> (out: Result<(), &str>)
+    ensures match out {
+        Ok(()) => paths::relative_path(value.spec_bytes()),
+        Err(invalid) => invalid@ == value@ && !paths::relative_path(value.spec_bytes()),
+    },
+{
+    if paths::valid_relative_path(value.as_bytes()) { Ok(()) }
+    else { Err(value) }
+}
+
+pub open spec fn registry_path_valid(row: Option<&str>) -> bool {
+    match row { Some(path) => paths::relative_path(path.spec_bytes()), None => false }
+}
+
+pub open spec fn registry_missing_message(index: int) -> Seq<char> {
+    if index == 0 { "missing registry path judges"@ }
+    else if index == 1 { "missing registry path projects"@ }
+    else if index == 2 { "missing registry path filemap"@ }
+    else { "missing registry path workflow"@ }
+}
+
+fn missing_registry_message(index: usize) -> (message: &'static str)
+    requires index < 4,
+    ensures message@ == registry_missing_message(index as int),
+{
+    if index == 0 { "missing registry path judges" }
+    else if index == 1 { "missing registry path projects" }
+    else if index == 2 { "missing registry path filemap" }
+    else { "missing registry path workflow" }
+}
+
+pub open spec fn registry_error_at(error: &RegistryPathError, index: int, row: Option<&str>) -> bool {
+    match error {
+        RegistryPathError::Missing { message } => row.is_none()
+            && message@ == registry_missing_message(index),
+        RegistryPathError::Invalid { path } => match row {
+            Some(original) => path@ == original@ && !paths::relative_path(original.spec_bytes()),
+            None => false,
+        },
+    }
+}
+
+/// 入口原样在前；依次收取 judges、projects、filemap、workflow，严格保留首错。
+pub fn collect_registry_paths<'a>(entry: &str, rows: &[Option<&'a str>; 4])
+    -> (out: Result<Vec<String>, RegistryPathError<'a>>)
+    ensures match out {
+        Ok(paths) => paths.len() == 5 && paths@[0]@ == entry@
+            && forall|i: int| 0 <= i < 4 ==> registry_path_valid(rows@[i])
+                && match rows@[i] { Some(path) => paths@[i + 1]@ == path@, None => false },
+        Err(error) => exists|i: int| 0 <= i < 4
+            && (forall|j: int| 0 <= j < i ==> registry_path_valid(rows@[j]))
+            && registry_error_at(&error, i, rows@[i]),
+    },
+{
+    let mut paths = vec![entry.to_owned()];
+    let mut i = 0usize;
+    while i < 4
+        invariant i <= 4, paths.len() == i + 1, paths@[0]@ == entry@,
+            forall|j: int| 0 <= j < i ==> registry_path_valid(rows@[j])
+                && match rows@[j] { Some(path) => paths@[j + 1]@ == path@, None => false },
+        decreases 4 - i,
+    {
+        let path = match rows[i] {
+            Some(path) => path,
+            None => {
+                let error = RegistryPathError::Missing { message: missing_registry_message(i) };
+                assert(registry_error_at(&error, i as int, rows@[i as int]));
+                return Err(error);
+            },
+        };
+        match admit_relative_path(path) {
+            Ok(()) => {},
+            Err(invalid) => {
+                let error = RegistryPathError::Invalid { path: invalid };
+                assert(registry_error_at(&error, i as int, rows@[i as int]));
+                return Err(error);
+            },
+        }
+        paths.push(path.to_owned());
+        i += 1;
+    }
+    Ok(paths)
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct IndexFlag {
