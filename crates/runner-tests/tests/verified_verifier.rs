@@ -433,9 +433,9 @@ fn unified_admission_does_not_invent_a_proof_for_blocked_or_missing_receipts() {
     let registry = Err("original registry error".to_string());
     let methods = Vec::new();
     let blocked = policy::bind_operation_output("blocked", "proof", &methods,
-        None, &registry, &UnavailableSources);
+        None, &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     let failed = policy::bind_operation_output("failed", "proof", &methods,
-        None, &registry, &UnavailableSources);
+        None, &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     proof {
         reveal_strlit("blocked"); reveal_strlit("failed"); reveal_strlit("passed");
         assert("blocked"@[0] != "passed"@[0]); assert("failed"@[0] != "passed"@[0]);
@@ -443,7 +443,7 @@ fn unified_admission_does_not_invent_a_proof_for_blocked_or_missing_receipts() {
     expect_verifier_true(blocked.is_ok() && blocked.unwrap().is_none());
     expect_verifier_true(failed.is_ok() && failed.unwrap().is_none());
     let missing = policy::bind_operation_output("passed", "proof", &methods,
-        None, &registry, &UnavailableSources);
+        None, &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     expect_verifier_true(missing.is_err());
 }
 
@@ -468,12 +468,12 @@ fn unified_ordinary_success_has_no_proof_and_failed_process_is_rejected() {
         assert(policy::ordinary_output_accepted("ordinary"@, methods@, &original));
     }
     let ordinary = policy::bind_operation_output("passed", "ordinary", &methods,
-        original, &registry, &UnavailableSources);
+        original, &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     expect_verifier_true(ordinary.is_ok() && ordinary.unwrap().is_none());
     let failed = policy::bind_operation_output("passed", "ordinary", &methods,
         Some(policy::ProofProcess { operation: "ordinary", argv: &argv, stdout: &raw,
             exit: 0, failed: true, dependency: &dependency, artifact: &artifact }),
-        &registry, &UnavailableSources);
+        &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     expect_verifier_true(failed.is_err());
 }
 
@@ -490,7 +490,7 @@ fn any_unified_proof_has_a_unique_method_and_complete_original_evidence<I>(
 )
     where I: policy::sources::CandidateSourceRead + policy::CompilerReportRead,
 {
-    let admitted = policy::bind_operation_output("passed", operation, methods, original, registry, io);
+    let admitted = policy::bind_operation_output("passed", operation, methods, original, registry, io, |message: &str, _path: &str| message.to_string());
     if let Ok(Some(proof)) = admitted {
         let ghost index = choose|i: int|
             policy::unique_proof_invocation(methods@, operation@, i)
@@ -528,18 +528,18 @@ fn unified_proof_rejects_missing_report_and_different_original_identity() {
     let missing_report = policy::bind_operation_output("passed", "proof", &methods,
         Some(policy::ProofProcess { operation: "proof", argv: &argv, stdout: &[],
             exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
-        &registry, &UnavailableSources);
+        &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     expect_verifier_true(missing_report.is_err());
     let wrong_operation = policy::bind_operation_output("passed", "proof", &methods,
         Some(policy::ProofProcess { operation: "Proof", argv: &argv, stdout: &[],
             exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
-        &registry, &UnavailableSources);
+        &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     expect_verifier_true(wrong_operation.is_err());
     let wrong_argv = vec!["verus".to_string()];
     let wrong_arguments = policy::bind_operation_output("passed", "proof", &methods,
         Some(policy::ProofProcess { operation: "proof", argv: &wrong_argv, stdout: &[],
             exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
-        &registry, &UnavailableSources);
+        &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
     expect_verifier_true(wrong_arguments.is_err());
 }
 
@@ -1155,4 +1155,267 @@ fn compiler_dependency_paths_reject_empty_words_controls_and_unknown_escapes() {
 }
 
 
+fn declared_file(path: &str, root: &str, operation: &str) -> (file: policy::sources::SourceFile)
+    ensures file.path@ == path@, file.verification.is_some(),
+        file.verification.unwrap().roots.len() == 1,
+        file.verification.unwrap().roots[0].path@ == root@,
+        file.verification.unwrap().roots[0].operation@ == operation@,
+{
+    policy::sources::SourceFile { path: path.to_string(), verification: Some(policy::sources::SourceVerification {
+        role: policy::sources::SourceRole::Program,
+        roots: vec![policy::sources::SourceProofRoot {
+            path: root.to_string(), operation: operation.to_string(),
+        }],
+    }) }
+}
+
+fn source(path: &str) -> (binding: policy::sources::SourceBinding)
+    ensures binding.path@ == vstd::utf8::encode_utf8(path@),
+{
+    let bytes = path.as_bytes();
+    policy::sources::SourceBinding { path: policy::sources::copy_range(bytes, 0, bytes.len()), sha256: Vec::new(), length: 0 }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn matching_root_and_compiled_file_are_accepted() {
+    let files = vec![declared_file("source é.rs", "root.rs", "proof")];
+    let candidate = vec![source("source é.rs")];
+    proof { reveal_with_fuel(policy::sources::binding_error, 2); reveal_with_fuel(policy::sources::file_binding_error, 2); }
+    let accepted = policy::sources::bind_registered_roots(&files, "proof", "root.rs", &candidate);
+    expect_verifier_true(accepted.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn different_root_is_rejected_with_complete_error() {
+    let files = vec![declared_file("source", "Root", "proof")];
+    let candidate = vec![source("source")];
+    proof {
+        reveal_strlit("Root"); reveal_strlit("root");
+        assert("Root"@[0] != "root"@[0]);
+        reveal_with_fuel(policy::sources::binding_error, 2); reveal_with_fuel(policy::sources::file_binding_error, 2);
+    }
+    let rejected = policy::sources::bind_registered_roots(&files, "proof", "root", &candidate);
+    expect_verifier_true(rejected.is_err());
+    let error = rejected.unwrap_err();
+    let same = identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: declared root differs from the invoked root: ");
+    expect_verifier_true(same);
+    let path = identifiers::equal_text(error.path, "source");
+    expect_verifier_true(path);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn missing_compiled_file_and_error_priority_are_independent() {
+    let files = vec![declared_file("missing", "root", "proof")];
+    let candidate = Vec::new();
+    proof { reveal_with_fuel(policy::sources::binding_error, 2); reveal_with_fuel(policy::sources::file_binding_error, 2); }
+    let rejected = policy::sources::bind_registered_roots(&files, "proof", "root", &candidate);
+    expect_verifier_true(rejected.is_err());
+    let error = rejected.unwrap_err();
+    let same = identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: declared file is absent from compiler sources: ");
+    expect_verifier_true(same);
+    let path = identifiers::equal_text(error.path, "missing");
+    expect_verifier_true(path);
+    let both = vec![declared_file("missing", "Root", "proof")];
+    proof {
+        reveal_strlit("Root"); reveal_strlit("root");
+        assert("Root"@[0] != "root"@[0]);
+        reveal_with_fuel(policy::sources::binding_error, 2); reveal_with_fuel(policy::sources::file_binding_error, 2);
+    }
+    let rejected = policy::sources::bind_registered_roots(&both, "proof", "root", &candidate);
+    expect_verifier_true(rejected.is_err());
+    let error = rejected.unwrap_err();
+    let same = identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: declared root differs from the invoked root: ");
+    expect_verifier_true(same);
+    let path = identifiers::equal_text(error.path, "missing");
+    expect_verifier_true(path);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unrelated_operations_and_missing_declarations_do_not_claim_coverage() {
+    let files = vec![
+        policy::sources::SourceFile { path: "undeclared".to_string(), verification: None },
+        declared_file("missing", "wrong", "proof\0"),
+    ];
+    proof {
+        reveal_strlit("proof"); reveal_strlit("proof\0");
+        assert("proof"@.len() != "proof\0"@.len());
+        reveal_with_fuel(policy::sources::binding_error, 3); reveal_with_fuel(policy::sources::file_binding_error, 2);
+    }
+    let ignored = policy::sources::bind_registered_roots(&files, "proof", "root", &Vec::new());
+    expect_verifier_true(ignored.is_ok());
+    let empty_files = Vec::new();
+    let empty = policy::sources::bind_registered_roots(&empty_files, "proof", "root", &Vec::new());
+    expect_verifier_true(empty.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn first_file_error_and_later_roots_are_not_skipped() {
+    let files = vec![declared_file("missing", "root", "proof"),
+        declared_file("missing", "Root", "proof")];
+    proof { reveal_with_fuel(policy::sources::binding_error, 2); reveal_with_fuel(policy::sources::file_binding_error, 2); }
+    let rejected = policy::sources::bind_registered_roots(&files, "proof", "root", &Vec::new());
+    expect_verifier_true(rejected.is_err());
+    let error = rejected.unwrap_err();
+    let same = identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: declared file is absent from compiler sources: ");
+    expect_verifier_true(same);
+    let path = identifiers::equal_text(error.path, "missing");
+    expect_verifier_true(path);
+    let files = vec![policy::sources::SourceFile { path: "source".to_string(),
+        verification: Some(policy::sources::SourceVerification {
+            role: policy::sources::SourceRole::Program,
+            roots: vec![
+                policy::sources::SourceProofRoot { path: "root".to_string(), operation: "proof".to_string() },
+                policy::sources::SourceProofRoot { path: "Root".to_string(), operation: "proof".to_string() },
+            ],
+        }),
+    }];
+    let candidate = vec![source("source")];
+    proof {
+        reveal_strlit("Root"); reveal_strlit("root");
+        assert("Root"@[0] != "root"@[0]);
+        reveal_with_fuel(policy::sources::binding_error, 2); reveal_with_fuel(policy::sources::file_binding_error, 3);
+    }
+    let rejected = policy::sources::bind_registered_roots(&files, "proof", "root", &candidate);
+    expect_verifier_true(rejected.is_err());
+    let error = rejected.unwrap_err();
+    let same = identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: declared root differs from the invoked root: ");
+    expect_verifier_true(same);
+    let path = identifiers::equal_text(error.path, "source");
+    expect_verifier_true(path);
+}
+}
+#[cfg(not(verus_keep_ghost))]
+struct BoundSources;
+
+#[cfg(not(verus_keep_ghost))]
+impl policy::sources::CandidateSourceRead for BoundSources {
+    fn text(&self, path: &[u8]) -> Result<String, String> {
+        String::from_utf8(path.to_vec()).map_err(|error| error.to_string())
+    }
+    fn mode(&self, path: &str) -> Option<String> {
+        (path == "root").then(|| "100644".to_string())
+    }
+    fn blob(&self, path: &str) -> Result<Vec<u8>, String> {
+        if path == "root" {
+            Ok(b"source".to_vec())
+        } else {
+            Err("absent".to_string())
+        }
+    }
+    fn digest(&self, bytes: &[u8]) -> Vec<u8> {
+        use sha2::{Digest, Sha256};
+        format!("{:x}", Sha256::digest(bytes)).into_bytes()
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl policy::CompilerReportRead for BoundSources {
+    fn decode(&self, bytes: &[u8]) -> Option<CompilerReport> {
+        serde_json::from_slice(bytes).ok()
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn unified_bound_result(file: &str, root: &str) -> Result<Option<policy::ProofAdmission>, String> {
+    use policy::sources::CandidateSourceRead;
+    let args = arguments();
+    let contract = contract();
+    let methods = vec![policy::ProofInvocation {
+        operation: "proof",
+        argv: &args,
+        output_contract: &contract,
+        output_limit_bytes: 1024,
+    }];
+    let mut argv = vec!["verus".to_string()];
+    argv.extend(args.iter().cloned());
+    let mut files = vec![declared_file(file, root, "proof")];
+    if file != "root" {
+        files.push(policy::sources::SourceFile {
+            path: "root".to_string(),
+            verification: None,
+        });
+    }
+    let registry = Ok(policy::sources::SourceRegistry { files });
+    let digest = String::from_utf8(BoundSources.digest(b"source")).unwrap();
+    let dependency = Some(Ok(format!(
+        "out.d: root\n\nout: root\n\nroot:\n\n# checksum:sha256={digest} file_len:6 root\n"
+    )
+    .into_bytes()));
+    let artifact = Some(Ok(library(1)));
+    let stdout = serde_json::to_vec(&serde_json::json!({
+        "verus": { "version": "v", "commit": "c" },
+        "verification-results": { "success": true, "encountered-error": false,
+            "encountered-vir-error": false, "verified": 1, "errors": 0,
+            "is-verifying-entire-crate": true }
+    }))
+    .unwrap();
+    policy::bind_operation_output(
+        "passed",
+        "proof",
+        &methods,
+        Some(policy::ProofProcess {
+            operation: "proof",
+            argv: &argv,
+            stdout: &stdout,
+            exit: 0,
+            failed: false,
+            dependency: &dependency,
+            artifact: &artifact,
+        }),
+        &registry,
+        &BoundSources,
+        |message, path| format!("{message}{path}"),
+    )
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn unified_proof_accepts_the_declared_root_and_compiled_file() {
+    let admitted = unified_bound_result("root", "root").unwrap().unwrap();
+    assert!(admitted.report.verification.success);
+    assert_eq!(admitted.sources.candidate.len(), 1);
+    assert_eq!(admitted.sources.candidate[0].path, b"root");
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn unified_proof_rejects_a_declared_root_that_was_not_invoked() {
+    match unified_bound_result("root", "other") {
+        Err(error) => assert_eq!(
+            error,
+            "E_VERUS_COVERAGE: declared root differs from the invoked root: root"
+        ),
+        Ok(_) => panic!("an unrelated root must not receive proof admission"),
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn unified_proof_rejects_a_declared_file_missing_from_actual_compilation() {
+    match unified_bound_result("file", "root") {
+        Err(error) => assert_eq!(
+            error,
+            "E_VERUS_COVERAGE: declared file is absent from compiler sources: file"
+        ),
+        Ok(_) => panic!("an uncompiled file must not receive proof admission"),
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn coverage_diagnostic_preserves_the_complete_utf8_and_nul_path() {
+    let files = vec![declared_file("路径 é\0suffix", "other", "proof")];
+    let error = policy::sources::bind_registered_roots(&files, "proof", "root", &Vec::new())
+        .err()
+        .unwrap();
+    let message = error.render(|message, path| format!("{message}{path}"));
+    assert_eq!(
+        message,
+        "E_VERUS_COVERAGE: declared root differs from the invoked root: 路径 é\0suffix"
+    );
 }
