@@ -1614,7 +1614,19 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.project-state": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
       "verify.project-languages-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.project-state-tests": {
         "resources": [],
         "outputs": [
           ".chrono-harness/state/"
