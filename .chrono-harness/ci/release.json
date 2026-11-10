@@ -402,17 +402,12 @@
       "artifact_name": "chrono-release-linux-verify_distribution_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/",
       "needs": [
-        "linux_release_frontend",
-        "linux_build_distribution"
+        "linux_release_frontend"
       ],
       "downloads": [
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_distribution",
-          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
         }
       ]
     },
@@ -1621,17 +1616,12 @@
       "artifact_name": "chrono-release-macos-verify_distribution_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_distribution_tests/",
       "needs": [
-        "macos_release_frontend",
-        "macos_build_distribution"
+        "macos_release_frontend"
       ],
       "downloads": [
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_distribution",
-          "directory": ".chrono-harness/cache/release-handoffs/build_distribution/"
         }
       ]
     },

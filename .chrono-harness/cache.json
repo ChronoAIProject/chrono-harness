@@ -2390,54 +2390,6 @@
       "restore": "compatible",
       "refresh_sources": true
     },
-    "check.distribution": {
-      "owner": "distribution",
-      "producer": "build.distribution",
-      "consumers": [
-        "check.unit_distribution"
-      ],
-      "artifacts": [
-        "distribution.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "distribution.manifest",
-        "distribution.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "distribution.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
     "check.distribution-tests": {
       "owner": "distribution-tests",
       "producer": "test.distribution-tests",
