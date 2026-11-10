@@ -71,7 +71,7 @@ pub open spec fn index_flag_observation_bound(row: &GitIndexFlagObservation) -> 
 }
 
 pub open spec fn index_flag_observations_bound(rows: Seq<GitIndexFlagObservation>) -> bool {
-    forall|i: int| 0 <= i < rows.len() ==> index_flag_observation_bound(&rows[i])
+    forall|i: int| 0 <= i < rows.len() ==> #[trigger] index_flag_observation_bound(&rows[i])
 }
 
 #[cfg(verus_keep_ghost)]

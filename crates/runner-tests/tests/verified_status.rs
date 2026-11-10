@@ -804,6 +804,24 @@ fn delta_equality_distinguishes_each_complete_field(left: &str, right: &str)
     expect_status_true(!equal);
 }
 
+proof fn finding_reference_member_at(entries: &[policy::Delta], at: int, reference: Seq<char>)
+    requires 0 <= at < entries.len(), entries[at].path@ == reference,
+    ensures policy::reference_allowed(reference, Some(entries)),
+{
+    let delta = Some(entries);
+    match delta {
+        Some(rows) => {
+            assert(rows == entries);
+            assert(rows[at].path@ == reference);
+            assert(exists|i: int| 0 <= i < rows.len() && #[trigger] rows[i].path@ == reference) by {
+                assert(0 <= at < rows.len() && rows[at].path@ == reference);
+            }
+            assert(policy::reference_allowed(reference, delta));
+        },
+        None => {},
+    }
+}
+
 fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
     let entry = policy::Delta { kind: kind.to_owned(), path: path.to_owned(),
         old_blob: Some(metadata.to_owned()), new_blob: None,
@@ -813,7 +831,7 @@ fn any_listed_path_is_accepted(path: &str, kind: &str, metadata: &str) {
     let slice = entries.as_slice();
     proof {
         assert(slice@.len() == 1 && slice@[0].path@ == path@);
-        assert(exists|i: int| 0 <= i < slice.len() && #[trigger] slice[i].path@ == path@);
+        finding_reference_member_at(slice, 0, path@);
         assert(policy::reference_allowed(path@, Some(slice)));
     }
     let accepted = policy::valid_finding_reference(path, Some(slice));
@@ -2012,7 +2030,7 @@ fn response_preflight_preserves_ordinary_and_initial_reference_scope() {
     let slice = delta.as_slice();
     proof {
         assert(slice.len() == 1 && slice[0].path@ == "x"@);
-        assert(exists|i: int| 0 <= i < slice.len() && #[trigger] slice[i].path@ == "x"@);
+        finding_reference_member_at(slice, 0, "x"@);
         assert(policy::reference_allowed("x"@, Some(slice)));
         assert forall|i: int| 0 <= i < first.len()
             implies policy::finding_fields(&(#[trigger] first@[i]))
@@ -3003,14 +3021,24 @@ fn index_entry_matching_preserves_complete_identity_and_stage_decision() {
     index_nonzero_stage_always_changes("3", "目录/é");
 }
 
-fn expect_index_flag_error(rows: &[policy::GitIndexFlagObservation], expected: &str)
+fn expect_index_flag_error(rows: &[policy::GitIndexFlagObservation], first: usize, expected: &str)
     requires policy::index_flag_observations_bound(rows@),
-        exists|i: int| 0 <= i < rows.len()
-            && (forall|j: int| 0 <= j < i ==> policy::index_flag_row_spec(&rows@[j]).is_ok())
-            && policy::index_flag_row_spec(&rows@[i]) == Err::<policy::IndexFlagBytes, Seq<char>>(expected@),
+        first < rows.len(),
+        forall|j: int| 0 <= j < first ==> policy::index_flag_row_spec(&rows@[j]).is_ok(),
+        policy::index_flag_row_spec(&rows@[first as int]) == Err::<policy::IndexFlagBytes, Seq<char>>(expected@),
 {
     match policy::parse_git_index_flag_rows(rows) {
-        Err(message) => { expect_status_text(message.as_str(), expected); },
+        Err(message) => {
+            proof {
+                let found = choose|i: int| 0 <= i < rows.len()
+                    && (forall|j: int| 0 <= j < i ==> policy::index_flag_row_spec(&rows@[j]).is_ok())
+                    && policy::index_flag_row_spec(&rows@[i]) == Err::<policy::IndexFlagBytes, Seq<char>>(message@);
+                if found < first { assert(policy::index_flag_row_spec(&rows@[found]).is_ok()); }
+                if first < found { assert(policy::index_flag_row_spec(&rows@[first as int]).is_ok()); }
+                assert(found == first);
+            }
+            expect_status_text(message.as_str(), expected);
+        },
         Ok(_) => { panic!(); },
     }
 }
@@ -3071,7 +3099,7 @@ fn expect_invalid_index_flag_header(text: &str)
     requires !policy::index_flag_header(text.spec_bytes()),
 {
     let rows = vec![policy::GitIndexFlagObservation { raw: text.as_bytes(), text: Some(text) }];
-    expect_index_flag_error(rows.as_slice(), "invalid Git index flag record");
+    expect_index_flag_error(rows.as_slice(), 0, "invalid Git index flag record");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -3116,12 +3144,17 @@ fn index_flag_format_and_utf8_errors_select_the_first_record() {
         policy::GitIndexFlagObservation { raw: invalid_bytes.as_slice(), text: None },
         policy::GitIndexFlagObservation { raw: malformed_bytes.as_slice(), text: None },
     ];
-    expect_index_flag_error(rows.as_slice(), "E_INPUT_UNSUPPORTED: non UTF-8 Git output");
+    proof {
+        assert(policy::index_flag_row_spec(&rows@[0]).is_ok());
+        assert(policy::index_flag_row_spec(&rows@[1]) ==
+            Err::<policy::IndexFlagBytes, Seq<char>>("E_INPUT_UNSUPPORTED: non UTF-8 Git output"@));
+    }
+    expect_index_flag_error(rows.as_slice(), 1, "E_INPUT_UNSUPPORTED: non UTF-8 Git output");
     let reversed = vec![
         policy::GitIndexFlagObservation { raw: malformed_bytes.as_slice(), text: None },
         policy::GitIndexFlagObservation { raw: invalid_bytes.as_slice(), text: None },
     ];
-    expect_index_flag_error(reversed.as_slice(), "invalid Git index flag record");
+    expect_index_flag_error(reversed.as_slice(), 0, "invalid Git index flag record");
 }
 
 fn expect_single_index_flag(text: &str, tag: &str, path: &str)
