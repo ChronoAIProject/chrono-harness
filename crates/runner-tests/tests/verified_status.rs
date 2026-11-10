@@ -2206,6 +2206,11 @@ fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
             implies key.stage.spec_bytes() != "2".spec_bytes() by {
             assert(key == policy::GitIndexStage { path, stage: "1" }
                 || key == policy::GitIndexStage { path, stage: "3" });
+            assert(key.stage@ == "1"@ || key.stage@ == "3"@);
+            assert(vstd::string::is_ascii(key.stage));
+            vstd::string::is_ascii_spec_bytes(key.stage);
+            assert(key.stage.spec_bytes()[0] == 49 || key.stage.spec_bytes()[0] == 51);
+            assert("2".spec_bytes()[0] == 50);
         }
     }
     expect_index_lookup(&stages, copied_path, "1", true);
