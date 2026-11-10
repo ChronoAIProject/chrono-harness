@@ -1,5 +1,6 @@
 use super::automatic::{native_consumer, native_git};
 use super::*;
+use std::os::unix::fs::MetadataExt;
 use std::time::{Duration, SystemTime};
 
 fn policy(h: &Host, reuse: u64, delete: u64, evidence: &str) {
@@ -43,6 +44,18 @@ fn output(target: &Path) {
     fs::write(target.join("output λ/cache"), vec![11; 4096]).unwrap();
 }
 
+fn cache_identity(target: &Path) -> (u64, u64) {
+    let cache = target.join("output λ/cache");
+    assert_eq!(fs::read(&cache).unwrap(), vec![11; 4096]);
+    let metadata = fs::metadata(cache).unwrap();
+    (metadata.dev(), metadata.ino())
+}
+
+fn temporary_output(target: &Path) {
+    fs::create_dir_all(target.join("nested/cache")).unwrap();
+    fs::write(target.join("nested/cache/temporary"), b"disposable").unwrap();
+}
+
 fn start(h: &Host, name: &str, target: &Path) {
     let (code, report, error) = h.invoke("feature", name, target);
     assert_eq!(code, 0, "{report} {error}");
@@ -70,6 +83,7 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     fs::write(target.join("ignored-source"), "ignored but unique source").unwrap();
     fs::write(target.join("wildcard*[abc]$literal"), "literal source").unwrap();
     output(&target);
+    let cache = cache_identity(&target);
     older_than(&target, 2);
     let (code, used, error) = h.auto(
         "use",
@@ -90,6 +104,7 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
         "current-source"
     );
     assert!(target.join("output λ/cache").is_file());
+    temporary_output(&target);
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     let result = maintained["drain"]
@@ -125,10 +140,16 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
         "literal source"
     );
     assert!(target.is_dir());
-    assert!(!target.join("output λ").exists());
+    assert_eq!(cache_identity(&target), cache);
+    assert!(!target.join("nested/cache").exists());
+    assert_eq!(original_result["age_outcome"], "reusable-source-preserved");
     let reference = saved["retained_ref"].as_str().unwrap().to_owned();
     let head = saved["head"].as_str().unwrap().to_owned();
-    output(&target);
+    temporary_output(&target);
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert_eq!(cache_identity(&target), cache);
+    assert!(!target.join("nested/cache").exists());
     let (code, reused, error) = h.auto(
         "use",
         &[
@@ -142,6 +163,7 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     assert!(reused["age_reuse"].is_null(), "{reused}");
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
     assert!(target.join("output λ/cache").is_file());
+    assert_eq!(cache_identity(&target), cache);
     // Modification now must not extend checkout creation age.
     fs::write(target.join("payload"), "source at deletion").unwrap();
     older_than(&target, 60);
@@ -239,6 +261,7 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
     git(&target, &["add", "payload"]);
     fs::write(target.join("payload"), "current detached source").unwrap();
     output(&target);
+    let cache = cache_identity(&target);
     older_than(&target, 1);
     let (code, used, error) = h.auto(
         "use",
@@ -291,7 +314,7 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
         fs::read_to_string(target.join("payload")).unwrap(),
         "current detached source"
     );
-    assert!(!target.join("output λ").exists());
+    assert_eq!(cache_identity(&target), cache);
     older_than(&target, 60);
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
@@ -329,6 +352,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     .unwrap();
     older_than(&target, 40);
     output(&target);
+    let cache = cache_identity(&target);
     let (code, used, error) = h.auto(
         "use",
         &[
@@ -349,7 +373,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     assert!(target.exists());
-    assert!(!target.join("output λ").exists());
+    assert_eq!(cache_identity(&target), cache);
     assert_eq!(
         fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
         b"needed original\0\xff"
