@@ -656,6 +656,8 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
     select_config(&h.root, SOURCE_CONFIG);
     let source_head = commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let tracking = "refs/remotes/warehouse/dev";
+    let previous_tracking = git(&h.root, &["rev-parse", tracking]);
     let other = h.parent.join("other writer");
     git(
         &h.root,
@@ -703,6 +705,11 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
     assert_eq!(report["source_commit"], source_head);
     assert_eq!(report["base"], latest);
     assert_eq!(report["branch_ref"], "selected/task");
+    assert_eq!(
+        git(&h.root, &["rev-parse", tracking]),
+        previous_tracking,
+        "fetching a private base must leave shared remote-tracking refs unchanged"
+    );
     assert_eq!(
         report["source_registry_digest"],
         chrono_harness::wire::digest(&value!(source_values)).unwrap()

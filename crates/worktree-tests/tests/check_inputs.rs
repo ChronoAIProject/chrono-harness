@@ -445,9 +445,12 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
         .output()
         .unwrap();
     assert_eq!(out.status.code(), Some(0));
+    let tracking = "refs/remotes/warehouse/dev";
+    let previous_tracking = git(&dest, &["rev-parse", tracking]);
     fs::write(h.root.join("anything/data.txt"), "advanced dev").unwrap();
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    git(&dest, &["update-ref", tracking, &previous_tracking]);
     let (o, p) = inputs(&dest);
     assert_eq!(
         o.status.code(),
@@ -459,6 +462,11 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
     let ctx = json(&p.context.unwrap().raw).unwrap();
     assert_eq!(ctx["fork_point"], birth["base"]);
     assert_eq!(ctx["base"], git(&h.root, &["rev-parse", "HEAD"]));
+    assert_eq!(
+        git(&dest, &["rev-parse", tracking]),
+        previous_tracking,
+        "preparing a private base must leave shared remote-tracking refs unchanged"
+    );
 }
 #[test]
 fn local_preparation_rejects_clean_replacement_after_candidate_head_observation() {
