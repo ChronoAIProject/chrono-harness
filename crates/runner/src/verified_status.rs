@@ -1511,14 +1511,14 @@ pub open spec fn checkout_index_prefix_changed(
 }
 
 /// 只保存完整路径；重复标记不增加成员，原有路径始终保留。
-pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
+pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
     ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
         changes@.len() == old(changes)@.len()
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     proof { tree_path_obeys_cmp(); }
-    let key = TreePath::from_text(path);
+    let key = TreePath::from_owned(path);
     let ghost before = changes@;
     changes.insert(key, ());
     tree_keys_have_unique_text(changes);
@@ -1543,6 +1543,72 @@ pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
                 assert(changes@.contains_key(found));
             }
             if text == path@ { assert(changes@.contains_key(key)); }
+        }
+    }
+}
+
+pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+        == (checkout_change_has_path(old(changes)@, text) || text == path@),
+        changes@.len() == old(changes)@.len()
+            + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
+{
+    record_checkout_owned_change(changes, path.to_owned());
+}
+
+pub open spec fn checkout_path_prefix(paths: Seq<String>, end: int, path: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < end && i < paths.len() && (#[trigger] paths[i])@ == path
+}
+
+/// 完整合并两个实际库存，按全文字节排序去重；不归一化或过滤路径。
+pub fn normalize_checkout_paths(first: Vec<String>, second: Vec<String>) -> (out: Vec<String>)
+    ensures
+        forall|path: Seq<char>| #[trigger] checkout_path_prefix(out@, out.len() as int, path)
+            == checkout_path_prefix(first@ + second@, (first@.len() + second@.len()) as int, path),
+        forall|i: int, j: int| 0 <= i < j < out.len()
+            ==> identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] out@[i])@),
+                vstd::utf8::encode_utf8((#[trigger] out@[j])@)),
+        out.len() <= first@.len() + second@.len(),
+{
+    let ghost all = first@ + second@;
+    let mut pending = first;
+    let mut additional = second;
+    pending.append(&mut additional);
+    let mut iterator = pending.into_iter();
+    let mut changes = CheckoutChanges::new();
+    loop
+        invariant all == first@ + second@,
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            changes@.len() <= iterator@.0,
+            forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == checkout_path_prefix(all, iterator@.0, path),
+        decreases all.len() - iterator@.0,
+    {
+        let ghost at = iterator@.0;
+        match iterator.next() {
+            None => {
+                assert(iterator@.0 == all.len());
+                let out = checkout_changed_paths(&changes);
+                proof {
+                    assert forall|text: Seq<char>|
+                        #[trigger] checkout_path_prefix(out@, out.len() as int, text)
+                            == checkout_path_prefix(all, all.len() as int, text) by {
+                        assert(checkout_change_has_path(changes@, text)
+                            == checkout_path_prefix(all, all.len() as int, text));
+                    }
+                }
+                return out;
+            },
+            Some(path) => {
+                record_checkout_owned_change(&mut changes, path);
+                proof {
+                    assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+                        == checkout_path_prefix(all, iterator@.0, text) by {
+                        assert(checkout_path_prefix(all, at + 1, text)
+                            == (checkout_path_prefix(all, at, text) || all[at]@ == text));
+                    }
+                }
+            },
         }
     }
 }

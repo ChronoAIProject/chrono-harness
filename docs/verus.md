@@ -539,6 +539,27 @@ UTF-8 字节严格排序及终止。`checkout_index_changes` 遍历全部解析�
 文件系统外层循环、完整哈希循环、外围错误／IO 组合和全仓覆盖门仍待证明，
 不把这些局部入口登记为整个 `checkout.rs` 已证明。
 
+`normalize_checkout_paths` 完整合并两个实际路径库存，证明输出成员恰为两输入的并集、
+按完整 UTF-8 字节严格排序、无重复且长度不超过输入长度之和。
+`Reader::checkout` 直接用它合并未跟踪与忽略库存，`Reader::untracked_excluding` 用它整理
+排除产物后的库存；两处普通 Rust 的 sort／dedup 已移除。空路径、NUL、换行、Unicode、
+大小写和前缀均按全文保留，不过滤或归一化。
+
+复用现有 `CheckoutChanges`、完整比较及排序输出；`record_checkout_owned_change` 按值接收
+实际字符串并证明精确成员与基数变化，原借用入口只转交完整文本。
+固定 vstd 的 `Vec::append` 合同将第二序列完整追加并清空第二向量，
+`Vec::into_iter`／`vec::IntoIter::next` 按原序列逐项转移所有值、推进索引并在末尾返回 None；
+本仓证明整个合并循环的输入对应、精确并集与终止，不新增仓内受信函数。
+四项独立 Verus 预期同时作为 Rust 测试执行，核两库存为空、任一侧非空、跨库存全文重复、
+反序输入的完整排序与精确数量，覆盖空串、大小写、前缀、NUL、换行及 Unicode。
+复用原两个 runner-status 整 crate 根、真实消费边和未过滤测试，不新增工具、操作或预算。
+
+设输入共 N 项、不同路径 U 项，插入约需 O(N log U) 次完整路径比较，字节比较另计。
+输入字符串按值移入 map，输出沿用已有复制入口；相较原 Vec sort／dedup 增加 map 存储和
+U 个输出字符串副本，峰值同时持有两份不同路径文本。这里是算法估计，完整证明、构建、
+运行、CI 与存储成本未测，不宣称性能收益。原 `paths` 的字节拆分／解码、Git IO 及外围
+判断仍有存量缺口，不据此宣称完整 `facts.rs` 或全仓覆盖门已完成。
+
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
 证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；

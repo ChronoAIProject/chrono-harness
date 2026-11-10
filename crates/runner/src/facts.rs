@@ -315,9 +315,9 @@ impl Reader {
     pub fn checkout(&self, root: &Path, candidate: &str) -> Result<Checkout, String> {
         let head = utf8(self.git(root, &["rev-parse", "HEAD"])?)?.trim().into();
         let tracked = self.tracked_changes(root, candidate)?;
-        let mut untracked =
+        let untracked =
             paths(self.git(root, &["ls-files", "--others", "--exclude-standard", "-z"])?)?;
-        untracked.extend(paths(self.git(
+        let ignored = paths(self.git(
             root,
             &[
                 "ls-files",
@@ -326,9 +326,8 @@ impl Reader {
                 "--exclude-standard",
                 "-z",
             ],
-        )?)?);
-        untracked.sort();
-        untracked.dedup();
+        )?)?;
+        let untracked = crate::verified_status::normalize_checkout_paths(untracked, ignored);
         Ok(Checkout {
             head,
             tracked,
@@ -344,10 +343,11 @@ impl Reader {
         let exclusions = artifact_exclusions(artifacts);
         let mut args = vec!["ls-files", "--others", "-z", "--", "."];
         args.extend(exclusions.iter().map(String::as_str));
-        let mut paths = paths(self.literal_inventory(root, &args)?)?;
-        paths.sort();
-        paths.dedup();
-        Ok(paths)
+        let paths = paths(self.literal_inventory(root, &args)?)?;
+        Ok(crate::verified_status::normalize_checkout_paths(
+            paths,
+            Vec::new(),
+        ))
     }
     pub fn checkout_excluding(
         &self,
