@@ -2201,6 +2201,119 @@ fn checkout_changed_paths_preserve_full_order_and_exact_cardinality() {
     expect_status_text(paths[3].as_str(), "目录/é");
 }
 
+fn expect_normalized_single_path(first: Vec<String>, second: Vec<String>, expected: &str)
+    requires first@.len() + second@.len() > 0,
+        forall|i: int| 0 <= i < first@.len() + second@.len()
+            ==> (#[trigger] (first@ + second@)[i])@ == expected@,
+{
+    let ghost all = first@ + second@;
+    let paths = policy::normalize_checkout_paths(first, second);
+    proof {
+        assert(policy::checkout_path_prefix(all, all.len() as int, expected@)) by {
+            assert(all[0]@ == expected@);
+        }
+        assert(policy::checkout_path_prefix(paths@, paths.len() as int, expected@));
+        assert(paths.len() > 0);
+        assert forall|i: int| 0 <= i < paths.len() implies
+            (#[trigger] paths@[i])@ == expected@ by {
+            assert(policy::checkout_path_prefix(paths@, paths.len() as int, paths@[i]@));
+            assert(policy::checkout_path_prefix(all, all.len() as int, paths@[i]@));
+            let source = choose|j: int| 0 <= j < all.len() && (#[trigger] all[j])@ == paths@[i]@;
+            assert(all[source]@ == expected@);
+        }
+        if paths.len() > 1 {
+            assert(paths@[0]@ == expected@ && paths@[1]@ == expected@);
+            assert(scope_text::byte_lt(vstd::utf8::encode_utf8(paths@[0]@),
+                vstd::utf8::encode_utf8(paths@[1]@)));
+            scope_text::byte_lt_asymmetric(expected.spec_bytes(), expected.spec_bytes());
+            assert(scope_text::byte_lt(expected.spec_bytes(), expected.spec_bytes()));
+        }
+        assert(paths.len() == 1);
+    }
+    expect_status_true(paths.len() == 1);
+    expect_status_text(paths[0].as_str(), expected);
+}
+
+fn expect_normalized_pair(left: &str, right: &str)
+    requires scope_text::byte_lt(left.spec_bytes(), right.spec_bytes()),
+{
+    let first = vec![right.to_owned()];
+    let second = vec![left.to_owned()];
+    let ghost all = first@ + second@;
+    let paths = policy::normalize_checkout_paths(first, second);
+    proof {
+        assert(all.len() == 2 && all[0]@ == right@ && all[1]@ == left@);
+        assert(policy::checkout_path_prefix(all, 2, left@));
+        assert(policy::checkout_path_prefix(all, 2, right@));
+        assert(policy::checkout_path_prefix(paths@, paths.len() as int, left@));
+        assert(policy::checkout_path_prefix(paths@, paths.len() as int, right@));
+        let a = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == left@;
+        let b = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == right@;
+        scope_text::byte_lt_asymmetric(left.spec_bytes(), right.spec_bytes());
+        assert(a < b);
+        assert(paths.len() == 2 && a == 0 && b == 1);
+    }
+    expect_status_true(paths.len() == 2);
+    expect_status_text(paths[0].as_str(), left);
+    expect_status_text(paths[1].as_str(), right);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_keeps_empty_inventory_empty() {
+    let first: Vec<String> = Vec::new();
+    let second: Vec<String> = Vec::new();
+    let paths = policy::normalize_checkout_paths(first, second);
+    expect_status_true(paths.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_keeps_either_inventory_and_empty_paths() {
+    expect_normalized_single_path(vec!["".to_owned()], Vec::new(), "");
+    expect_normalized_single_path(Vec::new(), vec!["目录/é\n ".to_owned()], "目录/é\n ");
+}
+
+fn expect_cross_inventory_duplicates(path: &str) {
+    expect_normalized_single_path(vec![path.to_owned(), path.to_owned()], vec![path.to_owned()], path);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_deduplicates_full_text_across_inventories() {
+    expect_cross_inventory_duplicates("");
+    expect_cross_inventory_duplicates("a\0");
+    expect_cross_inventory_duplicates("目录/é\n ");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_path_normalization_preserves_exact_byte_order_and_prefixes() {
+    proof {
+        reveal_strlit(""); reveal_strlit("A"); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("a\n"); reveal_strlit("a "); reveal_strlit("目录/é");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("A")
+            && vstd::string::is_ascii("a") && vstd::string::is_ascii("a\0")
+            && vstd::string::is_ascii("a\n") && vstd::string::is_ascii("a "));
+        assert('目' as u32 == 30446u32);
+        assert(vstd::utf8::encode_scalar(30446u32) == seq![231u8, 155u8, 174u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 2);
+        assert("目录/é".spec_bytes()[0] == 231u8);
+        assert(scope_text::byte_prefix("".spec_bytes(), "A".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("A".spec_bytes(), "a".spec_bytes(), 0));
+        assert(scope_text::byte_prefix("a".spec_bytes(), "a\0".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a\n".spec_bytes(), "a ".spec_bytes(), 1));
+        assert(scope_text::byte_prefix("a\0".spec_bytes(), "目录/é".spec_bytes(), 0));
+        assert(scope_text::byte_lt("".spec_bytes(), "A".spec_bytes()));
+        assert(scope_text::byte_lt("A".spec_bytes(), "a".spec_bytes()));
+        assert(scope_text::byte_lt("a".spec_bytes(), "a\0".spec_bytes()));
+        assert(scope_text::byte_lt("a\n".spec_bytes(), "a ".spec_bytes()));
+        assert(scope_text::byte_lt("a\0".spec_bytes(), "目录/é".spec_bytes()));
+    }
+    expect_normalized_pair("", "A");
+    expect_normalized_pair("A", "a");
+    expect_normalized_pair("a", "a\0");
+    expect_normalized_pair("a\n", "a ");
+    expect_normalized_pair("a\0", "目录/é");
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_index_changes_empty_and_exact_stage_zero_are_empty() {
     let mut tree = policy::Tree::new();

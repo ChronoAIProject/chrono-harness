@@ -111,6 +111,12 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 15 通用参考经验 | 部分 | 已有固定来源引用，不改参考仓 | 应用其余通用工作经验 |
 | 16 指令 | 已实现，限当前 manifest、可移植默认、宿主采用 | 中英文原子／工作流布局提供产品默认、本仓根、完整中文 Markdown、中文聚焦技能；instructions.md 定义保留定制的采用。生成测试覆盖不支持 manifest 拒绝且不发布、当前原方法字节／mode、别名身份、无变化／回滚。历史自动格式转换及专属测试已退役；当前内容所有者、宿主采用和实际载荷边界见 methodology-extraction.md | 运行／公开／原生消费、平台／崩溃／并发限制、干净候选／原生／PR／落地；不新增完整启用／输入／发布保证 |
 
+runner 的 `normalize_checkout_paths` 及四项独立 Verus 预期覆盖未跟踪／忽略库存的完整并集、
+全文严格排序、去重与数量上界；`Reader::checkout` 和 `Reader::untracked_excluding` 直接消费
+同源实现，沿现有两个 runner-status 整 crate 根及原未过滤测试验收。
+新增固定 vstd 的 Vec 追加与消费迭代接口假设、存储取舍及尚未证明的原字节拆分／解码、
+IO 与外围判断，见 [Verus 实施范围](verus.md)。此范围不构成整个 facts 文件或全仓覆盖证明。
+
 ## 按 §13 验收场景查看
 
 以下顺序与 SPEC §13 相同；按范围证据只证明对应 profile。
