@@ -124,7 +124,8 @@ fn produce(
         "check-inputs",
         "prepared",
         consumer.as_deref(),
-        |r, token, report| {
+        |_, _| Ok((req.host_root.clone(), ())),
+        |r, token, report, ()| {
             let root = &req.host_root;
             let observed = r.checkout_identity(root)?;
             let candidate = observed.head;

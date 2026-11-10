@@ -909,7 +909,7 @@ Cargo wrapper 存活回归在原 wrapper 中断和维护检查后，用阻塞 so
 
 当前 finish、maintain、import、受管入口接受 `--report-consumer ID`，点名调用方真实原件消费义务，独立于缓存 use／release。已有 retention 生产者在关闭发布能力前传精确消费者根，在 report_consumer 返回 `chrono-retention-consumer/v1` 声明，要求已采用生命周期保留。
 
-从 linked 调用时，协调者发布并绑定真实协调原件。报告声明的 recovery、fetch、cache、main-release、drain 是明确保留依赖，不从 JSON 发现边。
+生命周期命令先只读核对输入及协调者归属，在该协调根预留唯一报告后，才进入管理和业务派发；linked 调用根不再留下同名空报告或未结算预留。输入校验失败时，仍在调用根发布真实失败原件；协调根预留失败则不派发业务。普通创建、重建和检查输入报告继续由调用根负责。报告声明的 recovery、fetch、cache、main-release、drain 是明确保留依赖，不从 JSON 发现边；调用方消费者绑定实际发布的原件。
 
 bootstrap fixture 保管者消费该声明，核真实生产路径、物理身份、字节、类型化回执依赖范围，在维护、缓存处置、准备恢复、再次准入、后续断言期间保持保护。
 

@@ -886,6 +886,16 @@ impl Manager {
         let Some(inputs) = PolicyInputs::load(r, root, config_path, bytes)? else {
             return Ok(None);
         };
+        Self::from_inputs(r, inputs, token, scope, exclusive_namespace, wait).map(Some)
+    }
+    fn from_inputs(
+        r: &mut Runner,
+        inputs: PolicyInputs,
+        token: &str,
+        scope: &Path,
+        exclusive_namespace: bool,
+        wait: bool,
+    ) -> Result<Self, String> {
         let scope = absolute(scope, true)?;
         let policy = &inputs.policy;
         let anchor = &policy.coordinator_root;
@@ -1094,7 +1104,7 @@ impl Manager {
             _gate: gate,
         };
         manager.protect_originals()?;
-        Ok(Some(manager))
+        Ok(manager)
     }
     /// The enrollment is an actual durable consumer, independently of any
     /// invocation's read scope. These are the fields owned by this schema;
@@ -3906,19 +3916,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         operation,
         success,
         values.get("--report-consumer").copied(),
-        |r, token, report| {
+        |r, report| {
             report["invoking_root"] = value!(invoking);
-            let mut manager = Manager::open(
+            let inputs = PolicyInputs::load(r, &invoking, config_path, &bytes)?
+                .ok_or("automatic cleanup is not opted in")?;
+            Ok((inputs.policy.coordinator_root.clone(), inputs))
+        },
+        |r, token, report, inputs| {
+            let mut manager = Manager::from_inputs(
                 r,
-                &invoking,
-                config_path,
-                &bytes,
+                inputs,
                 token,
                 target.as_deref().unwrap_or(&invoking),
                 operation == "deploy-owner",
                 true,
-            )?
-            .ok_or("automatic cleanup is not opted in")?;
+            )?;
+            manager.restore_absent_policy(r)?;
             manager.protect_reports(r, &invoking)?;
             if !matches!(operation.as_str(), "maintain" | "status" | "import") {
                 manager.adopt_live_policy(r)?;
@@ -4468,60 +4481,4 @@ fn canonical_command(
         root.to_str().ok_or("check root UTF-8")?.into(),
     );
     Ok(command)
-}
-
-// Lifecycle wrapper publication continues only at the validated surviving owner,
-// after managed use of the disposable checkout has been released.
-pub(crate) fn publish_result(
-    root: &Path,
-    report: &mut Value,
-    consumer: Option<&str>,
-) -> Result<(), String> {
-    let root = absolute(root, false)?;
-    let path = report["report_path"]
-        .as_str()
-        .ok_or("lifecycle report path")?
-        .to_owned();
-    relative_path(&path)?;
-    if !path.starts_with(".chrono-harness/state/") {
-        return Err("lifecycle report must remain registered state".into());
-    }
-    let target = no_symlink_parents(&root, &path)?;
-    fs::create_dir_all(target.parent().ok_or("lifecycle report parent")?)
-        .map_err(|e| e.to_string())?;
-    if consumer.is_none() {
-        let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
-        raw.push(b'\n');
-        if !chrono_harness::retained_artifacts::retention::publish_owned_original(
-            &root,
-            "lifecycle-original",
-            &path,
-            &raw,
-            crate::recovery::publication_outcome(report, &raw),
-        )? {
-            write_bytes(&target, &raw, true)?;
-        }
-        return crate::recovery::settle_report(&root, report);
-    }
-    if chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?.is_none() {
-        return Err("report consumer requires adopted lifecycle retention".into());
-    }
-    let publication = chrono_harness::retained_artifacts::retention::create_adopted(
-        &root,
-        "lifecycle-original",
-        &target,
-        false,
-        value!({"outcome":"not-established"}),
-    )?;
-    crate::recovery::protect_report_consumer(report, publication.as_ref(), consumer)?;
-    let mut raw = serde_json::to_vec(report).map_err(|e| e.to_string())?;
-    raw.push(b'\n');
-    if let Some(publication) = publication {
-        publication.replace_file(&target, &raw)?;
-        publication.complete(crate::recovery::publication_outcome(report, &raw))?;
-    } else {
-        write_bytes(&target, &raw, true)?;
-    }
-    crate::recovery::settle_report(&root, report)?;
-    Ok(())
 }
