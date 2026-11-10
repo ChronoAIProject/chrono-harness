@@ -165,7 +165,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-ci' detect --host-root . --config '.chrono-harness/ci/units.json' --github-output "$GITHUB_OUTPUT"
       - name: Save download cache cargo.detect
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -177,7 +177,7 @@ jobs:
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/db/
             .chrono-harness/cache/bootstrap-owner-tooling/cargo/git/checkouts/
       - name: Save download cache rustup
-        if: ${{ success() && steps.chrono_download_1.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_1.outcome == 'success' && steps.chrono_download_1.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -400,7 +400,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'cache' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.cache
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -605,7 +605,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'ci' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.ci
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -758,7 +758,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'diagnostics' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.diagnostics
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -928,7 +928,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'distribution' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.distribution
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1042,7 +1042,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'host-bootstrap' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.host-bootstrap
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1284,7 +1284,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'inputs' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.inputs
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1437,7 +1437,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'instructions' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.instructions
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1616,7 +1616,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-ci' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-ci
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -1813,7 +1813,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-cost' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-cost
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2019,7 +2019,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-filemap' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-filemap
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2225,7 +2225,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-mixed' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-mixed
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2440,7 +2440,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-projects' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-projects
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2619,7 +2619,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-registration' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-registration
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -2772,7 +2772,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-routes' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-routes
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3023,7 +3023,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-workflow
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3266,7 +3266,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow-short' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-workflow-short
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3509,7 +3509,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'judge-workflow-units' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.judge-workflow-units
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3623,7 +3623,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'release-build' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.release-build
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3776,7 +3776,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'runner' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.runner
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -3964,7 +3964,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'worktree' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.worktree
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4144,7 +4144,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'worktree-adoption' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.worktree-adoption
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
@@ -4245,7 +4245,7 @@ jobs:
         run: |
           '.chrono-harness/bin/chrono-harness' retention --host-root . --delivered-check '.chrono-harness/ci/check.json' --scope 'collect' --artifact-id-env CHRONO_DELIVERED_ARTIFACT --artifact-digest-env CHRONO_DELIVERED_DIGEST
       - name: Save download cache cargo.aggregate
-        if: ${{ success() && steps.chrono_download_0.outputs.cache-hit != 'true' }}
+        if: ${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}
         continue-on-error: true
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:

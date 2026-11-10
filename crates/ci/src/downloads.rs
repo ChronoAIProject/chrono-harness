@@ -198,7 +198,7 @@ pub(crate) fn project(parent: &cache::Config, job: &str, body: String) -> Result
             .unwrap_or_default();
         restore.push_str(&format!("      - name: Restore download cache {id}\n        id: chrono_download_{index}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}          restore-keys: |\n            {stem}\n{fallback}          fail-on-cache-miss: false\n", parent.restore_action, scalar(&key)));
         if &entry.save_job == job {
-            save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ success() && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
+            save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ always() && !cancelled() && steps.chrono_download_{index}.outcome == 'success' && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
         }
     }
     let mut body = body
