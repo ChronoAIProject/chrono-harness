@@ -13,7 +13,7 @@ runner 的编译缓存和原证明也沿同一个登记构建入口复用，损�
 
 ## 真实 CI 已验证的范围
 
-本宿主的 `cache` 单元消费 `check.cache`、`check.cache-tests`。两项 `producer-manifest/v1` 缓存已有有限原生观察，覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
+本宿主的 `cache` 单元只消费 `check.cache-tests`；测试项目直接编译生产 CLI，不再恢复或保存生产 target。此前两项 `producer-manifest/v1` 缓存的有限原生观察覆盖冷启动保存、健康精确命中、兼容源码变化后的重建，以及不兼容环境分域／重建。原候选、输入、恢复键、原件和结果直接查[冷启动运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39688684172)、[源码变化及精确命中运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39690377913)和[环境分域运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/39695762671)，不在仓库维护运行表。
 
 这些观察只覆盖原候选和登记消费者，不能证明当前候选、其他消费者或完整缓存行为正确。不可用内容恢复、持久修复及修复后在原兼容范围健康精确命中的验收仍未完成；访问失败及部分观察见[退役说明](#retired-remote-acceptance-controls)。实验中的临时优化设置已移除，当前参数以现役登记为准；历史摘要、后端条目、artifact ID 和耗时归原运行。并发、linked 所有权、完整编译器／SDK／输入范围，以及传输、存储和总生命周期成本仍待验收或测量。
 
@@ -119,15 +119,15 @@ exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome �
 
 ## 可选的生产者内容核验
 
-本宿主仅为已有 `check.unit_cache` job 消费的 `check.cache`、`check.cache-tests` 选择 `verify_contents: true`。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
+本宿主为已有 `check.unit_cache` job 消费的 `check.cache-tests` 选择 `verify_contents: true`。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
 
-两项兼容范围还从 `projects.json` 选择真实生产 action（`build.cache` 或 `test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
+这项兼容范围还从 `projects.json` 选择真实生产 action（`test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
 
 provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-cache seal`。它重核计划／登记和当前 planner 身份，默认要求原生产步骤 **outcome** 成功，并枚举明确选择的产物目录。
 
-缓存可明确选择 `save_on_failure: true`，前提是采用内容核验。本仓仅为上述两个编译目录采用：同一步中的测试失败后，仍可封存实际留下的编译文件。只接受原 outcome 的 success／failure；skipped、cancelled、缺失或未知结果都拒绝，不按可能被 `continue-on-error` 改写的 conclusion 判断。封存报告保留生产步骤、原 outcome 和原生步骤原字节；封存成功只说明文件已列清，不改变原构建／测试失败。保存政策进入计划及 provider 输出，不改变内容兼容键。恢复后仍须运行原登记构建和测试。
+缓存可明确选择 `save_on_failure: true`，前提是采用内容核验。本仓仅为 `check.cache-tests` 编译目录采用：同一步中的测试失败后，仍可封存实际留下的编译文件。只接受原 outcome 的 success／failure；skipped、cancelled、缺失或未知结果都拒绝，不按可能被 `continue-on-error` 改写的 conclusion 判断。封存报告保留生产步骤、原 outcome 和原生步骤原字节；封存成功只说明文件已列清，不改变原构建／测试失败。保存政策进入计划及 provider 输出，不改变内容兼容键。恢复后仍须运行原登记构建和测试。
 
-**产品与宿主采用同时变更：**新增明确保存选择、同源封存判断及回归，宿主只采用上述两项已有编译缓存。原业务操作、断言、退出及恢复条件继续执行。新增条件及原件字段的成本有限，内容枚举、原生保存和完整失败恢复的总成本仍待实测；本地行为不证明远端后端已保存。
+**产品与宿主采用同时变更：**新增明确保存选择、同源封存判断及回归，宿主只为上述一项现役编译缓存采用。原业务操作、断言、退出及恢复条件继续执行。新增条件及原件字段的成本有限，内容枚举、原生保存和完整失败恢复的总成本仍待实测；本地行为不证明远端后端已保存。
 
 每个产物得到 `.chrono-cache-content-v1.json`，绑定缓存 ID、生产操作、实际源码键、产物声明和内容。清单记录普通文件 SHA-256／长度／执行位、目录（含空目录）、字面符号链接目标，不跟随链接；特殊文件和非 UTF-8 名称失败。只排除该方法自己的标记。标记包含输出身份，不含测试结果、judge 响应或缓存的通过状态。原生步骤、manifest 和封存观察保存在宿主执行证据中。
 
@@ -241,6 +241,8 @@ provider 从 `chrono-cache plan --github-output` 取得输出键，保留计划�
 
 本宿主把四项共享启动缓存交给已有 detector 保存，其他缓存交给登记生产单元。消费者仍恢复、重建、检查，不增加 job 或前置等待。写入者跳过或未完成生产时，该运行不提供新归档。
 
+cache 专属测试也在自己的 target 编译生产 CLI，自己的计划不再执行 `build.cache`，`check.cache` 及其独用输入 `cache.producer` 随无使用方的恢复／保存路径退役。测试 target 仍走原内容核验、源码刷新和原未过滤检查；native 发布测试、bootstrap 和发行打包继续使用生产 cache 构建，完整成本收益未测。
+
 runner 专属测试直接在自己的 target 编译生产 CLI，不再恢复或保存 `check.runner`。仍执行 `build.runner` 的现有 CI 测试单元接手这项缓存的唯一保存权；其他实际使用方继续恢复它，测试 target 的缓存和原检查操作保留。完整缓存与构建成本收益未测。
 
 明确的 `save_after_bootstrap` 子集可在原操作结束后，改用独立 bootstrap 步骤成功作为保存条件，使后续测试失败时仍保留可复用启动编译。未知、重复或不在可保存集合的子集项会让生成失败；取消时不保存。该子集是宿主声明，不证明后续每次构建成功。恢复的编译候选仍须经过原构建入口。
@@ -281,7 +283,7 @@ detector 独自保存 `detect.*` 启动缓存，真实单元生产者保存 `che
 
 **产品与宿主政策曾同步删除：**可选原生 manifest 删除 fixture、对应 CLI／配置和 provider 登记、仓库 Variables 激活及实时 PR 正文读取器。provider 不再为激活增加 `pull-requests: read` 或读 PR metadata。不需要替代激活传输、变量管理、远端缓存删除或额外权限。退役字段按普通严格解码失败，不会静默当作激活成功。
 
-已有 `check.unit_cache` 仍计划、恢复两项登记编译归档，核 `producer-manifest/v1` 内容，通过普通恢复丢弃不可用宿主输出，执行原候选构建／测试，封存成功生产输出并经原生 action 保存。保存仍受必需生产者／封存 outcome 限制。原生 action 日志及恢复原件保留实际结果和原失败，其他构建／发布缓存行为不变。
+已有 `check.unit_cache` 计划、恢复 `check.cache-tests` 编译归档，核 `producer-manifest/v1` 内容，通过普通恢复丢弃不可用宿主输出，执行原候选构建／测试，再按上述明确保存选择封存实际编译输出并经原生 action 保存。保存仍受必需生产者／封存 outcome 限制。原生 action 日志及恢复原件保留实际结果和原失败，其他构建／发布缓存行为不变。
 
 删除控制层不代表缓存验收完成。修复后在原兼容范围健康精确命中仍未完整验收；当前缺口见[覆盖表](spec-coverage.md)。历史过程从 Git、原 PR／CI 查询，不在当前说明维护运行状态或旧测试入口；原记录、输出和必要证据继续按其保管者的保留政策处理。
 

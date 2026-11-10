@@ -982,8 +982,11 @@ pub fn full_collection_requirements_with_inputs(
             &methods,
             &chrono_judge_routes::execute_actions(&r),
         )?;
+        let previous_registry =
+            serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
         chrono_judge_routes::validate_proof_plan(
             &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
+            previous_registry.as_ref().map(Some).map_err(String::as_str),
             &impact.closure.reached.keys().cloned().collect(),
             &methods,
             &operations,
@@ -1050,8 +1053,11 @@ pub fn full_scheduling_requirements(
         &methods,
         &chrono_judge_routes::execute_actions(&current),
     )?;
+    let previous_registry =
+        serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
     chrono_judge_routes::validate_proof_plan(
         &serde_json::from_value(current.filemap().clone()).map_err(|error| error.to_string())?,
+        previous_registry.as_ref().map(Some).map_err(String::as_str),
         &impact.closure.reached.keys().cloned().collect(),
         &methods,
         &operations,
@@ -1548,6 +1554,10 @@ fn inventory_profile(
             chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
         chrono_judge_routes::validate_proof_plan(
             new.source_registry.as_ref().map_err(Clone::clone)?,
+            old.as_ref()
+                .map(|snapshot| snapshot.source_registry.as_ref())
+                .transpose()
+                .map_err(String::as_str),
             &affected,
             &methods,
             &operations,

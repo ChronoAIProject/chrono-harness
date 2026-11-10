@@ -499,9 +499,16 @@ pub fn filemap(v: &Value) -> Result {
                 "test_costs",
                 "execution_plans",
             ],
-            &["execution_scheduling", "configuration_edges"],
+            &[
+                "execution_scheduling",
+                "configuration_edges",
+                "require_new_file_classification",
+            ],
         )?;
         choice(&v["status"], &["active", "proposed"])?;
+        if let Some(required) = v.get("require_new_file_classification") {
+            boolean(required)?;
+        }
         let plans = crate::execution::plans(v)?;
         for plan in plans.values() {
             plan_operations.extend(plan.operations.iter().cloned());

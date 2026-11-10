@@ -861,11 +861,6 @@
       "path": ".chrono-harness/ci/bootstrap-toolchains.json",
       "presence": "present"
     },
-    "cache.producer": {
-      "kind": "json-value",
-      "path": ".chrono-harness/projects.json",
-      "pointer": "/projects/32/actions/build"
-    },
     "cache-tests.producer": {
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
@@ -2600,57 +2595,6 @@
       ],
       "restore": "compatible",
       "refresh_sources": true
-    },
-    "check.cache": {
-      "owner": "cache",
-      "producer": "build.cache",
-      "consumers": [
-        "check.unit_cache"
-      ],
-      "artifacts": [
-        "cache.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "cache.manifest",
-        "cache.lock",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains",
-        "cache.producer"
-      ],
-      "source_inputs": [
-        "cache.sources"
-      ],
-      "restore": "compatible",
-      "verify_contents": true,
-      "refresh_sources": true,
-      "save_on_failure": true
     },
     "check.cache-tests": {
       "owner": "cache-tests",

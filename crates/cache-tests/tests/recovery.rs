@@ -1,7 +1,7 @@
 use super::*;
 
 fn bind_installed_planner(plan: &mut Value) {
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    let binary = Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli"));
     plan["planner"] = json!({
         "executable": fs::canonicalize(&binary).unwrap(),
         "sha256": format!("{:x}", Sha256::digest(fs::read(&binary).unwrap())),
@@ -38,7 +38,7 @@ fn recovery_host() -> (Host, Value, Value) {
 }
 
 pub(super) fn recover(root: &Path, steps: &Value) -> std::process::Output {
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
+    Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli")))
         .args([
             "recover",
             "--host-root",
@@ -566,7 +566,7 @@ fn verified_host() -> (Host, Value, Value) {
 }
 
 fn seal(root: &Path, steps: &Value) -> std::process::Output {
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"))
+    Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli")))
         .args([
             "seal",
             "--host-root",
@@ -757,9 +757,7 @@ fn opted_in_failed_producer_seals_bytes_and_preserves_the_original_failure() {
             let github_output = root
                 .path()
                 .join(".chrono-harness/state/restore/github-output");
-            let output = Command::new(
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"),
-            )
+            let output = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli")))
             .args([
                 "plan",
                 "--host-root",
@@ -855,13 +853,11 @@ fn retired_acceptance_registration_and_cli_fail_without_changing_outputs() {
     config["acceptance_fixtures"] = json!({"native-unusable":{
         "method":"remove-producer-manifest/v1","consumer":"check.one","caches":["project"]}});
     assert!(serde_json::from_value::<chrono_cache::Config>(config).is_err());
-    let output = Command::new(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache"),
-    )
-    .args(["acceptance-fixture", "--host-root"])
-    .arg(root.path())
-    .output()
-    .unwrap();
+    let output = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli")))
+        .args(["acceptance-fixture", "--host-root"])
+        .arg(root.path())
+        .output()
+        .unwrap();
     assert!(!output.status.success());
     assert!(root.path().join("out/project/partial").is_file());
 }

@@ -372,7 +372,7 @@ fn plan_retains_probe_original_without_creating_release_output() {
         serde_json::to_vec(&config).unwrap(),
     )
     .unwrap();
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    let binary = Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli"));
     let directory = ".chrono-harness/cache/release-results/unit/cache-observations/";
     let plan_path = ".chrono-harness/state/cache/check.one/plan.json".to_owned();
     let run = Command::new(&binary)
@@ -633,7 +633,7 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
         json!({"kind":"environment","name":"CHRONO_CACHE_TEST_PROFILE","presence":"present"});
     let path = root.path().join(".chrono-harness/cache.json");
     fs::write(path, serde_json::to_vec(&config).unwrap()).unwrap();
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    let binary = Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli"));
     let run = |value: Option<&str>| {
         let mut command = Command::new(&binary);
         command.args([
@@ -726,7 +726,7 @@ fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
     .unwrap();
     let output = root.path().join("github-output");
     fs::write(&output, "existing=value\n").unwrap();
-    let binary = Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+    let binary = Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli"));
     let invoke = |consumer: &str| {
         Command::new(&binary)
             .args([
@@ -916,8 +916,7 @@ fn registered_source_keys_follow_only_explicit_transitive_filemap_edges() {
             serde_json::to_vec(&config).unwrap(),
         )
         .unwrap();
-        let binary =
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../cache/target/debug/chrono-cache");
+        let binary = Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli"));
         let result = Command::new(binary)
             .args([
                 "plan",
@@ -1276,52 +1275,47 @@ fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() 
 
 #[test]
 fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality() {
-    let (root, config) = host_cache_fixture(&["check.unit_cache"]);
+    let (root, config) = host_cache_fixture(&["check.unit_cache", "check.detect"]);
     let projects = root.path().join(".chrono-harness/projects.json");
     let original: Value = serde_json::from_slice(&fs::read(&projects).unwrap()).unwrap();
     let first = plan(root.path(), &config, "check.unit_cache").unwrap();
+    let detector = plan(root.path(), &config, "check.detect").unwrap();
     let mut unrelated = original.clone();
     unrelated["projects"]
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|p| p["id"] == "runner")
+        .find(|p| p["id"] == "cache")
         .unwrap()["actions"]["build"]["argv"] = json!(["unrelated"]);
     fs::write(&projects, serde_json::to_vec(&unrelated).unwrap()).unwrap();
     assert_eq!(
         first["caches"],
         plan(root.path(), &config, "check.unit_cache").unwrap()["caches"]
     );
-    for (project, action, cache) in [
-        ("cache", "build", "check.cache"),
-        ("cache-tests", "execute", "check.cache-tests"),
-    ] {
-        for field in ["tool", "argv"] {
-            let mut changed = original.clone();
-            let owner = changed["projects"]
-                .as_array_mut()
-                .unwrap()
-                .iter_mut()
-                .find(|p| p["id"] == project)
-                .unwrap();
-            owner["actions"][action][field] = if field == "tool" {
-                json!("other-cargo")
-            } else {
-                json!(["build", "--release"])
-            };
-            fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
-            let after = plan(root.path(), &config, "check.unit_cache").unwrap();
-            assert_ne!(
-                first["caches"][cache]["restore_keys"], after["caches"][cache]["restore_keys"],
-                "{project} {field}"
-            );
-            let other = if cache == "check.cache" {
-                "check.cache-tests"
-            } else {
-                "check.cache"
-            };
-            assert_eq!(first["caches"][other], after["caches"][other]);
-        }
+    for field in ["tool", "argv"] {
+        let mut changed = original.clone();
+        let owner = changed["projects"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|p| p["id"] == "cache-tests")
+            .unwrap();
+        owner["actions"]["execute"][field] = if field == "tool" {
+            json!("other-cargo")
+        } else {
+            json!(["test", "--release"])
+        };
+        fs::write(&projects, serde_json::to_vec(&changed).unwrap()).unwrap();
+        let after = plan(root.path(), &config, "check.unit_cache").unwrap();
+        assert_ne!(
+            first["caches"]["check.cache-tests"]["restore_keys"],
+            after["caches"]["check.cache-tests"]["restore_keys"],
+            "cache-tests {field}"
+        );
+        assert_eq!(
+            detector["caches"],
+            plan(root.path(), &config, "check.detect").unwrap()["caches"]
+        );
     }
 }
 
@@ -1332,8 +1326,8 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
     config["require_primary_checkout"] = json!(true);
     config["recover_failed_restores"] = json!(true);
     config["recover_unconfirmed_restores"] = json!(true);
-    config["caches"]["check.cache"]["refresh_sources"] = json!(true);
-    let project = root.path().join("crates/cache");
+    config["caches"]["check.cache-tests"]["refresh_sources"] = json!(true);
+    let project = root.path().join("crates/cache-tests");
     fs::create_dir_all(project.join("src")).unwrap();
     fs::write(project.join("Cargo.toml"), "[package]\nname = \"cache-compiler-acceptance\"\nversion = \"0.1.0\"\nedition = \"2024\"\n").unwrap();
     fs::write(
@@ -1341,10 +1335,16 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         "version = 4\n[[package]]\nname = \"cache-compiler-acceptance\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
+    fs::create_dir_all(project.join("tests")).unwrap();
+    fs::write(
+        project.join("tests/cli.rs"),
+        "#[test]\nfn cli() { assert!(std::process::Command::new(env!(\"CARGO_BIN_EXE_cache-compiler-acceptance\")).status().unwrap().success()); }\n",
+    )
+    .unwrap();
     for (id, path) in [
-        ("cache.manifest", "crates/cache/Cargo.toml"),
-        ("cache.lock", "crates/cache/Cargo.lock"),
-        ("cache.sources", "crates/cache/src/main.rs"),
+        ("cache-tests.manifest", "crates/cache-tests/Cargo.toml"),
+        ("cache-tests.lock", "crates/cache-tests/Cargo.lock"),
+        ("cache-tests.sources", "crates/cache-tests/src/main.rs"),
     ] {
         config["inputs"][id] = json!({"kind":"file","path":path,"presence":"present"});
     }
@@ -1357,9 +1357,9 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         .as_array()
         .unwrap()
         .iter()
-        .find(|p| p["id"] == "cache")
+        .find(|p| p["id"] == "cache-tests")
         .unwrap();
-    let action = &owner["actions"]["build"];
+    let action = &owner["actions"]["execute"];
     let argv: Vec<String> = serde_json::from_value(action["argv"].clone()).unwrap();
     let build = || {
         let result = Command::new(action["tool"].as_str().unwrap())
@@ -1403,12 +1403,12 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         .unwrap();
     let after = plan(root.path(), &config, "check.unit_cache").unwrap();
     assert_ne!(
-        before["caches"]["check.cache"]["key"],
-        after["caches"]["check.cache"]["key"]
+        before["caches"]["check.cache-tests"]["key"],
+        after["caches"]["check.cache-tests"]["key"]
     );
     assert_eq!(
-        before["caches"]["check.cache"]["restore_keys"],
-        after["caches"]["check.cache"]["restore_keys"]
+        before["caches"]["check.cache-tests"]["restore_keys"],
+        after["caches"]["check.cache-tests"]["restore_keys"]
     );
     fs::create_dir_all(root.path().join(".chrono-harness/state/restore")).unwrap();
     for (path, value) in [
@@ -1423,7 +1423,7 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         .keys()
         .enumerate()
         .map(|(index, id)| {
-            let restore = if id == "check.cache" {
+            let restore = if id == "check.cache-tests" {
                 json!({"outcome":"success","outputs":{"cache-matched-key":before["caches"][id]["key"]}})
             } else {
                 json!({"outcome":"skipped"})
@@ -1450,8 +1450,8 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         .as_array_mut()
         .unwrap()
         .iter_mut()
-        .find(|p| p["id"] == "cache")
-        .unwrap()["actions"]["build"]["argv"]
+        .find(|p| p["id"] == "cache-tests")
+        .unwrap()["actions"]["execute"]["argv"]
         .as_array_mut()
         .unwrap()
         .push(json!("--release"));
@@ -1462,7 +1462,7 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
     .unwrap();
     let incompatible = plan(root.path(), &config, "check.unit_cache").unwrap();
     assert_ne!(
-        after["caches"]["check.cache"]["restore_keys"],
-        incompatible["caches"]["check.cache"]["restore_keys"]
+        after["caches"]["check.cache-tests"]["restore_keys"],
+        incompatible["caches"]["check.cache-tests"]["restore_keys"]
     );
 }
