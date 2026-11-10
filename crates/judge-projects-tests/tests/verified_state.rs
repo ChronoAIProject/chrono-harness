@@ -89,11 +89,13 @@ fn complete_execution_needs_every_operation_and_accepts_the_empty_execution() {
     assert(returned);
     rows.push(state::OperationObservation { status: "error", process_terminal: Some(false) });
     let unresolved_last = state::all_terminal(&rows);
+    proof { assert(!state::operation_is_terminal(&rows[2])); }
     assert(!unresolved_last);
     let mut unresolved_first = Vec::new();
     unresolved_first.push(state::OperationObservation { status: "error", process_terminal: None });
     unresolved_first.push(state::OperationObservation { status: "blocked", process_terminal: None });
     let incomplete = state::all_terminal(&unresolved_first);
+    proof { assert(!state::operation_is_terminal(&unresolved_first[0])); }
     assert(!incomplete);
 }
 
