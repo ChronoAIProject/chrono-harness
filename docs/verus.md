@@ -404,7 +404,7 @@ ASCII 分隔字节由固定 vstd 的 UTF-8 引理证明是字符边界，跳过�
 外围仅使用标准安全 `str::from_utf8`／`Result::ok` 提供实际解码观察，拆分直接调用同源实现；
 Verus 内使用固定 vstd 的切片、`str::as_bytes`／`str::len`／`str::split_at`、
 Vec 存取、Option／Result 和 `ToString` 合同，没有新增仓内受信函数或 unsafe。
-index 的重复 stage、完整逐行状态与文件系统比较仍待证明。
+index 的完整逐行状态与文件系统比较仍待证明；stage 插入的当前范围见下文。
 拆分扫描 N 个字节、保存 K 个借用字段，时间 O(N + K)、额外引用 O(K)；
 NUL 记录由惰性迭代改为借用数组，增加 O(K) 引用存储，meta 字段仍使用借用数组。
 其余新增判断读取末字节、字段数和至多一个 stage 字节；完整构建、证明、CI 与存储成本未测。
@@ -440,7 +440,26 @@ tree 与 index 复用 `GitInventoryError` 的原消息／原路径及已证明�
 复用现有 runner-status 生产／独立整 crate 根及未过滤测试，不增加证明操作或预算。
 解析扫描完整行并保存三个借用字段；普通行保留原 map 查询，非零 stage 行现在也取得预期条目后
 交给同源比较，增加一次 O(log K) 路径查询。完整证明、构建、运行与 CI 成本未测。
-重复 stage、changed 集合维护、完整循环、文件系统观察和编译／实际调用完整绑定仍待证明。
+stage-zero 查询的全文对应、changed 集合维护、完整循环、文件系统观察和编译／实际调用完整绑定仍待证明。
+
+index 的实际 stage 键由同源 `GitIndexStage` 持有，仍借用完整 path／stage 字符串。
+相等要求两个字段的完整 UTF-8 字节都相等；排序先比较完整 path，再比较完整 stage。
+实际 Eq／Ord／PartialOrd、对称性、传递性和容器要求的顺序定律均在同一根证明，
+不以原 Rust tuple／字符串比较的声明代替仓内比较器证明。
+`record_git_index_stage` 直接更新 checkout 的 `GitIndexStages`：结果集合恰为原集合加入
+该完整键，其他键均保留；只有完整 path／stage 已存在时返回原 `duplicate Git index stage`，
+并证明失败后的集合与原集合完全相同。行准入仍由上述解析器拥有，不在插入处重复验证字段。
+
+独立 Verus 预期列出两个路径、全部四个 stage 的五个实际键和数量，核重复错误及完整失败状态，
+并用另一份字符串存储核完整文本身份；空串、前缀、NUL、Unicode 组合形式及 stage 后缀均保留。
+排序预期核 path 优先于 stage，stage 使用完整字段；同一预期进入普通 Rust 测试。
+沿用现有两项 runner-status 整 crate 根、FILEMAP 依赖、严格工具及预算，无新增受信函数或外部假设。
+标准 BTreeMap 的 new／insert／iter 和同类型键的 contains_key 合同来自固定 vstd，
+其 `obeys_cmp<GitIndexStage>` 前提由本仓实际比较器及定律证明；外围 stage-zero 查询的
+全文语义与完整循环仍须继续证明，不由该局部插入合同推导。
+实际键保持原两个借用字段，不新增文本复制；每行仍执行一次 BTreeMap 插入，
+另创建标准迭代器以连接原集合的完整、有序键视图，不遍历或复制库存。
+比较扫描实际字段字节，原生运行、构建、证明、CI 与存储的完整成本未测。
 
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。

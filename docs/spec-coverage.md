@@ -7,8 +7,10 @@ projects 原件状态由 `verified_state.rs` 与独立 Verus 预期负责：
 
 Git index 的完整单行解析和 stage／mode／OID 比较由同源 Verus 维护，真实 checkout 直接消费；
 独立预期核完整字段、缺条目、stage 边界及错误文字／优先级。tree／index 共用原错误载体，
-标准 Debug 格式化仍是明确外部边界。重复 stage、changed 集合维护、完整循环、文件系统比较
-及完整编译／调用绑定仍待证明，不把局部行解析扩大为整个 checkout 已覆盖。
+标准 Debug 格式化仍是明确外部边界。实际 stage 键的全文比较、排序定律及集合插入状态
+由同源 `GitIndexStage`／`record_git_index_stage` 拥有，checkout 直接消费；独立预期核全部 stage、
+不同路径、重复错误与完整集合保留。stage-zero 查询的全文对应、changed 集合维护、完整循环、
+文件系统比较及完整编译／调用绑定仍待证明，不把局部行解析与插入扩大为整个 checkout 已覆盖。
 
 checkout 的 blob／模式准入、符号链接识别、普通文件与 owner execute 位、打开后完整权限和长度
 比较，以及哈希计数的溢出／增长优先级和结束长度判断由同源 Verus 维护，真实 IO 路径直接消费。
@@ -156,7 +158,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 43 源码变化增量缓存 | 完整目标待验，SPEC §4.2；两项有限原生证据见上文；候选本地真实 Cargo 回归已验证较旧时间的已变源码重新编译且增量目录保留 | 当前候选已为明确编译缓存采用兼容恢复后的登记源码时间调整，方法进入兼容键；精确命中／未恢复／重放边界及同源判断证明通过。正式本地入口、原生采用和 dev push 封存／保存仍待验收，有限验证不替代；完整输入绑定及生命周期成本仍缺 |
 | 44 不兼容编译输入 | 完整目标待验，SPEC §4.2；两项有限分域证据见上文 | 按不兼容工具链／target／profile／feature／输入分域，使用前重建 |
 | 45 缓存缺失／损坏／不可用 | 部分：明确恢复、采用 producer manifest；可选远端 fixture 退役 | 真实文件系统／CLI 保留有效／无效／缺内容及失败生产者边界，丢不可用登记输出、保原失败，普通构建／封存／保存继续。C1 部分观察不证明原范围修复后健康精确命中，见[退役边界](ci-cache.md#retired-remote-acceptance-controls) |
-| 46 并发／重跑／后续测试失败 | 部分：现役 `check.cache-tests` 编译缓存明确采用失败后封存；Rust 回归核原 outcome、原件、内容恢复及仍须构建，不缓存通过结论 | 原生失败后真实保存／命中、并发隔离、等待生产者和完整构建／测试／证据状态仍待验收 |
+| 46 并发／重跑／后续测试失败 | 部分：现役 `check.cache-tests`、`check.worktree-tests` 和 `check.worktree-tests.worktree-adoption` 编译缓存明确采用失败后封存；worktree 两组各自绑定原 Cargo 动作；Rust 回归核原 outcome、原件、内容恢复及仍须构建，不缓存通过结论 | 原生失败后真实保存／命中、并发隔离、等待生产者和完整构建／测试／证据状态仍待验收 |
 | 47 实现测试同语言 | 部分：v2 声明、受影响双向配对、登记 Rust CI／生命周期 helper | 完整迁移及真实执行，声明不证明源码语言 |
 | 48 声明或实际跨语言／内嵌测试 | 部分：projects 拒绝声明不符，Rust 回归含项目／脚本 | 其余外语逻辑迁移及实际入口对应；外层 wrapper 不证明符合，不宣称发现任意隐藏逻辑 |
 | 49 shell 实现／Python 测试 | 部分：有方向 shell→python 例外、专属配对测试 | 真实宿主独立所有权／依赖／方法／执行证据 |

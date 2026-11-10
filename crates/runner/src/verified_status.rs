@@ -584,6 +584,207 @@ pub fn insert_git_tree_entry(
     }
 }
 
+/// 与 Git 原 index 库存一样借用完整路径和 stage；不复制或归一化字段。
+pub struct GitIndexStage<'a> {
+    pub path: &'a str,
+    pub stage: &'a str,
+}
+
+impl<'a> GitIndexStage<'a> {
+    pub open spec fn same(&self, other: &Self) -> bool {
+        self.path.spec_bytes() == other.path.spec_bytes()
+            && self.stage.spec_bytes() == other.stage.spec_bytes()
+    }
+
+    pub open spec fn order_spec(&self, other: &Self) -> Ordering {
+        if self.path.spec_bytes() == other.path.spec_bytes() {
+            if self.stage.spec_bytes() == other.stage.spec_bytes() { Ordering::Equal }
+            else if identifiers::byte_lt(self.stage.spec_bytes(), other.stage.spec_bytes()) {
+                Ordering::Less
+            } else { Ordering::Greater }
+        } else if identifiers::byte_lt(self.path.spec_bytes(), other.path.spec_bytes()) {
+            Ordering::Less
+        } else { Ordering::Greater }
+    }
+}
+
+#[cfg(verus_keep_ghost)]
+impl<'a> vstd::std_specs::cmp::PartialEqSpecImpl for GitIndexStage<'a> {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { self.same(other) }
+}
+
+impl<'a> PartialEq for GitIndexStage<'a> {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == self.same(other),
+    {
+        identifiers::equal_bytes(self.path.as_bytes(), other.path.as_bytes())
+            && identifiers::equal_bytes(self.stage.as_bytes(), other.stage.as_bytes())
+    }
+}
+
+impl<'a> Eq for GitIndexStage<'a> {}
+
+#[cfg(verus_keep_ghost)]
+impl<'a> vstd::std_specs::cmp::OrdSpecImpl for GitIndexStage<'a> {
+    open spec fn obeys_cmp_spec() -> bool { true }
+    open spec fn cmp_spec(&self, other: &Self) -> Ordering { self.order_spec(other) }
+}
+
+impl<'a> Ord for GitIndexStage<'a> {
+    fn cmp(&self, other: &Self) -> (order: Ordering)
+        ensures order == self.order_spec(other),
+    {
+        let path_order = identifiers::compare_bytes(self.path.as_bytes(), other.path.as_bytes());
+        proof {
+            identifiers::byte_lt_asymmetric(self.path.spec_bytes(), other.path.spec_bytes());
+            identifiers::byte_lt_asymmetric(other.path.spec_bytes(), self.path.spec_bytes());
+            identifiers::byte_lt_asymmetric(self.stage.spec_bytes(), other.stage.spec_bytes());
+            identifiers::byte_lt_asymmetric(other.stage.spec_bytes(), self.stage.spec_bytes());
+        }
+        let order = if path_order == 0 {
+            identifiers::compare_bytes(self.stage.as_bytes(), other.stage.as_bytes())
+        } else { path_order };
+        if order == 0 { Ordering::Equal }
+        else if order < 0 { Ordering::Less }
+        else { Ordering::Greater }
+    }
+}
+
+#[cfg(verus_keep_ghost)]
+impl<'a> vstd::std_specs::cmp::PartialOrdSpecImpl for GitIndexStage<'a> {
+    open spec fn obeys_partial_cmp_spec() -> bool { true }
+    open spec fn partial_cmp_spec(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order_spec(other))
+    }
+}
+
+impl<'a> PartialOrd for GitIndexStage<'a> {
+    fn partial_cmp(&self, other: &Self) -> (order: Option<Ordering>)
+        ensures order == Some(self.order_spec(other)),
+    { Some(self.cmp(other)) }
+}
+
+pub proof fn git_index_stage_order_laws(a: &GitIndexStage, b: &GitIndexStage, c: &GitIndexStage)
+    ensures
+        (a.order_spec(b) == Ordering::Equal) == a.same(b),
+        (a.order_spec(b) == Ordering::Less) == (b.order_spec(a) == Ordering::Greater),
+        a.order_spec(b) == Ordering::Less && b.order_spec(c) == Ordering::Less
+            ==> a.order_spec(c) == Ordering::Less,
+{
+    identifiers::byte_trichotomy(a.path.spec_bytes(), b.path.spec_bytes());
+    identifiers::byte_lt_asymmetric(a.path.spec_bytes(), b.path.spec_bytes());
+    identifiers::byte_lt_asymmetric(b.path.spec_bytes(), a.path.spec_bytes());
+    identifiers::byte_trichotomy(a.stage.spec_bytes(), b.stage.spec_bytes());
+    identifiers::byte_lt_asymmetric(a.stage.spec_bytes(), b.stage.spec_bytes());
+    identifiers::byte_lt_asymmetric(b.stage.spec_bytes(), a.stage.spec_bytes());
+    if a.order_spec(b) == Ordering::Less && b.order_spec(c) == Ordering::Less {
+        if a.path.spec_bytes() == b.path.spec_bytes() && b.path.spec_bytes() == c.path.spec_bytes() {
+            identifiers::byte_lt_transitive(a.stage.spec_bytes(), b.stage.spec_bytes(), c.stage.spec_bytes());
+            identifiers::byte_lt_strict(a.stage.spec_bytes(), c.stage.spec_bytes());
+        } else if a.path.spec_bytes() != b.path.spec_bytes() && b.path.spec_bytes() != c.path.spec_bytes() {
+            identifiers::byte_lt_transitive(a.path.spec_bytes(), b.path.spec_bytes(), c.path.spec_bytes());
+            identifiers::byte_lt_strict(a.path.spec_bytes(), c.path.spec_bytes());
+        } else {
+            identifiers::byte_lt_strict(a.path.spec_bytes(), c.path.spec_bytes());
+        }
+    }
+}
+
+pub proof fn git_index_stage_obeys_cmp<'a>()
+    ensures vstd::laws_cmp::obeys_cmp::<GitIndexStage<'a>>(),
+{
+    use vstd::std_specs::cmp::{PartialEqSpec, PartialOrdSpec, OrdSpec};
+    reveal(vstd::laws_eq::obeys_eq_spec_properties);
+    reveal(vstd::laws_cmp::obeys_partial_cmp_spec_properties);
+    reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+    reveal(vstd::laws_cmp::obeys_cmp_ord);
+    assert forall|a: GitIndexStage<'a>, b: GitIndexStage<'a>|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            <==> b.partial_cmp_spec(&a) == Some(Ordering::Greater) by {
+        git_index_stage_order_laws(&a, &b, &b);
+    }
+    assert forall|a: GitIndexStage<'a>, b: GitIndexStage<'a>, c: GitIndexStage<'a>|
+        a.partial_cmp_spec(&b) == Some(Ordering::Less)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Less)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Less) by {
+        git_index_stage_order_laws(&a, &b, &c);
+    }
+    assert forall|a: GitIndexStage<'a>, b: GitIndexStage<'a>, c: GitIndexStage<'a>|
+        a.partial_cmp_spec(&b) == Some(Ordering::Greater)
+            && b.partial_cmp_spec(&c) == Some(Ordering::Greater)
+            implies a.partial_cmp_spec(&c) == Some(Ordering::Greater) by {
+        git_index_stage_order_laws(&c, &b, &a);
+    }
+}
+
+pub type GitIndexStages<'a> = BTreeMap<GitIndexStage<'a>, ()>;
+
+fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
+    ensures forall|a: GitIndexStage, b: GitIndexStage|
+        #![trigger stages@.contains_key(a), stages@.contains_key(b)]
+        stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b) ==> a == b,
+{
+    proof { git_index_stage_obeys_cmp(); }
+    let iterator = stages.iter();
+    proof {
+        let rows = iterator@.1;
+        let keys = rows.map(|i: int, row: (GitIndexStage, ())| row.0);
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
+        assert forall|a: GitIndexStage, b: GitIndexStage|
+            #![trigger stages@.contains_key(a), stages@.contains_key(b)]
+            stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b)
+                implies a == b by {
+            assert(rows.to_set().contains((a, ())));
+            assert(rows.to_set().contains((b, ())));
+            let i = choose|i: int| 0 <= i < rows.len() && rows[i] == (a, ());
+            let j = choose|j: int| 0 <= j < rows.len() && rows[j] == (b, ());
+            if i < j {
+                assert(keys[i].cmp_spec(&keys[j]) is Less);
+                assert(a.order_spec(&b) is Less);
+            } else if j < i {
+                assert(keys[j].cmp_spec(&keys[i]) is Less);
+                assert(b.order_spec(&a) is Less);
+            }
+        }
+    }
+}
+
+/// 实际插入保持原索引集合；仅完整路径和 stage 都重复时返回原错误。
+pub fn record_git_index_stage<'a>(stages: &mut GitIndexStages<'a>, path: &'a str, stage: &'a str)
+    -> (out: Result<(), String>)
+    ensures
+        stages@ == old(stages)@.insert(GitIndexStage { path, stage }, ()),
+        out.is_ok() == !old(stages)@.contains_key(GitIndexStage { path, stage }),
+        out.is_ok() == !(exists|key: GitIndexStage| (#[trigger] old(stages)@.contains_key(key))
+            && key.path.spec_bytes() == path.spec_bytes()
+            && key.stage.spec_bytes() == stage.spec_bytes()),
+        out.is_err() ==> stages@ == old(stages)@,
+        match out { Ok(()) => true, Err(message) => message@ == "duplicate Git index stage"@ },
+{
+    proof { git_index_stage_obeys_cmp(); }
+    let key = GitIndexStage { path, stage };
+    let ghost before = stages@;
+    let previous = stages.insert(key, ());
+    git_index_stage_keys_have_unique_text(stages);
+    proof {
+        if exists|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
+            && old_key.same(&key) {
+            let old_key = choose|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
+                && old_key.same(&key);
+            assert(stages@.contains_key(old_key));
+            assert(stages@.contains_key(key));
+            assert(old_key == key);
+            assert(before.contains_key(key));
+        }
+        if before.contains_key(key) {
+            assert(exists|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
+                && old_key.same(&key));
+        }
+    }
+    match previous { None => Ok(()), Some(()) => Err("duplicate Git index stage".to_owned()) }
+}
+
 #[cfg(verus_keep_ghost)]
 pub enum GitInventoryErrorView {
     Message(Seq<char>),

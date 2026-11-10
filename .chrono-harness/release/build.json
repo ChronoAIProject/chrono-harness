@@ -307,9 +307,7 @@
       "id": "verify_distribution_tests",
       "kind": "verify",
       "operation": "test.distribution-tests",
-      "needs": [
-        "build_distribution"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_distribution_tests",
       "rust_toolchain": true
     },
@@ -758,10 +756,8 @@
       ]
     },
     "verify_distribution_tests": {
-      "need": "crates/distribution-tests/tests/installation.rs runs the released distribution CLI through the host installer and checks installed bytes, modes and installation evidence; other package assets are synthetic fixture files.",
-      "release_assets": [
-        "chrono-distribution"
-      ]
+      "need": "原始未过滤的 test.distribution-tests 从生产 main.rs 编译专属测试 CLI，经真实宿主安装入口核对安装字节、权限和回执；其余包成员由独立 fixture 提供，不消费发布二进制。",
+      "release_assets": []
     },
     "verify_worktree_tests": {
       "need": "crates/worktree-tests/tests/creation.rs and cleanup/check-input consumers run the worktree CLI and runner; check_inputs.rs also runs the CI event producer. Assertions consume actual Git state, retained contexts, ownership and cleanup results.",
