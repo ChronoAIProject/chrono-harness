@@ -133,6 +133,45 @@ pub fn collect_registry_paths<'a>(entry: &str, rows: &[Option<&'a str>; 4])
     Ok(paths)
 }
 
+/// 只核本次请求的数量，不推断路径、内容或解码结果。
+pub fn registry_acquisition_count(expected: usize, observed: usize) -> (out: Result<(), String>)
+    ensures match out {
+        Ok(()) => expected == observed,
+        Err(message) => expected != observed && message@ == "registry acquisition count mismatch"@,
+    },
+{
+    if expected == observed { Ok(()) }
+    else { Err("registry acquisition count mismatch".to_owned()) }
+}
+
+/// 返回项须精确对应当前请求；不做归一化或额外路径准入。
+pub fn registry_acquisition_path(expected: &str, observed: &str) -> (out: Result<(), String>)
+    ensures match out {
+        Ok(()) => expected@ == observed@,
+        Err(message) => expected@ != observed@ && message@ == "registry acquisition path mismatch"@,
+    },
+{
+    if identifiers::equal_text(expected, observed) { Ok(()) }
+    else { Err("registry acquisition path mismatch".to_owned()) }
+}
+
+/// 单条读取必须恰好返回所请求的一项；成功按值交出该项完整原字节。
+pub fn single_registry_blob(expected: &str, mut rows: Vec<(String, Vec<u8>)>)
+    -> (out: Result<Vec<u8>, String>)
+    ensures match out {
+        Ok(bytes) => rows.len() == 1 && rows@[0].0@ == expected@ && bytes@ == rows@[0].1@,
+        Err(message) => (rows.len() != 1 || rows@[0].0@ != expected@)
+            && message@ == "registry acquisition path mismatch"@,
+    },
+{
+    if rows.len() != 1 { return Err("registry acquisition path mismatch".to_owned()); }
+    let (path, bytes) = rows.remove(0);
+    match registry_acquisition_path(expected, path.as_str()) {
+        Ok(()) => Ok(bytes),
+        Err(message) => Err(message),
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct IndexFlag {

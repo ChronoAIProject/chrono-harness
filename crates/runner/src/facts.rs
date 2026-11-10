@@ -189,11 +189,8 @@ fn registry_snapshot_with_batches_target(
     mut read: impl FnMut(&[String]) -> Result<Vec<(String, Vec<u8>)>, String>,
 ) -> Result<RegistrySnapshot, String> {
     let (mut snapshot, paths) = registry_snapshot_start(path, target, |path| {
-        let mut originals = read(&[path.to_owned()])?;
-        if originals.len() != 1 || originals[0].0 != path {
-            return Err("registry acquisition path mismatch".into());
-        }
-        Ok(originals.remove(0).1)
+        let originals = read(&[path.to_owned()])?;
+        crate::verified_status::single_registry_blob(path, originals)
     })?;
     let mut pending = vec![];
     for path in paths {
@@ -202,13 +199,9 @@ fn registry_snapshot_with_batches_target(
         }
     }
     let originals = read(&pending)?;
-    if originals.len() != pending.len() {
-        return Err("registry acquisition count mismatch".into());
-    }
+    crate::verified_status::registry_acquisition_count(pending.len(), originals.len())?;
     for (expected, (path, original)) in pending.iter().zip(originals) {
-        if expected != &path {
-            return Err("registry acquisition path mismatch".into());
-        }
+        crate::verified_status::registry_acquisition_path(expected, &path)?;
         let value = json(&original)?;
         snapshot.bytes.insert(path.clone(), original);
         snapshot.values.insert(path, value);
