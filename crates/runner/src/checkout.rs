@@ -47,8 +47,7 @@ pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>
         }
     }
     for (path, entry) in expected {
-        if !inventory.stages.contains(path.as_str(), "0") || !matches_entry(root, path, entry)?
-        {
+        if !inventory.stages.contains(path.as_str(), "0") || !matches_entry(root, path, entry)? {
             changed.insert(path.text.clone());
         }
     }
