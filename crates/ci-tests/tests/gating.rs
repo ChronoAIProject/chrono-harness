@@ -690,7 +690,7 @@ fn shared_parent_observation_checks_every_artifact_and_final_attempt_before_publ
 fn parent_collection_transports_report_references_and_rejects_damaged_originals() {
     let mut h = GatedHost::new();
     h.host.modify(".chrono-harness/ci/check.json", |c| {
-        c["policy"]["report_publication"] = json!("retained-reference/v1");
+        c["policy"]["report_publication"] = json!("retained-reference/v2");
     });
     h.change(&["a.txt", "b.txt"]);
     let d = h.detection();
@@ -723,24 +723,41 @@ fn parent_collection_transports_report_references_and_rejects_damaged_originals(
     let raw = fs::read(&downloaded).unwrap();
     fs::remove_file(h.host.root.join(original)).unwrap();
     for corrupt in [false, true] {
+        let previous_report = if corrupt {
+            Some(fs::read(h.host.root.join(".chrono-harness/state/check.json")).unwrap())
+        } else {
+            None
+        };
         if corrupt {
             fs::write(&downloaded, b"damaged uploaded original").unwrap();
         }
         let out = h.command(&["check", "--collect"], &d, &n).output().unwrap();
         assert_eq!(
             out.status.code(),
-            Some(if corrupt { 1 } else { 0 }),
+            Some(if corrupt { 2 } else { 0 }),
             "{out:?}"
         );
-        let report = referenced_report(&h.host.root, ".chrono-harness/state/check.json", &out);
         if corrupt {
             assert!(
-                report["response"]["results"][0]["cause"]
-                    .as_str()
-                    .unwrap()
-                    .contains("original report digest mismatch")
+                String::from_utf8_lossy(&out.stderr).contains("original report digest mismatch")
+            );
+            let gather: Value = serde_json::from_slice(
+                &fs::read(
+                    h.host
+                        .root
+                        .join(".chrono-harness/state/collection/gather.json"),
+                )
+                .unwrap(),
+            )
+            .unwrap();
+            assert!(gather["result"].is_null());
+            assert_eq!(fs::read(&downloaded).unwrap(), b"damaged uploaded original");
+            assert_eq!(
+                fs::read(h.host.root.join(".chrono-harness/state/check.json")).unwrap(),
+                previous_report.unwrap()
             );
         } else {
+            let report = stream_report(&h.host.root, ".chrono-harness/state/check.json", &out);
             assert_eq!(report["response"]["evidence"]["executed"], json!([]));
             assert_eq!(
                 report["response"]["evidence"]["reports"]
