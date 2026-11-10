@@ -438,6 +438,7 @@ pub(crate) fn execute(
             "fetch",
             "--no-tags",
             "--no-write-fetch-head",
+            "--refmap=",
             "--",
             &remote,
             &spec,

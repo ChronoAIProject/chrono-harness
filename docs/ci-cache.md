@@ -123,15 +123,15 @@ exact／compatible 命中和 skipped 保留输出；缺失／cancelled outcome �
 
 ## 可选的生产者内容核验
 
-本宿主为已有 `check.unit_cache` job 消费的 `check.cache-tests` 选择 `verify_contents: true`。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
+本宿主为 `check.cache-tests`、`check.worktree-tests` 和 `check.worktree-tests.worktree-adoption` 选择 `verify_contents: true`，分别由现役 cache、worktree 和 worktree-adoption 单元消费。此 v2 选项要求已有主检出失败／未确认恢复政策，不支持外部产物。其他消费者合同不变。方法名 `producer-manifest/v1` 纳入兼容身份，使旧未封存归档无法通过宽前缀进入这个范围。
 
-这项兼容范围还从 `projects.json` 选择真实生产 action（`test.cache-tests`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
+各自的兼容范围还从 `projects.json` 选择真实生产 action（`test.cache-tests`、`test.worktree.core`、`test.worktree.adoption`，含 tool／argv），并选择采用的直接 Git 政策中 Cargo 工具记录。已有输入绑定检查环境、Cargo／编译器观察、manifest、lock、bootstrap 和平台声明。无关项目 metadata 不在所选值内。这些声明仍不证明编译器／SDK 输入完整。
 
 provider 在原操作结束后、保存前，沿用保存阶段调用 `chrono-cache seal`。它重核计划／登记和当前 planner 身份，默认要求原生产步骤 **outcome** 成功，并枚举明确选择的产物目录。
 
-缓存可明确选择 `save_on_failure: true`，前提是采用内容核验。本仓仅为 `check.cache-tests` 编译目录采用：同一步中的测试失败后，仍可封存实际留下的编译文件。只接受原 outcome 的 success／failure；skipped、cancelled、缺失或未知结果都拒绝，不按可能被 `continue-on-error` 改写的 conclusion 判断。封存报告保留生产步骤、原 outcome 和原生步骤原字节；封存成功只说明文件已列清，不改变原构建／测试失败。保存政策进入计划及 provider 输出，不改变内容兼容键。恢复后仍须运行原登记构建和测试。
+缓存可明确选择 `save_on_failure: true`，前提是采用内容核验。本仓为上述三项编译目录采用：同一步中的测试失败后，仍可封存实际留下的编译文件。只接受原 outcome 的 success／failure；skipped、cancelled、缺失或未知结果都拒绝，不按可能被 `continue-on-error` 改写的 conclusion 判断。封存报告保留生产步骤、原 outcome 和原生步骤原字节；封存成功只说明文件已列清，不改变原构建／测试失败。保存政策进入计划及 provider 输出，不改变内容兼容键。恢复后仍须运行原登记构建和测试。
 
-**产品与宿主采用同时变更：**新增明确保存选择、同源封存判断及回归，宿主只为上述一项现役编译缓存采用。原业务操作、断言、退出及恢复条件继续执行。新增条件及原件字段的成本有限，内容枚举、原生保存和完整失败恢复的总成本仍待实测；本地行为不证明远端后端已保存。
+这些采用复用同源封存判断及原回归。原业务操作、断言、退出及恢复条件继续执行。内容枚举、原生保存和完整失败恢复的总成本仍待实测；本地行为不证明远端后端已保存。
 
 每个产物得到 `.chrono-cache-content-v1.json`，绑定缓存 ID、生产操作、实际源码键、产物声明和内容。清单记录普通文件 SHA-256／长度／执行位、目录（含空目录）、字面符号链接目标，不跟随链接；特殊文件和非 UTF-8 名称失败。只排除该方法自己的标记。标记包含输出身份，不含测试结果、judge 响应或缓存的通过状态。原生步骤、manifest 和封存观察保存在宿主执行证据中。
 
@@ -244,6 +244,8 @@ detector 在启动前恢复、启动成功后保存。检查单元通过已有�
 ### 恢复、保存与写入者
 
 provider 从 `chrono-cache plan --github-output` 取得输出键，保留计划和探测原输出，在原操作前恢复。默认业务成功后保存全部所选缓存。可选 `save_caches` 限定本 job 可保存项，空列表表示只恢复；未知或重复项拒绝。
+
+每个原生缓存使用方的准入由 `verified_literals.rs::valid_cache_consumer` 定义，真实生成器直接消费其结果。名字保留 1 至 128 字节的 ASCII 字母、数字及 `-_.:`；准备命令须有非空程序，每个参数拒绝 NUL、换行、回车和 `${{`。所选缓存须非空且名字有效；缓存、保存及启动后保存列表各自唯一，保存项须属于所选缓存，启动后保存项须属于保存列表。比较保留完整字段，顺序不影响子集判断，空保存列表继续允许只恢复。已知 job 查询、JSON 解码、原 `trim` 和借用字段投影仍由适配层提供；跨 job 保存者状态与完整工作流投影尚未证明。独立 Verus 预期和原生成器行为测试共用现有检查入口。列表核验使用借用字段和有限遍历，最坏两两比较；完整构建、证明与运行成本未测。
 
 同一 provider 配置内，每个缓存 ID 至多一个保存 job。生成／验证用 `E_CACHE_SAVE_OWNERSHIP` 拒绝冲突，指出缓存和两个 job。其他消费者明确只恢复；流程也可刻意没有写入者。独立登记生产范围使用不同缓存身份，包含不同发布平台。
 
