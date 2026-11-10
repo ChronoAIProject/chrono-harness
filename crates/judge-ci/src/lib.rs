@@ -1587,6 +1587,10 @@ impl PreparedExecution {
         {
             return Err("prepared CI execution request/plan binding differs".into());
         }
+        let config = Profile::load(&self.request)?.config;
+        if self.plan.binding["operation_state"] != operation_state_path(&self.request, &config)? {
+            return Err("prepared CI execution request/plan binding differs".into());
+        }
         execute_plan(&self.request, &self.plan)
     }
 }
@@ -1617,6 +1621,7 @@ pub fn prepare_execution(req: &Request) -> Result<PreparedExecution, String> {
     )?;
     let plan = prepare_plan(
         req,
+        &i.config,
         &selected,
         &i.new,
         &i.methods,
@@ -1630,8 +1635,22 @@ pub fn prepare_execution(req: &Request) -> Result<PreparedExecution, String> {
     })
 }
 
+fn operation_state_path(req: &Request, config: &CheckConfig) -> Result<String, String> {
+    let report = req
+        .scope
+        .as_ref()
+        .map(|scope| scope.report_path(config))
+        .transpose()?
+        .unwrap_or_else(|| config.report_path.clone());
+    Ok(chrono_judge_routes::operation_state_path(
+        &report,
+        &object!(req.request_id),
+    ))
+}
+
 fn prepare_plan(
     req: &Request,
+    config: &CheckConfig,
     selected: &BTreeSet<String>,
     new: &Snapshot,
     methods: &BTreeMap<String, Vec<chrono_judge_registration::execution::Method>>,
@@ -1643,7 +1662,7 @@ fn prepare_plan(
         tracing::info!(event_id = "ci.phase_started", "preparing registered operation plan and tools");
         chrono_judge_routes::prepare_scheduled(
             &req.host_root,
-            object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":req.request_id,"entry":req.observations["entry"]}),
+            object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":req.request_id,"entry":req.observations["entry"],"operation_state":operation_state_path(req, config)?}),
             selected, &new.plans, methods, &new.execute, declarations, environment, reused, new.scheduling.clone(), false,
         )
     })
@@ -1733,6 +1752,7 @@ fn evaluate(
     let plan = if blocked.is_empty() {
         Some(prepare_plan(
             req,
+            &config,
             &selected,
             &new,
             &methods,
@@ -1755,6 +1775,7 @@ fn evaluate(
         exit_code: None,
     }];
     let mut executed = vec![];
+    let mut operation_state = None;
     for reason in &blocked {
         results.push(CheckResult {
             id: format!("ci.blocked.{}", results.len()),
@@ -1765,6 +1786,7 @@ fn evaluate(
     }
     if let Some(plan) = &plan {
         let outcome = execute_plan(req, plan)?;
+        operation_state = outcome.operation_state.clone();
         let source_io = source_binding::CandidateIo {
             reader,
             request: req,
@@ -1845,5 +1867,6 @@ fn evaluate(
         evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
+    response.evidence["operation_state"] = object!(operation_state);
     Ok(response)
 }
