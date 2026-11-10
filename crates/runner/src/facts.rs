@@ -347,7 +347,10 @@ impl Reader {
         let mut args = vec!["ls-files", "--others", "-z", "--", "."];
         args.extend(exclusions.iter().map(String::as_str));
         let paths = paths(self.literal_inventory(root, &args)?)?;
-        Ok(crate::verified_status::normalize_checkout_paths(paths, Vec::new()))
+        Ok(crate::verified_status::normalize_checkout_paths(
+            paths,
+            Vec::new(),
+        ))
     }
     pub fn checkout_excluding(
         &self,
