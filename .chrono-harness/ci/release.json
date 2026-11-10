@@ -584,8 +584,7 @@
         "linux_build_runner",
         "linux_build_judge_ci",
         "linux_build_ci",
-        "linux_build_judge_registration",
-        "linux_build_worktree"
+        "linux_build_judge_registration"
       ],
       "downloads": [
         {
@@ -607,10 +606,6 @@
         {
           "job": "linux_build_judge_registration",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-        },
-        {
-          "job": "linux_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
         }
       ]
     },
@@ -773,8 +768,7 @@
         "linux_build_judge_cost",
         "linux_build_judge_mixed",
         "linux_build_judge_workflow",
-        "linux_build_inputs",
-        "linux_build_worktree"
+        "linux_build_inputs"
       ],
       "downloads": [
         {
@@ -820,10 +814,6 @@
         {
           "job": "linux_build_inputs",
           "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
-        },
-        {
-          "job": "linux_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
         }
       ]
     },
@@ -1818,8 +1808,7 @@
         "macos_build_runner",
         "macos_build_judge_ci",
         "macos_build_ci",
-        "macos_build_judge_registration",
-        "macos_build_worktree"
+        "macos_build_judge_registration"
       ],
       "downloads": [
         {
@@ -1841,10 +1830,6 @@
         {
           "job": "macos_build_judge_registration",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
-        },
-        {
-          "job": "macos_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
         }
       ]
     },
@@ -2007,8 +1992,7 @@
         "macos_build_judge_cost",
         "macos_build_judge_mixed",
         "macos_build_judge_workflow",
-        "macos_build_inputs",
-        "macos_build_worktree"
+        "macos_build_inputs"
       ],
       "downloads": [
         {
@@ -2054,10 +2038,6 @@
         {
           "job": "macos_build_inputs",
           "directory": ".chrono-harness/cache/release-handoffs/build_inputs/"
-        },
-        {
-          "job": "macos_build_worktree",
-          "directory": ".chrono-harness/cache/release-handoffs/build_worktree/"
         }
       ]
     },
