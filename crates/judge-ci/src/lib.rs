@@ -672,11 +672,11 @@ fn ci_impact(
                     let global = old
                         .scheduling
                         .as_ref()
-                        .map(|p| (p.max_running, &p.resources))
+                        .map(|p| (p.max_running, &p.resources, &p.priority))
                         != new
                             .scheduling
                             .as_ref()
-                            .map(|p| (p.max_running, &p.resources));
+                            .map(|p| (p.max_running, &p.resources, &p.priority));
                     if global
                         || plan.operations.iter().any(|op| {
                             old.scheduling.as_ref().and_then(|p| p.claims.get(op))
