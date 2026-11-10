@@ -15,6 +15,13 @@ FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 声明角色的语义真实性和生产调用的完整对应仍须继续验收。当前查找直接比较两端显式行，
 最坏工作随两端文件数的乘积增长，不增加持久索引；构建、证明、CI 和完整成本未测。
 
+本批新增边界采用固定 lockfile 的 `serde_json::from_value::<SourceRegistry>` 与
+Serde `Deserialize` 派生：读取原文件行及布尔字段，字段缺失时默认 false，错型报错；
+路径、分类和根不由解码器推断。固定 Rust 的 `Option::as_ref`、`Result::as_ref`、
+`Option::map`、`Result::map`、`Result::map_err` 和 `Option<Result<T, E>>::transpose`
+仅保留或借用原值：无基线保持 `Ok(None)`，成功保持同一基线，失败保持原错误全文。
+是否采用、初始范围、首个错误与具体错误类别全部由 Verus 内核决定。
+
 规范性权威、真实消费理由、证明与生产调用的绑定，以及 `E_VERUS_COVERAGE` 的目标失败语义，由 [SPEC 第 2.1.1 节](../SPEC.md#211-verus-规范性权威与实际调用)统一维护。当前结果合同只覆盖已登记操作，全仓覆盖门仍未实现，不能把局部检查通过当作全仓证明。
 
 本仓按批次把实际决策和状态逻辑迁到 Verus。完整目标是所有 SPEC 与仓内程序逻辑都有证明，
