@@ -409,6 +409,25 @@ index 的完整逐行状态与文件系统比较仍待证明；stage 插入的�
 NUL 记录由惰性迭代改为借用数组，增加 O(K) 引用存储，meta 字段仍使用借用数组。
 其余新增判断读取末字节、字段数和至多一个 stage 字节；完整构建、证明、CI 与存储成本未测。
 
+checkout 的文件系统观察判断归 `verified_status`：`checkout_entry_supported` 精确判断
+完整 kind／mode 文本，`checkout_symbolic_link` 识别原符号链接模式；
+`checkout_regular_file_matches` 只检查普通文件与 owner execute 位，
+`checkout_opened_file_matches` 比较打开后的普通文件标志、完整长度与完整权限字。
+实际 `matches_entry` 直接消费这些函数，最终摘要全文比较复用已证明的 `equal_text`。
+哈希循环直接消费 `checkout_hash_advance`／`checkout_hash_complete`：每次计数先拒绝
+u64 溢出，再拒绝超过原观察长度，结束必须精确同长；原错误全文和优先级不变。
+独立预期列出三种支持模式、错误 kind、前缀／NUL／LF／Unicode 后缀、owner／其他执行位、
+全部身份条件组合、完整权限的其他位变化、零与最大整数边界，以及溢出先于增长的错误；
+同一预期作为普通 Rust 测试执行。复用原两个 runner-status 严格整 crate 根和 FILEMAP
+消费边，不新增操作、依赖、外部假设、仓内受信函数、过滤或预算，Python 迁移继续暂缓。
+
+外部观察仍来自已采用 Rust 文件接口：`Metadata::is_file`／`is_symlink`／`len`、
+Unix `PermissionsExt::mode` 与 `Read::read` 提供本次原类型、完整权限字、长度和实际读取数；
+`u64::checked_add`、字符串借用／克隆使用固定 vstd 合同。各元数据字段从同一不可变观察对象读取，
+不增加文件系统 IO；非普通文件时也读取该对象的权限值，然后由同源判断拒绝。
+原 SHA／字节读取、路径遍历、摘要算法选择、完整循环和外层错误／状态组合仍须继续证明。
+新增计数和权限判断为常量工作，文本按完整字段比较；证明、构建、CI 和完整生命周期成本未测。
+
 index 的完整单行解析由 `verified_status::parse_git_index_row` 直接组合上述同源函数，
 从原始完整字节定义首 TAB、三个空格字段、单字节 stage、路径和 OID 的检查顺序及原错误。
 成功时 path／mode／OID／stage 完整保留；字段空值、TAB 后内容和多字节文本不被归一化。
