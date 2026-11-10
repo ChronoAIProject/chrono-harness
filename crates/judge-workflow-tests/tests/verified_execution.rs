@@ -8,8 +8,83 @@ mod policy;
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 verus! {
+
+fn expect(actual: bool)
+    requires actual,
+    ensures actual,
+{
+    if !actual { panic!(); }
+}
+
+fn expect_code(actual: &str, expected: &str)
+    requires actual.spec_bytes() == expected.spec_bytes(),
+    ensures actual@ == expected@,
+{
+    proof {
+        vstd::utf8::encode_utf8_decode_utf8(actual@);
+        vstd::utf8::encode_utf8_decode_utf8(expected@);
+    }
+    let same = policy::response::identifiers::equal_text(actual, expected);
+    expect(same);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn all_five_domain_rejections_have_fail_status() {
+    let (code, status) = policy::response::classify_error("E_BRANCH_STALE: 过期");
+    expect_code(code, "E_BRANCH_STALE");
+    expect(matches!(status, policy::response::Status::Fail));
+    let (code, status) = policy::response::classify_error("E_RETIREMENT");
+    expect_code(code, "E_RETIREMENT");
+    expect(matches!(status, policy::response::Status::Fail));
+    let (code, status) = policy::response::classify_error("E_REQUIRED_TEST_REMOVED: test:a:b");
+    expect_code(code, "E_REQUIRED_TEST_REMOVED");
+    expect(matches!(status, policy::response::Status::Fail));
+    let (code, status) = policy::response::classify_error("E_INTEGRATION_REQUIRED:");
+    expect_code(code, "E_INTEGRATION_REQUIRED");
+    expect(matches!(status, policy::response::Status::Fail));
+    let (code, status) = policy::response::classify_error("E_INTEGRATION_MISMATCH: 不符");
+    expect_code(code, "E_INTEGRATION_MISMATCH");
+    expect(matches!(status, policy::response::Status::Fail));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn invalid_prefixes_preserve_the_workflow_fallback() {
+    let (code, status) = policy::response::classify_error("");
+    expect_code(code, "E_WORKFLOW_INPUT");
+    expect(matches!(status, policy::response::Status::Error));
+    let (code, status) = policy::response::classify_error(":E_BRANCH_STALE");
+    expect_code(code, "E_WORKFLOW_INPUT");
+    expect(matches!(status, policy::response::Status::Error));
+    let (code, status) = policy::response::classify_error("e_BRANCH_STALE: lower");
+    expect_code(code, "E_WORKFLOW_INPUT");
+    expect(matches!(status, policy::response::Status::Error));
+    let (code, status) = policy::response::classify_error(" E_BRANCH_STALE: space");
+    expect_code(code, "E_WORKFLOW_INPUT");
+    expect(matches!(status, policy::response::Status::Error));
+    let (code, status) = policy::response::classify_error("E: short");
+    expect_code(code, "E_WORKFLOW_INPUT");
+    expect(matches!(status, policy::response::Status::Error));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn complete_code_identity_is_required_for_a_rejection() {
+    let (code, status) = policy::response::classify_error("E_BRANCH_STALE_SUFFIX: detail");
+    expect_code(code, "E_BRANCH_STALE_SUFFIX");
+    expect(matches!(status, policy::response::Status::Error));
+    let (code, status) = policy::response::classify_error("E_BRANCH_STALE\0: detail");
+    expect_code(code, "E_BRANCH_STALE\0");
+    expect(matches!(status, policy::response::Status::Error));
+    let (code, status) = policy::response::classify_error("E_雪\0:后:文");
+    expect_code(code, "E_雪\0");
+    expect(matches!(status, policy::response::Status::Error));
+    let (code, status) = policy::response::classify_error("E_:");
+    expect_code(code, "E_");
+    expect(matches!(status, policy::response::Status::Error));
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn collected_execution_requires_every_fact() {
