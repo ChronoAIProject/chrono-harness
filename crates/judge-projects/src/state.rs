@@ -1,4 +1,5 @@
 //! Execution originals belong to projects; retention only protects their lifetime.
+use crate::verified_state::{self, OperationObservation};
 use crate::{OperationResult, Results};
 use chrono_harness::retained_artifacts::retention::{self, Inventory, Publication};
 use chrono_harness::{ProcessEvidence, file_identity, no_symlink_parents, sha256};
@@ -101,14 +102,16 @@ pub(crate) fn address(plan: &Execution) -> Result<&str, String> {
         .ok_or("E_OPERATION_STATE: missing registered operation state address".into())
 }
 
-fn terminal(row: &OperationResult) -> bool {
-    row.status == "blocked"
-        || row.receipt.as_ref().is_some_and(|receipt| {
+fn observation(row: &OperationResult) -> OperationObservation<'_> {
+    OperationObservation {
+        status: &row.status,
+        process_terminal: row.receipt.as_ref().map(|receipt| {
             chrono_harness::verified_release::process_exit_known(
                 receipt.process.exit_code,
                 receipt.process.exit_signal,
             )
-        })
+        }),
+    }
 }
 
 fn encoded(row: &OperationResult) -> Result<Value, String> {
@@ -119,11 +122,7 @@ fn encoded(row: &OperationResult) -> Result<Value, String> {
     }
     value["schema"] = json!("chrono-project-operation-result/v1");
     value["updated_at_unix_millis"] = json!(now()?);
-    value["state"] = json!(if terminal(row) {
-        "completed"
-    } else {
-        "unknown"
-    });
+    value["state"] = json!(verified_state::operation_state(&observation(row)));
     Ok(value)
 }
 
@@ -176,11 +175,13 @@ impl Run {
             row.original = Some(reference.clone());
             originals.push(reference);
         }
-        let terminal = results
+        let observations = results
             .executed
             .iter()
             .chain(&results.blocked)
-            .all(terminal);
+            .map(observation)
+            .collect();
+        let terminal = verified_state::all_terminal(&observations);
         let reference = self.original.write(
             "result.json",
             &json!({
@@ -253,9 +254,11 @@ impl Operation {
                 None,
             ]) {
                 let identity = file_identity(path)?;
-                if expected.is_some_and(|(digest, length)| identity != (digest.clone(), length)) {
-                    return Err("operation original differs from the actual process result".into());
-                }
+                verified_state::validate_original(
+                    &identity.0,
+                    identity.1,
+                    expected.map(|(digest, length)| (digest.as_str(), length)),
+                )?;
                 inputs.push(
                     path.strip_prefix(&self.original.root)
                         .map_err(|e| e.to_string())?
@@ -270,20 +273,21 @@ impl Operation {
         let path = self.original.path.clone();
         // The sealed lossless result takes custody before temporary live streams
         // are released. Unknown results keep both originals and their recovery root.
-        let known = terminal(row);
+        let known = verified_state::terminal(&observation(row));
         self.original.finish(
             false,
             json!({"kind":"project-operation", "operation":row.operation, "terminal":known}),
             &inputs,
         )?;
         if let Some(inventory) = Inventory::adopted(&root)? {
-            if !inputs.is_empty() {
+            let release = verified_state::release_plan(known, inputs.len());
+            if release.settle_inputs {
                 inventory.settle_publication_inputs(&path, &inputs)?;
-                if known {
-                    inventory.dependencies_paths(&path, &[])?;
-                }
             }
-            if known {
+            if release.release_dependencies {
+                inventory.dependencies_paths(&path, &[])?;
+            }
+            if release.release_recovery {
                 inventory.reference_paths(
                     &format!("projects-recovery:{}", sha256(path.as_bytes())),
                     &[],

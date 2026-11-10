@@ -243,9 +243,11 @@
     {"path":"crates/judge-projects/src/lib.rs","owner":"judge-projects","surface":"judge-implementation","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects"}]},
     {"path":"crates/judge-projects/src/state.rs","owner":"judge-projects","surface":"judge-implementation","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects"}]},
     {"path":"crates/judge-projects/src/verified_languages.rs","verification":{"role":"program","roots":[{"path":"crates/judge-projects/src/verified_languages.rs","operation":"verify.project-languages"},{"path":"crates/judge-projects-tests/tests/verified_languages.rs","operation":"verify.project-languages-tests"}]},"owner":"judge-projects","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects"},{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"}]},
+    {"path":"crates/judge-projects/src/verified_state.rs","verification":{"role":"program","roots":[{"path":"crates/judge-projects/src/verified_state.rs","operation":"verify.project-state"},{"path":"crates/judge-projects-tests/tests/verified_state.rs","operation":"verify.project-state-tests"}]},"owner":"judge-projects","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects"},{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"}]},
     {"path":"crates/judge-projects/src/main.rs","owner":"judge-projects","surface":"judge-implementation","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects"}]},
     {"path":"crates/judge-projects-tests/Cargo.toml","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-projects-tests"}]},
     {"path":"crates/judge-projects-tests/tests/verified_languages.rs","verification":{"role":"program","roots":[{"path":"crates/judge-projects-tests/tests/verified_languages.rs","operation":"verify.project-languages-tests"}]},"owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"}]},
+    {"path":"crates/judge-projects-tests/tests/verified_state.rs","verification":{"role":"program","roots":[{"path":"crates/judge-projects-tests/tests/verified_state.rs","operation":"verify.project-state-tests"}]},"owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"}]},
     {"path":"crates/judge-projects-tests/Cargo.lock","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-projects-tests"}]},
     {"path":"crates/judge-projects-tests/tests/execution.rs","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"}]},
     {"path":"crates/judge-projects-tests/tests/support/execution_driver.rs","owner":"judge-projects-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-projects-tests"}]},
@@ -1365,6 +1367,8 @@
       "operations": [
         "verify.project-languages",
         "verify.project-languages-tests",
+        "verify.project-state",
+        "verify.project-state-tests",
         "fmt.judge-projects",
         "fmt.judge-projects-tests",
         "build.runner",
@@ -1609,7 +1613,19 @@
           ".chrono-harness/state/"
         ]
       },
+      "verify.project-state": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
       "verify.project-languages-tests": {
+        "resources": [],
+        "outputs": [
+          ".chrono-harness/state/"
+        ]
+      },
+      "verify.project-state-tests": {
         "resources": [],
         "outputs": [
           ".chrono-harness/state/"
