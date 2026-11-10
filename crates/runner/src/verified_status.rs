@@ -720,6 +720,146 @@ pub proof fn git_index_stage_obeys_cmp<'a>()
 
 pub type GitIndexStages<'a> = BTreeMap<GitIndexStage<'a>, ()>;
 
+pub open spec fn git_index_stages_ordered(keys: Seq<GitIndexStage>) -> bool {
+    forall|i: int, j: int| 0 <= i < j < keys.len()
+        ==> #[trigger] keys[i].order_spec(&keys[j]) == Ordering::Less
+}
+
+/// 解析完成后的只读键库存。只借用原字段；临时 BTreeMap 随解析返回释放。
+pub struct GitIndexStageLookup<'a> {
+    keys: Vec<GitIndexStage<'a>>,
+}
+
+impl<'a> GitIndexStageLookup<'a> {
+    pub closed spec fn view(&self) -> Seq<GitIndexStage<'a>> { self.keys@ }
+
+    pub open spec fn valid(&self) -> bool { git_index_stages_ordered(self.view()) }
+
+    pub open spec fn contains_spec(&self, path: &str, stage: &str) -> bool {
+        exists|key: GitIndexStage| (#[trigger] self.view().to_set().contains(key))
+            && key.path.spec_bytes() == path.spec_bytes()
+            && key.stage.spec_bytes() == stage.spec_bytes()
+    }
+
+    pub fn len(&self) -> (count: usize)
+        ensures count == self.view().len(),
+    { self.keys.len() }
+
+    /// 全文二分查找；不同借用地址、UTF-8 和 NUL 都按完整原字节比较。
+    pub fn contains(&self, path: &str, stage: &str) -> (found: bool)
+        requires self.valid(),
+        ensures found == self.contains_spec(path, stage),
+    {
+        let query = GitIndexStage { path, stage };
+        let mut low: usize = 0;
+        let mut high = self.keys.len();
+        while low < high
+            invariant
+                0 <= low <= high <= self.keys.len(), self.valid(),
+                query.path == path, query.stage == stage,
+                forall|i: int| 0 <= i < low
+                    ==> (#[trigger] self.keys@[i]).order_spec(&query) == Ordering::Less,
+                forall|i: int| high <= i < self.keys.len()
+                    ==> query.order_spec(&(#[trigger] self.keys@[i])) == Ordering::Less,
+            decreases high - low,
+        {
+            let mid = low + (high - low) / 2;
+            let order = self.keys[mid].cmp(&query);
+            match order {
+            Ordering::Equal => {
+                proof {
+                    git_index_stage_order_laws(&self.keys@[mid as int], &query, &query);
+                    let key = self.keys@[mid as int];
+                    assert(key.same(&query));
+                    assert(key.path.spec_bytes() == path.spec_bytes());
+                    assert(key.stage.spec_bytes() == stage.spec_bytes());
+                    assert(self.view().to_set().contains(key));
+                    assert(exists|key: GitIndexStage| (#[trigger] self.view().to_set().contains(key))
+                        && key.path.spec_bytes() == path.spec_bytes()
+                        && key.stage.spec_bytes() == stage.spec_bytes());
+                }
+                return true;
+            },
+            Ordering::Less => {
+                proof {
+                    assert forall|i: int| 0 <= i < mid + 1
+                        implies (#[trigger] self.keys@[i]).order_spec(&query) == Ordering::Less by {
+                        if low <= i < mid {
+                            git_index_stage_order_laws(&self.keys@[i], &self.keys@[mid as int], &query);
+                        }
+                    }
+                }
+                low = mid + 1;
+            },
+            Ordering::Greater => {
+                proof {
+                    git_index_stage_order_laws(&query, &self.keys@[mid as int], &query);
+                    assert forall|i: int| mid <= i < self.keys.len()
+                        implies query.order_spec(&(#[trigger] self.keys@[i])) == Ordering::Less by {
+                        if mid < i < high {
+                            git_index_stage_order_laws(&query, &self.keys@[mid as int], &self.keys@[i]);
+                        }
+                    }
+                }
+                high = mid;
+            },
+            }
+        }
+        proof {
+            if self.contains_spec(path, stage) {
+                let key = choose|key: GitIndexStage| (#[trigger] self.view().to_set().contains(key))
+                    && key.path.spec_bytes() == path.spec_bytes()
+                    && key.stage.spec_bytes() == stage.spec_bytes();
+                let i = choose|i: int| 0 <= i < self.keys.len() && self.keys@[i] == key;
+                if i < low {
+                    git_index_stage_order_laws(&key, &query, &query);
+                } else {
+                    git_index_stage_order_laws(&query, &key, &key);
+                }
+            }
+        }
+        false
+    }
+}
+
+/// 标准 keys 迭代提供完整键和顺序；本函数证明复制、基数和终止。
+pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIndexStageLookup<'a>)
+    ensures out.valid(), out.view().to_set() == stages@.dom(), out.view().len() == stages@.len(),
+{
+    proof { git_index_stage_obeys_cmp(); }
+    let mut iterator = stages.keys();
+    let ghost all = iterator@.1;
+    proof { all.unique_seq_to_set(); }
+    let mut keys: Vec<GitIndexStage<'a>> = Vec::new();
+    loop
+        invariant
+            iterator@.1 == all, iterator@.0 == keys.len(),
+            0 <= iterator@.0 <= all.len(), keys@ == all.take(iterator@.0),
+            all.to_set() == stages@.dom(), all.len() == stages@.len(),
+            vstd::std_specs::btree::increasing_seq(all),
+        decreases all.len() - keys.len(),
+    {
+        match iterator.next() {
+            None => {
+                proof {
+                    git_index_stage_obeys_cmp();
+                    vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
+                    assert(keys@ == all);
+                    assert forall|i: int, j: int| 0 <= i < j < keys.len()
+                        implies #[trigger] keys@[i].order_spec(&keys@[j]) == Ordering::Less by {
+                        assert(all[i].cmp_spec(&all[j]) == Ordering::Less);
+                    }
+                }
+                return GitIndexStageLookup { keys };
+            },
+            Some(key) => {
+                keys.push(GitIndexStage { path: key.path, stage: key.stage });
+                proof { assert(keys@ =~= all.take(iterator@.0)); }
+            },
+        }
+    }
+}
+
 fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
     ensures forall|a: GitIndexStage, b: GitIndexStage|
         #![trigger stages@.contains_key(a), stages@.contains_key(b)]
@@ -934,7 +1074,7 @@ pub fn parse_git_index_row(raw: &str) -> (out: Result<GitIndexRow<'_>, GitInvent
 
 pub struct GitIndexInventory<'a> {
     pub rows: Vec<GitIndexRow<'a>>,
-    pub stages: GitIndexStages<'a>,
+    pub stages: GitIndexStageLookup<'a>,
 }
 
 pub open spec fn git_index_row_at(rows: Seq<&str>, i: int) -> Result<GitIndexRowBytes, GitInventoryErrorView> {
@@ -965,6 +1105,14 @@ pub open spec fn git_index_inventory_stages(stages: Map<GitIndexStage, ()>, pars
         && (forall|key: GitIndexStage| stages.contains_key(key) ==> exists|i: int| 0 <= i < parsed.len()
             && key == GitIndexStage { path: parsed[i].path, stage: parsed[i].stage })
         && (forall|i: int| 0 <= i < parsed.len() ==> #[trigger] stages.contains_key(
+            GitIndexStage { path: parsed[i].path, stage: parsed[i].stage }))
+}
+
+pub open spec fn git_index_lookup_inventory(stages: Seq<GitIndexStage>, parsed: Seq<GitIndexRow>) -> bool {
+    stages.len() == parsed.len()
+        && (forall|key: GitIndexStage| stages.to_set().contains(key) ==> exists|i: int| 0 <= i < parsed.len()
+            && key == GitIndexStage { path: parsed[i].path, stage: parsed[i].stage })
+        && (forall|i: int| 0 <= i < parsed.len() ==> #[trigger] stages.to_set().contains(
             GitIndexStage { path: parsed[i].path, stage: parsed[i].stage }))
 }
 
@@ -1088,7 +1236,8 @@ pub fn parse_git_index_rows<'a>(rows: &[&'a str]) -> (out: Result<GitIndexInvent
     ensures match out {
         Ok(inventory) => git_index_prefix_valid(rows@, rows.len() as int)
             && git_index_prefix_rows(inventory.rows@, rows@, rows.len() as int)
-            && git_index_inventory_stages(inventory.stages@, inventory.rows@),
+            && inventory.stages.valid()
+            && git_index_lookup_inventory(inventory.stages.view(), inventory.rows@),
         Err(error) => exists|i: int| 0 <= i < rows.len() && git_index_prefix_valid(rows@, i)
             && git_index_error_at(rows@, i, error.view()),
     },
@@ -1135,7 +1284,8 @@ pub fn parse_git_index_rows<'a>(rows: &[&'a str]) -> (out: Result<GitIndexInvent
         parsed.push(row);
         i += 1;
     }
-    Ok(GitIndexInventory { rows: parsed, stages })
+    let lookup = snapshot_git_index_stages(&stages);
+    Ok(GitIndexInventory { rows: parsed, stages: lookup })
 }
 
 /// 与原 checkout 一致：只比较 stage、mode 和 OID，不增加 kind／mode 准入。
