@@ -2124,6 +2124,8 @@
             "verified_execution",
             "--test",
             "verified_certificate",
+            "--test",
+            "verified_transition",
             "--",
             "--skip",
             "full_units::"
