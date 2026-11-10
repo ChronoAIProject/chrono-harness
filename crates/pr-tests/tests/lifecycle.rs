@@ -1,5 +1,5 @@
 use serde_json::{Value, json};
-use std::{fs, process::Command};
+use std::{fs, io::Write, process::Command};
 use tempfile::TempDir;
 
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
@@ -30,6 +30,18 @@ fn pending() -> Value {
 
 struct Host {
     root: TempDir,
+}
+impl Drop for Host {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.root.disable_cleanup(true);
+            let _ = writeln!(
+                std::io::stderr(),
+                "PR test fixture retained for failure diagnosis and regression acceptance: {}",
+                self.root.path().display()
+            );
+        }
+    }
 }
 impl Host {
     fn new(steps: Vec<Value>) -> Self {
@@ -757,19 +769,21 @@ fn continues_a_known_operation_and_keeps_command_and_object_facts_separate() {
     );
 }
 
-fn maintain_after_diagnostics(h: &Host) {
+fn maintain_after_diagnostics(h: &Host) -> Value {
     let future = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs()
         + 100000;
+    let mut result = Value::Null;
     for _ in 0..8 {
-        Inventory::adopted(h.root.path())
+        result = Inventory::adopted(h.root.path())
             .unwrap()
             .unwrap()
             .maintain_at(future)
             .unwrap();
     }
+    result
 }
 
 #[test]
@@ -881,8 +895,11 @@ fn continuation_releases_only_its_prior_record_after_a_durable_handoff() {
     ]);
     assert_eq!(code, 0, "{terminal}");
     assert_eq!(terminal["merge_commit"], OTHER);
-    maintain_after_diagnostics(&h);
-    assert!(!h.root.path().join(current_path).exists());
+    let maintenance = maintain_after_diagnostics(&h);
+    assert!(
+        !h.root.path().join(current_path).exists(),
+        "terminal operation remains after maintenance: {maintenance}"
+    );
     assert!(
         !h.root
             .path()
