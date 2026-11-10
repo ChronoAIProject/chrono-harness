@@ -402,10 +402,24 @@ ASCII 分隔字节由固定 vstd 的 UTF-8 引理证明是字符边界，跳过�
 外围仅使用标准安全 `str::from_utf8`／`Result::ok` 提供实际解码观察，拆分直接调用同源实现；
 Verus 内使用固定 vstd 的切片、`str::as_bytes`／`str::len`／`str::split_at`、
 Vec 存取、Option／Result 和 `ToString` 合同，没有新增仓内受信函数或 unsafe。
-index 调用组合、重复 stage 与文件系统比较仍待证明。
+index 的重复 stage、完整逐行状态与文件系统比较仍待证明。
 拆分扫描 N 个字节、保存 K 个借用字段，时间 O(N + K)、额外引用 O(K)；
 NUL 记录由惰性迭代改为借用数组，增加 O(K) 引用存储，meta 字段仍使用借用数组。
 其余新增判断读取末字节、字段数和至多一个 stage 字节；完整构建、证明、CI 与存储成本未测。
+
+index 的完整单行解析由 `verified_status::parse_git_index_row` 直接组合上述同源函数，
+从原始完整字节定义首 TAB、三个空格字段、单字节 stage、路径和 OID 的检查顺序及原错误。
+成功时 path／mode／OID／stage 完整保留；字段空值、TAB 后内容和多字节文本不被归一化。
+tree 与 index 复用 `GitInventoryError` 的原消息／原路径及已证明的格式化转交，
+唯一外部边界仍是标准 Debug 格式化，没有新增仓内受信函数。
+`git_index_entry_changed` 拥有真实 checkout 的行比较：仅 stage `0` 且存在条目、完整 mode 和 OID
+相同时返回未改变；kind 和 path 不参与此字段比较，外围仍用完整 path 查找预期条目。
+独立 Verus 预期固定字段和分隔位置，核 stage 边界、完整借用字段、错误优先级、原错误、缺条目、
+全部字段差异及前缀／NUL／Unicode 身份；同一预期在普通 Rust 真实运行。
+复用现有 runner-status 生产／独立整 crate 根及未过滤测试，不增加证明操作或预算。
+解析扫描完整行并保存三个借用字段；普通行保留原 map 查询，非零 stage 行现在也取得预期条目后
+交给同源比较，增加一次 O(log K) 路径查询。完整证明、构建、运行与 CI 成本未测。
+重复 stage、changed 集合维护、完整循环、文件系统观察和编译／实际调用完整绑定仍待证明。
 
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
