@@ -3,6 +3,8 @@
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
@@ -255,6 +257,164 @@ pub fn valid_cache_registry(schema: Option<&str>, primary_checkout: bool) -> (va
         Some(schema) => identifiers::equal_text(schema, "chrono-cache/v2") && primary_checkout,
         None => false,
     }
+}
+
+pub open spec fn cache_name_byte(byte: u8) -> bool {
+    48 <= byte <= 57 || 65 <= byte <= 90 || 97 <= byte <= 122
+        || byte == 45 || byte == 95 || byte == 46 || byte == 58
+}
+
+pub open spec fn cache_name(bytes: Seq<u8>) -> bool {
+    0 < bytes.len() <= 128
+        && forall|i: int| 0 <= i < bytes.len() ==> cache_name_byte(#[trigger] bytes[i])
+}
+
+pub fn valid_cache_name(bytes: &[u8]) -> (valid: bool)
+    ensures valid == cache_name(bytes@),
+{
+    if bytes.len() == 0 || bytes.len() > 128 { return false; }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant 0 < bytes.len() <= 128, i <= bytes.len(),
+            forall|j: int| 0 <= j < i ==> cache_name_byte(#[trigger] bytes[j]),
+        decreases bytes.len() - i,
+    {
+        let byte = bytes[i];
+        if !((48 <= byte && byte <= 57) || (65 <= byte && byte <= 90)
+            || (97 <= byte && byte <= 122) || byte == 45 || byte == 95
+            || byte == 46 || byte == 58) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn cache_contains(values: Seq<&str>, target: &str) -> bool {
+    exists|i: int| 0 <= i < values.len() && values[i]@ == target@
+}
+
+pub fn cache_has_text(values: &[&str], target: &str) -> (found: bool)
+    ensures found == cache_contains(values@, target),
+{
+    let mut i = 0;
+    while i < values.len()
+        invariant i <= values.len(),
+            forall|j: int| 0 <= j < i ==> values@[j]@ != target@,
+        decreases values.len() - i,
+    {
+        if identifiers::equal_text(values[i], target) { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub open spec fn cache_unique(values: Seq<&str>) -> bool {
+    forall|i: int, j: int| 0 <= i < j < values.len() ==> values[i]@ != values[j]@
+}
+
+pub fn cache_has_unique_text(values: &[&str]) -> (unique: bool)
+    ensures unique == cache_unique(values@),
+{
+    let mut i = 0;
+    while i < values.len()
+        invariant i <= values.len(),
+            forall|a: int, b: int| 0 <= a < i && a < b < values.len()
+                ==> values@[a]@ != values@[b]@,
+        decreases values.len() - i,
+    {
+        let mut j = i + 1;
+        while j < values.len()
+            invariant i < values.len(), i < j <= values.len(),
+                forall|b: int| i < b < j ==> values@[i as int]@ != values@[b]@,
+            decreases values.len() - j,
+        {
+            if identifiers::equal_text(values[i], values[j]) { return false; }
+            j += 1;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn cache_subset(selected: Seq<&str>, allowed: Seq<&str>) -> bool {
+    forall|i: int| 0 <= i < selected.len() ==> cache_contains(allowed, selected[i])
+}
+
+pub fn cache_is_subset(selected: &[&str], allowed: &[&str]) -> (valid: bool)
+    ensures valid == cache_subset(selected@, allowed@),
+{
+    let mut i = 0;
+    while i < selected.len()
+        invariant i <= selected.len(),
+            forall|j: int| 0 <= j < i ==> cache_contains(allowed@, selected@[j]),
+        decreases selected.len() - i,
+    {
+        if !cache_has_text(allowed, selected[i]) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub fn valid_cache_names(values: &[&str]) -> (valid: bool)
+    ensures valid == (forall|i: int| 0 <= i < values.len()
+        ==> cache_name(values@[i].spec_bytes())),
+{
+    let mut i = 0;
+    while i < values.len()
+        invariant i <= values.len(),
+            forall|j: int| 0 <= j < i ==> cache_name(values@[j].spec_bytes()),
+        decreases values.len() - i,
+    {
+        if !valid_cache_name(values[i].as_bytes()) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn cache_preparation(values: Seq<&str>) -> bool {
+    values.len() > 0 && values[0]@.len() > 0
+        && forall|i: int| 0 <= i < values.len() ==> literal(#[trigger] values[i].spec_bytes())
+}
+
+pub fn valid_cache_preparation(values: &[&str]) -> (valid: bool)
+    ensures valid == cache_preparation(values@),
+{
+    if values.len() == 0 || values[0].is_empty() { return false; }
+    let mut i = 0;
+    while i < values.len()
+        invariant values.len() > 0, values@[0]@.len() > 0, i <= values.len(),
+            forall|j: int| 0 <= j < i ==> literal(#[trigger] values@[j].spec_bytes()),
+        decreases values.len() - i,
+    {
+        if !valid_literal(values[i].as_bytes()) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn cache_consumer(
+    known_job: bool, name: &str, need: &str, output_use: &str, preparation: Seq<&str>,
+    caches: Seq<&str>, saves: Seq<&str>, after_bootstrap: Seq<&str>,
+) -> bool {
+    known_job && cache_name(name.spec_bytes()) && need@.len() > 0 && output_use@.len() > 0
+        && cache_preparation(preparation) && caches.len() > 0
+        && (forall|i: int| 0 <= i < caches.len() ==> cache_name(caches[i].spec_bytes()))
+        && cache_unique(caches) && cache_unique(saves) && cache_subset(saves, caches)
+        && cache_unique(after_bootstrap) && cache_subset(after_bootstrap, saves)
+}
+
+/// need 和 output_use 由适配器保留原 trim 结果；其它字段逐字比较。
+pub fn valid_cache_consumer(
+    known_job: bool, name: &str, need: &str, output_use: &str, preparation: &[&str],
+    caches: &[&str], saves: &[&str], after_bootstrap: &[&str],
+) -> (valid: bool)
+    ensures valid == cache_consumer(known_job, name, need, output_use, preparation@,
+        caches@, saves@, after_bootstrap@),
+{
+    known_job && valid_cache_name(name.as_bytes()) && !need.is_empty() && !output_use.is_empty()
+        && valid_cache_preparation(preparation) && caches.len() > 0 && valid_cache_names(caches)
+        && cache_has_unique_text(caches) && cache_has_unique_text(saves)
+        && cache_is_subset(saves, caches) && cache_has_unique_text(after_bootstrap)
+        && cache_is_subset(after_bootstrap, saves)
 }
 
 #[verifier::inline]
