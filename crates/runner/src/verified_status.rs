@@ -1375,6 +1375,7 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
             Some(key) => { paths.push(key.text.clone()); },
             None => {
                 proof {
+                    tree_path_obeys_cmp();
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
                     assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
                         == (exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text) by {
