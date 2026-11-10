@@ -480,7 +480,7 @@ index 的完整逐行解析和 stage 库存由同根 `parse_git_index_rows` 维�
 
 Git 索引标记的实际类型 `IndexFlag`、完整字段克隆与相等、原字节 NUL 拆分、
 单行准入及完整行遍历也由同一 `verified_status` 根拥有；`wire` 只重导出实际类型，
-`Reader::index_flags` 直接消费 `git_index_flag_records`／`parse_git_index_flag_rows`。
+`Reader::index_flags` 直接消费 `git_nul_records`／`parse_git_index_flag_rows`。
 拆分忽略空项，保留顺序、重复和没有末尾 NUL 的记录，不提前把整份输入解码。
 每行先检查至少三个字节、第二字节为空格、首字节为 ASCII 字母，再采用该行的标准安全
 UTF-8 解码观察；成功完整保留原大小写和路径，失败严格返回最早一行的原格式或 UTF-8 错误。
@@ -538,6 +538,113 @@ UTF-8 字节严格排序及终止。`checkout_index_changes` 遍历全部解析�
 这是算法上界估计，不是机械成本证明或实测；完整构建、验证、CI、存储与运行成本未测。
 文件系统外层循环、完整哈希循环、外围错误／IO 组合和全仓覆盖门仍待证明，
 不把这些局部入口登记为整个 `checkout.rs` 已证明。
+
+`normalize_checkout_paths` 完整合并两个实际路径库存，证明输出成员恰为两输入的并集、
+按完整 UTF-8 字节严格排序、无重复且长度不超过输入长度之和。
+`Reader::checkout` 直接用它合并未跟踪与忽略库存，`Reader::untracked_excluding` 用它整理
+排除产物后的库存；两处普通 Rust 的 sort／dedup 已移除。空路径、NUL、换行、Unicode、
+大小写和前缀均按全文保留，不过滤或归一化。
+
+复用现有 `CheckoutChanges`、完整比较及排序输出；`record_checkout_owned_change` 按值接收
+实际字符串并证明精确成员与基数变化，原借用入口只转交完整文本。
+固定 vstd 的 `Vec::append` 合同将第二序列完整追加并清空第二向量，
+`Vec::into_iter`／`vec::IntoIter::next` 按原序列逐项转移所有值、推进索引并在末尾返回 None；
+本仓证明整个合并循环的输入对应、精确并集与终止，不新增仓内受信函数。
+四项独立 Verus 预期同时作为 Rust 测试执行，核两库存为空、任一侧非空、跨库存全文重复、
+反序输入的完整排序与精确数量，覆盖空串、大小写、前缀、NUL、换行及 Unicode。
+复用原两个 runner-status 整 crate 根、真实消费边和未过滤测试，不新增工具、操作或预算。
+
+设输入共 N 项、不同路径 U 项，插入约需 O(N log U) 次完整路径比较，字节比较另计。
+输入字符串按值移入 map，输出沿用已有复制入口；相较原 Vec sort／dedup 增加 map 存储和
+U 个输出字符串副本，峰值同时持有两份不同路径文本。这里是算法估计，完整证明、构建、
+运行、CI 与存储成本未测，不宣称性能收益。原 `paths` 的字节拆分及解码结果选择已沿
+下述入口迁移；Git IO 及其余外围判断仍有存量缺口，不宣称完整 `facts.rs` 或全仓覆盖门已完成。
+
+`git_nul_records` 同时供索引标记和实际路径库存使用，复用原拆分证明并采用通用名称，
+移除原专用名称。只丢弃空项，保留原字节、数量、顺序、重复和未终止尾行；
+不做索引头部、UTF-8 或路径准入。`facts::paths` 将该完整记录逐项交给标准解码器，
+再直接调用 `parse_git_text_rows`。后者按值消费全部解码观察，证明成功结果与每一项全文对应、
+数量与顺序相同；失败必须来自首个缺失解码，之前全部成功，并返回原完整 UTF-8 错误。
+`facts::utf8` 也直接消费同源 `git_output_text`，成功按值移交完整字符串，失败选择及原错误
+由 Verus 拥有，不再由普通 Rust 的 map_err 判断。
+
+外部边界明确采用固定 Rust 的 `String::from_utf8`：输入为本次完整 owned 字节向量，
+成功为这些原字节的完整 UTF-8 字符串，失败为原解码错误；`Result::ok` 只转为 Some／None。
+路径适配中的切片 `to_vec` 复制该完整记录，标准 `Vec::into_iter`／`Iterator::map`／
+`collect::<Vec<_>>` 逐项保留数量、顺序和对应，不在边界选择错误或发布部分路径。
+这段标准解码及搬运对应采用列明的接口合同，尚未在本仓机械精化。
+Verus 内继续使用固定 vstd 的 Vec 存取和消费迭代合同，循环终止、首错与完整输出由本仓证明。
+四项独立 Verus 预期同时作为普通 Rust 测试运行，核空／完整输出、原始非 UTF-8 字节不被拆分器
+过滤、空项／换行／未终止行、全文顺序与重复，以及每个边界的缺失解码拒绝和完整错误。
+复用原两个 runner-status 整 crate 根、真实调用及未过滤测试；没有新工具、操作或仓内受信函数。
+
+拆分与解码按完整输入字节线性扫描，字符串解码后按值移动，不由仓内再次复制文本。
+新增 O(K) 原行引用及解码观察，随后再构造输出句柄向量，K 为非空行数。
+与原短路 collect 不同，出现错误时也先解码后续记录；没有性能收益声明，完整构建、证明、
+运行、CI 及存储成本未测。原 Git 进程、其余 facts／IO 组合、完整源码绑定与全仓覆盖仍未完成。
+
+`collect_registry_paths` 在同一 runner-status 根证明登记快照的完整路径库存。
+真实 `facts::registry_paths` 显式读取四个固定字段，将观察直接交给该函数；
+成功精确返回五项：入口原文本、judges、projects、filemap、workflow，保留顺序与重复。
+入口不增加相对路径校验；每个登记字段先判缺失，再复用 `verified_paths::relative_path`，
+错误来自最早失败字段，缺失消息保留四个原完整文本，非法路径保留原全文，不发布部分库存。
+`admit_relative_path` 证明同一相对路径谓词的 Ok／Err 结果，公共 `relative_path` 直接消费；
+`RegistryPathError::render` 的缺失／非法分支、原消息复制和完整非法文本转交也直接由 Verus 定义。
+
+外部边界采用固定 lockfile 的 serde_json `Value` 只读字符串索引与 `as_str`：
+先取得 registries，再逐一取得 judges、projects、filemap、workflow；字符串返回完整原借用，
+缺字段、非对象或非字符串返回 None。四个只读观察在适配层完整构造，不执行仓内准入。
+固定 Rust 的 `Result::map_err` 保持 Ok 全值，仅将原 Err 交给渲染器；标准
+`format!("invalid relative path: {invalid:?}")` 保留原前缀，并按 Rust `str` Debug 合同
+给原字符串加引号和转义。这些 JSON 及格式化算法为明确接口假设，未在本仓机械精化；
+不授予仓内函数 `external_body` 例外。Verus 内的字符串复制与 Vec 操作沿用固定 vstd 合同。
+
+四项独立 Verus 预期同时作为普通 Rust 测试执行，核空／非法入口仍原样保留、
+固定五项全文与顺序、重复路径、全部缺失字段及其优先级、非法路径先于后续缺失，
+以及空、绝对、开头当前目录、父分量、NUL／LF／CR／反斜杠边界。
+独立 identity 格式化器核非法路径完整转交和缺失消息直接返回，不据此声称证明标准 Debug 算法。
+沿用原两个 runner-status 整 crate 根、实际消费者与未过滤 Rust 测试，无新工具、操作或预算。
+最多检查四条登记路径，扫描与成功复制的工作随这些路径的总字节数增长；
+相比原短路读取，JSON 适配总是先取得四个只读观察。完整构建、证明、运行、CI 及存储成本未测。
+其余登记快照、IO 组合、完整源码对应与全仓覆盖门仍未完成，不扩大整个 facts／lib 文件的证明范围。
+
+登记快照读取的三处返回身份判断继续由同一 runner-status 根拥有：
+`single_registry_blob` 要求本次读取恰好一项且路径全文相同，成功按值交出该项全部原字节；
+数量不是一或路径不同都保留原 `registry acquisition path mismatch`。
+批量读取先调用 `registry_acquisition_count`，数量不等返回原
+`registry acquisition count mismatch`；随后每项在 JSON 解码之前调用
+`registry_acquisition_path`，路径不同返回原完整路径错误。
+真实 `registry_snapshot_with_batches_target` 直接消费三者，原读取失败仍先返回，
+数量检查先于逐项处理，当前项路径检查先于当前 JSON 解码；不提前扫描后续路径，
+因此先前项的解码失败仍先于后续项的路径错误。待读选择、map 更新及整个组合仍待证明。
+
+匹配只比较完整字符串，不归一化大小写、Unicode、分隔符或控制字节，也不额外判相对路径。
+四项独立 Verus 预期同时作为普通 Rust 测试执行，核单条空／多余／错路径拒绝、
+原始非 UTF-8 字节及 NUL／控制字节不丢失、空／非法路径精确匹配仍接受，
+以及批量零项、相同数量、缺失／多余项和 usize::MAX 边界。
+路径预期覆盖前后缀、大小写、重复分隔符、NUL 及 Unicode 组合形式差异。
+沿用固定 vstd 的完整文本比较、Vec 长度与 remove 合同；只有已证明数量为一才移出第零项，
+移出项的完整路径与原字节对应由本仓证明。没有增加 `assume_specification`、
+仓内受信函数、外部接口假设、证明操作、工具或预算，真实消费者仍跑原未过滤 Rust 测试。
+
+数量核对为常数工作；路径匹配随两文本比较的字节数增长，成功字节向量按值移动，不复制内容。
+这些是局部算法说明，完整构建、证明、运行、CI 和存储成本未测；
+不宣称整个登记快照、facts 文件、源码完整对应或全仓覆盖已经完成。
+
+本批产品逻辑与宿主登记同时修改：runner 新增 `clean.runner-output`，直接委托固定 Cargo
+按 package `chrono-harness` 清理其专属 target 内的可重建编译输出，用于实际发现的输出库存超限恢复。
+不加入日常测试计划，不自动重试失败构建，不提高 4096 项上限；源码、安装槽位和 state 原件继续保留。
+调用前须收取原失败，确认目标为本工作树登记的 runner target、全部本地生产任务已结束、
+没有活跃或未知使用方，并完成必要失败诊断。调用方沿现有 worktree use 保护，唯一入口为：
+
+```sh
+.chrono-harness/bin/chrono-worktree use --operation clean.runner-output --path <工作树>
+```
+
+操作、固定 manifest／target 参数与工具归 projects.json，输出占用归 FILEMAP；
+Cargo 的包级产物删除是明确的外部工具接口，不新增仓内清理算法或假设仓内判断已证明。
+成功仅说明原 Cargo 清理退出成功，须核原 stdout／stderr，再由同一正式 bootstrap 与 check
+验收重建；失败仍保留原件。清理与重建成本单独观察，完整 CI 和维护总成本未测。
 
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
