@@ -17,6 +17,8 @@ checkout 的 blob／模式准入、符号链接识别、普通文件与 owner ex
 独立 Verus 预期同时作为普通 Rust 测试执行，沿用 runner-status 的两项严格整 crate 根；
 路径遍历、IO 组合、摘要算法选择、完整哈希循环及 index 状态组合仍待证明。
 
+Git 索引标记的实际类型、完整字段克隆／相等、NUL 原字节拆分、单行准入和完整行遍历已接入同源 Verus，真实 `Reader::index_flags` 消费该实现。规格核完整 tag／path、数量／顺序／重复和最早格式／UTF-8 错误；五项独立预期同时在 Rust 运行。标准安全 UTF-8 解码及原行／观察的一对一搬运为明确外部接口，尚未机械精化；整 crate 证明及 Reader／registration 原行为测试仍按同次 DELTA 验收，不据此宣称全仓覆盖。
+
 FILEMAP 已提供显式新增文件分类要求；同源 Verus 的候选门核对两端登记的新行分类、
 已有分类保留、初始范围和基线读取错误。新判断与独立预期沿 runner 现有两项整 crate 根
 验收，真实 routes／CI 入口共同消费。本宿主 FILEMAP 已采用该字段；实际使用方须先经

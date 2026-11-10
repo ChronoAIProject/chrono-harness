@@ -477,6 +477,26 @@ index 的完整逐行解析和 stage 库存由同根 `parse_git_index_rows` 维�
 证明、构建、CI 与完整生命周期成本未测；stage-zero 查询的全文语义、changed 集合和
 文件系统外层循环仍待证明，不能据此宣称完整 checkout 或全仓覆盖。
 
+Git 索引标记的实际类型 `IndexFlag`、完整字段克隆与相等、原字节 NUL 拆分、
+单行准入及完整行遍历也由同一 `verified_status` 根拥有；`wire` 只重导出实际类型，
+`Reader::index_flags` 直接消费 `git_index_flag_records`／`parse_git_index_flag_rows`。
+拆分忽略空项，保留顺序、重复和没有末尾 NUL 的记录，不提前把整份输入解码。
+每行先检查至少三个字节、第二字节为空格、首字节为 ASCII 字母，再采用该行的标准安全
+UTF-8 解码观察；成功完整保留原大小写和路径，失败严格返回最早一行的原格式或 UTF-8 错误。
+五项独立 Verus 预期同时作为 Rust 测试运行，核空／重复／未终止记录、字母区间端点及相邻
+非法值、短行、错误分隔、Unicode 和换行路径、完整字段、克隆以及两类首错优先级。
+现有真实 Reader／registration 行为测试继续验证生产调用，不新增证明根或测试入口。
+
+这个边界明确采用固定 Rust 的 `std::str::from_utf8`：成功借用完整原字节，失败产生 None；
+标准 `Vec::into_iter`、`Iterator::map` 和 `collect::<Vec<_>>` 仅逐项关联原行与这个解码观察，
+保持原顺序、数量和对应。这个标准库搬运对应尚未在本仓机械精化；仓内格式准入、
+错误选择和结果序列均由 Verus 证明，不给适配器新增决策或状态豁免。
+证明内的切片 `split_at`、Vec、String 及 UTF-8 合同沿用下表和固定 vstd；
+没有新增仓内受信函数、`external_body`、`assume`、依赖、过滤或预算，Python 迁移暂缓。
+拆分与解码扫描全部原字节，解析及字段复制随实际输入线性增长；新增 O(K) 行引用和解码观察，
+K 为非空行数。错误输入也会先解码后续行，完整运行／构建／证明／CI 成本未测。
+外部 Git 获取、其他 facts 决策、外围 IO 组合及全仓覆盖门仍未完成。
+
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
 证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；
