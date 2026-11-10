@@ -1780,22 +1780,14 @@ fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
     };
     let mut native = watch(0);
     native["pause_before_response"] = json!(true);
+    let mut intervening = api(snapshot());
+    intervening["pause_before_response"] = json!(true);
     let mut terminal = snapshot();
     terminal["data"]["repository"]["pullRequest"]["headRefOid"] = json!(OTHER);
     terminal["data"]["repository"]["pullRequest"]["state"] = json!("CLOSED");
-    let h = Host::new(vec![api(pending()), native, api(snapshot()), api(terminal)]);
+    let h = Host::new(vec![api(pending()), native, intervening, api(terminal)]);
     let listener = UnixListener::bind(h.root.path().join("response.sock")).unwrap();
-    let (watched, intermediate) = std::thread::scope(|scope| {
-        let task = scope.spawn(|| {
-            let result = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
-            if let Ok(mut ready) = UnixStream::connect(h.root.path().join("response.sock")) {
-                let bytes =
-                    serde_json::to_vec(&json!({"completed_before_handshake":result})).unwrap();
-                let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
-                let _ = ready.write_all(&bytes);
-            }
-            result
-        });
+    let accept = || {
         let (mut ready, _) = listener.accept().unwrap();
         let mut length = [0; 4];
         ready.read_exact(&mut length).unwrap();
@@ -1806,10 +1798,34 @@ fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
             started.get("completed_before_handshake").is_none(),
             "{started}"
         );
+        (ready, started)
+    };
+    let run = |args: &[&str]| {
+        let result = h.run(args);
+        if let Ok(mut ready) = UnixStream::connect(h.root.path().join("response.sock")) {
+            let bytes = serde_json::to_vec(&json!({"completed_before_handshake":result})).unwrap();
+            let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
+            let _ = ready.write_all(&bytes);
+        }
+        result
+    };
+    let (watched, intermediate) = std::thread::scope(|scope| {
+        let task = scope.spawn(|| run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]));
+        let (mut ready, started) = accept();
         assert_eq!(started["call"], 2);
-        let (code, intermediate) = h.status();
-        ready.write_all(&[1]).unwrap();
+        let query = scope.spawn(|| run(&["pr-status", "--pr", "42", "--head-sha", HEAD]));
+        let (mut query_ready, query_started) = accept();
+        assert_eq!(query_started["call"], 1);
+        assert_ne!(query_started["operation"], started["operation"]);
+        // The real intervening API call has already reserved its observation.
+        // Release the native wait without waiting for that command's separate
+        // result publication; both commands are joined before checking custody.
+        let query_release = query_ready.write_all(&[1]);
+        let watch_release = ready.write_all(&[1]);
+        let (code, intermediate) = query.join().unwrap();
         let (watch_code, watched) = task.join().unwrap();
+        assert!(query_release.is_ok(), "{query_release:?}: {intermediate}");
+        assert!(watch_release.is_ok(), "{watch_release:?}: {watched}");
         assert_eq!(code, 0, "{intermediate}");
         assert_eq!(watch_code, 4, "{watched}");
         assert_eq!(watched["pr_state"], "CLOSED");
