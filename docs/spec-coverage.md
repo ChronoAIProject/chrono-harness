@@ -70,7 +70,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 8 七判官／混合修改 | 部分 | 七个有限生产者及 W 完整链消费者 | 完整宿主输入及启用 |
 | 9 报告／成本 | 部分 | runner full.rs；G full_report_* 核必需字段、配置／实测执行物区别、发现／具名输出来源、null／未解原因、pass／warn／fail／error 退出、旧明确存储／stdout 一致。`judge-cost` 的 `verified_cost.rs` 由 `verify.judge-cost`／`verify.judge-cost-tests` 证明四个声明坐标的未知判定，并由 cost judge 的真实消费者回归消费；声明成本报告已实现，有限 routes 工具／projects 证据已有 | 完整工具链／输入和可选测量；未知／冲突不能证明完整治理 |
 | 9.1 资源诊断 | 部分 | 发布 v5 核明确消费／前置；cache 生成验证拒绝多保存者。父 gather 保留原生运行、job、artifact 和原报告核验所需响应；当前 attempt 视图可能沿用旧结果，不跨 attempt 重计。无当前使用方的额外分类、比较告警和摘要已退役，成本调查直接查线上 CI | 其他消费审计、编译／测试拆分、排队、内存／磁盘／计费及公开工具采用；未测成本保持未知 |
-| 10 生命周期 | 部分 | W 新鲜度、完整报告集成生产／消费；`judge-workflow` 的 `verified_branch.rs` 由 `verify.judge-workflow`／`verify.judge-workflow-tests` 证明来源分支类型和提交落后数准入，并由真实 branch／consumer 测试消费。独立 worktree 和真实 Git 测试覆盖目标获取／创建、政策采用、明确重建、冲突／失败保全、recover／cleanup／cleanup-fetch、lease 远端退役、intent 中断检出／fetch、无旧回执 metadata rebind 及继续 | AI 协调冲突／歧义恢复状态，时间新鲜度、Git 历史、JSON 解码、PR／合并／落地编排及完整事务 |
+| 10 生命周期 | 部分 | W 新鲜度、完整报告集成生产／消费；`judge-workflow` 的 `verified_branch.rs` 由 `verify.judge-workflow`／`verify.judge-workflow-tests` 证明来源分支类型和提交落后数准入，新增 `verified_evidence.rs` 证明 workflow 执行证据七项事实的组合准入，并由真实 branch／consumer 测试消费。独立 worktree 和真实 Git 测试覆盖目标获取／创建、政策采用、明确重建、冲突／失败保全、recover／cleanup／cleanup-fetch、lease 远端退役、intent 中断检出／fetch、无旧回执 metadata rebind 及继续 | AI 协调冲突／歧义恢复状态，时间新鲜度、Git 历史、JSON 解码、PR／合并／落地编排及完整事务 |
 | 10.2 兼容工作树复用、协作、交接 | 部分：显式采用当前分支 | 原 migrate 在逐工作树独占租约下核当前引用、HEAD、物理附件、政策和 Git 锁；创建分支／birth 原件保留，当前绑定单独维护；普通操作仍拒绝未采用的分支变化。Rust 回归覆盖工作／旧提交保全、活租约／待交接拒绝、重复采用、政策同改及当前分支清理；候选和真实宿主采用分别验收 | 完整兼容／工作保全判断，语义读写及受 index／ref／operation 限制的整树范围，分项保存／等待／检查／落地／清理交接；新分支仍须最新 dev |
 | 10.3 AI 的 PR 操作 | 源码实现，范围有限 | 独立 `pr`／`pr-tests`；`pr-open` 核远端 SHA、创建／复用及回读，`pr-status` 核完整必需检查，`pr-watch` 原生等待后重核身份；JSON 与原进程回执。合同见 [PR 工具](pr.md) | 本地 Rust CLI／子进程测试覆盖已登记边界；真实 GitHub 创建／等待、公开分发、自动合并、落地核验仍待验收，不证明完整生命周期或 SPEC |
 | 11 脚本／插件 | 部分 | 直接 argv 外部传输，R 原生协议／进程、L 外部脚本子进程；真实脚本配对／routes 有有限完整链证据 | 插件／完整外部输入 |
@@ -191,6 +191,8 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 形式证明 | 实际生产根及专属独立预期；[Verus](verus.md) | 同源证明、固定结果合同和部分生产调用已接入；未覆盖部分、外部合同及外围组合明确保留，不把局部成功当作完整 SPEC 证明 |
 
 ## 当前必要性与数据边界
+
+§2.3／§8 的来源边界复用现有 FILEMAP 投影与 config／CI policy 产物声明，不新增逐文件 provenance 标签或通用源预算准入。全对象必要性仍由 AI 核查真实使用方和验收终点。现役 CI 快照检查已拒绝产物范围内的受跟踪路径；原有 Rust 回归补充“文件已登记仍拒绝”的分支，与未登记拒绝及未跟踪产物允许共用同一用例。不改生产判法，不新增证明根；适用 Verus 与行为检查沿原登记入口执行。此覆盖不证明所有运行事实都已识别或全仓必要性审计已经完成。
 
 大文件获取回归已移除没有现役调用的外部历史文件选择分支及环境登记；自含输入继续核对原传输、容量和漂移合同。
 

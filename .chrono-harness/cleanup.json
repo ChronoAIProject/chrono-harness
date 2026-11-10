@@ -164,7 +164,7 @@
     },
     {
       "path": "crates/pr/target/",
-      "disposition": "dispose"
+      "disposition": "finish-dispose"
     },
     {
       "path": "crates/pr-tests/target/",

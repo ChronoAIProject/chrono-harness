@@ -367,7 +367,8 @@ tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 同步当前路径引用、独立锁、FILEMAP、项目配对和单元；两个独立 target 明确位于
 已采用清理的 `.chrono-harness/cache/identifiers/` 和 `identifiers-tests/` 下。
 原判断、全部预期、两项证明及原预算保留；没有新增证明进程或共享状态。
-独立构建增加两个 target 的管理范围，完整构建、验证、CI 和存储成本未测。
+专属测试自行编译真实库，只使用测试项目的 target；不把未被测试消费的日常生产构建列为前置。
+两项整 crate 证明继续独立执行；完整构建、验证、CI 和存储成本未测。
 发布计划也显式保留迁移的八项原测试：现有 Linux 和 macOS 平台各增加一个独立库测试单元，
 使用既有发布执行器、原未过滤操作及汇总，不增加发布二进制依赖或缓存。
 
@@ -935,6 +936,18 @@ JSON 解码、节点提取、诊断和完整图外层组合继续保留未完成
 `verify.judge-workflow-tests`，由 workflow 的真实 branch／consumer 测试计划共同验收。
 独立预期覆盖单一前缀、零／双前缀、目标分支、提交落后数和时间新鲜度边界；本批仍不证明
 Git 历史、JSON 解码和完整 workflow 事务。
+
+### 工作流执行证据准入
+
+`crates/judge-workflow/src/verified_evidence.rs` 拥有 `record` 的唯一组合准入判断。
+JSON 解码器和进程原件适配器先提供执行状态、judge／request 身份、请求摘要、零退出码、
+协议状态和 stdout 解码相等性七项事实，再由 `admit_record` 统一判断；`record` 只消费
+这个 Verus 结果并保留原错误。协议状态的严重度排序继续复用 runner 的已证明
+`verified_status.rs`，解码、原件读取和摘要计算仍是明确外部接口。
+
+独立 `verified_evidence.rs` 预期覆盖全通过、每一项单独缺失、全拒绝及单项边界；生产根
+与测试根加入现有 `verify.judge-workflow`／`verify.judge-workflow-tests` 整 crate 计划。
+本批不把 JSON 语义、进程字节真实性或完整 workflow 事务宣称为已证明。
 
 ## 专属测试的语言配对
 

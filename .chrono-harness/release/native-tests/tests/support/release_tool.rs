@@ -1,4 +1,6 @@
 //! 发布测试的真实外部工具接口；业务判定在独立 Rust 测试中。
+#[path = "context.rs"]
+mod context;
 use serde_json::Value;
 use std::{
     fs,
@@ -10,6 +12,32 @@ use std::{
 
 fn run() -> Result<u8, String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if args == ["--fixture-parent-context"] || args == ["--fixture-parent-context", "explicit"] {
+        let mut child = context::command(std::env::current_exe().map_err(|e| e.to_string())?);
+        child.arg("--fixture-observe-context");
+        if args.len() == 2 {
+            child.env("CHRONO_RELEASE_RUN", "fixture-run");
+        }
+        chrono_harness::process_fds::forward_command(&mut child, &[])?;
+        let output = child.output().map_err(|e| e.to_string())?;
+        io::stdout()
+            .write_all(&output.stdout)
+            .map_err(|e| e.to_string())?;
+        io::stderr()
+            .write_all(&output.stderr)
+            .map_err(|e| e.to_string())?;
+        return Ok(output.status.code().unwrap_or(91) as u8);
+    }
+    if args == ["--fixture-observe-context"] {
+        let release: std::collections::BTreeMap<_, _> = std::env::vars()
+            .filter(|(name, _)| name.starts_with("CHRONO_RELEASE_"))
+            .collect();
+        println!(
+            "{}",
+            serde_json::json!({"release":release,"keep":std::env::var("CHRONO_FIXTURE_KEEP").ok()})
+        );
+        return Ok(0);
+    }
     if args == ["--process-output-bound"] {
         io::stdout()
             .write_all(&[7u8; 100_000])
