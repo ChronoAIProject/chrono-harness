@@ -6,6 +6,15 @@ use vstd::prelude::*;
 
 use super::{append_bytes, equal_bytes};
 
+/// 只解码实际存在的布尔字段；缺失由 Serde 保留为 None，启用选择归 Verus。
+#[cfg(not(verus_keep_ghost))]
+fn deserialize_classification_policy<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    <bool as serde::Deserialize<'de>>::deserialize(deserializer).map(Some)
+}
+
 verus! {
 
 /// 仅获取指定路径的原字节；准入、路径选择和长度判断由下方实现负责。
@@ -555,8 +564,8 @@ pub struct SourceBinding {
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
 pub struct SourceRegistry {
     pub files: Vec<SourceFile>,
-    #[cfg_attr(not(verus_keep_ghost), serde(default))]
-    pub require_new_file_classification: bool,
+    #[cfg_attr(not(verus_keep_ghost), serde(default, deserialize_with = "deserialize_classification_policy"))]
+    pub require_new_file_classification: Option<bool>,
 }
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
@@ -941,7 +950,7 @@ pub open spec fn classifications_error(
 pub open spec fn registry_classification_error(
     current: &SourceRegistry, previous: Result<Option<&SourceRegistry>, &str>,
 ) -> Option<(Seq<char>, Seq<char>)> {
-    if !current.require_new_file_classification { None }
+    if !matches!(current.require_new_file_classification, Some(true)) { None }
     else {
         match previous {
             Err(message) => Some(("E_VERUS_COVERAGE: base file classifications unavailable: "@, message@)),
@@ -961,7 +970,7 @@ pub fn validate_file_classifications<'a>(
         Err(error) => registry_classification_error(current, previous) == Some(error.view()),
     },
 {
-    if !current.require_new_file_classification { return Ok(()); }
+    if !matches!(current.require_new_file_classification, Some(true)) { return Ok(()); }
     let empty = Vec::new();
     let base = match previous {
         Err(message) => {

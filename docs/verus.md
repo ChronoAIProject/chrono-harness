@@ -16,8 +16,10 @@ FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 最坏工作随两端文件数的乘积增长，不增加持久索引；构建、证明、CI 和完整成本未测。
 
 本批新增边界采用固定 lockfile 的 `serde_json::from_value::<SourceRegistry>` 与
-Serde `Deserialize` 派生：读取原文件行及布尔字段，字段缺失时默认 false，错型报错；
-路径、分类和根不由解码器推断。固定 Rust 的 `Option::as_ref`、`Result::as_ref`、
+Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为 None；字段存在时，
+纯转发适配器用 `<bool as Deserialize>::deserialize` 解码后经 `Result::map(Some)`
+保留原布尔值，显式 null 及错型仍报错。None、Some(false)、Some(true) 的启用选择
+直接由 Verus 定义并证明；路径、分类和根不由解码器推断。固定 Rust 的 `Option::as_ref`、`Result::as_ref`、
 `Option::map`、`Result::map`、`Result::map_err` 和 `Option<Result<T, E>>::transpose`
 仅保留或借用原值：无基线保持 `Ok(None)`，成功保持同一基线，失败保持原错误全文。
 是否采用、初始范围、首个错误与具体错误类别全部由 Verus 内核决定。

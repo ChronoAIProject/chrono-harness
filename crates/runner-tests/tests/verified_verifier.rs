@@ -26,11 +26,11 @@ verus! {
 fn new_file_classification_is_required_while_existing_unknowns_stay_unknown() {
     let base = policy::sources::SourceRegistry {
         files: vec![policy::sources::SourceFile { path: "old".to_string(), verification: None }],
-        require_new_file_classification: false,
+        require_new_file_classification: None,
     };
     let mut current = policy::sources::SourceRegistry {
         files: vec![policy::sources::SourceFile { path: "old".to_string(), verification: None }],
-        require_new_file_classification: true,
+        require_new_file_classification: Some(true),
     };
     proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
     let unchanged = policy::sources::validate_file_classifications(&current, Ok(Some(&base)));
@@ -57,11 +57,11 @@ fn declared_files_cannot_become_unknown_and_deleted_files_need_no_classification
             verification: Some(policy::sources::SourceVerification {
                 role: policy::sources::SourceRole::Data, roots: Vec::new(),
             }) }],
-        require_new_file_classification: true,
+        require_new_file_classification: Some(true),
     };
     let current = policy::sources::SourceRegistry {
         files: vec![policy::sources::SourceFile { path: "data".to_string(), verification: None }],
-        require_new_file_classification: true,
+        require_new_file_classification: Some(true),
     };
     proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
     let removed = policy::sources::validate_file_classifications(&current, Ok(Some(&base)));
@@ -71,7 +71,7 @@ fn declared_files_cannot_become_unknown_and_deleted_files_need_no_classification
         "E_VERUS_COVERAGE: existing verification classification was removed: ");
     expect_verifier_true(exact);
     let deleted = policy::sources::SourceRegistry {
-        files: Vec::new(), require_new_file_classification: true,
+        files: Vec::new(), require_new_file_classification: Some(true),
     };
     let absent = policy::sources::validate_file_classifications(&deleted, Ok(Some(&base)));
     expect_verifier_true(absent.is_ok());
@@ -84,7 +84,7 @@ fn explicit_new_data_is_allowed_and_empty_new_program_roots_are_rejected() {
             verification: Some(policy::sources::SourceVerification {
                 role: policy::sources::SourceRole::Data, roots: Vec::new(),
             }) }],
-        require_new_file_classification: true,
+        require_new_file_classification: Some(true),
     };
     proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
     let data = policy::sources::validate_file_classifications(&current, Ok(None));
@@ -106,11 +106,14 @@ fn explicit_new_data_is_allowed_and_empty_new_program_roots_are_rejected() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn classification_policy_is_explicit_and_unavailable_base_errors_are_preserved() {
     let mut current = policy::sources::SourceRegistry {
-        files: Vec::new(), require_new_file_classification: false,
+        files: Vec::new(), require_new_file_classification: None,
     };
     let unadopted = policy::sources::validate_file_classifications(&current, Err("base\0失败"));
     expect_verifier_true(unadopted.is_ok());
-    current.require_new_file_classification = true;
+    current.require_new_file_classification = Some(false);
+    let explicit_false = policy::sources::validate_file_classifications(&current, Err("base\0失败"));
+    expect_verifier_true(explicit_false.is_ok());
+    current.require_new_file_classification = Some(true);
     let missing = policy::sources::validate_file_classifications(&current, Err("base\0失败"));
     expect_verifier_true(missing.is_err());
     let error = missing.unwrap_err();
@@ -126,14 +129,14 @@ fn classification_policy_is_explicit_and_unavailable_base_errors_are_preserved()
 fn classification_identity_is_complete_and_first_file_error_is_stable() {
     let base = policy::sources::SourceRegistry {
         files: vec![policy::sources::SourceFile { path: "name".to_string(), verification: None }],
-        require_new_file_classification: false,
+        require_new_file_classification: None,
     };
     let current = policy::sources::SourceRegistry {
         files: vec![
             policy::sources::SourceFile { path: "name\0".to_string(), verification: None },
             policy::sources::SourceFile { path: "Name".to_string(), verification: None },
         ],
-        require_new_file_classification: true,
+        require_new_file_classification: Some(true),
     };
     proof {
         reveal_strlit("name"); reveal_strlit("name\0");
@@ -147,7 +150,7 @@ fn classification_identity_is_complete_and_first_file_error_is_stable() {
     expect_verifier_true(path);
     let case = policy::sources::SourceRegistry {
         files: vec![policy::sources::SourceFile { path: "Name".to_string(), verification: None }],
-        require_new_file_classification: true,
+        require_new_file_classification: Some(true),
     };
     proof {
         reveal_strlit("Name");
@@ -158,7 +161,7 @@ fn classification_identity_is_complete_and_first_file_error_is_stable() {
     expect_verifier_true(case_result.is_err());
     let unicode = policy::sources::SourceRegistry {
         files: vec![policy::sources::SourceFile { path: "数据".to_string(), verification: None }],
-        require_new_file_classification: true,
+        require_new_file_classification: Some(true),
     };
     proof {
         reveal_strlit("数据");
@@ -1793,7 +1796,7 @@ fn unified_bound_result(file: &str, root: &str) -> Result<Option<policy::ProofAd
     }
     let registry = Ok(policy::sources::SourceRegistry {
         files,
-        require_new_file_classification: false,
+        require_new_file_classification: None,
     });
     let digest = String::from_utf8(BoundSources.digest(b"source")).unwrap();
     let dependency = Some(Ok(format!(
