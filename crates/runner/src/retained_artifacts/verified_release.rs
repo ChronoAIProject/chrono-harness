@@ -219,6 +219,20 @@ pub fn unknown_pr_operation(unreturned: bool, unresolved_create: bool) -> (unkno
     ensures unknown == (unreturned || unresolved_create),
 { unreturned || unresolved_create }
 
+/// Native wait failure has neither an exit code nor a terminal signal.
+/// Returning a receipt alone does not establish either terminal result.
+pub fn process_exit_known(exit_code: i32, signal: Option<i32>) -> (known: bool)
+    ensures known == match signal {
+        None => exit_code >= 0,
+        Some(value) => exit_code == -1 && value > 0,
+    },
+{
+    match signal {
+        None => exit_code >= 0,
+        Some(value) => exit_code == -1 && value > 0,
+    }
+}
+
 pub fn settled_pr_command(unreturned: bool, unresolved_create: bool, originals_complete: bool) -> (ok: bool)
     ensures ok == (!unreturned && !unresolved_create && originals_complete),
 { !unreturned && !unresolved_create && originals_complete }
