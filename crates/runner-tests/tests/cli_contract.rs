@@ -93,8 +93,7 @@ fn report_reference_publication_is_an_explicit_scoped_v3_contract() {
             let loaded = chrono_harness::load_config(&path);
             assert_eq!(
                 loaded.is_ok(),
-                schema == "chrono-ci-check/v3"
-                    && value.as_str() == Some("retained-reference/v2")
+                schema == "chrono-ci-check/v3" && value.as_str() == Some("retained-reference/v2")
             );
             if let Ok(config) = loaded {
                 assert!(chrono_harness::units::reference_publication(&config).unwrap());
