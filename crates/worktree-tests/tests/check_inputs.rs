@@ -40,19 +40,20 @@ pub(super) fn install(root: &Path) {
 }
 fn install_owned(root: &Path, owner: Option<&Host>) {
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
-    for (project, name) in [
-        ("runner", "chrono-harness"),
-        ("worktree", "chrono-worktree"),
-    ] {
-        let built = source().join(format!("crates/{project}/target/debug/{name}"));
-        install_readonly_file_owned(
-            root,
-            &built,
-            name,
-            format!("{name} 0.1.0\n").as_bytes(),
-            owner,
-        );
-    }
+    install_readonly_file_owned(
+        root,
+        &source().join("crates/runner/target/debug/chrono-harness"),
+        "chrono-harness",
+        b"chrono-harness 0.1.0\n",
+        owner,
+    );
+    install_readonly_file_owned(
+        root,
+        Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")),
+        "chrono-worktree",
+        b"chrono-worktree 0.1.0\n",
+        owner,
+    );
     install_readonly_file_owned(
         root,
         Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-judge")),
@@ -60,10 +61,6 @@ fn install_owned(root: &Path, owner: Option<&Host>) {
         b"fixture\n",
         owner,
     );
-}
-pub(super) fn install_readonly_executable(root: &Path, project: &str, name: &str) {
-    let built = source().join(format!("crates/{project}/target/debug/{name}"));
-    install_readonly_file(root, &built, name, format!("{name} 0.1.0\n").as_bytes());
 }
 pub(super) fn ready_version_program(root: &Path, program: &Path, expected: &[u8]) {
     ready_version_program_owned(root, program, expected, None);

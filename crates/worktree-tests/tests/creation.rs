@@ -386,8 +386,7 @@ impl Host {
         }
     }
     fn invoke(&self, kind: &str, name: &str, target: &Path) -> (i32, Value, String) {
-        let mut command =
-            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        let mut command = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
         command
             .current_dir("/")
             .env_clear()
@@ -1315,7 +1314,7 @@ impl Host {
         let path = ".chrono-harness/state/reconstruction.json";
         fs::create_dir_all(self.root.join(".chrono-harness/state")).unwrap();
         fs::write(self.root.join(path), serde_json::to_vec(&plan).unwrap()).unwrap();
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let output = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")))
             .current_dir("/")
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
