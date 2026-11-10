@@ -132,7 +132,7 @@ fn select_config(h: &mut Host, target: &str) {
 
 fn pair_captures(h: &Host, base: &str, candidate: &str) -> Value {
     let out = h.capture_native(
-        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
             .current_dir("/")
             .args([
                 "pair",
@@ -157,7 +157,7 @@ fn pair_captures(h: &Host, base: &str, candidate: &str) -> Value {
 fn snapshots(h: &Host) -> Value {
     let invoke = |args: &[&str]| {
         let out = h.capture_native(
-            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
                 .current_dir("/")
                 .env("DECLARED_EMPTY", "")
                 .env_remove("DECLARED_ABSENT")
@@ -375,7 +375,7 @@ fn data_state(h: &mut Host, absent: bool) {
 }
 fn capture(h: &Host, name: &str) -> Value {
     let out = h.capture_native(
-        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
             .args([
@@ -986,7 +986,7 @@ fn selected_produced_pairs_preserve_endpoint_targets_old_edges_and_docs_locality
         if candidate_target != CONFIG {
             let output = ".chrono-harness/state/linked-capture.json";
             let out = h.capture_native(
-                Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+                Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
                     .current_dir("/")
                     .args([
                         "capture",

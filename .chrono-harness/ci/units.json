@@ -946,7 +946,6 @@
         ],
         "consumer": "check.unit_inputs",
         "caches": [
-          "check.inputs",
           "check.inputs-tests",
           "check.judge-cost",
           "check.judge-filemap",
@@ -958,7 +957,6 @@
           "check.runner"
         ],
         "save_caches": [
-          "check.inputs",
           "check.inputs-tests"
         ]
       },
