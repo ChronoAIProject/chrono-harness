@@ -86,6 +86,20 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 `verify.verus-result-tests` 独立预期。三项源码均已有真实 Verus invocation、整 crate
 结果和 Rust 消费者；本批只补 FILEMAP 绑定，不新增证明源或 Python 迁移。
 
+## projects 执行原件状态
+
+`judge-projects/src/verified_state.rs` 拥有完整状态文本与原进程终态的组合、
+`completed`／`unknown` 选择、全部操作的终态汇总、原件摘要和长度的精确核验，
+以及输入交接后解除依赖／恢复保护的条件。`state.rs` 的真实原件路径直接消费这些函数；
+进程终态继续复用现役已证明的 `process_exit_known`，不以回执存在或状态声称成功代替。
+`verify.project-state`／`verify.project-state-tests` 使用固定 Verus 和整 crate 参数，
+独立预期同时作为普通 Rust 测试运行，并与既有执行／中断／原件行为测试同次验收。
+
+本批源码与宿主验证登记同时修改，沿用工具、CI 单元和预算。JSON、文件、时钟与保留
+接口仍由现有适配器调用；外围原件发布事务和完整执行器尚未证明，`state.rs` 仍保持
+未知整文件覆盖，不把局部内核声明成整个外围文件已证明。汇总额外保留每项操作的借用观察，
+时间与临时空间随操作数量线性增长，构建／证明／CI 的完整总成本未测。Python 迁移暂缓。
+
 ## 发布交付字段判断
 
 发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
