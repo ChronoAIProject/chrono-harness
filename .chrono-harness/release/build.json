@@ -371,8 +371,7 @@
         "build_runner",
         "build_judge_ci",
         "build_ci",
-        "build_judge_registration",
-        "build_worktree"
+        "build_judge_registration"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
       "rust_toolchain": true
@@ -428,8 +427,7 @@
         "build_judge_cost",
         "build_judge_mixed",
         "build_judge_workflow",
-        "build_inputs",
-        "build_worktree"
+        "build_inputs"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests",
       "rust_toolchain": true
@@ -798,13 +796,12 @@
       ]
     },
     "verify_ci_tests": {
-      "need": "crates/ci-tests/tests/units.rs and behavior.rs run runner, judge-ci and chrono-ci for generated host checks, preparation and collection; short.rs and gating.rs run worktree for local preparation/ownership; initial_projection.rs runs registration for actual inventory admission. Assertions inspect original results, contexts and generated projections.",
+      "need": "ci-tests 调用 runner、judge-ci、chrono-ci 和 registration 发布 CLI，核生成宿主检查、固定 Git 输入与原回执；worktree CLI 由测试项目从生产 main.rs 编译，不消费 worktree 发布资产。",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-ci",
         "chrono-ci",
-        "chrono-judge-registration",
-        "chrono-worktree"
+        "chrono-judge-registration"
       ]
     },
     "verify_judge_ci_tests": {
@@ -833,7 +830,7 @@
       ]
     },
     "verify_judge_workflow_tests": {
-      "need": "crates/judge-workflow-tests/tests/consumer.rs and shared project host run runner with all seven full judges for integration/retirement decisions. git_facts.rs and full_short.rs run chrono-ci, full_short.rs runs worktree, and full_units.rs/full_short.rs run inputs; assertions consume fixed contexts, snapshots, unit receipts and collection evidence.",
+      "need": "judge-workflow-tests 调用 runner、全部 full 判官、chrono-ci 与 inputs 发布 CLI，核治理、固定上下文、快照及汇总；worktree CLI 由测试项目从生产 main.rs 编译，不消费 worktree 发布资产。",
       "release_assets": [
         "chrono-harness",
         "chrono-ci",
@@ -844,8 +841,7 @@
         "chrono-judge-cost",
         "chrono-judge-mixed",
         "chrono-judge-workflow",
-        "chrono-inputs",
-        "chrono-worktree"
+        "chrono-inputs"
       ]
     },
     "verify_judge_filemap_tests": {
