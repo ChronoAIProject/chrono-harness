@@ -1532,7 +1532,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
     fs::create_dir(&distribution).unwrap();
     install(&distribution);
     fs::copy(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../worktree/target/debug/chrono-worktree"),
+        env!("CARGO_BIN_EXE_chrono-worktree-test-cli"),
         distribution.join(".chrono-harness/bin/chrono-worktree"),
     )
     .unwrap();
