@@ -1080,6 +1080,18 @@ fn automatic_attention_preserves_unregistered_dirty_and_corrupt_worktrees() {
         !h.ledger_path(&unknown).exists(),
         "observation must not import work"
     );
+    let marker = h.record_directory(&healthy).join("owner.json");
+    let original_owner = fs::read(&marker).unwrap();
+    let mut foreign = json(&original_owner).unwrap();
+    foreign["common"] = value!(h.parent.join("foreign-owner"));
+    let foreign = serde_json::to_vec(&foreign).unwrap();
+    fs::write(&marker, &foreign).unwrap();
+    let (code, observed, error) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(attention_row(&observed, &healthy)["work_state"], "unknown");
+    assert!(attention_row(&observed, &healthy)["error"].is_string());
+    assert_eq!(fs::read(&marker).unwrap(), foreign);
+    fs::write(marker, original_owner).unwrap();
 }
 
 #[test]
@@ -1912,7 +1924,24 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     fs::write(&report_path, &report_bytes).unwrap();
     let (code, observed, error) = h.auto("status", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{observed} {error}");
-    assert!(h.ledger()["entries"][0]["enrollment"]["completed_uses"].is_null());
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipt]),
+        "observation must leave result recovery to its lifecycle owner"
+    );
+    assert_eq!(
+        attention_row(&observed, &target)["report_handoff_pending"],
+        true
+    );
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    assert!(
+        h.ledger()["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|entry| { entry["enrollment"]["completed_uses"].is_null() })
+    );
     inventory.maintain().unwrap();
     assert_eq!(
         fs::read(&raw_path).unwrap(),
@@ -3435,4 +3464,125 @@ fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
     );
     assert!(!target.exists());
     assert_eq!(fs::read(receipt).unwrap(), bytes);
+}
+
+#[test]
+fn status_observes_busy_metadata_without_mutating_enrollments() {
+    use chrono_harness::ownership::{DirectoryLease, Lease};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    h.policy(|policy| policy["timeout_seconds"] = value!(1));
+    let target = h.parent.join("busy-status");
+    let (code, created, error) = h.invoke("feature", "busy-status", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let originals: Vec<_> = [&h.root, &target]
+        .into_iter()
+        .flat_map(|path| {
+            ["ledger.json", "owner.json"].map(|name| {
+                let path = h.record_directory(path).join(name);
+                let bytes = fs::read(&path).unwrap();
+                (path, bytes)
+            })
+        })
+        .collect();
+    for path in [&h.root, &target] {
+        let record = h.record_directory(path);
+        let owner = json(&fs::read(record.join("owner.json")).unwrap()).unwrap();
+        let directory = DirectoryLease::acquire(&record, true, None)
+            .unwrap()
+            .unwrap();
+        let metadata = Lease::acquire(
+            &record.join("metadata.lease"),
+            owner["admission_id"].as_str(),
+            false,
+            true,
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        for extra in [vec![], vec!["--path", target.to_str().unwrap()]] {
+            let (code, observed, error) = h.auto("status", &extra);
+            assert_eq!(
+                code,
+                0,
+                "status during {} exclusion: {observed} {error}",
+                path.display()
+            );
+            let row = attention_row(&observed, &target);
+            assert_eq!(row["work_state"], "active");
+            assert_eq!(row["attention_required"], true);
+            assert_eq!(row["next_action"], "complete-work-and-finish");
+            for (original, bytes) in &originals {
+                assert_eq!(fs::read(original).unwrap(), *bytes);
+            }
+        }
+        directory.stable().unwrap();
+        metadata.stable().unwrap();
+    }
+    assert_eq!(
+        fs::read(target.join("payload")).unwrap(),
+        b"literal host input; no dependency inference\n"
+    );
+}
+
+#[test]
+fn status_does_not_initialize_namespace_or_unknown_address() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let namespace = h.root.join(".chrono-harness/state/automatic-cleanup");
+    let unknown = h.parent.join("unknown-status-address");
+    let (code, observed, error) = h.auto("status", &["--path", unknown.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert_eq!(
+        attention_row(&observed, &unknown)["work_state"],
+        "unregistered"
+    );
+    assert!(
+        !namespace.exists(),
+        "a status query must not initialize cleanup state"
+    );
+    let target = h.parent.join("registered-status-address");
+    assert_eq!(
+        h.invoke("feature", "registered-status-address", &target).0,
+        0
+    );
+    let (code, observed, error) = h.auto("status", &["--path", unknown.to_str().unwrap()]);
+    assert_eq!(code, 0, "{observed} {error}");
+    assert!(!h.record_directory(&unknown).exists());
+    assert!(!h.record_directory(&h.root).exists());
+}
+
+#[test]
+fn status_reports_damaged_invoking_metadata_and_rejects_namespace_identity_changes() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let ledger_path = h.ledger_path(&h.root);
+    let original = fs::read(&ledger_path).unwrap();
+    fs::write(&ledger_path, b"damaged invoking ledger").unwrap();
+    let (code, observed, error) = h.auto("status", &[]);
+    assert_eq!(code, 0, "{observed} {error}");
+    let row = attention_row(&observed, &h.root);
+    assert_eq!(row["work_state"], "unknown");
+    assert_eq!(row["attention_required"], true);
+    assert!(row["error"].is_string());
+    assert_eq!(fs::read(&ledger_path).unwrap(), b"damaged invoking ledger");
+    fs::write(&ledger_path, original).unwrap();
+    let namespace = h
+        .root
+        .join(".chrono-harness/state/automatic-cleanup/namespace.json");
+    let original = fs::read(&namespace).unwrap();
+    let mut changed = json(&original).unwrap();
+    changed["common"] = value!(h.parent.join("foreign-repository"));
+    let changed = serde_json::to_vec(&changed).unwrap();
+    fs::write(&namespace, &changed).unwrap();
+    let (code, failed, error) = h.auto("status", &[]);
+    assert_eq!(code, 2, "{failed} {error}");
+    assert_eq!(failed["status"], "failed");
+    assert!(failed["error"].as_str().unwrap().contains("namespace"));
+    assert_eq!(fs::read(&namespace).unwrap(), changed);
+    fs::write(namespace, original).unwrap();
 }
