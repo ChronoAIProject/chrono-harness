@@ -518,6 +518,7 @@ pub fn install_release(
     members: &BTreeSet<String>,
     shell: &str,
     curl: &str,
+    repository: &str,
     public_launcher: &str,
     commands: &mut impl Commands,
 ) -> Result<Value, String> {
@@ -539,11 +540,13 @@ pub fn install_release(
         .filter(|p| !p.is_empty())
         .ok_or_else(|| error("missing original publication processes"))?
     {
+        let stdout = receipt::original(publication, &process["stdout"])?;
+        receipt::original(publication, &process["stderr"])?;
         if process["exit_code"] != 0 {
-            return Err(error("failed original publication process"));
-        }
-        for stream in ["stdout", "stderr"] {
-            receipt::original(publication, &process[stream])?;
+            let stdout = fs::read(stdout).map_err(error)?;
+            if !publication::original_absence(process, &stdout, repository, identity) {
+                return Err(error("failed original publication process"));
+            }
         }
     }
     let directory = no_symlink_parents(publication, "release")?;
@@ -786,6 +789,7 @@ pub fn install(
             &loaded.plan.assets.keys().cloned().collect(),
             shell.to_str().ok_or("invalid shell path")?,
             curl.to_str().ok_or("invalid curl path")?,
+            &config.publication.repository,
             &public_launcher,
             &mut executor,
         )?;
