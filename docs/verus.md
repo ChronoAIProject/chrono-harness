@@ -33,6 +33,18 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+workflow 的错误分类由 `verified_response.rs::classify_error` 拥有，并加入现有
+`verify.judge-workflow-execution`／独立预期根的整 crate 证明。
+真实 `judge` 将原消息交给此函数，直接使用返回的实际协议 `Status` 与完整错误码；
+仅 JSON／响应字段构造和消息搬运留在适配层。
+首个 ASCII 冒号之前的字段须以 `E_` 开头，否则使用 `E_WORKFLOW_INPUT`；
+恰好 `E_BRANCH_STALE`、`E_RETIREMENT`、`E_REQUIRED_TEST_REMOVED`、
+`E_INTEGRATION_REQUIRED`、`E_INTEGRATION_MISMATCH` 产生 Fail，其余产生 Error。
+完整字段比较保留大小写、Unicode、NUL、后缀和空字段，不归一化原消息。
+字段切分复用 identifiers 已证明的 ASCII／UTF-8 边界方法；协议状态复用 runner 的实际类型，
+没有新增接口假设、证明入口、工具或预算。独立预期同时作为普通 Rust 测试执行断言。
+这项范围不证明完整 workflow、其余错误来源、JSON 或全仓覆盖；完整验证成本未测。
+
 已声明文件的证明选择由 `verified_sources.rs::validate_selected_roots` 核对：
 沿两端显式影响闭包，每个受影响文件的全部声明根必须出现在单元拆分前的全局计划中，
 且操作唯一、带有效证明合同、使用严格整 crate 参数并调用准确的声明根。

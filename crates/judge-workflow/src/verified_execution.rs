@@ -7,6 +7,9 @@ use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[path = "verified_response.rs"]
+pub mod response;
+
 verus! {
 
 /// A collected execution is admissible only when every identity and shape

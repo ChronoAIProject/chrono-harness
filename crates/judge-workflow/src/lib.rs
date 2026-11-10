@@ -32,24 +32,8 @@ pub fn judge(req: &Request) -> Response {
             r.outputs.insert("workflow".into(), v);
         }
         Err(message) => {
-            let code = message
-                .split(':')
-                .next()
-                .filter(|s| s.starts_with("E_"))
-                .unwrap_or("E_WORKFLOW_INPUT")
-                .to_string();
-            let severity = if matches!(
-                code.as_str(),
-                "E_BRANCH_STALE"
-                    | "E_RETIREMENT"
-                    | "E_REQUIRED_TEST_REMOVED"
-                    | "E_INTEGRATION_REQUIRED"
-                    | "E_INTEGRATION_MISMATCH"
-            ) {
-                Status::Fail
-            } else {
-                Status::Error
-            };
+            let (code, severity) = verified_execution::response::classify_error(&message);
+            let code = code.to_string();
             wire::append_finding(
                 &mut r.status,
                 &mut r.findings,
