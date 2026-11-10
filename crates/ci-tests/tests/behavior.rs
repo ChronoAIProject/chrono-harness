@@ -9,6 +9,65 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 mod retained_receipts;
+
+#[test]
+#[cfg(unix)]
+fn native_cli_rejects_invalid_utf8_classes_without_losing_position_or_bytes() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+    let root = tempfile::tempdir().unwrap();
+    for bytes in [
+        vec![255],
+        vec![128],
+        vec![240, 159, 146],
+        vec![192, 175],
+        vec![237, 160, 128],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
+            .arg("valid-before")
+            .arg(OsString::from_vec(bytes.clone()))
+            .arg(OsString::from_vec(vec![254]))
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        let record: Value = serde_json::from_slice(&output.stderr).unwrap();
+        assert_eq!(record["schema"], "chrono-log/v1");
+        assert_eq!(record["producer"], "chrono-ci");
+        assert_eq!(record["event"], "cli.invalid_argument");
+        assert_eq!(record["error"]["error"]["code"], "E_USAGE");
+        assert_eq!(record["error"]["error"]["source"], Value::Null);
+        assert_eq!(record["error"]["error"]["context"]["argv_index"], 2);
+        assert_eq!(record["error"]["error"]["context"]["argument_index"], 1);
+        assert_eq!(
+            record["error"]["error"]["context"]["argument_bytes"],
+            json!(bytes)
+        );
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn native_cli_accepts_literal_replacement_and_unicode_as_text() {
+    let root = tempfile::tempdir().unwrap();
+    for argument in ["", "�", "目录/é"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
+            .arg(argument)
+            .current_dir(root.path())
+            .output()
+            .unwrap();
+        // 合法文本进入原 CI 命令解析，沿用其退出 1 合同。
+        assert_eq!(output.status.code(), Some(1));
+        assert!(output.stdout.is_empty());
+        assert!(
+            std::str::from_utf8(&output.stderr)
+                .unwrap()
+                .starts_with("E_CI:")
+        );
+    }
+}
+
 fn config() -> Config {
     serde_json::from_value(json!({"schema":"chrono-github-ci/v4","facts_config":".chrono-harness/event-facts.json","workflow_path":".github/workflows/check.yml","name":"Host checks","runs_on":"macos-14","push_branches":["dev","integration/**"],"pull_request_branches":["dev"],"branch_creation_base_ref":"refs/heads/dev","checkout_action":"actions/checkout@11d5960a326750d5838078e36cf38b85af677262","upload_artifact_action":"actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02","timeout_minutes":20,"bootstrap":["/bin/bash",".chrono-harness/ci/bootstrap-native.sh","."],"runner":".chrono-harness/bin/chrono-harness","generator":".chrono-harness/bin/chrono-ci","check_config":".chrono-harness/ci/check.json","context_path":".chrono-harness/state/context.json","artifact_directory":".chrono-harness/state/"})).unwrap()
 }

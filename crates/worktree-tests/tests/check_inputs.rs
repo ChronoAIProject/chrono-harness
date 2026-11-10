@@ -251,16 +251,19 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
     let raw = fs::read(dest.join(&original.path)).unwrap();
     let unrelated = ".chrono-harness/state/worktrees/unrelated-ended.json";
     fs::write(dest.join(unrelated), b"unrelated ended original").unwrap();
-    Inventory::adopted(&dest)
+    let unrelated_publication = Inventory::adopted(&dest)
         .unwrap()
         .unwrap()
         .begin("lifecycle-original", unrelated, value!(null))
-        .unwrap()
-        .complete(value!({"exit":7}))
         .unwrap();
+    let unrelated_id = unrelated_publication.id().to_owned();
+    unrelated_publication.complete(value!({"exit":7})).unwrap();
+    // The fixture knows both originals. Visit them directly instead of spending
+    // the bounded pass on unrelated diagnostic metadata in directory order.
+    let maintenance_targets = [unrelated_id, original.id.clone()];
     let mut rounds = Vec::new();
     for _ in 0..8 {
-        rounds.push(inventory.maintain().unwrap());
+        rounds.push(inventory.maintain_originals(&maintenance_targets).unwrap());
         assert_eq!(
             fs::read(dest.join(&original.path)).unwrap(),
             raw,

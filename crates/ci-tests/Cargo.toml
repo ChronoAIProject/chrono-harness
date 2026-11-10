@@ -8,11 +8,11 @@ autotests = false
 [dependencies]
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-harness = { path = "../runner" }
+chrono-ci = { path = "../ci" }
 serde_json = { version = "1", features = ["unbounded_depth"] }
 
 [dev-dependencies]
 chrono-judge-ci = { path = "../judge-ci" }
-chrono-ci = { path = "../ci" }
 tempfile = "3"
 serde_yaml_ng = "0.10"
 verus_builtin_macros = "=0.0.0-2026-04-20-1748"
@@ -20,6 +20,12 @@ verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 [[bin]]
 name = "chrono-worktree-test-cli"
 path = "../worktree/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-ci-test-cli"
+path = "../ci/src/main.rs"
 test = false
 bench = false
 

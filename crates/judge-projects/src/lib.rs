@@ -193,6 +193,7 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                             event_id = "projects.operation_completed",
                             status = row.status,
                             has_receipt = row.receipt.is_some(),
+                            error = row.error.as_deref().unwrap_or(""),
                             "operation result available; enclosing execution may be incomplete"
                         );
                         let _ = tx.send((index, row));

@@ -924,6 +924,11 @@ Cargo wrapper 存活回归在原 wrapper 中断和维护检查后，用阻塞 so
 
 完成消息只表示 fixture 函数完成，不独立证明整 libtest 进程终态或全部调用方义务完成。
 
+该回归只维护自己的样本宿主，核对目标因真实存活消费者而保留。最后一次源码断言结束后，
+样本已有的 `TemporaryHost::finish` 定向回收自己的整个分配；测试不再调用共享宿主的全范围
+`maintain` 来检查一个分配。活子进程期间的缓存保留、原输出、完成消息和源码保全断言继续执行，
+原操作时限和测试线程不变；测试不依赖无关工作树的维护进度。
+
 ## 明确登记生命周期报告消费者
 
 当前 finish、maintain、import、受管入口接受 `--report-consumer ID`，点名调用方真实原件消费义务，独立于缓存 use／release。已有 retention 生产者在关闭发布能力前传精确消费者根，在 report_consumer 返回 `chrono-retention-consumer/v1` 声明，要求已采用生命周期保留。

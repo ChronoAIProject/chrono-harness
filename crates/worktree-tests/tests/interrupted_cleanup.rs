@@ -2396,11 +2396,25 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
         fs::read_to_string(target.join(".chrono-harness/state/native-io-error"))
             .unwrap_or_default()
     );
-    assert_eq!(h.auto("maintain", &[]).0, 0);
+    let (code, protected, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{protected} {error}");
+    assert!(
+        protected["drain"].as_array().unwrap().iter().any(|row| {
+            row["path"] == target.to_str().unwrap()
+                && row["status"] == "preserved"
+                && row["preserved_reason"] == "live registered consumers hold enrollment lease"
+        }),
+        "the actual native child must keep its target protected: {protected}"
+    );
     let preserved_while_native_live = target.join("output λ/cache").exists();
-    let protected = maintain_allocation();
+    assert!(allocation.is_dir(), "{protected}");
     assert!(cargo_output.is_dir(), "{protected}");
-    assert_eq!(protected["status"], "protected", "{protected}");
+    let allocation_protected = maintain_allocation();
+    assert_eq!(
+        allocation_protected["status"], "protected",
+        "{allocation_protected}"
+    );
+    assert!(cargo_output.is_dir(), "{allocation_protected}");
     fs::write(target.join(".chrono-harness/state/native-release"), "join").unwrap();
     native_completion.write_all(b"join").unwrap();
     let mut done = [0; 4];
@@ -2437,6 +2451,8 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     assert_eq!(fs::read(target.join("payload")).unwrap(), original_payload);
     assert_eq!(fs::read(manifest).unwrap(), original_manifest);
     assert_eq!(fs::read(library).unwrap(), original_library);
+    // Both lifecycle owners contain only this fixture; no maintenance here
+    // visits the real repository's other worktrees or allocations.
     drop(h);
     let reclaimed = maintain_allocation();
     assert!(!cargo_output.exists(), "{reclaimed}");
