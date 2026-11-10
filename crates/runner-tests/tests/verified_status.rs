@@ -2181,6 +2181,12 @@ fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
         assert(vstd::string::is_ascii("0") && vstd::string::is_ascii("1")
             && vstd::string::is_ascii("2") && vstd::string::is_ascii("3")
             && vstd::string::is_ascii("00") && vstd::string::is_ascii("1\0"));
+        assert("0".spec_bytes() == seq![48u8]);
+        assert("1".spec_bytes() == seq![49u8]);
+        assert("2".spec_bytes() == seq![50u8]);
+        assert("3".spec_bytes() == seq![51u8]);
+        assert("00".spec_bytes() == seq![48u8, 48u8]);
+        assert("1\0".spec_bytes() == seq![49u8, 0u8]);
     }
     expect_status_true(out.is_ok());
     let copied = path.to_owned();
