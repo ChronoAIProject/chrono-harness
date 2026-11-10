@@ -177,7 +177,7 @@ fn plan(
         .collect();
     let plan = prepare(
         dir.path(),
-        json!({"run":"test"}),
+        json!({"run":"test","operation_state":".chrono-harness/state/projects-run"}),
         &plans.keys().cloned().collect(),
         &plans,
         &methods,
@@ -282,6 +282,56 @@ fn unavailable_operation_state_rejects_before_dispatch() {
         "state publication must precede dispatch"
     );
     assert!(!directory.path().join("effects").exists());
+}
+
+#[test]
+fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation() {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let (directory, plan) = plan(
+        &[
+            ("a", vec![append("effects", "a"), stdout([255, 0]), Step::Exit(7)]),
+            ("b", vec![append("effects", "b"), stdout([254, 1]), Step::Stderr(vec![253]),
+                Step::Rendezvous { address:listener.local_addr().unwrap().to_string(), id:"b".into() }]),
+        ],
+        &[("test:a",vec!["a"]),("test:b",vec!["b"])],
+    );
+    let encoded_plan = directory.path().join("plan.json");
+    std::fs::write(&encoded_plan, serde_json::to_vec(&plan).unwrap()).unwrap();
+    let driver = env!("CARGO_BIN_EXE_chrono-test-project-execution-driver");
+    let spec = chrono_harness::CommandSpec {
+        program:driver.into(), args:vec![encoded_plan.to_str().unwrap().into()],
+        env:BTreeMap::new(), timeout_seconds:3, output_limit_bytes:65536,
+    };
+    let digest = chrono_harness::file_identity(std::path::Path::new(driver)).unwrap().0;
+    std::thread::scope(|scope| {
+        let worker = scope.spawn(|| chrono_harness::run_process_observed(directory.path(), &spec, &[], &digest).unwrap());
+        let (id, held) = arrival(&listener);
+        assert_eq!(id,"b");
+        let original = directory.path().join(".chrono-harness/state/projects-run.operation-0/result.json");
+        let mut saved:serde_json::Value = serde_json::from_slice(&std::fs::read(original).unwrap()).unwrap();
+        saved["receipt"]["process"] = chrono_harness::full::expand_process(&saved["receipt"]["process"]).unwrap();
+        let receipt:chrono_judge_routes::Receipt = serde_json::from_value(saved["receipt"].clone()).unwrap();
+        chrono_judge_routes::compare(&plan,&plan.operations[0],Some(&receipt)).unwrap();
+        assert_eq!(receipt.process.exit_code,7);
+        assert_eq!(receipt.process.stdout_bytes,[255,0]);
+        // Join the one native runner. Its timeout interrupts the real enclosing
+        // executor and accounts for its owned process tree before returning.
+        let interrupted = worker.join().unwrap();
+        drop(held);
+        assert!(interrupted.failure.is_some());
+    });
+    let state = directory.path().join(".chrono-harness/state/projects-run");
+    assert!(!state.join("result.json").exists(), "interrupted execution has no final result");
+    let partial = directory.path().join(".chrono-harness/state/projects-run.operation-1");
+    assert!(partial.join("intent.json").exists());
+    assert!(!partial.join("result.json").exists(), "no native result was returned to this producer");
+    let launch:serde_json::Value = serde_json::from_slice(&std::fs::read(format!("{}.launch.json",partial.display())).unwrap()).unwrap();
+    assert!(launch["child_pid"].as_u64().unwrap()>0);
+    assert_eq!(std::fs::read(format!("{}.stdout",partial.display())).unwrap(),[254,1]);
+    assert_eq!(std::fs::read(format!("{}.stderr",partial.display())).unwrap(),[253]);
+    assert!(execute(&plan).is_err(), "unknown execution cannot dispatch the same work again");
+    assert_eq!(std::fs::read(directory.path().join("effects")).unwrap(),b"ab");
 }
 #[test]
 fn output_bound_preserves_bytes_and_cannot_pass() {

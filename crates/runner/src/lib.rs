@@ -2376,7 +2376,7 @@ fn execute_check(
     } else {
         None
     };
-    let collected_originals: Vec<String> =
+    let mut collected_originals: Vec<String> =
         if matches!(report["request"]["scope"]["kind"].as_str(), Some("collect")) {
             report["response"]["evidence"]["retained_originals"]
                 .as_array()
@@ -2395,6 +2395,10 @@ fn execute_check(
         } else {
             Vec::new()
         };
+    if let Some(path) = report["response"]["evidence"]["operation_state"]["path"].as_str() {
+        relative_path(path)?;
+        collected_originals.push(path.to_owned());
+    }
     let console = if retained_streams {
         let projection = serde_json::json!({
             "retained_report": report["retained_report"],

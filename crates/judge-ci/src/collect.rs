@@ -385,7 +385,7 @@ pub(super) fn collect(
         plan.validate()?;
         if plan.root != original.host_root
             || plan.binding
-                != object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":original.request_id,"entry":original.observations["entry"]})
+                != object!({"base":req.base,"candidate":req.candidate,"config":req.config_sha256,"run":original.request_id,"entry":original.observations["entry"],"operation_state":super::operation_state_path(&original, config)?})
         {
             return Err("unit plan binding mismatch".into());
         }

@@ -1610,6 +1610,10 @@ pub fn check_prepared(
     let retained_written = publish(&retained_report);
     if retained_written {
         let mut originals = Vec::new();
+        if let Some(path) = report["tests"]["operation_state"]["path"].as_str() {
+            crate::relative_path(path)?;
+            originals.push(path.to_owned());
+        }
         if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
             originals.push(path.into());
         }

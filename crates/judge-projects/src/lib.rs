@@ -1,7 +1,8 @@
 //! Pair admissibility and actual operation/test evidence. Selection remains FILEMAP-owned.
 mod verified_languages;
+mod state;
 use chrono_harness::{
-    CommandSpec, facts, run_process_observed,
+    CommandSpec, facts, run_process_observed_retained,
     wire::{self, Binding, Finding, Request, Response, Status},
 };
 use chrono_judge_registration::Registrations;
@@ -19,6 +20,8 @@ pub struct OperationResult {
     pub status: String,
     pub receipt: Option<Receipt>,
     pub error: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub original: Option<Value>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Results {
@@ -32,6 +35,8 @@ pub struct Results {
     pub scope: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub completion: Option<CollectedCompletion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub operation_state: Option<Value>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -61,6 +66,8 @@ impl Results {
 /// Shared by full projects and the explicitly scoped CI adapter; no alternate process engine.
 pub fn execute(plan: &Execution) -> Result<Results, String> {
     plan.validate()?;
+    let state = state::Run::begin(plan)?;
+    let plan_original = &state.plan_original;
     let span = tracing::info_span!("projects.execution", plan = plan.identity);
     let _entered = span.enter();
     tracing::info!(
@@ -77,6 +84,7 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
         removed: BTreeMap::new(),
         scope: None,
         completion: None,
+        operation_state: None,
     };
     // Scoped threads are joined even if a launch, receipt or worker fails. Claims
     // are acquired together by this sole coordinator, never inside workers.
@@ -126,6 +134,7 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                         status: "blocked".into(),
                         receipt: None,
                         error: Some("failed prerequisite".into()),
+                        original: None,
                     };
                     statuses.insert(row.operation.clone(), row.status.clone());
                     rows.insert(index, row);
@@ -170,13 +179,14 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                             "operation worker started"
                         );
                         let row = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            execute_operation(plan, op)
+                            execute_operation(plan, index, plan_original)
                         }))
                         .unwrap_or_else(|_| OperationResult {
                             operation: op.method.operation.clone(),
                             status: "error".into(),
                             receipt: None,
                             error: Some("operation worker panicked".into()),
+                            original: None,
                         });
                         tracing::info!(
                             event_id = "projects.operation_completed",
@@ -194,6 +204,7 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
                         status: "error".into(),
                         receipt: None,
                         error: Some(format!("operation worker launch: {error}")),
+                        original: None,
                     };
                     statuses.insert(row.operation.clone(), row.status.clone());
                     rows.insert(index, row);
@@ -246,9 +257,12 @@ pub fn execute(plan: &Execution) -> Result<Results, String> {
             .into(),
         );
     }
+    state.finish(&mut results)?;
     Ok(results)
 }
-fn execute_operation(plan: &Execution, op: &chrono_judge_routes::Operation) -> OperationResult {
+fn execute_operation(plan: &Execution, index: usize, plan_original: &Value) -> OperationResult {
+    let op = &plan.operations[index];
+    let mut state = None;
     let result = (|| {
         let tool = plan
             .tools
@@ -261,7 +275,9 @@ fn execute_operation(plan: &Execution, op: &chrono_judge_routes::Operation) -> O
             timeout_seconds: op.timeout_seconds,
             output_limit_bytes: op.output_limit_bytes,
         };
-        let process = run_process_observed(&plan.root, &spec, &[], &tool.sha256)?;
+        state = Some(state::Operation::begin(plan, index, plan_original)?);
+        let process = run_process_observed_retained(&plan.root, &spec, &[], &tool.sha256,
+            &state.as_ref().unwrap().evidence())?;
         Receipt::new(plan, op, process)
     })();
     let (receipt, error, status) = match result {
@@ -283,12 +299,24 @@ fn execute_operation(plan: &Execution, op: &chrono_judge_routes::Operation) -> O
         }
         Err(e) => (None, Some(e), "error"),
     };
-    OperationResult {
+    let mut row = OperationResult {
         operation: op.method.operation.clone(),
         status: status.into(),
         receipt,
         error,
+        original: None,
+    };
+    if let Some(state) = state {
+        match state.finish(&row) {
+            Ok(original) => row.original = Some(original),
+            Err(error) => {
+                row.error = Some(format!("{}operation original publication: {error}",
+                    row.error.as_ref().map(|e| format!("{e}; ")).unwrap_or_default()));
+                row.status = "error".into();
+            }
+        }
     }
+    row
 }
 fn dedicated_pair<'a>(
     registry: &Value,
@@ -825,6 +853,7 @@ fn collect_reports(
         removed,
         scope: Some("collect".into()),
         completion: Some(completion.clone()),
+        operation_state: None,
     };
     Ok((results, completion))
 }
