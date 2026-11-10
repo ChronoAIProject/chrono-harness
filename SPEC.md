@@ -635,6 +635,8 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
 
 登记快照的 `facts::registry_paths` 直接消费同源 Verus 的完整路径收集：入口路径原样在前，随后固定为 judges、projects、filemap、workflow；保留重复和原文本，不归一化或额外验证入口。四字段各自先核缺失，再用已有相对路径谓词判定，失败严格来自首个错误字段，不发布部分库存。共享 `relative_path` 的成功／错误选择、原非法路径和错误渲染分支也由 Verus 拥有；标准 JSON 字符串观察、Result 转交与 Debug 格式化为列明的外部接口，不授予仓内判断额外信任。
 
+登记快照的单条读取和批量读取直接消费 Verus 的返回身份判断。单条结果必须恰好一项且路径全文等于本次请求，成功按值移交该项完整原字节，否则返回原路径不符错误；批量结果先核数量相等，再在逐项 JSON 解码前核对应路径，保留原数量错误、路径错误和解码失败的次序。不归一化路径，不增加相对路径准入，也不把尚未迁移的待读选择、快照状态维护或实际 IO 列为已证明。
+
 registration 从固定 tree 判断支持的 entry 类型，重读对象、磁盘配置、context 和 checkout，忽略两次观察之间新增的已声明 artifact；其它变化报错。request_id 覆盖这些字段；不把 导出的干净副本 当实际 checkout。base 导出保留在 state，普通文件无写权限，不执行 base 工具。
 
 registries.digest 精确定义为 JCS `{"base": {"<path>": <parsed JSON>, ...}, "candidate": {"<path>": <parsed JSON>, ...}}` 的 SHA-256，每端包含 config_path 与该端 config 指定的四份 registry；context.sha256 为 context JCS 摘要，evidence.sha256 为原始文件字节摘要。所有 JSON 先拒绝重复成员。

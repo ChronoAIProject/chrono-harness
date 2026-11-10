@@ -3776,4 +3776,108 @@ fn relative_path_results_and_registry_renderer_keep_complete_text() {
     expect_status_text(message.as_str(), "missing registry path filemap");
 }
 
+fn expect_single_registry_blob(path: &str, bytes: Vec<u8>, expected: Vec<u8>)
+    requires bytes@ == expected@,
+{
+    let rows = vec![(path.to_owned(), bytes)];
+    match policy::single_registry_blob(path, rows) {
+        Ok(actual) => {
+            expect_status_true(scope_text::equal_bytes(actual.as_slice(), expected.as_slice()));
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_single_acquisition_keeps_full_path_and_original_bytes() {
+    expect_single_registry_blob("", Vec::new(), Vec::new());
+    expect_single_registry_blob("目录/é\0\n", vec![255u8, 0, 10, 13, 254], vec![255u8, 0, 10, 13, 254]);
+    expect_single_registry_blob("../entry", vec![0u8], vec![0u8]);
+}
+
+fn expect_registry_blob_rejected(expected: &str, rows: Vec<(String, Vec<u8>)>)
+    requires rows.len() != 1 || rows@[0].0@ != expected@,
+{
+    match policy::single_registry_blob(expected, rows) {
+        Ok(_) => { panic!(); },
+        Err(message) => { expect_status_text(message.as_str(), "registry acquisition path mismatch"); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_single_acquisition_rejects_missing_extra_and_wrong_paths() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("a/"); reveal_strlit("A"); reveal_strlit("a\0");
+        assert("a"@.len() != "a/"@.len() && "a"@.len() != "a\0"@.len());
+        assert("a"@[0] != "A"@[0]);
+    }
+    expect_registry_blob_rejected("a", Vec::new());
+    expect_registry_blob_rejected("a", vec![("a".to_owned(), vec![1u8]), ("a".to_owned(), vec![2u8])]);
+    expect_registry_blob_rejected("a", vec![("a/".to_owned(), vec![1u8])]);
+    expect_registry_blob_rejected("a", vec![("A".to_owned(), vec![1u8])]);
+    expect_registry_blob_rejected("a", vec![("a\0".to_owned(), vec![1u8])]);
+}
+
+fn expect_registry_count(expected: usize, observed: usize, accepted: bool)
+    requires accepted == (expected == observed),
+{
+    match policy::registry_acquisition_count(expected, observed) {
+        Ok(()) => { expect_status_true(accepted); },
+        Err(message) => {
+            expect_status_true(!accepted);
+            expect_status_text(message.as_str(), "registry acquisition count mismatch");
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_batch_count_accepts_empty_exact_and_integer_boundary_only() {
+    expect_registry_count(0, 0, true);
+    expect_registry_count(1, 1, true);
+    expect_registry_count(5, 5, true);
+    expect_registry_count(usize::MAX, usize::MAX, true);
+    expect_registry_count(0, 1, false);
+    expect_registry_count(1, 0, false);
+    expect_registry_count(5, 4, false);
+    expect_registry_count(5, 6, false);
+    expect_registry_count(usize::MAX, usize::MAX - 1, false);
+}
+
+fn expect_registry_same_path(path: &str) {
+    match policy::registry_acquisition_path(path, path) {
+        Ok(()) => {},
+        Err(_) => { panic!(); },
+    }
+}
+
+fn expect_registry_wrong_path(expected: &str, observed: &str)
+    requires expected@ != observed@,
+{
+    match policy::registry_acquisition_path(expected, observed) {
+        Ok(()) => { panic!(); },
+        Err(message) => { expect_status_text(message.as_str(), "registry acquisition path mismatch"); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_batch_path_keeps_full_text_without_normalization_or_path_admission() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("a/"); reveal_strlit("A");
+        reveal_strlit("a//b"); reveal_strlit("a/b"); reveal_strlit("a\0");
+        reveal_strlit("é"); reveal_strlit("e\u{301}");
+        assert("a"@.len() != "a/"@.len() && "a"@.len() != "a\0"@.len());
+        assert("a"@[0] != "A"@[0]);
+        assert("a//b"@.len() != "a/b"@.len());
+        assert("é"@.len() != "e\u{301}"@.len());
+    }
+    expect_registry_same_path("");
+    expect_registry_same_path("目录/é\0\n");
+    expect_registry_same_path("../entry");
+    expect_registry_wrong_path("a", "a/");
+    expect_registry_wrong_path("a", "A");
+    expect_registry_wrong_path("a//b", "a/b");
+    expect_registry_wrong_path("a", "a\0");
+    expect_registry_wrong_path("é", "e\u{301}");
+}
+
 }

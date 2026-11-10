@@ -124,6 +124,10 @@ runner 的 `normalize_checkout_paths` 及四项独立 Verus 预期覆盖未跟�
 `facts::registry_paths`／`relative_path` 直接消费。四项独立预期核入口原样、固定五项顺序、
 重复保留、每个缺失字段及首错、非法路径边界、完整错误文本转交；同为 Verus 并执行普通 Rust 断言。
 JSON 字符串观察与标准 Debug 格式化是明确外部接口，剩余登记快照及 IO 组合仍未证明。
+同一证明根的 `single_registry_blob`、`registry_acquisition_count` 和
+`registry_acquisition_path` 已接入真实单条／批量快照读取，核返回数量、路径全文和完整原字节转交。
+四项独立 Verus 预期同时执行 Rust 断言，覆盖空／多余结果、原始非 UTF-8 字节、完整路径、
+大小写／分隔符／NUL／Unicode 不归一化及 usize 数量边界；批量待读选择和快照状态仍待证明。
 此范围不构成整个 facts 文件或全仓覆盖证明。
 
 ## 按 §13 验收场景查看
