@@ -3,7 +3,9 @@ use std::{fs, process::ExitCode};
 
 fn main() -> ExitCode {
     let run = || -> Result<(), String> {
-        let path = std::env::args().nth(1).ok_or("execution plan path missing")?;
+        let path = std::env::args()
+            .nth(1)
+            .ok_or("execution plan path missing")?;
         let plan = serde_json::from_slice(&fs::read(path).map_err(|e| e.to_string())?)
             .map_err(|e| e.to_string())?;
         let results = chrono_judge_projects::execute(&plan)?;
