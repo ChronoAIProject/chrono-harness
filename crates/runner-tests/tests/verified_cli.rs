@@ -20,6 +20,12 @@ fn expect_true(value: bool)
     if !value { panic!(); }
 }
 
+fn expect_text(actual: &str, expected: &str)
+    requires actual@ == expected@,
+{
+    expect_true(actual.to_owned() == expected.to_owned());
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn complete_valid_arguments_keep_empty_unicode_replacement_and_duplicates() {
     let input = [Some("tool"), Some(""), Some("目录/é/�"), Some("same"), Some("same")];
@@ -27,11 +33,11 @@ fn complete_valid_arguments_keep_empty_unicode_replacement_and_duplicates() {
     match output {
         Ok(texts) => {
             expect_true(texts.len() == 5);
-            expect_true(texts[0] == "tool");
-            expect_true(texts[1] == "");
-            expect_true(texts[2] == "目录/é/�");
-            expect_true(texts[3] == "same");
-            expect_true(texts[4] == "same");
+            expect_text(texts[0], "tool");
+            expect_text(texts[1], "");
+            expect_text(texts[2], "目录/é/�");
+            expect_text(texts[3], "same");
+            expect_text(texts[4], "same");
         },
         Err(_) => panic!(),
     }
@@ -46,7 +52,7 @@ fn empty_input_and_empty_program_name_remain_valid_text() {
     match policy::decoded_arguments(&[Some("")]) {
         Ok(texts) => {
             expect_true(texts.len() == 1);
-            expect_true(texts[0] == "");
+            expect_text(texts[0], "");
         },
         Err(_) => panic!(),
     }
