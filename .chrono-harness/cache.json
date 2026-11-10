@@ -880,6 +880,16 @@
       "kind": "file",
       "path": ".chrono-harness/ci/verus-macos-arm64.sha256",
       "presence": "present"
+    },
+    "worktree-tests.core.producer": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/29/actions/execute_core"
+    },
+    "worktree-tests.adoption.producer": {
+      "kind": "json-value",
+      "path": ".chrono-harness/projects.json",
+      "pointer": "/projects/29/actions/execute_adoption"
     }
   },
   "artifacts": {
@@ -2494,13 +2504,16 @@
         "bootstrap.config",
         "check.environment",
         "cache.cargo-registration",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "worktree-tests.core.producer"
       ],
       "source_inputs": [
         "worktree-tests.sources"
       ],
       "restore": "compatible",
-      "refresh_sources": true
+      "refresh_sources": true,
+      "verify_contents": true,
+      "save_on_failure": true
     },
     "check.diagnostics-tests": {
       "owner": "diagnostics-tests",
@@ -5886,13 +5899,16 @@
         "bootstrap.config",
         "check.environment",
         "cache.cargo-registration",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "worktree-tests.adoption.producer"
       ],
       "source_inputs": [
         "worktree-tests.sources"
       ],
       "restore": "compatible",
-      "refresh_sources": true
+      "refresh_sources": true,
+      "verify_contents": true,
+      "save_on_failure": true
     },
     "detect.ci": {
       "owner": "ci",

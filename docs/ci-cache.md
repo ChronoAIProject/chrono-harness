@@ -19,6 +19,8 @@ runner 的编译缓存和原证明也沿同一个登记构建入口复用，损�
 
 planner 准备身份；GitHub provider 在原 bootstrap 和检查／发布命令两侧生成固定版本的原生 restore／save action。本宿主在检查、发布登记中明确采用。计划或工作流生成成功，不代表真实恢复／保存、编译器复用或验收通过。SPEC §4.2 仍要求后端证据、冷／热／源码变化／失败／并发验收和当前执行物验证。
 
+`worktree` 和 `worktree-adoption` 两组分别为自己的测试编译缓存采用内容核验和失败后封存。兼容输入各自绑定现役 `execute_core`／`execute_adoption` 的完整 Cargo 动作，并沿用工具选择、源码、工具链和环境输入；一组的过滤动作变化不会静默复用该组原来的兼容键。检查失败后仍保留真实失败，缓存只保存编译资料，后续命中仍执行原构建与测试。内容清单会读取登记 target 的文件；原生失败后的实际保存／健康命中及新增 IO、传输和存储成本仍须验收或测量，不能从登记采用推定完成。
+
 每份计划记录准备它的 `chrono-cache` 精确摘要和版本；恢复与封存在执行前核对当前执行物。当前传输要求主 Git 检出；linked worktree 需要贯穿恢复／保存的租约，尚不支持。
 
 本宿主标准检查 action 明确设 `CARGO_INCREMENTAL=1`。core、full、cache seed bootstrap 和 v5 发布配方设 `rust_incremental: true`，原构建调用收到对应环境值，包含 release 构建和 Rust 验证单元。发布配方通过明确 `rust_toolchain` 把设置限制在 Rust 消费者；非 Rust 单元保留自身环境。
