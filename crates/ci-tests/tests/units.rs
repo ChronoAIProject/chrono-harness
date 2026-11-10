@@ -268,7 +268,12 @@ fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained:
     }
     // Finish fixture setup before fault injection and bounded check execution.
     // Each caller declares the program's real readiness protocol.
-    for (_, name, probe) in tools {
+    for (project, name, probe) in tools {
+        let original = crate::tools::fixture_binary(project, name);
+        let copied_name = original.file_name().unwrap();
+        if copied_name != std::ffi::OsStr::new(name) {
+            fs::rename(bin.join(copied_name), bin.join(name)).unwrap();
+        }
         let mut command = Command::new(bin.join(name));
         command
             .current_dir(root)
