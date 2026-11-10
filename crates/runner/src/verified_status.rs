@@ -722,7 +722,7 @@ pub type GitIndexStages<'a> = BTreeMap<GitIndexStage<'a>, ()>;
 
 pub open spec fn git_index_stages_ordered(keys: Seq<GitIndexStage>) -> bool {
     forall|i: int, j: int| 0 <= i < j < keys.len()
-        ==> (#[trigger] keys[i]).order_spec(&keys[j]) == Ordering::Less
+        ==> #[trigger] keys[i].order_spec(&keys[j]) == Ordering::Less
 }
 
 /// 解析完成后的只读键库存。只借用原字段；临时 BTreeMap 随解析返回释放。
@@ -838,7 +838,7 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
                     assert(keys@ == all);
                     assert forall|i: int, j: int| 0 <= i < j < keys.len()
-                        implies (#[trigger] keys@[i]).order_spec(&keys@[j]) == Ordering::Less by {
+                        implies #[trigger] keys@[i].order_spec(&keys@[j]) == Ordering::Less by {
                         assert(all[i].cmp_spec(&all[j]) == Ordering::Less);
                     }
                 }
