@@ -266,17 +266,17 @@ scoped v3 报告用紧凑 JSON，避免字节数组每字节缩进一行；解�
 
 ### 原报告引用格式
 
-scoped v3 可采用 `policy.report_publication: "retained-reference/v1"`，只保留一份完整不可变报告。固定报告路径仅写 `{"schema":"chrono-check-reference/v1","original":{"path":...,"sha256":...}}`，不含结论；短控制台直接指完整原件。本地／原生 manifest 绑定引用精确字节。
+scoped v3 可采用 `policy.report_publication: "retained-reference/v2"`，只保留一份完整不可变报告。固定报告路径仅写 `{"schema":"chrono-check-reference/v1","original":{"path":...,"sha256":...}}`，不含结论；短控制台直接指完整原件。本地／原生 manifest 绑定引用精确字节。
 
-汇总经声明产物传输读原件，核摘要／保留路径，继续全部报告、进程、计划、执行物检查，不跟随引用链。原件缺失、改变、符号链接、未声明或过大都失败，小引用／成功下载不能替代证据。引用和原件各自受登记报告读取上限约束。
+汇总经声明产物传输读原件，核摘要／保留路径，继续全部报告、进程、计划、执行物检查，不跟随引用链。原件缺失、改变、符号链接、未声明或过大都失败，小引用／成功下载不能替代证据。
 
-采用须匹配 runner／collector 二进制及准备后的短入口，明确端点调用在业务前失败。旧 profile（含省略字段的 scoped v3）仍在固定路径写完整报告。未知值、null、scoped v1／v2 采用都拒绝。固定路径读取器须先支持引用，再采用。上传整个登记目录，含引用和原件，不能只上传小引用。它只减少重复发布报告，不去重其他获取、进程或 gather 证据。
+采用须匹配 runner／collector 二进制及准备后的短入口，明确端点调用在业务前失败。省略政策仍在固定路径写内联报告。已退役的 `retained-reference/v1`、未知值、null、scoped v1／v2 采用都在业务派发前拒绝。固定路径读取器须先支持引用，再采用。上传整个登记目录，含引用和原件，不能只上传小引用。它只减少重复发布报告，不去重其他获取、进程或 gather 证据。
 
-明确选 `retained-reference/v2` 时，固定引用格式不变，原件变为 `chrono-check-report/v2`，保留请求、runner 身份、进程 metadata、退出、失败、保留路径。judge 精确 stdout／stderr 另按原件机制保存，`judge.stdout_original`／`judge.stderr_original` 各含 `{path, sha256}`。
+引用的原件为 `chrono-check-report/v2`，保留请求、runner 身份、进程 metadata、退出、失败、保留路径。judge 精确 stdout／stderr 另按原件机制保存，`judge.stdout_original`／`judge.stderr_original` 各含 `{path, sha256}`。
 
 报告不再有独立 `response` 或内联 judge `stdout`、`stderr`、`stdout_bytes`、`stderr_bytes`。汇总将两流摘要与引用／进程 metadata 核对，临时恢复进程视图，从原 stdout 解码响应。原协议、执行物、计划、回执、结论检查都保留。业务／传输失败保留原状态和字节，有限控制台指向报告。
 
-v2 的 `report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总字节，固定引用另受同大小上限。全部原件经声明传输解析，流缺失／损坏不能回退生产者本地副本。上传整目录，采用前升级全部实际读取器。拒绝内联流视图，只消费已核原字节。此存储合同不去重 judge 输出内业务回执或其他获取证据，v1／省略政策保留原格式。
+`report_bytes` 约束每单元原报告 metadata 加 stdout／stderr 总字节，固定引用另受同大小上限。全部原件经声明传输解析，流缺失／损坏不能回退生产者本地副本。上传整目录，采用前升级全部实际读取器。拒绝内联流视图，只消费已核原字节。此存储合同不去重 judge 输出内业务回执或其他获取证据。
 
 ### 读取上限与身份
 
