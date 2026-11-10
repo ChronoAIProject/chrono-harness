@@ -25,8 +25,16 @@ fn adopt_short_host(
     migration: bool,
 ) -> (Host, host::FixtureDirectory) {
     let root = h.root();
-    for (project, binary) in [("ci", "chrono-ci"), ("worktree", "chrono-worktree")] {
-        let original = source().join(format!("crates/{project}/target/debug/{binary}"));
+    for (original, binary) in [
+        (
+            source().join("crates/ci/target/debug/chrono-ci"),
+            "chrono-ci",
+        ),
+        (
+            std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")),
+            "chrono-worktree",
+        ),
+    ] {
         let destination = root.join(format!(".chrono-harness/bin/{binary}"));
         host::copied_fixture_input(&root, &original, &destination);
         fs::copy(original, destination).unwrap();

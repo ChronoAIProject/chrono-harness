@@ -756,8 +756,7 @@
           "check.ci-tests",
           "check.judge-ci",
           "check.judge-registration",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.ci-tests",
@@ -928,8 +927,7 @@
           "check.judge-routes",
           "check.judge-workflow",
           "check.judge-workflow-tests",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-workflow",
@@ -1032,8 +1030,7 @@
           "check.judge-routes",
           "check.judge-workflow",
           "check.judge-workflow-tests.judge-workflow-units",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-workflow-tests.judge-workflow-units"
@@ -1062,8 +1059,7 @@
           "check.judge-routes",
           "check.judge-workflow",
           "check.judge-workflow-tests.judge-workflow-short",
-          "check.runner",
-          "check.worktree"
+          "check.runner"
         ],
         "save_caches": [
           "check.judge-workflow-tests.judge-workflow-short"
