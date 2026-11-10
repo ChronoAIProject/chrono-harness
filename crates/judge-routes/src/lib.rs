@@ -47,12 +47,25 @@ pub fn proof_invocations(
 pub fn validate_proof_plan(
     registry: &chrono_harness::verified_verifier::sources::SourceRegistry,
     affected_nodes: &BTreeSet<String>,
+    methods: &BTreeMap<String, Vec<Method>>,
     operations: &[Operation],
 ) -> Result<(), String> {
+    let scopes = methods
+        .values()
+        .flatten()
+        .map(
+            |method| chrono_harness::verified_verifier::sources::SourceMethodScope {
+                operation: &method.operation,
+                owner: &method.owner,
+                tool: &method.tool,
+            },
+        )
+        .collect();
     chrono_harness::verified_verifier::sources::validate_selected_roots(
         &registry.files,
         &affected_nodes.iter().cloned().collect(),
         &proof_invocations(operations),
+        &scopes,
     )
     .map_err(|error| error.render(|message, path| format!("{message}{path}")))
 }
@@ -753,15 +766,13 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     // First prepare the global graph.  This validates every selected plan and
     // its prerequisites even when the caller asks for one unit only.
     let global_plans = chrono_judge_registration::execution::plans(r.filemap())?;
-    let (global_chosen, global_operations) = order(
-        &selected,
-        &global_plans,
-        &chrono_judge_registration::execution::methods(r.projects())?,
-        &execute_actions(&r),
-    )?;
+    let methods = chrono_judge_registration::execution::methods(r.projects())?;
+    let (global_chosen, global_operations) =
+        order(&selected, &global_plans, &methods, &execute_actions(&r))?;
     validate_proof_plan(
         &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
         &impact.closure.reached.keys().cloned().collect(),
+        &methods,
         &global_operations,
     )?;
     let global_selected = selected.clone();
