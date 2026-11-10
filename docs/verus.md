@@ -661,6 +661,15 @@ tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 没有新增验证进程。请求封存、JSON／摘要和外层组合仍待证明。
 比较最多读取协议和模式的完整字节，名称只查空值；构建、验证和完整运行成本未测。
 
+`facts::artifact_directories` 直接消费路径根的 `collect_artifact_declarations`。
+缺少声明数组时返回原错误；有数组时按原顺序逐项观察 `path`，遇到首个非字符串就返回原错误。
+成功保留全部借用字符串，包括空串、重复项及原字节；路径准入仍归使用方。
+独立 Verus 预期也作为 Rust 测试运行，核空数组、原顺序、重复、Unicode、NUL 及两个错误全文。
+仅使用锁定版本 Serde JSON 的字段索引、`Value::as_array`、`Value::as_str`，
+以及固定 Rust 的 `Vec::as_slice`、`Option::map`、`Result::map_err` 和 `str::to_owned`
+转交观察与结果。扫描最多调用每行一次字段读取，首错后不再读取，不另存字段副本。
+沿用两项路径整 crate 证明与原生产调用；完整构建、证明和 CI 成本未测。
+
 `facts::artifact_exclusions` 的完整过滤迁到同源路径根的
 `literal_artifact_directories`：只保留以 `/` 结尾、每个目录分量非空且不是 `.` 或 `..`
 的原声明，保持输入顺序、重复和原文借用。
