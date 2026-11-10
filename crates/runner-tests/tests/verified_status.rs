@@ -2132,6 +2132,94 @@ fn retained_response_preserves_exact_status_errors() {
     expect_response_error(bad_error, "response findings/status disagree");
 }
 
+fn expect_checkout_path(changes: &policy::CheckoutChanges, path: &str, wanted: bool)
+    requires wanted == policy::checkout_change_has_path(changes@, path@),
+{
+    let paths = policy::checkout_changed_paths(changes);
+    let mut i: usize = 0;
+    let mut found = false;
+    while i < paths.len()
+        invariant 0 <= i <= paths.len(),
+            found == (exists|j: int| 0 <= j < i && (#[trigger] paths@[j])@ == path@),
+        decreases paths.len() - i,
+    {
+        found = found || scope_text::equal_text(paths[i].as_str(), path);
+        i += 1;
+    }
+    expect_status_true(found == wanted);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_index_changes_empty_and_exact_stage_zero_are_empty() {
+    let mut tree = policy::Tree::new();
+    let out = policy::insert_git_tree_entry(&mut tree,
+        policy::TreePath::from_text("a"), "mode", "oid", "kind");
+    expect_tree_insert_ok(out);
+    let empty = policy::checkout_index_changes(&tree, &[]);
+    expect_checkout_path(&empty, "a", false);
+    let row = policy::GitIndexRow { path: "a", mode: "mode", oid: "oid", stage: "0" };
+    let rows = vec![row];
+    let changes = policy::checkout_index_changes(&tree, rows.as_slice());
+    expect_checkout_path(&changes, "a", false);
+    expect_checkout_path(&changes, "", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_index_changes_keep_all_rows_and_deduplicate_full_paths() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("B");
+        reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2");
+        assert("a"@[0] != "b"@[0]); assert("B"@[0] != "b"@[0]);
+    }
+    let tree = policy::Tree::new();
+    let text = "b".to_owned();
+    let rows = vec![
+        policy::GitIndexRow { path: "b", mode: "", oid: "", stage: "0" },
+        policy::GitIndexRow { path: "a", mode: "", oid: "", stage: "1" },
+        policy::GitIndexRow { path: text.as_str(), mode: "other", oid: "other", stage: "2" },
+    ];
+    let mut changes = policy::checkout_index_changes(&tree, rows.as_slice());
+    expect_checkout_path(&changes, "a", true);
+    expect_checkout_path(&changes, "b", true);
+    expect_checkout_path(&changes, "B", false);
+    policy::record_checkout_change(&mut changes, "a");
+    policy::record_checkout_change(&mut changes, "B");
+    expect_checkout_path(&changes, "B", true);
+    expect_checkout_path(&changes, "b", true);
+    expect_checkout_path(&changes, "a", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_index_changes_compare_complete_mode_oid_and_path_text() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("a\0"); reveal_strlit("A");
+        reveal_strlit("mode"); reveal_strlit("mode\0");
+        reveal_strlit("oid"); reveal_strlit("oid\0");
+        reveal_strlit("0"); reveal_strlit("3");
+        assert("a"@.len() != "a\0"@.len()); assert("A"@[0] != "a"@[0]);
+        assert("mode"@.len() != "mode\0"@.len()); assert("oid"@.len() != "oid\0"@.len());
+        assert("0"@[0] != "3"@[0]);
+    }
+    let mut tree = policy::Tree::new();
+    let out = policy::insert_git_tree_entry(&mut tree,
+        policy::TreePath::from_text("a"), "mode", "oid", "ignored kind");
+    expect_tree_insert_ok(out);
+    let mode_rows = vec![policy::GitIndexRow { path: "a", mode: "mode\0", oid: "oid", stage: "0" }];
+    let changes = policy::checkout_index_changes(&tree, mode_rows.as_slice());
+    expect_checkout_path(&changes, "a", true);
+    let oid_rows = vec![policy::GitIndexRow { path: "a", mode: "mode", oid: "oid\0", stage: "0" }];
+    let changes = policy::checkout_index_changes(&tree, oid_rows.as_slice());
+    expect_checkout_path(&changes, "a", true);
+    let path_rows = vec![
+        policy::GitIndexRow { path: "a\0", mode: "mode", oid: "oid", stage: "0" },
+        policy::GitIndexRow { path: "A", mode: "mode", oid: "oid", stage: "3" },
+    ];
+    let changes = policy::checkout_index_changes(&tree, path_rows.as_slice());
+    expect_checkout_path(&changes, "a\0", true);
+    expect_checkout_path(&changes, "A", true);
+    expect_checkout_path(&changes, "a", false);
+}
+
 fn expect_index_stage_duplicate(out: Result<(), String>)
     requires match out {
         Err(message) => message@ == "duplicate Git index stage"@,
