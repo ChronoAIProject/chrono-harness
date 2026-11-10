@@ -4,9 +4,9 @@
 #[path = "../../judge-workflow/src/verified_transition.rs"]
 mod policy;
 
-use policy::{ConversionFacts, MigrationError, MigrationFacts};
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
+use policy::{ConversionFacts, MigrationError, MigrationFacts};
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
