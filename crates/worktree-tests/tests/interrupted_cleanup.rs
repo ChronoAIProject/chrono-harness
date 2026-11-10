@@ -297,7 +297,7 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
         (&target, "linked-use-reader", "use"),
     ] {
         let mut command =
-            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+            Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
         command
             .current_dir(root)
             .env_clear()
@@ -465,7 +465,7 @@ fn linked_report_reservation_failure_does_not_dispatch_managed_work() {
     let ledger = fs::read(h.ledger_path(&target)).unwrap();
     let obstruction = h.root.join(blocked);
     fs::write(&obstruction, b"original report obstruction").unwrap();
-    let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
     command
         .current_dir(&target)
         .env_clear()
@@ -525,7 +525,7 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
                     .unwrap();
             reclaim_reports(&h.root, &previous, inventory.maintain().unwrap());
         }
-        let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        let output = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))
             .current_dir(&target)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -558,7 +558,7 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
         }
     }
     let destination = h.parent.join("linked-start-report");
-    let output = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let output = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))
         .current_dir(&target)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
@@ -1827,7 +1827,7 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
     let fixture = native_git(&h, "birth-interrupt", value!({"ledger":ledger}));
     fs::write(h.parent.join("interrupt-birth"), "after durable enrollment").unwrap();
     let interrupted = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree")).args([
+        Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")).args([
             "start",
             "--host-root",
             h.root.to_str().unwrap(),
@@ -2049,7 +2049,7 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
     fs::write(h.parent.join("interrupt-admission"), "kill owner").unwrap();
     let target = h.parent.join("interrupted-birth");
     let mut start = CapturedChild::spawn(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .args([
@@ -2260,7 +2260,7 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let coordinator = source();
     let maintain_allocation = || {
         let mut command =
-            Command::new(coordinator.join("crates/worktree/target/debug/chrono-worktree"));
+            Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         // Maintenance already publishes its original at the surviving owner.

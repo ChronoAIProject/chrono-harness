@@ -51,7 +51,7 @@ fn fixture_with_entrypoint(
     fs::create_dir_all(&bin).unwrap();
     fs::write(bin.join("chrono-worktree"), "ordinary original bytes").unwrap();
     fs::copy(
-        source().join("crates/worktree/target/debug/chrono-worktree"),
+        env!("CARGO_BIN_EXE_chrono-worktree-test-cli"),
         bin.join("built-owner"),
     )
     .unwrap();

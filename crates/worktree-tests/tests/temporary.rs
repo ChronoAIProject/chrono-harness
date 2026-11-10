@@ -1308,7 +1308,7 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
     drop(allocation);
     let maintain = || {
         let mut command =
-            Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+            Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
         command.current_dir(&coordinator).arg("maintain");
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output =

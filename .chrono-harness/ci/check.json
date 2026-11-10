@@ -303,14 +303,6 @@
         "worktree",
         "worktree-adoption"
       ],
-      "build.worktree": [
-        "ci",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units",
-        "worktree",
-        "worktree-adoption"
-      ],
       "fmt.judge-workflow": [
         "judge-workflow",
         "judge-workflow-short",

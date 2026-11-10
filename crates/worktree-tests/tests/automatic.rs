@@ -295,7 +295,7 @@ impl Host {
         self.policy(|p| p["automatic_cleanup"] = value!(AUTO_POLICY));
     }
     pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
-        let mut c = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+        let mut c = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
         c.current_dir(&self.root)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -996,7 +996,7 @@ fn automatic_attention_linked_query_publishes_its_original_at_the_coordinator() 
     h.automatic("evidence-retain");
     let target = h.parent.join("linked status");
     assert_eq!(h.invoke("feature", "linked-status", &target).0, 0);
-    let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"));
     command
         .current_dir(&target)
         .env_clear()
@@ -3233,7 +3233,7 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
     let target = h.parent.join("self-finish");
     assert_eq!(h.invoke("feature", "self-finish", &target).0, 0);
     output(&target);
-    let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let out = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))
         .current_dir(&target)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
@@ -3255,7 +3255,7 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
         "another birth has no cleanup dependency on this target"
     );
     let (code, r, e) = h.received(
-        Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+        Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))
             .current_dir(&h.root)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
@@ -3412,7 +3412,7 @@ fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
     native_consumer(&h, "finished");
     let target = h.parent.join("local-use");
     assert_eq!(h.invoke("feature", "local-use", &target).0, 0);
-    let out = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"))
+    let out = Command::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli"))
         .current_dir(&target)
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
