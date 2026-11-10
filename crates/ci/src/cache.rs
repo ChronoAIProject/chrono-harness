@@ -38,13 +38,6 @@ pub struct Consumer {
     pub save_after_bootstrap: Vec<String>,
 }
 
-fn name(s: &str) -> bool {
-    !s.is_empty()
-        && s.len() <= 128
-        && s.bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"-_.:".contains(&b))
-}
-
 pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String> {
     if c.schema != "chrono-github-cache/v1" || c.jobs.is_empty() {
         return Err("persistent cache requires nonempty chrono-github-cache/v1".into());
@@ -66,32 +59,24 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
     let mut saving_jobs = BTreeMap::new();
     for (job, consumer) in &c.jobs {
         let saves = consumer.save_caches.as_ref().unwrap_or(&consumer.caches);
-        if !jobs.contains(job)
-            || !name(&consumer.consumer)
-            || consumer.need.trim().is_empty()
-            || consumer.output_use.trim().is_empty()
-            || consumer.prepare.is_empty()
-            || consumer
-                .prepare
-                .iter()
-                .any(|s| s.contains(['\0', '\r', '\n']) || s.contains("${{"))
-            || consumer.prepare[0].is_empty()
-            || consumer.caches.is_empty()
-            || consumer.caches.iter().any(|s| !name(s))
-            || consumer.caches.iter().collect::<BTreeSet<_>>().len() != consumer.caches.len()
-            || saves.iter().collect::<BTreeSet<_>>().len() != saves.len()
-            || saves.iter().any(|id| !consumer.caches.contains(id))
-            || consumer
-                .save_after_bootstrap
-                .iter()
-                .collect::<BTreeSet<_>>()
-                .len()
-                != consumer.save_after_bootstrap.len()
-            || consumer
-                .save_after_bootstrap
-                .iter()
-                .any(|id| !saves.contains(id))
-        {
+        let preparation: Vec<_> = consumer.prepare.iter().map(String::as_str).collect();
+        let caches: Vec<_> = consumer.caches.iter().map(String::as_str).collect();
+        let saved: Vec<_> = saves.iter().map(String::as_str).collect();
+        let after_bootstrap: Vec<_> = consumer
+            .save_after_bootstrap
+            .iter()
+            .map(String::as_str)
+            .collect();
+        if !crate::verified_literals::valid_cache_consumer(
+            jobs.contains(job),
+            &consumer.consumer,
+            consumer.need.trim(),
+            consumer.output_use.trim(),
+            &preparation,
+            &caches,
+            &saved,
+            &after_bootstrap,
+        ) {
             return Err(format!("invalid persistent cache consumer for job {job}"));
         }
         for cache in saves {
