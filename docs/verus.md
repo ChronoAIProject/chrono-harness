@@ -3,8 +3,11 @@
 FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 本地 routes、scoped CI、full 调度和 collection 准备共用
 `validate_file_classifications`：固定基线未登记的新行必须给出有效分类；已有分类不得
-退回未知，删除整行则沿既有删除登记验收。缺基线原件保留原错误并返回
-`E_VERUS_COVERAGE`；初始输入将全部行视为新增。其它宿主未采用时沿用其明确范围。
+退回未知，删除整行则沿既有删除登记验收。固定基线已启用时，候选删掉字段或显式写
+`false` 都返回 `E_VERUS_COVERAGE`。基线不可读时始终保留原错误，不能据候选字段
+推断基线未启用；只有已确认的初始输入没有基线，启用后全部行视为新增。
+基线和候选均未启用时仍沿用原范围。以上判法由同一 Verus 实现与独立预期验收，
+未增加基线读取、证明操作或预算。
 数据声明仍不得有根，program／specification 必须有有效根，并继续接受现有严格计划、
 编译源码、原证明及真实消费者的绑定检查。独立预期同为 Verus，并作为 Rust 测试运行。
 
