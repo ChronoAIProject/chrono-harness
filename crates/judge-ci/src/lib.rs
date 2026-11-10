@@ -975,15 +975,17 @@ pub fn full_collection_requirements_with_inputs(
             &impact,
             chrono_judge_registration::downstream_validator(&r, "routes"),
         )?;
+        let methods = chrono_judge_registration::execution::methods(r.projects())?;
         let (_, operations) = chrono_judge_routes::order(
             &selected,
             &chrono_judge_registration::execution::plans(r.filemap())?,
-            &chrono_judge_registration::execution::methods(r.projects())?,
+            &methods,
             &chrono_judge_routes::execute_actions(&r),
         )?;
         chrono_judge_routes::validate_proof_plan(
             &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
             &impact.closure.reached.keys().cloned().collect(),
+            &methods,
             &operations,
         )?;
         let units = serde_json::from_value(r.config()["execution_units"]["units"].clone())
@@ -1041,15 +1043,17 @@ pub fn full_scheduling_requirements(
     let block = chrono_harness::units::full_execution_units(current.config())?
         .ok_or("full scheduling units missing")?;
     let units = chrono_judge_routes::validate_unit_assignments(&block, &plans)?;
+    let methods = chrono_judge_registration::execution::methods(current.projects())?;
     let (_, operations) = chrono_judge_routes::order(
         &selected,
         &plans,
-        &chrono_judge_registration::execution::methods(current.projects())?,
+        &methods,
         &chrono_judge_routes::execute_actions(&current),
     )?;
     chrono_judge_routes::validate_proof_plan(
         &serde_json::from_value(current.filemap().clone()).map_err(|error| error.to_string())?,
         &impact.closure.reached.keys().cloned().collect(),
+        &methods,
         &operations,
     )?;
     Ok(
@@ -1545,6 +1549,7 @@ fn inventory_profile(
         chrono_judge_routes::validate_proof_plan(
             new.source_registry.as_ref().map_err(Clone::clone)?,
             &affected,
+            &methods,
             &operations,
         )?;
     }
