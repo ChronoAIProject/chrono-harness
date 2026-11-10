@@ -32,6 +32,7 @@ pub mod retained_artifacts;
 pub mod scoped_report;
 mod short_console;
 pub mod units;
+pub mod verified_cli;
 pub mod verified_git_binding;
 pub use chrono_identifiers as verified_identifiers;
 pub mod verified_limits;
@@ -62,6 +63,45 @@ use std::sync::{
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const PROTOCOL: &str = "chrono-ci-judge/v1";
+
+/// 字符串入口共用无损 OS 参数边界；原生路径入口沿用 logged_main。
+pub fn logged_text_main(producer: &str, work: impl FnOnce(&[String]) -> u8) -> u8 {
+    logged_main(producer, || {
+        let native: Vec<_> = std::env::args_os().collect();
+        let decoded: Vec<_> = native.iter().map(|argument| argument.to_str()).collect();
+        let arguments = match verified_cli::decoded_arguments(&decoded) {
+            Ok(arguments) => arguments,
+            Err(position) => {
+                let error = Failure::new("E_USAGE", "arguments must be valid UTF-8.")
+                    .at("argv_index", position.argv_index as u64)
+                    .at("argument_index", serde_json::json!(position.argument_index))
+                    .at(
+                        "argument_bytes",
+                        serde_json::json!(native[position.argv_index].as_encoded_bytes()),
+                    );
+                let logger = chrono_diagnostics::logging::Logger::stderr(producer);
+                let _ = chrono_diagnostics::logging::failure(
+                    "cli.invalid_argument",
+                    &error.to_string(),
+                    &error.record(),
+                );
+                let _ = logger.run(|| {
+                    chrono_diagnostics::logging::failure(
+                        "cli.invalid_argument",
+                        &error.to_string(),
+                        &error.record(),
+                    )
+                });
+                let _ = logger.finish();
+                // 诊断发布失败也不能把已经拒绝的命令变成成功。
+                return 2;
+            }
+        };
+        let arguments: Vec<_> = arguments.into_iter().skip(1).map(str::to_owned).collect();
+        work(&arguments)
+    })
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct CliOutput {
     pub exit_code: u8,

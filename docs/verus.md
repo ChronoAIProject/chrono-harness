@@ -35,6 +35,19 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+字符串 CLI 的参数顺序与首个解码失败由 runner 的 `verified_cli.rs` 拥有，
+`logged_text_main` 把标准库 `OsStr::to_str` 的完整观察序列交给该内核。
+成功保留全部原文、空串、Unicode、顺序和重复；失败返回首个无效位置。
+`argv_index` 包含启动名称，`argument_index` 仅对其后的用户参数从零计数；
+启动名称失败时后者为 null。调用边界保留该位置的原始 OS 编码字节，
+发布 `cli.invalid_argument`／`E_USAGE` 并退出 2，不进入业务派发。
+runner、CI、cache、inputs、worktree、distribution 及七个字符串参数判官共用此边界；
+已有 OS 路径入口继续使用原 `logged_main`，不把字符串限制施加给原生路径使用方。
+`verify.runner-cli`／`verify.runner-cli-tests` 沿现有 Verus 工具和 runner 测试计划执行，
+独立预期也作为普通 Rust 测试运行。标准库 OS 解码、参数搬运、错误记录和日志 IO
+仍是外围接口；这项局部证明不代表完整 CLI、诊断体系或全仓已经证明。
+新增两项证明及真实 CLI 回归扩大相应 DELTA 验证成本，总成本未测。
+
 workflow 的错误分类由 `verified_response.rs::classify_error` 拥有，并加入现有
 `verify.judge-workflow-execution`／独立预期根的整 crate 证明。
 真实 `judge` 将原消息交给此函数，直接使用返回的实际协议 `Status` 与完整错误码；

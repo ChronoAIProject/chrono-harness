@@ -23,6 +23,12 @@ path = "../worktree/src/main.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "chrono-ci-test-cli"
+path = "../ci/src/main.rs"
+test = false
+bench = false
+
 [[test]]
 name = "behavior"
 path = "tests/behavior.rs"
