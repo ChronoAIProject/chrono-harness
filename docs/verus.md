@@ -9,6 +9,17 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 同次 DELTA 检查必须汇总受影响证明和实际消费者的行为结果，消费 job 不重复同一证明。
 新增未证明逻辑不能以“以后迁移”豁免；全仓存量覆盖门仍未完成。
 
+已声明文件的证明选择由 `verified_sources.rs::validate_selected_roots` 核对：
+沿两端显式影响闭包，每个受影响文件的全部声明根必须出现在单元拆分前的全局计划中，
+且操作唯一、带有效证明合同、使用严格整 crate 参数并调用准确的声明根。
+本地 routes、scoped CI 库存、full 调度及 collection 准备共用此 Verus 判断；
+缺失、普通操作冒充证明、重复方法、参数或根不符均返回带文件路径的 `E_VERUS_COVERAGE`。
+实际原进程、编译依赖和固定候选绑定继续由现有结果入口核对，计划准入不产生证明成功。
+独立预期在现有 runner Verus 根证明并作为真实 Rust 测试运行。
+未受影响文件不因此重验；无声明的存量文件仍是未知，分类完整性、证明实际执行和
+实际生产调用的完整对应仍须继续实施。没有新增证明根、工具、进程预算或 Python 迁移。
+额外工作随文件、声明根、显式影响节点和所选方法数量增长，总构建／验证／CI 成本未测。
+
 当前覆盖登记批次包括：FILEMAP 的 `crates/runner/src/verified_verifier.rs`、
 `crates/runner/src/verified_sources.rs` 及独立预期
 `crates/runner-tests/tests/verified_verifier.rs`，以及 runner 的

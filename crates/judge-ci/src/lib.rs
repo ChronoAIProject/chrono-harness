@@ -975,6 +975,17 @@ pub fn full_collection_requirements_with_inputs(
             &impact,
             chrono_judge_registration::downstream_validator(&r, "routes"),
         )?;
+        let (_, operations) = chrono_judge_routes::order(
+            &selected,
+            &chrono_judge_registration::execution::plans(r.filemap())?,
+            &chrono_judge_registration::execution::methods(r.projects())?,
+            &chrono_judge_routes::execute_actions(&r),
+        )?;
+        chrono_judge_routes::validate_proof_plan(
+            &serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?,
+            &impact.closure.reached.keys().cloned().collect(),
+            &operations,
+        )?;
         let units = serde_json::from_value(r.config()["execution_units"]["units"].clone())
             .map_err(|e| e.to_string())?;
         Ok(
@@ -1030,11 +1041,16 @@ pub fn full_scheduling_requirements(
     let block = chrono_harness::units::full_execution_units(current.config())?
         .ok_or("full scheduling units missing")?;
     let units = chrono_judge_routes::validate_unit_assignments(&block, &plans)?;
-    chrono_judge_routes::order(
+    let (_, operations) = chrono_judge_routes::order(
         &selected,
         &plans,
         &chrono_judge_registration::execution::methods(current.projects())?,
         &chrono_judge_routes::execute_actions(&current),
+    )?;
+    chrono_judge_routes::validate_proof_plan(
+        &serde_json::from_value(current.filemap().clone()).map_err(|error| error.to_string())?,
+        &impact.closure.reached.keys().cloned().collect(),
+        &operations,
     )?;
     Ok(
         object!({"required_units":chrono_harness::units::required(&units, &selected),"global_selected":selected,"changed_paths":delta.iter().map(|d| &d.path).collect::<Vec<_>>(),"git_facts":reader.observation(),"input_scope":"git-and-declarations; final-effective-input-admission-required"}),
@@ -1522,9 +1538,15 @@ fn inventory_profile(
         })
         .collect();
     let global_selected = selected.clone();
-    if blocked.is_empty() && p.units.is_some() {
+    if chrono_harness::verified_verifier::sources::can_validate_selected_plan(&blocked) {
         // Validate the complete obligation graph before selecting any unit.
-        chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
+        let (_, operations) =
+            chrono_judge_routes::order(&global_selected, &new.plans, &methods, &new.execute)?;
+        chrono_judge_routes::validate_proof_plan(
+            new.source_registry.as_ref().map_err(Clone::clone)?,
+            &affected,
+            &operations,
+        )?;
     }
     Ok(Inventory {
         config,

@@ -702,6 +702,144 @@ fn proof_roots_must_name_registered_execution_operations() {
     expect_verifier_true(policy::sources::proof_roots_have_registered_operations(&unknown, &missing));
 }
 
+fn planned_source() -> (file: policy::sources::SourceFile)
+    ensures file.path@ == "file"@, file.verification.is_some(),
+        file.verification.unwrap().roots.len() == 1,
+        file.verification.unwrap().roots[0].path@ == "root"@,
+        file.verification.unwrap().roots[0].operation@ == "proof"@,
+        policy::sources::source_declaration_valid(&file),
+{
+    proof {
+        reveal_strlit("root"); reveal_strlit("proof");
+        vstd::string::is_ascii_spec_bytes("root");
+        reveal_with_fuel(policy::sources::path_scan, 8);
+        reveal_with_fuel(policy::sources::joined_components, 4);
+        assert("root"@ =~= seq!['r', 'o', 'o', 't']);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        assert(vstd::utf8::encode_utf8("root"@) =~= seq![114u8, 111u8, 111u8, 116u8]);
+        assert(policy::sources::canonical_source_path(seq![114u8, 111u8, 111u8, 116u8])) by (compute);
+        assert(policy::sources::canonical_source_path(vstd::utf8::encode_utf8("root"@)));
+    }
+    let file = source_declaration(SourceRole::Program, vec![declared_source_root("root", "proof")]);
+    assert(policy::sources::proof_root_declaration_valid(&file.verification.unwrap().roots[0]));
+    assert(policy::sources::distinct_proof_root(file.verification.unwrap().roots@, 0));
+    file
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selected_plan_requires_every_affected_declared_proof() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 3);
+        reveal_with_fuel(policy::sources::file_plan_error, 3);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::root_planned);
+        reveal(policy::unique_proof_invocation);
+        reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
+        assert("file:file"@ =~= "file:"@ + "file"@);
+    }
+    let files = vec![planned_source()];
+    let affected = vec!["file:file".to_string()];
+    let missing = policy::sources::validate_selected_roots(&files, &affected, &Vec::new());
+    expect_verifier_true(missing.is_err());
+    let args = arguments();
+    let output = contract();
+    let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
+        output_contract: &output, output_limit_bytes: 4096 }];
+    assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
+    assert(policy::sources::root_planned(&files[0].verification.unwrap().roots[0], methods@));
+    let admitted = policy::sources::validate_selected_roots(&files, &affected, &methods);
+    expect_verifier_true(admitted.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selected_ordinary_operation_cannot_satisfy_a_declared_proof() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 3);
+        reveal_with_fuel(policy::sources::file_plan_error, 3);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::root_planned);
+        reveal(policy::unique_proof_invocation);
+        reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
+        assert("file:file"@ =~= "file:"@ + "file"@);
+    }
+    let files = vec![planned_source()];
+    let affected = vec!["file:file".to_string()];
+    let args = arguments();
+    let ordinary = None;
+    let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
+        output_contract: &ordinary, output_limit_bytes: 4096 }];
+    let rejected = policy::sources::validate_selected_roots(&files, &affected, &methods);
+    expect_verifier_true(rejected.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selected_proof_rejects_duplicate_methods_wrong_roots_and_noncanonical_arguments() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 3);
+        reveal_with_fuel(policy::sources::file_plan_error, 3);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::root_planned);
+        reveal(policy::unique_proof_invocation);
+        reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
+        reveal_strlit("root"); reveal_strlit("Root");
+        assert("file:file"@ =~= "file:"@ + "file"@);
+        assert("root"@[0] != "Root"@[0]);
+    }
+    let files = vec![planned_source()];
+    let affected = vec!["file:file".to_string()];
+    let args = arguments();
+    let output = contract();
+    let duplicates = vec![
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &output, output_limit_bytes: 4096 },
+        policy::ProofInvocation { operation: "proof", argv: &args,
+            output_contract: &output, output_limit_bytes: 4096 }];
+    let ambiguous = policy::sources::validate_selected_roots(&files, &affected, &duplicates);
+    expect_verifier_true(ambiguous.is_err());
+    let mut other_root = arguments();
+    other_root[8] = "Root".to_string();
+    let wrong = vec![policy::ProofInvocation { operation: "proof", argv: &other_root,
+        output_contract: &output, output_limit_bytes: 4096 }];
+    let mismatch = policy::sources::validate_selected_roots(&files, &affected, &wrong);
+    expect_verifier_true(mismatch.is_err());
+    let invalid = Vec::new();
+    let malformed = vec![policy::ProofInvocation { operation: "proof", argv: &invalid,
+        output_contract: &output, output_limit_bytes: 4096 }];
+    let rejected = policy::sources::validate_selected_roots(&files, &affected, &malformed);
+    expect_verifier_true(rejected.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn proof_plan_preserves_explicit_scope_data_and_unknown_boundaries() {
+    proof {
+        reveal_with_fuel(policy::sources::selected_plan_error, 5);
+        reveal_with_fuel(policy::sources::file_plan_error, 3);
+        reveal(policy::sources::file_affected);
+        reveal(policy::sources::source_declaration_valid);
+        reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
+        reveal_strlit("file:other");
+        assert("file:file"@ =~= "file:"@ + "file"@);
+        assert("file:other"@ != "file:"@ + "file"@);
+    }
+    let files = vec![planned_source()];
+    expect_verifier_true(policy::sources::can_validate_selected_plan(&Vec::new()));
+    let blocked = vec!["missing required input".to_string()];
+    expect_verifier_true(!policy::sources::can_validate_selected_plan(&blocked));
+    let unrelated = vec!["file:other".to_string()];
+    let unselected = policy::sources::validate_selected_roots(&files, &unrelated, &Vec::new());
+    expect_verifier_true(unselected.is_ok());
+    let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
+    let data = source_declaration(SourceRole::Data, Vec::new());
+    let inventory = vec![unknown, data];
+    let affected = vec!["file:file".to_string()];
+    let no_proof_claim = policy::sources::validate_selected_roots(&inventory, &affected, &Vec::new());
+    expect_verifier_true(no_proof_claim.is_ok());
+    let invalid = source_declaration(SourceRole::Program, Vec::new());
+    let bad = vec![invalid];
+    let rejected = policy::sources::validate_selected_roots(&bad, &affected, &Vec::new());
+    expect_verifier_true(rejected.is_err());
+}
+
 fn metadata_fixture(path: Vec<u8>, length: u64) -> (source: policy::sources::SourceBinding)
     ensures source.path@ == path@, source.length == length,
         source.sha256.len() == 64,
