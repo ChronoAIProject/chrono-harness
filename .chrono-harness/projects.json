@@ -353,6 +353,19 @@
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
         },
+        "clean_output": {
+          "operation": "clean.runner-output",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--package",
+            "chrono-harness",
+            "--manifest-path",
+            "crates/runner/Cargo.toml",
+            "--target-dir",
+            "crates/runner/target"
+          ]
+        },
         "recover_proof": {
           "operation": "recover.identifiers-proof",
           "tool": "cargo",

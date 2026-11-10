@@ -1740,6 +1740,12 @@
           ".chrono-harness/state/"
         ]
       },
+      "clean.runner-output": {
+        "resources": [],
+        "outputs": [
+          "crates/runner/target/"
+        ]
+      },
       "build.worktree": {
         "resources": [],
         "outputs": [

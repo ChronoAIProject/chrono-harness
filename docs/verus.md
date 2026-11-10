@@ -631,6 +631,21 @@ Verus 内继续使用固定 vstd 的 Vec 存取和消费迭代合同，循环终
 这些是局部算法说明，完整构建、证明、运行、CI 和存储成本未测；
 不宣称整个登记快照、facts 文件、源码完整对应或全仓覆盖已经完成。
 
+本批产品逻辑与宿主登记同时修改：runner 新增 `clean.runner-output`，直接委托固定 Cargo
+按 package `chrono-harness` 清理其专属 target 内的可重建编译输出，用于实际发现的输出库存超限恢复。
+不加入日常测试计划，不自动重试失败构建，不提高 4096 项上限；源码、安装槽位和 state 原件继续保留。
+调用前须收取原失败，确认目标为本工作树登记的 runner target、全部本地生产任务已结束、
+没有活跃或未知使用方，并完成必要失败诊断。调用方沿现有 worktree use 保护，唯一入口为：
+
+```sh
+.chrono-harness/bin/chrono-worktree use --operation clean.runner-output --path <工作树>
+```
+
+操作、固定 manifest／target 参数与工具归 projects.json，输出占用归 FILEMAP；
+Cargo 的包级产物删除是明确的外部工具接口，不新增仓内清理算法或假设仓内判断已证明。
+成功仅说明原 Cargo 清理退出成功，须核原 stdout／stderr，再由同一正式 bootstrap 与 check
+验收重建；失败仍保留原件。清理与重建成本单独观察，完整 CI 和维护总成本未测。
+
 tree 的条目构造、插入及重复路径拒绝改由实际类型所有者
 `verified_status::insert_git_tree_entry` 维护，完整逐行解析由同根 `parse_git_tree_rows` 调用它。
 证明新 map 恰为原 map 在该完整路径插入原 mode／OID／kind，所有其他键值均保留；
