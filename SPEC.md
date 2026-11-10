@@ -629,6 +629,10 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
 
 上述新增事实字段不裁决 admissibility：config_path 是两端共同的显式根相对配置路径；checkout.tracked 是相对 candidate 的索引/工作树变更路径并集，untracked 包括 ignore 路径；index_flags 是 Git ls-files -v 的完整 {path, tag} 记录，registration 拒绝 assume-unchanged/skip-worktree 隐藏条件，runner 不改写索引。runner 绑定实际当前执行物。
 
+索引标记的实际类型、完整字段克隆／相等、NUL 拆分、行准入、完整序列及首错选择由同源 Verus 定义并证明，`Reader::index_flags` 直接消费。空项忽略，顺序／重复／未终止尾行保留；每行先核至少三个字节、ASCII 字母和空格头部，再采用标准安全 UTF-8 解码，保留完整 tag／path 或首个原错误。标准解码与原行的一对一搬运为明确外部接口，尚未由本仓机械精化；其余 facts／IO 组合和全仓覆盖仍未完成，范围见 [Verus 实施说明](docs/verus.md)。
+
+路径库存与索引标记共用同源 Verus 的原字节 NUL 拆分；`facts::paths` 的完整结果序列、首个解码失败及 `facts::utf8` 的成功／错误选择也由 Verus 拥有。标准 owned UTF-8 解码、原记录复制及逐项搬运为逐项列明的外部接口；成功保留全文、顺序和重复，失败返回原完整错误，不发布部分库存。其余 facts／IO 组合和全仓覆盖的剩余义务不变。
+
 registration 从固定 tree 判断支持的 entry 类型，重读对象、磁盘配置、context 和 checkout，忽略两次观察之间新增的已声明 artifact；其它变化报错。request_id 覆盖这些字段；不把 导出的干净副本 当实际 checkout。base 导出保留在 state，普通文件无写权限，不执行 base 工具。
 
 registries.digest 精确定义为 JCS `{"base": {"<path>": <parsed JSON>, ...}, "candidate": {"<path>": <parsed JSON>, ...}}` 的 SHA-256，每端包含 config_path 与该端 config 指定的四份 registry；context.sha256 为 context JCS 摘要，evidence.sha256 为原始文件字节摘要。所有 JSON 先拒绝重复成员。
