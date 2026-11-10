@@ -2151,6 +2151,138 @@ fn expect_index_stage_slot<'a>(stages: &policy::GitIndexStages<'a>, path: &'a st
     expect_status_true(stages.contains_key(&policy::GitIndexStage { path, stage }));
 }
 
+fn expect_index_lookup(stages: &policy::GitIndexStages<'_>, path: &str, stage: &str, expected: bool)
+    requires expected == (exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+        && key.path.spec_bytes() == path.spec_bytes() && key.stage.spec_bytes() == stage.spec_bytes()),
+{
+    let lookup = policy::snapshot_git_index_stages(stages);
+    let actual = lookup.contains(path, stage);
+    expect_status_true(actual == expected);
+    proof { policy::git_index_stage_obeys_cmp(); }
+    expect_status_true(lookup.len() == stages.len());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_lookup_empty_rejects_every_text_key() {
+    let stages = policy::GitIndexStages::new();
+    expect_index_lookup(&stages, "", "", false);
+    expect_index_lookup(&stages, "数据\0path", "0", false);
+}
+
+fn index_lookup_keeps_full_path_and_stage_text(path: &str) {
+    let mut stages = policy::GitIndexStages::new();
+    let out = policy::record_git_index_stage(&mut stages, path, "1");
+    expect_status_true(out.is_ok());
+    let out = policy::record_git_index_stage(&mut stages, path, "3");
+    proof {
+        reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
+        reveal_strlit("00"); reveal_strlit("1\0");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("0") && vstd::string::is_ascii("1")
+            && vstd::string::is_ascii("2") && vstd::string::is_ascii("3")
+            && vstd::string::is_ascii("00") && vstd::string::is_ascii("1\0"));
+        assert("0".spec_bytes() == seq![48u8]);
+        assert("1".spec_bytes() == seq![49u8]);
+        assert("2".spec_bytes() == seq![50u8]);
+        assert("3".spec_bytes() == seq![51u8]);
+        assert("00".spec_bytes() == seq![48u8, 48u8]);
+        assert("1\0".spec_bytes() == seq![49u8, 0u8]);
+    }
+    expect_status_true(out.is_ok());
+    let copied = path.to_owned();
+    let copied_path = copied.as_str();
+    proof {
+        assert(copied_path.spec_bytes() == path.spec_bytes());
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "1" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "3" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "1".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "3".spec_bytes());
+        assert forall|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            implies key == policy::GitIndexStage { path, stage: "1" }
+                || key == policy::GitIndexStage { path, stage: "3" } by {};
+        assert forall|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            implies key.stage.spec_bytes() != "2".spec_bytes() by {
+            assert(key == policy::GitIndexStage { path, stage: "1" }
+                || key == policy::GitIndexStage { path, stage: "3" });
+            assert(key.stage@ == "1"@ || key.stage@ == "3"@);
+            assert(vstd::string::is_ascii(key.stage));
+            vstd::string::is_ascii_spec_bytes(key.stage);
+            assert(key.stage.spec_bytes()[0] == 49 || key.stage.spec_bytes()[0] == 51);
+            assert("2".spec_bytes()[0] == 50);
+        }
+    }
+    expect_index_lookup(&stages, copied_path, "1", true);
+    expect_index_lookup(&stages, copied_path, "3", true);
+    expect_index_lookup(&stages, copied_path, "0", false);
+    expect_index_lookup(&stages, copied_path, "2", false);
+    expect_index_lookup(&stages, copied_path, "00", false);
+    expect_index_lookup(&stages, copied_path, "1\0", false);
+    let out = policy::record_git_index_stage(&mut stages, path, "2");
+    expect_status_true(out.is_ok());
+    let out = policy::record_git_index_stage(&mut stages, path, "0");
+    expect_status_true(out.is_ok());
+    proof {
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "0" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "1" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "2" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path, stage: "3" }));
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "0".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "2".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "1".spec_bytes());
+        assert(exists|key: policy::GitIndexStage| (#[trigger] stages@.contains_key(key))
+            && key.path.spec_bytes() == copied_path.spec_bytes() && key.stage.spec_bytes() == "3".spec_bytes());
+    }
+    expect_index_lookup(&stages, copied_path, "0", true);
+    expect_index_lookup(&stages, copied_path, "1", true);
+    expect_index_lookup(&stages, copied_path, "2", true);
+    expect_index_lookup(&stages, copied_path, "3", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_lookup_nonzero_stages_do_not_supply_stage_zero() {
+    index_lookup_keeps_full_path_and_stage_text("");
+    index_lookup_keeps_full_path_and_stage_text("a");
+    index_lookup_keeps_full_path_and_stage_text("数据\0path");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_lookup_distinguishes_full_paths_and_owns_a_stable_snapshot() {
+    let mut stages = policy::GitIndexStages::new();
+    let out = policy::record_git_index_stage(&mut stages, "a\0", "0");
+    expect_status_true(out.is_ok());
+    proof {
+        reveal_strlit("a"); reveal_strlit("a\0"); reveal_strlit("A\0");
+        reveal_strlit("a\0tail"); reveal_strlit("0"); reveal_strlit("3");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("a\0")
+            && vstd::string::is_ascii("A\0") && vstd::string::is_ascii("a\0tail")
+            && vstd::string::is_ascii("0") && vstd::string::is_ascii("3"));
+        assert("a\0".spec_bytes()[0] != "A\0".spec_bytes()[0]);
+    }
+    expect_index_lookup(&stages, "a", "0", false);
+    expect_index_lookup(&stages, "A\0", "0", false);
+    expect_index_lookup(&stages, "a\0tail", "0", false);
+    let lookup = policy::snapshot_git_index_stages(&stages);
+    let copied = "a\0".to_owned();
+    let copied_path = copied.as_str();
+    proof {
+        assert(copied_path.spec_bytes() == "a\0".spec_bytes());
+        let key = policy::GitIndexStage { path: "a\0", stage: "0" };
+        assert(lookup.view().to_set().contains(key));
+        assert(lookup.contains_spec(copied_path, "0"));
+    }
+    expect_status_true(lookup.contains(copied_path, "0"));
+    let out = policy::record_git_index_stage(&mut stages, "a", "3");
+    expect_status_true(out.is_ok());
+    expect_status_true(!lookup.contains("a", "3"));
+    expect_status_true(lookup.len() == 1);
+}
+
 // 独立列出五个预期键、数量、完整重复错误及失败后的原集合。
 fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
     requires a@ != b@,
@@ -2360,7 +2492,8 @@ fn expect_index_inventory_rows(raw: &[&str], expected: &[policy::GitIndexRow])
                 invariant
                     0 <= i <= expected.len(), raw.len() == expected.len(),
                     policy::git_index_prefix_rows(inventory.rows@, raw@, raw.len() as int),
-                    policy::git_index_inventory_stages(inventory.stages@, inventory.rows@),
+                    inventory.stages.valid(),
+                    policy::git_index_lookup_inventory(inventory.stages.view(), inventory.rows@),
                     forall|j: int| 0 <= j < raw.len() ==> policy::git_index_row_at(raw@, j)
                         == Ok::<policy::GitIndexRowBytes, policy::GitInventoryErrorView>(expected@[j].bytes()),
                 decreases expected.len() - i,
@@ -2376,7 +2509,11 @@ fn expect_index_inventory_rows(raw: &[&str], expected: &[policy::GitIndexRow])
                     && scope_text::equal_bytes(actual.mode.as_bytes(), wanted.mode.as_bytes())
                     && scope_text::equal_bytes(actual.oid.as_bytes(), wanted.oid.as_bytes())
                     && scope_text::equal_bytes(actual.stage.as_bytes(), wanted.stage.as_bytes()));
-                expect_index_stage_slot(&inventory.stages, actual.path, actual.stage);
+                proof {
+                    assert(inventory.stages.view().to_set().contains(
+                        policy::GitIndexStage { path: actual.path, stage: actual.stage }));
+                }
+                expect_status_true(inventory.stages.contains(actual.path, actual.stage));
                 i += 1;
             }
         },
