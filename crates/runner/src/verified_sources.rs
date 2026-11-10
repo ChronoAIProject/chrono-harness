@@ -956,6 +956,13 @@ pub open spec fn file_affected(file: &SourceFile, nodes: Seq<String>) -> bool {
         && (#[trigger] nodes[i])@ == "file:"@ + file.path@
 }
 
+/// 仅无现存阻碍的库存准备可执行计划；阻碍原文由调用方保留。
+pub fn can_validate_selected_plan(blocked: &Vec<String>) -> (ready: bool)
+    ensures ready == (blocked.len() == 0),
+{
+    blocked.len() == 0
+}
+
 fn affected_file(file: &SourceFile, nodes: &Vec<String>) -> (affected: bool)
     ensures affected == file_affected(file, nodes@),
 {

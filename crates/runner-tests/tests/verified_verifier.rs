@@ -715,8 +715,8 @@ fn planned_source() -> (file: policy::sources::SourceFile)
         reveal_with_fuel(policy::sources::path_scan, 8);
         reveal_with_fuel(policy::sources::joined_components, 4);
         assert("root"@ =~= seq!['r', 'o', 'o', 't']);
-        assert(vstd::utf8::encode_utf8(seq!['r', 'o', 'o', 't'])
-            == seq![114u8, 111u8, 111u8, 116u8]) by (compute);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        assert(vstd::utf8::encode_utf8("root"@) =~= seq![114u8, 111u8, 111u8, 116u8]);
         assert(policy::sources::canonical_source_path(seq![114u8, 111u8, 111u8, 116u8])) by (compute);
         assert(policy::sources::canonical_source_path(vstd::utf8::encode_utf8("root"@)));
     }
@@ -822,6 +822,9 @@ fn proof_plan_preserves_explicit_scope_data_and_unknown_boundaries() {
         assert("file:other"@ != "file:"@ + "file"@);
     }
     let files = vec![planned_source()];
+    expect_verifier_true(policy::sources::can_validate_selected_plan(&Vec::new()));
+    let blocked = vec!["missing required input".to_string()];
+    expect_verifier_true(!policy::sources::can_validate_selected_plan(&blocked));
     let unrelated = vec!["file:other".to_string()];
     let unselected = policy::sources::validate_selected_roots(&files, &unrelated, &Vec::new());
     expect_verifier_true(unselected.is_ok());
