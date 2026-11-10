@@ -1,6 +1,6 @@
 # Verus 实施范围
 
-本宿主在 FILEMAP schema 2 显式采用 `require_new_file_classification: true`。
+FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 本地 routes、scoped CI、full 调度和 collection 准备共用
 `validate_file_classifications`：固定基线未登记的新行必须给出有效分类；已有分类不得
 退回未知，删除整行则沿既有删除登记验收。缺基线原件保留原错误并返回
@@ -8,7 +8,9 @@
 数据声明仍不得有根，program／specification 必须有有效根，并继续接受现有严格计划、
 编译源码、原证明及真实消费者的绑定检查。独立预期同为 Verus，并作为 Rust 测试运行。
 
-**产品与宿主政策同时修改：**本批沿用已有两项整 crate 根、固定工具、CI 单元及预算，
+本批先交付字段支持与同源判断；本宿主尚未启用该字段。公开 bootstrap 的已部署
+协调者须先支持新登记格式，再通过后续批次启用并验收真实消费；局部能力不代表已强制。
+本批沿用已有两项整 crate 根、固定工具、CI 单元及预算，
 不按文件名、语言或扫描推断分类。未分类存量、已有文件中全部新逻辑的分类完整性、
 声明角色的语义真实性和生产调用的完整对应仍须继续验收。当前查找直接比较两端显式行，
 最坏工作随两端文件数的乘积增长，不增加持久索引；构建、证明、CI 和完整成本未测。
