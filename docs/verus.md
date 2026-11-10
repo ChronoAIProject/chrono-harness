@@ -951,6 +951,21 @@ JSON 解码器和进程原件适配器先提供执行状态、judge／request �
 与测试根加入现有 `verify.judge-workflow`／`verify.judge-workflow-tests` 整 crate 计划。
 本批不把 JSON 语义、进程字节真实性或完整 workflow 事务宣称为已证明。
 
+### 工作流 schema migration 准入
+
+`crates/judge-workflow/src/verified_transition.rs` 拥有 schema migration 的唯一准入谓词
+`migration_admissible`。它要求恰有一条声明；无 `script` 时必须没有实际 conversion；有
+`script` 时同时要求 replacement test 通过、conversion 存在、声明的 script／test 与实际
+输入一致、进程成功、输入／输出摘要一致、解码后的输出等于实际 stdout，且 mappings 与声明
+一致。`transition.rs` 只负责读取 JSON、进程回执、摘要和 stdout 等明确外部接口，把这些
+适配器事实交给 `admit_migration`；准入结果和既有错误分类仍由该 Verus 结果决定。
+
+生产根和独立边界根分别登记为 `verify.judge-workflow-transition` 与
+`verify.judge-workflow-transition-tests`，并加入 `test:judge-workflow-tests` 的正式执行计划。
+独立预期覆盖无 script／有 conversion、零或多条声明，以及 scripted fact 的逐项缺失；Rust
+`consumer` 测试继续核实际 migration 消费。JSON 解码、进程、摘要和文件／外部 IO 仍是逐项
+登记的适配器假设；本批不宣称完整 workflow 或全仓 `E_VERUS_COVERAGE` 已完成。
+
 ## 专属测试的语言配对
 
 projects 的实际 `dedicated_pair` 直接把登记中的 implementation／testing 字符串借给

@@ -145,38 +145,89 @@ pub fn evaluate(
             .filter(|m| m["from_version"] == from && m["to_version"] == to)
             .collect();
         if rows.len() != 1 {
+            let admitted = super::verified_transition::admit_migration(
+                false, false, false, false, false, false, false, false, false, false, false,
+            );
+            if admitted {
+                return Err("E_MIGRATION_EVIDENCE: invalid migration admission facts".into());
+            }
             return Err("E_MIGRATION_EVIDENCE: missing/ambiguous schema migration".into());
         }
         let m = rows[0];
         let c = &view["conversion"];
-        if m.get("script").is_none() {
-            if !c.is_null() {
+        let has_script = m.get("script").is_some();
+        if !has_script {
+            let admitted = super::verified_transition::admit_migration(
+                true,
+                false,
+                c.is_null(),
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false,
+            );
+            if !admitted {
                 return Err("E_MIGRATION_EVIDENCE: actual data conversion requires its declared script/test pair".into());
             }
             migrations.push(m.clone());
             continue;
         }
-        let test = format!("test:{}", m["test"].as_str().unwrap());
-        if results.tests.get(&test).map(String::as_str) != Some("passed") || c.is_null() {
-            return Err("E_MIGRATION_EVIDENCE: declared data conversion requires its retained execution and passing test".into());
-        }
-        if m["script"] != c["input"]["profile"]["script"]
-            || m["test"] != c["input"]["profile"]["test"]
+        let test = m
+            .get("test")
+            .and_then(Value::as_str)
+            .map(|name| format!("test:{name}"));
+        let replacement_test_passed = test
+            .as_ref()
+            .and_then(|test| results.tests.get(test))
+            .map(String::as_str)
+            == Some("passed");
+        let conversion_present = !c.is_null();
+        let script_test_matches = m["script"] == c["input"]["profile"]["script"]
+            && m["test"] == c["input"]["profile"]["test"];
+        let mut process_succeeded = false;
+        let mut input_digest_matches = false;
+        let mut output_digest_matches = false;
+        let mut decoded_output_matches = false;
+        let mappings_match = c["output"]["mappings"] == m["mappings"];
+        if let Ok(p) = serde_json::from_value::<chrono_harness::ProcessResult>(c["process"].clone())
         {
-            return Err(
-                "E_MIGRATION_EVIDENCE: declared script/test differs from actual conversion pair"
-                    .into(),
-            );
+            process_succeeded = super::evidence::process(&p).is_ok();
+            input_digest_matches = c["input_digest"] == p.stdin_sha256
+                && chrono_harness::wire::digest(&c["input"])
+                    .map(|digest| digest == p.stdin_sha256)
+                    .unwrap_or(false);
+            output_digest_matches = c["output_digest"] == p.stdout_sha256;
+            decoded_output_matches = chrono_harness::decode::<Value>(&p.stdout_bytes)
+                .map(|output| c["output"] == output)
+                .unwrap_or(false);
         }
-        let p: chrono_harness::ProcessResult =
-            serde_json::from_value(c["process"].clone()).map_err(|e| e.to_string())?;
-        super::evidence::process(&p)?;
-        if c["output_digest"] != p.stdout_sha256
-            || c["input_digest"] != p.stdin_sha256
-            || chrono_harness::wire::digest(&c["input"])? != p.stdin_sha256
-            || c["output"] != chrono_harness::decode::<Value>(&p.stdout_bytes)?
-            || c["output"]["mappings"] != m["mappings"]
-        {
+        let admitted = super::verified_transition::admit_migration(
+            true,
+            true,
+            false,
+            replacement_test_passed,
+            conversion_present,
+            script_test_matches,
+            process_succeeded,
+            input_digest_matches,
+            output_digest_matches,
+            decoded_output_matches,
+            mappings_match,
+        );
+        if !admitted {
+            if !replacement_test_passed || !conversion_present {
+                return Err("E_MIGRATION_EVIDENCE: declared data conversion requires its retained execution and passing test".into());
+            }
+            if !script_test_matches {
+                return Err(
+                    "E_MIGRATION_EVIDENCE: declared script/test differs from actual conversion pair"
+                        .into(),
+                );
+            }
             return Err("E_MIGRATION_EVIDENCE: conversion differs from declaration".into());
         }
         migrations.push(m.clone());
