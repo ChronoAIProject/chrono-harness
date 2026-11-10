@@ -330,6 +330,20 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
         let path = h.root.join(report["report_path"].as_str().unwrap());
         let raw = fs::read(&path).unwrap();
         assert_eq!(json(&raw).unwrap(), report);
+        if root != &h.root {
+            let relative = report["report_path"].as_str().unwrap();
+            assert!(
+                !root.join(relative).exists(),
+                "linked caller must not leave an unused local report"
+            );
+            let local = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)
+                .unwrap()
+                .unwrap();
+            assert!(
+                !local.enrolled(relative).unwrap(),
+                "linked caller must not retain an unused local publication"
+            );
+        }
         let mut passes = vec![&report];
         if operation == "use" {
             assert_eq!(report["managed_process"]["exit_code"], 0);
@@ -431,6 +445,40 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
         assert!(root.join(".git").exists());
         assert!(root.join("payload").exists());
     }
+}
+
+#[test]
+fn linked_report_reservation_failure_does_not_dispatch_managed_work() {
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "rebuild-evidence");
+    let target = h.parent.join("blocked-linked-report");
+    assert_eq!(h.invoke("feature", "blocked-linked-report", &target).0, 0);
+    let config = target.join(POLICY);
+    let mut policy = json(&fs::read(&config).unwrap()).unwrap();
+    let blocked = ".chrono-harness/state/worktrees/blocked";
+    policy["report_directory"] = value!(format!("{blocked}/"));
+    fs::write(config, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&target);
+    let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{report} {error}");
+    let ledger = fs::read(h.ledger_path(&target)).unwrap();
+    let obstruction = h.root.join(blocked);
+    fs::write(&obstruction, b"original report obstruction").unwrap();
+    let mut command = Command::new(source().join("crates/worktree/target/debug/chrono-worktree"));
+    command
+        .current_dir(&target)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .args(["use", "--config", POLICY, "--operation", "use.consumer"]);
+    let output = h.native_output(&mut command);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(!target.join(".chrono-harness/state/evidence").exists());
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), ledger);
+    assert_eq!(
+        fs::read(obstruction).unwrap(),
+        b"original report obstruction"
+    );
 }
 
 #[test]
