@@ -1325,3 +1325,15 @@ fn incomplete_fresh_alias_rollback_names_unrestored_link_and_allows_explicit_rec
 
 #[path = "atomic.rs"]
 mod atomic;
+
+#[test]
+fn standalone_noop_has_durable_operation_state() {
+    let host = Host::new();
+    host.init().unwrap();
+    let guide = host.root.join("CLAUDE.md");
+    let before = fs::metadata(&guide).unwrap().modified().unwrap();
+    assert!(generate(&host.root).unwrap().is_empty());
+    assert_eq!(fs::metadata(&guide).unwrap().modified().unwrap(), before);
+    let state = host.root.join(".chrono-harness/state/instructions-operations");
+    assert!(state.read_dir().unwrap().count() >= 2);
+}

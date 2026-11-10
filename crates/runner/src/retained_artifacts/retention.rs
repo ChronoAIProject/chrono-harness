@@ -268,6 +268,7 @@ pub struct Inventory {
     root: PathBuf,
     policy: Policy,
     policy_bytes: Vec<u8>,
+    policy_from_disk: bool,
     directory: PathBuf,
     round_metadata: Cell<Option<u64>>,
     round_began: Cell<Option<Instant>>,
@@ -373,10 +374,18 @@ impl Inventory {
     }
     /// Absence preserves old semantics. Existing unknown output directories are never enrolled by opening.
     pub fn adopted(root: &Path) -> Result<Option<Self>, String> {
+        Self::open(root, None)
+    }
+    /// Standalone producers supply their declared policy when the host has not
+    /// adopted one. An on-disk policy always takes precedence.
+    pub fn with_standalone_policy(root: &Path, fallback: &[u8]) -> Result<Self, String> {
+        Self::open(root, Some(fallback))?.ok_or("standalone retention policy unavailable".into())
+    }
+    fn open(root: &Path, fallback: Option<&[u8]>) -> Result<Option<Self>, String> {
         let physical_root = fs::canonicalize(root).map_err(|e| e.to_string())?;
         let root = physical_root.as_path();
         let path = no_symlink_parents(root, POLICY_PATH)?;
-        let bytes = match fs::File::open(path) {
+        let (bytes, policy_from_disk) = match fs::File::open(path) {
             Ok(f) => {
                 let mut bytes = Vec::new();
                 f.take(1024 * 1024 + 1)
@@ -385,9 +394,12 @@ impl Inventory {
                 if bytes.len() > 1024 * 1024 {
                     return Err("retention policy byte bound".into());
                 }
-                bytes
+                (bytes, true)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match fallback {
+                Some(bytes) => (bytes.to_vec(), false),
+                None => return Ok(None),
+            },
             Err(e) => return Err(e.to_string()),
         };
         let policy: Policy = decode(&bytes)?;
@@ -443,6 +455,7 @@ impl Inventory {
             root: root.into(),
             policy,
             policy_bytes: bytes,
+            policy_from_disk,
             directory,
             round_metadata: Cell::new(None),
             round_began: Cell::new(None),
@@ -466,9 +479,13 @@ impl Inventory {
     fn stable(&self, gate: &impl Exclusion) -> Result<(), String> {
         self.charge_metadata(self.policy_bytes.len() as u64)?;
         gate.verify()?;
-        if fs::read(no_symlink_parents(&self.root, POLICY_PATH)?).map_err(|e| e.to_string())?
-            != self.policy_bytes
-        {
+        let policy = no_symlink_parents(&self.root, POLICY_PATH)?;
+        let current = if self.policy_from_disk {
+            fs::read(policy).map_err(|e| e.to_string())? == self.policy_bytes
+        } else {
+            matches!(fs::symlink_metadata(policy), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+        };
+        if !current {
             return Err("output retention policy changed; preserve outputs".into());
         }
         Ok(())
@@ -816,6 +833,29 @@ impl Inventory {
     ) -> Result<Publication, String> {
         self.reserve(producer, path, outcome, &[], Some(tree), None)
     }
+    /// Declare both a pending output and its existing domain recovery root.
+    pub fn plan_rooted(
+        self,
+        producer: &str,
+        path: &str,
+        outcome: Value,
+        root: &str,
+    ) -> Result<Publication, String> {
+        self.reserve(producer, path, outcome, &[root.into()], Some(true), None)
+    }
+    /// Read the original owner's current recovery attachment, without finding
+    /// operations by traversing unrelated output directories.
+    pub fn rooted_original(&self, producer: &str, role: &str) -> Result<Option<(String, String, String, Value)>, String> {
+        let gate = self.addressed_gate(&[], &[], &[role.into()], None, false, true)?;
+        let ledger = self.load(&gate)?;
+        self.stable(&gate)?;
+        let Some(ids) = ledger.roots.get(role) else { return Ok(None) };
+        let [id] = ids.as_slice() else { return Err("expected one rooted original".into()) };
+        let output = ledger.outputs.iter().find(|o| &o.id == id && o.producer == producer)
+            .ok_or("rooted original has no matching producer")?;
+        Ok(Some((output.id.clone(), output.path.clone(), output.phase.clone(), output.outcome.clone())))
+    }
+
     fn reserve(
         self,
         producer: &str,
@@ -1088,6 +1128,16 @@ impl Inventory {
         producer: &str,
         path: &str,
     ) -> Result<Option<Publication>, String> {
+        self.recover_unfinished_directory(producer, path, || Ok(()))
+    }
+    /// Run the owning producer's repair under the exact original exclusive
+    /// capability before accounting its finished recovery files.
+    pub fn recover_unfinished_directory(
+        self,
+        producer: &str,
+        path: &str,
+        repair: impl FnOnce() -> Result<(), String>,
+    ) -> Result<Option<Publication>, String> {
         crate::relative_path(path)?;
         if !self.accepts(producer, path) {
             return Ok(None);
@@ -1105,7 +1155,6 @@ impl Inventory {
             || output.creation.is_some()
             || !(output.phase == "publishing"
                 || (output.phase == "sealing"
-                    && output.outcome["publication"] == "interrupted"
                     && output.outcome["completion"] == "not-established"))
         {
             return Err(
@@ -1129,6 +1178,7 @@ impl Inventory {
         {
             return Err("unfinished directory identity changed; preserve originals".into());
         }
+        repair()?;
         let byte_limit = output.byte_limit.unwrap_or(self.policy.max_output_bytes);
         let mut observed = Manifest::default();
         let began = Instant::now();
