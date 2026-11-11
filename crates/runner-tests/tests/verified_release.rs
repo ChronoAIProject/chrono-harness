@@ -14,6 +14,35 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn pending_domain_and_resumed_seal_remain_distinct_from_terminal_eligibility() {
+    let pending = policy::domain_recovery(true, true);
+    let absent = policy::domain_recovery(true, false);
+    let unnamed = policy::domain_recovery(false, true);
+    let terminal = policy::terminal_eligible(true, true);
+    let unknown = policy::terminal_eligible(false, true);
+    let unsealed = policy::terminal_eligible(true, false);
+    let completed = policy::resumed_seal(true, true, false);
+    let interrupted = policy::resumed_seal(true, true, true);
+    let partial = policy::resumed_seal(true, false, false);
+    expect_true(pending); expect_true(!absent); expect_true(!unnamed);
+    expect_true(terminal); expect_true(!unknown); expect_true(!unsealed);
+    expect_true(completed); expect_true(!interrupted); expect_true(!partial);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_limits_keep_equal_bytes_and_reject_count_and_overflow() {
+    let first = policy::terminal_budget(0, 0, 10, 1, 10);
+    let full_count = policy::terminal_budget(1, 0, 1, 1, 10);
+    let too_large = policy::terminal_budget(0, 0, 11, 1, 10);
+    let full_bytes = policy::terminal_budget(0, 10, 1, 1, 10);
+    let overflow = policy::terminal_budget(0, u64::MAX, 1, 2, u64::MAX);
+    let zero = policy::terminal_budget(0, 0, 0, 0, 0);
+    expect_true(first); expect_true(!full_count); expect_true(!too_large);
+    expect_true(!full_bytes); expect_true(!overflow); expect_true(!zero);
+}
+
+
 fn expect_true(actual: bool)
     requires actual,
 {

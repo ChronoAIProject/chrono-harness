@@ -1387,7 +1387,10 @@ impl Inventory {
         for (id, record) in objects.iter_mut() {
             record.policy_sha256 = ledger.policy_sha256.clone();
             if record.output.is_some() && !ledger.outputs.iter().any(|o| o.id == *id) {
-                record.metadata_expires = now()?.saturating_add(self.policy.metadata_keep_seconds);
+                let keep = record.output.as_ref().and_then(|output|
+                    self.policy.terminal_limits.get(&output.producer))
+                    .map_or(self.policy.metadata_keep_seconds, |limits| limits.metadata_keep_seconds);
+                record.metadata_expires = now()?.saturating_add(keep);
                 record.prune_path = Some(record.path.clone());
             }
             record.output = ledger

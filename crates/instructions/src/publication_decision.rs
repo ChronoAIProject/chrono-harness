@@ -6,6 +6,27 @@ use vstd::prelude::*;
 
 verus! {
 
+pub enum IntentLayer { Done, Original, Intent, Invalid }
+
+pub fn intent_layer(schema: bool, original: bool, intent: bool) -> (layer: IntentLayer)
+    ensures
+        (layer is Done) == schema,
+        (layer is Original) == (!schema && original),
+        (layer is Intent) == (!schema && !original && intent),
+        (layer is Invalid) == (!schema && !original && !intent),
+{
+    if schema { IntentLayer::Done }
+    else if original { IntentLayer::Original }
+    else if intent { IntentLayer::Intent }
+    else { IntentLayer::Invalid }
+}
+
+pub fn record_bound(identity: bool, attempt: bool, digest: bool) -> (bound: bool)
+    ensures bound == (identity && attempt && digest),
+{
+    identity && attempt && digest
+}
+
 pub enum Repair {
     Leave,
     Restore,

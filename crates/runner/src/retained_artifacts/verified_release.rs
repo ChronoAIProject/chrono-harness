@@ -11,6 +11,26 @@ use crate::verified_identifiers as identifiers;
 
 verus! {
 
+pub fn domain_recovery(declared: bool, attached: bool) -> (protect: bool)
+    ensures protect == (declared && attached),
+{ declared && attached }
+
+pub fn terminal_eligible(released: bool, sealed: bool) -> (eligible: bool)
+    ensures eligible == (released && sealed),
+{ released && sealed }
+
+pub fn resumed_seal(sealing: bool, sealed: bool, interrupted: bool) -> (released: bool)
+    ensures released == (sealing && sealed && !interrupted),
+{ sealing && sealed && !interrupted }
+
+/// Checked without overflowing count or byte addition.
+pub fn terminal_budget(count: u64, bytes: u64, next: u64, max_count: u64, max_bytes: u64) -> (keep: bool)
+    ensures keep == (count < max_count && bytes as int + next as int <= max_bytes as int),
+{
+    count < max_count && bytes <= max_bytes && next <= max_bytes - bytes
+}
+
+
 pub open spec fn present(values: Seq<String>, value: Seq<char>) -> bool {
     exists|at: int| 0 <= at < values.len() && (#[trigger] values[at])@ == value
 }

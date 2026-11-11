@@ -1473,3 +1473,23 @@ finding 克隆使用固定 vstd 对 `<String as Clone>::clone` 和 `<Vec<String>
 runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` 定位需要 O(log C) 次字节比较，
 新增插入最多移动 C 个字符串句柄，存储为 O(C)。原图索引与遍历成本继续保留；
 构建、验证、CI、存储及完整运行成本未测，不宣称性能收益。
+
+
+## instructions 的恢复、释放和终态选择
+
+当前候选新增 `crates/instructions/src/publication_decision.rs`，真实 transaction 调用
+`intent_layer` 选择原 intent 的实际封套，`record_bound` 核宿主／尝试／摘要绑定，
+`repair` 判断保留、恢复或维持，`can_release` 核封存、精确结果绑定和已结发布。
+`crates/instructions-tests/tests/publication_decision.rs` 独立列出原对象、新对象、丢失备份、
+目标漂移、有效 commit 和三项释放前提的成功／拒绝边界，同时作为普通 Rust 测试运行。
+两项当前整 crate 根登记为 `verify.instructions-publication`／`-tests`，继续使用固定 Verus。
+
+领域根保护、终态资格和已结封存续接分别由已有根内新增的 `domain_recovery`、
+`terminal_eligible`、`resumed_seal` 判断；独立预期分别核缺少前提和中断状态。
+终态数量／字节的溢出安全判断归已有 `verified_release::terminal_budget`，真实 retention
+维护直接消费；独立预期在既有 runner-tests 的 verified_release 根覆盖相等、超出、空容量
+与 u64 溢出边界，沿原 `verify.retention-release`／`-tests` 验证。
+
+本候选尚未执行这些证明或 Rust 测试。已声明根不能代替原进程成功结果；观察事实的
+采集、JSON、文件发布、目录身份、租约、跨进程恢复和整个 IO 组合仍未证明，不能将
+局部谓词称为完整事务证明。行为验收与平台／宿主／交付缺口继续保留。

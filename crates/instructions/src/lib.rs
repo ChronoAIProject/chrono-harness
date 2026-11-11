@@ -2,6 +2,8 @@
 
 mod catalog;
 mod transaction;
+#[doc(hidden)]
+pub mod publication_decision;
 
 use catalog::{Atom, Catalog, Content, Format, Manifest, Variant};
 use std::collections::{BTreeMap, BTreeSet};
@@ -9,6 +11,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::os::unix::ffi::OsStrExt;
+use serde_json::json;
 use transaction::{Change, Fault, Snapshot};
 
 const MANIFEST: &str = ".chrono-harness/instructions/manifest.json";
@@ -23,15 +27,21 @@ struct InitSources {
     methodology: Option<Vec<u8>>,
     context: Option<Vec<u8>>,
     locale: Option<String>,
+    external: Vec<transaction::ExternalInput>,
 }
 
 impl InitSources {
     fn read(methodology: Option<&Path>, context: Option<&Path>) -> Result<Self, String> {
-        Ok(Self {
-            methodology: methodology.map(input).transpose()?,
-            context: context.map(input).transpose()?,
-            locale: None,
-        })
+        let mut external = Vec::new();
+        let mut read = |path: &Path| {
+            let (bytes, binding) = transaction::external_input(path)?;
+            utf8(path, &bytes)?;
+            external.push(binding);
+            Ok::<_, String>(bytes)
+        };
+        let methodology = methodology.map(&mut read).transpose()?;
+        let context = context.map(&mut read).transpose()?;
+        Ok(Self { methodology, context, locale: None, external })
     }
 }
 
@@ -82,10 +92,16 @@ fn regular(path: &Path) -> Result<Option<Snapshot>, String> {
             ));
         }
     }
-    Ok(Some(Snapshot {
-        bytes: fs::read(path).map_err(|e| error(path, e))?,
-        permissions: meta.permissions(),
-    }))
+    let identity = chrono_harness::artifact_disposal::identity(path)?;
+    let bytes = fs::read(path).map_err(|e| error(path, e))?;
+    let after = fs::symlink_metadata(path).map_err(|e| error(path, e))?;
+    use std::os::unix::fs::MetadataExt;
+    if chrono_harness::artifact_disposal::identity(path)? != identity
+        || (meta.len(), meta.mode(), meta.mtime(), meta.mtime_nsec(), meta.ctime(), meta.ctime_nsec(), meta.nlink())
+            != (after.len(), after.mode(), after.mtime(), after.mtime_nsec(), after.ctime(), after.ctime_nsec(), after.nlink()) {
+        return Err(error(path, "regular file identity/content changed during read"));
+    }
+    Ok(Some(Snapshot { bytes, permissions: meta.permissions(), identity }))
 }
 
 fn utf8(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -94,16 +110,6 @@ fn utf8(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .map_err(|e| error(path, format!("expected UTF-8: {e}")))
 }
 
-fn input(path: &Path) -> Result<Vec<u8>, String> {
-    // Explicit external inputs may use aliases; retained host files may not.
-    let meta = fs::metadata(path).map_err(|e| error(path, e))?;
-    if !meta.is_file() {
-        return Err(error(path, "expected a readable regular input file"));
-    }
-    let bytes = fs::read(path).map_err(|e| error(path, e))?;
-    utf8(path, &bytes)?;
-    Ok(bytes)
-}
 
 fn positions(bytes: &[u8], needle: &[u8]) -> Vec<usize> {
     bytes
@@ -166,6 +172,10 @@ fn relative(path: &str, source: bool) -> Result<(), String> {
         || Path::new(path).is_absolute()
     {
         return Err(format!("{path:?}: expected canonical relative path"));
+    }
+    if [".chrono-harness/state", ".chrono-harness/retention.json"].iter()
+        .any(|reserved| path == *reserved || path.starts_with(&format!("{reserved}/"))) {
+        return Err(format!("{path}: reserved instruction state or policy path"));
     }
     if source && !path.starts_with(".chrono-harness/") {
         return Err(format!(
@@ -304,14 +314,14 @@ fn raw_manifest(locale: &str) -> Result<Manifest, String> {
 
 fn prepare(
     host: &Path,
-    selected: Option<InitSources>,
-) -> Result<(Vec<Change>, Vec<PathBuf>), String> {
+    mut selected: Option<InitSources>,
+) -> Result<(Vec<Change>, Vec<PathBuf>, transaction::Bindings), String> {
     if !cfg!(unix) {
         return Err(
             "root guide publication requires Unix symlinks; this platform is unsupported".into(),
         );
     }
-    let root = fs::canonicalize(host).map_err(|e| error(host, e))?;
+    let root = host.to_path_buf();
     if !root.is_dir() {
         return Err(error(&root, "host root must be an existing directory"));
     }
@@ -321,9 +331,14 @@ fn prepare(
     let manifest_before = regular(&manifest_path)?;
     let mut changes = Vec::new();
     let mut pending = BTreeMap::<String, Vec<u8>>::new();
+    let mut observed_inputs = BTreeMap::new();
+    let mut bind = |path: &str, bytes: &[u8]| {
+        observed_inputs.insert(path.into(), chrono_harness::sha256(bytes));
+    };
     let new_manifest = manifest_before.is_none();
     let manifest: Manifest;
     if let Some(existing) = &manifest_before {
+        bind(MANIFEST, &existing.bytes);
         manifest = catalog::parse(&existing.bytes)
             .map_err(|e| error(&manifest_path, format!("invalid registration: {e}")))?;
     } else {
@@ -375,7 +390,11 @@ fn prepare(
     }
     let catalog_bytes = match pending.get(&manifest.catalog) {
         Some(bytes) => bytes.clone(),
-        None => required(&root, &manifest.catalog)?,
+        None => {
+            let bytes = required(&root, &manifest.catalog)?;
+            bind(&manifest.catalog, &bytes);
+            bytes
+        }
     };
     let cat: Catalog = catalog::parse(&catalog_bytes).map_err(|e| {
         error(
@@ -463,10 +482,15 @@ fn prepare(
     {
         let bytes = match pending.get(path) {
             Some(bytes) => bytes.clone(),
-            None => required(&root, path)?,
+            None => {
+                let bytes = required(&root, path)?;
+                bind(path, &bytes);
+                bytes
+            }
         };
         files.insert(path.to_owned(), bytes);
     }
+    let external = selected.as_mut().map(|s| std::mem::take(&mut s.external)).unwrap_or_default();
     if let Some(sources) = selected {
         let conflict = || {
             error(
@@ -583,10 +607,13 @@ fn prepare(
             catalog::bytes(&manifest)?,
         ));
     }
+    let unchanged = changes.iter().filter(|c| c.unchanged()).collect();
+    let mut bindings = transaction::bind_inputs(&root, observed_inputs, unchanged, alias)?;
+    bindings.external = external;
     changes.retain(|c| !c.unchanged());
     let mut directories: Vec<_> = directories.into_iter().collect();
     directories.sort_by_key(|p| p.components().count());
-    Ok((changes, directories))
+    Ok((changes, directories, bindings))
 }
 
 /// Retain exact selected UTF-8 bytes and publish the literal root guide and relative alias.
@@ -603,15 +630,44 @@ pub fn init_with_defaults(
     methodology: Option<&Path>,
     context: Option<&Path>,
 ) -> Result<Vec<PathBuf>, String> {
-    let selected = InitSources::read(methodology, context)?;
-    let (changes, directories) = prepare(host, Some(selected))?;
-    transaction::publish(changes, directories, Fault::default())
+    run_init(host, methodology, context, None, Fault::default())
+}
+
+fn run_init(
+    host: &Path, methodology: Option<&Path>, context: Option<&Path>,
+    locale: Option<&OsStr>, fault: Fault,
+) -> Result<Vec<PathBuf>, String> {
+    let path_bytes = |path: &Path| path.as_os_str().as_bytes().to_vec();
+    transaction::run(host, "init", json!({
+        "methodology_path":methodology.map(path_bytes),
+        "host_context_path":context.map(path_bytes),
+        "locale":locale.map(OsStrExt::as_bytes),
+        "cwd":std::env::current_dir().map_err(|e| e.to_string())?.as_os_str().as_bytes(),
+        "version":env!("CARGO_PKG_VERSION"),
+    }), fault, |root| {
+        let mut selected = InitSources::read(methodology, context)?;
+        selected.locale = locale.map(|l| l.to_str().ok_or("locale must be UTF-8").map(str::to_owned)).transpose()?;
+        prepare(root, Some(selected))
+    })
 }
 
 /// Validate registered sources and refresh the guide and alias while preserving host-owned bytes.
 pub fn generate(host: &Path) -> Result<Vec<PathBuf>, String> {
-    let (changes, directories) = prepare(host, None)?;
-    transaction::publish(changes, directories, Fault::default())
+    run_generate(host, Fault::default())
+}
+
+fn run_generate(host: &Path, fault: Fault) -> Result<Vec<PathBuf>, String> {
+    transaction::run(host, "generate", json!({"version":env!("CARGO_PKG_VERSION")}), fault, |root| prepare(root, None))
+}
+
+/// Query exact retained operations. An unavailable attempt is never evidence of success.
+pub fn status(host: &Path, attempt: Option<&str>) -> Result<serde_json::Value, String> {
+    transaction::status(host, attempt)
+}
+
+/// Recover this host's pending publication, then run one bounded custody round.
+pub fn maintain(host: &Path) -> Result<serde_json::Value, String> {
+    transaction::maintain(host)
 }
 
 /// Bounded IO-failure injection available only in the dedicated test build.
@@ -624,19 +680,9 @@ pub mod test_support {
         after: usize,
         rollback: Option<usize>,
     ) -> Result<Vec<PathBuf>, String> {
-        let (changes, directories) = prepare(host, None)?;
-        transaction::publish(
-            changes,
-            directories,
-            Fault {
-                after: Some(after),
-                rollback,
-            },
-        )
+        run_generate(host, Fault { after: Some(after), rollback, ..Fault::default() })
     }
 
-    /// Fail before publication `after` (zero based); optionally fail one rollback.
-    /// No production CLI or environment switch enables this hook.
     pub fn init_with_failure(
         host: &Path,
         method: &Path,
@@ -644,16 +690,23 @@ pub mod test_support {
         after: usize,
         rollback: Option<usize>,
     ) -> Result<Vec<PathBuf>, String> {
-        let selected = InitSources::read(Some(method), Some(context))?;
-        let (changes, directories) = prepare(host, Some(selected))?;
-        transaction::publish(
-            changes,
-            directories,
-            Fault {
-                after: Some(after),
-                rollback,
-            },
-        )
+        run_init(host, Some(method), Some(context), None, Fault { after: Some(after), rollback, ..Fault::default() })
+    }
+
+    pub fn generate_with_state_failure(host: &Path, point: &str) -> Result<Vec<PathBuf>, String> {
+        run_generate(host, Fault { fail: Some(point.into()), ..Fault::default() })
+    }
+
+    pub fn init_with_checkpoint(host: &Path, method: &Path, context: &Path, hook: fn(&str)) -> Result<Vec<PathBuf>, String> {
+        run_init(host, Some(method), Some(context), None, Fault { checkpoint: Some(hook), ..Fault::default() })
+    }
+
+    /// Synchronize the owning Rust subprocess at an exact publication boundary.
+    pub fn operation_with_checkpoint(
+        host: &Path, init: bool, hook: fn(&str),
+    ) -> Result<Vec<PathBuf>, String> {
+        let fault = Fault { checkpoint: Some(hook), ..Fault::default() };
+        if init { run_init(host, None, None, None, fault) } else { run_generate(host, fault) }
     }
 }
 
@@ -675,7 +728,7 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
     if args.is_empty()
         || (args.len() == 1 && ["help", "--help", "-h"].iter().any(|a| args[0] == *a))
     {
-        return reply(0, "Usage:\n  chrono-instructions init --host-root H [--methodology M] [--host-context C] [--locale L]\n  chrono-instructions generate --host-root H\nH must be an existing directory. New init adopts embedded atomic rules (zh-CN default) and empty context. --locale binds the fresh root; --methodology retains one opaque file atom (und unless explicitly bound). Registered init retains existing canonical sources for omitted options; explicit differing inputs fail. Optional M/C must be readable UTF-8 regular files. Edit the registered catalog and output plan, then generate root guides, Markdown and skills. AGENTS.md -> CLAUDE.md remains a literal relative alias. Unix only. No host inference or runtime checkout required. Exit 0 complete, 2 usage, 1 generation/IO failure. No judges run.\n".into(), String::new());
+        return reply(0, "Usage:\n  chrono-instructions init --host-root H [--methodology M] [--host-context C] [--locale L]\n  chrono-instructions generate --host-root H\n  chrono-instructions status --host-root H [--attempt A]\n  chrono-instructions maintain --host-root H\nH must be an existing directory. New init adopts embedded atomic rules (zh-CN default) and empty context. --locale binds the fresh root; --methodology retains one opaque file atom (und unless explicitly bound). Registered init retains existing canonical sources for omitted options; explicit differing inputs fail. Optional M/C must be readable UTF-8 regular files. Edit the registered catalog and output plan, then generate root guides, Markdown and skills. AGENTS.md -> CLAUDE.md remains a literal relative alias. Unix only. No host inference or runtime checkout required. Exit 0 complete, 2 usage, 1 generation/IO failure. No judges run.\n".into(), String::new());
     }
     if args.len() == 1 && args[0] == "--version" {
         return reply(
@@ -692,17 +745,22 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
         )
     };
     let is_init = args[0] == "init";
-    if !is_init && args[0] != "generate" {
+    let is_status = args[0] == "status";
+    let is_maintain = args[0] == "maintain";
+    if !is_init && !is_status && !is_maintain && args[0] != "generate" {
         return usage();
     }
     let mut host = None;
     let mut method = None;
     let mut context = None;
     let mut locale = None;
+    let mut attempt = None;
     let mut parts = args[1..].chunks_exact(2);
     for pair in &mut parts {
         let slot = if pair[0] == "--host-root" {
             &mut host
+        } else if is_status && pair[0] == "--attempt" {
+            &mut attempt
         } else if is_init && pair[0] == "--methodology" {
             &mut method
         } else if is_init && pair[0] == "--host-context" {
@@ -723,19 +781,20 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
     let Some(host) = host else {
         return usage();
     };
+    if is_status || is_maintain {
+        let result = if is_status {
+            match attempt.as_deref().map(Path::to_str) {
+                Some(None) => Err("attempt must be a UTF-8 host-relative original path".into()),
+                name => status(&host, name.flatten()),
+            }
+        } else { maintain(&host) };
+        return match result {
+            Ok(value) => reply(0, format!("{value}\n"), String::new()),
+            Err(error) => reply(1, String::new(), format!("E_STATE: {error}\n")),
+        };
+    }
     let result = if is_init {
-        (|| {
-            let mut sources = InitSources::read(method.as_deref(), context.as_deref())?;
-            sources.locale = locale
-                .map(|p| {
-                    p.into_os_string()
-                        .into_string()
-                        .map_err(|_| "locale must be UTF-8".to_string())
-                })
-                .transpose()?;
-            let (changes, directories) = prepare(&host, Some(sources))?;
-            transaction::publish(changes, directories, Fault::default())
-        })()
+        run_init(&host, method.as_deref(), context.as_deref(), locale.as_deref().map(Path::as_os_str), Fault::default())
     } else {
         generate(&host)
     };

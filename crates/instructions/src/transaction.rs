@@ -44,7 +44,7 @@ impl Change {
     }
 }
 
-use crate::publication_decision::{Repair, can_release, repair};
+use crate::publication_decision::{IntentLayer, Repair, can_release, intent_layer, record_bound, repair};
 use chrono_harness::{
     artifact_disposal::{identity, publish_entry},
     decode, no_symlink_parents,
@@ -56,7 +56,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::io::{Read, Write};
-use std::os::unix::{ffi::OsStrExt, fs::{MetadataExt, OpenOptionsExt, PermissionsExt, symlink}};
+use std::os::unix::{ffi::{OsStrExt, OsStringExt}, fs::{MetadataExt, OpenOptionsExt, PermissionsExt, symlink}};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const STORE: &str = ".chrono-harness/state/instructions-operations";
@@ -70,13 +70,16 @@ pub(super) struct Fault {
     pub after: Option<usize>,
     pub rollback: Option<usize>,
     pub checkpoint: Option<fn(&str)>,
+    pub fail: Option<String>,
 }
 
 impl Fault {
-    fn at(&self, point: &str) {
+    fn at(&self, point: &str) -> Result<(), String> {
         if let Some(hook) = self.checkpoint {
             hook(point);
         }
+        if self.fail.as_deref() == Some(point) { return Err(format!("injected {point} state/cleanup failure")); }
+        Ok(())
     }
 }
 
@@ -87,8 +90,92 @@ struct Plan {
     attempt: String,
     directories: Vec<Entry>,
     files: Vec<Entry>,
-    parents: BTreeMap<String, String>,
-    inputs: BTreeMap<String, String>,
+    parents: BTreeMap<String, Object>,
+    intent_sha256: String,
+    bindings: Bindings,
+}
+
+#[derive(Default, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Bindings {
+    inputs: BTreeMap<String, Object>,
+    unchanged: BTreeMap<String, Option<Object>>,
+    pub external: Vec<ExternalInput>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct ExternalInput {
+    requested: Vec<u8>,
+    resolved: Vec<u8>,
+    identity: String,
+    sha256: String,
+    mode: u32,
+}
+
+pub(super) fn external_input(path: &Path) -> Result<(Vec<u8>, ExternalInput), String> {
+    let requested = if path.is_absolute() { path.to_path_buf() } else {
+        std::env::current_dir().map_err(|e| e.to_string())?.join(path)
+    };
+    let resolved = fs::canonicalize(&requested).map_err(|e| super::error(path, e))?;
+    let meta = fs::metadata(&resolved).map_err(|e| super::error(path, e))?;
+    if !meta.is_file() { return Err(super::error(path, "expected a readable regular input file")); }
+    let id = identity(&resolved)?;
+    let bytes = fs::read(&resolved).map_err(|e| super::error(path, e))?;
+    if identity(&resolved)? != id || stamp(&fs::metadata(&resolved).map_err(|e| e.to_string())?) != stamp(&meta) {
+        return Err(super::error(path, "external input changed while reading"));
+    }
+    let binding = ExternalInput {
+        requested: requested.as_os_str().as_bytes().to_vec(),
+        resolved: resolved.as_os_str().as_bytes().to_vec(),
+        identity: id, sha256: sha256(&bytes), mode: mode(&meta),
+    };
+    Ok((bytes, binding))
+}
+
+pub(super) fn bind_inputs(
+    root: &Path, inputs: BTreeMap<String, String>, unchanged: Vec<&Change>, alias: bool,
+) -> Result<Bindings, String> {
+    let mut bound = Bindings::default();
+    for (name, digest) in inputs {
+        let path = target(root, &name)?;
+        let object = observe(&path)?.ok_or_else(|| super::error(&path, "registered input disappeared"))?;
+        if object.bytes.as_ref() != Some(&digest) {
+            return Err(super::error(&path, "registered input changed during preparation"));
+        }
+        bound.inputs.insert(name, object);
+    }
+    for change in unchanged {
+        let expected = change.before.as_ref().map(|b| Object {
+            identity: b.identity.clone(), bytes: Some(sha256(&b.bytes)), mode: b.permissions.mode() & 0o777,
+        });
+        if observe(&change.path)? != expected {
+            return Err(super::error(&change.path, "unchanged destination changed during preparation"));
+        }
+        bound.unchanged.insert(relative(root, &change.path)?, expected);
+    }
+    if alias {
+        let path = root.join("AGENTS.md");
+        let expected = observe(&path)?.ok_or("literal alias disappeared during preparation")?;
+        if !fs::symlink_metadata(&path).map_err(|e| e.to_string())?.is_symlink()
+            || expected.bytes.as_ref() != Some(&sha256(b"CLAUDE.md")) {
+            return Err(super::error(&path, "literal alias changed during preparation"));
+        }
+        bound.unchanged.insert("AGENTS.md".into(), Some(expected));
+    }
+    Ok(bound)
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Commit {
+    attempt: String,
+    host: String,
+    plan_sha256: String,
+}
+
+fn digest<T: Serialize>(value: &T) -> Result<String, String> {
+    Ok(sha256(&serde_json::to_vec(value).map_err(|e| e.to_string())?))
 }
 
 #[derive(Deserialize, Serialize)]
@@ -112,6 +199,10 @@ fn mode(meta: &fs::Metadata) -> u32 {
     meta.mode() & 0o777
 }
 
+fn stamp(meta: &fs::Metadata) -> (u64, i64, i64, i64, i64, u32, u64) {
+    (meta.len(), meta.mtime(), meta.mtime_nsec(), meta.ctime(), meta.ctime_nsec(), meta.mode(), meta.nlink())
+}
+
 fn observe(path: &Path) -> Result<Option<Object>, String> {
     let Some(meta) = super::metadata(path)? else { return Ok(None) };
     let id = identity(path)?;
@@ -124,8 +215,8 @@ fn observe(path: &Path) -> Result<Option<Object>, String> {
     } else {
         return Err(super::error(path, "unexpected publication object type or hard link"));
     };
-    if identity(path)? != id {
-        return Err(super::error(path, "publication object identity changed during read"));
+    if identity(path)? != id || (!meta.is_dir() && stamp(&fs::symlink_metadata(path).map_err(|e| e.to_string())?) != stamp(&meta)) {
+        return Err(super::error(path, "publication object identity/content changed during read"));
     }
     Ok(Some(Object { identity: id, bytes, mode: mode(&meta) }))
 }
@@ -189,7 +280,7 @@ fn scope(root: &Path) -> Result<PathBuf, String> {
 fn relative(root: &Path, path: &Path) -> Result<String, String> {
     let name = path.strip_prefix(root).ok().and_then(Path::to_str)
         .ok_or_else(|| super::error(path, "invalid host-relative publication path"))?;
-    super::relative(name, false)?;
+    chrono_harness::relative_path(name)?;
     Ok(name.into())
 }
 
@@ -208,8 +299,10 @@ fn build_plan(
     directory: &Path,
     changes: Vec<Change>,
     directories: Vec<PathBuf>,
-    inputs: BTreeMap<String, String>,
+    bindings: Bindings,
+    intent_sha256: String,
     byte_limit: u64,
+    fault: &Fault,
 ) -> Result<Plan, String> {
     let mut parents = BTreeMap::new();
     let mut dir_entries = Vec::new();
@@ -229,7 +322,7 @@ fn build_plan(
     for destination in directories.iter().chain(changes.iter().map(|c| &c.path)) {
         for parent in destination.ancestors().skip(1).take_while(|p| *p != root) {
             if !directories.iter().any(|path| path == parent) {
-                parents.insert(relative(root, parent)?, identity(parent)?);
+                parents.insert(relative(root, parent)?, observe(parent)?.ok_or("publication parent disappeared")?);
             }
         }
     }
@@ -241,6 +334,7 @@ fn build_plan(
         let staged = directory.join(format!("dir-{i}"));
         fs::create_dir(&staged).map_err(|e| super::error(&staged, e))?;
         dir_entries.push(Entry { target: name, before: None, next: observe(&staged)?.unwrap(), backup: None });
+        fault.at(&format!("staged-dir-{i}"))?;
     }
     for (i, change) in changes.into_iter().enumerate() {
         let name = relative(root, &change.path)?;
@@ -261,17 +355,19 @@ fn build_plan(
             observe(&path)?
         } else { None };
         files.push(Entry { target: name, before, next: observe(&next)?.unwrap(), backup });
+        fault.at(&format!("staged-file-{i}"))?;
     }
-    Ok(Plan { host: identity(root)?, attempt: attempt.into(), directories: dir_entries, files, parents, inputs })
+    Ok(Plan { host: identity(root)?, attempt: attempt.into(), directories: dir_entries, files, parents, intent_sha256, bindings })
 }
 
 fn check_parents(root: &Path, plan: &Plan, path: &Path) -> Result<(), String> {
+    if identity(root)? != plan.host { return Err("publication host identity changed; preserve state".into()); }
     for parent in path.ancestors().skip(1).take_while(|p| *p != root) {
         let name = relative(root, parent)?;
         let observed = super::metadata(parent)?;
         let current = observed.as_ref().map(|_| identity(parent)).transpose()?;
         if let Some(expected) = plan.parents.get(&name) {
-            if !observed.is_some_and(|m| m.is_dir()) || current.as_ref() != Some(expected) {
+            if !observed.is_some_and(|m| m.is_dir()) || observe(parent)?.as_ref() != Some(expected) {
                 return Err(super::error(parent, "original publication parent changed; preserve pending state"));
             }
         } else if let Some(created) = plan.directories.iter().find(|e| e.target == name) {
@@ -285,13 +381,45 @@ fn check_parents(root: &Path, plan: &Plan, path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn install(root: &Path, plan: &Plan, directory: &Path, fault: &Fault) -> Result<(), String> {
-    for (name, digest) in &plan.inputs {
-        let path = no_symlink_parents(root, name)?;
-        if observe(&path)?.and_then(|o| o.bytes).as_ref() != Some(digest) {
+fn check_bindings(root: &Path, plan: &Plan, committed: bool) -> Result<(), String> {
+    for (name, expected) in &plan.bindings.inputs {
+        let path = target(root, name)?;
+        if observe(&path)?.as_ref() != Some(expected) {
             return Err(super::error(&path, "registered input changed after preparation"));
         }
     }
+    for (name, expected) in &plan.bindings.unchanged {
+        let path = target(root, name)?;
+        if observe(&path)? != *expected {
+            return Err(super::error(&path, "unchanged destination or literal alias changed"));
+        }
+    }
+    // Recovery verifies the saved business plan and never repeats external
+    // input IO. Its exact original observations remain in that immutable plan.
+    if !committed {
+        for external in &plan.bindings.external {
+            let requested = PathBuf::from(std::ffi::OsString::from_vec(external.requested.clone()));
+            let (_, observed) = external_input(&requested)?;
+            if observed.resolved != external.resolved || observed.identity != external.identity
+                || observed.sha256 != external.sha256 || observed.mode != external.mode {
+                return Err(super::error(&requested, "external input changed after preparation"));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn committed(directory: &Path, plan: Option<&Plan>) -> Result<bool, String> {
+    let Some(commit) = read::<Commit>(directory, "commit.json")? else { return Ok(false) };
+    let plan = plan.ok_or("commit without original plan; preserve evidence")?;
+    if !record_bound(commit.host == plan.host, commit.attempt == plan.attempt, commit.plan_sha256 == digest(plan)?) {
+        return Err("commit does not bind the exact original plan; preserve evidence".into());
+    }
+    Ok(true)
+}
+
+fn install(root: &Path, plan: &Plan, directory: &Path, fault: &Fault) -> Result<(), String> {
+    check_bindings(root, plan, false)?;
     for (entries, prefix) in [(&plan.directories, "dir"), (&plan.files, "next")] {
         for (i, entry) in entries.iter().enumerate() {
             let path = target(root, &entry.target)?;
@@ -311,8 +439,8 @@ fn install(root: &Path, plan: &Plan, directory: &Path, fault: &Fault) -> Result<
             sync(path.parent().unwrap())?;
             sync(directory)?;
             if prefix == "next" {
-                fault.at(&format!("published-{i}"));
-            }
+                fault.at(&format!("published-{i}"))?;
+            } else { fault.at(&format!("published-dir-{i}"))?; }
         }
     }
     Ok(())
@@ -345,7 +473,7 @@ fn settle_effects(
                         if is_file && fault.rollback == Some(i) {
                             return Err("injected rollback failure".into());
                         }
-                        if !is_file && !unrestored.is_empty() {
+                        if !is_file && unrestored.iter().any(|unrestored: &PathBuf| unrestored.starts_with(&path)) {
                             return Ok(());
                         }
                         if entry.backup.is_some() {
@@ -357,7 +485,7 @@ fn settle_effects(
                         }
                         sync(path.parent().unwrap())?;
                         sync(directory)?;
-                        fault.at(&format!("restored-{}-{i}", if is_file { "file" } else { "dir" }));
+                        fault.at(&format!("restored-{}-{i}", if is_file { "file" } else { "dir" }))?;
                         Ok(())
                     }
                 }
@@ -378,7 +506,7 @@ fn settle_effects(
     }
 }
 
-fn clean_stage(directory: &Path, plan: Option<&Plan>) -> Result<(), String> {
+fn clean_stage(directory: &Path, plan: Option<&Plan>, fault: &Fault) -> Result<(), String> {
     // Before the immutable plan exists, staging has never been allowed to
     // reach a business destination. Delete only this reserved attempt's slots.
     for item in fs::read_dir(directory).map_err(|e| super::error(directory, e))? {
@@ -405,14 +533,25 @@ fn clean_stage(directory: &Path, plan: Option<&Plan>) -> Result<(), String> {
             _ if ["plan.json.writing", "failure.json.writing", "commit.json.writing", "result.json.writing"].contains(&name) => {
                 fs::remove_file(&path).map_err(|e| super::error(&path, e))?;
             }
-            _ => (),
+            Some(("original", n)) => {
+                if observe(&path)? != plan.and_then(|p| p.files.get(n)).and_then(|e| e.backup.clone()) {
+                    return Err(super::error(&path, "original backup changed; preserve it"));
+                }
+            }
+            _ if ["plan.json", "failure.json", "commit.json", "result.json"].contains(&name) => (),
+            _ => return Err(super::error(&path, "unregistered staging member; preserve it")),
         }
+        fault.at(&format!("cleaned-{name}"))?;
     }
     sync(directory)
 }
 
 fn inventory(root: &Path) -> Result<Inventory, String> {
-    Inventory::with_standalone_policy(root, POLICY)
+    let inventory = Inventory::with_standalone_policy(root, POLICY)?;
+    if inventory.terminal_limits(PRODUCER).is_none() {
+        return Err("instructions-operation requires explicit finite terminal_limits in the adopted retention policy".into());
+    }
+    Ok(inventory)
 }
 
 fn release(root: &Path, attempt: &str, id: &str, result: &Value) -> Result<(), String> {
@@ -423,10 +562,23 @@ fn release(root: &Path, attempt: &str, id: &str, result: &Value) -> Result<(), S
         && state.published_tree_member(PRODUCER, attempt, &format!("{attempt}/result.json"), &sha256(&bytes), bytes.len() as u64)?;
     let attached = state.rooted_original(PRODUCER, ACTIVE)?
         .is_some_and(|(actual, path, phase, _)| actual == id && path == attempt && phase == "released");
-    if !can_release(attached, bound, result["publication"].is_string()) {
+    if !can_release(attached, bound, matches!(result["publication"].as_str(), Some("committed" | "verified-committed" | "restored" | "not-started"))) {
         return Err("publication result is not sealed and bound; retain the recovery reference".into());
     }
     state.reference_paths(ACTIVE, &[])
+}
+
+fn original_intent(mut value: &Value) -> Result<&Value, String> {
+    for _ in 0..8 {
+        value = match intent_layer(value["schema"] == "chrono-instructions-intent/v1",
+            value.get("original").is_some(), value.get("intent").is_some()) {
+            IntentLayer::Done => return Ok(value),
+            IntentLayer::Original => value.get("original").ok_or("missing original envelope")?,
+            IntentLayer::Intent => value.get("intent").ok_or("missing intent envelope")?,
+            IntentLayer::Invalid => return Err("retention outcome has no original instruction intent".into()),
+        };
+    }
+    Err("instruction intent envelope nesting bound".into())
 }
 
 fn recover(root: &Path, fault: &Fault) -> Result<(), String> {
@@ -435,48 +587,57 @@ fn recover(root: &Path, fault: &Fault) -> Result<(), String> {
     };
     let directory = no_symlink_parents(root, &attempt)?;
     if matches!(phase.as_str(), "reserving" | "creating") {
-        inventory(root)?.maintain_originals(std::slice::from_ref(&id))?;
+        inventory(root)?.materialize_rooted(PRODUCER, ACTIVE)?;
+        fault.at("creation-recovered")?;
         phase = inventory(root)?.rooted_original(PRODUCER, ACTIVE)?
             .ok_or("original recovery reference disappeared")?.2;
     }
-    let bound = intent.get("original").unwrap_or(&intent);
-    if bound["host_identity"] != identity(root)? || bound["attempt"] != attempt {
-        return Err("instruction intent identity changed; preserve recovery");
+    let bound = original_intent(&intent)?;
+    if bound["host_identity"] != identity(root)? || bound["attempt"] != attempt
+        || bound["host"] != json!(root.as_os_str().as_bytes()) {
+        return Err("instruction intent identity changed; preserve recovery".into());
     }
     if !directory.exists() {
-        if phase == "sealing" && inventory(root)?.rooted_original(PRODUCER, ACTIVE)?
-            .is_some_and(|(_, _, _, o)| o["publication"] == "interrupted-creation")
-        {
-            // The custodian verified that business IO could not start. Its
-            // original unknown creation outcome remains in retention custody.
-            return inventory(root)?.reference_paths(ACTIVE, &[]);
-        }
         return Err("instruction recovery directory missing; preserve intent".into());
     }
     let prior: Option<Value> = read(&directory, "result.json")?;
+    if let Some(result) = &prior {
+        if result["schema"] != "chrono-instructions-result/v1" || result["attempt"] != attempt
+            || result["host_identity"] != identity(root)? || result["intent_sha256"] != digest(bound)? {
+            return Err("instruction result binding changed; preserve recovery".into());
+        }
+    }
+    if phase == "sealing" && intent.get("intent").is_some() {
+        inventory(root)?.maintain_originals(std::slice::from_ref(&id))?;
+        phase = inventory(root)?.rooted_original(PRODUCER, ACTIVE)?
+            .ok_or("original recovery reference disappeared")?.2;
+        if phase == "sealing" {
+            return Err(format!("instruction result sealing incomplete; resume same attempt {attempt}"));
+        }
+    }
     if phase == "released" {
         return release(root, &attempt, &id, &prior.ok_or("sealed instruction result missing")?);
     }
     let mut result = prior;
     let publication = inventory(root)?.recover_unfinished_directory(PRODUCER, &attempt, || {
         let plan: Option<Plan> = read(&directory, "plan.json")?;
-        let commit: Option<Value> = read(&directory, "commit.json")?;
+        let commit = committed(&directory, plan.as_ref())?;
         if let Some(plan) = &plan {
-            if plan.host != identity(root)? || plan.attempt != attempt {
+            if !record_bound(plan.host == identity(root)?, plan.attempt == attempt, plan.intent_sha256 == digest(bound)?) {
                 return Err("instruction recovery plan binding changed".into());
             }
-            settle_effects(root, &directory, plan, commit.is_some(), fault)?;
-        } else if commit.is_some() {
-            return Err("commit without original plan; preserve evidence".into());
+            check_bindings(root, plan, true)?;
+            settle_effects(root, &directory, plan, commit, fault)?;
         }
-        clean_stage(&directory, plan.as_ref())?;
+        clean_stage(&directory, plan.as_ref(), fault)?;
         if result.is_none() {
             let failure: Option<Value> = read(&directory, "failure.json")?;
             let value = json!({
                 "schema":"chrono-instructions-result/v1", "attempt":attempt, "updated":timestamp()?,
-                "publication": if commit.is_some() { "verified-committed" } else if plan.is_some() { "restored" } else { "not-started" },
-                "original_return":failure.unwrap_or(Value::Null),
-                "original_process_exit":null, "recovery":"verified-after-interruption",
+                "host_identity":identity(root)?, "intent_sha256":digest(bound)?,
+                "publication": if commit { "verified-committed" } else if plan.is_some() { "restored" } else { "not-started" },
+                "known_failure":failure.unwrap_or(Value::Null),
+                "original_process_exit":null, "recovery":"verified-from-original-attempt",
             });
             record(&directory, "result.json", &value)?;
             result = Some(value);
@@ -484,13 +645,14 @@ fn recover(root: &Path, fault: &Fault) -> Result<(), String> {
         Ok(())
     })?.ok_or("instruction recovery publication unavailable")?;
     let result = result.ok_or("instruction recovery result missing")?;
-    publication.complete(json!({"intent":intent, "result":"result.json", "publication":result["publication"]}))?;
+    publication.complete(json!({"intent":bound, "result":"result.json", "publication":result["publication"]}))?;
+    fault.at("sealed")?;
     release(root, &attempt, &id, &result)
 }
 
 pub(super) fn run(
     host: &Path, operation: &str, request: Value, fault: Fault,
-    prepare: impl FnOnce(&Path) -> Result<(Vec<Change>, Vec<PathBuf>, BTreeMap<String, String>), String>,
+    prepare: impl FnOnce(&Path) -> Result<(Vec<Change>, Vec<PathBuf>, Bindings), String>,
 ) -> Result<Vec<PathBuf>, String> {
     let root = fs::canonicalize(host).map_err(|e| super::error(host, e))?;
     let host_identity = identity(&root)?;
@@ -506,29 +668,33 @@ pub(super) fn run(
     let attempt = relative(&root, &directory)?;
     let intent = json!({
         "schema":"chrono-instructions-intent/v1", "producer":PRODUCER,
-        "operation":operation, "attempt":attempt, "host":root.as_os_str().as_bytes(),
+        "operation":operation, "attempt":attempt, "recovery_role":ACTIVE, "host":root.as_os_str().as_bytes(),
         "host_identity":host_identity, "request":request, "started":timestamp()?,
         "original_process_exit":null, "recovery":"resolve same attempt before prepare",
     });
     let publication = inventory(&root)?.plan_rooted(PRODUCER, &attempt, intent.clone(), ACTIVE)?;
     let id = publication.id().to_owned();
-    fault.at("intent");
+    let mut finalized = None;
+    let evaluated = (|| {
+    fault.at("intent")?;
     publication.materialize()?;
     sync(&store)?;
-    fault.at("before-prepare");
+    fault.at("before-prepare")?;
     let mut plan = None;
-    let mut committed = false;
+    let mut did_commit = false;
     let result = (|| {
-        let (changes, directories, inputs) = prepare(&root)?;
-        let prepared = build_plan(&root, &attempt, &directory, changes, directories, inputs, publication.byte_limit())?;
+        let (changes, directories, bindings) = prepare(&root)?;
+        let prepared = build_plan(&root, &attempt, &directory, changes, directories, bindings, digest(&intent)?, publication.byte_limit(), &fault)?;
+        if prepared.host != host_identity { return Err("publication host identity changed during preparation".into()); }
+        exclusive.stable()?;
         record(&directory, "plan.json", &prepared)?;
         plan = Some(prepared);
-        fault.at("prepared");
+        fault.at("prepared")?;
         let plan = plan.as_ref().unwrap();
         install(&root, plan, &directory, &fault)?;
-        record(&directory, "commit.json", &json!({"attempt":attempt, "updated":timestamp()?}))?;
-        committed = true;
-        fault.at("committed");
+        record(&directory, "commit.json", &Commit { attempt: attempt.clone(), host: host_identity.clone(), plan_sha256: digest(plan)? })?;
+        did_commit = true;
+        fault.at("committed")?;
         Ok::<_, String>(plan.files.iter().map(|entry| root.join(&entry.target)).collect::<Vec<_>>())
     })();
     let result = match result {
@@ -538,7 +704,7 @@ pub(super) fn run(
             record(&directory, "failure.json", &failure).map_err(|state| format!("{error}; state failure: {state}; attempt {attempt}"))?;
             // If a commit rename succeeded and only its directory sync failed,
             // leave the intent rooted; recovery re-observes the immutable decision.
-            if read::<Value>(&directory, "commit.json")?.is_some() {
+            if committed(&directory, plan.as_ref())? {
                 return Err(format!("{error}; commit state needs recovery; attempt {attempt}"));
             }
             if let Some(plan) = &plan {
@@ -548,22 +714,59 @@ pub(super) fn run(
             Err(format!("{error}; unrestored=[]"))
         }
     };
-    clean_stage(&directory, plan.as_ref()).map_err(|e| format!("{result:?}; cleanup failed: {e}; attempt {attempt}"))?;
+    fault.at("cleanup")?;
+    clean_stage(&directory, plan.as_ref(), &fault).map_err(|e| format!("{result:?}; cleanup failed: {e}; attempt {attempt}"))?;
     let state = json!({
         "schema":"chrono-instructions-result/v1", "attempt":attempt, "updated":timestamp()?,
-        "publication": if committed { "committed" } else if plan.is_some() { "restored" } else { "not-started" },
-        "producer_result": match &result {
+        "host_identity":host_identity, "intent_sha256":digest(&intent)?,
+        "transport_exit":null,
+        "publication": if did_commit { "committed" } else if plan.is_some() { "restored" } else { "not-started" },
+        "producer_evaluation": match &result {
             Ok(paths) => json!({"changed": paths.iter().map(|p| relative(&root, p)).collect::<Result<Vec<_>, _>>()?}),
             Err(error) => json!({"error":error}),
         },
         "original_process_exit":null,
     });
-    fault.at("before-result");
+    fault.at("before-result")?;
     record(&directory, "result.json", &state)
         .map_err(|e| format!("{result:?}; state failure: {e}; attempt {attempt}"))?;
+    fault.at("before-seal")?;
     publication.complete(json!({"intent":intent, "result":"result.json", "publication":state["publication"]}))
         .map_err(|e| format!("{result:?}; retention state failure: {e}; attempt {attempt}"))?;
-    release(&root, &attempt, &id, &state)
-        .map_err(|e| format!("{result:?}; recovery release failure: {e}; attempt {attempt}"))?;
+    fault.at("sealed")?;
+    fault.at("release")?;
+    finalized = Some(state);
     result
+    })();
+    let observed = match &evaluated {
+        Ok(paths) => json!({"method":"transaction-evaluator","result":{"changed":paths.iter().map(|p| relative(&root, p)).collect::<Result<Vec<_>, _>>()?},"transport_exit":null,"process_exit":null}),
+        Err(error) => json!({"method":"transaction-evaluator","result":{"error":error},"transport_exit":null,"process_exit":null}),
+    };
+    inventory(&root)?.observe_producer_return(PRODUCER, &attempt, observed)
+        .map_err(|error| format!("{evaluated:?}; return observation failed: {error}; attempt {attempt}"))?;
+    if let Some(state) = finalized {
+        release(&root, &attempt, &id, &state)
+            .map_err(|error| format!("{evaluated:?}; recovery release failure: {error}; attempt {attempt}"))?;
+    }
+    evaluated
+}
+
+
+pub(super) fn status(host: &Path, attempt: Option<&str>) -> Result<Value, String> {
+    let root = fs::canonicalize(host).map_err(|e| super::error(host, e))?;
+    inventory(&root)?.producer_status(PRODUCER, attempt)
+}
+
+pub(super) fn maintain(host: &Path) -> Result<Value, String> {
+    let root = fs::canonicalize(host).map_err(|e| super::error(host, e))?;
+    let store = scope(&root)?;
+    let _exclusive = DirectoryLease::acquire(&store, true, None)?
+        .ok_or("instructions operation busy on this host")?;
+    recover(&root, &Fault::default())?;
+    let report = inventory(&root)?.maintain_producer(PRODUCER)?;
+    if report["quota_errors"].as_array().is_some_and(|errors| !errors.is_empty())
+        || report["round"]["accounting_errors"].as_array().is_some_and(|errors| !errors.is_empty()) {
+        return Err(format!("instruction maintenance incomplete with original errors: {report}"));
+    }
+    Ok(report)
 }
