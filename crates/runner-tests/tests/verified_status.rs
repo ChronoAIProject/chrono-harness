@@ -3364,17 +3364,23 @@ fn checkout_metadata_only_collapses_the_observed_missing_error() {
     }
     let absent = policy::checkout_metadata_observation(
         Err::<String, String>("missing".to_owned()),
-        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+        |error: &String| -> (missing: bool)
+            ensures missing == (error@ == "missing"@),
+        { scope_text::equal_text(error.as_str(), "missing") },
     );
     match absent { Ok(None) => {}, _ => panic!() }
     let suffix = policy::checkout_metadata_observation(
         Err::<String, String>("missing\0detail".to_owned()),
-        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+        |error: &String| -> (missing: bool)
+            ensures missing == (error@ == "missing"@),
+        { scope_text::equal_text(error.as_str(), "missing") },
     );
     expect_checkout_observation_error(suffix, "missing\0detail");
     let full = policy::checkout_metadata_observation(
         Err::<String, String>("é\npermission".to_owned()),
-        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+        |error: &String| -> (missing: bool)
+            ensures missing == (error@ == "missing"@),
+        { scope_text::equal_text(error.as_str(), "missing") },
     );
     expect_checkout_observation_error(full, "é\npermission");
 }
@@ -3402,16 +3408,22 @@ fn checkout_parent_missing_stops_and_other_errors_preserve_the_complete_error() 
     }
     expect_checkout_parent(policy::checkout_parent_observation(
         Err::<bool, String>("missing".to_owned()),
-        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+        |error: &String| -> (missing: bool)
+            ensures missing == (error@ == "missing"@),
+        { scope_text::equal_text(error.as_str(), "missing") },
     ), false);
     let suffix = policy::checkout_parent_observation(
         Err::<bool, String>("missing\0detail".to_owned()),
-        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+        |error: &String| -> (missing: bool)
+            ensures missing == (error@ == "missing"@),
+        { scope_text::equal_text(error.as_str(), "missing") },
     );
     expect_checkout_observation_error(suffix, "missing\0detail");
     let full = policy::checkout_parent_observation(
         Err::<bool, String>("é\npermission".to_owned()),
-        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+        |error: &String| -> (missing: bool)
+            ensures missing == (error@ == "missing"@),
+        { scope_text::equal_text(error.as_str(), "missing") },
     );
     expect_checkout_observation_error(full, "é\npermission");
 }
