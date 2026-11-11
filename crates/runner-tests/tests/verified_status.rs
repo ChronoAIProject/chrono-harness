@@ -3559,6 +3559,113 @@ fn expect_checkout_hash_count(out: Result<u64, String>, expected: u64)
     match out { Ok(value) => expect_status_true(value == expected), Err(_) => panic!() }
 }
 
+fn checkout_dispatch_success(size: u64, source: u8) -> (out: Result<String, String>)
+    ensures if size == u64::MAX && source == 77 {
+        out matches Ok(text) && text@ == "digest: éfn expect_checkout_hash_errorfull\nend"@
+    } else { out matches Err(error) && error@ == "wrong success arguments"@ },
+{
+    if size == u64::MAX && source == 77 { Ok("digest: éfn expect_checkout_hash_errorfull\nend".to_owned()) }
+    else { Err("wrong success arguments".to_owned()) }
+}
+
+fn checkout_dispatch_error(size: u64, source: u8) -> (out: Result<String, String>)
+    ensures if size == 0 && source == 255 {
+        out matches Err(error) && error@ == "read: éfn expect_checkout_hash_errororiginal\nend"@
+    } else { out matches Ok(text) && text@ == "wrong error arguments"@ },
+{
+    if size == 0 && source == 255 { Err("read: éfn expect_checkout_hash_errororiginal\nend".to_owned()) }
+    else { Ok("wrong error arguments".to_owned()) }
+}
+
+fn checkout_dispatch_never(_size: u64, _source: u8) -> Result<String, String>
+    requires false,
+{ panic!() }
+
+fn checkout_dispatch_short_oid() -> (text: &'static str)
+    ensures policy::identifiers::oid(text.spec_bytes()), text.spec_bytes().len() == 40,
+{
+    let text = "1111111111111111111111111111111111111111";
+    proof {
+        reveal_strlit("1111111111111111111111111111111111111111");
+        assert(vstd::string::is_ascii(text));
+        vstd::string::is_ascii_spec_bytes(text);
+        assert(text.spec_bytes()[0] == 49);
+    }
+    text
+}
+
+fn checkout_dispatch_long_oid() -> (text: &'static str)
+    ensures policy::identifiers::oid(text.spec_bytes()), text.spec_bytes().len() == 64,
+{
+    let text = "1111111111111111111111111111111111111111111111111111111111111111";
+    proof {
+        reveal_strlit("1111111111111111111111111111111111111111111111111111111111111111");
+        assert(vstd::string::is_ascii(text));
+        vstd::string::is_ascii_spec_bytes(text);
+        assert(text.spec_bytes()[0] == 49);
+    }
+    text
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_dispatch_sha1_preserves_complete_source_size_and_digest() {
+    let out = policy::checkout_object_hash(checkout_dispatch_short_oid(), u64::MAX, 77u8,
+        checkout_dispatch_success, checkout_dispatch_never);
+    match out {
+        Ok(text) => expect_status_text(text.as_str(), "digest: éfn expect_checkout_hash_errorfull\nend"),
+        _ => panic!(),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_dispatch_sha256_preserves_complete_source_size_and_digest() {
+    let out = policy::checkout_object_hash(checkout_dispatch_long_oid(), u64::MAX, 77u8,
+        checkout_dispatch_never, checkout_dispatch_success);
+    match out {
+        Ok(text) => expect_status_text(text.as_str(), "digest: éfn expect_checkout_hash_errorfull\nend"),
+        _ => panic!(),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_dispatch_sha1_preserves_the_complete_hash_error() {
+    let out = policy::checkout_object_hash(checkout_dispatch_short_oid(), 0, 255u8,
+        checkout_dispatch_error, checkout_dispatch_never);
+    expect_checkout_observation_error(out, "read: éfn expect_checkout_hash_errororiginal\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_dispatch_sha256_preserves_the_complete_hash_error() {
+    let out = policy::checkout_object_hash(checkout_dispatch_long_oid(), 0, 255u8,
+        checkout_dispatch_never, checkout_dispatch_error);
+    expect_checkout_observation_error(out, "read: éfn expect_checkout_hash_errororiginal\nend");
+}
+
+fn checkout_dispatch_invalid_without_hash(text: &str)
+    requires !policy::identifiers::oid(text.spec_bytes()),
+{
+    let out = policy::checkout_object_hash(text, u64::MAX, 0u8,
+        checkout_dispatch_never, checkout_dispatch_never);
+    expect_checkout_observation_error(out, "expected full nonzero lowercase commit OID");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_dispatch_rejects_invalid_oids_before_either_hash() {
+    proof {
+        reveal_strlit(""); reveal_strlit("1");
+        reveal_strlit("0000000000000000000000000000000000000000");
+        assert(vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii("1"));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000000"));
+        vstd::string::is_ascii_spec_bytes("");
+        vstd::string::is_ascii_spec_bytes("1");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000");
+    }
+    checkout_dispatch_invalid_without_hash("");
+    checkout_dispatch_invalid_without_hash("1");
+    checkout_dispatch_invalid_without_hash("0000000000000000000000000000000000000000");
+}
+
 fn expect_checkout_hash_error(out: Result<u64, String>, expected: &str)
     requires out matches Err(message) && message@ == expected@,
 {
