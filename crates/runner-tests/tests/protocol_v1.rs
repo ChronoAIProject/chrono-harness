@@ -2645,6 +2645,17 @@ fn interrupted_nested_launcher_with_live_child_retains_cleanup_failure() {
         "{p:?}"
     );
     assert!(!d.path().join("escaped").exists());
+    let record = p.failure_record.as_ref().unwrap();
+    assert_eq!(record.error.code, "E_PROCESS_OWNERSHIP_CLEANUP");
+    assert_eq!(record.error.context["child_joined"], true);
+    let observed = &record.error.context["ownership_after_cleanup"];
+    assert_eq!(observed["child_pid"], value!(p.child_pid));
+    assert_eq!(observed["consistency"], "independent atomic reads");
+    assert_eq!(observed["cancelled"], true);
+    assert!(observed["generation"].as_u64().unwrap() > 0);
+    assert!(observed["launches"].as_array().unwrap().iter().any(|slot| {
+        slot["slot"] == observed["slot"] && slot["generation"] == observed["generation"]
+    }));
 }
 
 #[test]
