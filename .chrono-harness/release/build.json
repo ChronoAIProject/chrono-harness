@@ -364,7 +364,6 @@
       "needs": [
         "build_runner",
         "build_judge_ci",
-        "build_ci",
         "build_judge_registration"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
@@ -782,11 +781,10 @@
       ]
     },
     "verify_ci_tests": {
-      "need": "ci-tests 调用 runner、judge-ci、chrono-ci 和 registration 发布 CLI，核生成宿主检查、固定 Git 输入与原回执；worktree CLI 由测试项目从生产 main.rs 编译，不消费 worktree 发布资产。",
+      "need": "ci-tests 复用已有 chrono-ci-test-cli，由 Cargo 从唯一生产 main.rs 编译；worktree CLI 同样由测试项目编译。真实宿主测试仍消费 runner、judge-ci 和 registration 发布 CLI，核生成检查、固定 Git 输入与原回执。",
       "release_assets": [
         "chrono-harness",
         "chrono-judge-ci",
-        "chrono-ci",
         "chrono-judge-registration"
       ]
     },

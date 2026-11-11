@@ -297,6 +297,19 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
         .filter(|s| !s.is_empty())
         .ok_or_else(|| format!("missing {key}"))
 }
+
+struct JsonBindingReferences<'a>(&'a [Value]);
+
+impl verified_git_binding::BindingReferenceRows for JsonBindingReferences<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn id(&self, index: usize) -> Option<&str> {
+        self.0[index]["id"].as_str()
+    }
+}
+
 /// Validate the new link without interpreting any historical config as v3.
 pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
     if !matches!(config["schema_version"].as_u64(), Some(3 | 4)) {
@@ -318,18 +331,11 @@ pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
         );
     }
     let unique = |collection: &Value, id: &str| -> Result<usize, String> {
-        let items = collection
+        let rows = collection
             .as_array()
-            .ok_or("binding collection must be array")?;
-        let hits: Vec<_> = items
-            .iter()
-            .enumerate()
-            .filter(|(_, v)| v["id"] == id)
-            .collect();
-        if hits.len() != 1 {
-            return Err(format!("missing/ambiguous facts_git reference {id}"));
-        }
-        Ok(hits[0].0)
+            .map(|rows| JsonBindingReferences(rows));
+        verified_git_binding::unique_binding_reference(rows.as_ref(), id)?
+            .ok_or_else(|| format!("missing/ambiguous facts_git reference {id}"))
     };
     let tool = &config["tools"][unique(&config["tools"], text(&config["facts_git"], "tool")?)?];
     let input = link

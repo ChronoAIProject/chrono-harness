@@ -1321,7 +1321,6 @@
         "build.runner",
         "build.judge-registration",
         "build.judge-ci",
-        "build.ci",
         "test.ci-tests",
         "ci.verify",
         "ci.release.verify",

@@ -55,12 +55,7 @@ fn write(root: &Path, path: &str, value: &Value) {
     fs::write(target, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
 fn cli(root: &Path, args: &[&str]) -> std::process::Output {
-    let host = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
-    Command::new(host.join("crates/ci/target/debug/chrono-ci"))
+    Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
         .args(args)
         .current_dir(root)
         .output()

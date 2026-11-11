@@ -51,7 +51,7 @@ fn context(h: &Host, base: &str) -> Vec<u8> {
     format!(" {{\n\t\"schema_version\": 2, \"run_kind\": \"integration\", \"base\": \"{base}\", \"candidate\": \"{}\",\n\"branch_started_at\": \"2001-02-03T04:05:06Z\", \"note\": \"λ $HOME `literal`\" }}\n",h.candidate).into_bytes()
 }
 fn cli(root: &Path, args: &[&str]) -> std::process::Output {
-    Command::new(Path::new(env!("CARGO_MANIFEST_DIR")).join("../ci/target/debug/chrono-ci"))
+    Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
         .current_dir(root)
         .args(args)
         .output()
