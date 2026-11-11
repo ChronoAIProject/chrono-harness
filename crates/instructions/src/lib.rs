@@ -1,18 +1,18 @@
 //! Explicit host instruction generation. No judge execution or host discovery.
 
 mod catalog;
-mod transaction;
 #[doc(hidden)]
 pub mod publication_decision;
+mod transaction;
 
 use catalog::{Atom, Catalog, Content, Format, Manifest, Variant};
 use std::collections::{BTreeMap, BTreeSet};
 
+use serde_json::json;
 use std::ffi::{OsStr, OsString};
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::os::unix::ffi::OsStrExt;
-use serde_json::json;
+use std::path::{Path, PathBuf};
 use transaction::{Change, Fault, Snapshot};
 
 const MANIFEST: &str = ".chrono-harness/instructions/manifest.json";
@@ -41,7 +41,12 @@ impl InitSources {
         };
         let methodology = methodology.map(&mut read).transpose()?;
         let context = context.map(&mut read).transpose()?;
-        Ok(Self { methodology, context, locale: None, external })
+        Ok(Self {
+            methodology,
+            context,
+            locale: None,
+            external,
+        })
     }
 }
 
@@ -97,11 +102,34 @@ fn regular(path: &Path) -> Result<Option<Snapshot>, String> {
     let after = fs::symlink_metadata(path).map_err(|e| error(path, e))?;
     use std::os::unix::fs::MetadataExt;
     if chrono_harness::artifact_disposal::identity(path)? != identity
-        || (meta.len(), meta.mode(), meta.mtime(), meta.mtime_nsec(), meta.ctime(), meta.ctime_nsec(), meta.nlink())
-            != (after.len(), after.mode(), after.mtime(), after.mtime_nsec(), after.ctime(), after.ctime_nsec(), after.nlink()) {
-        return Err(error(path, "regular file identity/content changed during read"));
+        || (
+            meta.len(),
+            meta.mode(),
+            meta.mtime(),
+            meta.mtime_nsec(),
+            meta.ctime(),
+            meta.ctime_nsec(),
+            meta.nlink(),
+        ) != (
+            after.len(),
+            after.mode(),
+            after.mtime(),
+            after.mtime_nsec(),
+            after.ctime(),
+            after.ctime_nsec(),
+            after.nlink(),
+        )
+    {
+        return Err(error(
+            path,
+            "regular file identity/content changed during read",
+        ));
     }
-    Ok(Some(Snapshot { bytes, permissions: meta.permissions(), identity }))
+    Ok(Some(Snapshot {
+        bytes,
+        permissions: meta.permissions(),
+        identity,
+    }))
 }
 
 fn utf8(path: &Path, bytes: &[u8]) -> Result<(), String> {
@@ -109,7 +137,6 @@ fn utf8(path: &Path, bytes: &[u8]) -> Result<(), String> {
         .map(|_| ())
         .map_err(|e| error(path, format!("expected UTF-8: {e}")))
 }
-
 
 fn positions(bytes: &[u8], needle: &[u8]) -> Vec<usize> {
     bytes
@@ -173,8 +200,10 @@ fn relative(path: &str, source: bool) -> Result<(), String> {
     {
         return Err(format!("{path:?}: expected canonical relative path"));
     }
-    if [".chrono-harness/state", ".chrono-harness/retention.json"].iter()
-        .any(|reserved| path == *reserved || path.starts_with(&format!("{reserved}/"))) {
+    if [".chrono-harness/state", ".chrono-harness/retention.json"]
+        .iter()
+        .any(|reserved| path == *reserved || path.starts_with(&format!("{reserved}/")))
+    {
         return Err(format!("{path}: reserved instruction state or policy path"));
     }
     if source && !path.starts_with(".chrono-harness/") {
@@ -490,7 +519,10 @@ fn prepare(
         };
         files.insert(path.to_owned(), bytes);
     }
-    let external = selected.as_mut().map(|s| std::mem::take(&mut s.external)).unwrap_or_default();
+    let external = selected
+        .as_mut()
+        .map(|s| std::mem::take(&mut s.external))
+        .unwrap_or_default();
     if let Some(sources) = selected {
         let conflict = || {
             error(
@@ -634,21 +666,32 @@ pub fn init_with_defaults(
 }
 
 fn run_init(
-    host: &Path, methodology: Option<&Path>, context: Option<&Path>,
-    locale: Option<&OsStr>, fault: Fault,
+    host: &Path,
+    methodology: Option<&Path>,
+    context: Option<&Path>,
+    locale: Option<&OsStr>,
+    fault: Fault,
 ) -> Result<Vec<PathBuf>, String> {
     let path_bytes = |path: &Path| path.as_os_str().as_bytes().to_vec();
-    transaction::run(host, "init", json!({
-        "methodology_path":methodology.map(path_bytes),
-        "host_context_path":context.map(path_bytes),
-        "locale":locale.map(OsStrExt::as_bytes),
-        "cwd":std::env::current_dir().map_err(|e| e.to_string())?.as_os_str().as_bytes(),
-        "version":env!("CARGO_PKG_VERSION"),
-    }), fault, |root| {
-        let mut selected = InitSources::read(methodology, context)?;
-        selected.locale = locale.map(|l| l.to_str().ok_or("locale must be UTF-8").map(str::to_owned)).transpose()?;
-        prepare(root, Some(selected))
-    })
+    transaction::run(
+        host,
+        "init",
+        json!({
+            "methodology_path":methodology.map(path_bytes),
+            "host_context_path":context.map(path_bytes),
+            "locale":locale.map(OsStrExt::as_bytes),
+            "cwd":std::env::current_dir().map_err(|e| e.to_string())?.as_os_str().as_bytes(),
+            "version":env!("CARGO_PKG_VERSION"),
+        }),
+        fault,
+        |root| {
+            let mut selected = InitSources::read(methodology, context)?;
+            selected.locale = locale
+                .map(|l| l.to_str().ok_or("locale must be UTF-8").map(str::to_owned))
+                .transpose()?;
+            prepare(root, Some(selected))
+        },
+    )
 }
 
 /// Validate registered sources and refresh the guide and alias while preserving host-owned bytes.
@@ -657,7 +700,13 @@ pub fn generate(host: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 fn run_generate(host: &Path, fault: Fault) -> Result<Vec<PathBuf>, String> {
-    transaction::run(host, "generate", json!({"version":env!("CARGO_PKG_VERSION")}), fault, |root| prepare(root, None))
+    transaction::run(
+        host,
+        "generate",
+        json!({"version":env!("CARGO_PKG_VERSION")}),
+        fault,
+        |root| prepare(root, None),
+    )
 }
 
 /// Query exact retained operations. An unavailable attempt is never evidence of success.
@@ -680,7 +729,14 @@ pub mod test_support {
         after: usize,
         rollback: Option<usize>,
     ) -> Result<Vec<PathBuf>, String> {
-        run_generate(host, Fault { after: Some(after), rollback, ..Fault::default() })
+        run_generate(
+            host,
+            Fault {
+                after: Some(after),
+                rollback,
+                ..Fault::default()
+            },
+        )
     }
 
     pub fn init_with_failure(
@@ -690,23 +746,62 @@ pub mod test_support {
         after: usize,
         rollback: Option<usize>,
     ) -> Result<Vec<PathBuf>, String> {
-        run_init(host, Some(method), Some(context), None, Fault { after: Some(after), rollback, ..Fault::default() })
+        run_init(
+            host,
+            Some(method),
+            Some(context),
+            None,
+            Fault {
+                after: Some(after),
+                rollback,
+                ..Fault::default()
+            },
+        )
     }
 
     pub fn generate_with_state_failure(host: &Path, point: &str) -> Result<Vec<PathBuf>, String> {
-        run_generate(host, Fault { fail: Some(point.into()), ..Fault::default() })
+        run_generate(
+            host,
+            Fault {
+                fail: Some(point.into()),
+                ..Fault::default()
+            },
+        )
     }
 
-    pub fn init_with_checkpoint(host: &Path, method: &Path, context: &Path, hook: fn(&str)) -> Result<Vec<PathBuf>, String> {
-        run_init(host, Some(method), Some(context), None, Fault { checkpoint: Some(hook), ..Fault::default() })
+    pub fn init_with_checkpoint(
+        host: &Path,
+        method: &Path,
+        context: &Path,
+        hook: fn(&str),
+    ) -> Result<Vec<PathBuf>, String> {
+        run_init(
+            host,
+            Some(method),
+            Some(context),
+            None,
+            Fault {
+                checkpoint: Some(hook),
+                ..Fault::default()
+            },
+        )
     }
 
     /// Synchronize the owning Rust subprocess at an exact publication boundary.
     pub fn operation_with_checkpoint(
-        host: &Path, init: bool, hook: fn(&str),
+        host: &Path,
+        init: bool,
+        hook: fn(&str),
     ) -> Result<Vec<PathBuf>, String> {
-        let fault = Fault { checkpoint: Some(hook), ..Fault::default() };
-        if init { run_init(host, None, None, None, fault) } else { run_generate(host, fault) }
+        let fault = Fault {
+            checkpoint: Some(hook),
+            ..Fault::default()
+        };
+        if init {
+            run_init(host, None, None, None, fault)
+        } else {
+            run_generate(host, fault)
+        }
     }
 }
 
@@ -787,14 +882,22 @@ pub fn dispatch(args: &[OsString]) -> CliOutput {
                 Some(None) => Err("attempt must be a UTF-8 host-relative original path".into()),
                 name => status(&host, name.flatten()),
             }
-        } else { maintain(&host) };
+        } else {
+            maintain(&host)
+        };
         return match result {
             Ok(value) => reply(0, format!("{value}\n"), String::new()),
             Err(error) => reply(1, String::new(), format!("E_STATE: {error}\n")),
         };
     }
     let result = if is_init {
-        run_init(&host, method.as_deref(), context.as_deref(), locale.as_deref().map(Path::as_os_str), Fault::default())
+        run_init(
+            &host,
+            method.as_deref(),
+            context.as_deref(),
+            locale.as_deref().map(Path::as_os_str),
+            Fault::default(),
+        )
     } else {
         generate(&host)
     };

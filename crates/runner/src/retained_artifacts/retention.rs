@@ -436,9 +436,12 @@ impl Inventory {
             return Err("invalid finite output retention policy".into());
         }
         for (producer, limits) in &policy.terminal_limits {
-            if !policy.producers.contains_key(producer) || limits.keep_seconds == 0
-                || limits.max_count == 0 || limits.max_bytes == 0
-                || limits.max_count > policy.max_manifest_nodes as u64 {
+            if !policy.producers.contains_key(producer)
+                || limits.keep_seconds == 0
+                || limits.max_count == 0
+                || limits.max_bytes == 0
+                || limits.max_count > policy.max_manifest_nodes as u64
+            {
                 return Err("invalid producer terminal retention limits".into());
             }
         }
@@ -867,15 +870,31 @@ impl Inventory {
     }
     /// Read the original owner's current recovery attachment, without finding
     /// operations by traversing unrelated output directories.
-    pub fn rooted_original(&self, producer: &str, role: &str) -> Result<Option<(String, String, String, Value)>, String> {
+    pub fn rooted_original(
+        &self,
+        producer: &str,
+        role: &str,
+    ) -> Result<Option<(String, String, String, Value)>, String> {
         let gate = self.addressed_gate(&[], &[], &[role.into()], None, false, true)?;
         let ledger = self.load(&gate)?;
         self.stable(&gate)?;
-        let Some(ids) = ledger.roots.get(role) else { return Ok(None) };
-        let [id] = ids.as_slice() else { return Err("expected one rooted original".into()) };
-        let output = ledger.outputs.iter().find(|o| &o.id == id && o.producer == producer)
+        let Some(ids) = ledger.roots.get(role) else {
+            return Ok(None);
+        };
+        let [id] = ids.as_slice() else {
+            return Err("expected one rooted original".into());
+        };
+        let output = ledger
+            .outputs
+            .iter()
+            .find(|o| &o.id == id && o.producer == producer)
             .ok_or("rooted original has no matching producer")?;
-        Ok(Some((output.id.clone(), output.path.clone(), output.phase.clone(), output.outcome.clone())))
+        Ok(Some((
+            output.id.clone(),
+            output.path.clone(),
+            output.phase.clone(),
+            output.outcome.clone(),
+        )))
     }
 
     /// Resume only the original rooted creation, before a domain can have
@@ -883,41 +902,77 @@ impl Inventory {
     pub fn materialize_rooted(&self, producer: &str, role: &str) -> Result<(), String> {
         let gate = self.addressed_gate(&[], &[], &[role.into()], None, false, true)?;
         let mut ledger = self.load(&gate)?;
-        let ids = ledger.roots.get(role).ok_or("creation recovery root missing")?;
-        let [id] = ids.as_slice() else { return Err("creation recovery requires exactly one original".into()) };
+        let ids = ledger
+            .roots
+            .get(role)
+            .ok_or("creation recovery root missing")?;
+        let [id] = ids.as_slice() else {
+            return Err("creation recovery requires exactly one original".into());
+        };
         let id = id.clone();
-        let output = ledger.outputs.iter_mut().find(|o| o.id == id && o.producer == producer)
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == id && o.producer == producer)
             .ok_or("creation recovery producer mismatch")?;
-        if !output.tree || output.creation.is_none() || !matches!(output.phase.as_str(), "reserving" | "creating") {
+        if !output.tree
+            || output.creation.is_none()
+            || !matches!(output.phase.as_str(), "reserving" | "creating")
+        {
             return Err("original is not an interrupted directory creation".into());
         }
-        let lease = Lease::acquire(&self.directory.join(&output.lease),
+        let lease = Lease::acquire(
+            &self.directory.join(&output.lease),
             (!output.lease_id.is_empty()).then_some(output.lease_id.as_str()),
-            output.lease_id.is_empty(), true, None)?.ok_or("creation has live producer/readers")?;
+            output.lease_id.is_empty(),
+            true,
+            None,
+        )?
+        .ok_or("creation has live producer/readers")?;
         output.lease_id = lease.id().into();
         output.phase = "creating".into();
         let initial = Arc::clone(&output.value);
         self.save(&ledger, &gate)?;
         let publication = Publication {
             inventory: Inventory::with_standalone_policy(&self.root, &self.policy_bytes)?,
-            id, path: initial.path.clone(), identity: RefCell::new(initial.identity.clone()),
-            tree: true, written: Cell::new(0), written_nodes: Cell::new(1),
-            byte_limit: initial.byte_limit.unwrap_or(self.policy.max_output_bytes), initial, lease,
+            id,
+            path: initial.path.clone(),
+            identity: RefCell::new(initial.identity.clone()),
+            tree: true,
+            written: Cell::new(0),
+            written_nodes: Cell::new(1),
+            byte_limit: initial.byte_limit.unwrap_or(self.policy.max_output_bytes),
+            initial,
+            lease,
         };
         publication.materialize_excluded(&mut ledger, &gate, None, None)
     }
 
     /// The enclosing caller observed this evaluator return. This is separate
     /// from publication facts, API transport and an unobserved process exit.
-    pub fn observe_producer_return(&self, producer: &str, path: &str, result: Value) -> Result<(), String> {
-        if serde_json::to_vec(&result).map_err(|e| e.to_string())?.len() > 16384 {
+    pub fn observe_producer_return(
+        &self,
+        producer: &str,
+        path: &str,
+        result: Value,
+    ) -> Result<(), String> {
+        if serde_json::to_vec(&result)
+            .map_err(|e| e.to_string())?
+            .len()
+            > 16384
+        {
             return Err("producer return observation byte bound".into());
         }
         let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
         let mut ledger = self.load(&gate)?;
-        let output = ledger.outputs.iter_mut().find(|o| o.producer == producer && o.path == path)
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|o| o.producer == producer && o.path == path)
             .ok_or("producer return original unavailable")?;
-        if output.observed_return.is_some() { return Err("original producer return already observed".into()); }
+        if output.observed_return.is_some() {
+            return Err("original producer return already observed".into());
+        }
         output.observed_return = Some(result);
         self.save(&ledger, &gate)
     }
@@ -1221,8 +1276,7 @@ impl Inventory {
             || !output.tree
             || output.creation.is_some()
             || !(output.phase == "publishing"
-                || (output.phase == "sealing"
-                    && output.outcome["completion"] == "not-established"))
+                || (output.phase == "sealing" && output.outcome["completion"] == "not-established"))
         {
             return Err(
                 "directory publication is completed, disposing or not qualified for resumption"
@@ -1865,12 +1919,18 @@ impl Inventory {
     }
 
     fn keep_seconds(&self, producer: &str) -> u64 {
-        self.policy.terminal_limits.get(producer).map_or(self.policy.keep_seconds, |l| l.keep_seconds)
+        self.policy
+            .terminal_limits
+            .get(producer)
+            .map_or(self.policy.keep_seconds, |l| l.keep_seconds)
     }
 
     // Explicit status/maintenance may enumerate this owner's existing addressed
     // records. Ordinary production never enumerates terminal history.
-    fn producer_snapshot(&self, producer: &str) -> Result<(Vec<OutputRecord>, bool, Vec<Value>), String> {
+    fn producer_snapshot(
+        &self,
+        producer: &str,
+    ) -> Result<(Vec<OutputRecord>, bool, Vec<Value>), String> {
         if !self.policy.producers.contains_key(producer) {
             return Err(format!("unregistered retained producer: {producer}"));
         }
@@ -1879,22 +1939,33 @@ impl Inventory {
         let mut errors = Vec::new();
         let mut read_bytes = 0u64;
         let mut complete = true;
-        for (n, entry) in fs::read_dir(self.directory.join("objects")).map_err(|e| e.to_string())?.enumerate() {
-            if n >= self.policy.max_nodes_per_round || read_bytes >= self.policy.max_metadata_bytes_per_round
-                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128 {
+        for (n, entry) in fs::read_dir(self.directory.join("objects"))
+            .map_err(|e| e.to_string())?
+            .enumerate()
+        {
+            if n >= self.policy.max_nodes_per_round
+                || read_bytes >= self.policy.max_metadata_bytes_per_round
+                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
+            {
                 complete = false;
                 break;
             }
             let entry = entry.map_err(|e| e.to_string())?;
-            let id = entry.file_name().into_string().map_err(|_| "retention object address UTF8")?;
+            let id = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| "retention object address UTF8")?;
             let record = self.object_directory(&id)?.join("record.json");
             let observed = (|| {
-                let length = fs::symlink_metadata(&record).map_err(|e| e.to_string())?.len();
+                let length = fs::symlink_metadata(&record)
+                    .map_err(|e| e.to_string())?
+                    .len();
                 read_bytes = read_bytes.saturating_add(length);
                 if read_bytes > self.policy.max_metadata_bytes_per_round {
                     return Err("producer status metadata byte bound; scope unknown".into());
                 }
-                let gate = self.addressed_gate(std::slice::from_ref(&id), &[], &[], None, false, false)?;
+                let gate =
+                    self.addressed_gate(std::slice::from_ref(&id), &[], &[], None, false, false)?;
                 let ledger = self.load(&gate)?;
                 self.stable(&gate)?;
                 Ok::<_, String>(ledger.outputs.iter().find(|o| o.id == id).cloned())
@@ -1902,7 +1973,10 @@ impl Inventory {
             match observed {
                 Ok(Some(output)) if output.producer == producer => outputs.push(output),
                 Ok(_) => (),
-                Err(error) => { complete = false; errors.push(json!({"id":id,"error":error})); }
+                Err(error) => {
+                    complete = false;
+                    errors.push(json!({"id":id,"error":error}));
+                }
             }
         }
         Ok((outputs, complete, errors))
@@ -1913,21 +1987,35 @@ impl Inventory {
     pub fn producer_status(&self, producer: &str, path: Option<&str>) -> Result<Value, String> {
         let (outputs, complete, errors) = if let Some(path) = path {
             crate::relative_path(path)?;
-            if !self.accepts(producer, path) { return Err("status path is outside producer scope".into()); }
+            if !self.accepts(producer, path) {
+                return Err("status path is outside producer scope".into());
+            }
             let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, false)?;
             let ledger = self.load(&gate)?;
             self.stable(&gate)?;
-            (ledger.outputs.into_iter().filter(|o| o.producer == producer && o.path == path).collect(), true, Vec::new())
-        } else { self.producer_snapshot(producer)? };
+            (
+                ledger
+                    .outputs
+                    .into_iter()
+                    .filter(|o| o.producer == producer && o.path == path)
+                    .collect(),
+                true,
+                Vec::new(),
+            )
+        } else {
+            self.producer_snapshot(producer)?
+        };
         let records: Vec<_> = outputs.iter().map(|o| json!({
             "id":o.id,"path":o.path,"identity":o.identity,"phase":o.phase,
             "outcome":o.outcome,"observed_return":o.observed_return,"sealed":o.manifest.sealed,"expires":o.expires,
             "logical_bytes":if o.manifest.sealed { Some(o.manifest.bytes) } else { None },
         })).collect();
-        Ok(json!({"schema":"chrono-retained-producer-status/v1","producer":producer,
+        Ok(
+            json!({"schema":"chrono-retained-producer-status/v1","producer":producer,
             "availability":if path.is_some() && records.is_empty() {"unavailable-or-retired"} else {"observed"},
             "records":records,"scope_complete":complete,"errors":errors,
-            "terminal_limits":self.policy.terminal_limits.get(producer),"success_inferred":false}))
+            "terminal_limits":self.policy.terminal_limits.get(producer),"success_inferred":false}),
+        )
     }
 
     /// One explicit, bounded maintenance action through the current custodian.
@@ -1937,13 +2025,17 @@ impl Inventory {
         self.maintain_producer_at(producer, now()?)
     }
     pub fn maintain_producer_at(&self, producer: &str, observed: u64) -> Result<Value, String> {
-        if !self.policy.producers.contains_key(producer) { return Err("unregistered retained producer".into()); }
+        if !self.policy.producers.contains_key(producer) {
+            return Err("unregistered retained producer".into());
+        }
         let round = self.maintain_at(observed)?;
         let quota = &round["terminal_quotas"][producer];
-        Ok(json!({"schema":"chrono-retained-producer-maintenance/v1","producer":producer,
+        Ok(
+            json!({"schema":"chrono-retained-producer-maintenance/v1","producer":producer,
             "quota_scope_complete":quota["scope_complete"],"quota_errors":quota["errors"],
             "quota_expired":quota["expired"],"terminal_limits":self.policy.terminal_limits.get(producer),
-            "round":round,"completion":"not-established"}))
+            "round":round,"completion":"not-established"}),
+        )
     }
     fn terminal_quota(&self, producer: &str, observed: u64) -> Result<Value, String> {
         let (mut outputs, mut complete, mut errors) = self.producer_snapshot(producer)?;
@@ -1955,18 +2047,46 @@ impl Inventory {
             if let Some(limits) = self.policy.terminal_limits.get(producer) {
                 let began = Instant::now();
                 for output in &outputs {
-                    if began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128 { complete = false; break; }
-                    if !crate::verified_release::terminal_eligible(output.phase == "released", output.manifest.sealed) { continue; }
-                    if crate::verified_release::terminal_budget(count, bytes, output.manifest.bytes, limits.max_count, limits.max_bytes) {
+                    if began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128 {
+                        complete = false;
+                        break;
+                    }
+                    if !crate::verified_release::terminal_eligible(
+                        output.phase == "released",
+                        output.manifest.sealed,
+                    ) {
+                        continue;
+                    }
+                    if crate::verified_release::terminal_budget(
+                        count,
+                        bytes,
+                        output.manifest.bytes,
+                        limits.max_count,
+                        limits.max_bytes,
+                    ) {
                         count += 1;
                         bytes += output.manifest.bytes;
                     } else if expired.len() < self.policy.max_nodes_per_round {
                         let updated = (|| {
-                            let gate = self.addressed_gate(std::slice::from_ref(&output.id), &[], &[], None, false, false)?;
+                            let gate = self.addressed_gate(
+                                std::slice::from_ref(&output.id),
+                                &[],
+                                &[],
+                                None,
+                                false,
+                                false,
+                            )?;
                             let mut ledger = self.load(&gate)?;
-                            if let Some(current) = ledger.outputs.iter_mut().find(|o| o.id == output.id) {
-                                if current.phase == "released" && current.manifest.sealed && current.identity == output.identity {
-                                    if current.expires <= observed { return Ok(true); }
+                            if let Some(current) =
+                                ledger.outputs.iter_mut().find(|o| o.id == output.id)
+                            {
+                                if current.phase == "released"
+                                    && current.manifest.sealed
+                                    && current.identity == output.identity
+                                {
+                                    if current.expires <= observed {
+                                        return Ok(true);
+                                    }
                                     current.expires = current.expires.min(observed);
                                     self.save(&ledger, &gate)?;
                                     return Ok::<_, String>(true);
@@ -1998,15 +2118,19 @@ impl Inventory {
                 quotas.insert(producer.clone(), json!({"scope_complete":false,"expired":[],"errors":["quota observation deadline; scope unknown"]}));
                 break;
             }
-            let quota = self.terminal_quota(producer, observed).unwrap_or_else(|error|
-                json!({"scope_complete":false,"expired":[],"errors":[error]}));
+            let quota = self.terminal_quota(producer, observed).unwrap_or_else(
+                |error| json!({"scope_complete":false,"expired":[],"errors":[error]}),
+            );
             quotas.insert(producer.clone(), quota);
         }
         self.round_metadata
             .set(Some(self.policy.max_metadata_bytes_per_round));
         let result = self.maintain_round(observed, None);
         self.round_metadata.set(None);
-        result.map(|mut result| { result["terminal_quotas"] = json!(quotas); result })
+        result.map(|mut result| {
+            result["terminal_quotas"] = json!(quotas);
+            result
+        })
     }
     /// Shared explicit selection bounds for migration and maintenance.
     fn validate_originals(&self, originals: &[String]) -> Result<(), String> {
@@ -2292,8 +2416,11 @@ impl Inventory {
                 }
                 if l.outputs[index].manifest.sealed {
                     l.outputs[index].reserved_bytes = l.outputs[index].manifest.bytes;
-                    if crate::verified_release::resumed_seal(l.outputs[index].phase == "sealing",
-                        l.outputs[index].manifest.sealed, l.outputs[index].outcome["completion"] == "not-established") {
+                    if crate::verified_release::resumed_seal(
+                        l.outputs[index].phase == "sealing",
+                        l.outputs[index].manifest.sealed,
+                        l.outputs[index].outcome["completion"] == "not-established",
+                    ) {
                         l.outputs[index].phase = "released".into();
                     }
                 }
@@ -2913,8 +3040,15 @@ impl Inventory {
 }
 fn domain_recovery_rooted(ledger: &Ledger, output: &Output) -> bool {
     let role = output.outcome["recovery_role"].as_str();
-    crate::verified_release::domain_recovery(role.is_some(), role.is_some_and(|role|
-        ledger.roots.get(role).is_some_and(|ids| ids.contains(&output.id))))
+    crate::verified_release::domain_recovery(
+        role.is_some(),
+        role.is_some_and(|role| {
+            ledger
+                .roots
+                .get(role)
+                .is_some_and(|ids| ids.contains(&output.id))
+        }),
+    )
 }
 
 impl Publication {
@@ -2975,33 +3109,56 @@ impl Publication {
         match fs::symlink_metadata(&target) {
             Ok(_) => {
                 if o.identity.is_empty() || identity(&target)? != o.identity {
-                    return Err("creation destination identity changed; preserve replacement".into());
+                    return Err(
+                        "creation destination identity changed; preserve replacement".into(),
+                    );
                 }
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 match fs::symlink_metadata(&staged) {
                     Ok(meta) => {
                         let empty = if o.tree && meta.is_dir() {
-                            fs::read_dir(&staged).map_err(|e| e.to_string())?.next().is_none()
-                        } else { !o.tree && meta.is_file() && meta.len() == 0 };
+                            fs::read_dir(&staged)
+                                .map_err(|e| e.to_string())?
+                                .next()
+                                .is_none()
+                        } else {
+                            !o.tree && meta.is_file() && meta.len() == 0
+                        };
                         if !empty || (!o.identity.is_empty() && identity(&staged)? != o.identity) {
-                            return Err("creation staging identity/content changed; preserve original".into());
+                            return Err(
+                                "creation staging identity/content changed; preserve original"
+                                    .into(),
+                            );
                         }
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                        if !o.identity.is_empty() { return Err("bound creation inode missing; preserve intent".into()); }
-                        if o.tree { fs::create_dir(&staged).map_err(|e| e.to_string())?; }
-                        else { fs::OpenOptions::new().write(true).create_new(true).open(&staged)
-                            .map_err(|e| e.to_string())?.sync_all().map_err(|e| e.to_string())?; }
+                        if !o.identity.is_empty() {
+                            return Err("bound creation inode missing; preserve intent".into());
+                        }
+                        if o.tree {
+                            fs::create_dir(&staged).map_err(|e| e.to_string())?;
+                        } else {
+                            fs::OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(&staged)
+                                .map_err(|e| e.to_string())?
+                                .sync_all()
+                                .map_err(|e| e.to_string())?;
+                        }
                     }
                     Err(error) => return Err(error.to_string()),
                 }
                 o.identity = identity(&staged)?;
-                fs::File::open(&staged).and_then(|f| f.sync_all()).map_err(|e| e.to_string())?;
+                fs::File::open(&staged)
+                    .and_then(|f| f.sync_all())
+                    .map_err(|e| e.to_string())?;
                 self.inventory.save(l, gate)?;
                 crate::artifact_disposal::publish_entry(&staged, &target)?;
                 fs::File::open(target.parent().ok_or("creation parent")?)
-                    .and_then(|f| f.sync_all()).map_err(|e| e.to_string())?;
+                    .and_then(|f| f.sync_all())
+                    .map_err(|e| e.to_string())?;
             }
             Err(error) => return Err(error.to_string()),
         }
