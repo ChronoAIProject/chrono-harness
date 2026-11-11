@@ -11,17 +11,19 @@
 
 ## 当前接入方式
 
-四个示例的默认分支都是 `dev`，安装声明位于各自的 `.chrono-harness/distribution.json`，锁定独立发布 beta.20。它们下载选定的发布工具，不编译本仓 Rust 源码，也不提交工具二进制、SDK 或缓存。指南选择由各自 `.chrono-harness/instructions/` 维护，`AGENTS.md` 是指向 `CLAUDE.md` 的相对符号链接。
+四个示例的默认分支都是 `dev`，安装声明位于各自 `.chrono-harness/distribution.json`，共同锁定已公开测试版 [`v0.1.0-dev.42997777130.1.g0f081567fe9ce64c439b2c7a8e893ca403d5eec7`](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-dev.42997777130.1.g0f081567fe9ce64c439b2c7a8e893ca403d5eec7)。安装由该版本的清单与所选工具表生成 `install.sh`，校验 installer、清单和资产的摘要、长度及真实版本；不编译本仓 Rust 源码，也不提交工具、SDK 或缓存。各宿主的指南选择保留，`AGENTS.md` 仍是指向 `CLAUDE.md` 的相对符号链接。
 
-Go、TS、混合示例采用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`，在 `.chrono-harness/ci/units.json` 明确登记单元、工作流、SDK、测试计划及依赖。Go 有 harness／rates 两个单元，TS 有 harness／labels 两个单元，混合示例有 harness、labels、normalize、rates 四个单元；harness 与汇总不安装业务 SDK。首次接入示例采用独立 `chrono-github-ci/v2`，只登记 macOS arm64／`macos-14`。
+Go、TS、混合语言使用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`，collection provider 为 v4。父 workflow 先检测明确登记的 DELTA，再运行所选独立 job 并汇总原件。Go 的 harness／rates、TS 的 harness／labels、混合的 harness／labels／normalize／rates 分配与业务 SDK profile 均保留；harness 和汇总不安装无关业务 SDK。首次接入使用独立 v4 provider，保留单独的初始清单 profile、普通 DELTA profile，以及空 projects／scripts／units，runner 明确选 macOS arm64／`macos-26`。
 
-这几份旧发布配置仍使用该版本的显式参数命令，不能据此推导本仓当前短命令已经在这些宿主采用。Go 的平台 Git 政策接入见 [PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18)，公开产物清单排除接入见 [PR #19](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/19)。版本和行为升级按[宿主定制与更新](ci-units.md#host-customization-and-updates)明确迁移。
+四个宿主现已采用 schema4 短命令：普通 `.chrono-harness/bin/chrono-harness check`，单元追加 `--unit ID`，汇总追加无值 `--collect`。profile 的 registration_config 和 facts_config 都绑定根入口；Go 的根入口选择 macOS／Linux 完整政策，保留其精确 Git pin、global 配置摘要和缺席 include。其余宿主不套用 Go 的预期值。schema、安装、生成和行为升级仍须按[宿主定制与更新](ci-units.md#host-customization-and-updates)显式迁移。
 
 ## 验证范围
 
-固定旧发布已有本地 macOS 和原生 CI 的有限采用，包括单元执行、原报告汇总、取消后的选择性重试，以及业务失败时无关单元继续。具体候选、运行、原报告和失败直接查各宿主的 PR、Actions 和发布原件；本仓不维护运行表、测试数量、报告大小或安装摘要的副本。
+本轮四个宿主均完成 feature → integration → dev 的真实合并，且当前固定版本对应的本地 canonical 和 dev 落地检查通过。交付原件分别见 [Go PR #28](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/28)、[TS PR #25](https://github.com/ChronoAIProject/chrono-harness-examples-ts/pull/25)、[混合语言 PR #25](https://github.com/ChronoAIProject/chrono-harness-examples-mix/pull/25)、[首次接入 PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-initial/pull/18)。Go／TS／混合语言的原生 CI 为 Ubuntu 24.04；首次接入为 macOS 26。公开发行的 Linux／macOS 安装还由发布工作流分别验证。
 
-这些观察不证明当前候选或 beta.20 的原生采用、完整有效输入、七判官全面启用、跨平台同判，也不覆盖全部恢复状态。旧失败和未知结果仍按各自原件解释，后续成功不补作历史证据；原件不可取得时保持未验证，本文说明不能代替原字节。当前产品缺口归[覆盖表](spec-coverage.md)。
+Go 的原 Linux Git pin 漂移已按该候选 bootstrap 原日志显式更新，未放宽约束。首次接入旧 runner 的不可调度注释已定位并迁移；Python 安装器退役后，GitHub 默认 CodeQL 仍固定 Python，原扫描以提取 0 个模块失败。该树已无 Python，现有凭据无法访问扫描配置；当前 actions 扫描及登记的 canonical 检查通过。远端无源扫描配置的清理仍受既有权限限制，不记成已修复或扫描通过，也不增加空源文件。
+
+这些结果覆盖当前 scoped 采用，不证明全部 SPEC、完整有效输入、七判官全面启用或跨平台同判。当前版本没有重新执行无父初始 push；该项仅保留历史事实，不把普通 DELTA 结果冒充首次清单验收。原失败和 unknown 仍按各自原件解释；原件不可取得时保持未验证。具体源码、run／attempt、报告和摘要由各宿主与发布原件维护，本仓不复制长期运行表。当前产品缺口归[覆盖表](spec-coverage.md)。
 
 ## 可复制的当前源码示例
 
