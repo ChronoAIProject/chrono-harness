@@ -130,6 +130,8 @@ worktree 两个测试组由 Cargo 从唯一 runner 生产 `main.rs` 编译测试
 
 judge-ci 测试也从同一生产 `main.rs` 编译 runner 测试 CLI，两个真实 CLI 调用使用 Cargo 提供的路径。该测试计划不再前置 `build.runner`，对应单元不再恢复生产 runner 缓存；生产 runner 及其他使用方保留。测试根继续使用原锁和开发配置，原断言、测试线程和时限不变；测试与生产的编译配置不同，不声称执行物字节或性能相同，完整成本收益未测。
 
+cost 和 mixed 两个测试项目也从 runner 唯一生产 `main.rs` 编译同名测试 CLI，共享 Host 从各自 Cargo 提供的路径读取并安装它，继续绑定实际字节摘要。两个计划不再前置 `build.runner`，对应单元不再恢复生产 runner 缓存；registration、filemap、cost 和 mixed 判官的实际构建及调用保留。原锁、开发配置、未过滤测试、断言、线程和时限不变，完整成本收益未测。
+
 runner 和 diagnostics 使用普通锁定 Cargo 构建，core 按当前消费者安装所需工具。项目 action、单元、缓存和发布集合由各自登记维护。
 
 诊断单元直接验证导入 core，执行原格式、锁定构建和行为测试；不再准备专属保护工具、私有离线领域或目录观察。共享工具的验证／导入合同保持如下。

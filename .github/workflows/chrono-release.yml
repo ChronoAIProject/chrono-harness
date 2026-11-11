@@ -2635,7 +2635,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_cost_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost"]
+    needs: ["linux_release_frontend","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2658,7 +2658,6 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_11
-      - *chrono_release_download_10
       - *chrono_release_download_7
       - *chrono_release_download_4
       - *chrono_release_download_3
@@ -2735,7 +2734,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_mixed_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost","linux_build_judge_mixed"]
+    needs: ["linux_release_frontend","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost","linux_build_judge_mixed"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2758,7 +2757,6 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_11
-      - *chrono_release_download_10
       - *chrono_release_download_7
       - *chrono_release_download_4
       - *chrono_release_download_3
@@ -5692,7 +5690,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_cost_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost"]
+    needs: ["macos_release_frontend","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5715,7 +5713,6 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_23
-      - *chrono_release_download_22
       - *chrono_release_download_19
       - *chrono_release_download_16
       - *chrono_release_download_15
@@ -5792,7 +5789,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_mixed_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost","macos_build_judge_mixed"]
+    needs: ["macos_release_frontend","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost","macos_build_judge_mixed"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5815,7 +5812,6 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_23
-      - *chrono_release_download_22
       - *chrono_release_download_19
       - *chrono_release_download_16
       - *chrono_release_download_15

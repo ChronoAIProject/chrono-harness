@@ -861,8 +861,7 @@
           "check.judge-cost",
           "check.judge-cost-tests",
           "check.judge-filemap",
-          "check.judge-registration",
-          "check.runner"
+          "check.judge-registration"
         ],
         "save_caches": [
           "check.judge-cost",
@@ -886,8 +885,7 @@
           "check.judge-filemap",
           "check.judge-mixed",
           "check.judge-mixed-tests",
-          "check.judge-registration",
-          "check.runner"
+          "check.judge-registration"
         ],
         "save_caches": [
           "check.judge-mixed",

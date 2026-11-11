@@ -35,8 +35,14 @@ impl Host {
             ("judge-filemap", "chrono-judge-filemap"),
             ("judge-cost", "chrono-judge-cost"),
         ] {
-            let bytes = fs::read(source().join(format!("crates/{project}/target/debug/{binary}")))
-                .unwrap_or_else(|e| panic!("build registered {project} binary first: {e}"));
+            let executable = if project == "runner" {
+                Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli")).to_path_buf()
+            } else {
+                source().join(format!("crates/{project}/target/debug/{binary}"))
+            };
+            let bytes = fs::read(&executable).unwrap_or_else(|e| {
+                panic!("read registered {project} executable {executable:?}: {e}")
+            });
             fs::write(root.join(format!(".chrono-harness/bin/{binary}")), &bytes).unwrap();
             #[cfg(unix)]
             {
