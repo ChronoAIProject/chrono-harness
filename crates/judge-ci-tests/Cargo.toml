@@ -37,3 +37,9 @@ name = "chrono-test-scoped-git"
 path = "../ci-tests/tests/support/git.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-judge-ci-test-cli"
+path = "../judge-ci/src/main.rs"
+test = false
+bench = false
