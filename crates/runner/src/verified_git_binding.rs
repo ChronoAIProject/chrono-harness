@@ -349,6 +349,15 @@ pub open spec fn identity_failure_at(
         ) == Some(error)
 }
 
+pub open spec fn identity_walk_failure(
+    rows: Seq<SelectorRow>, v3: bool, hashes: Set<Seq<char>>, paths: Set<Seq<char>>,
+    error: Seq<char>,
+) -> bool {
+    exists|i: int| #[trigger] identity_failure_at(rows, v3, i, error)
+        && hashes == identity_row_hashes(&rows[i], v3, identity_prefix_hashes(rows, i))
+        && paths == identity_prefix_paths(rows, i)
+}
+
 /// 按原顺序收集全部目标；失败精确对应首个不合格行及该行产生的集合状态。
 pub fn collect_identity_paths<'a, R: SelectorRows<'a>, S: SelectorSeen<'a>>(
     rows: &R, v3: bool, hashes: &mut S, paths: &mut S,
@@ -362,10 +371,7 @@ pub fn collect_identity_paths<'a, R: SelectorRows<'a>, S: SelectorSeen<'a>>(
                 rows.rows()[i].path == Some(#[trigger] collected@[i]))
             && hashes.seen() == identity_prefix_hashes(rows.rows(), rows.rows().len() as int)
             && paths.seen() == identity_prefix_paths(rows.rows(), rows.rows().len() as int),
-        Err(error) => exists|i: int| #[trigger] identity_failure_at(rows.rows(), v3, i, error@)
-            && hashes.seen() == identity_row_hashes(&rows.rows()[i], v3,
-                identity_prefix_hashes(rows.rows(), i))
-            && paths.seen() == identity_prefix_paths(rows.rows(), i),
+        Err(error) => identity_walk_failure(rows.rows(), v3, hashes.seen(), paths.seen(), error@),
     },
 {
     let count = rows.len();
@@ -402,10 +408,7 @@ pub fn collect_identity_paths<'a, R: SelectorRows<'a>, S: SelectorSeen<'a>>(
                 assert(hashes.seen() == identity_row_hashes(&rows.rows()[i as int], v3,
                     identity_prefix_hashes(rows.rows(), i as int)));
                 assert(paths.seen() == identity_prefix_paths(rows.rows(), i as int));
-                assert(exists|index: int| #[trigger] identity_failure_at(rows.rows(), v3, index, error@)
-                    && hashes.seen() == identity_row_hashes(&rows.rows()[index], v3,
-                        identity_prefix_hashes(rows.rows(), index))
-                    && paths.seen() == identity_prefix_paths(rows.rows(), index));
+                assert(identity_walk_failure(rows.rows(), v3, hashes.seen(), paths.seen(), error@));
                 return Err(error);
             },
         }
