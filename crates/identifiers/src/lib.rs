@@ -611,6 +611,119 @@ pub fn full_oid(text: &str) -> (out: Result<(), String>)
     Ok(())
 }
 
+pub open spec fn commit_parent_error(text: Option<&str>) -> Option<Seq<char>> {
+    match text {
+        None => Some("invalid parent OID"@),
+        Some(text) => if !oid(text.spec_bytes()) {
+            Some("expected full nonzero lowercase commit OID"@)
+        } else { None },
+    }
+}
+
+pub open spec fn parent_decode_observed<'a, F>(decode: F, bytes: Seq<u8>, error: Option<Seq<char>>) -> bool
+    where F: Fn(&'a [u8]) -> Option<&'a str>,
+{
+    exists|row: &'a [u8], text: Option<&'a str>| row@ == bytes
+        && #[trigger] decode.ensures((row,), text) && commit_parent_error(text) == error
+}
+
+pub open spec fn parent_decode_first_error<'a, F>(
+    decode: F, rows: Seq<Seq<u8>>, i: int, message: Seq<char>,
+) -> bool
+    where F: Fn(&'a [u8]) -> Option<&'a str>,
+{
+    0 <= i < rows.len() && parent_decode_observed(decode, rows[i], Some(message))
+        && forall|j: int| 0 <= j < i ==> #[trigger] parent_decode_observed(decode, rows[j], None)
+}
+
+pub struct CommitParentError {
+    pub row: usize,
+    pub message: String,
+}
+
+impl CommitParentError {
+    pub fn into_message(self) -> (out: String)
+        ensures out@ == self.message@,
+    {
+        self.message
+    }
+}
+
+/// 外部安全解码只提供原文本或失败观察。按物理头顺序解析；首错不返回部分序列。
+pub fn parse_commit_parents<'a, F>(raw: &'a [u8], decode: F)
+    -> (out: Result<Vec<String>, CommitParentError>)
+    where F: Fn(&'a [u8]) -> Option<&'a str>,
+    requires
+        forall|row: &'a [u8]| decode.requires((row,)),
+        forall|row: &'a [u8], text: &'a str| #[trigger] decode.ensures((row,), Some(text))
+            ==> text.spec_bytes() == row@,
+    ensures match out {
+        Ok(parents) => parents.len() == commit_parent_lines(raw@).len()
+            && forall|i: int| 0 <= i < parents.len() ==>
+                #[trigger] parent_decode_observed(decode, commit_parent_lines(raw@)[i], None)
+                && vstd::utf8::encode_utf8(parents@[i]@) == commit_parent_lines(raw@)[i],
+        Err(error) => parent_decode_first_error(
+            decode, commit_parent_lines(raw@), error.row as int, error.message@),
+    },
+{
+    let records = commit_parent_records(raw);
+    let mut parents: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < records.len()
+        invariant
+            i <= records.len(), parents.len() == i,
+            records.len() == commit_parent_lines(raw@).len(),
+            forall|j: int| 0 <= j < records.len() ==>
+                (#[trigger] records@[j])@ == commit_parent_lines(raw@)[j],
+            forall|row: &'a [u8]| decode.requires((row,)),
+            forall|row: &'a [u8], text: &'a str| #[trigger] decode.ensures((row,), Some(text))
+                ==> text.spec_bytes() == row@,
+            forall|j: int| 0 <= j < i ==>
+                #[trigger] parent_decode_observed(decode, commit_parent_lines(raw@)[j], None)
+                && vstd::utf8::encode_utf8(parents@[j]@) == commit_parent_lines(raw@)[j],
+        decreases records.len() - i,
+    {
+        let record = records[i];
+        let observed = decode(record);
+        let text = match observed {
+            Some(text) => text,
+            None => {
+                let message = "invalid parent OID".to_owned();
+                proof {
+                    assert(parent_decode_observed(decode, record@, Some(message@))) by {
+                        assert(decode.ensures((record,), None::<&str>));
+                    }
+                    assert(parent_decode_first_error(decode, commit_parent_lines(raw@), i as int, message@));
+                }
+                return Err(CommitParentError { row: i, message });
+            },
+        };
+        match full_oid(text) {
+            Ok(()) => {
+                proof {
+                    assert(parent_decode_observed(decode, record@, None)) by {
+                        assert(decode.ensures((record,), Some(text)));
+                        assert(commit_parent_error(Some(text)).is_none());
+                    }
+                }
+                parents.push(text.to_owned());
+            },
+            Err(message) => {
+                proof {
+                    assert(parent_decode_observed(decode, record@, Some(message@))) by {
+                        assert(decode.ensures((record,), Some(text)));
+                        assert(commit_parent_error(Some(text)) == Some(message@));
+                    }
+                    assert(parent_decode_first_error(decode, commit_parent_lines(raw@), i as int, message@));
+                }
+                return Err(CommitParentError { row: i, message });
+            },
+        }
+        i += 1;
+    }
+    Ok(parents)
+}
+
 pub fn valid_merge_parents(
     count: usize, base: &[u8], second: &[u8], head: &[u8],
 ) -> (valid: bool)
