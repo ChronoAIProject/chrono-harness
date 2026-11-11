@@ -334,4 +334,89 @@ fn replay_or_missing_observation_keeps_the_current_original() {
     expect_true(valid_state && !unknown_write);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn observation_frontier_does_not_change_other_gate_modes() {
+    let yes = policy::observation_peer_frontier(true, false, false);
+    let ordinary = policy::observation_peer_frontier(false, false, false);
+    let maintenance = policy::observation_peer_frontier(true, true, false);
+    let birth = policy::observation_peer_frontier(true, false, true);
+    let both = policy::observation_peer_frontier(true, true, true);
+    expect_true(yes && !ordinary && !maintenance && !birth && !both);
+    let active: Vec<String> = Vec::new();
+    expect_true(policy::gate_discovery_candidate(false, &active, "peer", false, false));
+    expect_true(!policy::gate_discovery_candidate(false, &active, "peer", true, false));
+    expect_true(!policy::gate_discovery_candidate(false, &active, "peer", false, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn explicit_dependencies_are_active_but_unrelated_pending_peers_are_read_only() {
+    proof {
+        reveal_strlit("request"); reveal_strlit("peer"); reveal_strlit("peer\0");
+        assert("request"@.len() != "peer"@.len());
+        assert("request"@.len() != "peer\0"@.len());
+        assert("peer"@.len() != "peer\0"@.len());
+    }
+    let mut active = vec!["request".to_owned()];
+    expect_true(policy::gate_discovery_candidate(true, &active, "request", false, false));
+    expect_true(!policy::gate_discovery_candidate(true, &active, "peer", false, false));
+    let references = vec!["peer".to_owned(), "peer".to_owned()];
+    policy::extend_gate_active(&mut active, &references);
+    expect_true(active.len() == 2);
+    expect_true(policy::gate_discovery_candidate(true, &active, "peer", false, false));
+    expect_true(!policy::gate_discovery_candidate(true, &active, "peer\0", false, false));
+    expect_true(!policy::gate_discovery_candidate(true, &active, "peer", true, false));
+    expect_true(!policy::gate_discovery_candidate(true, &active, "peer", false, true));
+    let no_references: Vec<String> = Vec::new();
+    policy::extend_gate_active(&mut active, &no_references);
+    expect_true(active.len() == 2);
+    expect_true(policy::contains(&active, "request"));
+    expect_true(policy::contains(&active, "peer"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn read_only_peer_selection_keeps_exact_ids_order_and_duplicates() {
+    broadcast use vstd::array::group_array_axioms;
+    proof {
+        reveal_strlit("request"); reveal_strlit("peer"); reveal_strlit("");
+        reveal_strlit("输入\0λ"); reveal_strlit("输入λ");
+        assert("request"@.len() != "peer"@.len());
+        assert("request"@.len() != ""@.len());
+        assert("request"@.len() != "输入\0λ"@.len());
+        assert("输入λ"@.len() != "输入\0λ"@.len());
+        reveal_with_fuel(policy::gate_peer_values, 6);
+    }
+    let active = vec!["request".to_owned(), "输入λ".to_owned()];
+    let selected = vec!["peer".to_owned(), "request".to_owned(), "".to_owned(),
+        "peer".to_owned(), "输入\0λ".to_owned()];
+    let peers = policy::gate_role_peers(true, &active, &selected);
+    expect_true(peers.len() == 4);
+    let first = vec![peers[0].clone()];
+    let second = vec![peers[1].clone()];
+    let third = vec![peers[2].clone()];
+    let fourth = vec![peers[3].clone()];
+    expect_true(policy::contains(&first, "peer"));
+    expect_true(policy::contains(&second, ""));
+    expect_true(policy::contains(&third, "peer"));
+    expect_true(policy::contains(&fourth, "输入\0λ"));
+    let ordinary = policy::gate_role_peers(false, &active, &selected);
+    expect_true(ordinary.len() == 0);
+    let none = policy::gate_role_peers(true, &selected, &selected);
+    expect_true(none.len() == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn read_only_peer_output_requires_complete_unchanged_bytes() {
+    broadcast use vstd::array::group_array_axioms;
+    expect_true(policy::must_preserve_gate_peer(true, true));
+    expect_true(!policy::must_preserve_gate_peer(false, true));
+    expect_true(!policy::must_preserve_gate_peer(true, false));
+    let empty = policy::admit_gate_peer_output(b"", b"");
+    let original = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187, 255]);
+    let changed = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187, 254]);
+    let shortened = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187]);
+    let added = policy::admit_gate_peer_output(&[], &[0]);
+    expect_true(empty.is_ok() && original.is_ok());
+    expect_true(changed.is_err() && shortened.is_err() && added.is_err());
+}
+
 }
