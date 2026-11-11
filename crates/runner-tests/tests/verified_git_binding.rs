@@ -20,6 +20,57 @@ fn expect_true(value: bool)
     requires value,
 { if !value { panic!(); } }
 
+fn expect_selector_binding_result(actual: Result<(), &str>, expected: Result<(), &str>)
+    requires actual == expected,
+{
+    match (actual, expected) {
+        (Ok(()), Ok(())) => (),
+        (Err(actual), Err(expected)) => {
+            expect_true(policy::matches_expected(actual, Some(expected)));
+        },
+        _ => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_binding_requires_an_input_before_checking_the_three_text_fields() {
+    let program = "/git/版本";
+    let wrong_program = "/git/版本\0";
+    let digest = "hash";
+    let wrong_digest = "HASH";
+    let missing = "Git identity selector requires a declared executable input";
+    let mismatch = "Git config selector identity differs from selected policy binding";
+    proof {
+        reveal_strlit("/git/版本"); reveal_strlit("/git/版本\0");
+        reveal_strlit("hash"); reveal_strlit("HASH");
+        assert(program@.len() != wrong_program@.len());
+        assert(digest@[0] != wrong_digest@[0]);
+    }
+    expect_selector_binding_result(
+        policy::admit_selector_binding(program, digest, Some(program), Some((Some(program), Some(digest)))),
+        Ok(()),
+    );
+    expect_selector_binding_result(
+        policy::admit_selector_binding(program, digest, Some(wrong_program), None), Err(missing),
+    );
+    expect_selector_binding_result(
+        policy::admit_selector_binding(program, digest, Some(wrong_program), Some((Some(program), Some(digest)))),
+        Err(mismatch),
+    );
+    expect_selector_binding_result(
+        policy::admit_selector_binding(program, digest, Some(program), Some((Some(wrong_program), Some(digest)))),
+        Err(mismatch),
+    );
+    expect_selector_binding_result(
+        policy::admit_selector_binding(program, digest, Some(program), Some((Some(program), Some(wrong_digest)))),
+        Err(mismatch),
+    );
+    expect_selector_binding_result(
+        policy::admit_selector_binding(program, digest, Some(program), Some((Some(program), None))),
+        Err(mismatch),
+    );
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn input_is_optional_only_for_scoped_v4_and_other_link_constraints_remain() {
     expect_true(policy::valid_link(4, true, false, false));

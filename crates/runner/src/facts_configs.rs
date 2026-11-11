@@ -1,6 +1,6 @@
 //! Explicit native-platform selection for a separate Git facts policy.
 use crate::verified_git_binding::{
-    GitConfigSchema, admit_git_selector_target, classify_git_config_schema,
+    GitConfigSchema, admit_git_selector_target, admit_selector_binding, classify_git_config_schema,
 };
 use crate::{json, no_symlink_parents, relative_path, sha256};
 use serde_json::{Value, json as value};
@@ -157,10 +157,12 @@ pub(crate) fn resolve_target(
     )?;
     if let Some((program, hash)) = identity {
         let (tool, input) = crate::facts_binding::declaration(&selected_config)?;
-        let input = input.ok_or("Git identity selector requires a declared executable input")?;
-        if tool["program"] != program || input["location"] != program || input["sha256"] != hash {
-            return Err("Git config selector identity differs from selected policy binding".into());
-        }
+        admit_selector_binding(
+            program,
+            hash,
+            tool["program"].as_str(),
+            input.map(|value| (value["location"].as_str(), value["sha256"].as_str())),
+        )?;
     }
     let mut observation = value!({"schema":"chrono-git-config-selection/v1",
         "path":path,"sha256":sha256(&bytes),"platform":platform,"config_path":selected});
