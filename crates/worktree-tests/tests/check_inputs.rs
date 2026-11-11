@@ -42,7 +42,7 @@ fn install_owned(root: &Path, owner: Option<&Host>) {
     fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
     install_readonly_file_owned(
         root,
-        &source().join("crates/runner/target/debug/chrono-harness"),
+        Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli")),
         "chrono-harness",
         b"chrono-harness 0.1.0\n",
         owner,

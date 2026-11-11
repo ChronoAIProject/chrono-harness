@@ -1805,6 +1805,13 @@ fn maintain_until(
 
 #[test]
 fn terminal_count_and_bytes_are_maintenance_targets_with_truthful_retired_queries() {
+    // Immediate metadata lock acquisition must not depend on unrelated fixture
+    // forks briefly inheriting this host's open capabilities before exec.
+    if !isolated_capability::isolated_capability_test(
+        "terminal_count_and_bytes_are_maintenance_targets_with_truthful_retired_queries",
+    ) {
+        return;
+    }
     for (count, bytes, expected) in [(1, 67108864, 1), (32, 1, 0)] {
         let host = Host::new();
         retention_policy(&host, count, bytes);
