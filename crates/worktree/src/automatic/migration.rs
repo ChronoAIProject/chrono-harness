@@ -101,7 +101,9 @@ impl Manager {
                     &e.status,
                     e.terminal.is_some(),
                     !e.uses.is_empty(),
-                    e.report_handoff_pending(),
+                    // Defer only the completed-result handoff until the
+                    // candidate's own inputs and attachment are qualified.
+                    false,
                 ) {
                     return Err("checkout migration preserves pending work; reconcile its use, result or terminal handoff first".into());
                 }
@@ -212,6 +214,22 @@ impl Manager {
             return Err("migration target policy changed before adoption".into());
         }
         lease.stable()?;
+        if checkout_changed {
+            if e.report_handoff_pending() {
+                self.reconcile_published_results().map_err(|error| {
+                    format!("checkout migration preserves pending work; result handoff is not established: {error}")
+                })?;
+            }
+            let enrolled = &self.ledger.entries[i];
+            if !crate::verified_lifecycle::checkout_migration_ready(
+                &enrolled.status,
+                enrolled.terminal.is_some(),
+                !enrolled.uses.is_empty(),
+                enrolled.report_handoff_pending(),
+            ) {
+                return Err("checkout migration preserves pending work; reconcile its use, result or terminal handoff first".into());
+            }
+        }
         self.reconcile_uses(i, &lease)?;
         let mut updated = self.ledger.entries[i].clone();
         updated.checkout_branch = current.checkout_branch;
