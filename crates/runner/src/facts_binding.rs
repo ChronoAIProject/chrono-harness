@@ -331,7 +331,9 @@ pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
         );
     }
     let unique = |collection: &Value, id: &str| -> Result<usize, String> {
-        let rows = collection.as_array().map(|rows| JsonBindingReferences(rows));
+        let rows = collection
+            .as_array()
+            .map(|rows| JsonBindingReferences(rows));
         verified_git_binding::unique_binding_reference(rows.as_ref(), id)?
             .ok_or_else(|| format!("missing/ambiguous facts_git reference {id}"))
     };

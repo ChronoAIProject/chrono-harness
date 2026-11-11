@@ -370,7 +370,7 @@ fn unique_matching_index<R: UniqueMatchRows>(rows: &R) -> (out: Option<usize>)
         i += 1;
     }
     match selected {
-        Some(index) => { assert(unique_match_index(rows, index as int)); },
+        Some(_index) => { assert(unique_match_index(rows, _index as int)); },
         None => {
             assert forall|j: int| !#[trigger] unique_match_index(rows, j) by {
                 if 0 <= j < rows.count() { assert(!rows.matches(j)); }
