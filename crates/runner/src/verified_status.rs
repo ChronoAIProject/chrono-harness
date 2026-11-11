@@ -2303,6 +2303,56 @@ pub fn record_checkout_physical_observations(
     }
 }
 
+/// 外部接口只观察错误种类；成功保留原元数据，缺失转 None，其余错误原样转交。
+pub fn checkout_metadata_observation<T, E, F>(observation: Result<T, E>, is_missing: F)
+    -> (out: Result<Option<T>, E>)
+    where F: Fn(&E) -> bool,
+    requires match observation {
+        Ok(_) => true,
+        Err(error) => is_missing.requires((&error,)),
+    },
+    ensures match observation {
+        Ok(metadata) => out == Ok::<Option<T>, E>(Some(metadata)),
+        Err(error) => match out {
+            Ok(None) => is_missing.ensures((&error,), true),
+            Err(actual) => actual == error && is_missing.ensures((&error,), false),
+            _ => false,
+        },
+    },
+{
+    match observation {
+        Ok(metadata) => Ok(Some(metadata)),
+        Err(error) => {
+            if is_missing(&error) { Ok(None) }
+            else { Err(error) }
+        },
+    }
+}
+
+/// 父路径只在真实目录观察为真时允许继续；缺失和非目录均停止，其他错误保留。
+pub fn checkout_parent_observation<E, F>(observation: Result<bool, E>, is_missing: F)
+    -> (out: Result<bool, E>)
+    where F: Fn(&E) -> bool,
+    requires match observation {
+        Ok(_) => true,
+        Err(error) => is_missing.requires((&error,)),
+    },
+    ensures match observation {
+        Ok(is_directory) => out == Ok::<bool, E>(is_directory),
+        Err(error) => match out {
+            Ok(false) => is_missing.ensures((&error,), true),
+            Err(actual) => actual == error && is_missing.ensures((&error,), false),
+            _ => false,
+        },
+    },
+{
+    match checkout_metadata_observation(observation, is_missing) {
+        Ok(Some(is_directory)) => Ok(is_directory),
+        Ok(None) => Ok(false),
+        Err(error) => Err(error),
+    }
+}
+
 /// checkout 只支持原有三种 blob 模式，完整文本决定支持与否。
 pub fn checkout_entry_supported(kind: &str, mode: &str) -> (supported: bool)
     ensures supported == (kind@ == "blob"@
