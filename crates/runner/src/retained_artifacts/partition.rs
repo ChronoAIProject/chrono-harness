@@ -993,6 +993,7 @@ impl Inventory {
                 for previous in &retained_dependencies {
                     let record: &Object =
                         observed.get(previous).ok_or("dependency was not read")?;
+                    wanted_roles.extend(record.roles.iter().cloned());
                     selected.extend(record.incoming.iter().cloned());
                     selected.extend(
                         record
@@ -1006,9 +1007,8 @@ impl Inventory {
             if report_frontier {
                 // Only the released report may retire here. Its finalized
                 // originals remain excluded and retained while their incoming
-                // edge is updated; unrelated referrers are left untouched.
+                // edge is updated; their consumers and bytes remain untouched.
                 retained_dependencies.insert(id.clone());
-                wanted_roles.extend(record.roles.iter().cloned());
                 observed.insert(id, record);
                 continue;
             }
@@ -1022,7 +1022,13 @@ impl Inventory {
             observed.insert(id, record);
         }
         if maintenance {
-            let target_paths: Vec<_> = observed.values().map(|r| r.path.clone()).collect();
+            let target_paths: Vec<_> = observed
+                .values()
+                .filter(|r| {
+                    initial.as_ref() == Some(&r.id) || !retained_dependencies.contains(&r.id)
+                })
+                .map(|r| r.path.clone())
+                .collect();
             let (additional, dirs) = self.path_gates(&target_paths, wait, !discover_under_lease)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
@@ -1189,6 +1195,12 @@ impl Inventory {
             }
             ledger.summaries.extend(record.summaries.clone());
             ledger.retired_leases.extend(record.retired_leases.clone());
+            // These finalized objects are explicit roots for this retirement.
+            // Their metadata stays excluded, but no consumer membership changes
+            // and no physical disposal of their bytes is permitted.
+            if gate.retained_dependencies.contains(&record.id) {
+                continue;
+            }
             for role in &record.roles {
                 let current = if let Some(current) = roles.get(role) {
                     Some(current.clone())
