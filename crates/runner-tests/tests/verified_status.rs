@@ -24,6 +24,132 @@ use vstd::vpanic as panic;
 
 verus! {
 
+
+// 记录实际回调参数和严格次序；此 fixture 不冒充 Serde JSON 对象的内部模型。
+struct SelectionProjectionFixture {
+    phase: u8,
+    retained: String,
+    removed: String,
+    field: String,
+    value: String,
+}
+
+fn selection_projection_remove(state: SelectionProjectionFixture, key: &str)
+    -> (out: SelectionProjectionFixture)
+    requires state.phase == 0,
+    ensures out.phase == 1, out.retained == state.retained,
+        out.removed@ == key@, out.field == state.field, out.value == state.value,
+{
+    SelectionProjectionFixture {
+        phase: 1, retained: state.retained, removed: key.to_owned(),
+        field: state.field, value: state.value,
+    }
+}
+
+fn selection_projection_insert(state: SelectionProjectionFixture, key: &str, value: &str)
+    -> (out: SelectionProjectionFixture)
+    requires state.phase == 1,
+    ensures out.phase == 2, out.retained == state.retained,
+        out.removed == state.removed, out.field@ == key@, out.value@ == value@,
+{
+    SelectionProjectionFixture {
+        phase: 2, retained: state.retained, removed: state.removed,
+        field: key.to_owned(), value: value.to_owned(),
+    }
+}
+
+fn selection_projection_never_remove(state: SelectionProjectionFixture, key: &str)
+    -> (out: SelectionProjectionFixture)
+    requires false,
+    ensures false,
+{
+    panic!();
+}
+
+fn selection_projection_never_insert(state: SelectionProjectionFixture, key: &str, value: &str)
+    -> (out: SelectionProjectionFixture)
+    requires false,
+    ensures false,
+{
+    panic!();
+}
+
+fn selection_projection_fixture(state: SelectionProjectionFixture)
+    -> (out: SelectionProjectionFixture)
+    requires state.phase == 0,
+    ensures out.phase == 2, out.retained == state.retained,
+        out.removed@ == "sha256"@, out.field@ == "schema"@,
+        out.value@ == "chrono-registry-selection/v1"@,
+{
+    let result = policy::normalize_registry_selection_object(
+        Some(state), selection_projection_remove, selection_projection_insert,
+    );
+    match result {
+        None => { panic!(); },
+        Some(out) => {
+            proof {
+                reveal(policy::registry_selection_object_result);
+                let (middle, removed, field, value) = choose|
+                    middle: SelectionProjectionFixture, removed: &str, field: &str, value: &str|
+                    removed@ == "sha256"@ && field@ == "schema"@
+                    && value@ == "chrono-registry-selection/v1"@
+                    && selection_projection_remove.ensures((state, removed), middle)
+                    && selection_projection_insert.ensures((middle, field, value), out);
+            }
+            out
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_without_object_never_calls_either_interface() {
+    let out = policy::normalize_registry_selection_object(
+        None::<SelectionProjectionFixture>,
+        selection_projection_never_remove, selection_projection_never_insert,
+    );
+    proof { reveal(policy::registry_selection_object_result); }
+    expect_status_true(out.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_preserves_empty_metadata_and_exact_schema() {
+    let out = selection_projection_fixture(SelectionProjectionFixture {
+        phase: 0, retained: "".to_owned(), removed: "old digest".to_owned(),
+        field: "old field".to_owned(), value: "old schema".to_owned(),
+    });
+    expect_status_true(out.phase == 2);
+    expect_status_text(out.retained.as_str(), "");
+    expect_status_text(out.removed.as_str(), "sha256");
+    expect_status_text(out.field.as_str(), "schema");
+    expect_status_text(out.value.as_str(), "chrono-registry-selection/v1");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_preserves_unicode_nul_and_lf_metadata() {
+    let out = selection_projection_fixture(SelectionProjectionFixture {
+        phase: 0, retained: "原始/é\0\n完整尾部".to_owned(), removed: "摘要\0\n".to_owned(),
+        field: "schema\0suffix".to_owned(), value: "chrono-git-config-selection/v1".to_owned(),
+    });
+    expect_status_true(out.phase == 2);
+    expect_status_text(out.retained.as_str(), "原始/é\0\n完整尾部");
+    expect_status_text(out.removed.as_str(), "sha256");
+    expect_status_text(out.field.as_str(), "schema");
+    expect_status_text(out.value.as_str(), "chrono-registry-selection/v1");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_already_matching_schema_still_performs_both_operations() {
+    let out = selection_projection_fixture(SelectionProjectionFixture {
+        phase: 0, retained: "retained".to_owned(), removed: "sha256".to_owned(),
+        field: "schema".to_owned(), value: "chrono-registry-selection/v1".to_owned(),
+    });
+    expect_status_true(out.phase == 2);
+    expect_status_text(out.retained.as_str(), "retained");
+    expect_status_text(out.removed.as_str(), "sha256");
+    expect_status_text(out.field.as_str(), "schema");
+    expect_status_text(out.value.as_str(), "chrono-registry-selection/v1");
+}
+
 // 这些分支在普通 Rust 测试中也执行；证明不能替代真实调用的断言。
 fn expect_status_true(actual: bool)
     requires actual,
