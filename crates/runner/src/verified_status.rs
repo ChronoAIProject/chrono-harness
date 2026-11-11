@@ -114,6 +114,13 @@ pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R
             let middle = remove(initial, removed);
             let normalized = insert(middle, field, value);
             proof {
+                assert(remove.ensures((initial, removed), middle));
+                assert(insert.ensures((middle, field, value), normalized));
+                assert(exists|observed: M, key: &str, target: &str, schema: &str|
+                    key@ == "sha256"@ && target@ == "schema"@
+                    && schema@ == "chrono-registry-selection/v1"@
+                    && remove.ensures((initial, key), observed)
+                    && insert.ensures((observed, target, schema), normalized));
                 assert(registry_selection_object_result(
                     Some(initial), Some(normalized), remove, insert));
             }
