@@ -4600,11 +4600,13 @@ fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
     publication.complete(json!({"exit": 0})).unwrap();
 
     let role = retention_state::role_path(h.path(), "actual-original-consumer");
-    let address = h
+    let mut address = h
         .path()
-        .join(".chrono-harness/state/output-retention-v1/paths")
-        .join(chrono_harness::sha256(original.as_bytes()))
-        .join("address.json");
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in original.split('/') {
+        address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    address.push("address.json");
     let role_before = fs::read(&role).unwrap();
     let address_before = fs::read(&address).unwrap();
     let original_record = retention_state::object_path(h.path(), &original_id);
