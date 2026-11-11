@@ -378,8 +378,15 @@ fn explicit_dependencies_are_active_but_unrelated_pending_peers_are_read_only() 
     let mut active = vec!["request".to_owned()];
     expect_true(policy::gate_discovery_candidate(true, &active, "request", false, false));
     expect_true(!policy::gate_discovery_candidate(true, &active, "peer", false, false));
+    let ghost initial = active@;
     let references = vec!["peer".to_owned(), "peer".to_owned()];
     policy::extend_gate_active(&mut active, &references);
+    proof {
+        reveal_with_fuel(policy::gate_active_values, 4);
+        assert(!policy::present(initial, "peer"@));
+        assert(policy::present(initial.push(references@[0]), "peer"@));
+        assert(active@ =~= initial.push(references@[0]));
+    }
     expect_true(active.len() == 2);
     expect_true(policy::gate_discovery_candidate(true, &active, "peer", false, false));
     expect_true(!policy::gate_discovery_candidate(true, &active, "peer\0", false, false));
@@ -430,9 +437,13 @@ fn read_only_peer_output_requires_complete_unchanged_bytes() {
     expect_true(!policy::must_preserve_gate_peer(false, true));
     expect_true(!policy::must_preserve_gate_peer(true, false));
     let empty = policy::admit_gate_peer_output(&[], &[]);
-    let original = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187, 255]);
-    let changed = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187, 254]);
-    let shortened = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187]);
+    let bytes = [0u8, 207, 187, 255];
+    let different = [0u8, 207, 187, 254];
+    let shorter = [0u8, 207, 187];
+    proof { assert(bytes@[3] != different@[3]); }
+    let original = policy::admit_gate_peer_output(&bytes, &bytes);
+    let changed = policy::admit_gate_peer_output(&bytes, &different);
+    let shortened = policy::admit_gate_peer_output(&bytes, &shorter);
     let added = policy::admit_gate_peer_output(&[], &[0]);
     expect_true(empty.is_ok() && original.is_ok());
     expect_true(changed.is_err() && shortened.is_err() && added.is_err());
@@ -449,6 +460,7 @@ fn peer_output_lookup_requires_the_complete_unique_original_id() {
         assert("peer"@.len() != "输入λ"@.len());
         assert("输入λ"@.len() != "输入\0λ"@.len());
         assert("输入λ"@.len() != ""@.len());
+        assert("peer"@[0] != "输入\0λ"@[0]);
     }
     let ids = ["", "peer", "输入λ"];
     let empty = policy::gate_output_index(&ids, "");
