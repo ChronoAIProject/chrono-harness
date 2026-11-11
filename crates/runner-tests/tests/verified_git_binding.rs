@@ -557,6 +557,185 @@ fn selector_identity_rows_keep_shape_digest_and_path_error_order() {
     }, false, &mut hashes, &mut paths), "Git selector configuration paths must be unique");
 }
 
+pub struct ObservedRows<'a>(pub Vec<policy::SelectorRow<'a>>);
+
+impl<'a> policy::SelectorRows<'a> for ObservedRows<'a> {
+    open spec fn rows(&self) -> Seq<policy::SelectorRow<'a>> { self.0@ }
+
+    fn len(&self) -> usize { self.0.len() }
+
+    fn row(&self, index: usize) -> policy::SelectorRow<'a> {
+        let row = &self.0[index];
+        policy::SelectorRow {
+            fields: row.fields, digest: row.digest, path_present: row.path_present,
+            path: row.path, registry_path_present: row.registry_path_present,
+        }
+    }
+}
+
+fn observed_row<'a>(digest: &'a str, path: &'a str) -> (row: policy::SelectorRow<'a>)
+    ensures row.fields == Some(2usize), row.digest == Some(digest), row.path_present,
+        row.path == Some(path), !row.registry_path_present,
+{
+    policy::SelectorRow {
+        fields: Some(2), digest: Some(digest), path_present: true,
+        path: Some(path), registry_path_present: false,
+    }
+}
+
+proof fn valid_walk_digest_literals()
+    ensures policy::identifiers::digest_format(
+        "0000000000000000000000000000000000000000000000000000000000000000".spec_bytes()),
+        policy::identifiers::digest_format(
+        "1111111111111111111111111111111111111111111111111111111111111111".spec_bytes()),
+        "0000000000000000000000000000000000000000000000000000000000000000"@
+            != "1111111111111111111111111111111111111111111111111111111111111111"@,
+{
+    let zero = "0000000000000000000000000000000000000000000000000000000000000000";
+    let one = "1111111111111111111111111111111111111111111111111111111111111111";
+    reveal_strlit("0000000000000000000000000000000000000000000000000000000000000000");
+    reveal_strlit("1111111111111111111111111111111111111111111111111111111111111111");
+    assert(vstd::string::is_ascii(zero) && vstd::string::is_ascii(one));
+    vstd::string::is_ascii_spec_bytes(zero);
+    vstd::string::is_ascii_spec_bytes(one);
+    assert(zero.spec_bytes().len() == 64 && one.spec_bytes().len() == 64);
+    assert(policy::identifiers::digest_format(zero.spec_bytes()));
+    assert(policy::identifiers::digest_format(one.spec_bytes()));
+    assert(zero@[0] != one@[0]);
+}
+
+fn expect_walk_error(
+    rows: &ObservedRows, v3: bool, index: usize, expected: &str,
+    result: Result<Vec<&str>, &str>,
+)
+    requires policy::identity_failure_at(rows.0@, v3, index as int, expected@),
+        match result {
+            Ok(_) => policy::identity_prefix_valid(rows.0@, v3, rows.0@.len() as int),
+            Err(error) => exists|i: int| policy::identity_failure_at(rows.0@, v3, i, error@),
+        },
+{
+    match result {
+        Ok(_) => { panic!(); },
+        Err(error) => {
+            proof {
+                let first = choose|i: int| policy::identity_failure_at(rows.0@, v3, i, error@);
+                if first < index {
+                    assert(policy::identity_row_error(&rows.0@[first], v3,
+                        policy::identity_prefix_hashes(rows.0@, first),
+                        policy::identity_prefix_paths(rows.0@, first)).is_none());
+                } else if first > index {
+                    assert(policy::identity_row_error(&rows.0@[index as int], v3,
+                        policy::identity_prefix_hashes(rows.0@, index as int),
+                        policy::identity_prefix_paths(rows.0@, index as int)).is_none());
+                }
+                assert(first == index);
+                assert(error@ == expected@);
+            }
+            expect_true(policy::matches_expected(error, Some(expected)));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn identity_row_walk_preserves_empty_and_ordered_original_paths() {
+    use policy::SelectorSeen;
+    let mut hashes = SeenRows(Vec::new());
+    let mut paths = SeenRows(Vec::new());
+    let empty = ObservedRows(Vec::new());
+    proof { assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty()); }
+    match policy::collect_identity_paths(&empty, false, &mut hashes, &mut paths) {
+        Ok(collected) => { expect_true(collected.len() == 0); },
+        Err(_) => { panic!(); },
+    }
+    let mut rows = ObservedRows(Vec::new());
+    rows.0.push(observed_row(
+        "0000000000000000000000000000000000000000000000000000000000000000", ""));
+    rows.0.push(observed_row(
+        "1111111111111111111111111111111111111111111111111111111111111111", "λ\0"));
+    proof {
+        valid_walk_digest_literals();
+        reveal_strlit(""); reveal_strlit("λ\0");
+        assert(""@.len() != "λ\0"@.len());
+        assert(policy::identity_prefix_valid(rows.0@, false, 2));
+    }
+    match policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths) {
+        Ok(collected) => {
+            expect_true(collected.len() == 2);
+            expect_true(policy::matches_expected(collected[0], Some("")));
+            expect_true(policy::matches_expected(collected[1], Some("λ\0")));
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn identity_row_walk_stops_at_the_first_malformed_row() {
+    use policy::SelectorSeen;
+    let mut hashes = SeenRows(Vec::new());
+    let mut paths = SeenRows(Vec::new());
+    let mut rows = ObservedRows(Vec::new());
+    rows.0.push(policy::SelectorRow {
+        fields: None, digest: None, path_present: false, path: None, registry_path_present: false,
+    });
+    rows.0.push(observed_row(
+        "0000000000000000000000000000000000000000000000000000000000000000", "later"));
+    proof { assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty()); }
+    let result = policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths);
+    expect_walk_error(&rows, false, 0, "Git selector configuration object required", result);
+    proof { assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty()); }
+    expect_true(hashes.record(
+        "0000000000000000000000000000000000000000000000000000000000000000"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn identity_row_walk_rejects_nonadjacent_digest_reuse_before_collecting_its_path() {
+    use policy::SelectorSeen;
+    let mut hashes = SeenRows(Vec::new());
+    let mut paths = SeenRows(Vec::new());
+    let mut rows = ObservedRows(Vec::new());
+    let zero = "0000000000000000000000000000000000000000000000000000000000000000";
+    let one = "1111111111111111111111111111111111111111111111111111111111111111";
+    rows.0.push(observed_row(zero, "a"));
+    rows.0.push(observed_row(one, "b"));
+    rows.0.push(observed_row(zero, "later"));
+    let expected = "Git selector configuration requires a unique digest/path and the declared v3 registry_path only";
+    proof {
+        valid_walk_digest_literals();
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("later");
+        assert("a"@[0] != "b"@[0]);
+        assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty());
+        assert(policy::identity_failure_at(rows.0@, false, 2, expected@));
+    }
+    let result = policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths);
+    expect_walk_error(&rows, false, 2, expected, result);
+    expect_true(paths.record("later"));
+    expect_true(!hashes.record(zero));
+    expect_true(!hashes.record(one));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn identity_row_walk_keeps_the_second_digest_when_its_path_is_a_duplicate() {
+    use policy::SelectorSeen;
+    let mut hashes = SeenRows(Vec::new());
+    let mut paths = SeenRows(Vec::new());
+    let mut rows = ObservedRows(Vec::new());
+    let zero = "0000000000000000000000000000000000000000000000000000000000000000";
+    let one = "1111111111111111111111111111111111111111111111111111111111111111";
+    rows.0.push(observed_row(zero, "a"));
+    rows.0.push(observed_row(one, "a"));
+    let expected = "Git selector configuration paths must be unique";
+    proof {
+        valid_walk_digest_literals();
+        assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty());
+        assert(policy::identity_failure_at(rows.0@, false, 1, expected@));
+    }
+    let result = policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths);
+    expect_walk_error(&rows, false, 1, expected, result);
+    expect_true(!hashes.record(zero));
+    expect_true(!hashes.record(one));
+    expect_true(!paths.record("a"));
+}
+
 fn expect_target_schema(version: Option<u64>, schema_present: bool, expected: bool)
     requires expected == (!schema_present && (version == Some(3u64) || version == Some(4u64))),
 {
