@@ -5246,7 +5246,8 @@ fn registry_read_sequence_empty_keeps_initial_maps_and_reader()
 
 fn expect_registry_sequence_fixture_error(paths: Vec<String>, count: u8, expected: &str)
     requires vstd::laws_cmp::obeys_cmp::<String>(), paths.len() <= 3,
-        registry_sequence_expected(paths@, 0, Map::empty(), Map::empty()) == (count, Err(expected@)),
+        registry_sequence_expected(paths@, 0, Map::empty(), Map::empty())
+            == (count, Err::<(Map<String, Seq<u8>>, Map<String, u64>), Seq<char>>(expected@)),
 {
     let ghost requested = paths@;
     let out = policy::registry_read_sequence(paths, 0u8,
