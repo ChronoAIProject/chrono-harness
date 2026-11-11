@@ -4836,6 +4836,568 @@ fn relative_path_results_and_registry_renderer_keep_complete_text() {
     expect_status_text(message.as_str(), "missing registry path filemap");
 }
 
+spec fn registry_decode_model(bytes: Seq<u8>) -> Result<u64, Seq<char>> {
+    if bytes.len() == 0 { Err("空输入\0\n"@) }
+    else if bytes[0] == 255 { Err("解码失败：é\0\n"@) }
+    else { Ok(bytes[0] as u64) }
+}
+
+fn decode_registry_fixture(bytes: &[u8]) -> (out: Result<u64, String>)
+    ensures policy::registry_decoded_view(out) == registry_decode_model(bytes@),
+{
+    if bytes.len() == 0 { Err("空输入\0\n".to_owned()) }
+    else if bytes[0] == 255 { Err("解码失败：é\0\n".to_owned()) }
+    else { Ok(bytes[0] as u64) }
+}
+
+fn never_decode_registry(bytes: &[u8]) -> (out: Result<u64, String>)
+    requires false,
+    ensures false,
+{
+    panic!();
+}
+
+// 同一被测函数；只有 Verus 调用携带不会进入普通 Rust 的证明模型。
+fn registry_fixture_batch<P>(
+    expected: &[String], originals: Vec<(String, Vec<u8>)>,
+    bytes: std::collections::BTreeMap<String, Vec<u8>>,
+    values: std::collections::BTreeMap<String, u64>, decode: P,
+) -> (out: Result<(std::collections::BTreeMap<String, Vec<u8>>,
+    std::collections::BTreeMap<String, u64>), String>)
+    where P: Fn(&[u8]) -> Result<u64, String>,
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        forall|i: int, raw: &[u8]| 0 <= i < originals.len()
+            && policy::registry_batch_prefix(expected@, originals@, |raw: Seq<u8>| registry_decode_model(raw), i)
+            && expected@[i]@ == originals@[i].0@ && raw@ == originals@[i].1@
+            ==> decode.requires((raw,)),
+        forall|raw: &[u8], result: Result<u64, String>|
+            decode.requires((raw,)) && decode.ensures((raw,), result)
+            ==> policy::registry_decoded_view(result) == registry_decode_model(raw@),
+    ensures policy::registry_batch_view(out) == policy::registry_batch_spec(
+        expected@, originals@, bytes@, values@, |raw: Seq<u8>| registry_decode_model(raw)),
+{
+    #[cfg(verus_keep_ghost)]
+    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode,
+        Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+    #[cfg(not(verus_keep_ghost))]
+    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode);
+    out
+}
+
+fn expect_registry_batch_error(
+    actual: Result<(std::collections::BTreeMap<String, Vec<u8>>,
+        std::collections::BTreeMap<String, u64>), String>, expected: &str,
+)
+    requires actual matches Err(message) && message@ == expected@,
+{
+    match actual {
+        Err(message) => { expect_status_text(message.as_str(), expected); },
+        Ok(_) => { panic!(); },
+    }
+}
+
+fn expect_registry_pair(
+    bytes: &std::collections::BTreeMap<String, Vec<u8>>,
+    values: &std::collections::BTreeMap<String, u64>,
+    key: &String, original: &[u8], value: u64,
+)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        bytes@.contains_key(*key), bytes@[*key]@ == original@,
+        values@.contains_key(*key), values@[*key] == value,
+{
+    broadcast use {vstd::std_specs::btree::axiom_maps_deref_key_to_value,
+        vstd::std_specs::btree::axiom_contains_deref_key};
+    match bytes.get(key) {
+        Some(actual) => { expect_status_true(scope_text::equal_bytes(actual.as_slice(), original)); },
+        None => { panic!(); },
+    }
+    match values.get(key) {
+        Some(actual) => { expect_status_true(*actual == value); },
+        None => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_empty_preserves_both_existing_maps()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let key = "已有/é\0\n".to_owned();
+    let mut bytes = std::collections::BTreeMap::new();
+    let mut values = std::collections::BTreeMap::new();
+    bytes.insert(key.clone(), vec![0u8, 255, 10]);
+    values.insert(key.clone(), u64::MAX);
+    let result = registry_fixture_batch(&[], Vec::new(), bytes, values,
+        never_decode_registry);
+    match result {
+        Ok((bytes, values)) => {
+            expect_status_true(bytes.len() == 1 && values.len() == 1);
+            expect_registry_pair(&bytes, &values, &key, &[0u8, 255, 10], u64::MAX);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_missing_rows_rejects_before_decoding()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let expected = vec!["a".to_owned()];
+    let result = registry_fixture_batch(&expected, Vec::new(),
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        never_decode_registry);
+    expect_registry_batch_error(result, "registry acquisition count mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_extra_rows_rejects_before_path_or_decode()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let originals = vec![("unexpected".to_owned(), Vec::new())];
+    let result = registry_fixture_batch(&[], originals,
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        never_decode_registry);
+    expect_registry_batch_error(result, "registry acquisition count mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_wrong_path_rejects_before_current_decode()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof {
+        reveal_strlit("a"); reveal_strlit("a\0");
+        assert("a"@.len() != "a\0"@.len());
+    }
+    let expected = vec!["a".to_owned()];
+    let originals = vec![("a\0".to_owned(), Vec::new())];
+    let result = registry_fixture_batch(&expected, originals,
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        never_decode_registry);
+    expect_registry_batch_error(result, "registry acquisition path mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_preserves_complete_empty_decode_error()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let key = "".to_owned();
+    let expected = vec![key.clone()];
+    let originals = vec![(key, Vec::new())];
+    let result = registry_fixture_batch(&expected, originals,
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        decode_registry_fixture);
+    expect_registry_batch_error(result, "空输入\0\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_decode_error_precedes_later_wrong_path()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let key = "first".to_owned();
+    let expected = vec![key.clone(), "later".to_owned()];
+    let originals = vec![(key, vec![255u8, 0, 10]), ("wrong".to_owned(), Vec::new())];
+    let result = registry_fixture_batch(&expected, originals,
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        decode_registry_fixture);
+    expect_registry_batch_error(result, "解码失败：é\0\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_path_error_after_success_precedes_decode_error()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof {
+        reveal_strlit("a"); reveal_strlit("A");
+        assert("a"@[0] != "A"@[0]);
+        reveal_with_fuel(policy::registry_batch_fold, 3);
+    }
+    let first = "first".to_owned();
+    let expected = vec![first.clone(), "a".to_owned()];
+    let originals = vec![(first, vec![1u8]), ("A".to_owned(), vec![255u8])];
+    let result = registry_fixture_batch(&expected, originals,
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        decode_registry_fixture);
+    expect_registry_batch_error(result, "registry acquisition path mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_success_preserves_full_bytes_and_unrelated_entries()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof {
+        reveal_strlit("entry"); reveal_strlit("../目录/é\0\n");
+        assert("entry"@.len() != "../目录/é\0\n"@.len());
+        reveal_with_fuel(policy::registry_batch_fold, 3);
+    }
+    let old = "entry".to_owned();
+    let key = "../目录/é\0\n".to_owned();
+    let mut bytes = std::collections::BTreeMap::new();
+    let mut values = std::collections::BTreeMap::new();
+    bytes.insert(old.clone(), vec![9u8]);
+    values.insert(old.clone(), u64::MAX);
+    let expected = vec![key.clone()];
+    let originals = vec![(key.clone(), vec![0u8, 255, 10, 13, 254])];
+    let result = registry_fixture_batch(&expected, originals, bytes, values,
+        decode_registry_fixture);
+    match result {
+        Ok((bytes, values)) => {
+            expect_status_true(bytes.len() == 2 && values.len() == 2);
+            expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
+            expect_registry_pair(&bytes, &values, &key, &[0u8, 255, 10, 13, 254], 0);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_parse_batch_duplicate_keys_replace_both_maps_in_order()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { reveal_with_fuel(policy::registry_batch_fold, 4); }
+    let key = "same".to_owned();
+    let mut bytes = std::collections::BTreeMap::new();
+    let mut values = std::collections::BTreeMap::new();
+    bytes.insert(key.clone(), vec![3u8]);
+    values.insert(key.clone(), 3);
+    let expected = vec![key.clone(), key.clone()];
+    let originals = vec![(key.clone(), vec![4u8, 0]), (key.clone(), vec![254u8, 255, 0])];
+    let result = registry_fixture_batch(&expected, originals, bytes, values,
+        decode_registry_fixture);
+    match result {
+        Ok((bytes, values)) => {
+            expect_status_true(bytes.len() == 1 && values.len() == 1);
+            expect_registry_pair(&bytes, &values, &key, &[254u8, 255, 0], 254);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+spec fn registry_sequence_original(out: Result<Vec<u8>, String>) -> Result<Seq<u8>, Seq<char>> {
+    match out { Ok(raw) => Ok(raw@), Err(error) => Err(error@) }
+}
+
+spec fn registry_sequence_read_model(state: u8, path: Seq<char>) -> Result<Seq<u8>, Seq<char>> {
+    if state == 255 { Err("unexpected extra read"@) }
+    else if path == "read-error"@ { Err("读取失败：é\0\n"@) }
+    else if path == "empty"@ { Ok(Seq::empty()) }
+    else if path == "decode-error"@ { Ok(seq![255u8, 0, 10]) }
+    else if state == 0 { Ok(seq![1u8, 0, 255]) }
+    else { Ok(seq![2u8, 255, 0]) }
+}
+
+fn registry_sequence_read(state: u8, path: &str) -> (out: (u8, Result<Vec<u8>, String>))
+    ensures out.0 as int == if state == 255 { 255 } else { state as int + 1 },
+        registry_sequence_original(out.1) == registry_sequence_read_model(state, path@),
+{
+    if state == 255 { return (state, Err("unexpected extra read".to_owned())); }
+    let next = state + 1;
+    if scope_text::equal_text(path, "read-error") { (next, Err("读取失败：é\0\n".to_owned())) }
+    else if scope_text::equal_text(path, "empty") { (next, Ok(Vec::new())) }
+    else if scope_text::equal_text(path, "decode-error") { (next, Ok(vec![255u8, 0, 10])) }
+    else if state == 0 { (next, Ok(vec![1u8, 0, 255])) }
+    else { (next, Ok(vec![2u8, 255, 0])) }
+}
+
+spec fn registry_sequence_bytes(bytes: Map<String, Vec<u8>>) -> Map<String, Seq<u8>> {
+    Map::new(|key: String| bytes.contains_key(key), |key: String| bytes[key]@)
+}
+
+spec fn registry_sequence_view(out: (u8, Result<(std::collections::BTreeMap<String, Vec<u8>>,
+    std::collections::BTreeMap<String, u64>), String>))
+    -> (u8, Result<(Map<String, Seq<u8>>, Map<String, u64>), Seq<char>>)
+{
+    (out.0, match out.1 {
+        Ok((bytes, values)) => Ok((registry_sequence_bytes(bytes@), values@)),
+        Err(error) => Err(error@),
+    })
+}
+
+// 独立读取器和解析器的参考结果；具体用例另外断言完整错误、读取次数和两个 map。
+spec fn registry_sequence_expected(paths: Seq<String>, at: int,
+    bytes: Map<String, Seq<u8>>, values: Map<String, u64>)
+    -> (u8, Result<(Map<String, Seq<u8>>, Map<String, u64>), Seq<char>>)
+    recommends 0 <= at <= paths.len() <= 3,
+    decreases paths.len() - at,
+{
+    if at >= paths.len() { (at as u8, Ok((bytes, values))) }
+    else {
+        match registry_sequence_read_model(at as u8, paths[at]@) {
+            Err(error) => ((at + 1) as u8, Err(error)),
+            Ok(raw) => match registry_decode_model(raw) {
+                Err(error) => ((at + 1) as u8, Err(error)),
+                Ok(value) => registry_sequence_expected(paths, at + 1,
+                    bytes.insert(paths[at], raw), values.insert(paths[at], value)),
+            },
+        }
+    }
+}
+
+proof fn registry_sequence_bytes_insert(bytes: Map<String, Vec<u8>>, key: String, raw: Vec<u8>)
+    ensures registry_sequence_bytes(bytes.insert(key, raw))
+        == registry_sequence_bytes(bytes).insert(key, raw@),
+{
+    assert(registry_sequence_bytes(bytes.insert(key, raw))
+        =~= registry_sequence_bytes(bytes).insert(key, raw@));
+}
+
+proof fn registry_sequence_bytes_facts(bytes: Map<String, Vec<u8>>)
+    ensures registry_sequence_bytes(bytes).dom() == bytes.dom(),
+        forall|key: String| #[trigger] bytes.contains_key(key)
+            ==> registry_sequence_bytes(bytes)[key] == bytes[key]@,
+{
+    assert(registry_sequence_bytes(bytes).dom() =~= bytes.dom());
+}
+
+proof fn registry_sequence_fixture_step(paths: Seq<String>,
+    before: (u8, Map<String, Vec<u8>>, Map<String, u64>),
+    after: (u8, Map<String, Vec<u8>>, Map<String, u64>))
+    requires before.0 < paths.len() <= 3,
+        policy::registry_read_sequence_step(before, after, paths[before.0 as int],
+            registry_sequence_read, decode_registry_fixture),
+    ensures after.0 as int == before.0 as int + 1,
+        registry_sequence_expected(paths, before.0 as int, registry_sequence_bytes(before.1), before.2)
+            == registry_sequence_expected(paths, after.0 as int, registry_sequence_bytes(after.1), after.2),
+{
+    reveal(policy::registry_read_sequence_step);
+    let (path, raw, input, value) = choose|path: &str, raw: Vec<u8>, input: &[u8], value: u64|
+        path@ == paths[before.0 as int]@ && input@ == raw@
+        && registry_sequence_read.ensures((before.0, path), (after.0, Ok::<Vec<u8>, String>(raw)))
+        && decode_registry_fixture.ensures((input,), Ok::<u64, String>(value))
+        && after.1 == before.1.insert(paths[before.0 as int], raw)
+        && after.2 == before.2.insert(paths[before.0 as int], value);
+    registry_sequence_bytes_insert(before.1, paths[before.0 as int], raw);
+    reveal_with_fuel(registry_sequence_expected, 1);
+}
+
+proof fn registry_sequence_fixture_prefix(paths: Seq<String>,
+    states: Seq<(u8, Map<String, Vec<u8>>, Map<String, u64>)>,
+    initial: (u8, Map<String, Vec<u8>>, Map<String, u64>), at: int)
+    requires initial.0 == 0, paths.len() <= 3, 0 <= at < states.len(),
+        policy::registry_read_sequence_prefix(states, initial, paths,
+            registry_sequence_read, decode_registry_fixture),
+    ensures states[at].0 as int == at,
+        registry_sequence_expected(paths, 0, registry_sequence_bytes(initial.1), initial.2)
+            == registry_sequence_expected(paths, at, registry_sequence_bytes(states[at].1), states[at].2),
+    decreases at,
+{
+    if at > 0 {
+        registry_sequence_fixture_prefix(paths, states, initial, at - 1);
+        assert(policy::registry_read_sequence_step(states[at - 1], states[at], paths[at - 1],
+            registry_sequence_read, decode_registry_fixture));
+        registry_sequence_fixture_step(paths, states[at - 1], states[at]);
+    }
+}
+
+proof fn registry_sequence_fixture_result(paths: Seq<String>,
+    bytes: Map<String, Vec<u8>>, values: Map<String, u64>,
+    out: (u8, Result<(std::collections::BTreeMap<String, Vec<u8>>,
+        std::collections::BTreeMap<String, u64>), String>))
+    requires paths.len() <= 3,
+        policy::registry_read_sequence_result((0u8, bytes, values), paths,
+            registry_sequence_read, decode_registry_fixture, out),
+    ensures registry_sequence_view(out)
+        == registry_sequence_expected(paths, 0, registry_sequence_bytes(bytes), values),
+{
+    let initial = (0u8, bytes, values);
+    let states = choose|states: Seq<(u8, Map<String, Vec<u8>>, Map<String, u64>)>|
+        policy::registry_read_sequence_prefix(states, initial, paths,
+            registry_sequence_read, decode_registry_fixture)
+        && policy::registry_read_sequence_terminal(states.last(), states.len() - 1, paths,
+            registry_sequence_read, decode_registry_fixture, out);
+    registry_sequence_fixture_prefix(paths, states, initial, states.len() - 1);
+    let at = states.len() - 1;
+    let before = states.last();
+    reveal(policy::registry_read_sequence_terminal);
+    reveal_with_fuel(registry_sequence_expected, 1);
+    match out.1 {
+        Ok(_) => {},
+        Err(error) => {
+            let (path, observation) = choose|path: &str, observation: (u8, Result<Vec<u8>, String>)|
+                path@ == paths[at]@
+                && registry_sequence_read.ensures((before.0, path), observation)
+                && out.0 == observation.0
+                && match observation.1 {
+                    Err(original) => error@ == original@,
+                    Ok(raw) => exists|input: &[u8]| input@ == raw@
+                        && decode_registry_fixture.ensures((input,), Err::<u64, String>(error)),
+                };
+            match observation.1 {
+                Err(_) => {},
+                Ok(raw) => {
+                    let input = choose|input: &[u8]| input@ == raw@
+                        && decode_registry_fixture.ensures((input,), Err::<u64, String>(error));
+                },
+            }
+        },
+    }
+}
+
+proof fn registry_sequence_fixture_texts()
+    ensures "read-error"@.len() == 10, "empty"@.len() == 5, "decode-error"@.len() == 12,
+        "first"@.len() == 5, "first"@ != "empty"@,
+        "later"@.len() == 5, "later"@ != "empty"@, "same"@.len() == 4,
+        "旧/é"@.len() == 3, "../目录/é\0\n"@.len() == 9,
+{
+    reveal_strlit("read-error"); reveal_strlit("empty"); reveal_strlit("decode-error");
+    reveal_strlit("first"); reveal_strlit("later"); reveal_strlit("same");
+    reveal_strlit("旧/é"); reveal_strlit("../目录/é\0\n");
+    assert("first"@[0] != "empty"@[0]);
+    assert("later"@[0] != "empty"@[0]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_empty_keeps_initial_maps_and_reader()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let key = "旧/é".to_owned();
+    let mut bytes = std::collections::BTreeMap::new();
+    let mut values = std::collections::BTreeMap::new();
+    bytes.insert(key.clone(), vec![255u8, 0, 10]);
+    values.insert(key.clone(), u64::MAX);
+    let ghost initial = (bytes@, values@);
+    let out = policy::registry_read_sequence(Vec::new(), 0u8, bytes, values,
+        registry_sequence_read, decode_registry_fixture);
+    proof { registry_sequence_fixture_result(Seq::empty(), initial.0, initial.1, out); }
+    expect_status_true(out.0 == 0);
+    match out.1 {
+        Ok((bytes, values)) => {
+            expect_status_true(bytes.len() == 1 && values.len() == 1);
+            expect_registry_pair(&bytes, &values, &key, &[255u8, 0, 10], u64::MAX);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+fn expect_registry_sequence_fixture_error(paths: Vec<String>, count: u8, expected: &str)
+    requires vstd::laws_cmp::obeys_cmp::<String>(), paths.len() <= 3,
+        registry_sequence_expected(paths@, 0, Map::empty(), Map::empty())
+            == (count, Err::<(Map<String, Seq<u8>>, Map<String, u64>), Seq<char>>(expected@)),
+{
+    let ghost requested = paths@;
+    let out = policy::registry_read_sequence(paths, 0u8,
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        registry_sequence_read, decode_registry_fixture);
+    proof {
+        assert(registry_sequence_bytes(Map::<String, Vec<u8>>::empty())
+            =~= Map::<String, Seq<u8>>::empty());
+        registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out);
+    }
+    expect_status_true(out.0 == count);
+    expect_registry_batch_error(out.1, expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_first_read_error_stops_before_parse_or_later_read()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
+    expect_registry_sequence_fixture_error(vec!["read-error".to_owned(), "decode-error".to_owned()],
+        1, "读取失败：é\0\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_empty_decode_error_stops_before_later_read()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
+    expect_registry_sequence_fixture_error(vec!["empty".to_owned(), "read-error".to_owned()],
+        1, "空输入\0\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_decode_error_wins_over_later_read_error()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
+    expect_registry_sequence_fixture_error(vec!["decode-error".to_owned(), "read-error".to_owned()],
+        1, "解码失败：é\0\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_read_error_after_success_discards_partial_maps()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
+    expect_registry_sequence_fixture_error(vec!["first".to_owned(), "read-error".to_owned(), "later".to_owned()],
+        2, "读取失败：é\0\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_decode_error_after_success_discards_partial_maps()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
+    expect_registry_sequence_fixture_error(vec!["first".to_owned(), "decode-error".to_owned(), "later".to_owned()],
+        2, "解码失败：é\0\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
+    let old = "旧/é".to_owned();
+    let key = "../目录/é\0\n".to_owned();
+    let mut bytes = std::collections::BTreeMap::new();
+    let mut values = std::collections::BTreeMap::new();
+    bytes.insert(old.clone(), vec![9u8]);
+    values.insert(old.clone(), u64::MAX);
+    let paths = vec![key.clone()];
+    let ghost initial = (paths@, bytes@, values@);
+    let out = policy::registry_read_sequence(paths, 0u8, bytes, values,
+        registry_sequence_read, decode_registry_fixture);
+    proof { registry_sequence_fixture_result(initial.0, initial.1, initial.2, out); }
+    expect_status_true(out.0 == 1);
+    match out.1 {
+        Ok((bytes, values)) => {
+            proof {
+                registry_sequence_bytes_facts(initial.1);
+                registry_sequence_bytes_facts(bytes@);
+            }
+            expect_status_true(bytes.len() == 2 && values.len() == 2);
+            expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
+            let original = [1u8, 0, 255];
+            proof {
+                assert(registry_sequence_bytes(bytes@)[key] == seq![1u8, 0, 255]);
+                assert(bytes@[key]@ =~= original@);
+            }
+            expect_registry_pair(&bytes, &values, &key, &original, 1);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_read_sequence_duplicate_keys_replace_both_maps_in_order()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
+    let key = "same".to_owned();
+    let paths = vec![key.clone(), key.clone()];
+    let ghost requested = paths@;
+    let out = policy::registry_read_sequence(paths, 0u8,
+        std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
+        registry_sequence_read, decode_registry_fixture);
+    proof {
+        assert(registry_sequence_bytes(Map::<String, Vec<u8>>::empty())
+            =~= Map::<String, Seq<u8>>::empty());
+        registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out);
+    }
+    expect_status_true(out.0 == 2);
+    match out.1 {
+        Ok((bytes, values)) => {
+            proof { registry_sequence_bytes_facts(bytes@); }
+            expect_status_true(bytes.len() == 1 && values.len() == 1);
+            let original = [2u8, 255, 0];
+            proof {
+                assert(registry_sequence_bytes(bytes@)[key] == seq![2u8, 255, 0]);
+                assert(bytes@[key]@ =~= original@);
+            }
+            expect_registry_pair(&bytes, &values, &key, &original, 2);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
 fn expect_single_registry_blob(path: &str, bytes: Vec<u8>, expected: Vec<u8>)
     requires bytes@ == expected@,
 {

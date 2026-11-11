@@ -379,9 +379,7 @@
       "id": "verify_judge_ci_tests",
       "kind": "verify",
       "operation": "test.judge-ci-tests",
-      "needs": [
-        "build_runner"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests",
       "rust_toolchain": true
     },
@@ -802,10 +800,8 @@
       ]
     },
     "verify_judge_ci_tests": {
-      "need": "judge-ci-tests 由 Cargo 从唯一生产 main.rs 编译 chrono-judge-ci-test-cli；真实 runner 消费该 CLI，核对分单元执行、汇总原件和固定 Git facts。",
-      "release_assets": [
-        "chrono-harness"
-      ]
+      "need": "judge-ci-tests 由 Cargo 从唯一生产 main.rs 编译 runner 和 judge-ci 测试 CLI，核对分单元执行、汇总原件和固定 Git facts，不消费发布资产。",
+      "release_assets": []
     },
     "verify_judge_registration_tests": {
       "need": "crates/judge-registration-tests/tests/registration_contract.rs runs runner with registration and checks admission failures and passed registration evidence for the declared host inputs.",

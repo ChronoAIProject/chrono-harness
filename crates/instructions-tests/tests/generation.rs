@@ -1427,6 +1427,42 @@ fn all_publication_entries_record_success_failure_and_noop_without_rewriting_tar
 }
 
 #[test]
+fn publication_finishes_sealing_before_reporting_init_generate_and_noop_success() {
+    let host = Host::new();
+    for init in [true, false, false] {
+        if !init {
+            host.write(METHOD, "body after init");
+        }
+        let changed = test_support::operation_with_sealing_round_budget(&host.root, init, 1)
+            .unwrap_or_else(|error| panic!("init={init}: {error}"));
+        if init {
+            assert!(!changed.is_empty());
+        }
+        let state = chrono_instructions::status(&host.root, None).unwrap();
+        for record in state["records"].as_array().unwrap() {
+            assert_eq!(record["phase"], "released", "{record}");
+            assert_eq!(record["sealed"], true, "{record}");
+        }
+        let inventory =
+            chrono_harness::retained_artifacts::retention::Inventory::with_standalone_policy(
+                &host.root,
+                include_bytes!("../../../assets/instructions/standalone-retention.json"),
+            )
+            .unwrap();
+        assert!(
+            inventory
+                .rooted_original(
+                    "instructions-operation",
+                    "instructions-publication-recovery"
+                )
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert!(generate(&host.root).unwrap().is_empty());
+}
+
+#[test]
 fn finalization_failure_is_real_and_the_same_attempt_is_recoverable() {
     for point in [
         "cleanup",

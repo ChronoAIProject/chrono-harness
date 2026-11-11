@@ -4256,6 +4256,109 @@ fn independent_report_slots_publish_while_another_slot_is_held() {
 }
 
 #[test]
+fn synchronous_completion_seals_across_exhausted_rounds_before_handoff() {
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/synchronous-result";
+    let publication = inventory(h.path())
+        .plan_rooted(
+            "fixture",
+            path,
+            json!({"request":"original"}),
+            "domain-recovery",
+        )
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.materialize().unwrap();
+    let bytes = b"exact producer result";
+    fs::write(h.path().join(path).join("result.json"), bytes).unwrap();
+    let mut rounds = 0;
+    publication
+        .complete_sealed_with_round_budget(json!({"publication":"committed"}), |steps| {
+            if steps == 0 {
+                rounds += 1;
+                assert_eq!(
+                    inventory(h.path())
+                        .rooted_original("fixture", "domain-recovery")
+                        .unwrap()
+                        .unwrap()
+                        .0,
+                    id
+                );
+            }
+            steps >= 1
+        })
+        .unwrap();
+    assert!(
+        rounds > 1,
+        "the clock must force multiple actual sealing rounds"
+    );
+    let state = ledger(h.path());
+    let output = state["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["id"] == id)
+        .unwrap();
+    assert_eq!(output["phase"], "released", "{output}");
+    assert_eq!(output["manifest"]["sealed"], true, "{output}");
+    assert_eq!(output["outcome"]["publication"], "committed");
+    let _guard = retained_artifacts::retention::read_guard(h.path(), path)
+        .unwrap()
+        .unwrap();
+    assert!(
+        inventory(h.path())
+            .published_tree_member(
+                "fixture",
+                path,
+                &format!("{path}/result.json"),
+                &chrono_harness::sha256(bytes),
+                bytes.len() as u64
+            )
+            .unwrap()
+    );
+}
+
+#[test]
+fn synchronous_sealing_preserves_recovery_and_actual_error_on_changed_tree() {
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/changed-synchronous-result";
+    let publication = inventory(h.path())
+        .plan_rooted(
+            "fixture",
+            path,
+            json!({"request":"original"}),
+            "domain-recovery",
+        )
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.materialize().unwrap();
+    fs::write(h.path().join(path).join("result.json"), b"original").unwrap();
+    let mut rounds = 0;
+    let error = publication
+        .complete_sealed_with_round_budget(json!({"publication":"committed"}), |steps| {
+            if steps == 0 {
+                rounds += 1;
+                if rounds == 2 {
+                    fs::write(h.path().join(path).join("unexpected"), b"changed").unwrap();
+                }
+            }
+            steps >= 1
+        })
+        .unwrap_err();
+    assert!(error.contains("tree changed while sealing"), "{error}");
+    let original = inventory(h.path())
+        .rooted_original("fixture", "domain-recovery")
+        .unwrap()
+        .unwrap();
+    assert_eq!(original.0, id);
+    assert_eq!(original.2, "sealing");
+    assert_eq!(
+        fs::read(h.path().join(path).join("result.json")).unwrap(),
+        b"original"
+    );
+}
+
+#[test]
 fn completion_io_allows_independent_publication_and_preserves_new_references() {
     if !isolated_capability_test(
         "completion_io_allows_independent_publication_and_preserves_new_references",
@@ -6134,6 +6237,81 @@ fn sealed_tree_member_qualification_requires_exact_producer_identity_and_bytes()
         inventory(h.path())
             .published_tree_member("fixture", path, &member, &digest, 8)
             .is_err()
+    );
+}
+
+#[test]
+fn publication_input_handoff_validates_every_publisher_before_releasing_any() {
+    if !isolated_capability_test(
+        "publication_input_handoff_validates_every_publisher_before_releasing_any",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let inputs = ["first", "second", "independent"].map(|name| {
+        let path = format!(".chrono-harness/state/fixtures/{name}.stdout");
+        retained_artifacts::retention::publish_pending_original(
+            h.path(),
+            "fixture",
+            &path,
+            name.as_bytes(),
+            json!({}),
+        )
+        .unwrap();
+        path
+    });
+    let destination = ".chrono-harness/state/fixtures/domain-result";
+    let publication = inventory(h.path())
+        .plan("fixture", destination, true, json!({}))
+        .unwrap();
+    publication.materialize().unwrap();
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[destination.into()])
+        .unwrap();
+    inventory(h.path())
+        .dependencies_paths(destination, &inputs[..2])
+        .unwrap();
+    publication.complete(json!({"exit_code":0})).unwrap();
+    let state = ledger(h.path());
+    let id = |path: &str| {
+        state["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["path"] == path)
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let second = id(&inputs[1]);
+    let role = format!("consumer:publication-recheck:{second}");
+    inventory(h.path())
+        .reference(&role, &[second.clone(), id(&inputs[2])])
+        .unwrap();
+    let before = ledger(h.path())["roots"].clone();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &inputs[..2])
+            .is_err()
+    );
+    assert_eq!(
+        ledger(h.path())["roots"],
+        before,
+        "a later publisher's changed declaration must preserve every earlier handoff"
+    );
+    inventory(h.path()).reference(&role, &[second]).unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &inputs[..2])
+        .unwrap();
+    let roots = ledger(h.path())["roots"].clone();
+    assert_eq!(roots.as_object().unwrap().len(), 2, "{roots}");
+    assert!(roots.get("domain-recovery").is_some());
+    assert!(
+        roots
+            .get(format!("consumer:publication-recheck:{}", id(&inputs[2])))
+            .is_some(),
+        "the independent publisher keeps its protection"
     );
 }
 

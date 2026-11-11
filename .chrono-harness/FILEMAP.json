@@ -136,7 +136,7 @@
     {"path":"crates/runner/Cargo.lock","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner/src/lib.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner/src/short_console.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
-    {"path":"crates/runner/src/main.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"},{"kind":"compile","to":"project:runner-tests"},{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/runner/src/main.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"compile","to":"project:runner-tests"},{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner/src/publication.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner-tests/Cargo.toml","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner-tests/Cargo.lock","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -1309,7 +1309,6 @@
         "verify.ci-collection",
         "fmt.judge-ci",
         "fmt.judge-ci-tests",
-        "build.runner",
         "test.judge-ci-tests"
       ],
       "timeout_seconds": 900,

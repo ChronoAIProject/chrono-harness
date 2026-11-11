@@ -51,7 +51,7 @@ use chrono_harness::{
     artifact_disposal::{identity, publish_entry},
     decode, no_symlink_parents,
     ownership::DirectoryLease,
-    retained_artifacts::retention::{Inventory, unique_path},
+    retained_artifacts::retention::{Inventory, Publication, unique_path},
     sha256,
 };
 use serde::{Deserialize, Serialize};
@@ -76,6 +76,16 @@ pub(super) struct Fault {
     pub rollback: Option<usize>,
     pub checkpoint: Option<fn(&str)>,
     pub fail: Option<String>,
+    #[cfg(feature = "test-support")]
+    pub sealing_steps: Option<usize>,
+}
+
+fn complete(publication: Publication, outcome: Value, _fault: &Fault) -> Result<(), String> {
+    #[cfg(feature = "test-support")]
+    if let Some(limit) = _fault.sealing_steps {
+        return publication.complete_sealed_with_round_budget(outcome, |steps| steps >= limit);
+    }
+    publication.complete_sealed(outcome)
 }
 
 impl Fault {
@@ -787,9 +797,10 @@ fn release(root: &Path, attempt: &str, id: &str, result: &Value) -> Result<(), S
             Some("committed" | "verified-committed" | "restored" | "not-started")
         ),
     ) {
-        return Err(
-            "publication result is not sealed and bound; retain the recovery reference".into(),
-        );
+        return Err(format!(
+            "publication result is not sealed and bound; retain the recovery reference; attached={attached}, result_bound={bound}, publication={}",
+            result["publication"]
+        ));
     }
     state.reference_paths(ACTIVE, &[])
 }
@@ -894,8 +905,10 @@ fn recover(root: &Path, fault: &Fault) -> Result<(), String> {
         Ok(())
     })?.ok_or("instruction recovery publication unavailable")?;
     let result = result.ok_or("instruction recovery result missing")?;
-    publication.complete(
+    complete(
+        publication,
         json!({"intent":bound, "result":"result.json", "publication":result["publication"]}),
+        fault,
     )?;
     fault.at("sealed")?;
     release(root, &attempt, &id, &result)
@@ -1017,7 +1030,11 @@ pub(super) fn run(
         record(&directory, "result.json", &state)
             .map_err(|e| format!("{result:?}; state failure: {e}; attempt {attempt}"))?;
         fault.at("before-seal")?;
-        publication.complete(json!({"intent":intent, "result":"result.json", "publication":state["publication"]}))
+        complete(
+            publication,
+            json!({"intent":intent, "result":"result.json", "publication":state["publication"]}),
+            &fault,
+        )
         .map_err(|e| format!("{result:?}; retention state failure: {e}; attempt {attempt}"))?;
         fault.at("sealed")?;
         fault.at("release")?;

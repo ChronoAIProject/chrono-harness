@@ -149,22 +149,34 @@ pub fn registry_snapshot_with(
 ) -> Result<RegistrySnapshot, String> {
     registry_snapshot_with_target(path, None, read)
 }
-fn registry_snapshot_with_target(
+fn registry_snapshot_with_target<F>(
     path: &str,
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
-    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<RegistrySnapshot, String> {
+    mut read: F,
+) -> Result<RegistrySnapshot, String>
+where
+    F: FnMut(&str) -> Result<Vec<u8>, String>,
+{
     let (mut snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
-    for path in crate::verified_status::pending_registry_paths(
+    let pending = crate::verified_status::pending_registry_paths(
         paths,
         &snapshot.entry_path,
         &snapshot.effective_path,
-    ) {
-        let original = read(&path)?;
-        let value = json(&original)?;
-        snapshot.bytes.insert(path.clone(), original);
-        snapshot.values.insert(path, value);
-    }
+    );
+    let (_, result) = crate::verified_status::registry_read_sequence(
+        pending,
+        &mut read,
+        snapshot.bytes,
+        snapshot.values,
+        |reader: &mut F, path: &str| {
+            let result = reader(path);
+            (reader, result)
+        },
+        json,
+    );
+    let (bytes, values) = result?;
+    snapshot.bytes = bytes;
+    snapshot.values = values;
     Ok(snapshot)
 }
 /// Resolve the entry and selector before acquiring their explicit registry list.
@@ -190,13 +202,15 @@ fn registry_snapshot_with_batches_target(
         &snapshot.effective_path,
     );
     let originals = read(&pending)?;
-    crate::verified_status::registry_acquisition_count(pending.len(), originals.len())?;
-    for (expected, (path, original)) in pending.iter().zip(originals) {
-        crate::verified_status::registry_acquisition_path(expected, &path)?;
-        let value = json(&original)?;
-        snapshot.bytes.insert(path.clone(), original);
-        snapshot.values.insert(path, value);
-    }
+    let (bytes, values) = crate::verified_status::registry_parse_batch(
+        &pending,
+        originals,
+        snapshot.bytes,
+        snapshot.values,
+        json,
+    )?;
+    snapshot.bytes = bytes;
+    snapshot.values = values;
     Ok(snapshot)
 }
 fn registry_snapshot_start(

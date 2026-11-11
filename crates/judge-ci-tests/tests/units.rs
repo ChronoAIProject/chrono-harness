@@ -34,8 +34,7 @@ fn unit(h: &Host, base: &str, candidate: &str, unit: &str) -> Response {
 }
 
 fn cli(h: &Host, base: &str, candidate: &str, selector: &[&str]) -> (i32, Value) {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new(source.join("crates/runner/target/debug/chrono-harness"))
+    let output = Command::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
         .current_dir(h.root())
         .args([
             "check",
