@@ -1789,7 +1789,8 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
             .begin_rooted("fixture", &input_path, json!(null), &["current".into()])
             .unwrap();
         let input_id = input.id().to_owned();
-        input.complete(json!({"exit": 7})).unwrap();
+        // An unfinished dependency requires the full component, including its
+        // consumers. Finalized originals use the independent report frontier.
         let report_path = tree(h.path(), "obsolete-report");
         let report = inventory(h.path())
             .begin("fixture", &report_path, json!(null))
@@ -1848,6 +1849,7 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
         inventory(h.path()).maintain_originals(&[other_id]).unwrap();
         assert!(!h.path().join(&other_path).exists());
         drop(holder);
+        input.complete(json!({"exit": 7})).unwrap();
         inventory(h.path())
             .maintain_originals(&[report_id])
             .unwrap();
