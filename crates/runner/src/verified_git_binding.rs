@@ -276,6 +276,108 @@ pub fn select_captured_target<'a, M: RegistryMembership>(paths: &[&'a str], valu
     }
 }
 
+pub fn admit_identity_object(fields: Option<usize>, program: bool, configurations: bool)
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => fields == Some(2usize) && program && configurations,
+        Err(error) => if fields.is_none() {
+            error@ == "Git selector identity object required"@
+        } else {
+            (fields != Some(2usize) || !program || !configurations)
+                && error@ == "Git selector identity requires only program and configurations"@
+        },
+    },
+{
+    match fields {
+        None => Err("Git selector identity object required"),
+        Some(2) if program && configurations => Ok(()),
+        Some(_) => Err("Git selector identity requires only program and configurations"),
+    }
+}
+
+pub open spec fn literal_program(text: &str, absolute: bool) -> bool {
+    absolute && forall|i: int| 0 <= i < text.spec_bytes().len() ==>
+        (#[trigger] text.spec_bytes()[i] != 0 && text.spec_bytes()[i] != 10
+            && text.spec_bytes()[i] != 13)
+}
+
+pub fn admit_identity_program(program: Option<&str>, absolute: bool)
+    -> (out: Result<&str, &'static str>)
+    ensures match out {
+        Ok(text) => program == Some(text) && text@.len() > 0 && literal_program(text, absolute),
+        Err(error) => if (match program { Some(text) => text@.len() > 0, None => false }) {
+            !literal_program(program.unwrap(), absolute)
+                && error@ == "Git selector program must be an absolute literal path"@
+        } else { error@ == "Git selector program required"@ },
+    },
+{
+    let Some(text) = program else { return Err("Git selector program required"); };
+    if text.is_empty() { return Err("Git selector program required"); }
+    if !absolute { return Err("Git selector program must be an absolute literal path"); }
+    let bytes = text.as_bytes();
+    let mut i = 0;
+    while i < bytes.len()
+        invariant i <= bytes.len(), absolute, program == Some(text), text@.len() > 0,
+            bytes@ == text.spec_bytes(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] bytes[j] != 0
+                && bytes[j] != 10 && bytes[j] != 13),
+        decreases bytes.len() - i,
+    {
+        if bytes[i] == 0 || bytes[i] == 10 || bytes[i] == 13 {
+            assert(!literal_program(text, absolute));
+            return Err("Git selector program must be an absolute literal path");
+        }
+        i += 1;
+    }
+    Ok(text)
+}
+
+pub fn admit_identity_configurations<T>(rows: Option<(&T, usize)>)
+    -> (out: Result<&T, &'static str>)
+    ensures match out {
+        Ok(actual) => match rows { Some((original, count)) => count > 0 && actual == original, None => false },
+        Err(error) => (match rows { Some((_, count)) => count == 0, None => true })
+            && error@ == "Git selector requires nonempty configurations"@,
+    },
+{
+    match rows {
+        Some((rows, count)) if count > 0 => Ok(rows),
+        _ => Err("Git selector requires nonempty configurations"),
+    }
+}
+
+pub fn identity_registry_path(path: Option<&str>) -> (out: Result<&str, &'static str>)
+    ensures match out {
+        Ok(actual) => path == Some(actual),
+        Err(error) => path.is_none() && error@ == "Git selector registry_path required"@,
+    },
+{
+    path.ok_or("Git selector registry_path required")
+}
+
+pub fn admit_identity_registry_target(path: &str, targets: &[&str])
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => exists|i: int| 0 <= i < targets.len() && targets@[i]@ == path@,
+        Err(error) => (forall|i: int| 0 <= i < targets.len() ==> targets@[i]@ != path@)
+            && error@ == "Git selector registry_path must name a registered policy target"@,
+    },
+{
+    let mut i = 0;
+    while i < targets.len()
+        invariant i <= targets.len(),
+            forall|j: int| 0 <= j < i ==> #[trigger] targets@[j]@ != path@,
+        decreases targets.len() - i,
+    {
+        if identifiers::equal_text(path, targets[i]) {
+            assert(exists|j: int| 0 <= j < targets.len() && targets@[j]@ == path@);
+            return Ok(());
+        }
+        i += 1;
+    }
+    Err("Git selector registry_path must name a registered policy target")
+}
+
 pub fn valid_version(schema: u64, present: bool, null: bool, text: Option<&str>) -> (valid: bool)
     ensures valid <==> (present && match text {
         Some(value) => value@.len() > 0,

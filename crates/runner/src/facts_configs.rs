@@ -246,26 +246,24 @@ impl crate::verified_git_binding::RegistryMembership for CapturedRegistry<'_> {
 }
 
 fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
-    let object = host
-        .as_object()
-        .ok_or("Git selector identity object required")?;
-    if object.len() != 2
-        || !object.contains_key("program")
-        || !object.contains_key("configurations")
-    {
-        return Err("Git selector identity requires only program and configurations".into());
-    }
-    let program = host["program"]
-        .as_str()
-        .filter(|p| !p.is_empty())
-        .ok_or("Git selector program required")?;
-    if !Path::new(program).is_absolute() || program.contains(['\0', '\n', '\r']) {
-        return Err("Git selector program must be an absolute literal path".into());
-    }
-    let rows = host["configurations"]
-        .as_array()
-        .filter(|rows| !rows.is_empty())
-        .ok_or("Git selector requires nonempty configurations")?;
+    use crate::verified_git_binding::{
+        admit_identity_configurations, admit_identity_object, admit_identity_program,
+        admit_identity_registry_target, identity_registry_path,
+    };
+
+    admit_identity_object(
+        host.as_object().map(|object| object.len()),
+        host.get("program").is_some(),
+        host.get("configurations").is_some(),
+    )?;
+    let program = host["program"].as_str();
+    admit_identity_program(
+        program,
+        program.is_some_and(|program| Path::new(program).is_absolute()),
+    )?;
+    let rows = admit_identity_configurations(
+        host["configurations"].as_array().map(|rows| (rows, rows.len())),
+    )?;
     let mut hashes = std::collections::BTreeSet::new();
     let mut unique_paths = std::collections::BTreeSet::new();
     let mut paths = vec![];
@@ -294,15 +292,9 @@ fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
     }
     if version3 {
         for row in rows {
-            let path = row["registry_path"]
-                .as_str()
-                .ok_or("Git selector registry_path required")?;
+            let path = identity_registry_path(row["registry_path"].as_str())?;
             host_path(path, None)?;
-            if !paths.contains(&path) {
-                return Err(
-                    "Git selector registry_path must name a registered policy target".into(),
-                );
-            }
+            admit_identity_registry_target(path, &paths)?;
         }
     }
     Ok(paths)

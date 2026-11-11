@@ -94,6 +94,81 @@ impl policy::RegistryMembership for CapturedPath<'_> {
     }
 }
 
+fn expect_identity_error<T>(result: Result<T, &str>, expected: &str)
+    requires match result { Ok(_) => false, Err(error) => error@ == expected@ },
+{
+    match result {
+        Ok(_) => { panic!(); },
+        Err(error) => { expect_true(policy::matches_expected(error, Some(expected))); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn identity_header_requires_exact_fields_then_nonempty_configurations() {
+    let fields = "Git selector identity requires only program and configurations";
+    expect_identity_error(policy::admit_identity_object(None, false, false),
+        "Git selector identity object required");
+    expect_identity_error(policy::admit_identity_object(Some(3), true, true), fields);
+    expect_identity_error(policy::admit_identity_object(Some(2), false, true), fields);
+    expect_identity_error(policy::admit_identity_object(Some(2), true, false), fields);
+    expect_true(policy::admit_identity_object(Some(2), true, true).is_ok());
+    expect_identity_error(policy::admit_identity_configurations::<u8>(None),
+        "Git selector requires nonempty configurations");
+    expect_identity_error(policy::admit_identity_configurations(Some((&7u8, 0))),
+        "Git selector requires nonempty configurations");
+    match policy::admit_identity_configurations(Some((&7u8, 1))) {
+        Ok(rows) => { expect_true(*rows == 7); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn identity_program_keeps_missing_empty_absolute_and_control_boundaries() {
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    proof {
+        reveal_strlit(""); reveal_strlit("/git/tool"); reveal_strlit("/git/tool ");
+        reveal_strlit("/git/\0"); reveal_strlit("/git/\n"); reveal_strlit("/git/\r");
+        assert(vstd::string::is_ascii("/git/tool") && vstd::string::is_ascii("/git/tool "));
+        assert(vstd::string::is_ascii("/git/\0") && vstd::string::is_ascii("/git/\n")
+            && vstd::string::is_ascii("/git/\r"));
+        assert("/git/\0".spec_bytes()[5] == 0 && "/git/\n".spec_bytes()[5] == 10
+            && "/git/\r".spec_bytes()[5] == 13);
+        assert(!policy::literal_program("/git/\0", true));
+        assert(!policy::literal_program("/git/\n", true));
+        assert(!policy::literal_program("/git/\r", true));
+    }
+    let missing = "Git selector program required";
+    let invalid = "Git selector program must be an absolute literal path";
+    expect_identity_error(policy::admit_identity_program(None, true), missing);
+    expect_identity_error(policy::admit_identity_program(Some(""), false), missing);
+    expect_identity_error(policy::admit_identity_program(Some("/git/tool"), false), invalid);
+    expect_identity_error(policy::admit_identity_program(Some("/git/\0"), true), invalid);
+    expect_identity_error(policy::admit_identity_program(Some("/git/\n"), true), invalid);
+    expect_identity_error(policy::admit_identity_program(Some("/git/\r"), true), invalid);
+    match policy::admit_identity_program(Some("/git/tool "), true) {
+        Ok(program) => { expect_true(policy::matches_expected(program, Some("/git/tool "))); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn identity_registry_target_requires_text_and_exact_membership() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("a\0");
+        assert("a"@.len() != "a\0"@.len());
+    }
+    expect_identity_error(policy::identity_registry_path(None), "Git selector registry_path required");
+    match policy::identity_registry_path(Some("a")) {
+        Ok(path) => { expect_true(policy::matches_expected(path, Some("a"))); },
+        Err(_) => { panic!(); },
+    }
+    expect_true(policy::admit_identity_registry_target("a", &["a", "a"]).is_ok());
+    expect_identity_error(policy::admit_identity_registry_target("a", &[]),
+        "Git selector registry_path must name a registered policy target");
+    expect_identity_error(policy::admit_identity_registry_target("a", &["a\0"]),
+        "Git selector registry_path must name a registered policy target");
+}
+
 fn expect_captured_path(paths: &[&str], values: &CapturedPath, expected: &str, index: usize)
     requires policy::unique_registry_index(paths@, values, index as int),
         paths@[index as int]@ == expected@,
