@@ -5949,6 +5949,12 @@ fn registry_snapshot_initial_distinct_paths_keep_both_complete_documents()
 {
     let entry = ".chrono-harness/入口\0\n".to_owned();
     let effective = ".chrono-harness/目标é\0\n".to_owned();
+    proof {
+        reveal_strlit(".chrono-harness/入口\0\n");
+        reveal_strlit(".chrono-harness/目标é\0\n");
+        assert(entry@.len() != effective@.len());
+        assert(entry != effective);
+    }
     let snapshot = policy::registry_snapshot_initial(
         entry.clone(), vec![0u8, 255, 10], u64::MAX,
         effective.clone(), vec![17u8, 0, 254], 0u64, Some(71u64),
@@ -5969,14 +5975,17 @@ fn registry_snapshot_initial_empty_identity_preserves_entry_and_selection()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     let entry = "".to_owned();
+    let original = Vec::new();
+    let expected: &[u8] = &[];
+    proof { assert(original@ =~= expected@); }
     let snapshot = policy::registry_snapshot_initial(
-        entry.clone(), Vec::new(), 0u64,
+        entry.clone(), original, 0u64,
         "".to_owned(), vec![255u8], u64::MAX, Some(u64::MAX),
     );
     expect_status_text(snapshot.entry_path.as_str(), "");
     expect_status_text(snapshot.effective_path.as_str(), "");
     expect_status_true(snapshot.bytes.len() == 1 && snapshot.values.len() == 1);
-    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[], 0u64);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, expected, 0u64);
     match snapshot.selection {
         Some(value) => { expect_status_true(value == u64::MAX); },
         None => { panic!(); },
@@ -5989,15 +5998,26 @@ fn registry_snapshot_initial_paths_remain_literal_and_case_sensitive()
 {
     let entry = "../A/é\0\n".to_owned();
     let effective = "../a/é\0\n".to_owned();
+    let original = Vec::new();
+    let effective_bytes = Vec::new();
+    let expected: &[u8] = &[];
+    proof {
+        reveal_strlit("../A/é\0\n");
+        reveal_strlit("../a/é\0\n");
+        assert(entry@[3] == 'A' && effective@[3] == 'a');
+        assert(entry != effective);
+        assert(original@ =~= expected@);
+        assert(effective_bytes@ =~= expected@);
+    }
     let snapshot = policy::registry_snapshot_initial(
-        entry.clone(), Vec::new(), 13u64,
-        effective.clone(), Vec::new(), 17u64, None,
+        entry.clone(), original, 13u64,
+        effective.clone(), effective_bytes, 17u64, None,
     );
     expect_status_text(snapshot.entry_path.as_str(), "../A/é\0\n");
     expect_status_text(snapshot.effective_path.as_str(), "../a/é\0\n");
     expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
-    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[], 13u64);
-    expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, &[], 17u64);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, expected, 13u64);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, expected, 17u64);
     expect_status_true(snapshot.selection.is_none());
 }
 
