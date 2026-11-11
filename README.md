@@ -10,13 +10,13 @@ chrono-harness 帮仓库按登记的依赖选择检查，让本地和 CI 使用�
 
 **目前已实现指南生成、CI 生成、共用的 `check` 入口，以及各检查程序的一部分功能。本仓正在使用按变更范围检查的 CI；五份完整检查登记仍标为 `proposed`，尚未全面启用。** 完整要求见 [SPEC.md](SPEC.md)，进度和缺口见[覆盖表](docs/spec-coverage.md)。
 
-[公开测试版 v0.1.0-beta.29](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0-beta.29) 提供 macOS arm64 和 Linux x86_64 可执行文件及一键安装脚本。在接入仓库根目录运行：
+[正式版 v0.1.0](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0) 提供 macOS arm64 和 Linux x86_64 可执行文件及一键安装脚本。在接入仓库根目录运行：
 
 ```sh
-curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v0.1.0-beta.29/install.sh | sh -s -- --host-root .
+curl -fsSL https://github.com/ChronoAIProject/chrono-harness/releases/download/v0.1.0/install.sh | sh -s -- --host-root .
 ```
 
-默认安装全部 16 个工具，无需 Python、Rust 工具链或 sudo。可用 `--tool NAME` 选择工具，已有不同安装用 `--replace` 显式升级。安装登记和生成入口归宿主维护，详见[发布与安装](docs/distribution.md#一键安装)。
+默认安装全部 15 个工具，无需 Python、Rust 工具链或 sudo。可用 `--tool NAME` 选择工具，已有不同安装用 `--replace` 显式升级。安装登记和生成入口归宿主维护，详见[发布与安装](docs/distribution.md#一键安装)。
 
 ## 从哪里开始
 
