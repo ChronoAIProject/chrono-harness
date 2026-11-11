@@ -129,14 +129,7 @@ pub fn registry_values(
     Reader::legacy().registry_values(root, oid, path)
 }
 /// Original bytes and parsed values from one registry read, without a global cache.
-pub struct RegistrySnapshot {
-    pub bytes: BTreeMap<String, Vec<u8>>,
-    pub values: BTreeMap<String, Value>,
-    /// The caller's stable entry and the direct endpoint used for policy.
-    pub entry_path: String,
-    pub effective_path: String,
-    pub selection: Option<Value>,
-}
+pub type RegistrySnapshot = crate::verified_status::RegistrySnapshot<Value>;
 pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
     Reader::legacy().registry_snapshot(root, oid, path)
 }
@@ -223,26 +216,23 @@ fn registry_snapshot_start(
         crate::facts_configs::resolve_target(path, original.clone(), target, &mut read)?;
     let config = json(&original)?;
     let paths = registry_paths(&effective_config, &effective_path)?;
-    let mut snapshot = RegistrySnapshot {
-        bytes: BTreeMap::from([(path.into(), original)]),
-        values: BTreeMap::from([(path.into(), config)]),
-        entry_path: path.into(),
-        effective_path: effective_path.clone(),
-        selection: selection.map(|s| {
-            let mut observation = s.observation;
-            if let Some(object) = observation.as_object_mut() {
-                object.remove("sha256");
-                object.insert("schema".into(), value!("chrono-registry-selection/v1"));
-            }
-            observation
-        }),
-    };
-    if effective_path != path {
-        snapshot
-            .bytes
-            .insert(effective_path.clone(), effective_bytes.clone());
-        snapshot.values.insert(effective_path, effective_config);
-    }
+    let selection = selection.map(|s| {
+        let mut observation = s.observation;
+        if let Some(object) = observation.as_object_mut() {
+            object.remove("sha256");
+            object.insert("schema".into(), value!("chrono-registry-selection/v1"));
+        }
+        observation
+    });
+    let snapshot = crate::verified_status::registry_snapshot_initial(
+        path.into(),
+        original,
+        config,
+        effective_path,
+        effective_bytes,
+        effective_config,
+        selection,
+    );
     Ok((snapshot, paths))
 }
 pub fn registry_digest(
