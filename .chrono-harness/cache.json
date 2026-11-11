@@ -1115,7 +1115,6 @@
       "consumers": [
         "check.unit_ci",
         "check.unit_inputs",
-        "check.unit_judge-ci",
         "check.unit_judge-cost",
         "check.unit_judge-filemap",
         "check.unit_judge-mixed",

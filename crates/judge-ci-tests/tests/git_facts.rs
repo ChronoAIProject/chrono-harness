@@ -11,9 +11,6 @@ struct BoundHost {
     base: String,
     legacy_base: String,
 }
-fn source() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
-}
 impl BoundHost {
     fn new(mode: &str) -> Self {
         let host = Host::new();
@@ -73,7 +70,7 @@ impl BoundHost {
         fs::read_to_string(&self.trace).unwrap_or_default()
     }
     fn cli(&self, candidate: &str) -> (i32, Value, String) {
-        let output = Command::new(source().join("crates/runner/target/debug/chrono-harness"))
+        let output = Command::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
             .current_dir("/")
             .env_clear()
             .env("PATH", &self.shadow)
