@@ -3396,6 +3396,22 @@ impl Publication {
     pub fn complete(self, outcome: Value) -> Result<(), String> {
         self.complete_with_release(outcome, None)
     }
+    /// Finish the caller's exact publication before a synchronous domain handoff.
+    /// Persist each bounded sealing round under the original capability; do not
+    /// poll maintenance, drop protection, or start a replacement publication.
+    pub fn complete_sealed(self, outcome: Value) -> Result<(), String> {
+        self.complete_mode(outcome, None, true, || {})
+    }
+    /// Deterministic round exhaustion for the dedicated regression consumer.
+    #[cfg(feature = "retention-test")]
+    #[doc(hidden)]
+    pub fn complete_sealed_with_round_budget(
+        self,
+        outcome: Value,
+        mut exhausted: impl FnMut(usize) -> bool,
+    ) -> Result<(), String> {
+        self.complete_rounds(outcome, None, true, || {}, |_, steps| exhausted(steps))
+    }
     /// A joined producer can release its own publication consumer after the
     /// actual caller has taken custody. Unsettled or interrupted publication
     /// uses complete and preserves the repair handoff.
@@ -3417,6 +3433,28 @@ impl Publication {
         outcome: Value,
         consumer: Option<&str>,
         observe: impl FnOnce(),
+    ) -> Result<(), String> {
+        self.complete_mode(outcome, consumer, false, observe)
+    }
+    fn complete_mode(
+        self,
+        outcome: Value,
+        consumer: Option<&str>,
+        seal_all: bool,
+        observe: impl FnOnce(),
+    ) -> Result<(), String> {
+        let millis = self.inventory.policy.max_millis_per_round;
+        self.complete_rounds(outcome, consumer, seal_all, observe, |began, _| {
+            began.elapsed().as_millis() >= millis as u128
+        })
+    }
+    fn complete_rounds(
+        self,
+        outcome: Value,
+        consumer: Option<&str>,
+        seal_all: bool,
+        observe: impl FnOnce(),
+        mut exhausted: impl FnMut(Instant, usize) -> bool,
     ) -> Result<(), String> {
         // Returning a completed original hands its capability to any enclosing
         // caller before the producer closes. A nested caller may have no durable
@@ -3452,86 +3490,108 @@ impl Publication {
         o.creation = None;
         o.outcome = outcome;
         o.phase = "sealing".into();
-        let began = Instant::now();
-        let mut steps = 0;
-        let mut accounting_error = None;
-        while !o.manifest.sealed
-            && steps < self.inventory.policy.max_manifest_nodes.saturating_mul(4)
-            && began.elapsed().as_millis() < self.inventory.policy.max_millis_per_round as u128
-        {
-            steps += 1;
-            if let Err(error) = o.manifest.step(
-                &self.inventory.root,
-                &o.path,
-                self.inventory.policy.max_manifest_nodes,
-                self.byte_limit,
-            ) {
-                accounting_error = Some(error);
-                break;
+        let mut total_steps = 0;
+        loop {
+            let o = &mut owned;
+            let began = Instant::now();
+            let mut steps = 0;
+            let mut accounting_error = None;
+            while !o.manifest.sealed
+                && total_steps < self.inventory.policy.max_manifest_nodes.saturating_mul(4)
+                && (!exhausted(began, steps) || (seal_all && steps == 0))
+            {
+                steps += 1;
+                total_steps += 1;
+                if let Err(error) = o.manifest.step(
+                    &self.inventory.root,
+                    &o.path,
+                    self.inventory.policy.max_manifest_nodes,
+                    self.byte_limit,
+                ) {
+                    accounting_error = Some(error);
+                    break;
+                }
             }
-        }
-        if o.manifest.sealed {
-            o.reserved_bytes = o.manifest.bytes;
-            o.phase = "released".into();
-        }
-        o.expires = now()?.saturating_add(self.inventory.keep_seconds(&o.producer));
-        self.lease.stable()?;
-        let roles = consumer
-            .map(|c| self.inventory.consumer_role(c))
-            .transpose()?
-            .into_iter()
-            .collect::<Vec<_>>();
-        let gate =
-            self.inventory
-                .addressed_gate(&[self.id.clone()], &[], &roles, None, false, true)?;
-        let mut l = self.inventory.load(&gate)?;
-        let current = l
-            .outputs
-            .iter_mut()
-            .find(|o| o.id == self.id)
-            .ok_or("publication disappeared while sealing")?;
-        if current.path != owned.path
-            || current.identity != owned.identity
-            || current.lease != owned.lease
-            || current.lease_id != owned.lease_id
-            || current.phase == "disposing"
-        {
-            return Err("publication binding changed while sealing; preserve originals".into());
-        }
-        // Keep graph changes made since the original observation. Only this
-        // producer owns the outcome, content accounting and completion fields.
-        owned.references = current.references.clone();
-        owned.observed_return = current.observed_return.clone();
-        *current = owned.into();
-        let o = l.outputs.iter().find(|o| o.id == self.id).unwrap();
-        if let Some(consumer) = consumer.filter(|_| accounting_error.is_none()) {
-            // Release only after all original accounting succeeded; any earlier error
-            // preserves the root and original partial producer outcome.
-            if o.manifest.bytes > self.byte_limit() {
-                self.inventory.save(&l, &gate)?;
-                return Err("output byte capacity exceeded; consumer original preserved".into());
+            if o.manifest.sealed {
+                o.reserved_bytes = o.manifest.bytes;
+                o.phase = "released".into();
             }
-            let role = self.inventory.consumer_role(consumer)?;
-            if l.roots.get(&role) != Some(&vec![self.id.clone()]) {
-                return Err("producer consumer root differs".into());
+            o.expires = now()?.saturating_add(self.inventory.keep_seconds(&o.producer));
+            self.lease.stable()?;
+            let roles = consumer
+                .map(|c| self.inventory.consumer_role(c))
+                .transpose()?
+                .into_iter()
+                .collect::<Vec<_>>();
+            let gate = self.inventory.addressed_gate(
+                &[self.id.clone()],
+                &[],
+                &roles,
+                None,
+                false,
+                true,
+            )?;
+            let mut l = self.inventory.load(&gate)?;
+            let current = l
+                .outputs
+                .iter_mut()
+                .find(|o| o.id == self.id)
+                .ok_or("publication disappeared while sealing")?;
+            if current.path != owned.path
+                || current.identity != owned.identity
+                || current.lease != owned.lease
+                || current.lease_id != owned.lease_id
+                || current.phase == "disposing"
+            {
+                return Err("publication binding changed while sealing; preserve originals".into());
             }
-            self.inventory.reference_locked(&mut l, &role, &[])?;
-        }
-        self.inventory.save(&l, &gate)?;
-        if let Some(error) = accounting_error {
-            return Err(error);
-        }
-        if l.outputs
-            .iter()
-            .find(|o| o.id == self.id)
-            .is_some_and(|o| o.manifest.bytes > self.byte_limit())
-        {
-            return Err(
+            // Keep graph changes made since the original observation. Only this
+            // producer owns the outcome, content accounting and completion fields.
+            owned.references = current.references.clone();
+            owned.observed_return = current.observed_return.clone();
+            *current = owned.clone().into();
+            let o = l.outputs.iter().find(|o| o.id == self.id).unwrap();
+            if let Some(consumer) = consumer.filter(|_| accounting_error.is_none()) {
+                // Release only after all original accounting succeeded; any earlier error
+                // preserves the root and original partial producer outcome.
+                if o.manifest.bytes > self.byte_limit() {
+                    self.inventory.save(&l, &gate)?;
+                    return Err("output byte capacity exceeded; consumer original preserved".into());
+                }
+                let role = self.inventory.consumer_role(consumer)?;
+                if l.roots.get(&role) != Some(&vec![self.id.clone()]) {
+                    return Err("producer consumer root differs".into());
+                }
+                self.inventory.reference_locked(&mut l, &role, &[])?;
+            }
+            self.inventory.save(&l, &gate)?;
+            if let Some(error) = accounting_error {
+                return Err(error);
+            }
+            if l.outputs
+                .iter()
+                .find(|o| o.id == self.id)
+                .is_some_and(|o| o.manifest.bytes > self.byte_limit())
+            {
+                return Err(
                 "output byte capacity exceeded; original accounted and preserved until released"
                     .into(),
             );
+            }
+            if owned.manifest.sealed || !seal_all {
+                return Ok(());
+            }
+            if steps == 0
+                || total_steps >= self.inventory.policy.max_manifest_nodes.saturating_mul(4)
+            {
+                return Err(
+                    "publication sealing incomplete; preserve original and resume same attempt"
+                        .into(),
+                );
+            }
+            // Drop addressed metadata exclusion before the next content-IO round.
+            // The producer capability and persisted manifest cursor remain unchanged.
         }
-        Ok(())
     }
 }
 /// Ordinary adopted owners share this entry. Unknown legacy outputs remain protected.
