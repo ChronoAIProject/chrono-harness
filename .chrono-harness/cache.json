@@ -890,6 +890,24 @@
       "kind": "json-value",
       "path": ".chrono-harness/projects.json",
       "pointer": "/projects/29/actions/execute_adoption"
+    },
+    "pr.manifest": {
+      "kind": "file",
+      "path": "crates/pr/Cargo.toml",
+      "presence": "present"
+    },
+    "pr.lock": {
+      "kind": "file",
+      "path": "crates/pr/Cargo.lock",
+      "presence": "present"
+    },
+    "pr.sources": {
+      "kind": "registered-files",
+      "registry": ".chrono-harness/FILEMAP.json",
+      "node": "project:pr",
+      "edges": [
+        "compile"
+      ]
     }
   },
   "artifacts": {
@@ -1020,6 +1038,10 @@
     "verus.archive": {
       "owner": "repository",
       "path": ".chrono-harness/cache/bootstrap-owner-tooling/verus/"
+    },
+    "pr.target": {
+      "owner": "pr",
+      "path": "crates/pr/target/"
     }
   },
   "caches": {
@@ -6025,6 +6047,95 @@
         "verus.checksum"
       ],
       "restore": "exact"
+    },
+    "release.linux.release.pr": {
+      "owner": "pr",
+      "producer": "build_pr",
+      "consumers": [
+        "release.linux_build_pr"
+      ],
+      "artifacts": [
+        "pr.target"
+      ],
+      "compatibility_inputs": [
+        "rustc.file",
+        "cargo.file",
+        "rustc.version",
+        "platform",
+        "linux.cc",
+        "linux.linker",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
+        "absent.RUSTFLAGS",
+        "absent.CARGO_ENCODED_RUSTFLAGS",
+        "absent.CARGO_BUILD_TARGET",
+        "absent.CARGO_TARGET_DIR",
+        "absent.RUSTC",
+        "absent.RUSTC_WRAPPER",
+        "absent.RUSTC_WORKSPACE_WRAPPER",
+        "root.cargo-config",
+        "root.cargo-config-toml",
+        "root.rust-toolchain",
+        "root.rust-toolchain-toml",
+        "pr.manifest",
+        "pr.lock",
+        "diagnostics.manifest",
+        "diagnostics.lock",
+        "runner.manifest",
+        "runner.lock",
+        "release.script",
+        "release.config"
+      ],
+      "source_inputs": [
+        "pr.sources"
+      ],
+      "restore": "compatible",
+      "refresh_sources": true
+    },
+    "release.macos.release.pr": {
+      "owner": "pr",
+      "producer": "build_pr",
+      "consumers": [
+        "release.macos_build_pr"
+      ],
+      "artifacts": [
+        "pr.target"
+      ],
+      "compatibility_inputs": [
+        "rustc.file",
+        "cargo.file",
+        "rustc.version",
+        "platform",
+        "macos.sdk",
+        "macos.linker",
+        "macos.cc",
+        "bootstrap.cargo.home-config",
+        "bootstrap.cargo.home-config-toml",
+        "absent.RUSTFLAGS",
+        "absent.CARGO_ENCODED_RUSTFLAGS",
+        "absent.CARGO_BUILD_TARGET",
+        "absent.CARGO_TARGET_DIR",
+        "absent.RUSTC",
+        "absent.RUSTC_WRAPPER",
+        "absent.RUSTC_WORKSPACE_WRAPPER",
+        "root.cargo-config",
+        "root.cargo-config-toml",
+        "root.rust-toolchain",
+        "root.rust-toolchain-toml",
+        "pr.manifest",
+        "pr.lock",
+        "diagnostics.manifest",
+        "diagnostics.lock",
+        "runner.manifest",
+        "runner.lock",
+        "release.script",
+        "release.config"
+      ],
+      "source_inputs": [
+        "pr.sources"
+      ],
+      "restore": "compatible",
+      "refresh_sources": true
     }
   },
   "consumer_operations": {
@@ -6522,6 +6633,18 @@
       {
         "registry": ".chrono-harness/release/build.json",
         "pointer": "/units/32/operation"
+      }
+    ],
+    "release.linux_build_pr": [
+      {
+        "registry": ".chrono-harness/release/build.json",
+        "pointer": "/units/36/id"
+      }
+    ],
+    "release.macos_build_pr": [
+      {
+        "registry": ".chrono-harness/release/build.json",
+        "pointer": "/units/36/id"
       }
     ]
   },

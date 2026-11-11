@@ -12,7 +12,9 @@
 cargo build --locked --manifest-path crates/pr/Cargo.toml
 ```
 
-当前源码入口为 `crates/pr/target/debug/chrono-pr`；尚未加入公开发布包。本宿主将 `crates/pr/target/` 声明为 `finish-dispose`，因为构建完成后的 PR 命令仍需该执行物。普通 `build.pr` 使用结束后保留目录，调用方核对全部 PR 操作完成再走正式 finish；检出继续复用时，显式维护也保留该目录；实际检出处置仍须排除使用方。使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2，登记 `pr-original` 的操作目录范围和 `check-original` 的同级进程原件范围；缺失时不派发 gh。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
+当前源码入口为 `crates/pr/target/debug/chrono-pr`。发布计划已登记 Linux x86_64 和 macOS arm64 的 `chrono-pr`，通过[现有安装入口](distribution.md#一键安装)选择工具；所选固定发布的清单必须实际包含它，候选登记不表示已经公开发布或安装验收。
+
+本宿主将 `crates/pr/target/` 声明为 `finish-dispose`，因为构建完成后的 PR 命令仍需该执行物。普通 `build.pr` 使用结束后保留目录，调用方核对全部 PR 操作完成再走正式 finish；检出继续复用时，显式维护也保留该目录；实际检出处置仍须排除使用方。使用方须已有能访问目标仓库的 GitHub CLI。工具沿用 gh 的原生认证，不申请额外权限。`.chrono-harness/pr.json` 使用 `chrono-pr-config/v2`，显式设置仓库、目标分支、检查名称、gh 程序、资源上限，以及 `state_directory`／`state_producer`。本宿主采用 `.chrono-harness/state/pr-operations` 和 retention.json 登记的 `pr-original`。宿主必须采用现役 retention/v2，登记 `pr-original` 的操作目录范围和 `check-original` 的同级进程原件范围；缺失时不派发 gh。配置与结果均只接受当前格式。其他宿主提供自己的同格式文件；默认读取 `--host-root` 下的 `.chrono-harness/pr.json`，也可用 `--config` 指定。
 
 ```sh
 crates/pr/target/debug/chrono-pr pr-open \
@@ -82,6 +84,6 @@ PR 测试断言失败时，宿主样本通过固定 tempfile 的调试接口保�
 
 并发排序回归用原生 socket 握手确认：等待期间的另一次 API 查询已经实际启动并绑定观察顺序，随后同时放行两条原通道。两项命令分别封存结果，测试加入两项命令后再核对最终对象保管与回收；不把另一命令的完整封存串在原生等待之前。原 5 秒时限、查询次数和结果断言保留。
 
-产品与宿主登记同时变化：新增 PR 产品、配置、配对、依赖和检查计划，复用 worktree CI 单元运行 PR 测试，不增加主检查工作流或必需检查。发布验证沿用“覆盖所有现役测试项目”的合同，新增 Linux／macOS 各一个 `verify_pr_tests`，执行原未过滤测试，无发布资产前置；发布包不新增二进制。两项目的 target 进入现有生成物和清理白名单，沿用原有身份、使用保护与清理条件。原有检查判法不变，新增构建、测试和 target 存储成本未测。新项目锁定 runner 当前使用的 `libc 0.2.189`；初次解析的 `0.2.191` 缺少 runner 在 macOS 使用的 `NOTE_REAP`，不采用该组合。
+产品与宿主登记同时变化：PR 产品、配置、配对、依赖和检查计划复用 worktree CI 单元，不增加主检查工作流或必需检查。发布验证沿用“覆盖所有现役测试项目”的合同；Linux／macOS 的 `verify_pr_tests` 执行原未过滤测试，无发布资产前置。两平台另由 `build_pr` 独立构建 `chrono-pr`，交现有 collector 打包和安装入口消费，原测试不增加重复构建依赖。两项目的 target 沿用现有生成物、清理和缓存登记；原有检查判法不变，构建、传输和存储总成本未测。
 
-Rust 行为测试覆盖上述输入、状态和失败边界。真实 GitHub 固定提交已验证查询、终态读取，以及单个原生等待进程结束后的重新核对；等待退出码不替代必需检查的实际结果。远端写入、公开分发、自动合并、落地核验仍分别需要实际验收，这些结果不能由本地替身或检查通过推导。
+Rust 行为测试覆盖上述输入、状态和失败边界。真实 GitHub 固定提交已验证查询、终态读取，以及单个原生等待进程结束后的重新核对；等待退出码不替代必需检查的实际结果。正式 `pr-open` 也已实际创建 [PR #812](https://github.com/ChronoAIProject/chrono-harness/pull/812)，核对远端固定 head、base 和 PR 身份，并封存命令结果、对象 OPEN 状态及全部原调用回执。该验收只覆盖这次真实创建和回读；公开分发、实际安装、自动合并和落地仍须分别取得相应结果，不能由本地替身、创建成功或检查通过推导。

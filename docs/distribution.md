@@ -32,6 +32,8 @@ instructions 测试直接调用库及 dispatch；routes 测试调用库并使用
 
 对应生产二进制仍由独立 build 单元构建并交 collector 打包。
 
+`chrono-pr` 同样采用这条链：两平台的 `build_pr` 独立构建生产二进制，collector 收取后纳入同一固定版本清单，现有安装入口按工具名选择。`verify_pr_tests` 继续运行原未过滤操作，不下载其未调用的发布资产。构建缓存按平台及 PR 项目分别登记，恢复后仍执行原构建和内容核验；本批公开发布、安装及安装后真实调用尚须验收，源码登记不代表所选历史发布已经包含该工具。
+
 `verification_consumers` 是 v5 的可选消费约定：以验证单元 ID 为键，每项登记非空 `need` 与显式 `release_assets` 列表。
 
 空列表表示不消费发布二进制，Cargo 的库源码依赖不写成发布资产。

@@ -16,7 +16,8 @@
     "crates/inputs/Cargo.toml",
     "crates/distribution/Cargo.toml",
     "crates/worktree/Cargo.toml",
-    "crates/cache/Cargo.toml"
+    "crates/cache/Cargo.toml",
+    "crates/pr/Cargo.toml"
   ],
   "projects": ".chrono-harness/projects.json",
   "tools": {
@@ -155,6 +156,13 @@
         "asset": "chrono-cache",
         "destinations": [
           "crates/cache/target/debug/chrono-cache"
+        ]
+      },
+      {
+        "asset": "chrono-pr",
+        "destinations": [
+          "crates/pr/target/debug/chrono-pr",
+          ".chrono-harness/bin/chrono-pr"
         ]
       }
     ]
@@ -550,6 +558,14 @@
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_pr_tests",
       "rust_toolchain": true
+    },
+    {
+      "id": "build_pr",
+      "kind": "build",
+      "manifest": "crates/pr/Cargo.toml",
+      "asset": "chrono-pr",
+      "needs": [],
+      "handoff": ".chrono-harness/cache/release-handoffs/build_pr"
     }
   ],
   "collector": {
@@ -590,7 +606,8 @@
       "verify_host_bootstrap_native_tests",
       "verify_host_bootstrap_launcher_tests",
       "verify_pr_tests",
-      "verify_host_release_native_tests"
+      "verify_host_release_native_tests",
+      "build_pr"
     ],
     "package_asset": "chrono-distribution",
     "dependency_metadata": ".chrono-harness/cache/release-dependencies.json"
@@ -634,7 +651,8 @@
       "verify_host_bootstrap_launcher_tests": "linux_verify_host_bootstrap_launcher_tests",
       "verify_pr_tests": "linux_verify_pr_tests",
       "verify_identifiers_tests": "linux_verify_identifiers_tests",
-      "verify_host_release_native_tests": "linux_verify_host_release_native_tests"
+      "verify_host_release_native_tests": "linux_verify_host_release_native_tests",
+      "build_pr": "linux_build_pr"
     },
     "macos": {
       "build_runner": "macos_build_runner",
@@ -673,7 +691,8 @@
       "verify_host_bootstrap_launcher_tests": "macos_verify_host_bootstrap_launcher_tests",
       "verify_pr_tests": "macos_verify_pr_tests",
       "verify_identifiers_tests": "macos_verify_identifiers_tests",
-      "verify_host_release_native_tests": "macos_verify_host_release_native_tests"
+      "verify_host_release_native_tests": "macos_verify_host_release_native_tests",
+      "build_pr": "macos_build_pr"
     }
   },
   "unit_costs": {
@@ -713,7 +732,8 @@
     "verify_host_bootstrap_launcher_tests": "unmeasured",
     "verify_pr_tests": "unmeasured",
     "verify_identifiers_tests": "unmeasured",
-    "verify_host_release_native_tests": "unmeasured"
+    "verify_host_release_native_tests": "unmeasured",
+    "build_pr": "unmeasured"
   },
   "limits": {
     "unit_seconds": 2700,
