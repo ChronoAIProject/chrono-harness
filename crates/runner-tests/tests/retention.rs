@@ -791,19 +791,38 @@ fn independent_components_share_the_existing_round_verification_byte_budget() {
             .complete(json!({"exit":n}))
             .unwrap();
     }
-    let round = maintenance(h.path());
-    assert_eq!(round["verified_bytes"], 8, "{round}");
+    assert_eq!(ledger(h.path())["outputs"].as_array().unwrap().len(), 2);
+    // A round may stop at its existing time or node bound before disposal.
+    // Keep the byte bound shared across both components in every real round.
+    let rounds = maintain_fixture_rounds_to(h.path(), 0);
+    assert!(rounds.len() >= 2, "{rounds:?}");
     assert_eq!(
-        ledger(h.path())["outputs"].as_array().unwrap().len(),
-        1,
-        "{round}"
+        rounds
+            .iter()
+            .map(|round| round["verified_bytes"].as_u64().unwrap())
+            .sum::<u64>(),
+        16,
+        "{rounds:?}"
     );
-    let next = maintenance(h.path());
-    assert!(next["verified_bytes"].as_u64().unwrap() <= 8, "{next}");
-    assert!(
-        ledger(h.path())["outputs"].as_array().unwrap().is_empty(),
-        "{next}"
-    );
+    let mut disposed = 0;
+    for round in &rounds {
+        let count = round["disposed"].as_array().unwrap().len();
+        assert!(count <= 1, "{round}");
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        disposed += count;
+    }
+    assert_eq!(disposed, 2, "{rounds:?}");
+    for n in 0..2 {
+        assert!(
+            !h.path()
+                .join(format!(".chrono-harness/state/fixtures/budget-{n}"))
+                .exists(),
+            "{rounds:?}"
+        );
+    }
 }
 
 #[test]
