@@ -663,9 +663,9 @@ fn identity_row_walk_preserves_empty_and_ordered_original_paths() {
             Set::empty().insert(rows.0@[0].digest.unwrap()@));
         assert(policy::identity_prefix_paths(rows.0@, 1) =~= Set::empty().insert(""@));
         assert(policy::identity_row_error(&rows.0@[0], false,
-            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None);
+            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None::<Seq<char>>);
         assert(policy::identity_row_error(&rows.0@[1], false,
-            policy::identity_prefix_hashes(rows.0@, 1), policy::identity_prefix_paths(rows.0@, 1)) == None);
+            policy::identity_prefix_hashes(rows.0@, 1), policy::identity_prefix_paths(rows.0@, 1)) == None::<Seq<char>>);
         assert(policy::identity_prefix_valid(rows.0@, false, 2));
     }
     match policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths) {
@@ -715,9 +715,9 @@ fn identity_row_walk_rejects_nonadjacent_digest_reuse_before_collecting_its_path
         assert("a"@[0] != "b"@[0]);
         assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty());
         assert(policy::identity_row_error(&rows.0@[0], false,
-            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None);
+            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None::<Seq<char>>);
         assert(policy::identity_row_error(&rows.0@[1], false,
-            policy::identity_prefix_hashes(rows.0@, 1), policy::identity_prefix_paths(rows.0@, 1)) == None);
+            policy::identity_prefix_hashes(rows.0@, 1), policy::identity_prefix_paths(rows.0@, 1)) == None::<Seq<char>>);
         assert(policy::identity_prefix_valid(rows.0@, false, 2));
         assert(policy::identity_failure_at(rows.0@, false, 2, expected@));
     }
@@ -743,7 +743,7 @@ fn identity_row_walk_keeps_the_second_digest_when_its_path_is_a_duplicate() {
         valid_walk_digest_literals();
         assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty());
         assert(policy::identity_row_error(&rows.0@[0], false,
-            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None);
+            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None::<Seq<char>>);
         assert(policy::identity_prefix_valid(rows.0@, false, 1));
         assert(policy::identity_failure_at(rows.0@, false, 1, expected@));
     }
