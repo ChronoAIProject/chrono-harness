@@ -113,6 +113,11 @@ fn rolling_directory_ambiguous_operation_owner_refuses_before_launch() {
 
 #[test]
 fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
+    if !super::isolated_capability::isolated_capability_test(
+        "temporary::rolling_directory_reclaims_released_fixture_as_one_owned_artifact",
+    ) {
+        return;
+    }
     let h = rolling_host(0);
     let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
         &h.root,
@@ -203,6 +208,11 @@ fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_referenc
 
 #[test]
 fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal() {
+    if !super::isolated_capability::isolated_capability_test(
+        "temporary::rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal",
+    ) {
+        return;
+    }
     let h = rolling_host(0);
     let policy_path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
@@ -220,7 +230,7 @@ fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal
     let store = path.parent().unwrap();
     let result = fixture.finish(false).unwrap();
     assert_eq!(result["status"], "finished", "{result}");
-    assert!(!path.exists());
+    assert!(!path.exists(), "released fixture must be disposed: {result}");
     let record_path = producer_record_path(store, &path);
     let original = fs::read(&record_path).unwrap();
     let record = json(&original).unwrap();
