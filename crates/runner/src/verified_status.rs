@@ -300,7 +300,7 @@ pub open spec fn registry_batch_spec<V>(
 pub fn registry_parse_batch<V, P>(
     expected: &[String], originals: Vec<(String, Vec<u8>)>,
     bytes: BTreeMap<String, Vec<u8>>, values: BTreeMap<String, V>, decode: P,
-    Ghost(model): Ghost<spec_fn(Seq<u8>) -> Result<V, Seq<char>>>,
+    #[cfg(verus_keep_ghost)] Ghost(model): Ghost<spec_fn(Seq<u8>) -> Result<V, Seq<char>>>,
 ) -> (out: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>)
     where P: Fn(&[u8]) -> Result<V, String>,
     requires
