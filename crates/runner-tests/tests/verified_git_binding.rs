@@ -102,28 +102,25 @@ fn expect_reference_index<R: policy::BindingReferenceRows>(rows: &R, id: &str, e
     },
 {
     let result = policy::unique_binding_reference(Some(rows), id);
-    match result {
-        Ok(actual) => {
+    match expected {
+        Some(index) => {
             proof {
-                match (actual, expected) {
-                    (Some(a), Some(e)) => {
-                        if a != e {
-                            assert(policy::binding_reference_matches(rows, e as int, id));
-                            assert(!policy::binding_reference_matches(rows, e as int, id));
-                        }
-                    },
-                    (Some(a), None) => {
-                        assert(!policy::unique_binding_reference_index(rows, id, a as int));
-                    },
-                    (None, Some(e)) => {
-                        assert(result == Ok::<Option<usize>, &str>(Some(e)));
-                    },
-                    (None, None) => {},
-                }
+                assert(policy::unique_binding_reference_index(rows, id, index as int));
+                assert(result == Ok::<Option<usize>, &str>(Some(index)));
             }
-            expect_true(actual == expected);
+            match result {
+                Ok(Some(actual)) => { expect_true(actual == index); },
+                _ => { panic!(); },
+            }
         },
-        Err(_) => { panic!(); },
+        None => match result {
+            Ok(None) => {},
+            Ok(Some(actual)) => {
+                assert(!policy::unique_binding_reference_index(rows, id, actual as int));
+                panic!();
+            },
+            Err(_) => { panic!(); },
+        },
     }
 }
 
