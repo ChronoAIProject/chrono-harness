@@ -724,6 +724,22 @@ pub fn maintain(host: &Path) -> Result<serde_json::Value, String> {
 pub mod test_support {
     use super::*;
 
+    pub fn operation_with_sealing_round_budget(
+        host: &Path,
+        init: bool,
+        steps: usize,
+    ) -> Result<Vec<PathBuf>, String> {
+        let fault = Fault {
+            sealing_steps: Some(steps),
+            ..Fault::default()
+        };
+        if init {
+            run_init(host, None, None, None, fault)
+        } else {
+            run_generate(host, fault)
+        }
+    }
+
     pub fn generate_with_failure(
         host: &Path,
         after: usize,

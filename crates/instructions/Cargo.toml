@@ -19,7 +19,7 @@ test = false
 bench = false
 
 [features]
-test-support = []
+test-support = ["chrono-harness/retention-test"]
 
 [dependencies]
 chrono-diagnostics = { path = "../diagnostics" }
