@@ -5018,4 +5018,349 @@ fn registry_pending_handles_empty_input_shared_entry_and_exact_path_text() {
     expect_pending_paths(paths, "", "", expected);
 }
 
+// 独立边界预期：未选中的 IO 替身不可调用，普通执行时调用即失败。
+
+fn entry_match_no_locate() -> Result<Option<u8>, String> requires false, { panic!() }
+fn entry_match_no_metadata(_path: &u8) -> Result<policy::CheckoutEntryMetadata, (bool, u8)> requires false, { panic!() }
+fn entry_match_no_format(_error: u8) -> String requires false, { panic!() }
+fn entry_match_no_link(_path: u8) -> Result<u32, String> requires false, { panic!() }
+fn entry_match_no_link_hash(_target: u32) -> Result<String, String> requires false, { panic!() }
+fn entry_match_no_open(_path: u8) -> Result<u16, String> requires false, { panic!() }
+fn entry_match_no_opened(_file: &u16) -> Result<policy::CheckoutEntryMetadata, String> requires false, { panic!() }
+fn entry_match_no_file_hash(_size: u64, _file: u16) -> Result<String, String> requires false, { panic!() }
+fn entry_match_no_changed() -> String requires false, { panic!() }
+
+fn entry_match_locate_none() -> (out: Result<Option<u8>, String>) ensures out == Ok::<Option<u8>, String>(None),
+{ Ok(None) }
+
+fn entry_match_locate_error() -> (out: Result<Option<u8>, String>)
+    ensures out matches Err(error) && error@ == "path: é\0original\nend"@,
+{ Err("path: é\0original\nend".to_owned()) }
+
+fn entry_match_locate_seven() -> (out: Result<Option<u8>, String>) ensures out == Ok::<Option<u8>, String>(Some(7)),
+{ Ok(Some(7)) }
+
+fn entry_match_metadata_missing(path: &u8) -> (out: Result<policy::CheckoutEntryMetadata, (bool, u8)>)
+    requires *path == 7,
+    ensures out == Err::<policy::CheckoutEntryMetadata, (bool, u8)>((true, 42)),
+{ Err((true, 42)) }
+
+fn entry_match_metadata_error(path: &u8) -> (out: Result<policy::CheckoutEntryMetadata, (bool, u8)>)
+    requires *path == 7,
+    ensures out == Err::<policy::CheckoutEntryMetadata, (bool, u8)>((false, 42)),
+{ Err((false, 42)) }
+
+fn entry_match_format_metadata(error: u8) -> (out: String)
+    requires error == 42,
+    ensures out@ == "checkout file é\0name: original\nend"@,
+{ "checkout file é\0name: original\nend".to_owned() }
+
+fn entry_match_metadata_regular(path: &u8) -> (out: Result<policy::CheckoutEntryMetadata, (bool, u8)>)
+    requires *path == 7,
+    ensures out matches Ok(fields) && !fields.symbolic && fields.regular
+        && fields.size == u64::MAX && fields.permissions == 0o644,
+{ Ok(policy::CheckoutEntryMetadata { symbolic: false, regular: true, size: u64::MAX, permissions: 0o644 }) }
+
+fn entry_match_open_regular(path: u8) -> (out: Result<u16, String>)
+    requires path == 7,
+    ensures out == Ok::<u16, String>(513),
+{ Ok(513) }
+
+fn entry_match_opened_regular(file: &u16) -> (out: Result<policy::CheckoutEntryMetadata, String>)
+    requires *file == 513,
+    ensures out matches Ok(fields) && !fields.symbolic && fields.regular
+        && fields.size == u64::MAX && fields.permissions == 0o644,
+{ Ok(policy::CheckoutEntryMetadata { symbolic: false, regular: true, size: u64::MAX, permissions: 0o644 }) }
+
+fn entry_match_hash_regular(size: u64, file: u16) -> (out: Result<String, String>)
+    requires size == u64::MAX, file == 513,
+    ensures out matches Ok(text) && text@ == "digest: é\0full\nend"@,
+{ Ok("digest: é\0full\nend".to_owned()) }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_unsupported_entry_performs_no_observation() {
+    proof {
+        reveal_strlit("tree"); reveal_strlit("blob");
+        assert("tree"@[0] == 't'); assert("blob"@[0] == 'b');
+        assert("tree"@ != "blob"@);
+        reveal(policy::checkout_entry_matches_callable);
+    }
+    let out = policy::checkout_entry_matches("tree", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_no_locate, metadata: entry_match_no_metadata, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_parent(out, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_missing_physical_path_stops_before_metadata() {
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_none, metadata: entry_match_no_metadata, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_parent(out, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_physical_error_preserves_complete_text_and_stops() {
+    let out = policy::checkout_entry_matches("blob", "120000", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_error, metadata: entry_match_no_metadata, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_observation_error(out, "path: é\0original\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_absent_metadata_does_not_format_or_continue() {
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_missing, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_parent(out, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_metadata_error_formats_original_error_and_stops() {
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_error, format_metadata_error: entry_match_format_metadata,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_observation_error(out, "checkout file é\0name: original\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_symbolic_mode_rejects_regular_metadata_before_read_link() {
+    let out = policy::checkout_entry_matches("blob", "120000", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_parent(out, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_mode_rejects_wrong_execute_bit_before_open() {
+    proof { assert(0o644u32 & 0o100u32 == 0) by(bit_vector); }
+    let out = policy::checkout_entry_matches("blob", "100755", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_parent(out, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_match_preserves_path_file_size_and_complete_digest() {
+    proof { entry_match_regular_mode_facts(); }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest: é\0full\nend", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_regular,
+        opened_metadata: entry_match_opened_regular, hash_file: entry_match_hash_regular, changed_error: entry_match_no_changed,
+    });
+    proof {
+        reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); reveal(policy::checkout_digest_result);
+    }
+    expect_checkout_parent(out, true);
+}
+
+proof fn entry_match_regular_mode_facts()
+    ensures "100644"@ != "120000"@, "100644"@ != "100755"@,
+        0o644u32 & 0o100u32 == 0,
+{
+    reveal_strlit("100644"); reveal_strlit("100755"); reveal_strlit("120000");
+    assert("100644"@[1] == '0' && "120000"@[1] == '2');
+    assert("100644"@[3] == '6' && "100755"@[3] == '7');
+    assert(0o644u32 & 0o100u32 == 0) by(bit_vector);
+}
+
+fn entry_match_metadata_symbolic(path: &u8) -> (out: Result<policy::CheckoutEntryMetadata, (bool, u8)>)
+    requires *path == 7,
+    ensures out matches Ok(fields) && fields.symbolic && !fields.regular
+        && fields.size == 0 && fields.permissions == 0,
+{ Ok(policy::CheckoutEntryMetadata { symbolic: true, regular: false, size: 0, permissions: 0 }) }
+
+fn entry_match_read_target(path: u8) -> (out: Result<u32, String>)
+    requires path == 7,
+    ensures out == Ok::<u32, String>(u32::MAX),
+{ Ok(u32::MAX) }
+
+fn entry_match_read_error(path: u8) -> (out: Result<u32, String>)
+    requires path == 7,
+    ensures out matches Err(error) && error@ == "read link: é\0original\nend"@,
+{ Err("read link: é\0original\nend".to_owned()) }
+
+fn entry_match_hash_target(target: u32) -> (out: Result<String, String>)
+    requires target == u32::MAX,
+    ensures out matches Ok(text) && text@ == "digest: é\0full\nend"@,
+{ Ok("digest: é\0full\nend".to_owned()) }
+
+fn entry_match_hash_target_error(target: u32) -> (out: Result<String, String>)
+    requires target == u32::MAX,
+    ensures out matches Err(error) && error@ == "link hash: é\0original\nend"@,
+{ Err("link hash: é\0original\nend".to_owned()) }
+
+fn entry_match_open_error(path: u8) -> (out: Result<u16, String>)
+    requires path == 7,
+    ensures out matches Err(error) && error@ == "checkout file é\0name: open\nend"@,
+{ Err("checkout file é\0name: open\nend".to_owned()) }
+
+fn entry_match_opened_error(file: &u16) -> (out: Result<policy::CheckoutEntryMetadata, String>)
+    requires *file == 513,
+    ensures out matches Err(error) && error@ == "opened metadata: é\0original\nend"@,
+{ Err("opened metadata: é\0original\nend".to_owned()) }
+
+fn entry_match_changed_type(file: &u16) -> (out: Result<policy::CheckoutEntryMetadata, String>)
+    requires *file == 513,
+    ensures out matches Ok(fields) && !fields.regular
+        && fields.size == u64::MAX && fields.permissions == 0o644,
+{ Ok(policy::CheckoutEntryMetadata { symbolic: true, regular: false, size: u64::MAX, permissions: 0o644 }) }
+
+fn entry_match_changed_size(file: &u16) -> (out: Result<policy::CheckoutEntryMetadata, String>)
+    requires *file == 513,
+    ensures out matches Ok(fields) && fields.regular
+        && fields.size == 0 && fields.permissions == 0o644,
+{ Ok(policy::CheckoutEntryMetadata { symbolic: false, regular: true, size: 0, permissions: 0o644 }) }
+
+fn entry_match_changed_permissions(file: &u16) -> (out: Result<policy::CheckoutEntryMetadata, String>)
+    requires *file == 513,
+    ensures out matches Ok(fields) && fields.regular
+        && fields.size == u64::MAX && fields.permissions == 0o600,
+{ Ok(policy::CheckoutEntryMetadata { symbolic: false, regular: true, size: u64::MAX, permissions: 0o600 }) }
+
+fn entry_match_changed_message() -> (out: String)
+    ensures out@ == "checkout file identity changed while opening: é\0name\nend"@,
+{ "checkout file identity changed while opening: é\0name\nend".to_owned() }
+
+fn entry_match_hash_file_error(size: u64, file: u16) -> (out: Result<String, String>)
+    requires size == u64::MAX, file == 513,
+    ensures out matches Err(error) && error@ == "file hash: é\0original\nend"@,
+{ Err("file hash: é\0original\nend".to_owned()) }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_symbolic_success_preserves_target_and_complete_digest() {
+    let out = policy::checkout_entry_matches("blob", "120000", "digest: é\0full\nend", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_symbolic, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_read_target, hash_link: entry_match_hash_target, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_digest_result); }
+    expect_checkout_parent(out, true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_symbolic_read_error_stops_before_hash_and_open() {
+    let out = policy::checkout_entry_matches("blob", "120000", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_symbolic, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_read_error, hash_link: entry_match_no_link_hash, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    expect_checkout_observation_error(out, "read link: é\0original\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_symbolic_hash_error_preserves_complete_text() {
+    let out = policy::checkout_entry_matches("blob", "120000", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_symbolic, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_read_target, hash_link: entry_match_hash_target_error, open: entry_match_no_open,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_digest_result); }
+    expect_checkout_observation_error(out, "link hash: é\0original\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_open_error_stops_before_opened_metadata() {
+    proof { entry_match_regular_mode_facts(); }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_error,
+        opened_metadata: entry_match_no_opened, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); }
+    expect_checkout_observation_error(out, "checkout file é\0name: open\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_opened_metadata_error_stops_before_hash() {
+    proof { entry_match_regular_mode_facts(); }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_regular,
+        opened_metadata: entry_match_opened_error, hash_file: entry_match_no_file_hash, changed_error: entry_match_no_changed,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); }
+    expect_checkout_observation_error(out, "opened metadata: é\0original\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_changed_type_stops_before_hash() {
+    proof { entry_match_regular_mode_facts(); }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_regular,
+        opened_metadata: entry_match_changed_type, hash_file: entry_match_no_file_hash, changed_error: entry_match_changed_message,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); }
+    expect_checkout_observation_error(out, "checkout file identity changed while opening: é\0name\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_changed_size_stops_before_hash() {
+    proof { entry_match_regular_mode_facts(); }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_regular,
+        opened_metadata: entry_match_changed_size, hash_file: entry_match_no_file_hash, changed_error: entry_match_changed_message,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); }
+    expect_checkout_observation_error(out, "checkout file identity changed while opening: é\0name\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_changed_permissions_stops_before_hash() {
+    proof { entry_match_regular_mode_facts(); }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_regular,
+        opened_metadata: entry_match_changed_permissions, hash_file: entry_match_no_file_hash, changed_error: entry_match_changed_message,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); }
+    expect_checkout_observation_error(out, "checkout file identity changed while opening: é\0name\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_regular_hash_error_preserves_complete_text() {
+    proof { entry_match_regular_mode_facts(); }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_regular,
+        opened_metadata: entry_match_opened_regular, hash_file: entry_match_hash_file_error, changed_error: entry_match_no_changed,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); reveal(policy::checkout_digest_result); }
+    expect_checkout_observation_error(out, "file hash: é\0original\nend");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn entry_match_digest_prefix_never_matches_full_oid() {
+    proof {
+        entry_match_regular_mode_facts();
+        reveal_strlit("digest: é\0full\nend"); reveal_strlit("digest: é\0full\nend-suffix");
+        assert("digest: é\0full\nend"@.len() < "digest: é\0full\nend-suffix"@.len());
+        assert("digest: é\0full\nend"@ != "digest: é\0full\nend-suffix"@);
+    }
+    let out = policy::checkout_entry_matches("blob", "100644", "digest: é\0full\nend-suffix", policy::CheckoutEntryIo {
+        locate: entry_match_locate_seven, metadata: entry_match_metadata_regular, format_metadata_error: entry_match_no_format,
+        read_link: entry_match_no_link, hash_link: entry_match_no_link_hash, open: entry_match_open_regular,
+        opened_metadata: entry_match_opened_regular, hash_file: entry_match_hash_regular, changed_error: entry_match_no_changed,
+    });
+    proof { reveal(policy::checkout_entry_matches_result); reveal(policy::checkout_entry_observed_result); reveal(policy::checkout_entry_opened_result); reveal(policy::checkout_digest_result); }
+    expect_checkout_parent(out, false);
+}
+
+
 }
