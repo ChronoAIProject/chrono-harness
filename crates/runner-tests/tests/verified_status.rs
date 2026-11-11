@@ -5347,7 +5347,12 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
             }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
             expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
-            expect_registry_pair(&bytes, &values, &key, &[1u8, 0, 255], 1);
+            let original = [1u8, 0, 255];
+            proof {
+                assert(registry_sequence_bytes(bytes@)[key] == seq![1u8, 0, 255]);
+                assert(bytes@[key]@ =~= original@);
+            }
+            expect_registry_pair(&bytes, &values, &key, &original, 1);
         },
         Err(_) => { panic!(); },
     }
@@ -5374,7 +5379,12 @@ fn registry_read_sequence_duplicate_keys_replace_both_maps_in_order()
         Ok((bytes, values)) => {
             proof { registry_sequence_bytes_facts(bytes@); }
             expect_status_true(bytes.len() == 1 && values.len() == 1);
-            expect_registry_pair(&bytes, &values, &key, &[2u8, 255, 0], 2);
+            let original = [2u8, 255, 0];
+            proof {
+                assert(registry_sequence_bytes(bytes@)[key] == seq![2u8, 255, 0]);
+                assert(bytes@[key]@ =~= original@);
+            }
+            expect_registry_pair(&bytes, &values, &key, &original, 2);
         },
         Err(_) => { panic!(); },
     }
