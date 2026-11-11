@@ -14,6 +14,10 @@ pub fn command(program: impl AsRef<OsStr>) -> Command {
         "CHRONO_RELEASE_CI_RUN_ID",
         "CHRONO_RELEASE_CI_ATTEMPT",
         "CHRONO_RELEASE_VERSION",
+        "GITHUB_ACTIONS",
+        "GITHUB_REPOSITORY",
+        "GITHUB_WORKFLOW_SHA",
+        "GITHUB_WORKFLOW_REF",
     ] {
         command.env_remove(name);
     }

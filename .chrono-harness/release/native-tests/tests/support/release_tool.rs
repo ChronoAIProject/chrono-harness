@@ -17,6 +17,7 @@ fn run() -> Result<u8, String> {
         child.arg("--fixture-observe-context");
         if args.len() == 2 {
             child.env("CHRONO_RELEASE_RUN", "fixture-run");
+            child.env("GITHUB_REPOSITORY", "fixture/repository");
         }
         chrono_harness::process_fds::forward_command(&mut child, &[])?;
         let output = child.output().map_err(|e| e.to_string())?;
@@ -30,7 +31,16 @@ fn run() -> Result<u8, String> {
     }
     if args == ["--fixture-observe-context"] {
         let release: std::collections::BTreeMap<_, _> = std::env::vars()
-            .filter(|(name, _)| name.starts_with("CHRONO_RELEASE_"))
+            .filter(|(name, _)| {
+                name.starts_with("CHRONO_RELEASE_")
+                    || [
+                        "GITHUB_ACTIONS",
+                        "GITHUB_REPOSITORY",
+                        "GITHUB_WORKFLOW_SHA",
+                        "GITHUB_WORKFLOW_REF",
+                    ]
+                    .contains(&name.as_str())
+            })
             .collect();
         println!(
             "{}",
