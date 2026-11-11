@@ -169,7 +169,7 @@ init、init_with_defaults、generate、CLI 和 test-support 统一进入同一�
 
 **本候选同时修改产品与宿主政策。** 新增 `terminal_limits.instructions-operation`：终态保留一天、最多 32 项和 64 MiB 逻辑字节。这是显式维护的终态目标，不是全库发布准入；有恢复根、未知未结发布或真实使用凭据时继续保护并报告超限／未知。终态年龄到期或超出数量／字节目标，只使原件有资格进入原有身份、源码排除、引用和使用凭据检查。instructions 的正文完成终态保留并实际移除后，移除声明立即有资格回收；仍须排除引用、退役凭据和活读取者。其余生产者仍按原有一天元数据期限和摘要上限回收。普通发布不扫描历史；调用方在消费者结束后执行明确维护，不能把保留上限当作已经回收的观察。
 
-宿主政策变更不能直接重绑旧原件。部署支持该字段的候选后，由原保管者先排除旧使用方、保留精确旧政策字节，再经[现有 migrate-policy](artifact-retention.md#正式入口和操作要求)迁移实际原件。由独立 fallback 转为磁盘政策也遵守同一合同；未知旧绑定保持未知。当前源码保护期间尚未执行这次部署或迁移。
+宿主政策变更不能直接重绑旧原件。部署支持该字段的候选后，由原保管者先排除旧使用方、保留精确旧政策字节，再经[现有 migrate-policy](artifact-retention.md#正式入口和操作要求)迁移实际原件。由独立 fallback 转为磁盘政策也遵守同一合同；未知旧绑定保持未知。迁移只覆盖精确点名的原件及依赖，不宣称整个存储已采用，也不表示共享协调宿主已部署。
 
 支持 Unix 的当前 Linux／macOS 接口，保留普通字节、类型、权限及字面别名；不恢复 ACL、扩展属性、原 inode、时间戳或所有者。目录内核锁只协调参与本操作协议的写入者；外部并发修改须靠各次身份／内容重验检测。实际断电、内核或文件系统持久性保证及完整 IO 组合不在局部谓词证明之内，仍须平台验收。
 
@@ -179,7 +179,7 @@ init、init_with_defaults、generate、CLI 和 test-support 统一进入同一�
 | 原件与引用 | intent／plan／备份／result → retention → 后续调用和真实读取者 | 可复用现有保管、租约、引用、封存及删除；只补独立政策入口、原创建续接、返回观察和终态维护选择 | 同一未过滤 test.instructions-tests、test.runner-tests；保留原权限与字节断言 |
 | 决策边界 | 观察事实 → publication_decision、verified_release → 恢复动作、解除引用、终态数量／字节选择 | 原所有者缺少这些实际决策；无需新增服务或独立库存 | verify.instructions-publication／-tests、既有 verify.retention-release／-tests 和 Rust 同源预期 |
 
-这些是当前源码与待执行验收的绑定，不是测试已通过的声明。新增构建依赖复用 runner、libc 及仓内固定 Verus 宏；完整构建、验证、维护和存储成本未测。本候选尚待受保护的锁更新、格式、构建、独立行为测试、整 crate Verus、固定候选 DELTA、真实 Linux／macOS 和 integration／dev 交付；完整 SPEC 继续保持未完成。
+这些是源码与验收入口的绑定，实际结论须核原报告。新增构建依赖复用 runner、libc 及仓内固定 Verus 宏；完整构建、验证、维护和存储成本未测。本地指令单元已验证行为、格式及局部同源 Verus 判断，候选 core bootstrap 已通过；runner 保管改动、完整固定候选 DELTA、真实 Linux／macOS 和 integration／dev 交付仍须分别验收，完整 SPEC 继续保持未完成。
 
 本仓验证走[登记的统一入口](ci.md#this-repository)，由明确依赖选择格式检查、生产构建、专属行为测试及适用的同源 Verus 证明。具体参数归 projects／FILEMAP 登记，本文引用该入口。
 
