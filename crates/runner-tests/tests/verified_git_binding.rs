@@ -32,7 +32,7 @@ fn expect_selector_binding_result(actual: Result<(), &str>, expected: Result<(),
     }
 }
 
-struct RegistryPathsFixture<'a>(Vec<Option<&'a str>>);
+pub struct RegistryPathsFixture<'a>(pub Vec<Option<&'a str>>);
 
 impl<'a> policy::SelectorRegistryRows<'a> for RegistryPathsFixture<'a> {
     open spec fn registry_paths(&self) -> Seq<Option<&'a str>> { self.0@ }
