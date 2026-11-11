@@ -628,6 +628,12 @@ serde_json 的 `Value` 键查询、`as_str` 与 `as_u64`；前缀借用与全文
 `Value` 查询与 `as_str` 接口；标准 `Option::map` 只转交是否存在执行物输入和两个原字段观察。
 独立 Verus 预期核成功、缺输入优先、各字段差异及缺摘要。实际 IO、平台映射及声明解析其余逻辑仍待证明。
 
+身份选择器的配置行由 `admit_identity_row` 判定。按原顺序检查对象、摘要格式、版本对应的
+字段和重复摘要，再检查路径文本及重复路径。成功借出原路径；独立 Verus 预期核验首错和
+集合状态。外部接口为已固定的 serde_json 字段观察及标准库 `BTreeSet<&str>::insert`：
+插入完整文本，当且仅当先前不含该文本时返回 true。选择何时插入和如何处理结果由 Verus
+决定；v3 登记路径关联及外围读取仍有未证明部分。
+
 `collect_registry_paths` 在同一 runner-status 根证明登记快照的完整路径库存。
 真实 `facts::registry_paths` 显式读取四个固定字段，将观察直接交给该函数；
 成功精确返回五项：入口原文本、judges、projects、filemap、workflow，保留顺序与重复。
