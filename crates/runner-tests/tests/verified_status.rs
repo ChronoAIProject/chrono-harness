@@ -3880,4 +3880,90 @@ fn registry_batch_path_keeps_full_text_without_normalization_or_path_admission()
     expect_registry_wrong_path("é", "e\u{301}");
 }
 
+fn expect_pending_paths(paths: Vec<String>, entry: &str, effective: &str, expected: Vec<String>)
+    requires
+        policy::registry_pending_prefix(paths@.map_values(|p: String| p@), paths@.len() as int,
+            entry@, effective@) == expected@.map_values(|p: String| p@),
+{
+    let actual = policy::pending_registry_paths(paths, entry, effective);
+    let ghost actual_text = actual@.map_values(|p: String| p@);
+    let ghost expected_text = expected@.map_values(|p: String| p@);
+    assert(actual_text.len() == actual.len() && expected_text.len() == expected.len());
+    expect_status_true(actual.len() == expected.len());
+    let mut i = 0usize;
+    while i < expected.len()
+        invariant
+            i <= expected.len(), actual.len() == expected.len(),
+            actual_text == expected_text,
+            actual_text == actual@.map_values(|p: String| p@),
+            expected_text == expected@.map_values(|p: String| p@),
+        decreases expected.len() - i,
+    {
+        assert(actual_text[i as int] == actual@[i as int]@);
+        assert(expected_text[i as int] == expected@[i as int]@);
+        expect_status_text(actual[i].as_str(), expected[i].as_str());
+        i += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_pending_keeps_first_unread_path_in_request_order() {
+    let paths = vec!["entry".to_owned(), "z".to_owned(), "effective".to_owned(),
+        "a".to_owned(), "z".to_owned()];
+    let expected = vec!["z".to_owned(), "a".to_owned()];
+    assert(policy::registry_pending_prefix(paths@.map_values(|p: String| p@), paths@.len() as int,
+        "entry"@, "effective"@) == expected@.map_values(|p: String| p@)) by {
+        reveal_with_fuel(policy::registry_pending_prefix, 6);
+        reveal_strlit("entry"); reveal_strlit("effective"); reveal_strlit("z"); reveal_strlit("a");
+        let input = paths@.map_values(|p: String| p@);
+        assert(input.len() == 5);
+        assert(input =~= seq!["entry"@, "z"@, "effective"@, "a"@, "z"@]);
+        let a = policy::registry_pending_prefix(input, 1, "entry"@, "effective"@);
+        let b = policy::registry_pending_prefix(input, 2, "entry"@, "effective"@);
+        let c = policy::registry_pending_prefix(input, 3, "entry"@, "effective"@);
+        let d = policy::registry_pending_prefix(input, 4, "entry"@, "effective"@);
+        assert("z"@.len() == 1 && "entry"@.len() == 5 && "effective"@.len() == 9);
+        assert("a"@.len() == 1 && "a"@[0] != "z"@[0]);
+        assert(a =~= seq![]);
+        assert(a.len() == 0 && !a.contains("z"@));
+        assert(b =~= seq!["z"@]);
+        assert(c =~= seq!["z"@]);
+        assert(c.len() == 1 && c[0] == "z"@);
+        assert(!c.contains("a"@));
+        assert(d =~= seq!["z"@, "a"@]);
+        assert(d.len() == 2 && d[0] == "z"@);
+        assert(d.contains("z"@));
+        assert(expected@.map_values(|p: String| p@) =~= d);
+    }
+    expect_pending_paths(paths, "entry", "effective", expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_pending_handles_empty_input_shared_entry_and_exact_path_text() {
+    let paths = vec!["".to_owned(), "目录/é\0".to_owned(), "目录/é".to_owned()];
+    let expected = vec!["目录/é\0".to_owned(), "目录/é".to_owned()];
+    assert(policy::registry_pending_prefix(paths@.map_values(|p: String| p@), paths@.len() as int,
+        ""@, ""@) == expected@.map_values(|p: String| p@)) by {
+        reveal_with_fuel(policy::registry_pending_prefix, 4);
+        reveal_strlit(""); reveal_strlit("目录/é\0"); reveal_strlit("目录/é");
+        let input = paths@.map_values(|p: String| p@);
+        assert(input.len() == 3);
+        assert(input =~= seq![""@, "目录/é\0"@, "目录/é"@]);
+        let a = policy::registry_pending_prefix(input, 1, ""@, ""@);
+        let b = policy::registry_pending_prefix(input, 2, ""@, ""@);
+        assert(""@.len() == 0 && "目录/é\0"@.len() == 5 && "目录/é"@.len() == 4);
+        assert(a =~= seq![]);
+        assert(a.len() == 0 && !a.contains("目录/é\0"@));
+        assert(b =~= seq!["目录/é\0"@]);
+        assert(b.len() == 1 && b[0] == "目录/é\0"@);
+        assert(!b.contains("目录/é"@));
+        assert(expected@.map_values(|p: String| p@) =~= seq!["目录/é\0"@, "目录/é"@]);
+        assert(policy::registry_pending_prefix(input, 3, ""@, ""@) =~= seq!["目录/é\0"@, "目录/é"@]);
+    }
+    let empty: Vec<String> = Vec::new();
+    assert(empty@.map_values(|p: String| p@) =~= seq![]);
+    expect_pending_paths(empty, "entry", "effective", Vec::new());
+    expect_pending_paths(paths, "", "", expected);
+}
+
 }

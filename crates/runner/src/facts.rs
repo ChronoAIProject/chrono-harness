@@ -155,13 +155,15 @@ fn registry_snapshot_with_target(
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<RegistrySnapshot, String> {
     let (mut snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
-    for path in paths {
-        if !snapshot.bytes.contains_key(&path) {
-            let original = read(&path)?;
-            let value = json(&original)?;
-            snapshot.bytes.insert(path.clone(), original);
-            snapshot.values.insert(path, value);
-        }
+    for path in crate::verified_status::pending_registry_paths(
+        paths,
+        &snapshot.entry_path,
+        &snapshot.effective_path,
+    ) {
+        let original = read(&path)?;
+        let value = json(&original)?;
+        snapshot.bytes.insert(path.clone(), original);
+        snapshot.values.insert(path, value);
     }
     Ok(snapshot)
 }
@@ -182,12 +184,11 @@ fn registry_snapshot_with_batches_target(
         let originals = read(&[path.to_owned()])?;
         crate::verified_status::single_registry_blob(path, originals)
     })?;
-    let mut pending = vec![];
-    for path in paths {
-        if !snapshot.bytes.contains_key(&path) && !pending.contains(&path) {
-            pending.push(path);
-        }
-    }
+    let pending = crate::verified_status::pending_registry_paths(
+        paths,
+        &snapshot.entry_path,
+        &snapshot.effective_path,
+    );
     let originals = read(&pending)?;
     crate::verified_status::registry_acquisition_count(pending.len(), originals.len())?;
     for (expected, (path, original)) in pending.iter().zip(originals) {
