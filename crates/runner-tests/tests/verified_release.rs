@@ -14,6 +14,60 @@ use vstd::vpanic as panic;
 
 verus! {
 
+fn expect_retirement_id(actual: &String, expected: &str)
+    requires actual@ == expected@,
+{
+    let one = vec![actual.clone()];
+    expect_true(policy::contains(&one, expected));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retirement_selection_has_no_work_for_empty_or_terminal_records() {
+    let empty = policy::pending_retirements(&Vec::new());
+    expect_true(empty.is_empty());
+    let terminal = vec![("retired".to_owned(), true), ("also retired".to_owned(), true)];
+    let done = policy::pending_retirements(&terminal);
+    expect_true(done.is_empty());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retirement_selection_preserves_every_active_record_in_order() {
+    let records = vec![("first".to_owned(), false), ("second".to_owned(), false)];
+    let pending = policy::pending_retirements(&records);
+    expect_true(pending.len() == 2);
+    expect_retirement_id(&pending[0], "first");
+    expect_retirement_id(&pending[1], "second");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retirement_selection_keeps_byte_absent_records_until_state_is_terminal() {
+    let records = vec![
+        ("finished".to_owned(), true),
+        ("bytes removed; edges pending".to_owned(), false),
+        ("unvisited".to_owned(), false),
+        ("finished after".to_owned(), true),
+    ];
+    let pending = policy::pending_retirements(&records);
+    expect_true(pending.len() == 2);
+    expect_retirement_id(&pending[0], "bytes removed; edges pending");
+    expect_retirement_id(&pending[1], "unvisited");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retirement_selection_preserves_complete_ids_and_duplicate_observations() {
+    let records = vec![
+        ("original: é\0full\nend".to_owned(), false),
+        ("original: é\0full\nend".to_owned(), true),
+        ("original: é\0full\nend".to_owned(), false),
+        ("".to_owned(), false),
+    ];
+    let pending = policy::pending_retirements(&records);
+    expect_true(pending.len() == 3);
+    expect_retirement_id(&pending[0], "original: é\0full\nend");
+    expect_retirement_id(&pending[1], "original: é\0full\nend");
+    expect_retirement_id(&pending[2], "");
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn report_recovery_checks_current_formats_and_exit_boundaries() {
     proof {
