@@ -78,6 +78,7 @@ pub(super) struct Gate {
     roles: RefCell<BTreeMap<String, Role>>,
     paths: BTreeMap<String, PathBuf>,
     maintenance: bool,
+    observation_frontier: bool,
     retained_dependencies: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
@@ -120,7 +121,15 @@ impl Inventory {
         if !verified::observation_role(role.trim(), role.len(), attempt) {
             return Err("invalid observation role/attempt".into());
         }
-        let gate = self.addressed_gate(&[], &[path.into()], &[role.into()], None, false, true)?;
+        let gate = self.addressed_gate_with_frontier(
+            &[],
+            &[path.into()],
+            &[role.into()],
+            None,
+            false,
+            true,
+            true,
+        )?;
         let mut ledger = self.load(&gate)?;
         let output = ledger
             .outputs
@@ -195,12 +204,13 @@ impl Inventory {
         ) {
             return Err("invalid observation token".into());
         }
-        let gate = self.addressed_gate(
+        let gate = self.addressed_gate_with_frontier(
             &[request.original.id.clone()],
             &[request.original.path.clone()],
             &[request.role.clone()],
             None,
             false,
+            true,
             true,
         )?;
         let mut ledger = self.load(&gate)?;
@@ -423,6 +433,7 @@ impl Inventory {
             paths: directories,
             maintenance: false,
             retained_dependencies: BTreeSet::new(),
+            observation_frontier: false,
             unvisited_relations: BTreeSet::new(),
         })
     }
@@ -871,7 +882,24 @@ impl Inventory {
         maintenance: bool,
         wait: bool,
     ) -> Result<Gate, String> {
+        self.addressed_gate_with_frontier(ids, paths, roles, birth, maintenance, wait, false)
+    }
+
+    fn addressed_gate_with_frontier(
+        &self,
+        ids: &[String],
+        paths: &[String],
+        roles: &[String],
+        birth: Option<(&str, &str)>,
+        maintenance: bool,
+        wait: bool,
+        observation: bool,
+    ) -> Result<Gate, String> {
+        let observation_frontier =
+            verified::observation_peer_frontier(observation, maintenance, birth.is_some());
         let discover_under_lease = maintenance && !wait && birth.is_none();
+        let roles_excluded =
+            verified::gate_role_exclusion(discover_under_lease, observation_frontier);
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
@@ -907,6 +935,11 @@ impl Inventory {
         let mut deferred_initial = false;
         let mut report_frontier = false;
         let mut retained_dependencies = BTreeSet::new();
+        let mut active = if observation_frontier {
+            selected.iter().cloned().collect()
+        } else {
+            Vec::new()
+        };
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
         // order never waits behind an ordinary publisher holding path locks.
@@ -921,12 +954,16 @@ impl Inventory {
                 .find(|role| !observed_roles.contains_key(*role))
                 .cloned();
             if let Some(role) = next_role {
-                if discover_under_lease {
+                if roles_excluded {
                     let directory = self.role_directory(&role)?;
                     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
                     leases.push(
-                        DirectoryLease::acquire(&directory, true, None)?
-                            .ok_or("retention consumer metadata is busy")?,
+                        DirectoryLease::acquire(
+                            &directory,
+                            true,
+                            wait.then(|| Duration::from_secs(5)),
+                        )?
+                        .ok_or("retention consumer metadata is busy")?,
                     );
                 }
                 let record = self.read_role(&role)?;
@@ -969,7 +1006,13 @@ impl Inventory {
             let next = selected
                 .iter()
                 .find(|id| {
-                    !observed.contains_key(*id) && !birth.as_ref().is_some_and(|b| b.0 == **id)
+                    verified::gate_discovery_candidate(
+                        observation_frontier,
+                        &active,
+                        id,
+                        observed.contains_key(*id),
+                        birth.as_ref().is_some_and(|b| b.0 == **id),
+                    )
                 })
                 .cloned();
             let Some(id) = next else {
@@ -1017,6 +1060,9 @@ impl Inventory {
                 continue;
             }
             if let Some(output) = &record.output {
+                if observation_frontier {
+                    verified::extend_gate_active(&mut active, &output.references);
+                }
                 selected.extend(output.references.iter().cloned());
             }
             if maintenance {
@@ -1040,7 +1086,7 @@ impl Inventory {
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
             let directory = self.role_directory(&role)?;
-            let actual = if discover_under_lease {
+            let actual = if roles_excluded {
                 expected
             } else {
                 fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
@@ -1130,6 +1176,10 @@ impl Inventory {
             }
             records.insert(id, record);
         }
+        if observation_frontier {
+            let excluded: Vec<_> = records.keys().cloned().collect();
+            retained_dependencies.extend(verified::gate_role_peers(true, &active, &excluded));
+        }
         for record in records.values() {
             if !retained_dependencies.contains(&record.id)
                 && (record
@@ -1167,6 +1217,7 @@ impl Inventory {
             roles: RefCell::new(role_records),
             paths: path_dirs,
             maintenance,
+            observation_frontier,
             retained_dependencies,
             unvisited_relations,
         })
@@ -1199,9 +1250,9 @@ impl Inventory {
             }
             ledger.summaries.extend(record.summaries.clone());
             ledger.retired_leases.extend(record.retired_leases.clone());
-            // These finalized objects are explicit roots for this retirement.
-            // Their metadata stays excluded, but no consumer membership changes
-            // and no physical disposal of their bytes is permitted.
+            // Frontier outputs remain excluded and retained. Retirement keeps
+            // finalized originals; observation only changes the addressed role,
+            // while each peer's output and unrelated roles remain untouched.
             if gate.retained_dependencies.contains(&record.id) {
                 continue;
             }
@@ -1279,6 +1330,28 @@ impl Inventory {
         let mut objects = gate.objects.borrow_mut();
         let mut roles = gate.roles.borrow_mut();
         let before = objects.clone();
+        let peer_output_ids = if gate.observation_frontier {
+            ledger
+                .outputs
+                .iter()
+                .map(|output| output.id.as_str())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        for record in objects.values() {
+            if verified::must_preserve_gate_peer(
+                gate.observation_frontier,
+                gate.retained_dependencies.contains(&record.id),
+            ) {
+                let original = serde_json::to_vec(&record.output).map_err(|e| e.to_string())?;
+                let proposed = verified::gate_output_index(&peer_output_ids, &record.id)
+                    .map_err(str::to_owned)?
+                    .map(|index| ledger.outputs[index].value.as_ref());
+                let proposed = serde_json::to_vec(&proposed).map_err(|e| e.to_string())?;
+                verified::admit_gate_peer_output(&original, &proposed).map_err(str::to_owned)?;
+            }
+        }
         // partition_load reads the first addressed declaration's cursor. Keep
         // that single owner rather than synchronously rewriting every related
         // original whenever bounded disposal advances the component cursor.

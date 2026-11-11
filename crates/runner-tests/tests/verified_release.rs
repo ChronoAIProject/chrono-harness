@@ -342,6 +342,10 @@ fn observation_frontier_does_not_change_other_gate_modes() {
     let birth = policy::observation_peer_frontier(true, false, true);
     let both = policy::observation_peer_frontier(true, true, true);
     expect_true(yes && !ordinary && !maintenance && !birth && !both);
+    expect_true(policy::gate_role_exclusion(false, true));
+    expect_true(policy::gate_role_exclusion(true, false));
+    expect_true(policy::gate_role_exclusion(true, true));
+    expect_true(!policy::gate_role_exclusion(false, false));
     let active: Vec<String> = Vec::new();
     expect_true(policy::gate_discovery_candidate(false, &active, "peer", false, false));
     expect_true(!policy::gate_discovery_candidate(false, &active, "peer", true, false));
@@ -355,6 +359,7 @@ fn explicit_dependencies_are_active_but_unrelated_pending_peers_are_read_only() 
         assert("request"@.len() != "peer"@.len());
         assert("request"@.len() != "peer\0"@.len());
         assert("peer"@.len() != "peer\0"@.len());
+        reveal_with_fuel(policy::gate_active_values, 4);
     }
     let mut active = vec!["request".to_owned()];
     expect_true(policy::gate_discovery_candidate(true, &active, "request", false, false));
@@ -417,6 +422,33 @@ fn read_only_peer_output_requires_complete_unchanged_bytes() {
     let added = policy::admit_gate_peer_output(&[], &[0]);
     expect_true(empty.is_ok() && original.is_ok());
     expect_true(changed.is_err() && shortened.is_err() && added.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn peer_output_lookup_requires_the_complete_unique_original_id() {
+    broadcast use vstd::array::group_array_axioms;
+    proof {
+        reveal_strlit(""); reveal_strlit("peer"); reveal_strlit("peer\0");
+        reveal_strlit("输入λ"); reveal_strlit("输入\0λ");
+        assert("peer"@.len() != "peer\0"@.len());
+        assert("peer"@.len() != ""@.len());
+        assert("peer"@.len() != "输入λ"@.len());
+        assert("输入λ"@.len() != "输入\0λ"@.len());
+        assert("输入λ"@.len() != ""@.len());
+    }
+    let ids = ["", "peer", "输入λ"];
+    let empty = policy::gate_output_index(&ids, "");
+    let middle = policy::gate_output_index(&ids, "peer");
+    let last = policy::gate_output_index(&ids, "输入λ");
+    expect_true(empty == Ok(Some(0)) && middle == Ok(Some(1)) && last == Ok(Some(2)));
+    let absent = policy::gate_output_index(&ids, "输入\0λ");
+    expect_true(absent == Ok(None));
+    let repeated = ["peer", "", "peer"];
+    let ambiguous = policy::gate_output_index(&repeated, "peer");
+    expect_true(ambiguous.is_err());
+    let distinct = ["peer", "peer\0"];
+    let exact = policy::gate_output_index(&distinct, "peer\0");
+    expect_true(exact == Ok(Some(1)));
 }
 
 }

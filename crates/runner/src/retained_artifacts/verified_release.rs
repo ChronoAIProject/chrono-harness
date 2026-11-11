@@ -167,6 +167,143 @@ pub fn without(values: &[String], id: &str) -> (out: Vec<String>)
     out
 }
 
+/// 只有对象观察的成员更新采用只读同伴；普通发布、维护及创建沿用原完整发现。
+pub fn observation_peer_frontier(observation: bool, maintenance: bool, birth: bool) -> (use_peers: bool)
+    ensures use_peers == (observation && !maintenance && !birth),
+{ observation && !maintenance && !birth }
+
+pub fn gate_role_exclusion(nonblocking_maintenance: bool, observation_frontier: bool) -> (excluded: bool)
+    ensures excluded == (nonblocking_maintenance || observation_frontier),
+{ nonblocking_maintenance || observation_frontier }
+
+pub fn gate_discovery_candidate(
+    peers: bool, active: &[String], id: &str, observed: bool, birth: bool,
+) -> (discover: bool)
+    ensures discover == (!observed && !birth && (!peers || present(active@, id@))),
+{
+    !observed && !birth && (!peers || contains(active, id))
+}
+
+pub open spec fn gate_active_values(active: Seq<String>, references: Seq<String>) -> Seq<String>
+    decreases references.len(),
+{
+    if references.len() == 0 { active }
+    else {
+        let before = gate_active_values(active, references.drop_last());
+        if present(before, references.last()@) { before }
+        else { before.push(references.last()) }
+    }
+}
+
+/// 仅加入实际出向引用，保留原顺序；重复引用不增加成员。
+pub fn extend_gate_active(active: &mut Vec<String>, references: &[String])
+    ensures active@ == gate_active_values(old(active)@, references@),
+{
+    let ghost initial = active@;
+    let mut at = 0;
+    while at < references.len()
+        invariant at <= references.len(),
+            active@ == gate_active_values(initial, references@.take(at as int)),
+        decreases references.len() - at,
+    {
+        let ghost before = active@;
+        if !contains(active, references[at].as_str()) {
+            active.push(references[at].clone());
+        }
+        proof {
+            let next = references@.take(at as int + 1);
+            assert(next.drop_last() =~= references@.take(at as int));
+            assert(next.last() == references@[at as int]);
+            reveal_with_fuel(gate_active_values, 1);
+        }
+        at += 1;
+    }
+    assert(references@.take(at as int) =~= references@);
+}
+
+pub open spec fn gate_peer_values(active: Seq<String>, selected: Seq<String>) -> Seq<String>
+    decreases selected.len(),
+{
+    if selected.len() == 0 { Seq::empty() }
+    else if present(active, selected.last()@) { gate_peer_values(active, selected.drop_last()) }
+    else { gate_peer_values(active, selected.drop_last()).push(selected.last()) }
+}
+
+pub fn gate_role_peers(peers: bool, active: &[String], selected: &[String]) -> (out: Vec<String>)
+    ensures out@ == if peers { gate_peer_values(active@, selected@) } else { Seq::<String>::empty() },
+{
+    let mut out = Vec::new();
+    if !peers { return out; }
+    let mut at = 0;
+    while at < selected.len()
+        invariant at <= selected.len(), out@ == gate_peer_values(active@, selected@.take(at as int)),
+        decreases selected.len() - at,
+    {
+        if !contains(active, selected[at].as_str()) { out.push(selected[at].clone()); }
+        proof {
+            let next = selected@.take(at as int + 1);
+            assert(next.drop_last() =~= selected@.take(at as int));
+            assert(next.last() == selected@[at as int]);
+            reveal_with_fuel(gate_peer_values, 1);
+        }
+        at += 1;
+    }
+    assert(selected@.take(at as int) =~= selected@);
+    out
+}
+
+pub fn must_preserve_gate_peer(observation_frontier: bool, retained: bool) -> (preserve: bool)
+    ensures preserve == (observation_frontier && retained),
+{ observation_frontier && retained }
+
+pub open spec fn gate_output_position(ids: Seq<&str>, id: Seq<char>, at: int) -> bool {
+    0 <= at < ids.len() && ids[at]@ == id
+        && forall|other: int| 0 <= other < ids.len() && other != at ==> (#[trigger] ids[other])@ != id
+}
+
+pub fn gate_output_index(ids: &[&str], id: &str) -> (out: Result<Option<usize>, &'static str>)
+    ensures match out {
+        Ok(Some(at)) => gate_output_position(ids@, id@, at as int),
+        Ok(None) => forall|at: int| 0 <= at < ids.len() ==> (#[trigger] ids[at])@ != id@,
+        Err(error) => error@ == "ambiguous observation peer output; originals preserved"@
+            && exists|a: int, b: int| 0 <= a < b < ids.len() && ids[a]@ == id@ && ids[b]@ == id@,
+    },
+{
+    let mut at = 0;
+    let mut found: Option<usize> = None;
+    while at < ids.len()
+        invariant at <= ids.len(),
+            match found {
+                Some(index) => gate_output_position(ids@.take(at as int), id@, index as int),
+                None => forall|before: int| 0 <= before < at ==> (#[trigger] ids[before])@ != id@,
+            },
+        decreases ids.len() - at,
+    {
+        if identifiers::equal_text(ids[at], id) {
+            if let Some(index) = found {
+                assert(0 <= index < at && ids@[index as int]@ == id@);
+                assert(exists|a: int, b: int| 0 <= a < b < ids.len() && ids[a]@ == id@ && ids[b]@ == id@);
+                return Err("ambiguous observation peer output; originals preserved");
+            }
+            found = Some(at);
+        }
+        at += 1;
+    }
+    assert(ids@.take(at as int) =~= ids@);
+    Ok(found)
+}
+
+pub fn admit_gate_peer_output(before: &[u8], after: &[u8]) -> (out: Result<(), &'static str>)
+    ensures out.is_ok() == (before@ == after@),
+        match out {
+            Ok(_) => true,
+            Err(error) => error@ == "read-only observation peer output changed; originals preserved"@,
+        },
+{
+    if identifiers::equal_bytes(before, after) { Ok(()) }
+    else { Err("read-only observation peer output changed; originals preserved") }
+}
+
 /// 所选原件的请求不进入全库事务、输出或消费者枚举。
 pub fn global_maintenance(originals: Option<&[String]>) -> (global: bool)
     ensures global == originals.is_none(),
