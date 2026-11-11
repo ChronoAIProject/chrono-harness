@@ -631,6 +631,32 @@ Git 对象哈希的算法选择直接消费同根 `checkout_hash_algorithm`：
 也不据此宣称整个 checkout 已证明。复用原状态证明根、FILEMAP、工具、参数和预算，
 没有新增依赖、文本复制或文件观察；完整证明、构建、CI 与运行成本未测。
 
+checkout 的完整条目匹配分支由同根 `checkout_entry_matches` 拥有：先判断支持的 kind／mode，
+再取得物理路径和条目元数据；缺失返回不匹配，其他错误保留原格式。符号链接只读取链接目标，
+普通文件先核类型与执行位，再打开文件并核打开后的类型、完整长度和权限，最后核完整摘要。
+路径、元数据、读取、打开、身份变化及哈希的错误按原顺序立即返回，不继续后面的操作。
+`checkout_digest_matches` 完整转交哈希错误，成功只比较完整摘要文本。
+分层结果规格关联实际回调的前置／后置条件和返回值；可调用条件只要求实际选中分支可调用。
+证明中的观察快照不进入运行程序，没有额外 IO、运行时轨迹、集合或计数器。
+
+实际 `checkout::matches_entry` 只向该函数提供标准接口观察、现役路径／哈希入口及原错误格式。
+`entry_metadata` 从同一次不可变 `Metadata` 观察取得 `is_symlink`、`is_file`、`len` 和
+`PermissionsExt::mode`，不重新查询文件系统。新增的字段读取是内存观察，不能据此宣称性能收益。
+逐项外部接口为固定 Rust 的 `fs::symlink_metadata`、`io::Error::kind` 与 `ErrorKind` 相等、
+`fs::read_link`、`PathBuf::as_os_str`／`OsStrExt::as_bytes`、字节切片长度及其 usize→u64 转换，
+以及 `OpenOptions::new`／`read`／`custom_flags`／`open`、`File::metadata` 和原错误的 Display 格式化。
+打开标志仍为 `O_NOFOLLOW | O_NONBLOCK`；`Result::map`／`map_err` 仅搬运标准观察及格式化结果。
+物理路径和对象哈希分别继续消费已证明入口，没有把仓内回调当成外部信任函数。
+
+十八组独立 Verus 预期也作为普通 Rust 测试执行，核不支持条目、路径／元数据缺失及完整错误，
+符号链接与普通文件成功、链接读取／哈希失败、执行位拒绝、打开／打开后元数据失败，
+打开后类型／长度／完整权限分别变化、文件哈希失败以及完整摘要的前缀不匹配。
+每组未选中的替身均不可调用，普通运行中调用即失败；预期覆盖 0／u64::MAX 元数据长度，
+成功用例要求原路径、文件、哈希长度及含 Unicode／NUL／换行的全文结果。
+沿用原两个状态证明根、FILEMAP、严格整 crate 参数与未过滤消费测试，无新增依赖或预算。
+这项迁移不证明标准库／文件系统、完整 checkout 适配层、源码／编译／调用完整绑定或全仓覆盖门；
+其余 checkout 组合仍须继续证明，Python 存量迁移暂缓。完整生命周期成本未测。
+
 Git 索引标记的实际类型 `IndexFlag`、完整字段克隆与相等、原字节 NUL 拆分、
 单行准入及完整行遍历也由同一 `verified_status` 根拥有；`wire` 只重导出实际类型，
 `Reader::index_flags` 直接消费 `git_nul_records`／`parse_git_index_flag_rows`。

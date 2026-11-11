@@ -2,15 +2,13 @@
 use crate::{
     facts::{Entry, Tree},
     relative_path,
-    verified_identifiers::{
-        equal_text, git_inventory_records, git_inventory_termination, git_inventory_text,
-    },
+    verified_identifiers::{git_inventory_records, git_inventory_termination, git_inventory_text},
     verified_status::{
-        CheckoutPhysicalObservation, checkout_changed_paths, checkout_entry_supported,
-        checkout_hash_stream, checkout_index_changes, checkout_metadata_observation,
-        checkout_object_hash, checkout_opened_file_matches, checkout_physical_path,
-        checkout_physical_targets, checkout_regular_file_matches, checkout_symbolic_link,
-        parse_git_index_rows, parse_git_tree_rows, record_checkout_physical_observations,
+        CheckoutEntryIo, CheckoutEntryMetadata, CheckoutPhysicalObservation,
+        checkout_changed_paths, checkout_entry_matches, checkout_hash_stream,
+        checkout_index_changes, checkout_object_hash, checkout_physical_path,
+        checkout_physical_targets, parse_git_index_rows, parse_git_tree_rows,
+        record_checkout_physical_observations,
     },
 };
 use sha1::Sha1;
@@ -108,60 +106,49 @@ fn hash<D: Digest>(size: u64, source: &mut impl Read) -> Result<String, String> 
 fn object_hash(oid: &str, size: u64, source: &mut impl Read) -> Result<String, String> {
     checkout_object_hash(oid, size, source, hash::<Sha1>, hash::<Sha256>)
 }
+
+fn entry_metadata(metadata: fs::Metadata) -> CheckoutEntryMetadata {
+    CheckoutEntryMetadata {
+        symbolic: metadata.is_symlink(),
+        regular: metadata.is_file(),
+        size: metadata.len(),
+        permissions: metadata.permissions().mode(),
+    }
+}
+
 fn matches_entry(root: &Path, name: &str, entry: &Entry) -> Result<bool, String> {
-    if !checkout_entry_supported(entry.kind.as_str(), entry.mode.as_str()) {
-        // Unsupported entries never match. Keep observations available so the
-        // registration judge can emit its structured unsupported-input finding.
-        return Ok(false);
-    }
-    let Some(path) = physical(root, name)? else {
-        return Ok(false);
-    };
-    let Some(metadata) = checkout_metadata_observation(fs::symlink_metadata(&path), |error| {
-        error.kind() == io::ErrorKind::NotFound
-    })
-    .map_err(|error| format!("checkout file {name}: {error}"))?
-    else {
-        return Ok(false);
-    };
-    if checkout_symbolic_link(entry.mode.as_str()) {
-        if !metadata.is_symlink() {
-            return Ok(false);
-        }
-        let target = fs::read_link(path).map_err(|e| e.to_string())?;
-        let bytes = target.as_os_str().as_bytes();
-        return Ok(equal_text(
-            object_hash(&entry.oid, bytes.len() as u64, &mut &bytes[..])?.as_str(),
-            entry.oid.as_str(),
-        ));
-    }
-    if !checkout_regular_file_matches(
-        metadata.is_file(),
-        metadata.permissions().mode(),
+    checkout_entry_matches(
+        entry.kind.as_str(),
         entry.mode.as_str(),
-    ) {
-        return Ok(false);
-    }
-    // Never open a symlink or block on a FIFO substituted after the type observation.
-    let mut file = fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
-        .open(path)
-        .map_err(|e| format!("checkout file {name}: {e}"))?;
-    let opened = file.metadata().map_err(|e| e.to_string())?;
-    if !checkout_opened_file_matches(
-        opened.is_file(),
-        opened.len(),
-        opened.permissions().mode(),
-        metadata.len(),
-        metadata.permissions().mode(),
-    ) {
-        return Err(format!(
-            "checkout file identity changed while opening: {name}"
-        ));
-    }
-    Ok(equal_text(
-        object_hash(&entry.oid, opened.len(), &mut file)?.as_str(),
         entry.oid.as_str(),
-    ))
+        CheckoutEntryIo {
+            locate: || physical(root, name),
+            metadata: |path: &PathBuf| {
+                fs::symlink_metadata(path)
+                    .map(entry_metadata)
+                    .map_err(|error| (error.kind() == io::ErrorKind::NotFound, error))
+            },
+            format_metadata_error: |error: io::Error| format!("checkout file {name}: {error}"),
+            read_link: |path: PathBuf| fs::read_link(path).map_err(|error| error.to_string()),
+            hash_link: |target: PathBuf| {
+                let bytes = target.as_os_str().as_bytes();
+                object_hash(&entry.oid, bytes.len() as u64, &mut &bytes[..])
+            },
+            open: |path: PathBuf| {
+                // 不跟随在类型观察后替入的链接，也不阻塞在替入的 FIFO 上。
+                fs::OpenOptions::new()
+                    .read(true)
+                    .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+                    .open(path)
+                    .map_err(|error| format!("checkout file {name}: {error}"))
+            },
+            opened_metadata: |file: &fs::File| {
+                file.metadata()
+                    .map(entry_metadata)
+                    .map_err(|error| error.to_string())
+            },
+            hash_file: |size: u64, mut file: fs::File| object_hash(&entry.oid, size, &mut file),
+            changed_error: || format!("checkout file identity changed while opening: {name}"),
+        },
+    )
 }

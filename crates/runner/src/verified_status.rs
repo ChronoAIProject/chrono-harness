@@ -2558,6 +2558,345 @@ pub fn checkout_opened_file_matches(
     is_file && opened_size == observed_size && opened_permissions == observed_permissions
 }
 
+
+/// 同一次文件系统元数据的原始字段；判断由条目匹配流程拥有。
+pub struct CheckoutEntryMetadata {
+    pub symbolic: bool,
+    pub regular: bool,
+    pub size: u64,
+    pub permissions: u32,
+}
+
+/// 实际 IO、已有生产入口及原错误格式；未选中分支无需可调用。
+pub struct CheckoutEntryIo<L, M, FE, R, HL, O, FM, HF, C> {
+    pub locate: L,
+    pub metadata: M,
+    pub format_metadata_error: FE,
+    pub read_link: R,
+    pub hash_link: HL,
+    pub open: O,
+    pub opened_metadata: FM,
+    pub hash_file: HF,
+    pub changed_error: C,
+}
+
+pub open spec fn checkout_digest_result(oid: Seq<char>, digest: Result<String, String>, out: Result<bool, String>) -> bool {
+    match digest {
+        Err(error) => out == Err::<bool, String>(error),
+        Ok(text) => out == Ok::<bool, String>(text@ == oid),
+    }
+}
+
+pub fn checkout_digest_matches(oid: &str, digest: Result<String, String>) -> (out: Result<bool, String>)
+    ensures checkout_digest_result(oid@, digest, out),
+{
+    match digest {
+        Err(error) => Err(error),
+        Ok(text) => Ok(identifiers::equal_text(text.as_str(), oid)),
+    }
+}
+
+pub open spec fn checkout_entry_opened_result<F, FM, HF, C>(
+    oid: Seq<char>, observed: CheckoutEntryMetadata, opened: Result<F, String>,
+    metadata: FM, hash: HF, changed: C, out: Result<bool, String>,
+) -> bool
+    where FM: Fn(&F) -> Result<CheckoutEntryMetadata, String>,
+          HF: Fn(u64, F) -> Result<String, String>, C: Fn() -> String,
+{
+    match opened {
+        Err(error) => out == Err::<bool, String>(error),
+        Ok(file) => metadata.requires((&file,)) && (exists|actual: Result<CheckoutEntryMetadata, String>|
+            metadata.ensures((&file,), actual) && match actual {
+                Err(error) => out == Err::<bool, String>(error),
+                Ok(fields) => {
+                    if fields.regular && fields.size == observed.size && fields.permissions == observed.permissions {
+                        hash.requires((fields.size, file)) && (exists|digest: Result<String, String>| hash.ensures((fields.size, file), digest)
+                            && checkout_digest_result(oid, digest, out))
+                    } else {
+                        changed.requires(()) && (exists|error: String| changed.ensures((), error) && out == Err::<bool, String>(error))
+                    }
+                },
+            }),
+    }
+}
+
+pub open spec fn checkout_entry_observed_result<P, F, B, E, FE, R, HL, O, FM, HF, C>(
+    mode: Seq<char>, oid: Seq<char>, path: P,
+    observed: Result<CheckoutEntryMetadata, (bool, E)>, format_error: FE,
+    read_link: R, hash_link: HL, open: O, opened_metadata: FM, hash_file: HF,
+    changed_error: C, out: Result<bool, String>,
+) -> bool
+    where FE: Fn(E) -> String, R: Fn(P) -> Result<B, String>,
+          HL: Fn(B) -> Result<String, String>, O: Fn(P) -> Result<F, String>,
+          FM: Fn(&F) -> Result<CheckoutEntryMetadata, String>,
+          HF: Fn(u64, F) -> Result<String, String>, C: Fn() -> String,
+{
+    match observed {
+        Err((missing, error)) => {
+            if missing { out == Ok::<bool, String>(false) }
+            else { format_error.requires((error,)) && (exists|message: String| format_error.ensures((error,), message)
+                && out == Err::<bool, String>(message)) }
+        },
+        Ok(fields) => {
+            if mode == "120000"@ {
+                if !fields.symbolic { out == Ok::<bool, String>(false) }
+                else {
+                    read_link.requires((path,)) && (exists|target: Result<B, String>| read_link.ensures((path,), target) && match target {
+                        Err(error) => out == Err::<bool, String>(error),
+                        Ok(bytes) => hash_link.requires((bytes,)) && (exists|digest: Result<String, String>|
+                            hash_link.ensures((bytes,), digest) && checkout_digest_result(oid, digest, out)),
+                    })
+                }
+            } else if !(fields.regular && ((fields.permissions & 0o100 != 0) == (mode == "100755"@))) {
+                out == Ok::<bool, String>(false)
+            } else {
+                open.requires((path,)) && (exists|opened: Result<F, String>| open.ensures((path,), opened)
+                    && checkout_entry_opened_result(oid, fields, opened, opened_metadata, hash_file, changed_error, out))
+            }
+        },
+    }
+}
+
+pub open spec fn checkout_entry_matches_result<P, F, B, E, L, M, FE, R, HL, O, FM, HF, C>(
+    kind: Seq<char>, mode: Seq<char>, oid: Seq<char>,
+    io: CheckoutEntryIo<L, M, FE, R, HL, O, FM, HF, C>, out: Result<bool, String>,
+) -> bool
+    where L: Fn() -> Result<Option<P>, String>,
+          M: Fn(&P) -> Result<CheckoutEntryMetadata, (bool, E)>, FE: Fn(E) -> String,
+          R: Fn(P) -> Result<B, String>, HL: Fn(B) -> Result<String, String>,
+          O: Fn(P) -> Result<F, String>, FM: Fn(&F) -> Result<CheckoutEntryMetadata, String>,
+          HF: Fn(u64, F) -> Result<String, String>, C: Fn() -> String,
+{
+    if kind != "blob"@ || !(mode == "100644"@ || mode == "100755"@ || mode == "120000"@) {
+        out == Ok::<bool, String>(false)
+    } else {
+        io.locate.requires(()) && (exists|located: Result<Option<P>, String>| io.locate.ensures((), located) && match located {
+            Err(error) => out == Err::<bool, String>(error),
+            Ok(None) => out == Ok::<bool, String>(false),
+            Ok(Some(path)) => io.metadata.requires((&path,)) && (exists|observed: Result<CheckoutEntryMetadata, (bool, E)>|
+                io.metadata.ensures((&path,), observed)
+                && checkout_entry_observed_result(mode, oid, path, observed, io.format_metadata_error,
+                    io.read_link, io.hash_link, io.open, io.opened_metadata,
+                    io.hash_file, io.changed_error, out)),
+        })
+    }
+}
+
+pub open spec fn checkout_entry_opened_callable<F, FM, HF, C>(
+    observed: CheckoutEntryMetadata, file: F, metadata: FM, hash: HF, changed: C,
+) -> bool
+    where FM: Fn(&F) -> Result<CheckoutEntryMetadata, String>,
+          HF: Fn(u64, F) -> Result<String, String>, C: Fn() -> String,
+{
+    metadata.requires((&file,)) && (forall|actual: Result<CheckoutEntryMetadata, String>|
+        #[trigger] metadata.ensures((&file,), actual) ==> match actual {
+            Err(_) => true,
+            Ok(fields) => {
+                if fields.regular && fields.size == observed.size && fields.permissions == observed.permissions {
+                    hash.requires((fields.size, file))
+                } else { changed.requires(()) }
+            },
+        })
+}
+
+pub open spec fn checkout_entry_observed_callable<P, F, B, E, FE, R, HL, O, FM, HF, C>(
+    mode: Seq<char>, path: P, observed: Result<CheckoutEntryMetadata, (bool, E)>,
+    format_error: FE, read_link: R, hash_link: HL, open: O,
+    opened_metadata: FM, hash_file: HF, changed_error: C,
+) -> bool
+    where FE: Fn(E) -> String, R: Fn(P) -> Result<B, String>,
+          HL: Fn(B) -> Result<String, String>, O: Fn(P) -> Result<F, String>,
+          FM: Fn(&F) -> Result<CheckoutEntryMetadata, String>,
+          HF: Fn(u64, F) -> Result<String, String>, C: Fn() -> String,
+{
+    match observed {
+        Err((missing, error)) => missing || format_error.requires((error,)),
+        Ok(fields) => {
+            if mode == "120000"@ {
+                !fields.symbolic || (read_link.requires((path,))
+                    && (forall|target: Result<B, String>| #[trigger] read_link.ensures((path,), target)
+                        ==> match target { Err(_) => true, Ok(bytes) => hash_link.requires((bytes,)) }))
+            } else if !(fields.regular && ((fields.permissions & 0o100 != 0) == (mode == "100755"@))) {
+                true
+            } else {
+                open.requires((path,)) && (forall|opened: Result<F, String>|
+                    #[trigger] open.ensures((path,), opened) ==> match opened {
+                        Err(_) => true,
+                        Ok(file) => checkout_entry_opened_callable(fields, file, opened_metadata, hash_file, changed_error),
+                    })
+            }
+        },
+    }
+}
+
+pub open spec fn checkout_entry_matches_callable<P, F, B, E, L, M, FE, R, HL, O, FM, HF, C>(
+    kind: Seq<char>, mode: Seq<char>, io: CheckoutEntryIo<L, M, FE, R, HL, O, FM, HF, C>,
+) -> bool
+    where L: Fn() -> Result<Option<P>, String>,
+          M: Fn(&P) -> Result<CheckoutEntryMetadata, (bool, E)>, FE: Fn(E) -> String,
+          R: Fn(P) -> Result<B, String>, HL: Fn(B) -> Result<String, String>,
+          O: Fn(P) -> Result<F, String>, FM: Fn(&F) -> Result<CheckoutEntryMetadata, String>,
+          HF: Fn(u64, F) -> Result<String, String>, C: Fn() -> String,
+{
+    if kind != "blob"@ || !(mode == "100644"@ || mode == "100755"@ || mode == "120000"@) {
+        true
+    } else {
+        io.locate.requires(()) && (forall|located: Result<Option<P>, String>|
+            #[trigger] io.locate.ensures((), located) ==> match located {
+                Err(_) => true,
+                Ok(None) => true,
+                Ok(Some(path)) => io.metadata.requires((&path,))
+                    && (forall|observed: Result<CheckoutEntryMetadata, (bool, E)>|
+                        #[trigger] io.metadata.ensures((&path,), observed)
+                        ==> checkout_entry_observed_callable(mode, path, observed, io.format_metadata_error,
+                            io.read_link, io.hash_link, io.open, io.opened_metadata,
+                            io.hash_file, io.changed_error)),
+            })
+    }
+}
+
+/// 保持实际观察次序、首错与完整结果；证明快照不进入运行程序。
+pub fn checkout_entry_matches<P, F, B, E, L, M, FE, R, HL, O, FM, HF, C>(
+    kind: &str, mode: &str, oid: &str, io: CheckoutEntryIo<L, M, FE, R, HL, O, FM, HF, C>,
+) -> (out: Result<bool, String>)
+    where L: Fn() -> Result<Option<P>, String>,
+          M: Fn(&P) -> Result<CheckoutEntryMetadata, (bool, E)>, FE: Fn(E) -> String,
+          R: Fn(P) -> Result<B, String>, HL: Fn(B) -> Result<String, String>,
+          O: Fn(P) -> Result<F, String>, FM: Fn(&F) -> Result<CheckoutEntryMetadata, String>,
+          HF: Fn(u64, F) -> Result<String, String>, C: Fn() -> String,
+    requires checkout_entry_matches_callable(kind@, mode@, io),
+    ensures checkout_entry_matches_result(kind@, mode@, oid@, io, out),
+{
+    if !checkout_entry_supported(kind, mode) { return Ok(false); }
+    let located = (io.locate)();
+    let ghost located_snapshot = located;
+    let path = match located {
+        Err(error) => { return Err(error); },
+        Ok(None) => { return Ok(false); },
+        Ok(Some(path)) => path,
+    };
+    let ghost path_snapshot = path;
+    let observation = (io.metadata)(&path);
+    let ghost observation_snapshot = observation;
+    let observed = match observation {
+        Err((missing, error)) => {
+            let out = if missing { Ok(false) }
+                else { Err((io.format_metadata_error)(error)) };
+            proof {
+                assert(checkout_entry_observed_result(mode@, oid@, path, observation_snapshot,
+                    io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                    io.opened_metadata, io.hash_file, io.changed_error, out));
+                assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+            }
+            return out;
+        },
+        Ok(fields) => fields,
+    };
+    if checkout_symbolic_link(mode) {
+        if !observed.symbolic {
+            let out = Ok(false);
+            proof {
+                assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+                    io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                    io.opened_metadata, io.hash_file, io.changed_error, out));
+                assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+            }
+            return out;
+        }
+        let target_result = (io.read_link)(path);
+        let ghost target_snapshot = target_result;
+        let target = match target_result {
+            Err(error) => {
+                let out = Err(error);
+                proof {
+                    assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+                        io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                        io.opened_metadata, io.hash_file, io.changed_error, out));
+                    assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+                }
+                return out;
+            },
+            Ok(target) => target,
+        };
+        let out = checkout_digest_matches(oid, (io.hash_link)(target));
+        proof {
+            assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+                io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                io.opened_metadata, io.hash_file, io.changed_error, out));
+            assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+        }
+        return out;
+    }
+    if !checkout_regular_file_matches(observed.regular, observed.permissions, mode) {
+        let out = Ok(false);
+        proof {
+            assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+                io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                io.opened_metadata, io.hash_file, io.changed_error, out));
+            assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+        }
+        return out;
+    }
+    let opened_result_value = (io.open)(path);
+    let ghost opened_snapshot = opened_result_value;
+    let file = match opened_result_value {
+        Err(error) => {
+            let out = Err(error);
+            proof {
+                assert(checkout_entry_opened_result(oid@, observed, opened_snapshot, io.opened_metadata,
+                    io.hash_file, io.changed_error, out));
+                assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+                    io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                    io.opened_metadata, io.hash_file, io.changed_error, out));
+                assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+            }
+            return out;
+        },
+        Ok(file) => file,
+    };
+    let opened_observation = (io.opened_metadata)(&file);
+    let ghost opened_observation_snapshot = opened_observation;
+    let opened = match opened_observation {
+        Err(error) => {
+            let out = Err(error);
+            proof {
+                assert(checkout_entry_opened_result(oid@, observed, opened_snapshot, io.opened_metadata,
+                    io.hash_file, io.changed_error, out));
+                assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+                    io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                    io.opened_metadata, io.hash_file, io.changed_error, out));
+                assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+            }
+            return out;
+        },
+        Ok(fields) => fields,
+    };
+    if !checkout_opened_file_matches(opened.regular, opened.size, opened.permissions,
+        observed.size, observed.permissions) {
+        let out = Err((io.changed_error)());
+        proof {
+            assert(checkout_entry_opened_result(oid@, observed, opened_snapshot, io.opened_metadata,
+                io.hash_file, io.changed_error, out));
+            assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+                io.format_metadata_error, io.read_link, io.hash_link, io.open,
+                io.opened_metadata, io.hash_file, io.changed_error, out));
+            assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+        }
+        return out;
+    }
+    let out = checkout_digest_matches(oid, (io.hash_file)(opened.size, file));
+    proof {
+        assert(checkout_entry_opened_result(oid@, observed, opened_snapshot, io.opened_metadata,
+            io.hash_file, io.changed_error, out));
+        assert(checkout_entry_observed_result(mode@, oid@, path_snapshot, observation_snapshot,
+            io.format_metadata_error, io.read_link, io.hash_link, io.open,
+            io.opened_metadata, io.hash_file, io.changed_error, out));
+        assert(checkout_entry_matches_result(kind@, mode@, oid@, io, out));
+    }
+    out
+}
+
+
 pub enum CheckoutHashAlgorithm {
     Sha1,
     Sha256,
