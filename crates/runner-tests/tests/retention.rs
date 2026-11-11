@@ -76,27 +76,34 @@ fn ledger(root: &Path) -> Value {
 
 #[test]
 #[cfg(unix)]
-fn path_declaration_rejects_special_files_without_blocking_or_disposing_originals() {
+fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
     use std::os::unix::fs::{MetadataExt, symlink};
     if !isolated_capability_test(
-        "path_declaration_rejects_special_files_without_blocking_or_disposing_originals",
+        "declarations_reject_special_files_without_blocking_or_disposing_originals",
     ) {
         return;
     }
-    for kind in [
-        "fifo",
-        "symlink",
-        "dangling",
-        "symlink-fifo",
-        "directory",
-        "oversized",
-    ] {
+    for (namespace, kind) in ["path", "object", "consumer"]
+        .into_iter()
+        .flat_map(|namespace| {
+            [
+                "fifo",
+                "symlink",
+                "dangling",
+                "symlink-fifo",
+                "directory",
+                "oversized",
+            ]
+            .into_iter()
+            .map(move |kind| (namespace, kind))
+        })
+    {
         let h = host(256, 16);
         let path = tree(h.path(), "original");
         let original = h.path().join(&path).join("failure");
         fs::write(&original, b"necessary original failure").unwrap();
         let publication = inventory(h.path())
-            .begin("fixture", &path, json!(null))
+            .begin_rooted("fixture", &path, json!(null), &["current".into()])
             .unwrap();
         let id = publication.id().to_owned();
         publication.complete(json!({"exit":7})).unwrap();
@@ -106,7 +113,13 @@ fn path_declaration_rejects_special_files_without_blocking_or_disposing_original
         for component in path.split('/') {
             directory.push(chrono_harness::sha256(component.as_bytes()));
         }
-        let marker = directory.join("address.json");
+        let marker = match namespace {
+            "path" => directory.join("address.json"),
+            "object" => retention_state::object_path(h.path(), &id),
+            "consumer" => retention_state::role_path(h.path(), "current"),
+            _ => unreachable!(),
+        };
+        let directory = marker.parent().unwrap();
         let saved = directory.join("saved-address.json");
         let target = directory.join("fifo-target");
         fs::rename(&marker, &saved).unwrap();
@@ -131,12 +144,16 @@ fn path_declaration_rejects_special_files_without_blocking_or_disposing_original
             _ => unreachable!(),
         }
         let before = fs::symlink_metadata(&marker).unwrap();
+        // Explicit selection rejects a non-file object declaration before its
+        // reader runs. Global maintenance exercises that reader's refusal.
+        let request = if namespace == "object" {
+            json!({"operation":"maintain"})
+        } else {
+            json!({"operation":"maintain", "originals":[id]})
+        };
         fs::write(
             h.path().join("maintain.json"),
-            serde_json::to_vec(&json!({
-                "operation":"maintain", "originals":[id]
-            }))
-            .unwrap(),
+            serde_json::to_vec(&request).unwrap(),
         )
         .unwrap();
         // The managed real child is joined even if an unsafe FIFO open blocks.
@@ -159,20 +176,23 @@ fn path_declaration_rejects_special_files_without_blocking_or_disposing_original
             b"",
         )
         .unwrap();
-        assert!(result.failure.is_none(), "{kind}: {result:?}");
-        assert_eq!(result.exit_code, 0, "{kind}: {result:?}");
+        assert!(result.failure.is_none(), "{namespace}/{kind}: {result:?}");
+        assert_eq!(result.exit_code, 0, "{namespace}/{kind}: {result:?}");
         let round: Value = serde_json::from_str(&result.stdout).unwrap();
         assert!(
             !round["accounting_errors"].as_array().unwrap().is_empty(),
-            "{kind}: {round}"
+            "{namespace}/{kind}: {round}"
         );
-        assert_eq!(round["removed_logical_bytes"], 0, "{kind}: {round}");
+        assert_eq!(
+            round["removed_logical_bytes"], 0,
+            "{namespace}/{kind}: {round}"
+        );
         assert_eq!(fs::read(&original).unwrap(), b"necessary original failure");
         let after = fs::symlink_metadata(&marker).unwrap();
         assert_eq!(
             (after.dev(), after.ino(), after.mode(), after.len()),
             (before.dev(), before.ino(), before.mode(), before.len()),
-            "{kind}"
+            "{namespace}/{kind}"
         );
         if kind == "directory" {
             fs::remove_dir(&marker).unwrap();
@@ -183,8 +203,9 @@ fn path_declaration_rejects_special_files_without_blocking_or_disposing_original
             fs::remove_file(&target).unwrap();
         }
         fs::rename(&saved, &marker).unwrap();
-        assert_eq!(maintain_fixture_to(h.path(), 0), 0, "{kind}");
-        assert!(!original.exists(), "{kind}");
+        inventory(h.path()).reference("current", &[]).unwrap();
+        assert_eq!(maintain_fixture_to(h.path(), 0), 0, "{namespace}/{kind}");
+        assert!(!original.exists(), "{namespace}/{kind}");
     }
 }
 
@@ -1789,7 +1810,8 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
             .begin_rooted("fixture", &input_path, json!(null), &["current".into()])
             .unwrap();
         let input_id = input.id().to_owned();
-        input.complete(json!({"exit": 7})).unwrap();
+        // An unfinished dependency requires the full component, including its
+        // consumers. Finalized originals use the independent report frontier.
         let report_path = tree(h.path(), "obsolete-report");
         let report = inventory(h.path())
             .begin("fixture", &report_path, json!(null))
@@ -1848,6 +1870,7 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
         inventory(h.path()).maintain_originals(&[other_id]).unwrap();
         assert!(!h.path().join(&other_path).exists());
         drop(holder);
+        input.complete(json!({"exit": 7})).unwrap();
         inventory(h.path())
             .maintain_originals(&[report_id])
             .unwrap();
@@ -4563,6 +4586,181 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
     assert_eq!(retained["incoming"], json!(expected));
     assert_eq!(retained["output"], original_before["output"]);
     assert_eq!(retained["roles"], original_before["roles"]);
+}
+
+fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
+    if !isolated_capability_test(test) {
+        return;
+    }
+    let h = host(256, 128);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_millis_per_round"] = json!(25);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let original = ".chrono-harness/state/fixtures/required-original";
+    fs::write(
+        h.path().join(original),
+        b"original still required by its consumer",
+    )
+    .unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", original, json!(null))
+        .unwrap();
+    let original_id = publication.id().to_owned();
+    publication.complete(json!({"exit": 7})).unwrap();
+    inventory(h.path())
+        .reference("actual-original-consumer", &[original_id.clone()])
+        .unwrap();
+    let report = ".chrono-harness/state/fixtures/obsolete-report";
+    fs::write(h.path().join(report), b"obsolete report").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", report, json!(null))
+        .unwrap();
+    let report_id = publication.id().to_owned();
+    inventory(h.path())
+        .dependencies(&report_id, &[original_id.clone()])
+        .unwrap();
+    publication.complete(json!({"exit": 0})).unwrap();
+
+    let role = retention_state::role_path(h.path(), "actual-original-consumer");
+    let mut address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in original.split('/') {
+        address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    address.push("address.json");
+    let role_before = fs::read(&role).unwrap();
+    let address_before = fs::read(&address).unwrap();
+    let original_record = retention_state::object_path(h.path(), &original_id);
+    let original_before: Value =
+        serde_json::from_slice(&fs::read(&original_record).unwrap()).unwrap();
+    let busy = if consumer { &role } else { &address };
+    let exclusion =
+        chrono_harness::ownership::DirectoryLease::acquire(busy.parent().unwrap(), true, None)
+            .unwrap()
+            .unwrap();
+    let mut rounds = Vec::new();
+    for _ in 0..4 {
+        let round = inventory(h.path())
+            .maintain_originals(&[report_id.clone()])
+            .unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
+        assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
+        rounds.push(round);
+        if !h.path().join(report).exists() {
+            break;
+        }
+    }
+    assert!(!h.path().join(report).exists(), "{rounds:?}");
+    assert_eq!(
+        fs::read(h.path().join(original)).unwrap(),
+        b"original still required by its consumer"
+    );
+    assert_eq!(fs::read(&role).unwrap(), role_before);
+    assert_eq!(fs::read(&address).unwrap(), address_before);
+    let retained: Value = serde_json::from_slice(&fs::read(original_record).unwrap()).unwrap();
+    assert_eq!(retained["incoming"], json!([]));
+    assert_eq!(retained["output"], original_before["output"]);
+    assert_eq!(retained["roles"], original_before["roles"]);
+    drop(exclusion);
+}
+
+#[test]
+fn finalized_original_consumer_lease_does_not_block_released_report() {
+    released_report_with_busy_retained_original(
+        "finalized_original_consumer_lease_does_not_block_released_report",
+        true,
+    );
+}
+
+#[test]
+fn finalized_original_path_lease_does_not_block_released_report() {
+    released_report_with_busy_retained_original(
+        "finalized_original_path_lease_does_not_block_released_report",
+        false,
+    );
+}
+
+#[test]
+fn unfinished_report_dependency_restores_finalized_original_consumer_exclusion() {
+    if !isolated_capability_test(
+        "unfinished_report_dependency_restores_finalized_original_consumer_exclusion",
+    ) {
+        return;
+    }
+    let h = host(256, 128);
+    let original = ".chrono-harness/state/fixtures/finalized-original";
+    fs::write(h.path().join(original), b"required original").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", original, json!(null))
+        .unwrap();
+    let original_id = publication.id().to_owned();
+    publication.complete(json!({"exit": 7})).unwrap();
+    inventory(h.path())
+        .reference("actual-original-consumer", &[original_id.clone()])
+        .unwrap();
+    let unfinished = ".chrono-harness/state/fixtures/unfinished-original";
+    fs::write(
+        h.path().join(unfinished),
+        b"producer still owns these bytes",
+    )
+    .unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", unfinished, json!(null))
+        .unwrap();
+    let unfinished_id = publication.id().to_owned();
+    let report = ".chrono-harness/state/fixtures/obsolete-report";
+    fs::write(h.path().join(report), b"obsolete report").unwrap();
+    let result = inventory(h.path())
+        .begin("fixture", report, json!(null))
+        .unwrap();
+    let report_id = result.id().to_owned();
+    inventory(h.path())
+        .dependencies(&report_id, &[original_id, unfinished_id])
+        .unwrap();
+    result.complete(json!({"exit": 0})).unwrap();
+    let role = retention_state::role_path(h.path(), "actual-original-consumer");
+    let role_before = fs::read(&role).unwrap();
+    let exclusion =
+        chrono_harness::ownership::DirectoryLease::acquire(role.parent().unwrap(), true, None)
+            .unwrap()
+            .unwrap();
+    let refused = inventory(h.path())
+        .maintain_originals(&[report_id])
+        .unwrap();
+    assert!(
+        refused["accounting_errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|error| {
+                error["reason"]
+                    .as_str()
+                    .is_some_and(|reason| reason.contains("consumer metadata is busy"))
+            }),
+        "{refused}"
+    );
+    assert!(
+        refused["disposed"].as_array().unwrap().is_empty(),
+        "{refused}"
+    );
+    assert_eq!(fs::read(h.path().join(report)).unwrap(), b"obsolete report");
+    assert_eq!(
+        fs::read(h.path().join(original)).unwrap(),
+        b"required original"
+    );
+    assert_eq!(
+        fs::read(h.path().join(unfinished)).unwrap(),
+        b"producer still owns these bytes"
+    );
+    assert_eq!(fs::read(role).unwrap(), role_before);
+    drop(exclusion);
+    publication.complete(json!({"exit": 0})).unwrap();
 }
 
 #[test]
