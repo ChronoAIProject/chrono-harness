@@ -364,7 +364,7 @@
     {"path":"crates/runner/src/facts_binding.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/input_file.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/facts_configs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
-    {"path":"crates/runner/src/facts_inputs.rs","verification":{"role":"program","roots":[{"path":"crates/runner/src/verified_git_binding.rs","operation":"verify.runner-git-binding"},{"path":"crates/runner-tests/tests/verified_git_binding.rs","operation":"verify.runner-git-binding-tests"}]},"owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
+    {"path":"crates/runner/src/facts_inputs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/judge-registration-tests/tests/git_facts.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/git_inputs.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/input_coverage.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
