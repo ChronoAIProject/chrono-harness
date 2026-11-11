@@ -571,6 +571,17 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
         },
 {
     let Some(rows) = rows else { return Err("binding collection must be array"); };
+    Ok(binding_reference_index(rows, id))
+}
+
+fn binding_reference_index<R: BindingReferenceRows>(rows: &R, id: &str) -> (selected: Option<usize>)
+    ensures match selected {
+        Some(index) => unique_binding_reference_index(rows, id, index as int),
+        None => forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i),
+    },
+        forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+            ==> selected == Some(i),
+{
     let observed = BindingMatches { rows, id };
     proof {
         reveal(unique_match_index);
@@ -614,7 +625,7 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
             }
         }
     }
-    Ok(selected)
+    selected
 }
 
 struct CapturedMatches<'a, 'p, M: RegistryMembership> {
@@ -865,29 +876,18 @@ pub fn git_guard_reference<'a, R: BindingReferenceRows>(rows: &R, id: &'a str, f
     if !fresh {
         return Err(GitGuardError { prefix: "duplicate Git input ", id, suffix: "" });
     }
-    let checked = unique_binding_reference(Some(rows), id);
-    assert(checked.is_ok());
-    let selected = checked.unwrap();
-    assert(checked == Ok::<Option<usize>, &'static str>(selected));
+    let selected = binding_reference_index(rows, id);
     match selected {
         Some(index) => {
             assert(unique_binding_reference_index(rows, id, index as int));
             assert forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
                 implies i == index by {
-                assert(checked == Ok::<Option<usize>, &'static str>(Some(i)));
+                assert(selected == Some(i));
             }
             Ok(index)
         },
         None => {
-            let count = rows.len();
-            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {
-                if unique_binding_reference_index(rows, id, i) {
-                    assert(0 <= i < count);
-                    let index = i as usize;
-                    assert(index as int == i);
-                    assert(checked == Ok::<Option<usize>, &'static str>(Some(index)));
-                }
-            }
+            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {}
             Err(GitGuardError { prefix: "missing/ambiguous Git input ", id, suffix: "" })
         },
     }

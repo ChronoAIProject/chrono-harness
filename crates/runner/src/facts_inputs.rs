@@ -18,8 +18,7 @@ pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> 
     let ids = verified_git_binding::git_guard_ids(
         guard["inputs"].as_array().map(|ids| (ids, ids.len())),
     )?;
-    let inputs =
-        verified_git_binding::git_guard_files(config["environment"]["inputs"].as_array())?;
+    let inputs = verified_git_binding::git_guard_files(config["environment"]["inputs"].as_array())?;
     let mut seen = BTreeSet::new();
     let mut selected = vec![];
     for id in ids {
