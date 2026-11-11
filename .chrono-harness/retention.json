@@ -30,6 +30,9 @@
     "fixture-retirement": [
       ".chrono-harness/state/temporary-hosts/worktree/body-inputs/"
     ],
+    "instructions-operation": [
+      ".chrono-harness/state/instructions-operations/"
+    ],
     "pr-original": [
       ".chrono-harness/state/pr-operations/"
     ]
@@ -44,5 +47,13 @@
   "max_output_bytes": 1073741824,
   "metadata_keep_seconds": 86400,
   "max_manifest_nodes": 16384,
-  "max_metadata_bytes_per_round": 67108864
+  "max_metadata_bytes_per_round": 67108864,
+  "terminal_limits": {
+    "instructions-operation": {
+      "keep_seconds": 86400,
+      "max_count": 32,
+      "max_bytes": 67108864,
+      "metadata_keep_seconds": 0
+    }
+  }
 }

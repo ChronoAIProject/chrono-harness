@@ -1,6 +1,6 @@
 # 宿主指令生成：atomic-rules/relative-alias/v3
 
-`chrono-instructions` 把登记的规则生成工作指南。它是独立 Rust 库，CLI 只负责参数和调用；生产项目与专属测试项目为 instructions ↔ instructions-tests，没有根 workspace，也不依赖 runner。
+`chrono-instructions` 把登记的规则生成工作指南。它有独立的 Rust 库和 CLI，CLI 只负责参数和调用；生产项目与专属测试项目为 instructions ↔ instructions-tests，没有根 workspace。发布恢复复用 runner 的原件保管能力。
 
 专属测试自行编译真实库和 CLI 源码，只消费测试项目的 target；测试计划和单元缓存不再包含未被读取的生产 target。日常构建、生成及发布仍保留各自的正式入口；发布所用生产缓存不受此删减影响。
 
@@ -157,11 +157,29 @@ init／generate 只接受 schema 2、producer=`chrono-instructions`、render=`at
 
 ## IO、边界与验证
 
-生成器复用同一发布器。在同目录暂存普通新文件和原文件备份，执行 flush／sync；新文件使用 tempfile 默认私有权限，已有普通权限保留。写入顺序为源先于输出、CLAUDE 先于别名、新建 manifest 最后。用户已经编辑的 manifest，不是程序保存的历史版本。全部内容相等时，不创建临时文件，也不改 inode／mtime。
+init、init_with_defaults、generate、CLI 和 test-support 统一进入同一操作负责方。它先为本宿主取得目录内核排除，再从现有原件保留所有者登记 intent，最后才读取输入和 prepare。没有配置的新目录直接采用随产品编译的 `assets/instructions/standalone-retention.json`；不要求 Git、config.json 或其他 harness 项目。有宿主 retention.json 时只采用宿主政策，必须明确登记 `instructions-operation` 范围和有限 `terminal_limits`；不静默合并或替换宿主选择。
 
-普通发布失败时，按相反顺序恢复字节、普通类型和权限，删除本次新建文件或链接，再按子先父后清理空目录。错误列出 published、unrestored、recovery、cleanup；published 不表示文件仍处于改变状态。回滚失败时，保留原文件备份并报告路径；没有原文件时，报告未移除目标。恢复实际异常状态后再重试。清理失败也退出非零；若发布已完成但清理失败，会明确说明。
+操作原件在 `.chrono-harness/state/instructions-operations/`。成员、结果、恢复根、真实消费者和删除都由现有 retention 对象声明负责，没有另一份操作总账。每次调用（包括无需修改和准备失败）都有独立 intent。它绑定宿主物理身份、请求原路径、输入观察、尝试地址和开始时间；plan 还绑定完整目标、父目录、原字节摘要、普通权限、备份与新对象身份，以及未修改目标和 AGENTS 字面链接。外部文件允许原有别名，记录请求路径、解析路径、原身份、内容摘要和普通权限，在执行发布前重验。操作间的排除只针对同一宿主，不把独立宿主放进共用准入锁。
 
-支持范围限于 Unix 和当前 macOS 普通 IO，不保证崩溃原子性、并发写入、跨平台行为，或恢复 ACL、扩展属性、原 inode、时间戳及所有者。没有针对恶意 AI 的关卡，也不假定全局安装或 provider。
+发布前把全部新对象和原件备份写进受保护尝试，flush／sync 后发布不可变 plan。源先于输出、CLAUDE 先于别名、新建 manifest 最后；commit 精确绑定原 plan 和宿主。没有有效 commit 时按反序恢复；有有效 commit 时只核已发布对象，不重放写入。恢复必须从原根和原尝试继续，先解决旧状态再 prepare。输入、父目录、目标、原件或字面链接变化时保留原件和未知状态，不覆盖独立修改。恢复中的再次中断仍使用同一备份身份；PID 消失、信号、日志和缺结果都不能建立原命令成功。
+
+不变的业务目标保持原 inode／mtime；操作仍写持久状态。状态、清理、封存或引用交接失败都返回失败，恢复根继续保护。发布结果与实际观察到的 evaluator 返回分别保存：`result.json` 是发布事实，retention 的 `observed_return` 是外层已收到的 evaluator Result；它们都不冒充 CLI 传输完成或进程实际退出。跨进程中断未观察到返回时保留 null，恢复只能新增已核的发布结论。普通 CLI 返回的 exit_code 由实际 dispatch 决定，stdout／stderr 写入失败仍可能使实际进程退出不同；本进程不伪造自己尚未被等待的退出结果。
+
+独立宿主使用同一个 `chrono-instructions` 入口的 `status --host-root H [--attempt A]` 查看现有对象，`maintain --host-root H` 先恢复本宿主待决操作，再委托现有所有者作有界维护。A 是原件的精确宿主相对路径。登记了 harness 的本仓分别使用 projects.json 的 `instructions.status`／`instructions.maintain` action，并沿受保护 use 入口执行。查询返回真实原件地址、发布阶段、原 intent 和已观察返回；已退役或不可取得的精确地址返回 `unavailable-or-retired`，不推断成功，也不承诺已删除正文仍可读取。范围未遍历完整时明确报告 unknown。
+
+**本候选同时修改产品与宿主政策。** 新增 `terminal_limits.instructions-operation`：终态保留一天、最多 32 项和 64 MiB 逻辑字节。这是显式维护的终态目标，不是全库发布准入；有恢复根、未知未结发布或真实使用凭据时继续保护并报告超限／未知。终态年龄到期或超出数量／字节目标，只使原件有资格进入原有身份、源码排除、引用和使用凭据检查。instructions 的正文完成终态保留并实际移除后，移除声明立即有资格回收；仍须排除引用、退役凭据和活读取者。其余生产者仍按原有一天元数据期限和摘要上限回收。普通发布不扫描历史；调用方在消费者结束后执行明确维护，不能把保留上限当作已经回收的观察。
+
+宿主政策变更不能直接重绑旧原件。部署支持该字段的候选后，由原保管者先排除旧使用方、保留精确旧政策字节，再经[现有 migrate-policy](artifact-retention.md#正式入口和操作要求)迁移实际原件。由独立 fallback 转为磁盘政策也遵守同一合同；未知旧绑定保持未知。迁移只覆盖精确点名的原件及依赖，不宣称整个存储已采用，也不表示共享协调宿主已部署。
+
+支持 Unix 的当前 Linux／macOS 接口，保留普通字节、类型、权限及字面别名；不恢复 ACL、扩展属性、原 inode、时间戳或所有者。目录内核锁只协调参与本操作协议的写入者；外部并发修改须靠各次身份／内容重验检测。实际断电、内核或文件系统持久性保证及完整 IO 组合不在局部谓词证明之内，仍须平台验收。
+
+| 必要链条 | 实际输入与使用方 | 现有能力为何仍需这项修改 | 独立验收入口 |
+| --- | --- | --- | --- |
+| 发布与重进 | 当前 API／CLI 请求 → transaction → 宿主根、额外 Markdown／skill 使用方 | 原发布器只能在同一进程回滚，prepare 前没有原尝试可恢复 | instructions-tests 的普通失败、真实 Rust 子进程中断及再次恢复用例 |
+| 原件与引用 | intent／plan／备份／result → retention → 后续调用和真实读取者 | 可复用现有保管、租约、引用、封存及删除；只补独立政策入口、原创建续接、返回观察和终态维护选择 | 同一未过滤 test.instructions-tests、test.runner-tests；保留原权限与字节断言 |
+| 决策边界 | 观察事实 → publication_decision、verified_release → 恢复动作、解除引用、终态数量／字节选择 | 原所有者缺少这些实际决策；无需新增服务或独立库存 | verify.instructions-publication／-tests、既有 verify.retention-release／-tests 和 Rust 同源预期 |
+
+这些是源码与验收入口的绑定，实际结论须核原报告。新增构建依赖复用 runner、libc 及仓内固定 Verus 宏；完整构建、验证、维护和存储成本未测。本地指令行为、runner 保管改动、相关同源 Verus 判断及完整固定候选 DELTA 已验证，候选 core bootstrap 已通过。原生 instructions 单元复用既有 unit bootstrap 核对并解压共享 Verus 包；其原生验收、真实 Linux／macOS、共享协调宿主采用和 integration／dev 交付仍须分别核实，完整 SPEC 继续保持未完成。
 
 本仓验证走[登记的统一入口](ci.md#this-repository)，由明确依赖选择格式检查、生产构建、专属行为测试及适用的同源 Verus 证明。具体参数归 projects／FILEMAP 登记，本文引用该入口。
 

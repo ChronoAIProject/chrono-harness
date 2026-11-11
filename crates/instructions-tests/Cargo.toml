@@ -10,6 +10,8 @@ chrono-instructions = { path = "../instructions", features = ["test-support"] }
 chrono-diagnostics = { path = "../diagnostics" }
 
 [dev-dependencies]
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
+chrono-harness = { path = "../runner", features = ["retention-test"] }
 tempfile = "3"
 serde_json = "1"
 
@@ -22,3 +24,7 @@ name = "chrono-test-instructions"
 path = "../instructions/src/main.rs"
 test = false
 bench = false
+
+[[test]]
+name = "publication_decision"
+path = "tests/publication_decision.rs"

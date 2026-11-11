@@ -612,6 +612,81 @@
             "--host-root",
             "."
           ]
+        },
+        "format": {
+          "operation": "format.instructions",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml"
+          ]
+        },
+        "update_lockfile": {
+          "operation": "lock.instructions",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml",
+            "--package",
+            "chrono-instructions"
+          ]
+        },
+        "verify_publication": {
+          "operation": "verify.instructions-publication",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.instructions-publication.rlib,dep-info=.chrono-harness/state/verify.instructions-publication.rlib.d",
+            "crates/instructions/src/publication_decision.rs",
+            "-o",
+            ".chrono-harness/state/verify.instructions-publication.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "status": {
+          "operation": "instructions.status",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml",
+            "--bin",
+            "chrono-instructions",
+            "--",
+            "status",
+            "--host-root",
+            "."
+          ]
+        },
+        "maintain": {
+          "operation": "instructions.maintain",
+          "tool": "cargo",
+          "argv": [
+            "run",
+            "--locked",
+            "--manifest-path",
+            "crates/instructions/Cargo.toml",
+            "--bin",
+            "chrono-instructions",
+            "--",
+            "maintain",
+            "--host-root",
+            "."
+          ]
         }
       },
       "language": "rust"
@@ -643,6 +718,49 @@
             "--manifest-path",
             "crates/instructions-tests/Cargo.toml"
           ]
+        },
+        "format": {
+          "operation": "format.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/instructions-tests/Cargo.toml"
+          ]
+        },
+        "update_lockfile": {
+          "operation": "lock.instructions-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--manifest-path",
+            "crates/instructions-tests/Cargo.toml",
+            "--package",
+            "chrono-instructions-tests"
+          ]
+        },
+        "verify_publication": {
+          "operation": "verify.instructions-publication-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.instructions-publication-tests.rlib,dep-info=.chrono-harness/state/verify.instructions-publication-tests.rlib.d",
+            "crates/instructions-tests/tests/publication_decision.rs",
+            "-o",
+            ".chrono-harness/state/verify.instructions-publication-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         }
       },
       "language": "rust"
