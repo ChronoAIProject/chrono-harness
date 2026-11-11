@@ -113,31 +113,31 @@ pub(crate) fn resolve_target(
     let mut identity = None;
     let mut registry_path = None;
     let selected = if identities {
+        use crate::verified_git_binding::select_git_target;
+
         let program = host["program"]
             .as_str()
             .ok_or("Git selector program required")?;
         let rows = host["configurations"].as_array().unwrap();
-        let row = if let Some(target) = target {
+        let index = if let Some(target) = target {
             // Current executable identities retain each endpoint's explicit
             // target. Otherwise only the candidate-declared data path is eligible;
             // it never admits an executable or selects an unregistered policy.
-            target
-                .sha256
-                .and_then(|hash| rows.iter().find(|row| row["sha256"] == hash))
-                .or_else(|| rows.iter().find(|row| row["path"] == target.path))
-                .ok_or_else(|| {
+            select_git_target(&JsonTargetRows(rows), target.sha256, Some(target.path)).ok_or_else(
+                || {
                     format!(
                         "Git config selector has no bound registry policy path for {platform}: {}",
                         target.path
                     )
-                })?
+                },
+            )?
         } else {
             let hash =
                 sha256(&fs::read(program).map_err(|e| format!("Git selector executable: {e}"))?);
-            rows.iter()
-                .find(|row| row["sha256"] == hash)
+            select_git_target(&JsonTargetRows(rows), Some(&hash), None)
                 .ok_or_else(|| format!("Git config selector has no registered executable identity for {platform}: {program} sha256={hash}"))?
         };
+        let row = &rows[index];
         identity = Some((program, row["sha256"].as_str().unwrap()));
         if version3 {
             registry_path = Some(row["registry_path"].as_str().unwrap());
@@ -310,6 +310,28 @@ fn host_path(path: &str) -> Result<(), String> {
         return Err("Git config selector paths must reside in .chrono-harness/".into());
     }
     Ok(())
+}
+
+struct JsonTargetRows<'a>(&'a [Value]);
+
+impl crate::verified_git_binding::GitTargetRows for JsonTargetRows<'_> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn text(
+        &self,
+        index: usize,
+        field: &crate::verified_git_binding::GitTargetField,
+    ) -> Option<&str> {
+        use crate::verified_git_binding::GitTargetField;
+
+        let key = match field {
+            GitTargetField::Digest => "sha256",
+            GitTargetField::Path => "path",
+        };
+        self.0[index][key].as_str()
+    }
 }
 
 impl Selection {

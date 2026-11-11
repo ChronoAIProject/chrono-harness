@@ -243,6 +243,8 @@ scoped 的可选 `registration_config` 及 full-CI `check_config` 均可显式�
 
 固定端点读取器独立按各自 commit 解析 entry 与 selected target，并在 registry snapshot中按真实路径保留 selector、target 和五份 status-bearing registry 的原字节和值；不把target JSON 别名到 selector，也不把 candidate target 套到 base。
 
+执行物身份选择器的目标匹配由同源 Verus 判定。已绑定读取先选本端数组中首个完整摘要匹配；仅在没有摘要匹配时，才选首个完整登记路径匹配。打开现役执行物时只匹配实际文件的摘要，没有路径回退。没有匹配项时保留各入口的原错误。
+
 请求、registrationview（选择器模式版本化为 `chrono-registration-view/v2`）、历史 decode（选择器输入版本化为 `chrono-historical-decode/v3`）、FILEMAP provenance、mixed documents 与 workflow checks 同时保留原始 entry identity、effective target identity 和结构化 selector binding，缺失、替换或漂移均拒绝。
 
 Git facts 仍按原合同绑定 candidate，历史 endpoint 只读固定对象，不执行历史工具。选中输入快照使用版本化 `chrono-input-snapshot/v3` 绑定 entry、effectivetarget 与 selector；direct v1/v2/v3 和旧快照语义保持不变。
