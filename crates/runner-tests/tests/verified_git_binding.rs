@@ -110,6 +110,38 @@ fn expect_selector_path_error(actual: Result<(), policy::SelectorPathError>,
     }
 }
 
+fn expect_registry_path_failure<'a, R: policy::SelectorRegistryRows<'a>>(
+    rows: &R, targets: &[&str], first: usize, invalid: bool, expected: &str,
+)
+    requires first < rows.registry_paths().len(),
+        policy::selector_registry_prefix(rows.registry_paths(), targets@, first as int),
+        policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@)
+            == Some((invalid, expected@)),
+{
+    let actual = policy::validate_identity_registry_paths(true, rows, targets);
+    proof {
+        match actual {
+            Ok(()) => {
+                assert(policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@).is_none());
+                assert(false);
+            },
+            Err(error) => {
+                let i = choose|i: int| #[trigger] policy::selector_registry_failure_at(
+                    rows.registry_paths(), targets@, i, policy::selector_path_failure(error));
+                if i < first {
+                    assert(policy::identity_registry_path_error(rows.registry_paths()[i], targets@).is_none());
+                }
+                if i > first {
+                    assert(policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@).is_none());
+                }
+                assert(i == first as int);
+                assert(policy::selector_path_failure(error) == (invalid, expected@));
+            },
+        }
+    }
+    expect_selector_path_error(actual, invalid, expected);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn selector_registry_paths_skip_non_v3_and_accept_empty_v3() {
     let rows = RegistryPathsFixture(vec![None, Some("../bad\0\n"), Some("other/missing")]);
@@ -133,22 +165,20 @@ fn selector_registry_paths_return_first_missing_or_invalid_row() {
     let first = ".chrono-harness/a";
     let invalid = ".chrono-harness/目录é\0\n尾部";
     let missing_first = RegistryPathsFixture(vec![Some(first), None, Some(invalid)]);
-    expect_selector_path_error(policy::validate_identity_registry_paths(true, &missing_first, &[first]),
-        false, "Git selector registry_path required");
+    expect_registry_path_failure(&missing_first, &[first], 1, false, "Git selector registry_path required");
     let invalid_first = RegistryPathsFixture(vec![Some(first), Some(invalid), None]);
-    expect_selector_path_error(policy::validate_identity_registry_paths(true, &invalid_first, &[first]),
-        true, invalid);
+    expect_registry_path_failure(&invalid_first, &[first], 1, true, invalid);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn selector_registry_paths_check_host_scope_before_exact_membership() {
     proof { selector_fixture_path_facts(); }
     let outside = RegistryPathsFixture(vec![Some("other/policy")]);
-    expect_selector_path_error(policy::validate_identity_registry_paths(true, &outside, &[]),
-        false, "Git config selector paths must reside in .chrono-harness/");
+    expect_registry_path_failure(&outside, &[], 0, false,
+        "Git config selector paths must reside in .chrono-harness/");
     let different = RegistryPathsFixture(vec![Some(".chrono-harness/A")]);
-    expect_selector_path_error(policy::validate_identity_registry_paths(true, &different, &[".chrono-harness/a"]),
-        false, "Git selector registry_path must name a registered policy target");
+    expect_registry_path_failure(&different, &[".chrono-harness/a"], 0, false,
+        "Git selector registry_path must name a registered policy target");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
