@@ -3321,6 +3321,101 @@ fn checkout_regular_permissions_keep_only_owner_execute_decision() {
     checkout_non_file_never_matches(u32::MAX, "100755\0");
 }
 
+fn expect_checkout_metadata(out: Result<Option<String>, String>, expected: &str)
+    requires out matches Ok(Some(value)) && value@ == expected@,
+{
+    match out {
+        Ok(Some(value)) => expect_status_text(value.as_str(), expected),
+        _ => panic!(),
+    }
+}
+
+fn expect_checkout_observation_error<T>(out: Result<T, String>, expected: &str)
+    requires out matches Err(error) && error@ == expected@,
+{
+    match out {
+        Err(error) => expect_status_text(error.as_str(), expected),
+        Ok(_) => panic!(),
+    }
+}
+
+fn expect_checkout_parent(out: Result<bool, String>, expected: bool)
+    requires out matches Ok(value) && value == expected,
+{
+    match out { Ok(value) => expect_status_true(value == expected), Err(_) => panic!() }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_metadata_preserves_complete_success_even_when_classifier_says_missing() {
+    let empty = policy::checkout_metadata_observation(
+        Ok::<String, String>("".to_owned()), |_error: &String| true,
+    );
+    expect_checkout_metadata(empty, "");
+    let full = policy::checkout_metadata_observation(
+        Ok::<String, String>("é\0metadata\ntail".to_owned()), |_error: &String| false,
+    );
+    expect_checkout_metadata(full, "é\0metadata\ntail");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_metadata_only_collapses_the_observed_missing_error() {
+    proof {
+        reveal_strlit("missing"); reveal_strlit("missing\0detail"); reveal_strlit("é\npermission");
+    }
+    let absent = policy::checkout_metadata_observation(
+        Err::<String, String>("missing".to_owned()),
+        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+    );
+    match absent { Ok(None) => {}, _ => panic!() }
+    let suffix = policy::checkout_metadata_observation(
+        Err::<String, String>("missing\0detail".to_owned()),
+        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+    );
+    expect_checkout_observation_error(suffix, "missing\0detail");
+    let full = policy::checkout_metadata_observation(
+        Err::<String, String>("é\npermission".to_owned()),
+        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+    );
+    expect_checkout_observation_error(full, "é\npermission");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_parent_success_preserves_the_actual_directory_observation() {
+    expect_checkout_parent(policy::checkout_parent_observation(
+        Ok::<bool, String>(true), |_error: &String| true,
+    ), true);
+    expect_checkout_parent(policy::checkout_parent_observation(
+        Ok::<bool, String>(false), |_error: &String| true,
+    ), false);
+    expect_checkout_parent(policy::checkout_parent_observation(
+        Ok::<bool, String>(true), |_error: &String| false,
+    ), true);
+    expect_checkout_parent(policy::checkout_parent_observation(
+        Ok::<bool, String>(false), |_error: &String| false,
+    ), false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_parent_missing_stops_and_other_errors_preserve_the_complete_error() {
+    proof {
+        reveal_strlit("missing"); reveal_strlit("missing\0detail"); reveal_strlit("é\npermission");
+    }
+    expect_checkout_parent(policy::checkout_parent_observation(
+        Err::<bool, String>("missing".to_owned()),
+        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+    ), false);
+    let suffix = policy::checkout_parent_observation(
+        Err::<bool, String>("missing\0detail".to_owned()),
+        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+    );
+    expect_checkout_observation_error(suffix, "missing\0detail");
+    let full = policy::checkout_parent_observation(
+        Err::<bool, String>("é\npermission".to_owned()),
+        |error: &String| scope_text::equal_text(error.as_str(), "missing"),
+    );
+    expect_checkout_observation_error(full, "é\npermission");
+}
+
 fn checkout_open_identity_cases(size: u64, other_size: u64, permissions: u32, other_permissions: u32)
     requires size != other_size, permissions != other_permissions,
 {
