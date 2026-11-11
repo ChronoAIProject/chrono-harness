@@ -1329,7 +1329,7 @@ jobs:
       - name: Bootstrap registered tools
         shell: bash
         run: |
-          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-shared.json' 'verify' 'core'
+          '/bin/bash' '.chrono-harness/ci/bootstrap-native.sh' '.' '.chrono-harness/ci/bootstrap-unit.json'
       - name: Canonical harness check
         id: chrono_cache_work
         shell: bash

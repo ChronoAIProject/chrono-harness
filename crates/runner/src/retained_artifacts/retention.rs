@@ -71,6 +71,8 @@ fn retained_measurements(
 #[serde(deny_unknown_fields)]
 pub struct Policy {
     pub schema: String,
+    #[serde(default)]
+    pub terminal_limits: BTreeMap<String, TerminalLimits>,
     pub producers: BTreeMap<String, Vec<String>>,
     pub keep_seconds: u64,
     #[serde(default = "default_diagnostic_seconds")]
@@ -91,6 +93,17 @@ pub struct Policy {
     #[serde(default)]
     historical: BTreeMap<String, super::retention_command::Historical>,
 }
+/// Maintenance targets for resolved terminal originals of an explicitly named
+/// producer. Roots, live capabilities and unknown outcomes still take priority.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TerminalLimits {
+    pub keep_seconds: u64,
+    pub metadata_keep_seconds: u64,
+    pub max_count: u64,
+    pub max_bytes: u64,
+}
+
 fn default_metadata_bytes() -> u64 {
     64 * 1024 * 1024
 }
@@ -135,6 +148,8 @@ struct Output {
     #[serde(deserialize_with = "crate::strict_json_value")]
     outcome: Value,
     phase: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    observed_return: Option<Value>,
     expires: u64,
     references: Vec<String>,
     stack: Vec<Node>,
@@ -268,6 +283,7 @@ pub struct Inventory {
     root: PathBuf,
     policy: Policy,
     policy_bytes: Vec<u8>,
+    policy_from_disk: bool,
     directory: PathBuf,
     round_metadata: Cell<Option<u64>>,
     round_began: Cell<Option<Instant>>,
@@ -373,10 +389,18 @@ impl Inventory {
     }
     /// Absence preserves old semantics. Existing unknown output directories are never enrolled by opening.
     pub fn adopted(root: &Path) -> Result<Option<Self>, String> {
+        Self::open(root, None)
+    }
+    /// Standalone producers supply their declared policy when the host has not
+    /// adopted one. An on-disk policy always takes precedence.
+    pub fn with_standalone_policy(root: &Path, fallback: &[u8]) -> Result<Self, String> {
+        Self::open(root, Some(fallback))?.ok_or("standalone retention policy unavailable".into())
+    }
+    fn open(root: &Path, fallback: Option<&[u8]>) -> Result<Option<Self>, String> {
         let physical_root = fs::canonicalize(root).map_err(|e| e.to_string())?;
         let root = physical_root.as_path();
         let path = no_symlink_parents(root, POLICY_PATH)?;
-        let bytes = match fs::File::open(path) {
+        let (bytes, policy_from_disk) = match fs::File::open(path) {
             Ok(f) => {
                 let mut bytes = Vec::new();
                 f.take(1024 * 1024 + 1)
@@ -385,9 +409,12 @@ impl Inventory {
                 if bytes.len() > 1024 * 1024 {
                     return Err("retention policy byte bound".into());
                 }
-                bytes
+                (bytes, true)
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => match fallback {
+                Some(bytes) => (bytes.to_vec(), false),
+                None => return Ok(None),
+            },
             Err(e) => return Err(e.to_string()),
         };
         let policy: Policy = decode(&bytes)?;
@@ -407,6 +434,16 @@ impl Inventory {
             || policy.max_metadata_bytes_per_round < 3 * MAX_STATE
         {
             return Err("invalid finite output retention policy".into());
+        }
+        for (producer, limits) in &policy.terminal_limits {
+            if !policy.producers.contains_key(producer)
+                || limits.keep_seconds == 0
+                || limits.max_count == 0
+                || limits.max_bytes == 0
+                || limits.max_count > policy.max_manifest_nodes as u64
+            {
+                return Err("invalid producer terminal retention limits".into());
+            }
         }
         for scopes in policy.producers.values() {
             if scopes.is_empty() {
@@ -443,6 +480,7 @@ impl Inventory {
             root: root.into(),
             policy,
             policy_bytes: bytes,
+            policy_from_disk,
             directory,
             round_metadata: Cell::new(None),
             round_began: Cell::new(None),
@@ -466,9 +504,13 @@ impl Inventory {
     fn stable(&self, gate: &impl Exclusion) -> Result<(), String> {
         self.charge_metadata(self.policy_bytes.len() as u64)?;
         gate.verify()?;
-        if fs::read(no_symlink_parents(&self.root, POLICY_PATH)?).map_err(|e| e.to_string())?
-            != self.policy_bytes
-        {
+        let policy = no_symlink_parents(&self.root, POLICY_PATH)?;
+        let current = if self.policy_from_disk {
+            fs::read(policy).map_err(|e| e.to_string())? == self.policy_bytes
+        } else {
+            matches!(fs::symlink_metadata(policy), Err(e) if e.kind() == std::io::ErrorKind::NotFound)
+        };
+        if !current {
             return Err("output retention policy changed; preserve outputs".into());
         }
         Ok(())
@@ -816,6 +858,125 @@ impl Inventory {
     ) -> Result<Publication, String> {
         self.reserve(producer, path, outcome, &[], Some(tree), None)
     }
+    /// Declare both a pending output and its existing domain recovery root.
+    pub fn plan_rooted(
+        self,
+        producer: &str,
+        path: &str,
+        outcome: Value,
+        root: &str,
+    ) -> Result<Publication, String> {
+        self.reserve(producer, path, outcome, &[root.into()], Some(true), None)
+    }
+    /// Read the original owner's current recovery attachment, without finding
+    /// operations by traversing unrelated output directories.
+    pub fn rooted_original(
+        &self,
+        producer: &str,
+        role: &str,
+    ) -> Result<Option<(String, String, String, Value)>, String> {
+        let gate = self.addressed_gate(&[], &[], &[role.into()], None, false, true)?;
+        let ledger = self.load(&gate)?;
+        self.stable(&gate)?;
+        let Some(ids) = ledger.roots.get(role) else {
+            return Ok(None);
+        };
+        let [id] = ids.as_slice() else {
+            return Err("expected one rooted original".into());
+        };
+        let output = ledger
+            .outputs
+            .iter()
+            .find(|o| &o.id == id && o.producer == producer)
+            .ok_or("rooted original has no matching producer")?;
+        Ok(Some((
+            output.id.clone(),
+            output.path.clone(),
+            output.phase.clone(),
+            output.outcome.clone(),
+        )))
+    }
+
+    /// Resume only the original rooted creation, before a domain can have
+    /// received its materialized publication. No new attempt is enrolled.
+    pub fn materialize_rooted(&self, producer: &str, role: &str) -> Result<(), String> {
+        let gate = self.addressed_gate(&[], &[], &[role.into()], None, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        let ids = ledger
+            .roots
+            .get(role)
+            .ok_or("creation recovery root missing")?;
+        let [id] = ids.as_slice() else {
+            return Err("creation recovery requires exactly one original".into());
+        };
+        let id = id.clone();
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == id && o.producer == producer)
+            .ok_or("creation recovery producer mismatch")?;
+        if !output.tree
+            || output.creation.is_none()
+            || !matches!(output.phase.as_str(), "reserving" | "creating")
+        {
+            return Err("original is not an interrupted directory creation".into());
+        }
+        let lease = Lease::acquire(
+            &self.directory.join(&output.lease),
+            (!output.lease_id.is_empty()).then_some(output.lease_id.as_str()),
+            output.lease_id.is_empty(),
+            true,
+            None,
+        )?
+        .ok_or("creation has live producer/readers")?;
+        output.lease_id = lease.id().into();
+        output.phase = "creating".into();
+        let initial = Arc::clone(&output.value);
+        self.save(&ledger, &gate)?;
+        let publication = Publication {
+            inventory: Inventory::with_standalone_policy(&self.root, &self.policy_bytes)?,
+            id,
+            path: initial.path.clone(),
+            identity: RefCell::new(initial.identity.clone()),
+            tree: true,
+            written: Cell::new(0),
+            written_nodes: Cell::new(1),
+            byte_limit: initial.byte_limit.unwrap_or(self.policy.max_output_bytes),
+            initial,
+            lease,
+        };
+        publication.materialize_excluded(&mut ledger, &gate, None, None)
+    }
+
+    /// The enclosing caller observed this evaluator return. This is separate
+    /// from publication facts, API transport and an unobserved process exit.
+    pub fn observe_producer_return(
+        &self,
+        producer: &str,
+        path: &str,
+        result: Value,
+    ) -> Result<(), String> {
+        if serde_json::to_vec(&result)
+            .map_err(|e| e.to_string())?
+            .len()
+            > 16384
+        {
+            return Err("producer return observation byte bound".into());
+        }
+        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let mut ledger = self.load(&gate)?;
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|o| o.producer == producer && o.path == path)
+            .ok_or("producer return original unavailable")?;
+        if output.observed_return.is_some() {
+            return Err("original producer return already observed".into());
+        }
+        output.observed_return = Some(result);
+        self.save(&ledger, &gate)
+    }
+
     fn reserve(
         self,
         producer: &str,
@@ -917,7 +1078,8 @@ impl Inventory {
             lease_id: String::new(),
             outcome,
             phase: "reserving".into(),
-            expires: now()?.saturating_add(self.policy.keep_seconds),
+            observed_return: None,
+            expires: now()?.saturating_add(self.keep_seconds(producer)),
             references: vec![],
             stack: vec![],
             removed_logical_bytes: 0,
@@ -1088,6 +1250,16 @@ impl Inventory {
         producer: &str,
         path: &str,
     ) -> Result<Option<Publication>, String> {
+        self.recover_unfinished_directory(producer, path, || Ok(()))
+    }
+    /// Run the owning producer's repair under the exact original exclusive
+    /// capability before accounting its finished recovery files.
+    pub fn recover_unfinished_directory(
+        self,
+        producer: &str,
+        path: &str,
+        repair: impl FnOnce() -> Result<(), String>,
+    ) -> Result<Option<Publication>, String> {
         crate::relative_path(path)?;
         if !self.accepts(producer, path) {
             return Ok(None);
@@ -1104,9 +1276,7 @@ impl Inventory {
             || !output.tree
             || output.creation.is_some()
             || !(output.phase == "publishing"
-                || (output.phase == "sealing"
-                    && output.outcome["publication"] == "interrupted"
-                    && output.outcome["completion"] == "not-established"))
+                || (output.phase == "sealing" && output.outcome["completion"] == "not-established"))
         {
             return Err(
                 "directory publication is completed, disposing or not qualified for resumption"
@@ -1129,6 +1299,7 @@ impl Inventory {
         {
             return Err("unfinished directory identity changed; preserve originals".into());
         }
+        repair()?;
         let byte_limit = output.byte_limit.unwrap_or(self.policy.max_output_bytes);
         let mut observed = Manifest::default();
         let began = Instant::now();
@@ -1743,16 +1914,223 @@ impl Inventory {
         o.references = references.into();
         self.save(&l, &gate)
     }
+    pub fn terminal_limits(&self, producer: &str) -> Option<&TerminalLimits> {
+        self.policy.terminal_limits.get(producer)
+    }
+
+    fn keep_seconds(&self, producer: &str) -> u64 {
+        self.policy
+            .terminal_limits
+            .get(producer)
+            .map_or(self.policy.keep_seconds, |l| l.keep_seconds)
+    }
+
+    // Explicit status/maintenance may enumerate this owner's existing addressed
+    // records. Ordinary production never enumerates terminal history.
+    fn producer_snapshot(
+        &self,
+        producer: &str,
+    ) -> Result<(Vec<OutputRecord>, bool, Vec<Value>), String> {
+        if !self.policy.producers.contains_key(producer) {
+            return Err(format!("unregistered retained producer: {producer}"));
+        }
+        let began = Instant::now();
+        let mut outputs = Vec::new();
+        let mut errors = Vec::new();
+        let mut read_bytes = 0u64;
+        let mut complete = true;
+        for (n, entry) in fs::read_dir(self.directory.join("objects"))
+            .map_err(|e| e.to_string())?
+            .enumerate()
+        {
+            if n >= self.policy.max_nodes_per_round
+                || read_bytes >= self.policy.max_metadata_bytes_per_round
+                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
+            {
+                complete = false;
+                break;
+            }
+            let entry = entry.map_err(|e| e.to_string())?;
+            let id = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| "retention object address UTF8")?;
+            let record = self.object_directory(&id)?.join("record.json");
+            let observed = (|| {
+                let length = fs::symlink_metadata(&record)
+                    .map_err(|e| e.to_string())?
+                    .len();
+                read_bytes = read_bytes.saturating_add(length);
+                if read_bytes > self.policy.max_metadata_bytes_per_round {
+                    return Err("producer status metadata byte bound; scope unknown".into());
+                }
+                let gate =
+                    self.addressed_gate(std::slice::from_ref(&id), &[], &[], None, false, false)?;
+                let ledger = self.load(&gate)?;
+                self.stable(&gate)?;
+                Ok::<_, String>(ledger.outputs.iter().find(|o| o.id == id).cloned())
+            })();
+            match observed {
+                Ok(Some(output)) if output.producer == producer => outputs.push(output),
+                Ok(_) => (),
+                Err(error) => {
+                    complete = false;
+                    errors.push(json!({"id":id,"error":error}));
+                }
+            }
+        }
+        Ok((outputs, complete, errors))
+    }
+
+    /// An exact unavailable path is deliberately ambiguous after retirement.
+    /// Status never reconstructs success from missing bytes or process identity.
+    pub fn producer_status(&self, producer: &str, path: Option<&str>) -> Result<Value, String> {
+        let (outputs, complete, errors) = if let Some(path) = path {
+            crate::relative_path(path)?;
+            if !self.accepts(producer, path) {
+                return Err("status path is outside producer scope".into());
+            }
+            let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, false)?;
+            let ledger = self.load(&gate)?;
+            self.stable(&gate)?;
+            (
+                ledger
+                    .outputs
+                    .into_iter()
+                    .filter(|o| o.producer == producer && o.path == path)
+                    .collect(),
+                true,
+                Vec::new(),
+            )
+        } else {
+            self.producer_snapshot(producer)?
+        };
+        let records: Vec<_> = outputs.iter().map(|o| json!({
+            "id":o.id,"path":o.path,"identity":o.identity,"phase":o.phase,
+            "outcome":o.outcome,"observed_return":o.observed_return,"sealed":o.manifest.sealed,"expires":o.expires,
+            "logical_bytes":if o.manifest.sealed { Some(o.manifest.bytes) } else { None },
+        })).collect();
+        Ok(
+            json!({"schema":"chrono-retained-producer-status/v1","producer":producer,
+            "availability":if path.is_some() && records.is_empty() {"unavailable-or-retired"} else {"observed"},
+            "records":records,"scope_complete":complete,"errors":errors,
+            "terminal_limits":self.policy.terminal_limits.get(producer),"success_inferred":false}),
+        )
+    }
+
+    /// One explicit, bounded maintenance action through the current custodian.
+    /// Overflow only shortens terminal eligibility; ordinary guards still own
+    /// whether any original can actually be removed.
+    pub fn maintain_producer(&self, producer: &str) -> Result<Value, String> {
+        self.maintain_producer_at(producer, now()?)
+    }
+    pub fn maintain_producer_at(&self, producer: &str, observed: u64) -> Result<Value, String> {
+        if !self.policy.producers.contains_key(producer) {
+            return Err("unregistered retained producer".into());
+        }
+        let round = self.maintain_at(observed)?;
+        let quota = &round["terminal_quotas"][producer];
+        Ok(
+            json!({"schema":"chrono-retained-producer-maintenance/v1","producer":producer,
+            "quota_scope_complete":quota["scope_complete"],"quota_errors":quota["errors"],
+            "quota_expired":quota["expired"],"terminal_limits":self.policy.terminal_limits.get(producer),
+            "round":round,"completion":"not-established"}),
+        )
+    }
+    fn terminal_quota(&self, producer: &str, observed: u64) -> Result<Value, String> {
+        let (mut outputs, mut complete, mut errors) = self.producer_snapshot(producer)?;
+        outputs.sort_by(|a, b| b.expires.cmp(&a.expires).then_with(|| b.id.cmp(&a.id)));
+        let mut count = 0u64;
+        let mut bytes = 0u64;
+        let mut expired = Vec::new();
+        {
+            if let Some(limits) = self.policy.terminal_limits.get(producer) {
+                let began = Instant::now();
+                for output in &outputs {
+                    if began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128 {
+                        complete = false;
+                        break;
+                    }
+                    if !crate::verified_release::terminal_eligible(
+                        output.phase == "released",
+                        output.manifest.sealed,
+                    ) {
+                        continue;
+                    }
+                    if crate::verified_release::terminal_budget(
+                        count,
+                        bytes,
+                        output.manifest.bytes,
+                        limits.max_count,
+                        limits.max_bytes,
+                    ) {
+                        count += 1;
+                        bytes += output.manifest.bytes;
+                    } else if expired.len() < self.policy.max_nodes_per_round {
+                        let updated = (|| {
+                            let gate = self.addressed_gate(
+                                std::slice::from_ref(&output.id),
+                                &[],
+                                &[],
+                                None,
+                                false,
+                                false,
+                            )?;
+                            let mut ledger = self.load(&gate)?;
+                            if let Some(current) =
+                                ledger.outputs.iter_mut().find(|o| o.id == output.id)
+                            {
+                                if current.phase == "released"
+                                    && current.manifest.sealed
+                                    && current.identity == output.identity
+                                {
+                                    if current.expires <= observed {
+                                        return Ok(true);
+                                    }
+                                    current.expires = current.expires.min(observed);
+                                    self.save(&ledger, &gate)?;
+                                    return Ok::<_, String>(true);
+                                }
+                            }
+                            Ok(false)
+                        })();
+                        match updated {
+                            Ok(true) => expired.push(output.id.clone()),
+                            Ok(false) => (),
+                            Err(error) => errors.push(json!({"id":output.id,"error":error})),
+                        }
+                    }
+                }
+            }
+        }
+        Ok(json!({"scope_complete":complete,"errors":errors,"expired":expired}))
+    }
+
     pub fn maintain(&self) -> Result<Value, String> {
         self.maintain_at(now()?)
     }
     /// Timestamp is a supplied observation for deterministic owner tests, not a live-user heuristic.
     pub fn maintain_at(&self, observed: u64) -> Result<Value, String> {
+        let began = Instant::now();
+        let mut quotas = serde_json::Map::new();
+        for producer in self.policy.terminal_limits.keys() {
+            if began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128 {
+                quotas.insert(producer.clone(), json!({"scope_complete":false,"expired":[],"errors":["quota observation deadline; scope unknown"]}));
+                break;
+            }
+            let quota = self.terminal_quota(producer, observed).unwrap_or_else(
+                |error| json!({"scope_complete":false,"expired":[],"errors":[error]}),
+            );
+            quotas.insert(producer.clone(), quota);
+        }
         self.round_metadata
             .set(Some(self.policy.max_metadata_bytes_per_round));
         let result = self.maintain_round(observed, None);
         self.round_metadata.set(None);
-        result
+        result.map(|mut result| {
+            result["terminal_quotas"] = json!(quotas);
+            result
+        })
     }
     /// Shared explicit selection bounds for migration and maintenance.
     fn validate_originals(&self, originals: &[String]) -> Result<(), String> {
@@ -1926,6 +2304,7 @@ impl Inventory {
                 }
             }
             if l.outputs[index].phase == "creating"
+                && !domain_recovery_rooted(&l, &l.outputs[index])
                 && metadata_steps
                     < self
                         .round_node_limit
@@ -1995,6 +2374,7 @@ impl Inventory {
                 break;
             }
             if l.outputs[index].manifest.sealed
+                || domain_recovery_rooted(&l, &l.outputs[index])
                 || l.outputs[index].overflow_disposal
                 || matches!(l.outputs[index].phase.as_str(), "reserving" | "creating")
             {
@@ -2036,6 +2416,13 @@ impl Inventory {
                 }
                 if l.outputs[index].manifest.sealed {
                     l.outputs[index].reserved_bytes = l.outputs[index].manifest.bytes;
+                    if crate::verified_release::resumed_seal(
+                        l.outputs[index].phase == "sealing",
+                        l.outputs[index].manifest.sealed,
+                        l.outputs[index].outcome["completion"] == "not-established",
+                    ) {
+                        l.outputs[index].phase = "released".into();
+                    }
                 }
                 self.save(&l, &gate)?;
             }
@@ -2430,7 +2817,7 @@ impl Inventory {
             match effect {
                 Ok(true) => {
                     let o = Arc::unwrap_or_clone(l.outputs.remove(i).value);
-                    let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
+                    let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"observed_return":o.observed_return,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
                     disposed.push(summary.clone());
                     l.summaries.push(summary);
                     let excess = l.summaries.len().saturating_sub(self.policy.max_summaries);
@@ -2651,6 +3038,19 @@ impl Inventory {
         Ok(lease)
     }
 }
+fn domain_recovery_rooted(ledger: &Ledger, output: &Output) -> bool {
+    let role = output.outcome["recovery_role"].as_str();
+    crate::verified_release::domain_recovery(
+        role.is_some(),
+        role.is_some_and(|role| {
+            ledger
+                .roots
+                .get(role)
+                .is_some_and(|ids| ids.contains(&output.id))
+        }),
+    )
+}
+
 impl Publication {
     /// Attach the empty inode durably before publishing its exact destination.
     pub fn materialize(&self) -> Result<(), String> {
@@ -2694,6 +3094,13 @@ impl Publication {
         reference: Option<&str>,
     ) -> Result<(), String> {
         self.lease.stable()?;
+        if let Some(reference) = reference {
+            let mut ids = l.roots.get(reference).cloned().unwrap_or_default();
+            if !ids.contains(&self.id) {
+                ids.push(self.id.clone());
+            }
+            self.inventory.reference_locked(l, reference, &ids)?;
+        }
         let o = l
             .outputs
             .iter_mut()
@@ -2706,27 +3113,62 @@ impl Publication {
         }
         self.inventory.stable(gate)?;
         let staged = self.inventory.directory.join(&creation.staged);
-        if o.tree {
-            fs::create_dir(&staged).map_err(|e| e.to_string())?;
-        } else {
-            fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&staged)
-                .map_err(|e| e.to_string())?
-                .sync_all()
-                .map_err(|e| e.to_string())?;
-        }
-        o.identity = identity(&staged)?;
-        if let Some(reference) = reference {
-            let mut ids = l.roots.get(reference).cloned().unwrap_or_default();
-            if !ids.contains(&self.id) {
-                ids.push(self.id.clone());
+        match fs::symlink_metadata(&target) {
+            Ok(_) => {
+                if o.identity.is_empty() || identity(&target)? != o.identity {
+                    return Err(
+                        "creation destination identity changed; preserve replacement".into(),
+                    );
+                }
             }
-            self.inventory.reference_locked(l, reference, &ids)?;
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                match fs::symlink_metadata(&staged) {
+                    Ok(meta) => {
+                        let empty = if o.tree && meta.is_dir() {
+                            fs::read_dir(&staged)
+                                .map_err(|e| e.to_string())?
+                                .next()
+                                .is_none()
+                        } else {
+                            !o.tree && meta.is_file() && meta.len() == 0
+                        };
+                        if !empty || (!o.identity.is_empty() && identity(&staged)? != o.identity) {
+                            return Err(
+                                "creation staging identity/content changed; preserve original"
+                                    .into(),
+                            );
+                        }
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        if !o.identity.is_empty() {
+                            return Err("bound creation inode missing; preserve intent".into());
+                        }
+                        if o.tree {
+                            fs::create_dir(&staged).map_err(|e| e.to_string())?;
+                        } else {
+                            fs::OpenOptions::new()
+                                .write(true)
+                                .create_new(true)
+                                .open(&staged)
+                                .map_err(|e| e.to_string())?
+                                .sync_all()
+                                .map_err(|e| e.to_string())?;
+                        }
+                    }
+                    Err(error) => return Err(error.to_string()),
+                }
+                o.identity = identity(&staged)?;
+                fs::File::open(&staged)
+                    .and_then(|f| f.sync_all())
+                    .map_err(|e| e.to_string())?;
+                self.inventory.save(l, gate)?;
+                crate::artifact_disposal::publish_entry(&staged, &target)?;
+                fs::File::open(target.parent().ok_or("creation parent")?)
+                    .and_then(|f| f.sync_all())
+                    .map_err(|e| e.to_string())?;
+            }
+            Err(error) => return Err(error.to_string()),
         }
-        self.inventory.save(l, gate)?;
-        crate::artifact_disposal::publish_entry(&staged, &target)?;
         let o = l
             .outputs
             .iter_mut()
@@ -2968,7 +3410,7 @@ impl Publication {
             o.reserved_bytes = o.manifest.bytes;
             o.phase = "released".into();
         }
-        o.expires = now()?.saturating_add(self.inventory.policy.keep_seconds);
+        o.expires = now()?.saturating_add(self.inventory.keep_seconds(&o.producer));
         self.lease.stable()?;
         let roles = consumer
             .map(|c| self.inventory.consumer_role(c))
@@ -2995,6 +3437,7 @@ impl Publication {
         // Keep graph changes made since the original observation. Only this
         // producer owns the outcome, content accounting and completion fields.
         owned.references = current.references.clone();
+        owned.observed_return = current.observed_return.clone();
         *current = owned.into();
         let o = l.outputs.iter().find(|o| o.id == self.id).unwrap();
         if let Some(consumer) = consumer.filter(|_| accounting_error.is_none()) {

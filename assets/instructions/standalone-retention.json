@@ -1,0 +1,25 @@
+{
+  "schema": "chrono-output-retention/v2",
+  "producers": {
+    "instructions-operation": [
+      ".chrono-harness/state/instructions-operations/"
+    ]
+  },
+  "keep_seconds": 0,
+  "diagnostic_keep_seconds": 0,
+  "metadata_keep_seconds": 86400,
+  "max_related_outputs": 512,
+  "max_summaries": 32,
+  "max_nodes_per_round": 256,
+  "max_bytes_per_round": 67108864,
+  "max_millis_per_round": 25,
+  "max_output_bytes": 67108864,
+  "terminal_limits": {
+    "instructions-operation": {
+      "keep_seconds": 86400,
+      "max_count": 32,
+      "max_bytes": 67108864,
+      "metadata_keep_seconds": 0
+    }
+  }
+}
