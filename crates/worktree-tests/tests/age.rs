@@ -62,6 +62,76 @@ fn start(h: &Host, name: &str, target: &Path) {
 }
 
 #[test]
+fn maintenance_selects_creation_age_from_each_targets_adopted_policy() {
+    for (coordinator, target_policy, expired) in [
+        (Some((1, 3)), Some((3600, 7200)), false),
+        (Some((1, 3)), None, false),
+        (Some((3600, 7200)), Some((1, 3)), true),
+        (None, Some((1, 3)), true),
+    ] {
+        let h = Host::new("payload");
+        let (reuse, delete) = coordinator.unwrap_or((3600, 7200));
+        policy(&h, reuse, delete, "dispose");
+        if coordinator.is_none() {
+            let path = h.root.join(".chrono-harness/cleanup.json");
+            let mut p = json(&fs::read(&path).unwrap()).unwrap();
+            p.as_object_mut().unwrap().remove("age_policy");
+            fs::write(path, serde_json::to_vec_pretty(&p).unwrap()).unwrap();
+            commit(&h.root);
+            git(&h.root, &["push", "-q", "warehouse", "dev"]);
+        }
+        let coordinator_bytes = fs::read(h.root.join(".chrono-harness/cleanup.json")).unwrap();
+        let target = h.parent.join("independent-age-policy");
+        start(&h, "independent-age-policy", &target);
+        let path = target.join(".chrono-harness/cleanup.json");
+        let mut p = json(&fs::read(&path).unwrap()).unwrap();
+        if let Some((reuse, delete)) = target_policy {
+            p["age_policy"]["reuse_after_seconds"] = value!(reuse);
+            p["age_policy"]["delete_after_seconds"] = value!(delete);
+            p["age_policy"]["preserved_branch_prefix"] = value!("preserved/target-age/");
+        } else {
+            p.as_object_mut().unwrap().remove("age_policy");
+        }
+        fs::write(path, serde_json::to_vec_pretty(&p).unwrap()).unwrap();
+        let head = commit(&target);
+        let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+        assert_eq!(code, 0, "{report} {error}");
+        output(&target);
+        temporary_output(&target);
+        older_than(&target, 3);
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        assert_eq!(target.exists(), !expired, "{report}");
+        assert_eq!(
+            fs::read(h.root.join(".chrono-harness/cleanup.json")).unwrap(),
+            coordinator_bytes
+        );
+        if expired {
+            let row = report["drain"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["path"] == value!(target))
+                .unwrap();
+            let original = drain_report(row);
+            assert_eq!(
+                original["source_preservation"]["original_head"],
+                head.trim()
+            );
+            let reference = original["source_preservation"]["original_ref"]
+                .as_str()
+                .unwrap();
+            assert!(reference.starts_with("refs/heads/preserved/target-age/"));
+            assert_eq!(git(&h.root, &["rev-parse", reference]).trim(), head.trim());
+        } else {
+            assert!(target.join("output λ/cache").exists());
+            assert!(!target.join("nested/cache").exists());
+            assert_eq!(git(&target, &["rev-parse", "HEAD"]).trim(), head.trim());
+        }
+    }
+}
+
+#[test]
 fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     let h = Host::new("payload");
     policy(&h, 2, 60, "dispose");
