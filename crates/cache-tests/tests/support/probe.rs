@@ -85,6 +85,10 @@ fn main() {
         }
         "echo" | "file" => println!("{}", args[1]),
         "exit" => {
+            if let Some(count) = args.get(1) {
+                std::fs::OpenOptions::new().create(true).append(true).open(count)
+                    .unwrap().write_all(b"x").unwrap();
+            }
             eprintln!("original probe failure");
             std::process::exit(7);
         }

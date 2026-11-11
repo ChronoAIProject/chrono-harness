@@ -63,6 +63,14 @@ mod runtime {
         for v in values.values_mut(){v["status"]=json!("proposed");}
         values.get_mut(policy::CONFIG).unwrap()["enforcement"]=json!("not-implemented");
         values.get_mut(policy::CONFIG).unwrap()["input_closure"]=json!({"status":"incomplete","unresolved":["fixture exercises custody, not full host governance"]});
+        // The joined parent also reads source-safety facts while observing
+        // retirement. Bind the same mock in policy, independent of child PATH.
+        let git=fs::canonicalize(env!("CARGO_BIN_EXE_chrono-test-git-model")).unwrap();
+        let config=values.get_mut(policy::CONFIG).unwrap();
+        config["schema_version"]=json!(3);
+        config["facts_git"]=json!({"tool":"git","input":"git-bytes"});
+        config["tools"]=json!([{"id":"git","program":git,"resolution":"PATH-once","version_argv":["--version"],"expected_version":"git version fixture"}]);
+        config["environment"]["inputs"]=json!([{"id":"git-bytes","location":git,"presence":"present","sha256":chrono_harness::sha256(&fs::read(&git).unwrap())}]);
         values.get_mut(policy::PROJECTS).unwrap()["owners"]=json!(["host"]);
         values.get_mut(policy::PROJECTS).unwrap()["projects"]=json!([]);
         values.get_mut(policy::FM).unwrap()["project_edges"]=json!([]);
@@ -85,7 +93,11 @@ mod runtime {
         let config=json!({"schema":"chrono-worktree-config/v2","host_config":policy::CONFIG,"remote":"unused",
             "git":{"program":env!("CARGO_BIN_EXE_chrono-test-git-model"),"expected_version":null,"sha256":null},
             "environment":{"inherit":["PATH"],"values":{}},"timeout_seconds":30,"output_limit_bytes":1048576,
-            "report_directory":".chrono-harness/state/worktrees/","automatic_cleanup":".chrono-harness/cleanup.json"});
+            "report_directory":".chrono-harness/state/worktrees/","automatic_cleanup":".chrono-harness/cleanup.json",
+            "check_inputs":{"origin_path":".chrono-harness/state/origin.json",
+                "context_path":".chrono-harness/state/local/context.json",
+                "collection_manifest":".chrono-harness/state/collection/manifest.json",
+                "roles":{"feature":"integration","integration":"integration"}}});
         fs::write(root.join(".chrono-harness/worktree.json"),serde_json::to_vec(&config).unwrap()).unwrap();
         fs::write(root.join(".chrono-harness/cleanup.json"),serde_json::to_vec(&cleanup).unwrap()).unwrap();
         fs::copy(source.join(".chrono-harness/retention.json"),root.join(".chrono-harness/retention.json")).unwrap();

@@ -10,8 +10,8 @@ use vstd::prelude::*;
 
 verus! {
 pub fn known_git_command(command: &str) -> (allowed: bool)
-    ensures allowed == (command@ == "--version"@ || command@ == "check-ref-format"@ || command@ == "init"@ || command@ == "clone"@ || command@ == "add"@ || command@ == "commit"@ || command@ == "commit-tree"@ || command@ == "rev-parse"@ || command@ == "show"@ || command@ == "ls-tree"@ || command@ == "cat-file"@ || command@ == "ls-files"@ || command@ == "config"@ || command@ == "diff"@ || command@ == "update-index"@ || command@ == "update-ref"@ || command@ == "reset"@ || command@ == "checkout"@ || command@ == "switch"@ || command@ == "status"@ || command@ == "symbolic-ref"@ || command@ == "branch"@ || command@ == "show-ref"@ || command@ == "for-each-ref"@ || command@ == "remote"@ || command@ == "ls-remote"@ || command@ == "push"@ || command@ == "fetch"@ || command@ == "merge-base"@ || command@ == "rev-list"@ || command@ == "merge"@ || command@ == "write-tree"@ || command@ == "read-tree"@ || command@ == "mv"@ || command@ == "rm"@ || command@ == "replace"@ || command@ == "reflog"@ || command@ == "worktree"@),
-{ identifiers::equal_text(command, "--version") || identifiers::equal_text(command, "check-ref-format") || identifiers::equal_text(command, "init") || identifiers::equal_text(command, "clone") || identifiers::equal_text(command, "add") || identifiers::equal_text(command, "commit") || identifiers::equal_text(command, "commit-tree") || identifiers::equal_text(command, "rev-parse") || identifiers::equal_text(command, "show") || identifiers::equal_text(command, "ls-tree") || identifiers::equal_text(command, "cat-file") || identifiers::equal_text(command, "ls-files") || identifiers::equal_text(command, "config") || identifiers::equal_text(command, "diff") || identifiers::equal_text(command, "update-index") || identifiers::equal_text(command, "update-ref") || identifiers::equal_text(command, "reset") || identifiers::equal_text(command, "checkout") || identifiers::equal_text(command, "switch") || identifiers::equal_text(command, "status") || identifiers::equal_text(command, "symbolic-ref") || identifiers::equal_text(command, "branch") || identifiers::equal_text(command, "show-ref") || identifiers::equal_text(command, "for-each-ref") || identifiers::equal_text(command, "remote") || identifiers::equal_text(command, "ls-remote") || identifiers::equal_text(command, "push") || identifiers::equal_text(command, "fetch") || identifiers::equal_text(command, "merge-base") || identifiers::equal_text(command, "rev-list") || identifiers::equal_text(command, "merge") || identifiers::equal_text(command, "write-tree") || identifiers::equal_text(command, "read-tree") || identifiers::equal_text(command, "mv") || identifiers::equal_text(command, "rm") || identifiers::equal_text(command, "replace") || identifiers::equal_text(command, "reflog") || identifiers::equal_text(command, "worktree") }
+    ensures allowed == (command@ == "--version"@ || command@ == "check-ref-format"@ || command@ == "init"@ || command@ == "clone"@ || command@ == "add"@ || command@ == "commit"@ || command@ == "commit-tree"@ || command@ == "rev-parse"@ || command@ == "show"@ || command@ == "ls-tree"@ || command@ == "cat-file"@ || command@ == "ls-files"@ || command@ == "config"@ || command@ == "diff"@ || command@ == "update-index"@ || command@ == "update-ref"@ || command@ == "reset"@ || command@ == "restore"@ || command@ == "checkout"@ || command@ == "switch"@ || command@ == "status"@ || command@ == "symbolic-ref"@ || command@ == "branch"@ || command@ == "show-ref"@ || command@ == "for-each-ref"@ || command@ == "remote"@ || command@ == "ls-remote"@ || command@ == "push"@ || command@ == "fetch"@ || command@ == "merge-base"@ || command@ == "rev-list"@ || command@ == "merge"@ || command@ == "write-tree"@ || command@ == "read-tree"@ || command@ == "mv"@ || command@ == "rm"@ || command@ == "replace"@ || command@ == "reflog"@ || command@ == "worktree"@),
+{ identifiers::equal_text(command, "--version") || identifiers::equal_text(command, "check-ref-format") || identifiers::equal_text(command, "init") || identifiers::equal_text(command, "clone") || identifiers::equal_text(command, "add") || identifiers::equal_text(command, "commit") || identifiers::equal_text(command, "commit-tree") || identifiers::equal_text(command, "rev-parse") || identifiers::equal_text(command, "show") || identifiers::equal_text(command, "ls-tree") || identifiers::equal_text(command, "cat-file") || identifiers::equal_text(command, "ls-files") || identifiers::equal_text(command, "config") || identifiers::equal_text(command, "diff") || identifiers::equal_text(command, "update-index") || identifiers::equal_text(command, "update-ref") || identifiers::equal_text(command, "reset") || identifiers::equal_text(command, "restore") || identifiers::equal_text(command, "checkout") || identifiers::equal_text(command, "switch") || identifiers::equal_text(command, "status") || identifiers::equal_text(command, "symbolic-ref") || identifiers::equal_text(command, "branch") || identifiers::equal_text(command, "show-ref") || identifiers::equal_text(command, "for-each-ref") || identifiers::equal_text(command, "remote") || identifiers::equal_text(command, "ls-remote") || identifiers::equal_text(command, "push") || identifiers::equal_text(command, "fetch") || identifiers::equal_text(command, "merge-base") || identifiers::equal_text(command, "rev-list") || identifiers::equal_text(command, "merge") || identifiers::equal_text(command, "write-tree") || identifiers::equal_text(command, "read-tree") || identifiers::equal_text(command, "mv") || identifiers::equal_text(command, "rm") || identifiers::equal_text(command, "replace") || identifiers::equal_text(command, "reflog") || identifiers::equal_text(command, "worktree") }
 }
 
 #[cfg(not(any(verus_keep_ghost, test)))]
@@ -245,14 +245,27 @@ mod runtime {
             .get(&resolve(repo, name))
             .ok_or_else(|| format!("missing fixture commit {name}"))
     }
-    fn object(repo: &Repository, query: &str) -> Result<(String, &'static str), String> {
+    fn object(
+        repo: &Repository,
+        query: &str,
+        apply_replace: bool,
+    ) -> Result<(String, &'static str), String> {
         if let Some((revision, path)) = query.split_once(':') {
             let e = tree(repo, revision)?
                 .get(path)
                 .ok_or("missing fixture path")?;
             Ok((e.oid.clone(), "blob"))
         } else if repo.commits.contains_key(&resolve(repo, query)) {
-            Ok((resolve(repo, query), "commit"))
+            let oid = resolve(repo, query);
+            let replacement = if apply_replace {
+                repo.refs
+                    .get(&format!("refs/replace/{oid}"))
+                    .cloned()
+                    .unwrap_or(oid)
+            } else {
+                oid
+            };
+            Ok((replacement, "commit"))
         } else if repo.trees.contains_key(query) {
             Ok((query.into(), "tree"))
         } else {
@@ -311,6 +324,27 @@ mod runtime {
         }
         Ok(())
     }
+    fn materialize(root: &Path, path: &str, e: &Entry) -> Result<(), String> {
+        let physical = root.join(path);
+        fs::create_dir_all(physical.parent().unwrap()).map_err(|e| e.to_string())?;
+        let bytes =
+            fs::read(common(root).join("objects").join(&e.oid)).map_err(|e| e.to_string())?;
+        if fs::symlink_metadata(&physical).is_ok() {
+            fs::remove_file(&physical).map_err(|e| e.to_string())?;
+        }
+        if e.mode == "120000" {
+            std::os::unix::fs::symlink(std::ffi::OsStr::from_bytes(&bytes), physical)
+                .map_err(|e| e.to_string())?;
+        } else {
+            fs::write(&physical, bytes).map_err(|e| e.to_string())?;
+            fs::set_permissions(
+                physical,
+                fs::Permissions::from_mode(if e.mode == "100755" { 0o755 } else { 0o644 }),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    }
     fn checkout(root: &Path, repo: &mut Repository, revision: &str) -> Result<(), String> {
         let snapshot = tree(repo, revision)?.clone();
         for path in repo.index.keys() {
@@ -319,24 +353,7 @@ mod runtime {
             }
         }
         for (path, e) in &snapshot {
-            let physical = root.join(path);
-            fs::create_dir_all(physical.parent().unwrap()).map_err(|e| e.to_string())?;
-            let bytes =
-                fs::read(common(root).join("objects").join(&e.oid)).map_err(|e| e.to_string())?;
-            if fs::symlink_metadata(&physical).is_ok() {
-                fs::remove_file(&physical).map_err(|e| e.to_string())?;
-            }
-            if e.mode == "120000" {
-                std::os::unix::fs::symlink(std::ffi::OsStr::from_bytes(&bytes), physical)
-                    .map_err(|e| e.to_string())?;
-            } else {
-                fs::write(&physical, bytes).map_err(|e| e.to_string())?;
-                fs::set_permissions(
-                    physical,
-                    fs::Permissions::from_mode(if e.mode == "100755" { 0o755 } else { 0o644 }),
-                )
-                .map_err(|e| e.to_string())?;
-            }
+            materialize(root, path, e)?;
         }
         repo.head = resolve(repo, revision);
         repo.index = snapshot;
@@ -388,6 +405,7 @@ mod runtime {
 
     pub fn run(mut root: PathBuf, raw: &[String], input: &[u8]) -> Result<Vec<u8>, String> {
         let mut args = Vec::new();
+        let mut no_replace_objects = false;
         let mut i = 0;
         while i < raw.len() {
             match raw[i].as_str() {
@@ -403,7 +421,11 @@ mod runtime {
                 "-c" => {
                     i += 2;
                 }
-                "--no-optional-locks" | "--no-replace-objects" | "--literal-pathspecs" => {
+                "--no-optional-locks" | "--literal-pathspecs" => {
+                    i += 1;
+                }
+                "--no-replace-objects" => {
+                    no_replace_objects = true;
                     i += 1;
                 }
                 _ => {
@@ -437,6 +459,8 @@ mod runtime {
                         "--stage"
                             | "-z"
                             | "--others"
+                            | "--directory"
+                            | "--no-empty-directory"
                             | "--exclude-standard"
                             | "--ignored"
                             | "-v"
@@ -458,6 +482,7 @@ mod runtime {
                     | "-qa"
                     | "--allow-empty"
                     | "--allow-empty-message"
+                    | "--amend"
                     | "--no-gpg-sign" => at += 1,
                     "-m" | "-qm" | "-am" | "-qam" | "-aqm" => {
                         if a.get(at + 1).is_none() {
@@ -474,6 +499,9 @@ mod runtime {
             if value.contains(' ')
                 || value.contains("..")
                 || value.ends_with('/')
+                || value
+                    .split('/')
+                    .any(|component| component.ends_with(".lock"))
                 || !value.contains('/')
             {
                 return Err("invalid fixture reference".into());
@@ -594,9 +622,52 @@ mod runtime {
                 repo.index.clear();
                 checkout(&target, &mut repo, &head)?;
             }
-            if depth.is_some() {
-                fs::write(common(&target).join("shallow"), format!("{}\n", repo.head))
+            if let Some(depth) = depth {
+                let depth = depth.parse::<usize>().map_err(|e| e.to_string())?;
+                if depth == 0 {
+                    return Err("fixture clone depth must be positive".into());
+                }
+                let mut retained = std::collections::BTreeSet::new();
+                let mut boundary = std::collections::BTreeSet::new();
+                let mut pending = vec![(repo.head.clone(), 1)];
+                while let Some((oid, level)) = pending.pop() {
+                    if !retained.insert(oid.clone()) {
+                        continue;
+                    }
+                    if level == depth {
+                        if repo.parents.get(&oid).is_some_and(|p| !p.is_empty()) {
+                            boundary.insert(oid);
+                        }
+                    } else {
+                        pending.extend(
+                            repo.parents
+                                .get(&oid)
+                                .into_iter()
+                                .flatten()
+                                .cloned()
+                                .map(|p| (p, level + 1)),
+                        );
+                    }
+                }
+                // Boundary commit bytes retain their physical parent headers,
+                // but unavailable ancestors must not pass cat-file before fetch.
+                for oid in repo.commits.keys().filter(|oid| !retained.contains(*oid)) {
+                    fs::remove_file(common(&target).join("objects").join(oid))
+                        .map_err(|e| e.to_string())?;
+                }
+                repo.commits.retain(|oid, _| retained.contains(oid));
+                repo.parents.retain(|oid, _| retained.contains(oid));
+                repo.refs.retain(|_, oid| retained.contains(oid));
+                if !boundary.is_empty() {
+                    fs::write(
+                        common(&target).join("shallow"),
+                        boundary
+                            .into_iter()
+                            .map(|oid| format!("{oid}\n"))
+                            .collect::<String>(),
+                    )
                     .map_err(|e| e.to_string())?;
+                }
             }
             save(&target, &repo)?;
             return Ok(vec![]);
@@ -681,7 +752,12 @@ mod runtime {
                         }
                     }
                 }
-                let parents = if repo.head.is_empty() {
+                let parents = if a.contains(&"--amend") {
+                    repo.parents
+                        .get(&repo.head)
+                        .cloned()
+                        .ok_or("cannot amend an unborn fixture HEAD")?
+                } else if repo.head.is_empty() {
                     vec![]
                 } else {
                     vec![repo.head.clone()]
@@ -712,7 +788,22 @@ mod runtime {
             "rev-parse" => {
                 let mut symbolic = false;
                 let mut abbrev = false;
+                let mut git_path = false;
                 for value in &a[1..] {
+                    if git_path {
+                        if *value != "shallow" {
+                            return Err(format!("unhandled rev-parse Git path {a:?}"));
+                        }
+                        out.extend_from_slice(
+                            format!("{}\n", common(&root).join(value).display()).as_bytes(),
+                        );
+                        git_path = false;
+                        continue;
+                    }
+                    if *value == "--git-path" {
+                        git_path = true;
+                        continue;
+                    }
                     if *value == "--symbolic-full-name" {
                         symbolic = true;
                         continue;
@@ -723,7 +814,7 @@ mod runtime {
                     }
                     if matches!(
                         *value,
-                        "--verify" | "--end-of-options" | "--path-format=absolute"
+                        "--verify" | "--revs-only" | "--end-of-options" | "--path-format=absolute"
                     ) {
                         continue;
                     }
@@ -764,7 +855,9 @@ mod runtime {
                         value if value.starts_with('-') => {
                             return Err(format!("unhandled rev-parse {a:?}"));
                         }
-                        value if value.contains(':') => object(&repo, value)?.0,
+                        value if value.contains(':') => {
+                            object(&repo, value, !no_replace_objects)?.0
+                        }
                         value => {
                             tree(&repo, value)?;
                             resolve(&repo, value)
@@ -772,9 +865,12 @@ mod runtime {
                     };
                     out.extend_from_slice(format!("{text}\n").as_bytes());
                 }
+                if git_path {
+                    return Err("missing fixture Git path".into());
+                }
             }
             "show" if a.len() == 2 => {
-                let (oid, _) = object(&repo, a.last().unwrap())?;
+                let (oid, _) = object(&repo, a.last().unwrap(), !no_replace_objects)?;
                 out =
                     fs::read(common(&root).join("objects").join(oid)).map_err(|e| e.to_string())?;
             }
@@ -788,7 +884,12 @@ mod runtime {
                 } else {
                     return Err(format!("unhandled ls-tree {a:?}"));
                 };
-                for (path, e) in tree(&repo, revision)? {
+                let snapshot = repo
+                    .trees
+                    .get(revision)
+                    .map(Ok)
+                    .unwrap_or_else(|| tree(&repo, revision))?;
+                for (path, e) in snapshot {
                     if selected.is_some_and(|s| {
                         s != path && !path.starts_with(&format!("{}/", s.trim_end_matches('/')))
                     }) {
@@ -810,11 +911,13 @@ mod runtime {
                         .filter(|s| !s.is_empty())
                     {
                         let query = std::str::from_utf8(query).map_err(|e| e.to_string())?;
-                        let found = object(&repo, query).ok().and_then(|(oid, kind)| {
-                            fs::read(common(&root).join("objects").join(&oid))
-                                .ok()
-                                .map(|bytes| (oid, kind, bytes))
-                        });
+                        let found = object(&repo, query, !no_replace_objects).ok().and_then(
+                            |(oid, kind)| {
+                                fs::read(common(&root).join("objects").join(&oid))
+                                    .ok()
+                                    .map(|bytes| (oid, kind, bytes))
+                            },
+                        );
                         let Some((oid, kind, bytes)) = found else {
                             out.extend_from_slice(format!("{query} missing\n").as_bytes());
                             continue;
@@ -832,7 +935,7 @@ mod runtime {
                         }
                     }
                 } else if a.len() == 3 && matches!(a[1], "-e" | "-t" | "-p") {
-                    let (oid, kind) = object(&repo, a[2])?;
+                    let (oid, kind) = object(&repo, a[2], !no_replace_objects)?;
                     let bytes = fs::read(common(&root).join("objects").join(oid))
                         .map_err(|e| e.to_string())?;
                     if a[1] == "-t" {
@@ -841,7 +944,7 @@ mod runtime {
                         out = bytes;
                     }
                 } else if a.len() == 3 && matches!(a[1], "blob" | "commit") {
-                    let (oid, kind) = object(&repo, a[2])?;
+                    let (oid, kind) = object(&repo, a[2], !no_replace_objects)?;
                     if kind != a[1] {
                         return Err("wrong fixture object type".into());
                     }
@@ -867,6 +970,23 @@ mod runtime {
                     files.extend(repo.index.keys().cloned());
                 }
                 files.sort();
+                if other && a.contains(&"--directory") {
+                    files = files
+                        .into_iter()
+                        .filter(|p| !repo.index.contains_key(p))
+                        .map(|path| {
+                            for (at, _) in path.match_indices('/') {
+                                let prefix = &path[..=at];
+                                if !repo.index.keys().any(|tracked| tracked.starts_with(prefix)) {
+                                    return prefix.to_owned();
+                                }
+                            }
+                            path
+                        })
+                        .collect();
+                    files.sort();
+                    files.dedup();
+                }
                 let selected = a.iter().position(|s| *s == "--").map(|i| &a[i + 1..]);
                 let operands: Vec<_> = a[1..]
                     .iter()
@@ -1025,6 +1145,17 @@ mod runtime {
                     }
                 }
                 save(&root, &repo)?;
+            }
+            "restore"
+                if a.len() > 1 && a[1..].iter().all(|p| *p == "--" || !p.starts_with('-')) =>
+            {
+                for path in a[1..].iter().filter(|p| **p != "--") {
+                    let e = repo
+                        .index
+                        .get(*path)
+                        .ok_or("missing restore fixture path")?;
+                    materialize(&root, path, e)?;
+                }
             }
             "reset" if a.len() == 3 && matches!(a[1], "--mixed" | "--hard" | "--soft") => {
                 if a[1] == "--hard" {
@@ -1534,6 +1665,12 @@ mod runtime {
                 }
             }
             "rev-list" => {
+                let shallow: std::collections::BTreeSet<_> =
+                    fs::read_to_string(common(root).join("shallow"))
+                        .unwrap_or_default()
+                        .lines()
+                        .map(str::to_owned)
+                        .collect();
                 let revision = a.last().ok_or("missing revision")?;
                 let selected = revision
                     .split_once("..")
@@ -1541,37 +1678,43 @@ mod runtime {
                     .unwrap_or(revision);
                 let oid = resolve(repo, selected);
                 tree(repo, &oid)?;
-                if a.contains(&"--count") {
-                    let count = if let Some((base, head)) = revision.split_once("..") {
-                        let mut pending = vec![resolve(repo, head)];
-                        let mut seen = std::collections::BTreeSet::new();
-                        while let Some(oid) = pending.pop() {
-                            if ancestor(repo, &oid, base) || !seen.insert(oid.clone()) {
-                                continue;
-                            }
-                            pending.extend(repo.parents.get(&oid).into_iter().flatten().cloned());
-                        }
-                        seen.len()
-                    } else {
-                        let mut pending = vec![oid.clone()];
-                        let mut seen = std::collections::BTreeSet::new();
-                        while let Some(next) = pending.pop() {
-                            if seen.insert(next.clone()) {
-                                pending
-                                    .extend(repo.parents.get(&next).into_iter().flatten().cloned());
-                            }
-                        }
-                        seen.len()
-                    };
-                    return Ok(format!("{count}\n").into_bytes());
-                }
-                out.extend_from_slice(oid.as_bytes());
-                if a.contains(&"--parents") && !common(root).join("shallow").is_file() {
-                    for parent in repo.parents.get(&oid).into_iter().flatten() {
-                        out.extend_from_slice(format!(" {parent}").as_bytes());
+                let excluded = revision.split_once("..").map(|(base, _)| base);
+                let mut pending = vec![oid];
+                let mut seen = std::collections::BTreeSet::new();
+                let mut selected = Vec::new();
+                while let Some(next) = pending.pop() {
+                    if excluded.is_some_and(|base| ancestor(repo, &next, base))
+                        || !seen.insert(next.clone())
+                    {
+                        continue;
+                    }
+                    selected.push(next.clone());
+                    if !shallow.contains(&next) {
+                        pending
+                            .extend(repo.parents.get(&next).into_iter().flatten().rev().cloned());
                     }
                 }
-                out.push(b'\n');
+                if a.contains(&"--count") {
+                    return Ok(format!("{}\n", selected.len()).into_bytes());
+                }
+                let limit = if a.contains(&"-1") {
+                    1
+                } else if let Some(pair) = a.windows(2).find(|pair| pair[0] == "-n") {
+                    pair[1]
+                        .parse::<usize>()
+                        .map_err(|_| "invalid fixture revision limit")?
+                } else {
+                    usize::MAX
+                };
+                for oid in selected.into_iter().take(limit) {
+                    out.extend_from_slice(oid.as_bytes());
+                    if a.contains(&"--parents") && !shallow.contains(&oid) {
+                        for parent in repo.parents.get(&oid).into_iter().flatten() {
+                            out.extend_from_slice(format!(" {parent}").as_bytes());
+                        }
+                    }
+                    out.push(b'\n');
+                }
             }
             "merge" => {
                 let head = resolve(repo, a.last().ok_or("missing merge head")?);
@@ -1896,12 +2039,7 @@ mod runtime {
             if !cached && repo.flags.get(&path).is_some_and(|v| v == "h" || v == "S") {
                 continue;
             }
-            if !cached
-                && path == "payload"
-                && fs::read_to_string(root.join(".gitattributes"))
-                    .unwrap_or_default()
-                    .contains("payload filter=hide")
-            {
+            if !cached && clean_filter_path(root, &path) {
                 continue;
             }
             let actual = if cached {
@@ -1910,7 +2048,12 @@ mod runtime {
                 entry(root, &path, repo.width).ok().map(|(e, _)| e)
             };
             if match (snapshot.get(&path), actual) {
-                (Some(x), Some(y)) => x.oid != y.oid || x.mode != y.mode,
+                (Some(x), Some(y)) => {
+                    x.oid != y.oid
+                        || (x.mode != y.mode
+                            && repo.config.get("core.filemode").map(String::as_str)
+                                != Some("false"))
+                }
                 (None, None) => false,
                 _ => true,
             } {
@@ -1919,6 +2062,16 @@ mod runtime {
             }
         }
         Ok(out)
+    }
+
+    fn clean_filter_path(root: &Path, path: &str) -> bool {
+        fs::read_to_string(root.join(".gitattributes"))
+            .unwrap_or_default()
+            .lines()
+            .any(|line| {
+                let mut fields = line.split_whitespace();
+                fields.next() == Some(path) && fields.any(|field| field == "filter=hide")
+            })
     }
 }
 #[cfg(not(any(verus_keep_ghost, test)))]

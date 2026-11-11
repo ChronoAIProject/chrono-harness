@@ -10,6 +10,7 @@ fn invoke(root: &Path, args: &[&str]) -> (i32, Value, String) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"));
     cmd.current_dir("/")
         .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("DECLARED_EMPTY", "")
         .env("SHOULD_NOT_LEAK", "undeclared");
     cmd.args(args).args(["--host-root", root.to_str().unwrap()]);

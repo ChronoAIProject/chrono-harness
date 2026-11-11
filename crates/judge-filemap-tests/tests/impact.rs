@@ -130,6 +130,9 @@ fn witnesses(i: &Impact, allowed: &BTreeSet<Edge>) {
 }
 #[test]
 fn typed_content_mode_binary_add_modify_delete_and_rename() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();

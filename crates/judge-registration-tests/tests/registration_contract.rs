@@ -277,6 +277,10 @@ struct Host {
 fn source() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
+// Self-contained registry inputs; tests never query the source checkout's Git.
+fn fixture_registries() -> Value {
+    serde_json::from_str(include_str!("fixtures/host-registries.json")).unwrap()
+}
 fn git(root: &Path, args: &[&str]) -> String {
     let out = Command::new("git")
         .arg("-C")
@@ -372,15 +376,7 @@ impl Host {
         }
         let mut values = std::collections::BTreeMap::new();
         for name in ["config", "judges", "projects", "FILEMAP", "workflow"] {
-            let mut v: Value = serde_json::from_slice(
-                &facts::blob(
-                    &source(),
-                    "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98",
-                    &format!(".chrono-harness/{name}.json"),
-                )
-                .unwrap(),
-            )
-            .unwrap();
+            let mut v = fixture_registries()[name].clone();
             v["status"] = "active".into();
             values.insert(name, v);
         }
@@ -1741,15 +1737,7 @@ fn real_host_pseudo_script_and_tool_defects_are_concrete() {
         return;
     }
     let mut h = Host::new();
-    let host: Value = serde_json::from_slice(
-        &chrono_harness::facts::blob(
-            &source(),
-            "4f08aef7ab40d7b0a3fb6ba42af2620600f18d98",
-            ".chrono-harness/projects.json",
-        )
-        .unwrap(),
-    )
-    .unwrap();
+    let host = fixture_registries()["projects"].clone();
     h.edit(".chrono-harness/projects.json", |v| {
         v["scripts"] = host["scripts"].clone()
     });

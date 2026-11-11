@@ -766,6 +766,18 @@ fn retain_command_result(
 ) {
     // Existing callers retain an unreleased diagnostic reference. They do not
     // acquire disposal eligibility from another caller's expected-exit contract.
+    if std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none() {
+        if output.status.success() {
+            return;
+        }
+        // A private command-boundary fixture cannot read the source checkout's
+        // Git policy. Reuse the existing self-contained receipt owner, preserving
+        // its policy and original bytes until this diagnostic is resolved.
+        let mut owner = retained_receipts::Owner::new();
+        owner.preserve_diagnostic();
+        let _ = retain_expected_command_result(&owner.root, root, argv, context, output, None);
+        return;
+    }
     let _ = retain_expected_command_result(
         &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
         root,

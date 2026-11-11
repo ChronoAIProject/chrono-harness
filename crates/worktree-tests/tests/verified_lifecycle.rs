@@ -20,6 +20,16 @@ fn producer_namespace_members_require_complete_literal_identity() {
         reveal_strlit("objects.json"); reveal_strlit("producer-records");
         reveal_strlit("rolling-metadata"); reveal_strlit("rolling-disposals");
         reveal_strlit(""); reveal_strlit("unfinished-birth"); reveal_strlit("objects.json\0");
+        assert("unfinished-birth"@[0] != "producer-records"@[0]);
+        assert("unfinished-birth"@[0] != "rolling-metadata"@[0]);
+        assert(""@.len() != "objects.json"@.len());
+        assert(""@.len() != "producer-records"@.len());
+        assert(""@.len() != "rolling-metadata"@.len());
+        assert(""@.len() != "rolling-disposals"@.len());
+        assert("objects.json\0"@.len() != "objects.json"@.len());
+        assert("objects.json\0"@.len() != "producer-records"@.len());
+        assert("objects.json\0"@.len() != "rolling-metadata"@.len());
+        assert("objects.json\0"@.len() != "rolling-disposals"@.len());
     }
     use policy::ProducerNamespaceMember::*;
     expect(match policy::producer_namespace_member("objects.json") { Owner => true, _ => false });

@@ -3051,6 +3051,11 @@
             "crates/cache-tests/Cargo.toml"
           ]
         },
+        "format": {
+          "operation": "format.cache-tests",
+          "tool": "cargo",
+          "argv": ["fmt", "--manifest-path", "crates/cache-tests/Cargo.toml"]
+        },
         "execute": {
           "operation": "test.cache-tests",
           "tool": "cargo",

@@ -89,6 +89,14 @@ impl Drop for Owner {
 }
 
 impl Owner {
+    pub(super) fn preserve_diagnostic(&mut self) {
+        self._dir.disable_cleanup(true);
+        eprintln!(
+            "original CI diagnostic receipt owner: {}",
+            self.root.display()
+        );
+    }
+
     pub(super) fn new() -> Self {
         let dir = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(dir.path()).unwrap().join("main");

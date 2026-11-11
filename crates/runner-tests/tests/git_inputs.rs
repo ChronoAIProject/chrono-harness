@@ -359,14 +359,14 @@ fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
     assert_eq!(current.bytes, originals);
     let observed = reader.observation();
     let wire_bytes = serde_json::to_vec(&observed).unwrap();
-    let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let retained = chrono_harness::prepared::retain_original(
-        &product,
+        &h.root,
         ".chrono-harness/state/preparation/",
         "registry-transport",
         &wire_bytes,
     )
     .unwrap();
+    assert_eq!(fs::read(h.root.join(&retained.path)).unwrap(), wire_bytes);
     println!(
         "ACTUAL_REGISTRY_TRANSPORT config_bytes={} registry_bytes_per_endpoint={} registries={} processes={} observation_bytes={} original={} sha256={}",
         original.len(),
@@ -2654,4 +2654,114 @@ fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_gi
     assert_eq!(unknown.status.code(), Some(93));
     assert!(unknown.stdout.is_empty());
     assert!(String::from_utf8_lossy(&unknown.stderr).contains("unhandled Git fixture command"));
+}
+
+#[test]
+fn selected_git_mock_preserves_directory_restore_and_shallow_fetch_boundaries() {
+    if !git_fixture::isolated(
+        "selected_git_mock_preserves_directory_restore_and_shallow_fetch_boundaries",
+    ) {
+        return;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("source");
+    fs::create_dir(&root).unwrap();
+    let call = |at: &std::path::Path, args: &[&str]| {
+        Command::new(git_fixture::program())
+            .current_dir(at)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let ok = |at: &std::path::Path, args: &[&str]| {
+        let out = call(at, args);
+        assert!(out.status.success(), "{args:?}: {out:?}");
+        assert!(out.stderr.is_empty(), "{out:?}");
+        out.stdout
+    };
+    ok(&root, &["init", "-q", "-b", "dev"]);
+    fs::create_dir(root.join("tracked")).unwrap();
+    fs::write(root.join("tracked/a"), b"base").unwrap();
+    ok(&root, &["add", "."]);
+    ok(&root, &["commit", "-qm", "base"]);
+    let base = String::from_utf8(ok(&root, &["rev-parse", "HEAD"])).unwrap();
+    fs::write(root.join("tracked/a"), b"staged").unwrap();
+    ok(&root, &["add", "tracked/a"]);
+    fs::write(root.join("tracked/a"), b"unstaged").unwrap();
+    ok(&root, &["restore", "tracked/a"]);
+    assert_eq!(fs::read(root.join("tracked/a")).unwrap(), b"staged");
+    ok(&root, &["commit", "-qm", "middle"]);
+    let middle = String::from_utf8(ok(&root, &["rev-parse", "HEAD"])).unwrap();
+    fs::write(root.join("tracked/a"), b"head").unwrap();
+    ok(&root, &["commit", "-qam", "head"]);
+    fs::create_dir_all(root.join("untracked/nested")).unwrap();
+    fs::create_dir(root.join("empty")).unwrap();
+    fs::write(root.join("untracked/nested/file"), b"new").unwrap();
+    fs::write(root.join("tracked/new"), b"new").unwrap();
+    assert_eq!(
+        ok(
+            &root,
+            &[
+                "ls-files",
+                "--others",
+                "--directory",
+                "--no-empty-directory",
+                "-z",
+                "--",
+                "."
+            ]
+        ),
+        b"tracked/new\0untracked/\0"
+    );
+    assert_eq!(
+        ok(
+            &root,
+            &[
+                "ls-files",
+                "--others",
+                "--directory",
+                "--no-empty-directory",
+                "-z",
+                "--",
+                ".",
+                ":(top,exclude,literal)untracked/"
+            ]
+        ),
+        b"tracked/new\0"
+    );
+    let clone = directory.path().join("clone");
+    let remote = format!("file://{}", root.display());
+    ok(
+        directory.path(),
+        &[
+            "clone",
+            "-q",
+            "--no-checkout",
+            "--depth=2",
+            &remote,
+            clone.to_str().unwrap(),
+        ],
+    );
+    assert!(!clone.join("tracked/a").exists());
+    assert!(
+        !call(
+            &clone,
+            &["cat-file", "-e", &format!("{}^{{commit}}", base.trim())]
+        )
+        .status
+        .success()
+    );
+    let middle_header = ok(&clone, &["cat-file", "-p", middle.trim()]);
+    assert!(
+        String::from_utf8(middle_header)
+            .unwrap()
+            .contains(&format!("parent {}\n", base.trim()))
+    );
+    assert_eq!(ok(&clone, &["rev-list", "--count", "HEAD"]), b"2\n");
+    ok(&clone, &["fetch", "origin", base.trim()]);
+    ok(
+        &clone,
+        &["cat-file", "-e", &format!("{}^{{commit}}", base.trim())],
+    );
+    assert_eq!(ok(&clone, &["rev-list", "--count", "HEAD"]), b"2\n");
 }

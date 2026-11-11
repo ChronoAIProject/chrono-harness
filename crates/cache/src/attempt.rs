@@ -219,6 +219,14 @@ mod runtime {
                 ));
             }
             let _use = state.consume(&id)?;
+            // A terminal failed attempt has no downstream plan consumer. If
+            // the first execution was interrupted after sealing its result but
+            // before releasing the plan root, replay resumes that same
+            // producer-owned release obligation after the exact result is
+            // verified and consumed.
+            if result["error"].is_string() {
+                inventory(&root)?.reference_paths(&role, &[])?;
+            }
             return replay(&result);
         }
         // Retired/unrooted addresses cannot be used to repeat the same attempt.

@@ -84,6 +84,7 @@ fn native_v3(h: &mut Host) {
         "input:execution-tool",
         "input:data",
         "environment:FACTS_GIT",
+        "environment:PATH",
         "environment:DECLARED_EMPTY",
         "environment:DECLARED_ABSENT",
         "environment:EMPTY"
