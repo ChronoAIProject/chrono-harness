@@ -15,6 +15,76 @@ use vstd::vpanic as panic;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn report_recovery_checks_current_formats_and_exit_boundaries() {
+    proof {
+        reveal_strlit("chrono-report-publication/v1"); reveal_strlit("wrong");
+        reveal_strlit("chrono-check-report/v1"); reveal_strlit("chrono-check-report/v2");
+        reveal_strlit("original"); reveal_strlit("other");
+        assert("original"@[1] != "other"@[1]);
+        assert("wrong"@[0] != "chrono-report-publication/v1"@[0]);
+        assert("wrong"@[0] != "chrono-check-report/v1"@[0]);
+        assert("wrong"@[0] != "chrono-check-report/v2"@[0]);
+        assert("chrono-check-report/v1"@[21] != "chrono-check-report/v2"@[21]);
+    }
+    expect_true(policy::report_publication("chrono-report-publication/v1", 0));
+    expect_true(policy::report_publication("chrono-report-publication/v1", 1));
+    expect_true(policy::report_publication("chrono-report-publication/v1", 2));
+    expect_true(!policy::report_publication("chrono-report-publication/v1", 3));
+    expect_true(!policy::report_publication("chrono-report-publication/v1", 255));
+    expect_true(!policy::report_publication("wrong", 0));
+    expect_true(policy::recovered_report_kind(Some("chrono-check-report/v1"), None, Some("original"), None, "original") == 1);
+    expect_true(policy::recovered_report_kind(Some("chrono-check-report/v2"), None, Some("original"), None, "original") == 2);
+    expect_true(policy::recovered_report_kind(None, Some(1), None, Some("original"), "original") == 3);
+    expect_true(policy::recovered_report_kind(Some("chrono-check-report/v2"), Some(1), Some("other"), Some("original"), "original") == 0);
+    expect_true(policy::recovered_report_kind(None, Some(2), None, Some("original"), "original") == 0);
+    expect_true(policy::recovered_report_kind(None, None, None, Some("original"), "original") == 0);
+    expect_true(policy::recovered_report_kind(None, Some(1), None, None, "original") == 0);
+    expect_true(policy::recovered_report_kind(Some("wrong"), Some(1), Some("original"), Some("original"), "original") == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn report_recovery_requires_one_sealed_matching_operation_outcome() {
+    proof {
+        reveal_strlit("request"); reveal_strlit("requesT");
+        assert("request"@[6] != "requesT"@[6]);
+    }
+    expect_true(policy::report_outcome(1, Some("request"), Some(0), "request", 0));
+    expect_true(policy::report_outcome(1, Some("request"), Some(1), "request", 1));
+    expect_true(policy::report_outcome(1, Some("request"), Some(2), "request", 2));
+    expect_true(!policy::report_outcome(0, Some("request"), Some(0), "request", 0));
+    expect_true(!policy::report_outcome(2, Some("request"), Some(0), "request", 0));
+    expect_true(!policy::report_outcome(1, Some("requesT"), Some(0), "request", 0));
+    expect_true(!policy::report_outcome(1, None, Some(0), "request", 0));
+    expect_true(!policy::report_outcome(1, Some("request"), None, "request", 0));
+    expect_true(!policy::report_outcome(1, Some("request"), Some(1), "request", 0));
+    expect_true(!policy::report_outcome(1, Some("request"), Some(u64::MAX), "request", 2));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn report_slot_recovery_preserves_newer_reports_and_reuses_its_original() {
+    proof {
+        reveal_strlit("old"); reveal_strlit("new"); reveal_strlit("else");
+        assert("old"@[0] != "new"@[0]);
+        assert("old"@[0] != "else"@[0]);
+        assert("new"@[0] != "else"@[0]);
+    }
+    let empty = policy::report_slot(None, None, "new");
+    expect_true(empty.allowed && !empty.already_published);
+    let unchanged = policy::report_slot(Some("old"), Some("old"), "new");
+    expect_true(unchanged.allowed && !unchanged.already_published);
+    let repeated = policy::report_slot(Some("new"), Some("old"), "new");
+    expect_true(repeated.allowed && repeated.already_published);
+    let initially_same = policy::report_slot(Some("new"), Some("new"), "new");
+    expect_true(initially_same.allowed && initially_same.already_published);
+    let newer = policy::report_slot(Some("else"), Some("old"), "new");
+    expect_true(!newer.allowed && !newer.already_published);
+    let removed = policy::report_slot(None, Some("old"), "new");
+    expect_true(!removed.allowed && !removed.already_published);
+    let replaced_empty = policy::report_slot(Some("else"), None, "new");
+    expect_true(!replaced_empty.allowed && !replaced_empty.already_published);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn pending_domain_and_resumed_seal_remain_distinct_from_terminal_eligibility() {
     let pending = policy::domain_recovery(true, true);
     let absent = policy::domain_recovery(true, false);

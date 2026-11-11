@@ -1896,8 +1896,8 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
                 .expect("refused maintenance must release every acquired metadata lease");
             drop(released);
         }
-        inventory(h.path()).maintain_originals(&[other_id]).unwrap();
-        assert!(!h.path().join(&other_path).exists());
+        let independent = inventory(h.path()).maintain_originals(&[other_id]).unwrap();
+        assert!(!h.path().join(&other_path).exists(), "{independent}");
         drop(holder);
         input.complete(json!({"exit": 7})).unwrap();
         inventory(h.path())

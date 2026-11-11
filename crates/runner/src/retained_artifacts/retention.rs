@@ -337,12 +337,17 @@ fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
     }
     // One declared replacement slot under admission exclusion. Hard termination
     // cannot accumulate a new random temporary file on every retry.
-    let temporary = path.with_extension("pending");
-    match fs::symlink_metadata(&temporary) {
+    replace_file(path, &path.with_extension("pending"), raw).map_err(|e| e.to_string())
+}
+
+fn replace_file(path: &Path, temporary: &Path, raw: &[u8]) -> std::io::Result<()> {
+    match fs::symlink_metadata(temporary) {
         Ok(m) if !m.is_file() || m.file_type().is_symlink() => {
-            return Err("retention replacement slot identity/type changed".into());
+            return Err(std::io::Error::other(
+                "retention replacement slot identity/type changed",
+            ));
         }
-        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e.to_string()),
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(e),
         _ => (),
     }
     let mut options = fs::OpenOptions::new();
@@ -352,11 +357,32 @@ fn write(path: &Path, raw: &[u8]) -> Result<(), String> {
         use std::os::unix::fs::OpenOptionsExt;
         options.custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC);
     }
-    let mut f = options.open(&temporary).map_err(|e| e.to_string())?;
-    f.write_all(raw).map_err(|e| e.to_string())?;
-    f.sync_all().map_err(|e| e.to_string())?;
-    fs::rename(temporary, path).map_err(|e| e.to_string())?;
+    let mut f = options.open(temporary)?;
+    f.write_all(raw)?;
+    f.sync_all()?;
+    fs::rename(temporary, path)?;
     Ok(())
+}
+
+/// The fixed report slot has one recoverable replacement file, protected by
+/// its own slot lease. A failed write never truncates the previous report.
+pub(crate) fn replace_report(path: &Path, raw: &[u8]) -> std::io::Result<()> {
+    let name = path
+        .file_name()
+        .ok_or_else(|| std::io::Error::other("report filename"))?;
+    let mut pending = name.to_os_string();
+    pending.push(".publication-pending");
+    replace_file(path, &path.with_file_name(pending), raw)?;
+    sync_report(path)
+}
+
+pub(crate) fn sync_report(path: &Path) -> std::io::Result<()> {
+    fs::File::open(path)?.sync_all()?;
+    fs::File::open(
+        path.parent()
+            .ok_or_else(|| std::io::Error::other("report parent"))?,
+    )?
+    .sync_all()
 }
 impl Inventory {
     pub fn read_scope(&self) -> Result<ReadScope, String> {
@@ -3964,10 +3990,29 @@ pub fn reference_report(
     originals: &[String],
     pending_native: Option<&str>,
 ) -> Result<Option<Lease>, String> {
+    let publisher = report_slot(root, slot)?;
+    reference_report_held(root, slot, original, originals, pending_native)?;
+    Ok(publisher)
+}
+
+pub(crate) fn report_slot(root: &Path, slot: &str) -> Result<Option<Lease>, String> {
+    crate::relative_path(slot)?;
+    Inventory::adopted(root)?
+        .map(|inventory| inventory.address_gate("slot", slot))
+        .transpose()
+}
+
+/// The caller holds report_slot through intent creation, publication and settlement.
+pub(crate) fn reference_report_held(
+    root: &Path,
+    slot: &str,
+    original: &str,
+    originals: &[String],
+    pending_native: Option<&str>,
+) -> Result<(), String> {
     let Some(inventory) = Inventory::adopted(root)? else {
-        return Ok(None);
+        return Ok(());
     };
-    let publisher = inventory.address_gate("slot", slot)?;
     inventory.dependencies_paths(original, originals)?;
     // Both old and new originals stay rooted until the fixed pointer was written.
     inventory.extend_reference_path(
@@ -3977,7 +4022,7 @@ pub fn reference_report(
     if let Some(identity) = pending_native {
         inventory.reference_paths(&format!("native-delivery:{identity}"), &[original.into()])?;
     }
-    Ok(Some(publisher))
+    Ok(())
 }
 /// Release the previous fixed-slot reference only after its replacement is durably published.
 pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), String> {
@@ -3995,7 +4040,9 @@ pub fn settle_report(root: &Path, slot: &str, original: &str) -> Result<(), Stri
                 && matches!(output.phase.as_str(), "released" | "sealing")
                 && ledger.roots.contains_key(&diagnostic)
             {
-                inventory.retain_diagnostic_path(&output.path)?;
+                if output.outcome["exit_code"] != 0 {
+                    inventory.retain_diagnostic_path(&output.path)?;
+                }
                 inventory.reference(&diagnostic, &[])?;
             }
             inventory.reference(&format!("consumer:publication-recheck:{id}"), &[])?;

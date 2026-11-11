@@ -68,6 +68,9 @@ fn judge() {
         mode => panic!("unknown judge fixture mode {mode}"),
     }
     let request: Value = serde_json::from_reader(io::stdin().lock()).unwrap();
+    if let Some(path) = case["block_pending"].as_str() {
+        std::fs::create_dir(path).unwrap();
+    }
     let mut response = json!({"protocol":"chrono-ci-judge/v1", "request_id":request["request_id"],
         "status":"passed", "results":[{"id":"external","status":"passed","cause":"real execution","exit_code":0}],
         "evidence":{"executed":true}});
