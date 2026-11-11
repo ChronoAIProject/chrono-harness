@@ -16,6 +16,14 @@ struct EnrollmentOriginalsFixture {
 }
 impl EnrollmentOriginalsFixture {
     fn new() -> Self {
+        Self::build(None)
+    }
+
+    fn imported() -> Self {
+        Self::build(Some(""))
+    }
+
+    fn build(import_fault: Option<&str>) -> Self {
         use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
         let directory = tempfile::tempdir().unwrap();
         let root = fs::canonicalize(directory.path()).unwrap();
@@ -133,15 +141,112 @@ impl EnrollmentOriginalsFixture {
             .unwrap(),
         )
         .unwrap();
+        let mut original_bytes = b"original failure bytes\n".to_vec();
+        if let Some(fault) = import_fault {
+            let source = "c".repeat(64);
+            let mut config = json(&fs::read(root.join(POLICY)).unwrap()).unwrap();
+            config["git"] = value!({"not-executable":"retained caller data"});
+            if fault == "policy-address" {
+                config["automatic_cleanup"] = value!(".chrono-harness/other.json");
+            }
+            let config_bytes = serde_json::to_string(&config).unwrap();
+            let mut policy = json(&fs::read(root.join(AUTO_POLICY)).unwrap()).unwrap();
+            policy["allow_evidence_disposal"] = value!(false);
+            if fault == "namespace" {
+                policy["state_directory"] = value!(".chrono-harness/state/other-cleanup/");
+            }
+            let policy_bytes = serde_json::to_string(&policy).unwrap();
+            let mut retained = BTreeMap::<String, String>::new();
+            for path in registered.keys() {
+                retained.insert(path.clone(), fs::read_to_string(root.join(path)).unwrap());
+            }
+            retained.insert(POLICY.into(), config_bytes.clone());
+            retained.insert(AUTO_POLICY.into(), policy_bytes.clone());
+            if fault == "config-bytes" {
+                retained.insert(POLICY.into(), format!("{config_bytes}\n"));
+            }
+            if fault == "policy-bytes" {
+                retained.insert(AUTO_POLICY.into(), format!("{policy_bytes}\n"));
+            }
+            if fault == "registration" {
+                let mut filemap = json(retained[FM].as_bytes()).unwrap();
+                filemap["files"]
+                    .as_array_mut()
+                    .unwrap()
+                    .retain(|row| row["path"] != AUTO_POLICY);
+                retained.insert(FM.into(), serde_json::to_string(&filemap).unwrap());
+            }
+            let mut git_fixture = json(&fs::read(&fixture).unwrap()).unwrap();
+            git_fixture["retained"] = value!({
+                (source.clone()):retained,
+                ("b".repeat(64)):{(POLICY):"target original configuration is raw data",
+                    (AUTO_POLICY):"target original policy is different raw data"}
+            });
+            write("git-fixture.json", git_fixture);
+            let mut ledger = json(&fs::read(record.join("ledger.json")).unwrap()).unwrap();
+            let entry = &mut ledger["entries"][0];
+            entry["policy_sha256"] = value!(sha256(policy_bytes.as_bytes()));
+            entry["enrollment"]["kind"] = value!("import");
+            entry["enrollment"]["policy_inputs"] = value!({
+                (POLICY):sha256(b"target original configuration is raw data"),
+                (AUTO_POLICY):sha256(b"target original policy is different raw data")
+            });
+            fs::write(
+                record.join("ledger.json"),
+                serde_json::to_vec(&ledger).unwrap(),
+            )
+            .unwrap();
+            let mut report = value!({
+                "schema":"chrono-worktree-report/v1","operation":"import","status":"imported",
+                "source_root":root,"policy_source_root":root,"policy_source_commit":source,
+                "report_path":original,"config_path":POLICY,
+                "config_sha256":sha256(config_bytes.as_bytes())
+            });
+            match fault {
+                "missing-source" => {
+                    report
+                        .as_object_mut()
+                        .unwrap()
+                        .remove("policy_source_commit");
+                }
+                "schema" => report["schema"] = value!("chrono-worktree-report/v2"),
+                "operation" => report["operation"] = value!("migrate"),
+                "status" => report["status"] = value!("failed"),
+                "report-path" => report["report_path"] = value!(sibling),
+                "source-root" => report["source_root"] = value!(target),
+                "config-path" => report["config_path"] = value!(AUTO_POLICY),
+                "config-digest" => report["config_sha256"] = value!("0".repeat(64)),
+                "retained-input" => {
+                    report["original_result"] = value!({"input":{
+                        "schema":"chrono-worktree-retained-input/v1","source_root":root,
+                        "path":".chrono-harness/state/missing-input.bin","sha256":"0".repeat(64),
+                        "byte_length":0,"format":"bytes"
+                    }})
+                }
+                _ => (),
+            }
+            original_bytes = serde_json::to_vec(&report).unwrap();
+        }
         for path in [&original, &sibling] {
-            fs::write(root.join(path), b"original failure bytes\n").unwrap();
-            Inventory::adopted(&root)
+            fs::write(
+                root.join(path),
+                if path == &original {
+                    original_bytes.as_slice()
+                } else {
+                    b"original failure bytes\n"
+                },
+            )
+            .unwrap();
+            let publication = Inventory::adopted(&root)
                 .unwrap()
                 .unwrap()
                 .begin("lifecycle-original", path, value!({"status":"unknown"}))
-                .unwrap()
-                .complete(value!({"status":"failed","error":"original failure"}))
                 .unwrap();
+            if path != &original || import_fault != Some("unsealed") {
+                publication
+                    .complete(value!({"status":"failed","error":"original failure"}))
+                    .unwrap();
+            }
         }
         Self {
             _directory: directory,
@@ -199,6 +304,133 @@ impl EnrollmentOriginalsFixture {
             (AUTO_POLICY):Some(sha256(policy_bytes.as_bytes()))
         });
         fs::write(path, serde_json::to_vec(&record).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
+    let h = EnrollmentOriginalsFixture::imported();
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let original = fs::read(h.root.join(&h.original)).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+    assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
+}
+
+#[test]
+fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let h = EnrollmentOriginalsFixture::build(Some("missing-source"));
+    let fixture_path = h.root.join("git-fixture.json");
+    let mut fixture = json(&fs::read(&fixture_path).unwrap()).unwrap();
+    let mut snapshot = fixture["retained"]["c".repeat(64)].clone();
+    let config_bytes = format!("{}\n", snapshot[POLICY].as_str().unwrap());
+    snapshot[POLICY] = value!(config_bytes);
+    let policy_bytes = snapshot[AUTO_POLICY].as_str().unwrap().to_owned();
+    let head = "d".repeat(64);
+    fixture["retained"][&head] = snapshot;
+    fs::write(fixture_path, serde_json::to_vec(&fixture).unwrap()).unwrap();
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    let entry = &mut ledger["entries"][0];
+    let migration = value!({
+        "schema":"chrono-worktree-policy-migration/v1",
+        "binding":{
+            "path":entry["path"],"branch":entry["branch"],"attachment":entry["attachment"],
+            "policy_sha256":entry["policy_sha256"],"observed_head":entry["enrollment"]["observed_head"],
+            "policy_inputs":entry["enrollment"]["policy_inputs"],
+            "original_receipt":entry["enrollment"]["receipt"],"ownership":null
+        },
+        "previous":{"policy_sha256":entry["policy_sha256"],
+            "head":entry["enrollment"]["observed_head"],"inputs":entry["enrollment"]["policy_inputs"]},
+        "next":{"policy_sha256":sha256(policy_bytes.as_bytes()),"head":head,"inputs":{
+            (POLICY):sha256(config_bytes.as_bytes()),(AUTO_POLICY):sha256(policy_bytes.as_bytes())
+        }},
+        "terminal_handoff":"not-claimed","disposal":"not-performed"
+    });
+    let path = ".chrono-harness/state/import-policy-migration.json";
+    let bytes = serde_json::to_vec(&migration).unwrap();
+    fs::write(h.root.join(path), &bytes).unwrap();
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .begin("lifecycle-original", path, value!({"status":"unknown"}))
+        .unwrap()
+        .complete(value!({"status":"published"}))
+        .unwrap();
+    entry["policy_migrations"] = value!([{"path":path,"sha256":sha256(&bytes)}]);
+    let ledger_bytes = serde_json::to_vec(&ledger).unwrap();
+    fs::write(&ledger_path, &ledger_bytes).unwrap();
+    let original = fs::read(h.root.join(&h.original)).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+    assert_eq!(fs::read(&ledger_path).unwrap(), ledger_bytes);
+    assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
+}
+
+#[test]
+fn absent_import_preserves_unqualified_originals_and_rejects_source_drift() {
+    for fault in [
+        "missing-source",
+        "schema",
+        "operation",
+        "status",
+        "report-path",
+        "source-root",
+        "config-path",
+        "config-digest",
+        "retained-input",
+        "unsealed",
+        "config-bytes",
+        "policy-bytes",
+        "policy-address",
+        "namespace",
+        "registration",
+        "replaced",
+        "changed",
+        "missing",
+        "symlink",
+    ] {
+        let h = EnrollmentOriginalsFixture::build(Some(fault));
+        let original_path = h.root.join(&h.original);
+        match fault {
+            "replaced" => {
+                let bytes = fs::read(&original_path).unwrap();
+                fs::rename(&original_path, h.root.join("original-before-replacement")).unwrap();
+                fs::write(&original_path, bytes).unwrap();
+            }
+            "changed" => {
+                let mut bytes = fs::read(&original_path).unwrap();
+                bytes.push(b'\n');
+                fs::write(&original_path, bytes).unwrap();
+            }
+            "missing" => fs::remove_file(&original_path).unwrap(),
+            "symlink" => {
+                let kept = h.root.join("original-before-symlink");
+                fs::rename(&original_path, &kept).unwrap();
+                std::os::unix::fs::symlink(kept, &original_path).unwrap();
+            }
+            _ => (),
+        }
+        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let original = fs::read(&original_path).ok();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 2, "{fault}: {report}");
+        assert!(
+            !report["cleanup_failures"].as_array().unwrap().is_empty(),
+            "{fault}: {report}"
+        );
+        assert_eq!(
+            fs::read(h.record.join("ledger.json")).unwrap(),
+            ledger,
+            "{fault}"
+        );
+        assert_eq!(fs::read(&original_path).ok(), original, "{fault}");
+        assert!(!h.target.exists(), "{fault}");
     }
 }
 

@@ -1910,13 +1910,70 @@ impl Manager {
         let Some(i) = self.current_entry(&self.scope) else {
             return Ok(());
         };
-        let binding = self.policy_binding(&self.ledger.entries[i])?;
-        if equal_text(&binding.head, &self.inputs.source_head)
-            && equal_text(&binding.policy_sha256, &sha256(&self.inputs.policy_bytes))
-        {
-            return Ok(());
-        }
+        let entry = &self.ledger.entries[i];
+        let mut binding = self.policy_binding(entry)?;
         let root = self.inputs.policy.coordinator_root.clone();
+        // An import adopts the caller's policy while retaining the target's raw
+        // input bindings. Those are separate sources until an explicit migration.
+        let mut _original_guard = None;
+        match crate::verified_lifecycle::absent_policy_source(
+            entry.enrollment["kind"].as_str().unwrap_or(""),
+            !entry.policy_migrations.is_empty(),
+            &binding.head,
+            &self.inputs.source_head,
+            &binding.policy_sha256,
+            &sha256(&self.inputs.policy_bytes),
+        ) {
+            crate::verified_lifecycle::AbsentPolicySource::Current => return Ok(()),
+            crate::verified_lifecycle::AbsentPolicySource::RetainedTarget => (),
+            crate::verified_lifecycle::AbsentPolicySource::ImportedOriginal => {
+                let path = entry.enrollment["receipt"]["report_path"]
+                    .as_str()
+                    .ok_or("import enrollment lacks its original report path")?;
+                _original_guard =
+                    chrono_harness::retained_artifacts::retention::read_guard(&root, path)?;
+                let bytes = crate::recovery::state_bytes(&root, path)?;
+                let inventory =
+                    chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
+                        .ok_or("import policy restoration requires its published original")?;
+                let published =
+                    inventory.published_original(path, &sha256(&bytes), bytes.len() as u64)?;
+                let report = json(&bytes)?;
+                let fields = crate::verified_lifecycle::ImportedPolicyReceipt {
+                    schema: report["schema"].as_str(),
+                    operation: report["operation"].as_str(),
+                    status: report["status"].as_str(),
+                    source_root: report["source_root"].as_str(),
+                    report_path: report["report_path"].as_str(),
+                    config_path: report["config_path"].as_str(),
+                };
+                if !crate::verified_lifecycle::imported_policy_receipt_valid(
+                    &fields,
+                    published,
+                    root.to_str().ok_or("non-UTF8 coordinator root")?,
+                    path,
+                    &self.inputs.config_path,
+                ) {
+                    return Err("import policy original does not bind this adoption".into());
+                }
+                self.verify_inputs(&report)?;
+                binding.head = report["policy_source_commit"]
+                    .as_str()
+                    .ok_or("import policy original lacks its fixed policy source commit")?
+                    .into();
+                facts::full_oid(&binding.head)?;
+                let config_sha256 = report["config_sha256"]
+                    .as_str()
+                    .ok_or("import policy original lacks its configuration digest")?;
+                binding.inputs = BTreeMap::from([
+                    (self.inputs.config_path.clone(), Some(config_sha256.into())),
+                    (
+                        self.inputs.policy_path.clone(),
+                        Some(binding.policy_sha256.clone()),
+                    ),
+                ]);
+            }
+        }
         let config_bytes = r.blob(&root, &binding.head, &self.inputs.config_path)?;
         let policy_bytes = r.blob(&root, &binding.head, &self.inputs.policy_path)?;
         let expected = BTreeMap::from([
