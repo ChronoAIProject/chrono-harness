@@ -337,7 +337,7 @@ pub open spec fn identity_prefix_valid(rows: Seq<SelectorRow>, v3: bool, count: 
     0 <= count <= rows.len()
         && forall|i: int| 0 <= i < count ==> #[trigger] identity_row_error(
             &rows[i], v3, identity_prefix_hashes(rows, i), identity_prefix_paths(rows, i),
-        ) == None
+        ) == None::<Seq<char>>
 }
 
 pub open spec fn identity_failure_at(
@@ -390,8 +390,10 @@ pub fn collect_identity_paths<'a, R: SelectorRows<'a>, S: SelectorSeen<'a>>(
                     assert(identity_row_error(&rows.rows()[i as int], v3,
                         before_hashes, before_paths).is_none());
                     assert(identity_row_shape(&rows.rows()[i as int], v3));
-                    assert(matches!(rows.rows()[i as int].digest,
-                        Some(text) if identifiers::digest_format(text.spec_bytes())));
+                    assert(match rows.rows()[i as int].digest {
+                        Some(text) => identifiers::digest_format(text.spec_bytes()),
+                        None => false,
+                    });
                 }
                 collected.push(path);
             },
