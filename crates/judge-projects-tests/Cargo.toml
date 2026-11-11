@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+chrono-diagnostics = { path = "../diagnostics" }
 chrono-harness = { path = "../runner" }
 chrono-judge-projects = { path = "../judge-projects" }
 serde = { version = "1", features = ["derive"] }
@@ -30,7 +31,6 @@ bench = false
 
 [dev-dependencies]
 libc = "0.2"
-chrono-diagnostics = { path = "../diagnostics" }
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 chrono-worktree = { path = "../worktree" }
 chrono-judge-registration = { path = "../judge-registration" }
