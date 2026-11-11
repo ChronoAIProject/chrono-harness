@@ -144,12 +144,16 @@ fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
             _ => unreachable!(),
         }
         let before = fs::symlink_metadata(&marker).unwrap();
+        // Explicit selection rejects a non-file object declaration before its
+        // reader runs. Global maintenance exercises that reader's refusal.
+        let request = if namespace == "object" {
+            json!({"operation":"maintain"})
+        } else {
+            json!({"operation":"maintain", "originals":[id]})
+        };
         fs::write(
             h.path().join("maintain.json"),
-            serde_json::to_vec(&json!({
-                "operation":"maintain", "originals":[id]
-            }))
-            .unwrap(),
+            serde_json::to_vec(&request).unwrap(),
         )
         .unwrap();
         // The managed real child is joined even if an unsafe FIFO open blocks.
@@ -172,20 +176,23 @@ fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
             b"",
         )
         .unwrap();
-        assert!(result.failure.is_none(), "{kind}: {result:?}");
-        assert_eq!(result.exit_code, 0, "{kind}: {result:?}");
+        assert!(result.failure.is_none(), "{namespace}/{kind}: {result:?}");
+        assert_eq!(result.exit_code, 0, "{namespace}/{kind}: {result:?}");
         let round: Value = serde_json::from_str(&result.stdout).unwrap();
         assert!(
             !round["accounting_errors"].as_array().unwrap().is_empty(),
-            "{kind}: {round}"
+            "{namespace}/{kind}: {round}"
         );
-        assert_eq!(round["removed_logical_bytes"], 0, "{kind}: {round}");
+        assert_eq!(
+            round["removed_logical_bytes"], 0,
+            "{namespace}/{kind}: {round}"
+        );
         assert_eq!(fs::read(&original).unwrap(), b"necessary original failure");
         let after = fs::symlink_metadata(&marker).unwrap();
         assert_eq!(
             (after.dev(), after.ino(), after.mode(), after.len()),
             (before.dev(), before.ino(), before.mode(), before.len()),
-            "{kind}"
+            "{namespace}/{kind}"
         );
         if kind == "directory" {
             fs::remove_dir(&marker).unwrap();
@@ -197,8 +204,8 @@ fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
         }
         fs::rename(&saved, &marker).unwrap();
         inventory(h.path()).reference("current", &[]).unwrap();
-        assert_eq!(maintain_fixture_to(h.path(), 0), 0, "{kind}");
-        assert!(!original.exists(), "{kind}");
+        assert_eq!(maintain_fixture_to(h.path(), 0), 0, "{namespace}/{kind}");
+        assert!(!original.exists(), "{namespace}/{kind}");
     }
 }
 
