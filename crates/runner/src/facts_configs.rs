@@ -14,6 +14,22 @@ pub(crate) fn is_selector(config: &Value) -> bool {
     config_schema(config).is_selector()
 }
 
+/// 标准 JSON 接口只转交对象借用和字段操作；投影分支及参数由 Verus 决定。
+pub(crate) fn registry_selection_observation(mut observation: Value) -> Value {
+    let _ = crate::verified_status::normalize_registry_selection_object(
+        observation.as_object_mut(),
+        |object: &mut serde_json::Map<String, Value>, key: &str| {
+            object.remove(key);
+            object
+        },
+        |object: &mut serde_json::Map<String, Value>, key: &str, schema: &str| {
+            object.insert(key.into(), Value::String(schema.into()));
+            object
+        },
+    );
+    observation
+}
+
 pub(crate) struct Selection {
     pub path: String,
     pub bytes: Vec<u8>,
@@ -218,18 +234,9 @@ pub fn identity(
             .ok_or_else(|| format!("missing selected configuration target {target}"))?;
         serde_json::to_vec(value).map_err(|e| e.to_string())
     })?;
-    let selection = selection.map(|s| {
-        let mut observation = s.observation;
-        // The exact selector bytes are retained in the snapshot map.  The
-        // value-only identity intentionally carries structural binding fields
-        // so it can be reconstructed after JSON decoding without inventing a
-        // digest for reformatted bytes.
-        if let Some(object) = observation.as_object_mut() {
-            object.remove("sha256");
-            object.insert("schema".into(), value!("chrono-registry-selection/v1"));
-        }
-        observation
-    });
+    // 原始 selector 字节保留在 snapshot 中；值身份只保留结构化绑定字段，
+    // 不为 JSON 重新排版后的字节虚构摘要。
+    let selection = selection.map(|s| registry_selection_observation(s.observation));
     Ok(Identity {
         entry_path: path.into(),
         effective_path,

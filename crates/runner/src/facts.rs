@@ -217,12 +217,7 @@ fn registry_snapshot_start(
     let config = json(&original)?;
     let paths = registry_paths(&effective_config, &effective_path)?;
     let selection = selection.map(|s| {
-        let mut observation = s.observation;
-        if let Some(object) = observation.as_object_mut() {
-            object.remove("sha256");
-            object.insert("schema".into(), value!("chrono-registry-selection/v1"));
-        }
-        observation
+        crate::facts_configs::registry_selection_observation(s.observation)
     });
     let snapshot = crate::verified_status::registry_snapshot_initial(
         path.into(),

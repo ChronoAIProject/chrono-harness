@@ -70,6 +70,58 @@ pub fn registry_snapshot_initial<V>(
 }
 
 
+
+/// 对象投影只在存在时改写；回调是实际外部 map 接口，规格绑定完整参数及操作次序。
+pub open spec fn registry_selection_object_result<M, R, I>(
+    before: Option<M>, after: Option<M>, remove: R, insert: I,
+) -> bool
+    where R: Fn(M, &str) -> M, I: Fn(M, &str, &str) -> M,
+{
+    match before {
+        None => after.is_none(),
+        Some(initial) => match after {
+            None => false,
+            Some(normalized) => exists|middle: M, removed: &str, field: &str, value: &str|
+                removed@ == "sha256"@ && field@ == "schema"@
+                && value@ == "chrono-registry-selection/v1"@
+                && remove.ensures((initial, removed), middle)
+                && insert.ensures((middle, field, value), normalized),
+        },
+    }
+}
+
+/// 保留非对象；对象先删除原字节摘要，再写入结构化 registry selection schema。
+pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R, insert: I)
+    -> (out: Option<M>)
+    where R: Fn(M, &str) -> M, I: Fn(M, &str, &str) -> M,
+    requires match object {
+        None => true,
+        Some(initial) =>
+            (forall|key: &str| key@ == "sha256"@ ==> remove.requires((initial, key)))
+            && (forall|key: &str, middle: M, field: &str, value: &str|
+                key@ == "sha256"@ && remove.ensures((initial, key), middle)
+                && field@ == "schema"@ && value@ == "chrono-registry-selection/v1"@
+                ==> insert.requires((middle, field, value))),
+    },
+    ensures registry_selection_object_result(object, out, remove, insert),
+{
+    match object {
+        None => None,
+        Some(initial) => {
+            let removed = "sha256";
+            let field = "schema";
+            let value = "chrono-registry-selection/v1";
+            let middle = remove(initial, removed);
+            let normalized = insert(middle, field, value);
+            proof {
+                assert(registry_selection_object_result(
+                    Some(initial), Some(normalized), remove, insert));
+            }
+            Some(normalized)
+        },
+    }
+}
+
 /// 标准 JSON 解码仅提供四个固定字段的原字符串观察。
 pub enum RegistryPathError<'a> {
     Missing { message: &'static str },

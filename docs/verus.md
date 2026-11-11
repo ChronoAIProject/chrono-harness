@@ -53,6 +53,28 @@ entry／target 获取、严格 JSON、selector 解析与 selection 的 JSON 投�
 不把整个 snapshot 起始组合或外围适配器列为已证明。沿用现有两项状态整 crate 根及真实
 消费者测试；完整构建、证明、运行、CI 与存储成本未测。
 
+registry selection 的对象投影由
+`verified_status.rs::normalize_registry_selection_object` 统一拥有。
+无对象时不调用字段接口；有对象时先以完整键 `sha256` 删除字段，再以完整键
+`schema` 写入 `chrono-registry-selection/v1`，结果关系绑定两次真实回调及其顺序。
+`facts.rs::registry_snapshot_start` 与 `facts_configs.rs::identity` 共用薄 JSON 适配器，
+不再各自判断对象和选择投影参数，也不增加集合复制或分配。
+
+本项逐项采用固定 lockfile 的 Serde JSON 1.0.151 外部接口：
+`Value::as_object_mut` 仅投影原对象可变借用，非对象返回 None；
+`Map::remove` 删除指定完整键，`Map::insert` 插入或替换指定完整键，二者保留其余字段；
+`Value::String` 构造原字符串值，固定 Rust 的 `From<&str> for String` 保留完整文本。
+两次回调只执行上述接口并返回同一对象借用；`Option::map` 只转交原 selection。
+仓内对象分支、参数选择及调用次序不在这些外部假设内。
+
+独立 Verus 预期同时作为 Rust 测试，覆盖无对象时零调用、严格删除后插入、完整字段与
+schema、空元数据、Unicode／NUL／换行保留及已匹配 schema 的情况。
+其 fixture 记录实际调用及完整参数，不冒充 Serde 对象内部模型；现役 snapshot、selector
+与 identity 消费测试继续验证真实 Rust 组合。两项状态根仍执行严格整 crate 证明，
+不新增依赖、工具、证明根、过滤或预算；本项尚须取得候选证明及消费测试原结果。
+JSON 内部语义与完整组合证明、文件到编译及生产调用的完整覆盖和全仓覆盖门仍未完成。
+运行成本增加一个无分配的转发调用；完整构建、验证、CI 和存储成本未测。
+
 registry 的批量组装由 `verified_status.rs::registry_parse_batch` 定义。
 同源规格先核完整返回数量，再按请求顺序核路径、解析当前原字节并更新 bytes／values
 两个 map；任一错误立即返回完整原消息，成功保留已有无关项，重复键采用最后一项。
