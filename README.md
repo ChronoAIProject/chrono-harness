@@ -4,7 +4,7 @@ chrono-harness 帮仓库按登记的依赖选择检查，让本地和 CI 使用�
 
 参与本仓开发请先读 [Git 与 GitHub 协作规范](CONTRIBUTING.md)：分支、提交、Issue／PR 模板、检查、合并、发布与清理统一从这里进入。
 
-供 AI 调用的 PR 工具已有源码入口：独立 Rust `chrono-pr` 支持 `pr-open`、`pr-status`、`pr-watch`，显式绑定 head SHA，输出 JSON 并保留原始进程回执。构建、用法、退出码及验收范围见 [PR 工具](docs/pr.md)；尚未加入公开发布包。
+供 AI 调用的独立 Rust `chrono-pr` 支持 `pr-open`、`pr-status`、`pr-watch`，显式绑定 head SHA，输出 JSON 并保留原始进程回执。当前发布计划已加入该工具；使用前须核对所选固定发布的实际清单和安装结果。构建、用法、退出码及验收范围见 [PR 工具](docs/pr.md)。
 
 这里的“宿主”就是接入工具的仓库；“判官”就是按规则给出结果的检查程序；“DELTA”就是两次提交之间的变化。工具只按明确登记的文件、依赖和操作做事，不靠目录名、语言或扫描代码猜依赖。
 
