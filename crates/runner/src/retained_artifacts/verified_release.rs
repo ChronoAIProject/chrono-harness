@@ -167,6 +167,28 @@ pub fn without(values: &[String], id: &str) -> (out: Vec<String>)
     out
 }
 
+/// 发现阶段的排除和成员保全决策；实际租约及声明 IO 由调用方执行。
+pub struct GateDiscovery {
+    pub object_excluded: bool,
+    pub role_excluded: bool,
+    pub retain_member: bool,
+}
+
+pub fn gate_discovery(membership_only: bool, maintenance: bool, wait: bool, birth: bool)
+    -> (plan: GateDiscovery)
+    ensures
+        plan.object_excluded == (maintenance && !wait && !birth),
+        plan.role_excluded == (membership_only || (maintenance && !wait && !birth)),
+        plan.retain_member == membership_only,
+{
+    let object_excluded = maintenance && !wait && !birth;
+    GateDiscovery {
+        object_excluded,
+        role_excluded: membership_only || object_excluded,
+        retain_member: membership_only,
+    }
+}
+
 /// 所选原件的请求不进入全库事务、输出或消费者枚举。
 pub fn global_maintenance(originals: Option<&[String]>) -> (global: bool)
     ensures global == originals.is_none(),
