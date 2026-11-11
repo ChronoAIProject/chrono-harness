@@ -202,15 +202,12 @@ pub fn identity(
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
     let target = if schema.has_identity() {
         let host = &entry["platforms"][&platform];
-        let present: Vec<_> = identity_targets(host, schema.has_registry_path())?
-            .into_iter()
-            .filter(|target| values.contains_key(*target))
-            .collect();
-        if present.len() != 1 {
-            return Err("registry values require exactly one registered effective policy".into());
-        }
+        let targets = identity_targets(host, schema.has_registry_path())?;
         Some(RegistryTarget {
-            path: present[0],
+            path: crate::verified_git_binding::select_captured_target(
+                &targets,
+                &CapturedRegistry(values),
+            )?,
             sha256: None,
         })
     } else {
@@ -240,6 +237,14 @@ pub fn identity(
         effective_path,
         selection,
     })
+}
+
+struct CapturedRegistry<'a>(&'a std::collections::BTreeMap<String, Value>);
+
+impl crate::verified_git_binding::RegistryMembership for CapturedRegistry<'_> {
+    fn contains_path(&self, path: &str) -> bool {
+        self.0.contains_key(path)
+    }
 }
 
 fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {

@@ -92,6 +92,72 @@ pub fn valid_link(schema: u64, tool: bool, input: bool, unknown: bool) -> (valid
     (schema == 3 || schema == 4) && tool && !unknown && (schema == 4 || input)
 }
 
+/// 只观察捕获的快照是否包含完整路径，不选择目标或读取现役执行物。
+pub trait RegistryMembership {
+    spec fn has_path(&self, path: &str) -> bool;
+
+    fn contains_path(&self, path: &str) -> (present: bool)
+        ensures present == self.has_path(path);
+}
+
+pub open spec fn unique_registry_index<M: RegistryMembership>(
+    paths: Seq<&str>, values: &M, index: int,
+) -> bool {
+    0 <= index < paths.len() && values.has_path(paths[index])
+        && forall|j: int| 0 <= j < paths.len() && j != index ==> !values.has_path(#[trigger] paths[j])
+}
+
+/// 从原登记路径中借出快照唯一包含的一项；缺失或歧义保持原错误。
+pub fn select_captured_target<'a, M: RegistryMembership>(paths: &[&'a str], values: &M)
+    -> (out: Result<&'a str, &'static str>)
+    ensures match out {
+        Ok(path) => exists|i: int| #[trigger] unique_registry_index(paths@, values, i)
+            && paths@[i]@ == path@,
+        Err(message) => message@ == "registry values require exactly one registered effective policy"@
+            && forall|i: int| !#[trigger] unique_registry_index(paths@, values, i),
+    },
+{
+    let message = "registry values require exactly one registered effective policy";
+    let mut selected: Option<usize> = None;
+    let mut i = 0;
+    while i < paths.len()
+        invariant i <= paths.len(),
+            message@ == "registry values require exactly one registered effective policy"@,
+            match selected { Some(s) => s < i, None => true },
+            forall|j: int| 0 <= j < i ==>
+                (values.has_path(#[trigger] paths@[j]) == (selected == Some(j as usize))),
+        decreases paths.len() - i,
+    {
+        if values.contains_path(paths[i]) {
+            if let Some(first) = selected {
+                assert(values.has_path(paths@[first as int]));
+                assert forall|j: int| !#[trigger] unique_registry_index(paths@, values, j) by {
+                    if j == i {
+                        assert(first < j && values.has_path(paths@[first as int]));
+                    } else {
+                        assert(values.has_path(paths@[i as int]));
+                    }
+                }
+                return Err(message);
+            }
+            selected = Some(i);
+        }
+        i += 1;
+    }
+    match selected {
+        Some(index) => {
+            assert(unique_registry_index(paths@, values, index as int));
+            Ok(paths[index])
+        },
+        None => {
+            assert forall|j: int| !#[trigger] unique_registry_index(paths@, values, j) by {
+                if 0 <= j < paths.len() { assert(!values.has_path(paths@[j])); }
+            }
+            Err(message)
+        },
+    }
+}
+
 pub fn valid_version(schema: u64, present: bool, null: bool, text: Option<&str>) -> (valid: bool)
     ensures valid <==> (present && match text {
         Some(value) => value@.len() > 0,
