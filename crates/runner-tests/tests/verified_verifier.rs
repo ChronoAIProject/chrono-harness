@@ -104,16 +104,26 @@ fn explicit_new_data_is_allowed_and_empty_new_program_roots_are_rejected() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn classification_policy_is_explicit_and_unavailable_base_errors_are_preserved() {
+fn classification_continuity_checks_the_base_even_when_candidate_disables_the_rule() {
+    let strict = policy::sources::SourceRegistry {
+        files: Vec::new(), require_new_file_classification: Some(true),
+    };
     let mut current = policy::sources::SourceRegistry {
         files: Vec::new(), require_new_file_classification: None,
     };
-    let unadopted = policy::sources::validate_file_classifications(&current, Err("base\0失败"));
-    expect_verifier_true(unadopted.is_ok());
+    let absent = policy::sources::validate_file_classifications(&current, Ok(Some(&strict)));
+    expect_verifier_true(absent.is_err());
+    let error = absent.unwrap_err();
+    expect_verifier_true(identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: existing classification requirement cannot be disabled: "));
+    expect_verifier_true(identifiers::equal_text(error.path, "require_new_file_classification"));
     current.require_new_file_classification = Some(false);
-    let explicit_false = policy::sources::validate_file_classifications(&current, Err("base\0失败"));
-    expect_verifier_true(explicit_false.is_ok());
-    current.require_new_file_classification = Some(true);
+    let disabled = policy::sources::validate_file_classifications(&current, Ok(Some(&strict)));
+    expect_verifier_true(disabled.is_err());
+    let error = disabled.unwrap_err();
+    expect_verifier_true(identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: existing classification requirement cannot be disabled: "));
+    expect_verifier_true(identifiers::equal_text(error.path, "require_new_file_classification"));
     let missing = policy::sources::validate_file_classifications(&current, Err("base\0失败"));
     expect_verifier_true(missing.is_err());
     let error = missing.unwrap_err();
@@ -121,6 +131,11 @@ fn classification_policy_is_explicit_and_unavailable_base_errors_are_preserved()
         "E_VERUS_COVERAGE: base file classifications unavailable: ");
     let original = identifiers::equal_text(error.path, "base\0失败");
     expect_verifier_true(message && original);
+    let unadopted = policy::sources::SourceRegistry {
+        files: Vec::new(), require_new_file_classification: None,
+    };
+    let unchanged = policy::sources::validate_file_classifications(&current, Ok(Some(&unadopted)));
+    expect_verifier_true(unchanged.is_ok());
     let initial = policy::sources::validate_file_classifications(&current, Ok(None));
     expect_verifier_true(initial.is_ok());
 }
