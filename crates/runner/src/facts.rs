@@ -190,13 +190,15 @@ fn registry_snapshot_with_batches_target(
         &snapshot.effective_path,
     );
     let originals = read(&pending)?;
-    crate::verified_status::registry_acquisition_count(pending.len(), originals.len())?;
-    for (expected, (path, original)) in pending.iter().zip(originals) {
-        crate::verified_status::registry_acquisition_path(expected, &path)?;
-        let value = json(&original)?;
-        snapshot.bytes.insert(path.clone(), original);
-        snapshot.values.insert(path, value);
-    }
+    let (bytes, values) = crate::verified_status::registry_parse_batch(
+        &pending,
+        originals,
+        snapshot.bytes,
+        snapshot.values,
+        json,
+    )?;
+    snapshot.bytes = bytes;
+    snapshot.values = values;
     Ok(snapshot)
 }
 fn registry_snapshot_start(
