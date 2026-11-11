@@ -70,6 +70,63 @@ pub fn registry_snapshot_initial<V>(
 }
 
 
+
+/// 保留非对象；对象先删除原字节摘要，再写入结构化 registry selection schema。
+pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R, insert: I)
+    -> (out: Option<M>)
+    where R: Fn(M, &str) -> M, I: Fn(M, &str, &str) -> M,
+    requires match object {
+        None => true,
+        Some(initial) =>
+            (forall|key: &str| key@ == "sha256"@ ==> remove.requires((initial, key)))
+            && (forall|key: &str, middle: M, field: &str, value: &str|
+                key@ == "sha256"@ && remove.ensures((initial, key), middle)
+                && field@ == "schema"@ && value@ == "chrono-registry-selection/v1"@
+                ==> insert.requires((middle, field, value))),
+    },
+    ensures match (object, out) {
+        (None, None) => true,
+        (Some(initial), Some(normalized)) =>
+            exists|middle: M, removed: &str, field: &str, value: &str|
+                removed@ == "sha256"@ && field@ == "schema"@
+                && value@ == "chrono-registry-selection/v1"@
+                && remove.ensures((initial, removed), middle)
+                && insert.ensures((middle, field, value), normalized),
+        _ => false,
+    },
+{
+    match object {
+        None => None,
+        Some(initial) => {
+            let removed = "sha256";
+            let field = "schema";
+            let value = "chrono-registry-selection/v1";
+            let middle = remove(initial, removed);
+            let normalized = insert(middle, field, value);
+            proof {
+                assert(object == Some(initial));
+                assert(remove.ensures((initial, removed), middle));
+                assert(insert.ensures((middle, field, value), normalized));
+                assert(exists|observed: M, key: &str, target: &str, schema: &str|
+                    key@ == "sha256"@ && target@ == "schema"@
+                    && schema@ == "chrono-registry-selection/v1"@
+                    && remove.ensures((initial, key), observed)
+                    && insert.ensures((observed, target, schema), normalized));
+            }
+            let result = Some(normalized);
+            proof {
+                assert(result->Some_0 == normalized);
+                assert(exists|observed: M, key: &str, target: &str, schema: &str|
+                    key@ == "sha256"@ && target@ == "schema"@
+                    && schema@ == "chrono-registry-selection/v1"@
+                    && remove.ensures((object->Some_0, key), observed)
+                    && insert.ensures((observed, target, schema), result->Some_0));
+            }
+            result
+        },
+    }
+}
+
 /// 标准 JSON 解码仅提供四个固定字段的原字符串观察。
 pub enum RegistryPathError<'a> {
     Missing { message: &'static str },
