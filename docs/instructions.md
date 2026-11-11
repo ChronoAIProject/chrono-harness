@@ -179,7 +179,7 @@ init、init_with_defaults、generate、CLI 和 test-support 统一进入同一�
 | 原件与引用 | intent／plan／备份／result → retention → 后续调用和真实读取者 | 可复用现有保管、租约、引用、封存及删除；只补独立政策入口、原创建续接、返回观察和终态维护选择 | 同一未过滤 test.instructions-tests、test.runner-tests；保留原权限与字节断言 |
 | 决策边界 | 观察事实 → publication_decision、verified_release → 恢复动作、解除引用、终态数量／字节选择 | 原所有者缺少这些实际决策；无需新增服务或独立库存 | verify.instructions-publication／-tests、既有 verify.retention-release／-tests 和 Rust 同源预期 |
 
-这些是源码与验收入口的绑定，实际结论须核原报告。新增构建依赖复用 runner、libc 及仓内固定 Verus 宏；完整构建、验证、维护和存储成本未测。本地指令单元已验证行为、格式及局部同源 Verus 判断，候选 core bootstrap 已通过；runner 保管改动、完整固定候选 DELTA、真实 Linux／macOS 和 integration／dev 交付仍须分别验收，完整 SPEC 继续保持未完成。
+这些是源码与验收入口的绑定，实际结论须核原报告。新增构建依赖复用 runner、libc 及仓内固定 Verus 宏；完整构建、验证、维护和存储成本未测。本地指令行为、runner 保管改动、相关同源 Verus 判断及完整固定候选 DELTA 已验证，候选 core bootstrap 已通过。原生 instructions 单元复用既有 unit bootstrap 核对并解压共享 Verus 包；其原生验收、真实 Linux／macOS、共享协调宿主采用和 integration／dev 交付仍须分别核实，完整 SPEC 继续保持未完成。
 
 本仓验证走[登记的统一入口](ci.md#this-repository)，由明确依赖选择格式检查、生产构建、专属行为测试及适用的同源 Verus 证明。具体参数归 projects／FILEMAP 登记，本文引用该入口。
 
