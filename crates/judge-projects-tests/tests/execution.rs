@@ -340,10 +340,23 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         chrono_judge_routes::compare(&plan, &plan.operations[0], Some(&receipt)).unwrap();
         assert_eq!(receipt.process.exit_code, 7);
         assert_eq!(receipt.process.stdout_bytes, [255, 0]);
-        // Join the one native runner. Its timeout interrupts the real enclosing
-        // executor and accounts for its owned process tree before returning.
+        let partial = directory
+            .path()
+            .join(".chrono-harness/state/projects-run.operation-1");
+        let launch: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(format!("{}.launch.json", partial.display())).unwrap(),
+        )
+        .unwrap();
+        assert!(!partial.join("result.json").exists());
+        let launcher = i32::try_from(launch["launcher_pid"].as_u64().unwrap()).unwrap();
+        // An enclosing timeout cooperatively cancels nested operations, allowing
+        // this producer to publish their terminal results. Interrupt the actual
+        // producer first; the existing runner still joins its owned descendants.
+        assert_eq!(unsafe { libc::kill(launcher, libc::SIGKILL) }, 0);
         let interrupted = worker.join().unwrap();
         drop(held);
+        assert_eq!(interrupted.child_pid, Some(launcher as u32));
+        assert_eq!(interrupted.exit_signal, Some(libc::SIGKILL));
         assert!(interrupted.failure.is_some());
     });
     let state = directory.path().join(".chrono-harness/state/projects-run");
