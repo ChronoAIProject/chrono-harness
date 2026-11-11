@@ -25,6 +25,16 @@ fn fixture_commands_isolate_parent_release_context_and_preserve_explicit_inputs(
                 ("CHRONO_RELEASE_CI_RUN_ID", "1234"),
                 ("CHRONO_RELEASE_CI_ATTEMPT", "2"),
                 ("CHRONO_RELEASE_VERSION", "v1.2.3"),
+                ("GITHUB_ACTIONS", "true"),
+                ("GITHUB_REPOSITORY", "outer/repository"),
+                (
+                    "GITHUB_WORKFLOW_SHA",
+                    "abcdef0123456789abcdef0123456789abcdef01",
+                ),
+                (
+                    "GITHUB_WORKFLOW_REF",
+                    "outer/repository/.github/workflows/release.yml@refs/heads/dev",
+                ),
                 ("CHRONO_FIXTURE_KEEP", "保留其他环境"),
             ]);
             if explicit {
@@ -41,7 +51,7 @@ fn fixture_commands_isolate_parent_release_context_and_preserve_explicit_inputs(
             assert_eq!(
                 observed,
                 json!({
-                    "release":if explicit { json!({"CHRONO_RELEASE_RUN":"fixture-run"}) } else { json!({}) },
+                    "release":if explicit { json!({"CHRONO_RELEASE_RUN":"fixture-run","GITHUB_REPOSITORY":"fixture/repository"}) } else { json!({}) },
                     "keep":"保留其他环境"
                 }),
                 "{channel}, explicit={explicit}"

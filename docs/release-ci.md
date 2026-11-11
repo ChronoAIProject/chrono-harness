@@ -116,7 +116,7 @@ v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、�
 
 Rust `test.host-release-native-tests` 运行全部发布行为测试。真实 distribution pack 使用测试 crate 自行编译的 distribution alias；真实 cache 回归消费暂存到 `crates/cache/target/debug/chrono-cache` 的选中发布资产，并执行 plan→recover→stage→consumer→plan。因此发布验证只依赖 `build_cache`，不依赖发布版 distribution。本地 FILEMAP、shared_operations 和两平台 needs／downloads 同步登记；原两组 Python 验证由这一未过滤 Rust 操作替代。回归核传输摘要、恢复原件及重新规划的执行物身份，不能代替不同编译配置或完整外围 workflow 的验收。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures，collector 仍要求全部真实单元成功。
 
-发布行为测试在创建临时宿主的 CLI／launcher 子进程时，统一移除外层发布的十个控制变量，再显式设置该样本的运行、依赖等输入。否则真实 preview 的源码 SHA 会污染临时仓库，触发正确的源码身份拒绝。普通 CI 中的 Rust 命令替身回归模拟 build／preview／stable 父环境，核对清除继承值、保留显式输入与其他环境；它不调用 Git 或编译器，也不代替两平台原始未过滤测试与公开发布验收。
+发布行为测试在创建临时宿主的 CLI／launcher 子进程时，统一移除外层发布的十个控制变量及四个 GitHub 工作流变量，再显式设置该样本的运行、依赖等输入。否则真实 preview 的源码 SHA 或工作流上下文会污染临时仓库，触发正确的身份拒绝。普通 CI 中的 Rust 命令替身回归模拟 build／preview／stable 父环境，核对清除继承值、保留显式输入与其他环境；它不调用 Git 或编译器，也不代替两平台原始未过滤测试与公开发布验收。
 
 发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。Git 按所选政策一次解析并固定本轮实际身份；显式配置版本或摘要预期时，不符仍在执行前拒绝。运行读数归 state／线上原件，候选是否可用仍须实际验证。
 
@@ -137,6 +137,10 @@ Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，�
 v2 可选 `delivery` 明确登记 `workflow`、`branch` 和 `publisher`。它与直接 push 触发互斥。所有作业检出原完成事件的 `head_sha`；只有发布作业取得 `contents: write` 和 `actions: read`，并接收当前 token。其余作业维持只读。手动输入 `channel` 可为 build、preview 或 stable；公开渠道还须提供固定 `source`、`verified_run` 和 `verified_attempt`。stable 另需 `version`，且必须等于该源码中的正式计划版本。
 
 GitHub 的执行工作流由派发的 `--ref` 决定，`source` 只决定各作业检出的源码。派发前核两个固定修订的发布源、needs／downloads 与构建配方是否匹配；手动正式发布统一用已核验的最终测试版标签作为 `--ref`，标签须解析到完整 source，新 run 的工作流 head 也须一致。不要移动标签。自动 `workflow_run` 使用默认分支的工作流，列表 head 与发行源码可能不同；仅看到 head 不同不能判失败，但实际执行图与候选合同不符时，不能宣称该运行验收了候选。
+
+GitHub 原生 frontend 在导出前读取 `GITHUB_REPOSITORY`、`GITHUB_WORKFLOW_REF` 和 `GITHUB_WORKFLOW_SHA`，核路径等于候选发布源的 `workflow_path`，再用现有全量 Git 检出比较两个固定提交的工作流 blob。提交不同但该文件字节相同可继续；文件不同、绑定缺失或 Git 读取失败则停止导出，业务单元无法取得 frontend。原进程、退出和两条输出流由现有发布执行器记录在 frontend artifact 的 `workflow.json` 及 `processes/`；通过时，`frontend.json.workflow` 保留工作流提交、候选提交、路径和共同 blob。GitHub 外的本地导出将该字段记为 null，不声称验证了远端执行图。此检查复用现有权限和 `fetch-depth: 0`，每平台最多两个固定 blob 读取；新增时间、IO 及整体成本尚未测量。
+
+**发布程序与宿主输入登记同时修改：**frontend 新增读取现役发布源的运行输入边，现有命令 mock 回归覆盖相同源码、无关前移、不同 blob、缺绑定和原 Git 失败；临时宿主同时清除继承的 GitHub 工作流变量，只使用样本显式输入。新候选仍须 canonical、两平台原生导出与全部发布验证，以及真实下游采用；本地 mock 通过不代替这些结果。
 
 发现派发输入不符合本意时，先保留固定修订差异及原运行，终止尚未公开的错误运行，等待最终状态并核发布作业及公开状态，再从匹配 ref 派发。取消后的 collector 可能因缺少 artifact_id 报错；保留真实错误，不把它归成已执行产品测试的回归。这个恢复使用原发布入口和现有权限，不降低必需验证，也不与原运行并行争用同一正式版本。
 

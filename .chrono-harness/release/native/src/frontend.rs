@@ -150,6 +150,25 @@ pub fn export(root: &Path, output: &Path, environment: &Environment) -> Result<(
     )?;
     // create_dir 拒绝任何已有输出，包括链接；失败的部分输出保留供诊断。
     fs::create_dir(output).map_err(error)?;
+    let workflow = if environment
+        .get(OsStr::new("GITHUB_ACTIONS"))
+        .is_some_and(|value| value == "true")
+    {
+        let config = crate::recipe::read_json(&root, ".chrono-harness/ci/release.json")?;
+        Some(crate::delivery::workflow_preflight(
+            &root,
+            output,
+            &loaded,
+            text(&config, "workflow_path")?,
+            source
+                .commit
+                .as_deref()
+                .ok_or("missing frontend source commit")?,
+            environment,
+        )?)
+    } else {
+        None
+    };
     let packed = transport::pack(&root, INSTALLED, &output.join("executable.tar"))?;
     if !same(&packed.executable, &identity) {
         return Err(error("installed frontend changed during export"));
@@ -169,7 +188,7 @@ pub fn export(root: &Path, output: &Path, environment: &Environment) -> Result<(
     }
     let manifest = json!({"schema":"chrono-release-frontend/v1", "source":source,
         "system":native.system,"machine":native.machine,"lineage":lineage,
-        "executable":identity.receipt(&declared.executable),"archive":packed.archive.receipt(),"bootstrap":bootstrap});
+        "executable":identity.receipt(&declared.executable),"archive":packed.archive.receipt(),"bootstrap":bootstrap,"workflow":workflow});
     write(
         output,
         "frontend.json",
