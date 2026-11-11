@@ -35,7 +35,7 @@ fn expect_selector_binding_result(actual: Result<(), &str>, expected: Result<(),
 struct RegistryPathsFixture<'a>(Vec<Option<&'a str>>);
 
 impl<'a> policy::SelectorRegistryRows<'a> for RegistryPathsFixture<'a> {
-    spec fn registry_paths(&self) -> Seq<Option<&'a str>> { self.0@ }
+    open spec fn registry_paths(&self) -> Seq<Option<&'a str>> { self.0@ }
     fn len(&self) -> usize { self.0.len() }
     fn registry_path(&self, index: usize) -> Option<&'a str> { self.0[index] }
 }
@@ -120,7 +120,7 @@ fn selector_invalid_path_echo(path: &str) -> (out: String)
     ensures out@ == path@,
 { path.to_owned() }
 
-fn selector_unused_path_formatter(_: &str) -> String
+fn selector_unused_path_formatter(_unused: &str) -> String
     requires false,
 { panic!() }
 
