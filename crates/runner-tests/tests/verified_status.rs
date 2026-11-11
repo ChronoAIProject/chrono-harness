@@ -3342,6 +3342,106 @@ fn checkout_open_identity_requires_full_permissions_and_size() {
     checkout_open_identity_cases(7, 8, 0o755, 0o754);
 }
 
+fn expect_checkout_sha1(out: Result<policy::CheckoutHashAlgorithm, String>)
+    requires out matches Ok(policy::CheckoutHashAlgorithm::Sha1),
+{
+    match out { Ok(policy::CheckoutHashAlgorithm::Sha1) => {}, _ => panic!() }
+}
+
+fn expect_checkout_sha256(out: Result<policy::CheckoutHashAlgorithm, String>)
+    requires out matches Ok(policy::CheckoutHashAlgorithm::Sha256),
+{
+    match out { Ok(policy::CheckoutHashAlgorithm::Sha256) => {}, _ => panic!() }
+}
+
+fn expect_checkout_algorithm_error(text: &str)
+    requires !scope_text::oid(text.spec_bytes()),
+{
+    match policy::checkout_hash_algorithm(text) {
+        Ok(_) => panic!(),
+        Err(message) => expect_status_text(
+            message.as_str(), "expected full nonzero lowercase commit OID",
+        ),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_sha1_requires_a_complete_valid_forty_byte_oid() {
+    proof {
+        reveal_strlit("0123456789abcdef0123456789abcdef01234567");
+        reveal_strlit("0000000000000000000000000000000000000001");
+        assert(vstd::string::is_ascii("0123456789abcdef0123456789abcdef01234567"));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000001"));
+        vstd::string::is_ascii_spec_bytes("0123456789abcdef0123456789abcdef01234567");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000001");
+        assert("0123456789abcdef0123456789abcdef01234567".spec_bytes()[1] == 49);
+        assert("0000000000000000000000000000000000000001".spec_bytes()[39] == 49);
+    }
+    expect_checkout_sha1(policy::checkout_hash_algorithm("0123456789abcdef0123456789abcdef01234567"));
+    expect_checkout_sha1(policy::checkout_hash_algorithm("0000000000000000000000000000000000000001"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_sha256_requires_a_complete_valid_sixty_four_byte_oid() {
+    proof {
+        reveal_strlit("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        reveal_strlit("0000000000000000000000000000000000000000000000000000000000000001");
+        assert(vstd::string::is_ascii("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000000000000000000000000000001"));
+        vstd::string::is_ascii_spec_bytes("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000000000000000000000000001");
+        assert("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef".spec_bytes()[1] == 49);
+        assert("0000000000000000000000000000000000000000000000000000000000000001".spec_bytes()[63] == 49);
+    }
+    expect_checkout_sha256(policy::checkout_hash_algorithm(
+        "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    ));
+    expect_checkout_sha256(policy::checkout_hash_algorithm(
+        "0000000000000000000000000000000000000000000000000000000000000001",
+    ));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_algorithm_rejects_zero_wrong_lengths_case_and_interior_control_bytes() {
+    proof {
+        reveal_strlit("");
+        reveal_strlit("0000000000000000000000000000000000000000");
+        reveal_strlit("0000000000000000000000000000000000000000000000000000000000000000");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+        assert(vstd::string::is_ascii(""));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000000"));
+        assert(vstd::string::is_ascii("0000000000000000000000000000000000000000000000000000000000000000"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa"));
+        assert(vstd::string::is_ascii("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa"));
+        vstd::string::is_ascii_spec_bytes("");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000");
+        vstd::string::is_ascii_spec_bytes("0000000000000000000000000000000000000000000000000000000000000000");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
+        vstd::string::is_ascii_spec_bytes("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+        assert("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa".spec_bytes()[19] == 65);
+        assert("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa".spec_bytes()[19] == 0);
+        assert("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa".spec_bytes()[19] == 10);
+    }
+    expect_checkout_algorithm_error("");
+    expect_checkout_algorithm_error("0000000000000000000000000000000000000000");
+    expect_checkout_algorithm_error("0000000000000000000000000000000000000000000000000000000000000000");
+    expect_checkout_algorithm_error("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect_checkout_algorithm_error("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+    expect_checkout_algorithm_error("aaaaaaaaaaaaaaaaaaaAaaaaaaaaaaaaaaaaaaaa");
+    expect_checkout_algorithm_error("aaaaaaaaaaaaaaaaaaa\0aaaaaaaaaaaaaaaaaaaa");
+    expect_checkout_algorithm_error("aaaaaaaaaaaaaaaaaaa\naaaaaaaaaaaaaaaaaaaa");
+}
+
 fn expect_checkout_hash_count(out: Result<u64, String>, expected: u64)
     requires out matches Ok(value) && value == expected,
 {
