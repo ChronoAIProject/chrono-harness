@@ -141,10 +141,8 @@ fn evaluate(req: &Request, response: &mut Response, reader: &facts::Reader) -> R
     {
         return Err("initial candidate checkout is dirty or changed".into());
     }
-    if observed
-        .index_flags
-        .iter()
-        .any(|f| f.tag.as_bytes()[0].is_ascii_lowercase() || f.tag.eq_ignore_ascii_case("S"))
+    if chrono_harness::verified_status::first_unsupported_index_flag(&observed.index_flags)
+        .is_some()
     {
         return Err("initial inventory rejects unsupported index flags".into());
     }

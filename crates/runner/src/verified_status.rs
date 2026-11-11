@@ -205,6 +205,76 @@ impl PartialEq for IndexFlag {
 }
 impl Eq for IndexFlag {}
 
+pub enum UnsupportedIndexFlag {
+    AssumeUnchanged,
+    SkipWorktree,
+    Both,
+}
+
+impl UnsupportedIndexFlag {
+    pub open spec fn message_spec(&self) -> Seq<char> {
+        match self {
+            Self::AssumeUnchanged => "assume-unchanged"@,
+            Self::SkipWorktree => "skip-worktree"@,
+            Self::Both => "assume-unchanged and skip-worktree"@,
+        }
+    }
+
+    pub fn message(&self) -> (out: &'static str)
+        ensures out@ == self.message_spec(),
+    {
+        match self {
+            Self::AssumeUnchanged => "assume-unchanged",
+            Self::SkipWorktree => "skip-worktree",
+            Self::Both => "assume-unchanged and skip-worktree",
+        }
+    }
+}
+
+pub open spec fn index_flag_admission(tag: Seq<u8>) -> Option<UnsupportedIndexFlag> {
+    if tag.len() == 1 && tag[0] == 115 { Some(UnsupportedIndexFlag::Both) }
+    else if tag.len() == 1 && tag[0] == 83 { Some(UnsupportedIndexFlag::SkipWorktree) }
+    else if tag.len() > 0 && 97 <= tag[0] <= 122 { Some(UnsupportedIndexFlag::AssumeUnchanged) }
+    else { None }
+}
+
+pub fn unsupported_index_flag(tag: &str) -> (out: Option<UnsupportedIndexFlag>)
+    ensures out == index_flag_admission(tag.spec_bytes()),
+{
+    let bytes = tag.as_bytes();
+    // Git's -v lowercases assume-unchanged; S/s denotes skip-worktree.
+    if bytes.len() == 1 && bytes[0] == 115 { Some(UnsupportedIndexFlag::Both) }
+    else if bytes.len() == 1 && bytes[0] == 83 { Some(UnsupportedIndexFlag::SkipWorktree) }
+    else if bytes.len() > 0 && 97 <= bytes[0] && bytes[0] <= 122 {
+        Some(UnsupportedIndexFlag::AssumeUnchanged)
+    } else { None }
+}
+
+pub fn first_unsupported_index_flag(flags: &[IndexFlag])
+    -> (out: Option<(&IndexFlag, UnsupportedIndexFlag)>)
+    ensures match out {
+        Some((flag, reason)) => exists|i: int| 0 <= i < flags.len() && (#[trigger] flags[i]) == *flag
+            && index_flag_admission(vstd::utf8::encode_utf8(flag.tag@)) == Some(reason)
+            && (forall|j: int| 0 <= j < i ==> index_flag_admission(vstd::utf8::encode_utf8((#[trigger] flags[j]).tag@)).is_none()),
+        None => forall|i: int| 0 <= i < flags.len() ==>
+            index_flag_admission(vstd::utf8::encode_utf8((#[trigger] flags[i]).tag@)).is_none(),
+    },
+{
+    let mut i = 0;
+    while i < flags.len()
+        invariant 0 <= i <= flags.len(),
+            forall|j: int| 0 <= j < i ==> index_flag_admission(vstd::utf8::encode_utf8((#[trigger] flags[j]).tag@)).is_none(),
+        decreases flags.len() - i,
+    {
+        let flag = &flags[i];
+        if let Some(reason) = unsupported_index_flag(flag.tag.as_str()) {
+            return Some((flag, reason));
+        }
+        i += 1;
+    }
+    None
+}
+
 /// 原字节与安全标准 UTF-8 解码的观察。适配层只搬运这两个值。
 pub struct GitIndexFlagObservation<'a> {
     pub raw: &'a [u8],

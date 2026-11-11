@@ -3274,6 +3274,52 @@ fn index_entry_matching_preserves_complete_identity_and_stage_decision() {
     index_nonzero_stage_always_changes("3", "目录/é");
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn index_admission_preserves_first_offending_record_and_reason() {
+    let flags = vec![
+        policy::IndexFlag { tag: "H".to_string(), path: "ok".to_string() },
+        policy::IndexFlag { tag: "S".to_string(), path: "目录/首个".to_string() },
+        policy::IndexFlag { tag: "s".to_string(), path: "later".to_string() },
+    ];
+    proof {
+        reveal_strlit("H"); reveal_strlit("S"); reveal_strlit("s"); reveal_strlit("h");
+        assert(vstd::utf8::encode_scalar(72) == seq![72u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(83) == seq![83u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(104) == seq![104u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(115) == seq![115u8]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 2);
+        assert("H".spec_bytes() =~= seq![72u8]);
+        assert("S".spec_bytes() =~= seq![83u8]);
+        assert("h".spec_bytes() =~= seq![104u8]);
+        assert("s".spec_bytes() =~= seq![115u8]);
+        assert(flags@[0].tag@ == "H"@);
+        assert(flags@[1].tag@ == "S"@);
+        assert(policy::index_flag_admission(vstd::utf8::encode_utf8(flags@[0].tag@)).is_none());
+        assert(policy::index_flag_admission(vstd::utf8::encode_utf8(flags@[1].tag@))
+            == Some(policy::UnsupportedIndexFlag::SkipWorktree));
+    }
+    let result = policy::first_unsupported_index_flag(flags.as_slice());
+    let (entry, reason) = result.unwrap();
+    proof {
+        let i = choose|i: int| 0 <= i < flags.len() && (#[trigger] flags@[i]) == *entry
+            && policy::index_flag_admission(vstd::utf8::encode_utf8(entry.tag@)) == Some(reason)
+            && (forall|j: int| 0 <= j < i ==> policy::index_flag_admission(
+                vstd::utf8::encode_utf8((#[trigger] flags@[j]).tag@)).is_none());
+        if i > 1 {
+            assert(policy::index_flag_admission(vstd::utf8::encode_utf8(flags@[1].tag@)).is_none());
+        }
+        assert(i == 1);
+    }
+    expect_status_text(entry.path.as_str(), "目录/首个");
+    expect_status_text(reason.message(), "skip-worktree");
+    let both = policy::unsupported_index_flag("s").unwrap();
+    expect_status_text(both.message(), "assume-unchanged and skip-worktree");
+    let assume = policy::unsupported_index_flag("h").unwrap();
+    expect_status_text(assume.message(), "assume-unchanged");
+    expect_status_true(policy::unsupported_index_flag("H").is_none());
+    expect_status_true(policy::first_unsupported_index_flag(&[]).is_none());
+}
+
 fn expect_index_flag_error(rows: &[policy::GitIndexFlagObservation], first: usize, expected: &str)
     requires policy::index_flag_observations_bound(rows@),
         first < rows.len(),
