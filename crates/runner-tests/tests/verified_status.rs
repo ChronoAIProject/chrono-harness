@@ -62,7 +62,9 @@ fn expect_some_text(actual: &Option<String>, expected: &str)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn registry_snapshot_completion_keeps_empty_documents_and_absent_selection() {
+fn registry_snapshot_completion_keeps_empty_documents_and_absent_selection()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
     let bytes: std::collections::BTreeMap<String, Vec<u8>> = std::collections::BTreeMap::new();
     let values: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
     let out = policy::registry_snapshot_complete(
@@ -5423,7 +5425,12 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
                 registry_sequence_bytes_facts(bytes@);
             }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
-            expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
+            let old_original = [9u8];
+            proof {
+                assert(registry_sequence_bytes(bytes@)[old] == seq![9u8]);
+                assert(bytes@[old]@ =~= old_original@);
+            }
+            expect_registry_pair(&bytes, &values, &old, &old_original, u64::MAX);
             let original = [1u8, 0, 255];
             proof {
                 assert(registry_sequence_bytes(bytes@)[key] == seq![1u8, 0, 255]);
