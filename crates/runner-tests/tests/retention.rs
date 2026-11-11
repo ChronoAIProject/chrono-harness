@@ -73,6 +73,11 @@ mod retention_state;
 fn ledger(root: &Path) -> Value {
     retention_state::snapshot(root)
 }
+fn output_retired(root: &Path, id: &str) -> bool {
+    let state: Value =
+        serde_json::from_slice(&fs::read(retention_state::object_path(root, id)).unwrap()).unwrap();
+    state["output"].is_null()
+}
 
 #[test]
 #[cfg(unix)]
@@ -1810,11 +1815,16 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
             .begin_rooted("fixture", &input_path, json!(null), &["current".into()])
             .unwrap();
         let input_id = input.id().to_owned();
-        // An unfinished dependency requires the full component, including its
-        // consumers. Finalized originals use the independent report frontier.
+        // Refusal must concern the actual report consumer/path. Its unfinished
+        // input and that input's consumer remain independently protected.
         let report_path = tree(h.path(), "obsolete-report");
         let report = inventory(h.path())
-            .begin("fixture", &report_path, json!(null))
+            .begin_rooted(
+                "fixture",
+                &report_path,
+                json!(null),
+                &["report-current".into()],
+            )
             .unwrap();
         let report_id = report.id().to_owned();
         inventory(h.path())
@@ -1828,7 +1838,7 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
         let other_id = other.id().to_owned();
         other.complete(json!({"exit": 0})).unwrap();
         let busy_directory = if busy == "consumer" {
-            retention_state::role_path(h.path(), "current")
+            retention_state::role_path(h.path(), "report-current")
                 .parent()
                 .unwrap()
                 .to_path_buf()
@@ -1871,6 +1881,9 @@ fn component_discovery_releases_metadata_when_a_consumer_or_path_is_busy() {
         assert!(!h.path().join(&other_path).exists());
         drop(holder);
         input.complete(json!({"exit": 7})).unwrap();
+        inventory(h.path())
+            .reference("report-current", &[])
+            .unwrap();
         inventory(h.path())
             .maintain_originals(&[report_id])
             .unwrap();
@@ -2018,7 +2031,8 @@ fn bounded_disposal_does_not_rewrite_unchanged_dependency_declarations() {
     assert_eq!(partial["output"]["phase"], "disposing");
     assert_eq!(partial["output"]["outcome"]["exit"], 17);
 
-    for _ in 0..8 {
+    // Five tree entries and eight edges advance in distinct bounded steps.
+    for _ in 0..5 + originals.len() + 2 {
         let round = inventory(h.path())
             .maintain_originals(&[report_id.clone()])
             .unwrap();
@@ -2027,11 +2041,12 @@ fn bounded_disposal_does_not_rewrite_unchanged_dependency_declarations() {
             "{round}"
         );
         assert!(round["nodes"].as_u64().unwrap() <= 2, "{round}");
-        if !h.path().join(&report_path).exists() {
+        if output_retired(h.path(), &report_id) {
             break;
         }
     }
     assert!(!h.path().join(&report_path).exists());
+    assert!(output_retired(h.path(), &report_id));
     for (id, path) in originals {
         assert_eq!(fs::read(h.path().join(path)).unwrap(), b"current original");
         let record: Value =
@@ -4581,7 +4596,7 @@ fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisit
         assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
-        if !h.path().join(report).exists() {
+        if output_retired(h.path(), &report_id) {
             break;
         }
     }
@@ -4685,7 +4700,7 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
         assert_eq!(round["remaining_outputs"], Value::Null, "{round}");
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
-        if !h.path().join(path).exists() {
+        if output_retired(h.path(), &selected) {
             break;
         }
     }
@@ -4779,7 +4794,7 @@ fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
         assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
-        if !h.path().join(report).exists() {
+        if output_retired(h.path(), &report_id) {
             break;
         }
     }
@@ -4806,6 +4821,144 @@ fn finalized_original_consumer_lease_does_not_block_released_report() {
 }
 
 #[test]
+fn released_report_detaches_many_originals_with_bounded_durable_progress() {
+    if !isolated_capability_test(
+        "released_report_detaches_many_originals_with_bounded_durable_progress",
+    ) {
+        return;
+    }
+    let h = host(8, 128);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(64);
+    policy["max_millis_per_round"] = json!(25);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut originals = Vec::new();
+    for n in 0..52 {
+        let path = format!(".chrono-harness/state/fixtures/required-{n}");
+        let bytes = format!("original failure {n}");
+        fs::write(h.path().join(&path), &bytes).unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.complete(json!({"exit": 7})).unwrap();
+        originals.push((id, path, bytes));
+    }
+    let ids: Vec<_> = originals.iter().map(|(id, _, _)| id.clone()).collect();
+    inventory(h.path())
+        .reference("actual-recheck", &ids)
+        .unwrap();
+    let role = retention_state::role_path(h.path(), "actual-recheck");
+    let role_before = fs::read(&role).unwrap();
+    let report = ".chrono-harness/state/fixtures/many-originals-report";
+    let bytes = b"expired report for 52 required originals";
+    fs::write(h.path().join(report), bytes).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", report, json!(null))
+        .unwrap();
+    let report_id = publication.id().to_owned();
+    inventory(h.path()).dependencies(&report_id, &ids).unwrap();
+    publication.complete(json!({"exit": 0})).unwrap();
+    let record = retention_state::object_path(h.path(), &report_id);
+    let report_reader = inventory(h.path()).consume(&report_id).unwrap();
+    let live = inventory(h.path())
+        .maintain_originals(&[report_id.clone()])
+        .unwrap();
+    assert!(h.path().join(report).exists(), "{live}");
+    assert!(live["disposed"].as_array().unwrap().is_empty(), "{live}");
+    assert!(
+        live["metadata_inventory_entries"].as_u64().unwrap() <= 2,
+        "{live}"
+    );
+    drop(report_reader);
+
+    let mut rounds = Vec::new();
+    let mut removed = 0;
+    let mut previous_references = ids.len();
+    let mut checked_replacement = false;
+    for _ in 0..ids.len() + 8 {
+        // Reopen the owner on every call: progress must survive process loss.
+        let round = inventory(h.path())
+            .maintain_originals(&[report_id.clone()])
+            .unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert!(
+            round["metadata_inventory_entries"].as_u64().unwrap() <= 2,
+            "{round}"
+        );
+        assert!(round["nodes"].as_u64().unwrap() <= 8, "{round}");
+        assert!(
+            round["verified_bytes"].as_u64().unwrap() <= 1048576,
+            "{round}"
+        );
+        removed += round["removed_logical_bytes"].as_u64().unwrap();
+        let state: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+        if state["output"].is_null() {
+            rounds.push(round);
+            break;
+        }
+        let references = state["output"]["references"].as_array().unwrap().len();
+        assert!(references <= previous_references, "{state}");
+        if references < previous_references {
+            assert!(
+                !h.path().join(report).exists(),
+                "edges released before report bytes"
+            );
+            assert_eq!(state["output"]["phase"], "disposing");
+            assert!(inventory(h.path()).consume(&report_id).is_err());
+            assert!(
+                inventory(h.path())
+                    .reference("late-reader", &[report_id.clone()])
+                    .is_err()
+            );
+            if !checked_replacement {
+                fs::write(
+                    h.path().join(report),
+                    b"replacement is not the retired report",
+                )
+                .unwrap();
+                let replacement = inventory(h.path())
+                    .maintain_originals(&[report_id.clone()])
+                    .unwrap();
+                assert_eq!(replacement["removed_logical_bytes"], 0, "{replacement}");
+                let preserved: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+                assert_eq!(
+                    preserved["output"]["references"],
+                    state["output"]["references"]
+                );
+                assert_eq!(
+                    fs::read(h.path().join(report)).unwrap(),
+                    b"replacement is not the retired report"
+                );
+                fs::remove_file(h.path().join(report)).unwrap();
+                checked_replacement = true;
+            }
+        }
+        previous_references = references;
+        rounds.push(round);
+    }
+    let final_state: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert!(final_state["output"].is_null(), "{rounds:?}; {final_state}");
+    assert!(checked_replacement);
+    assert_eq!(removed, bytes.len() as u64, "{rounds:?}");
+    assert!(!h.path().join(report).exists());
+    assert_eq!(fs::read(role).unwrap(), role_before);
+    for (id, path, bytes) in originals {
+        assert_eq!(fs::read(h.path().join(path)).unwrap(), bytes.as_bytes());
+        let original: Value =
+            serde_json::from_slice(&fs::read(retention_state::object_path(h.path(), &id)).unwrap())
+                .unwrap();
+        assert_eq!(original["incoming"], json!([]));
+        assert_eq!(original["output"]["outcome"]["exit"], 7);
+        assert_eq!(original["roles"], json!(["actual-recheck"]));
+    }
+}
+
+#[test]
 fn finalized_original_path_lease_does_not_block_released_report() {
     released_report_with_busy_retained_original(
         "finalized_original_path_lease_does_not_block_released_report",
@@ -4814,9 +4967,9 @@ fn finalized_original_path_lease_does_not_block_released_report() {
 }
 
 #[test]
-fn unfinished_report_dependency_restores_finalized_original_consumer_exclusion() {
+fn report_retirement_preserves_unfinished_originals_and_their_busy_consumers() {
     if !isolated_capability_test(
-        "unfinished_report_dependency_restores_finalized_original_consumer_exclusion",
+        "report_retirement_preserves_unfinished_originals_and_their_busy_consumers",
     ) {
         return;
     }
@@ -4848,35 +5001,52 @@ fn unfinished_report_dependency_restores_finalized_original_consumer_exclusion()
         .unwrap();
     let report_id = result.id().to_owned();
     inventory(h.path())
-        .dependencies(&report_id, &[original_id, unfinished_id])
+        .dependencies(&report_id, &[original_id.clone(), unfinished_id.clone()])
         .unwrap();
     result.complete(json!({"exit": 0})).unwrap();
+    let original_outputs: Vec<_> = [&original_id, &unfinished_id]
+        .into_iter()
+        .map(|id| {
+            let record = retention_state::object_path(h.path(), id);
+            let state: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+            (record, state["output"].clone())
+        })
+        .collect();
     let role = retention_state::role_path(h.path(), "actual-original-consumer");
     let role_before = fs::read(&role).unwrap();
     let exclusion =
         chrono_harness::ownership::DirectoryLease::acquire(role.parent().unwrap(), true, None)
             .unwrap()
             .unwrap();
-    let refused = inventory(h.path())
-        .maintain_originals(&[report_id])
+    let mut rounds = Vec::new();
+    for _ in 0..4 {
+        let round = inventory(h.path())
+            .maintain_originals(&[report_id.clone()])
+            .unwrap();
+        assert!(
+            round["accounting_errors"].as_array().unwrap().is_empty(),
+            "{round}"
+        );
+        assert!(
+            round["metadata_inventory_entries"].as_u64().unwrap() <= 2,
+            "{round}"
+        );
+        rounds.push(round);
+        let state: Value = serde_json::from_slice(
+            &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+        )
         .unwrap();
-    assert!(
-        refused["accounting_errors"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|error| {
-                error["reason"]
-                    .as_str()
-                    .is_some_and(|reason| reason.contains("consumer metadata is busy"))
-            }),
-        "{refused}"
-    );
-    assert!(
-        refused["disposed"].as_array().unwrap().is_empty(),
-        "{refused}"
-    );
-    assert_eq!(fs::read(h.path().join(report)).unwrap(), b"obsolete report");
+        if state["output"].is_null() {
+            break;
+        }
+    }
+    assert!(!h.path().join(report).exists(), "{rounds:?}");
+    assert!(output_retired(h.path(), &report_id), "{rounds:?}");
+    for (path, output) in original_outputs {
+        let state: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+        assert_eq!(state["output"], output);
+        assert_eq!(state["incoming"], json!([]));
+    }
     assert_eq!(
         fs::read(h.path().join(original)).unwrap(),
         b"required original"
