@@ -3278,6 +3278,41 @@ pub fn checkout_entry_matches<P, F, B, E, L, M, FE, R, HL, O, FM, HF, C>(
 }
 
 
+pub open spec fn git_blob_match_result<'a, A, B>(
+    oid: &str, size: usize, bytes: &'a [u8], sha1: A, sha256: B, matches: bool,
+) -> bool
+    where A: Fn(usize, &'a [u8]) -> String,
+          B: Fn(usize, &'a [u8]) -> String,
+{
+    if bytes.len() != size { !matches }
+    else if oid.spec_bytes().len() == 40 {
+        exists|digest: String| sha1.ensures((size, bytes), digest)
+            && matches == (digest@ == oid@)
+    } else {
+        exists|digest: String| sha256.ensures((size, bytes), digest)
+            && matches == (digest@ == oid@)
+    }
+}
+
+/// 声明长度先于哈希；只调用原 OID 字节宽度选中的接口，保留原参数及完整摘要比较。
+pub fn git_blob_matches<'a, A, B>(
+    oid: &str, size: usize, bytes: &'a [u8], sha1: A, sha256: B,
+) -> (matches: bool)
+    where A: Fn(usize, &'a [u8]) -> String,
+          B: Fn(usize, &'a [u8]) -> String,
+    requires if bytes.len() == size {
+        if oid.spec_bytes().len() == 40 { sha1.requires((size, bytes)) }
+        else { sha256.requires((size, bytes)) }
+    } else { true },
+    ensures git_blob_match_result(oid, size, bytes, sha1, sha256, matches),
+{
+    if bytes.len() != size { return false; }
+    let digest = if oid.as_bytes().len() == 40 { sha1(size, bytes) } else { sha256(size, bytes) };
+    let matches = identifiers::equal_text(digest.as_str(), oid);
+    assert(git_blob_match_result(oid, size, bytes, sha1, sha256, matches));
+    matches
+}
+
 pub enum CheckoutHashAlgorithm {
     Sha1,
     Sha256,
