@@ -50,7 +50,7 @@ CI 专属测试同时统一复用已有的 `chrono-ci-test-cli`，由相同生�
 
 cache 专属测试直接编译生产 CLI，恢复及封存样本绑定同一执行物的真实身份。两平台 `verify_cache_tests` 不再等待、下载或暂存 cache 发布资产，原未过滤操作保留；native 发布测试与最终打包仍消费生产 cache，完整发布成本收益未测。
 
-runner 专属测试也直接编译生产 `main.rs`，通过 Cargo 提供的路径调用测试 CLI。两平台的 `verify_runner_tests` 不再依赖、下载或暂存 runner 发布资产，仍执行原未过滤操作。其他验证和最终打包继续消费生产 runner；完整发布成本收益未测。
+runner 专属测试也直接编译生产 `main.rs`，通过 Cargo 提供的路径调用测试 CLI。两平台的 `verify_runner_tests` 不再依赖、下载或暂存 runner 发布资产，仍执行原未过滤操作。worktree 两平台的 `verify_worktree_tests` 也改用 Cargo 从同一生产 `main.rs` 编译的 runner 测试 CLI，删除 runner 发布资产的依赖、下载和消费声明，仍消费 CI 输入程序。其他验证和最终打包继续消费生产 runner；测试根保留原锁、开发配置、未过滤操作及断言，完整发布成本收益未测。
 
 distribution 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，再经真实安装入口核对字节、权限和回执。两平台的 `verify_distribution_tests` 不再依赖、下载或暂存 distribution 发布资产，原未过滤操作与断言保留。生产 `build_distribution`、最终打包和实际安装仍消费发布资产；完整发布成本收益未测。
 
