@@ -869,6 +869,49 @@ pub open spec fn previously_classified(files: Seq<SourceFile>, path: Seq<char>, 
         && files[i].verification.is_some()
 }
 
+pub open spec fn proof_bearing(file: &SourceFile) -> bool {
+    match &file.verification {
+        Some(declaration) => matches!(declaration.role, SourceRole::Program | SourceRole::Specification),
+        None => false,
+    }
+}
+
+pub open spec fn data_classification(file: &SourceFile) -> bool {
+    match &file.verification {
+        Some(declaration) => matches!(declaration.role, SourceRole::Data),
+        None => false,
+    }
+}
+
+pub open spec fn previously_proof_bearing(files: Seq<SourceFile>, path: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < files.len() && (#[trigger] files[i]).path@ == path
+        && proof_bearing(&files[i])
+}
+
+fn had_proof_obligation(files: &Vec<SourceFile>, path: &str) -> (found: bool)
+    ensures found == previously_proof_bearing(files@, path@),
+{
+    let mut i = 0;
+    while i < files.len()
+        invariant 0 <= i <= files.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] files[j]).path@ != path@
+                || !proof_bearing(&files[j]),
+        decreases files.len() - i,
+    {
+        let file = &files[i];
+        if super::equal_text(file.path.as_str(), path) {
+            if let Some(declaration) = &file.verification {
+                if matches!(declaration.role, SourceRole::Program | SourceRole::Specification) {
+                    assert(proof_bearing(&files@[i as int]));
+                    return true;
+                }
+            }
+        }
+        i += 1;
+    }
+    false
+}
+
 fn classification_history(files: &Vec<SourceFile>, path: &str) -> (history: (bool, bool))
     ensures history.0 == previous_file(files@, path@, files.len() as int),
         history.1 == previously_classified(files@, path@, files.len() as int),
@@ -894,7 +937,9 @@ fn classification_history(files: &Vec<SourceFile>, path: &str) -> (history: (boo
 pub open spec fn classification_file_error(
     file: &SourceFile, previous: Seq<SourceFile>,
 ) -> Option<Seq<char>> {
-    if file.verification.is_none() {
+    if data_classification(file) && previously_proof_bearing(previous, file.path@) {
+        Some("E_VERUS_COVERAGE: proof-bearing file was reclassified as data: "@)
+    } else if file.verification.is_none() {
         if !previous_file(previous, file.path@, previous.len() as int) {
             Some("E_VERUS_COVERAGE: new file lacks explicit verification classification: "@)
         } else if previously_classified(previous, file.path@, previous.len() as int) {
@@ -915,6 +960,15 @@ fn validate_file_classification<'a>(
             && error.path@ == file.path@,
     },
 {
+    if let Some(declaration) = &file.verification {
+        if matches!(declaration.role, SourceRole::Data)
+            && had_proof_obligation(previous, file.path.as_str()) {
+            return Err(CoverageError {
+                message: "E_VERUS_COVERAGE: proof-bearing file was reclassified as data: ",
+                path: file.path.as_str(),
+            });
+        }
+    }
     if file.verification.is_some() && valid_source_declaration(file) { return Ok(()); }
     let history = classification_history(previous, file.path.as_str());
     if file.verification.is_none() {
