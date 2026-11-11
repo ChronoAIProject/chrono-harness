@@ -103,8 +103,11 @@ pub fn admit_selector_object(fields: Option<usize>, has_platforms: bool)
 pub fn admit_selector_platforms<T>(object: Option<(&T, usize)>)
     -> (out: Result<&T, &'static str>)
     ensures match out {
-        Ok(platforms) => exists|count: usize| count > 0 && object == Some((platforms, count)),
-        Err(error) => (object.is_none() || object.unwrap().1 == 0)
+        Ok(platforms) => match object {
+            Some((original, count)) => count > 0 && platforms == original,
+            None => false,
+        },
+        Err(error) => (match object { Some((_, count)) => count == 0, None => true })
             && error@ == "Git config selector requires nonempty platforms"@,
     },
 {
