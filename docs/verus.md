@@ -618,7 +618,14 @@ Git 对象哈希的算法选择直接消费同根 `checkout_hash_algorithm`：
 `expected full nonzero lowercase commit OID`，不截取、归一化或提前读取文件。
 独立 Verus 预期核两种长度、混合小写十六进制、仅末位非零，以及全零、39／41 字节、
 内部大写、NUL 和换行的拒绝与原错误；同一预期在普通 Rust 中运行。
-`object_hash` 只把已证明的算法变体交给原 SHA-1／SHA-256 实例，不再另判长度或保留不可达兜底。
+实际分派由同根 `checkout_object_hash` 拥有：无效 OID 在哈希前保留原错误；有效的
+40／64 字节 OID 分别把同一个 size 和读取源交给 SHA-1／SHA-256，并完整返回同一次实际结果。
+前置条件只要求实际选中的回调可调用；无效 OID 不要求任何哈希回调可调用。
+实际 `object_hash` 直接传入原 `hash::<Sha1>`／`hash::<Sha256>` 函数项；
+仓内 `hash` 的读取循环继续消费已证明的 `checkout_hash_stream`，没有新增受信函数。
+五组独立 Verus 预期同时进入普通 Rust 测试：两个算法各核成功摘要和完整错误，
+核对 0／u64::MAX 大小、原源值及 Unicode／NUL／换行全文；空、短和全零 OID 在哈希前拒绝。
+未选中的替身在证明中不可调用，普通 Rust 中一旦调用就失败，核对实际分派与拒绝顺序。
 固定直接依赖的 `sha1::Sha1`、`sha2::Sha256` 及其 `Digest` 接口提供实际密码学运算；
 这是明确外部库接口，不授予仓内 `hash`、读循环、头部构造或摘要编码任何信任豁免，
 也不据此宣称整个 checkout 已证明。复用原状态证明根、FILEMAP、工具、参数和预算，

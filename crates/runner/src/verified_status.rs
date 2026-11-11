@@ -2582,6 +2582,30 @@ pub fn checkout_hash_algorithm(text: &str) -> (out: Result<CheckoutHashAlgorithm
     }
 }
 
+/// 只调用已准入的哈希分支，并完整转交原输入与同一次实际结果。
+pub fn checkout_object_hash<S, A, B>(
+    oid: &str, size: u64, source: S, sha1: A, sha256: B,
+) -> (out: Result<String, String>)
+    where A: Fn(u64, S) -> Result<String, String>,
+          B: Fn(u64, S) -> Result<String, String>,
+    requires if identifiers::oid(oid.spec_bytes()) {
+        if oid.spec_bytes().len() == 40 { sha1.requires((size, source)) }
+        else { sha256.requires((size, source)) }
+    } else { true },
+    ensures if identifiers::oid(oid.spec_bytes()) {
+        if oid.spec_bytes().len() == 40 { sha1.ensures((size, source), out) }
+        else { sha256.ensures((size, source), out) }
+    } else {
+        out matches Err(error) && error@ == "expected full nonzero lowercase commit OID"@
+    },
+{
+    match checkout_hash_algorithm(oid) {
+        Err(error) => Err(error),
+        Ok(CheckoutHashAlgorithm::Sha1) => sha1(size, source),
+        Ok(CheckoutHashAlgorithm::Sha256) => sha256(size, source),
+    }
+}
+
 pub open spec fn checkout_hash_advance_spec(total: u64, size: u64, chunk: u64)
     -> Result<u64, Seq<char>>
 {
