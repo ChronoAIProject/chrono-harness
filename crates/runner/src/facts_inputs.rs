@@ -96,14 +96,20 @@ fn observe(root: &Path, entries: &[Value]) -> Result<Value, String> {
             root.join(path)
         };
         let identity = observe_file(&path).map_err(|e| format!("Git input {id}: {e}"))?;
-        let observation = match identity {
-            None if input["presence"] == "absent" => json!({"presence":"absent","location":path}),
-            Some((digest, length))
-                if input["presence"] == "present" && input["sha256"] == digest =>
-            {
+        let admitted = verified_git_binding::admit_git_guard_observation(
+            id,
+            input["presence"].as_str(),
+            input["sha256"].as_str(),
+            identity
+                .as_ref()
+                .map(|(digest, length)| (digest.as_str(), *length)),
+        )
+        .map_err(|(prefix, id, suffix)| format!("{prefix}{id}{suffix}"))?;
+        let observation = match admitted {
+            None => json!({"presence":"absent","location":path}),
+            Some((digest, length)) => {
                 json!({"presence":"present","location":path,"sha256":digest,"length":length})
             }
-            _ => return Err(format!("Git input {id} digest/presence mismatch")),
         };
         files.insert(id, observation);
     }
