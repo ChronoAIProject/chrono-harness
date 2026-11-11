@@ -1510,7 +1510,7 @@ impl Inventory {
             Manifest::validate(&input.manifest.entries[0], &self.root)?;
             let role = self.consumer_role(&format!("publication-recheck:{}", input.id))?;
             if let Some(ids) = ledger.roots.get(&role) {
-                if !verified::same_members(ids, &[input.id.clone()]) {
+                if !crate::verified_release::same_members(ids, &[input.id.clone()]) {
                     return Err("caller original handoff root differs".into());
                 }
                 leases.extend(self.original_leases(
