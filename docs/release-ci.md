@@ -56,6 +56,8 @@ cache 专属测试直接编译生产 CLI，恢复及封存样本绑定同一执�
 
 runner 专属测试也直接编译生产 `main.rs`，通过 Cargo 提供的路径调用测试 CLI。两平台的 `verify_runner_tests` 不再依赖、下载或暂存 runner 发布资产，仍执行原未过滤操作。worktree 两平台的 `verify_worktree_tests` 也改用 Cargo 从同一生产 `main.rs` 编译的 runner 测试 CLI，删除 runner 发布资产的依赖、下载和消费声明，仍消费 CI 输入程序。其他验证和最终打包继续消费生产 runner；测试根保留原锁、开发配置、未过滤操作及断言，完整发布成本收益未测。
 
+judge-ci 两平台的 `verify_judge_ci_tests` 由测试项目编译 runner 和 judge-ci 两个生产入口，使用 Cargo 提供的 CLI 路径验证真实调用；不再依赖、下载或暂存 runner 发布资产。发布前端及原未过滤验证操作保留，测试根沿用原锁、开发配置、断言、线程和时限；两平台完整发布与公开采用仍须单独验收，完整成本收益未测。
+
 distribution 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，再经真实安装入口核对字节、权限和回执。两平台的 `verify_distribution_tests` 不再依赖、下载或暂存 distribution 发布资产，原未过滤操作与断言保留。生产 `build_distribution`、最终打包和实际安装仍消费发布资产；完整发布成本收益未测。
 
 inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI。两平台的 `verify_inputs_tests` 移除 inputs 发布资产的依赖、下载和消费声明，仍消费生产 runner 与七个判官，执行原未过滤操作。生产 `build_inputs`、其他真实使用方和最终打包保留；完整发布成本收益未测。

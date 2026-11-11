@@ -1459,21 +1459,40 @@ impl Inventory {
     }
     /// Hand off explicitly declared process originals to an already sealed, rooted
     /// consumer output. The caller holds read guards and has verified actual bytes.
-    /// Reuse the existing consumer transfer; never create a second durable root.
+    /// Exclude and validate every publisher declaration, then release their
+    /// interim roots together; the destination already owns every dependency.
     pub fn settle_publication_inputs(
         &self,
         destination: &str,
         paths: &[String],
     ) -> Result<(), String> {
-        let gate = self.addressed_gate(
-            &[],
-            &[paths, &[destination.into()]].concat(),
-            &[],
-            None,
-            false,
-            true,
-        )?;
+        let addressed_paths = [paths, &[destination.into()]].concat();
+        let gate = self.addressed_gate(&[], paths, &[], None, false, true)?;
         let ledger = self.load(&gate)?;
+        let originals = paths
+            .iter()
+            .map(|path| {
+                let input = ledger
+                    .outputs
+                    .iter()
+                    .find(|o| o.path == *path)
+                    .ok_or("publication handoff input is not enrolled")?;
+                Ok(OriginalIdentity {
+                    id: input.id.clone(),
+                    path: input.path.clone(),
+                    identity: input.identity.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let roles = originals
+            .iter()
+            .map(|input| self.consumer_role(&format!("publication-recheck:{}", input.id)))
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(gate);
+        // Ordinary path discovery projects roots onto its selected objects.
+        // Explicit roles bring every publisher's full declaration under exclusion.
+        let gate = self.addressed_gate(&[], &addressed_paths, &roles, None, false, true)?;
+        let mut ledger = self.load(&gate)?;
         let output = ledger
             .outputs
             .iter()
@@ -1486,13 +1505,17 @@ impl Inventory {
             return Err("publication handoff destination is not sealed and protected".into());
         }
         let mut transfers = Vec::new();
-        for path in paths {
+        let mut leases = Vec::new();
+        for (original, role) in originals.iter().zip(&roles) {
+            let path = &original.path;
             let input = ledger
                 .outputs
                 .iter()
                 .find(|o| o.path == *path)
                 .ok_or("publication handoff input is not enrolled")?;
-            if input.id == output.id
+            if input.id != original.id
+                || input.identity != original.identity
+                || input.id == output.id
                 || !output.references.contains(&input.id)
                 || input.phase != "released"
                 || !input.manifest.sealed
@@ -1506,19 +1529,16 @@ impl Inventory {
                 return Err("publication handoff requires a sealed process file".into());
             }
             Manifest::validate(&input.manifest.entries[0], &self.root)?;
-            let consumer = format!("publication-recheck:{}", input.id);
-            if ledger.roots.contains_key(&self.consumer_role(&consumer)?) {
-                transfers.push(Consumer {
-                    schema: "chrono-retention-consumer/v1".into(),
-                    consumer,
-                    purpose: "Verified process originals accepted by the sealed domain result"
-                        .into(),
-                    originals: vec![OriginalIdentity {
-                        id: input.id.clone(),
-                        path: input.path.clone(),
-                        identity: input.identity.clone(),
-                    }],
-                });
+            if let Some(ids) = ledger.roots.get(role) {
+                if !crate::verified_release::same_members(ids, &[input.id.clone()]) {
+                    return Err("caller original handoff root differs".into());
+                }
+                leases.extend(self.original_leases(
+                    &ledger,
+                    std::slice::from_ref(original),
+                    false,
+                )?);
+                transfers.push(role.clone());
             }
         }
         // A completed handoff remains a no-op after the domain root is released.
@@ -1526,9 +1546,14 @@ impl Inventory {
         if !transfers.is_empty() && !ledger.roots.values().any(|ids| ids.contains(&output.id)) {
             return Err("publication handoff destination is not sealed and protected".into());
         }
-        drop(gate);
-        for consumer in transfers {
-            self.transfer_consumer(&consumer, destination)?;
+        for role in &transfers {
+            self.reference_locked(&mut ledger, role, &[])?;
+        }
+        if !transfers.is_empty() {
+            self.save(&ledger, &gate)?;
+        }
+        for lease in &leases {
+            self.remember_input(lease)?;
         }
         Ok(())
     }
