@@ -7,11 +7,11 @@ use crate::{
     },
     verified_status::{
         CheckoutHashAlgorithm, CheckoutPhysicalObservation, checkout_changed_paths,
-        checkout_entry_supported, checkout_hash_advance, checkout_hash_algorithm,
-        checkout_hash_complete, checkout_index_changes, checkout_metadata_observation,
-        checkout_opened_file_matches, checkout_parent_observation, checkout_physical_targets,
-        checkout_regular_file_matches, checkout_symbolic_link, parse_git_index_rows,
-        parse_git_tree_rows, record_checkout_physical_observations,
+        checkout_entry_supported, checkout_hash_algorithm, checkout_hash_stream,
+        checkout_index_changes, checkout_metadata_observation, checkout_opened_file_matches,
+        checkout_parent_observation, checkout_physical_targets, checkout_regular_file_matches,
+        checkout_symbolic_link, parse_git_index_rows, parse_git_tree_rows,
+        record_checkout_physical_observations,
     },
 };
 use sha1::Sha1;
@@ -81,21 +81,28 @@ fn hash<D: Digest>(size: u64, source: &mut impl Read) -> Result<String, String> 
     let mut digest = D::new();
     digest.update(format!("blob {size}\0").as_bytes());
     let mut buffer = [0u8; 65536];
-    let mut total = 0u64;
-    loop {
-        let n = source.read(&mut buffer).map_err(|e| e.to_string())?;
-        if n == 0 {
-            break;
-        }
-        total = checkout_hash_advance(total, size, n as u64)?;
-        digest.update(&buffer[..n]);
-    }
-    checkout_hash_complete(total, size)?;
-    Ok(digest
-        .finalize()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect())
+    checkout_hash_stream(
+        size,
+        source,
+        digest,
+        &mut buffer,
+        |source: &mut _, buffer: &mut [u8; 65536]| {
+            let result = Read::read(source, buffer).map_err(|error| error.to_string());
+            (source, buffer, result)
+        },
+        AsRef::<[u8]>::as_ref,
+        |mut digest: D, bytes: &[u8]| {
+            digest.update(bytes);
+            digest
+        },
+        |digest: D| {
+            digest
+                .finalize()
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect()
+        },
+    )
 }
 fn object_hash(oid: &str, size: u64, source: &mut impl Read) -> Result<String, String> {
     match checkout_hash_algorithm(oid)? {

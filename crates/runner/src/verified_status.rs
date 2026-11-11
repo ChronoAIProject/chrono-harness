@@ -2442,6 +2442,176 @@ pub fn checkout_hash_complete(total: u64, size: u64) -> (out: Result<(), String>
     else { Err("checkout file shrank during observation".to_owned()) }
 }
 
+
+#[verifier::opaque]
+pub open spec fn checkout_hash_stream_step<S, B, D, R, V, U>(
+    before: (S, B, D, u64), after: (S, B, D, u64), size: u64,
+    read: R, view: V, update: U,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>),
+          V: Fn(&B) -> &[u8], U: Fn(D, &[u8]) -> D,
+{
+    exists|count: usize, bytes: &[u8], chunk: &[u8]|
+        count > 0 && count <= bytes.len()
+        && read.ensures((before.0, before.1), (after.0, after.1, Ok::<usize, String>(count)))
+        && view.ensures((&after.1,), bytes)
+        && chunk@ == bytes@.subrange(0, count as int)
+        && checkout_hash_advance_spec(before.3, size, count as u64) == Ok::<u64, Seq<char>>(after.3)
+        && update.ensures((before.2, chunk), after.2)
+}
+
+pub open spec fn checkout_hash_stream_prefix<S, B, D, R, V, U>(
+    states: Seq<(S, B, D, u64)>, initial: (S, B, D, u64), size: u64,
+    read: R, view: V, update: U,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>),
+          V: Fn(&B) -> &[u8], U: Fn(D, &[u8]) -> D,
+{
+    states.len() > 0 && states[0] == initial
+        && states.len() <= states.last().3 as int + 1
+        && (forall|i: int| 0 <= i < states.len() ==> (#[trigger] states[i]).3 <= size)
+        && (forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] checkout_hash_stream_step(states[i], states[i + 1], size, read, view, update))
+}
+
+pub open spec fn checkout_hash_stream_terminal<S, B, D, R, F>(
+    before: (S, B, D, u64), observation: (S, B, Result<usize, String>),
+    size: u64, read: R, finalize: F, out: Result<String, String>,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), F: Fn(D) -> String,
+{
+    read.ensures((before.0, before.1), observation)
+        && match observation.2 {
+            Err(error) => match out { Err(message) => message@ == error@, Ok(_) => false },
+            Ok(count) => if count == 0 {
+                if before.3 == size {
+                    match out { Ok(value) => finalize.ensures((before.2,), value), Err(_) => false }
+                } else {
+                    match out { Err(message) => message@ == "checkout file shrank during observation"@, Ok(_) => false }
+                }
+            } else {
+                match (checkout_hash_advance_spec(before.3, size, count as u64), out) {
+                    (Err(expected), Err(message)) => message@ == expected,
+                    _ => false,
+                }
+            },
+        }
+}
+
+pub open spec fn checkout_hash_stream_result<S, B, D, R, V, U, F>(
+    initial: (S, B, D, u64), size: u64,
+    read: R, view: V, update: U, finalize: F, out: Result<String, String>,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>),
+          V: Fn(&B) -> &[u8], U: Fn(D, &[u8]) -> D, F: Fn(D) -> String,
+{
+    exists|states: Seq<(S, B, D, u64)>, observation: (S, B, Result<usize, String>)|
+        checkout_hash_stream_prefix(states, initial, size, read, view, update)
+            && checkout_hash_stream_terminal(states.last(), observation, size, read, finalize, out)
+}
+
+// 真实读取、完整错误与摘要接口通过回调转交；轨迹只在证明中保留，没有运行时副本。
+pub fn checkout_hash_stream<S, D, B, R, V, U, F>(
+    size: u64, input_source: S, input_digest: D, input_buffer: B,
+    read: R, view: V, update: U, finalize: F,
+) -> (out: Result<String, String>)
+    where R: Fn(S, B) -> (S, B, Result<usize, String>),
+          V: Fn(&B) -> &[u8], U: Fn(D, &[u8]) -> D, F: Fn(D) -> String,
+    requires
+        forall|buffer: &B| #[trigger] view.requires((buffer,)),
+        forall|state: S, buffer: B| #[trigger] read.requires((state, buffer)),
+        forall|state: S, buffer: B, result: (S, B, Result<usize, String>)|
+            #[trigger] read.ensures((state, buffer), result) ==>
+                (forall|bytes: &[u8]| #[trigger] view.ensures((&result.1,), bytes)
+                    ==> match result.2 { Ok(count) => count <= bytes.len(), Err(_) => true }),
+        forall|state: D, bytes: &[u8]| #[trigger] update.requires((state, bytes)),
+        forall|state: D| #[trigger] finalize.requires((state,)),
+    ensures checkout_hash_stream_result((input_source, input_buffer, input_digest, 0), size, read, view, update, finalize, out),
+{
+    let ghost initial = (input_source, input_buffer, input_digest, 0u64);
+    let ghost states = seq![initial];
+    let mut source = input_source;
+    let mut buffer = input_buffer;
+    let mut digest = input_digest;
+    let mut total = 0u64;
+    loop
+        invariant total <= size,
+            initial == (input_source, input_buffer, input_digest, 0u64),
+            states.last() == (source, buffer, digest, total),
+            checkout_hash_stream_prefix(states, initial, size, read, view, update),
+            forall|buffer: &B| #[trigger] view.requires((buffer,)),
+            forall|state: S, buffer: B| #[trigger] read.requires((state, buffer)),
+            forall|state: S, buffer: B, result: (S, B, Result<usize, String>)|
+                #[trigger] read.ensures((state, buffer), result) ==>
+                    (forall|bytes: &[u8]| #[trigger] view.ensures((&result.1,), bytes)
+                        ==> match result.2 { Ok(count) => count <= bytes.len(), Err(_) => true }),
+            forall|state: D, bytes: &[u8]| #[trigger] update.requires((state, bytes)),
+            forall|state: D| #[trigger] finalize.requires((state,)),
+        decreases size - total,
+    {
+        assert(checkout_hash_stream_prefix(states, initial, size, read, view, update));
+        let observation = read(source, buffer);
+        let ghost observed = observation;
+        let (next_source, next_buffer, result) = observation;
+        source = next_source;
+        buffer = next_buffer;
+        let count = match result {
+            Err(error) => {
+                assert(checkout_hash_stream_terminal(states.last(), observed, size, read, finalize, Err(error)));
+                assert(checkout_hash_stream_result(initial, size, read, view, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(count) => count,
+        };
+        if count == 0 {
+            match checkout_hash_complete(total, size) {
+                Err(error) => {
+                    assert(checkout_hash_stream_terminal(states.last(), observed, size, read, finalize, Err(error)));
+                    assert(checkout_hash_stream_result(initial, size, read, view, update, finalize, Err(error)));
+                    return Err(error);
+                },
+                Ok(()) => {
+                    let output = finalize(digest);
+                    assert(checkout_hash_stream_terminal(states.last(), observed, size, read, finalize, Ok(output)));
+                    assert(checkout_hash_stream_result(initial, size, read, view, update, finalize, Ok(output)));
+                    return Ok(output);
+                },
+            }
+        }
+        let next = match checkout_hash_advance(total, size, count as u64) {
+            Err(error) => {
+                assert(checkout_hash_stream_terminal(states.last(), observed, size, read, finalize, Err(error)));
+                assert(checkout_hash_stream_result(initial, size, read, view, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(next) => next,
+        };
+        assert(next > total);
+        let bytes = view(&buffer);
+        #[cfg(verus_keep_ghost)]
+        let chunk = vstd::slice::slice_subrange(bytes, 0, count);
+        #[cfg(not(verus_keep_ghost))]
+        let chunk = &bytes[0..count];
+        digest = update(digest, chunk);
+        let ghost after = (source, buffer, digest, next);
+        assert(checkout_hash_stream_step(states.last(), after, size, read, view, update)) by {
+            reveal(checkout_hash_stream_step);
+        }
+        proof {
+            let previous = states;
+            states = states.push(after);
+            assert forall|i: int| 0 <= i < states.len() - 1 implies
+                #[trigger] checkout_hash_stream_step(states[i], states[i + 1], size, read, view, update) by {
+                if i < previous.len() - 1 {
+                    assert(checkout_hash_stream_step(previous[i], previous[i + 1], size, read, view, update));
+                }
+            }
+        }
+        total = next;
+    }
+}
+
+
 pub open spec fn git_tree_row_at(rows: Seq<&str>, i: int) -> Result<GitTreeRowBytes, GitInventoryErrorView> {
     git_tree_row_spec(rows[i].spec_bytes())
 }
