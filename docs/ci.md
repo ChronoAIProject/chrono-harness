@@ -307,7 +307,7 @@ v4 的工作流只调用 `check`、`check --unit ID` 或 `check --collect`，输
 
 专属测试在已提交无父宿主上，以真实 runner／registration 进程消费生成 profile，覆盖未登记文件拒绝、空格路径、其他 cwd，以及旧明确存储／stdout 报告身份。短检查显示状态、有限诊断、不可变原报告位置，消费者读取已有完整文件。
 
-公开[初始宿主示例](https://github.com/ChronoAIProject/chrono-harness-examples-initial)锁定独立 beta.20 发布，保留该发布的生成 v2 CI；历史采用曾验证真实无父首次 push，之后在 integration／PR／dev 执行普通文档 DELTA。它明确登记 macOS arm64／`macos-14` 和该平台初始判官摘要。真实证据及范围见[示例索引](examples.md)，不证明跨平台初始 profile、完整 bootstrap 来源／输入、治理启用或确定同判。
+公开[初始宿主示例](https://github.com/ChronoAIProject/chrono-harness-examples-initial)已采用当前固定测试版、schema4 短命令和生成的 v4 CI，明确登记 macOS arm64／`macos-26` 与该发行平台的初始判官摘要。空业务库存、独立首次清单及普通 DELTA 的区别继续保留。当前版本通过真实 integration／dev 的普通文档 DELTA；无父首次 push 仅有历史验收，未在该候选重新执行。版本、交付和边界见[示例索引](examples.md)，不证明跨平台初始 profile、完整 bootstrap 来源／输入、治理启用或确定同判。
 
 ### push 基线与生成流程
 
