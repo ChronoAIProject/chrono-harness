@@ -892,7 +892,8 @@ impl Inventory {
         wait: bool,
         membership_only: bool,
     ) -> Result<Gate, String> {
-        let discover_under_lease = maintenance && !wait && birth.is_none();
+        let discovery = verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
+        let discover_under_lease = discovery.object_excluded;
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
@@ -943,7 +944,7 @@ impl Inventory {
                 .find(|role| !observed_roles.contains_key(*role))
                 .cloned();
             if let Some(role) = next_role {
-                if discover_under_lease || membership_only {
+                if discovery.role_excluded {
                     let directory = self.role_directory(&role)?;
                     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
                     leases.push(
@@ -1009,7 +1010,7 @@ impl Inventory {
                 );
             }
             let record = self.read_object(&id, &directory)?;
-            if membership_only {
+            if discovery.retain_member {
                 // Observation transitions own the role and member declarations,
                 // not their output dependencies. Keep every member excluded and
                 // preserve its edges without reading another publisher's graph.
@@ -1074,7 +1075,7 @@ impl Inventory {
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
             let directory = self.role_directory(&role)?;
-            let actual = if discover_under_lease || membership_only {
+            let actual = if discovery.role_excluded {
                 expected
             } else {
                 fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
