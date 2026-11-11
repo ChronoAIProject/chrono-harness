@@ -3307,7 +3307,7 @@ pub fn git_blob_matches<'a, A, B>(
     ensures git_blob_match_result(oid, size, bytes, sha1, sha256, matches),
 {
     if bytes.len() != size { return false; }
-    let digest = if oid.len() == 40 { sha1(size, bytes) } else { sha256(size, bytes) };
+    let digest = if oid.as_bytes().len() == 40 { sha1(size, bytes) } else { sha256(size, bytes) };
     let matches = identifiers::equal_text(digest.as_str(), oid);
     assert(git_blob_match_result(oid, size, bytes, sha1, sha256, matches));
     matches

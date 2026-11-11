@@ -3712,9 +3712,10 @@ fn blob_match_long_digest(size: usize, bytes: &[u8]) -> (out: String)
 
 fn blob_match_full_digest(size: usize, bytes: &[u8]) -> (out: String)
     requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
-    ensures out@ == "digest: é\0original\nend"@,
+    ensures out@ == "digest: é\0original\nend"@, out@[0] == 'd',
 {
     blob_match_original_input(size, bytes);
+    proof { reveal_strlit("digest: é\0original\nend"); }
     "digest: é\0original\nend".to_owned()
 }
 
@@ -3797,6 +3798,8 @@ fn blob_match_preserves_complete_unicode_nul_and_line_text() {
     proof {
         reveal_strlit("digest: é\0original\nend");
         reveal_strlit("digest: é\0original\nEnd");
+        assert(exact@[19] == 'e');
+        assert(different@[19] == 'E');
         assert(exact@ != different@);
     }
     expect_status_true(policy::git_blob_matches(exact, 4, &bytes,
@@ -3842,6 +3845,7 @@ fn checkout_dispatch_never(_size: u64, _source: u8) -> Result<String, String>
 
 fn checkout_dispatch_short_oid() -> (text: &'static str)
     ensures policy::identifiers::oid(text.spec_bytes()), text.spec_bytes().len() == 40,
+        text@ == "1111111111111111111111111111111111111111"@, text@[0] == '1',
 {
     let text = "1111111111111111111111111111111111111111";
     proof {
@@ -3855,6 +3859,8 @@ fn checkout_dispatch_short_oid() -> (text: &'static str)
 
 fn checkout_dispatch_long_oid() -> (text: &'static str)
     ensures policy::identifiers::oid(text.spec_bytes()), text.spec_bytes().len() == 64,
+        text@ == "1111111111111111111111111111111111111111111111111111111111111111"@,
+        text@[0] == '1',
 {
     let text = "1111111111111111111111111111111111111111111111111111111111111111";
     proof {
@@ -5603,6 +5609,8 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
             proof {
                 registry_sequence_bytes_facts(initial.1);
                 registry_sequence_bytes_facts(bytes@);
+                assert(registry_sequence_bytes(bytes@)[old] == seq![9u8]);
+                assert(bytes@[old]@ =~= seq![9u8]);
             }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
             expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
