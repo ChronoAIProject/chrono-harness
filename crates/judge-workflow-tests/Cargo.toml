@@ -12,6 +12,7 @@ test = false
 bench = false
 
 [dependencies]
+chrono-judge-workflow = { path = "../judge-workflow" }
 chrono-worktree = { path = "../worktree" }
 chrono-harness = { path = "../runner" }
 serde = { version = "1", features = ["derive"] }
@@ -24,9 +25,14 @@ test = false
 bench = false
 
 [dev-dependencies]
-chrono-judge-workflow = { path = "../judge-workflow" }
 chrono-judge-registration = { path = "../judge-registration" }
 tempfile = "3"
+
+[[bin]]
+name = "chrono-judge-workflow-test-cli"
+path = "../judge-workflow/src/main.rs"
+test = false
+bench = false
 
 [[bin]]
 name = "chrono-worktree-test-cli"

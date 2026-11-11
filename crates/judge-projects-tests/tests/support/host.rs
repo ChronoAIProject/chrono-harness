@@ -26,13 +26,17 @@ pub enum FixtureProbe {
 
 pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureProbe) -> String {
     let source = source().join(format!("crates/{project}/target/debug/{binary}"));
+    install_executable(root, &source, binary, probe)
+}
+
+pub fn install_executable(root: &Path, source: &Path, binary: &str, probe: FixtureProbe) -> String {
     assert!(source.is_file(), "build {}", source.display());
     let destination = root.join(format!(".chrono-harness/bin/{binary}"));
     assert!(matches!(fs::symlink_metadata(&destination), Err(error)
         if error.kind() == std::io::ErrorKind::NotFound));
     // A joined copy owns all writable descriptors before concurrent test
     // children can inherit them. Each host retains its own executable file.
-    copied_fixture_input(root, &source, &destination);
+    copied_fixture_input(root, source, &destination);
     let copied = capture_native(root, Command::new("/bin/cp").arg(source).arg(&destination));
     assert!(copied.status.success(), "fixture installation: {copied:?}");
     let digest = sha256(&fs::read(&destination).unwrap());
