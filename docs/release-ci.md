@@ -132,6 +132,10 @@ Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，�
 
 v2 可选 `delivery` 明确登记 `workflow`、`branch` 和 `publisher`。它与直接 push 触发互斥。所有作业检出原完成事件的 `head_sha`；只有发布作业取得 `contents: write` 和 `actions: read`，并接收当前 token。其余作业维持只读。手动输入 `channel` 可为 build、preview 或 stable；公开渠道还须提供固定 `source`、`verified_run` 和 `verified_attempt`。stable 另需 `version`，且必须等于该源码中的正式计划版本。
 
+GitHub 的执行工作流由派发的 `--ref` 决定，`source` 只决定各作业检出的源码。派发前核两个固定修订的发布源、needs／downloads 与构建配方是否匹配；手动正式发布统一用已核验的最终测试版标签作为 `--ref`，标签须解析到完整 source，新 run 的工作流 head 也须一致。不要移动标签。自动 `workflow_run` 使用默认分支的工作流，列表 head 与发行源码可能不同；仅看到 head 不同不能判失败，但实际执行图与候选合同不符时，不能宣称该运行验收了候选。
+
+发现派发输入不符合本意时，先保留固定修订差异及原运行，终止尚未公开的错误运行，等待最终状态并核发布作业及公开状态，再从匹配 ref 派发。取消后的 collector 可能因缺少 artifact_id 报错；保留真实错误，不把它归成已执行产品测试的回归。这个恢复使用原发布入口和现有权限，不降低必需验证，也不与原运行并行争用同一正式版本。
+
 preview 版本由计划版本核心、原 CI run／attempt 和完整源码提交组成，例如 `v0.1.0-dev.1234.2.g<40位SHA>`。相同原 CI 身份重试得到同一版本；不同源码或 CI attempt 得到不同版本。单元、验证、collector 与 publisher 核同一身份。普通 build 使用计划版本，走完平台原件核验及组合打包后保留 Actions artifacts，不调用公开 Release API。
 
 发布者核对当前依赖选择的平台原报告、完整原件摘要和全部资产；公开前另核原 CI 的工作流 ID、路径、push 事件、dev 分支、完整源码、attempt 和真实成功状态。它复用受验的 `chrono-distribution assemble`，输出固定版本的 release.json、install.sh 及平台二进制；随后创建 draft，上传缺少的资产，核 GitHub 返回的 size／sha256 后公开，并重新读取 Release、资产与实际标签源码。
