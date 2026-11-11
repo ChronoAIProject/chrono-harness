@@ -4,6 +4,7 @@ pub fn fixture_binary(project: &str, binary: &str) -> PathBuf {
     match (project, binary) {
         ("ci", "chrono-ci") => env!("CARGO_BIN_EXE_chrono-ci-test-cli").into(),
         ("worktree", "chrono-worktree") => env!("CARGO_BIN_EXE_chrono-worktree-test-cli").into(),
+        ("judge-ci", "chrono-judge-ci") => env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli").into(),
         _ => Path::new(env!("CARGO_MANIFEST_DIR"))
             .join(format!("../{project}/target/debug/{binary}")),
     }

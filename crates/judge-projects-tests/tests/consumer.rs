@@ -268,7 +268,7 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
     let mut h = Host::new(true);
     let root = h.root();
     let profile = ".chrono-harness/scoped.json";
-    let original = source().join("crates/judge-ci/target/debug/chrono-judge-ci");
+    let original = std::path::Path::new(env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"));
     let destination = root.join(".chrono-harness/bin/chrono-judge-ci");
     host::copied_fixture_input(&root, &original, &destination);
     fs::copy(original, destination).unwrap();
@@ -1187,7 +1187,7 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
         .as_array_mut()
         .unwrap()
         .push(file(scoped_registration, json!([])));
-    let profile = json!({"schema":"chrono-ci-check/v3", "judge":{"program":source().join("crates/judge-ci/target/debug/chrono-judge-ci"),"args":[],"timeout_seconds":120,"output_limit_bytes":8388608},
+    let profile = json!({"schema":"chrono-ci-check/v3", "judge":{"program":env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"),"args":[],"timeout_seconds":120,"output_limit_bytes":8388608},
         "report_path":".chrono-harness/state/scoped.json", "policy":{
         "filemap":FM,"projects":PROJECTS,"registration_config":scoped_registration,
         "tools":{"cargo":cargo,"fixture":h.tool},
