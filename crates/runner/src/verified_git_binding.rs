@@ -85,6 +85,54 @@ pub fn admit_git_selector_target(version: Option<u64>, schema_present: bool)
     else { Err("Git config selector requires a direct full-v3 policy or v4 policy, never another selector") }
 }
 
+pub open spec fn required_text_matches(observed: Option<&str>, expected: &str) -> bool {
+    match observed {
+        Some(text) => text@ == expected@,
+        None => false,
+    }
+}
+
+fn matches_required(observed: Option<&str>, expected: &str) -> (valid: bool)
+    ensures valid == required_text_matches(observed, expected),
+{
+    match observed {
+        Some(text) => identifiers::equal_text(text, expected),
+        None => false,
+    }
+}
+
+/// 目标策略必须声明执行物；缺声明先于任一字段不匹配。
+pub fn admit_selector_binding(
+    program: &str,
+    digest: &str,
+    tool: Option<&str>,
+    input: Option<(Option<&str>, Option<&str>)>,
+) -> (out: Result<(), &'static str>)
+    ensures match input {
+        None => out == Err::<(), &'static str>("Git identity selector requires a declared executable input"),
+        Some((location, sha256)) => {
+            if required_text_matches(tool, program) && required_text_matches(location, program)
+                && required_text_matches(sha256, digest)
+            {
+                out == Ok::<(), &'static str>(())
+            } else {
+                out == Err::<(), &'static str>("Git config selector identity differs from selected policy binding")
+            }
+        },
+    },
+{
+    let Some((location, sha256)) = input else {
+        return Err("Git identity selector requires a declared executable input");
+    };
+    if matches_required(tool, program) && matches_required(location, program)
+        && matches_required(sha256, digest)
+    {
+        Ok(())
+    } else {
+        Err("Git config selector identity differs from selected policy binding")
+    }
+}
+
 pub fn valid_link(schema: u64, tool: bool, input: bool, unknown: bool) -> (valid: bool)
     ensures valid <==> ((schema == 3 || schema == 4) && tool && !unknown
         && (schema == 4 || input)),
