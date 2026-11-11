@@ -1944,7 +1944,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_ci_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["linux_release_frontend","linux_build_runner","linux_build_judge_ci"]
+    needs: ["linux_release_frontend","linux_build_runner"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -1968,7 +1968,6 @@ jobs:
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_12
       - *chrono_release_download_11
-      - *chrono_release_download_3
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5001,7 +5000,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_ci_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["macos_release_frontend","macos_build_runner","macos_build_judge_ci"]
+    needs: ["macos_release_frontend","macos_build_runner"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5025,7 +5024,6 @@ jobs:
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_25
       - *chrono_release_download_24
-      - *chrono_release_download_16
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash

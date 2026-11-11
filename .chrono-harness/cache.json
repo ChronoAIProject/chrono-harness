@@ -1092,7 +1092,6 @@
       "producer": "build.judge-ci",
       "consumers": [
         "check.unit_ci",
-        "check.unit_judge-ci",
         "check.unit_judge-projects"
       ],
       "artifacts": [
