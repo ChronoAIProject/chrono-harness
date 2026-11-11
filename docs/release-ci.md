@@ -26,6 +26,8 @@ chrono-ci verify --host-root HOST --config .chrono-harness/ci/release.json
 
 ## 本仓采用
 
+**PR 分发与宿主发布登记同改：**发布计划新增 `chrono-pr`，两平台各增加 `build_pr`，collector 显式接收其资产及回执；原 `verify_pr_tests` 不增加发布资产依赖。两个生产构建使用现有按平台缓存入口，明确登记 PR 源码、manifest／lock 和 target，恢复后仍执行原构建、封存及保存。未增加平台、权限、测试门或发布控制层；新增构建、传输与存储成本未知。实际公开清单、安装和安装后的 PR 调用须核当前候选的原结果。
+
 [发布源](../.chrono-harness/ci/release.json)明确列出 macOS 和 Linux。早期 v1 每平台一个 job，执行同一顺序入口；当前采用 v2。完整本地入口仍为：
 
 ```sh

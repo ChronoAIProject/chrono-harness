@@ -1035,7 +1035,8 @@
         "linux_verify_host_bootstrap_native_tests",
         "linux_verify_host_bootstrap_launcher_tests",
         "linux_verify_pr_tests",
-        "linux_verify_host_release_native_tests"
+        "linux_verify_host_release_native_tests",
+        "linux_build_pr"
       ],
       "downloads": [
         {
@@ -1185,6 +1186,10 @@
         {
           "job": "linux_verify_host_release_native_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_host_release_native_tests/"
+        },
+        {
+          "job": "linux_build_pr",
+          "directory": ".chrono-harness/cache/release-handoffs/build_pr/"
         }
       ],
       "always": true,
@@ -2219,7 +2224,8 @@
         "macos_verify_host_bootstrap_native_tests",
         "macos_verify_host_bootstrap_launcher_tests",
         "macos_verify_pr_tests",
-        "macos_verify_host_release_native_tests"
+        "macos_verify_host_release_native_tests",
+        "macos_build_pr"
       ],
       "downloads": [
         {
@@ -2369,6 +2375,10 @@
         {
           "job": "macos_verify_host_release_native_tests",
           "directory": ".chrono-harness/cache/release-handoffs/verify_host_release_native_tests/"
+        },
+        {
+          "job": "macos_build_pr",
+          "directory": ".chrono-harness/cache/release-handoffs/build_pr/"
         }
       ],
       "always": true,
@@ -2951,6 +2961,60 @@
           "job": "publish",
           "directory": ".chrono-harness/cache/release-publication/"
         },
+        {
+          "job": "macos_release_frontend",
+          "directory": ".chrono-harness/cache/release-frontend/"
+        }
+      ]
+    },
+    {
+      "id": "linux_build_pr",
+      "runs_on": "ubuntu-24.04",
+      "timeout_minutes": 45,
+      "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
+        "/bin/bash",
+        ".chrono-harness/release/consume.sh",
+        ".",
+        ".chrono-harness/cache/release-frontend",
+        ".chrono-harness/cache/release-results/build_pr",
+        "--unit",
+        "build_pr"
+      ],
+      "artifact_name": "chrono-release-linux-build_pr",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_pr/",
+      "needs": [
+        "linux_release_frontend"
+      ],
+      "downloads": [
+        {
+          "job": "linux_release_frontend",
+          "directory": ".chrono-harness/cache/release-frontend/"
+        }
+      ]
+    },
+    {
+      "id": "macos_build_pr",
+      "runs_on": "macos-26",
+      "timeout_minutes": 45,
+      "command": [
+        "/usr/bin/env",
+        "CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo",
+        "/bin/bash",
+        ".chrono-harness/release/consume.sh",
+        ".",
+        ".chrono-harness/cache/release-frontend",
+        ".chrono-harness/cache/release-results/build_pr",
+        "--unit",
+        "build_pr"
+      ],
+      "artifact_name": "chrono-release-macos-build_pr",
+      "artifact_directory": ".chrono-harness/cache/release-results/build_pr/",
+      "needs": [
+        "macos_release_frontend"
+      ],
+      "downloads": [
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
@@ -3834,6 +3898,34 @@
         "consumer": "release.macos_verify_cache_tests",
         "caches": [
           "release.macos.verify.cache-tests"
+        ]
+      },
+      "linux_build_pr": {
+        "need": "在现有 linux 发布平台构建 PR 工具，交由最终打包和固定版本安装入口消费。",
+        "output_use": "恢复已登记的 PR target 后执行原发布构建和资产交接；保存核验后的结果供后续兼容构建复用。",
+        "prepare": [
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.linux_build_pr",
+        "caches": [
+          "release.linux.release.pr"
+        ]
+      },
+      "macos_build_pr": {
+        "need": "在现有 macos 发布平台构建 PR 工具，交由最终打包和固定版本安装入口消费。",
+        "output_use": "恢复已登记的 PR target 后执行原发布构建和资产交接；保存核验后的结果供后续兼容构建复用。",
+        "prepare": [
+          "/bin/bash",
+          ".chrono-harness/ci/bootstrap-native.sh",
+          ".",
+          ".chrono-harness/ci/bootstrap-cache.json"
+        ],
+        "consumer": "release.macos_build_pr",
+        "caches": [
+          "release.macos.release.pr"
         ]
       }
     }
