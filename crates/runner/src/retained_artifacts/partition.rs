@@ -78,10 +78,14 @@ pub(super) struct Gate {
     roles: RefCell<BTreeMap<String, Role>>,
     paths: BTreeMap<String, PathBuf>,
     maintenance: bool,
+    retiring_report: Option<String>,
     retained_dependencies: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
 impl Gate {
+    pub(super) fn retiring_report(&self, id: &str) -> bool {
+        self.retiring_report.as_deref() == Some(id)
+    }
     pub(super) fn retained_dependencies(&self) -> &BTreeSet<String> {
         &self.retained_dependencies
     }
@@ -422,6 +426,7 @@ impl Inventory {
             roles: RefCell::new(BTreeMap::new()),
             paths: directories,
             maintenance: false,
+            retiring_report: None,
             retained_dependencies: BTreeSet::new(),
             unvisited_relations: BTreeSet::new(),
         })
@@ -906,6 +911,7 @@ impl Inventory {
             .then(|| selected.iter().next().unwrap().clone());
         let mut deferred_initial = false;
         let mut report_frontier = false;
+        let mut retiring_report = None;
         let mut retained_dependencies = BTreeSet::new();
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
@@ -957,9 +963,15 @@ impl Inventory {
                     retained_dependencies.insert(id.clone());
                 } else {
                     let output = record.output.as_ref().unwrap();
-                    selected.extend(output.references.iter().cloned());
                     report_frontier = record.incoming.is_empty() && record.roles.is_empty();
-                    if !report_frontier {
+                    if report_frontier {
+                        // Retire this consumer before releasing its originals.
+                        // Only one outgoing edge can change in this bounded
+                        // pass; the source keeps every other edge durably.
+                        retiring_report = Some(id.clone());
+                        selected.extend(output.references.first().cloned());
+                    } else {
+                        selected.extend(output.references.iter().cloned());
                         selected.extend(record.incoming.iter().cloned());
                     }
                 }
@@ -989,29 +1001,10 @@ impl Inventory {
                 deferred_initial = true;
                 continue;
             }
-            if report_frontier && !finalized(&record) {
-                // Unknown or unfinished dependencies need the existing full
-                // closure. Keep every exclusion already acquired while adding
-                // the relations omitted from earlier finalized dependencies.
-                report_frontier = false;
-                for previous in &retained_dependencies {
-                    let record: &Object =
-                        observed.get(previous).ok_or("dependency was not read")?;
-                    wanted_roles.extend(record.roles.iter().cloned());
-                    selected.extend(record.incoming.iter().cloned());
-                    selected.extend(
-                        record
-                            .output
-                            .iter()
-                            .flat_map(|o| o.references.iter().cloned()),
-                    );
-                }
-                retained_dependencies.clear();
-            }
             if report_frontier {
-                // Only the released report may retire here. Its finalized
-                // originals remain excluded and retained while their incoming
-                // edge is updated; their consumers and bytes remain untouched.
+                // Only the released report may retire here. This original is
+                // excluded solely to detach that edge after the report's bytes
+                // are gone. Its phase, consumers and bytes remain untouched.
                 retained_dependencies.insert(id.clone());
                 observed.insert(id, record);
                 continue;
@@ -1132,10 +1125,11 @@ impl Inventory {
         }
         for record in records.values() {
             if !retained_dependencies.contains(&record.id)
-                && (record
-                    .output
-                    .as_ref()
-                    .is_some_and(|o| o.references.iter().any(|id| !records.contains_key(id)))
+                && ((retiring_report.as_ref() != Some(&record.id)
+                    && record
+                        .output
+                        .as_ref()
+                        .is_some_and(|o| o.references.iter().any(|id| !records.contains_key(id))))
                     || (maintenance
                         && (record.incoming.iter().any(|id| !records.contains_key(id))
                             || record
@@ -1149,10 +1143,13 @@ impl Inventory {
                 );
             }
         }
-        let unvisited_relations = retained_dependencies
-            .iter()
-            .flat_map(|id| {
-                let record = &records[id];
+        let unvisited_relations = records
+            .values()
+            .filter(|record| {
+                retained_dependencies.contains(&record.id)
+                    || retiring_report.as_ref() == Some(&record.id)
+            })
+            .flat_map(|record| {
                 record
                     .incoming
                     .iter()
@@ -1167,6 +1164,7 @@ impl Inventory {
             roles: RefCell::new(role_records),
             paths: path_dirs,
             maintenance,
+            retiring_report,
             retained_dependencies,
             unvisited_relations,
         })
@@ -1199,7 +1197,7 @@ impl Inventory {
             }
             ledger.summaries.extend(record.summaries.clone());
             ledger.retired_leases.extend(record.retired_leases.clone());
-            // These finalized objects are explicit roots for this retirement.
+            // These originals are explicit roots for this retirement.
             // Their metadata stays excluded, but no consumer membership changes
             // and no physical disposal of their bytes is permitted.
             if gate.retained_dependencies.contains(&record.id) {
