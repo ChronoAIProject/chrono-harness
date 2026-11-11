@@ -8,9 +8,9 @@ use crate::{
     verified_status::{
         CheckoutPhysicalObservation, checkout_changed_paths, checkout_entry_supported,
         checkout_hash_advance, checkout_hash_complete, checkout_index_changes,
-        checkout_opened_file_matches, checkout_physical_targets, checkout_regular_file_matches,
-        checkout_symbolic_link, parse_git_index_rows, parse_git_tree_rows,
-        record_checkout_physical_observations,
+        checkout_metadata_observation, checkout_opened_file_matches, checkout_parent_observation,
+        checkout_physical_targets, checkout_regular_file_matches, checkout_symbolic_link,
+        parse_git_index_rows, parse_git_tree_rows, record_checkout_physical_observations,
     },
 };
 use sha1::Sha1;
@@ -63,11 +63,13 @@ fn physical(root: &Path, path: &str) -> Result<Option<PathBuf>, String> {
     while let Some(part) = parts.next() {
         current.push(part);
         if parts.peek().is_some() {
-            match fs::symlink_metadata(&current) {
-                Ok(m) if m.is_dir() => (),
-                Ok(_) => return Ok(None),
-                Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
-                Err(e) => return Err(format!("checkout path {path}: {e}")),
+            if !checkout_parent_observation(
+                fs::symlink_metadata(&current).map(|metadata| metadata.is_dir()),
+                |error| error.kind() == io::ErrorKind::NotFound,
+            )
+            .map_err(|error| format!("checkout path {path}: {error}"))?
+            {
+                return Ok(None);
             }
         }
     }
@@ -111,10 +113,12 @@ fn matches_entry(root: &Path, name: &str, entry: &Entry) -> Result<bool, String>
     let Some(path) = physical(root, name)? else {
         return Ok(false);
     };
-    let metadata = match fs::symlink_metadata(&path) {
-        Ok(m) => m,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(false),
-        Err(e) => return Err(format!("checkout file {name}: {e}")),
+    let Some(metadata) = checkout_metadata_observation(fs::symlink_metadata(&path), |error| {
+        error.kind() == io::ErrorKind::NotFound
+    })
+    .map_err(|error| format!("checkout file {name}: {error}"))?
+    else {
+        return Ok(false);
     };
     if checkout_symbolic_link(entry.mode.as_str()) {
         if !metadata.is_symlink() {
