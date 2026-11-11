@@ -5,7 +5,7 @@ description: 持续发布测试版，迁移和验证真实下游，修复反馈�
 
 在用户授权的仓库和发布范围内推进到真实采用；没有授权的其他仓库不自动纳入。先读各仓库的 AGENTS 与 host_context，定位当前发布、安装、检查和生命周期登记。此 skill 不授予额外权限，也不要求再次确认已经授权的发布与合并。
 
-在 chrono-harness 中，以仓库的 [docs/release-iteration.md](../../docs/release-iteration.md) 为迭代验收来源；[docs/release-ci.md](../../docs/release-ci.md) 管发布及恢复，[docs/distribution.md](../../docs/distribution.md) 管安装，[docs/examples.md](../../docs/examples.md) 确定四个现役下游。安装到个人 skill 目录后，在当前 chrono-harness 检出根解析这些路径；其他产品先定位其等效合同，不套用本仓仓库名或入口。
+在 chrono-harness 中，以当前检出根的 `docs/release-iteration.md` 为迭代验收来源；`docs/release-ci.md` 管发布及恢复，`docs/distribution.md` 管安装，`docs/examples.md` 确定四个现役下游。此 skill 的维护源是仓库 `skills/iterate-releases/SKILL.md`；个人目录只是安装副本。没有本地检出时先取得已授权仓库的固定修订，不凭移动网页代替候选输入；其他产品先定位其等效合同，不套用本仓仓库名或入口。
 
 先完成一个测试版，再迁移下游。固定成功落地 CI 的源码 SHA、run 和原 attempt，检查是否已有该身份的自动发布；接续它，只有确无原运行才显式触发 preview。发布工作流列表中的 head 不一定是发行源码，核原 CI、回执、清单和标签的共同身份。等待原运行及两平台安装结果，核公开资产后才把版本交给下游。
 
