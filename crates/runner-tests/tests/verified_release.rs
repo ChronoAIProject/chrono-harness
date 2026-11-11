@@ -23,6 +23,7 @@ fn expect_retirement_id(actual: &String, expected: &str)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn retirement_selection_has_no_work_for_empty_or_terminal_records() {
+    proof { reveal_with_fuel(policy::pending_retirement_values, 6); }
     let empty = policy::pending_retirements(&Vec::new());
     expect_true(empty.is_empty());
     let terminal = vec![("retired".to_owned(), true), ("also retired".to_owned(), true)];
@@ -32,6 +33,7 @@ fn retirement_selection_has_no_work_for_empty_or_terminal_records() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn retirement_selection_preserves_every_active_record_in_order() {
+    proof { reveal_with_fuel(policy::pending_retirement_values, 6); }
     let records = vec![("first".to_owned(), false), ("second".to_owned(), false)];
     let pending = policy::pending_retirements(&records);
     expect_true(pending.len() == 2);
@@ -41,6 +43,7 @@ fn retirement_selection_preserves_every_active_record_in_order() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn retirement_selection_keeps_byte_absent_records_until_state_is_terminal() {
+    proof { reveal_with_fuel(policy::pending_retirement_values, 6); }
     let records = vec![
         ("finished".to_owned(), true),
         ("bytes removed; edges pending".to_owned(), false),
@@ -55,6 +58,7 @@ fn retirement_selection_keeps_byte_absent_records_until_state_is_terminal() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn retirement_selection_preserves_complete_ids_and_duplicate_observations() {
+    proof { reveal_with_fuel(policy::pending_retirement_values, 6); }
     let records = vec![
         ("original: é\0full\nend".to_owned(), false),
         ("original: é\0full\nend".to_owned(), true),
