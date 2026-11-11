@@ -1930,7 +1930,13 @@ impl Manager {
         {
             return Err("absent worktree policy does not match its retained adoption".into());
         }
-        let config: crate::Config = decode(&config_bytes)?;
+        // These bound bytes supply addresses, never an executable configuration.
+        #[derive(Deserialize)]
+        struct AdoptedPolicyAddresses {
+            host_config: String,
+            automatic_cleanup: Option<String>,
+        }
+        let config: AdoptedPolicyAddresses = decode(&config_bytes)?;
         if !equal_bytes(
             &serde_json::to_vec(&config.automatic_cleanup).map_err(|e| e.to_string())?,
             &serde_json::to_vec(&Some(&self.inputs.policy_path)).map_err(|e| e.to_string())?,
