@@ -6366,6 +6366,11 @@ fn observation_metadata_survives_pending_work_then_expires_after_terminal_settle
 
 #[test]
 fn observation_reservation_cannot_claim_an_ordinary_nonempty_consumer() {
+    if !isolated_capability_test(
+        "observation_reservation_cannot_claim_an_ordinary_nonempty_consumer",
+    ) {
+        return;
+    }
     let h = host(512, 16);
     let (path, publication) = observation_publication(h.path(), "ordinary");
     let owner = inventory(h.path());
