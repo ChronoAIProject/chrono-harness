@@ -1,5 +1,5 @@
 //! Real seven-judge short entry, existing local producers and native unit transport.
-#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 use super::*;
 const PROVIDER: &str = ".chrono-harness/ci/units.json";

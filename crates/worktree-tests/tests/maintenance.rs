@@ -1,4 +1,4 @@
-#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 use super::automatic::native_git;
 use super::*;

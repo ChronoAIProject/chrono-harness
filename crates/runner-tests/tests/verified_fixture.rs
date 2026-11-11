@@ -27,6 +27,13 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn custody_release_requires_original_child_result_and_owner_retirement() {
+    expect(isolation::release_custody(true, true));
+    expect(!isolation::release_custody(false, true));
+    expect(!isolation::release_custody(true, false));
+    expect(!isolation::release_custody(false, false));
+}
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn isolation_requires_complete_test_identity() {
     proof {reveal_strlit("case");reveal_strlit("case-extra");reveal_strlit("");}
     expect(isolation::same_test("case",Some("case")));

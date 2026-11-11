@@ -19,8 +19,28 @@ pub fn known_custody_producer(command: &str) -> (allowed: bool)
 mod runtime {
 #[path = "../../../judge-filemap-tests/tests/support/mod.rs"]
 mod policy;
+#[path = "../../../runner-tests/tests/support/isolated_capability.rs"]
+mod isolation;
 use std::{fs,path::{Path,PathBuf},sync::OnceLock};
 use serde_json::{Value,json};
+
+/// Join the original libtest child, then ask the existing producer owner about
+/// each declared store. A passed test alone is never a release observation.
+pub fn isolated_git() -> bool {
+    isolation::isolated_git_with_retirement(retired)
+}
+
+pub fn retired(root: &Path) -> Result<bool, String> {
+    for producer in ["ci-test-host", "projects-test-host", "workflow-test-tools", "worktree-test-host"] {
+        let (directory, _) = chrono_worktree::TemporaryHost::registered_store(
+            root, ".chrono-harness/worktree.json", producer,
+        )?;
+        if !chrono_worktree::TemporaryHost::retired_fixture_store(&directory, producer)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
 
 pub fn root() -> &'static Path {
     static ROOT: OnceLock<PathBuf> = OnceLock::new();
@@ -44,6 +64,12 @@ pub fn root() -> &'static Path {
         cleanup["coordinator_root"]=json!("git-main-worktree");
         // Only these current producers are consumers of this fixture.
         cleanup["retained_producers"].as_array_mut().unwrap().retain(|p|p["id"].as_str().is_some_and(super::known_custody_producer));
+        // All success consumers end within this one joined case. Failed,
+        // diagnostic and interrupted allocations keep the current finite policy.
+        // Metadata of an actually disposed success has no later test consumer.
+        for producer in cleanup["retained_producers"].as_array_mut().unwrap() {
+            producer["rolling_directory"]["metadata_keep_seconds"] = json!(0);
+        }
         cleanup["artifacts"]=json!([{"path":".chrono-harness/state/","disposition":"evidence-retain"}]);
         let config=json!({"schema":"chrono-worktree-config/v2","host_config":policy::CONFIG,"remote":"unused",
             "git":{"program":env!("CARGO_BIN_EXE_chrono-test-git-model"),"expected_version":null,"sha256":null},
@@ -59,4 +85,4 @@ pub fn root() -> &'static Path {
 
 }
 #[cfg(not(verus_keep_ghost))]
-pub use runtime::{root};
+pub use runtime::{isolated_git, retired, root};

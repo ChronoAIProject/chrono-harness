@@ -40,7 +40,7 @@ bench = false
 [dev-dependencies]
 libc = "0.2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
-chrono-worktree = { path = "../worktree" }
+chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 tempfile = "3"

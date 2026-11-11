@@ -1,6 +1,6 @@
 #[path = "support/fixture_coordinator.rs"]
 mod fixture_coordinator;
-#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
 mod isolated_capability;
@@ -2143,4 +2143,28 @@ fn custody_fixture_selects_only_current_declared_producers() {
     assert!(!fixture_coordinator::known_custody_producer(""));
     assert!(!fixture_coordinator::known_custody_producer("unknown command"));
     assert!(!fixture_coordinator::known_custody_producer("BUILD"));
+}
+
+#[test]
+fn joined_fixture_case_removes_outer_custody_only_after_all_producers_retire() {
+    let observed = std::cell::RefCell::new(None);
+    if isolated_capability::isolated_git_with_retirement(|root| {
+        *observed.borrow_mut() = Some(root.parent().unwrap().to_owned());
+        fixture_coordinator::retired(root)
+    }) {
+        for producer in ["ci-test-host", "projects-test-host", "workflow-test-tools", "worktree-test-host"] {
+            let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+                fixture_coordinator::root(), POLICY, producer, "joined fixture release ",
+            ).unwrap();
+            let path = fixture.path().to_owned();
+            fs::write(path.join("original.bin"), b"consumed fixture original").unwrap();
+            assert_eq!(fs::read(path.join("original.bin")).unwrap(), b"consumed fixture original");
+            let result = fixture.finish(false).unwrap();
+            assert_eq!(result["status"], "finished", "{result}");
+            assert!(!path.exists());
+        }
+        return;
+    }
+    let outer = observed.into_inner().expect("actual custody owner consulted after original child join");
+    assert!(!outer.exists(), "all four real producer owners retired; outer fixture must exit");
 }

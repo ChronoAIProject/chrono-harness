@@ -1,5 +1,5 @@
 //! Provider transport tests; the recording consumer does not judge full governance.
-#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 use super::*;
 use chrono_harness::units::Scope;

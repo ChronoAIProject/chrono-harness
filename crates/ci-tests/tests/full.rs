@@ -1,5 +1,5 @@
 //! Full transport shares the real bound-Git fixture with event acquisition tests.
-#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 #[path = "full_scope.rs"]
 mod scope_tests;

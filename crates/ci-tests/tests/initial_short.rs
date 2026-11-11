@@ -1,5 +1,5 @@
 //! Real standalone bare checks with empty business inventory and both input owners.
-#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 use super::*;
 use chrono_harness::{prepared, sha256};

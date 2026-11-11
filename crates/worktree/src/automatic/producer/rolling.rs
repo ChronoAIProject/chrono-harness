@@ -82,6 +82,58 @@ pub(super) fn physical_stable(directory: &Path, object: &Object) -> Result<(), S
 }
 
 impl TemporaryHost {
+    /// Read the existing producer's retirement state for its private test owner.
+    /// The caller must first join all allocators. This neither retires an object
+    /// nor grants deletion rights over a shared store or any enclosing checkout.
+    #[cfg(feature = "producer-birth-test")]
+    #[doc(hidden)]
+    pub fn retired_fixture_store(directory: &Path, producer: &str) -> Result<bool, String> {
+        match fs::symlink_metadata(directory) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(true),
+            Err(error) => return Err(error.to_string()),
+            Ok(kind) if !kind.is_dir() || kind.file_type().is_symlink() => {
+                return Err("fixture producer namespace is not a physical directory".into());
+            }
+            Ok(_) => (),
+        }
+        let Some(gate) = DirectoryGate::available(directory)? else { return Ok(false); };
+        let store = Store::open(directory, producer, false)?;
+        let (objects, errors) = store.records()?;
+        if !errors.is_empty() { return Err("fixture producer registrations are unknown".into()); }
+        let mut metadata_empty = true;
+        let mut members_known = true;
+        for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let kind = entry.file_type().map_err(|e| e.to_string())?;
+            use crate::verified_lifecycle::{ProducerNamespaceMember, producer_namespace_member};
+            let name = entry.file_name();
+            let member = name.to_str().map(producer_namespace_member)
+                .unwrap_or(ProducerNamespaceMember::Unknown);
+            match member {
+                ProducerNamespaceMember::Owner => members_known &= kind.is_file(),
+                ProducerNamespaceMember::Records => members_known &= kind.is_dir(),
+                ProducerNamespaceMember::Metadata => {
+                    if !kind.is_dir() { return Ok(false); }
+                    metadata_empty &= fs::read_dir(entry.path()).map_err(|e| e.to_string())?
+                        .next().transpose().map_err(|e| e.to_string())?.is_none();
+                }
+                ProducerNamespaceMember::Disposals if kind.is_dir() => {
+                    let (trash, _) = trash(&store)?;
+                    for pending in fs::read_dir(trash).map_err(|e| e.to_string())? {
+                        let pending = pending.map_err(|e| e.to_string())?;
+                        metadata_empty &= pending.file_name() == "owner.json";
+                    }
+                }
+                _ => members_known = false,
+            }
+        }
+        gate.stable()?;
+        store.owner_stable()?;
+        Ok(crate::verified_lifecycle::producer_namespace_retired(
+            objects.is_empty(), metadata_empty, members_known,
+        ))
+    }
+
     /// 由现役宿主政策取得整个临时目录的所有权，不接管已有分配。
     pub fn registered_allocate(
         host_root: &Path,

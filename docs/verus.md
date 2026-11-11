@@ -8,7 +8,7 @@ FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 推断基线未启用；只有已确认的初始输入没有基线，启用后全部行视为新增。
 基线和候选均未启用时仍沿用原范围。以上判法由同一 Verus 实现与独立预期验收，
 未增加基线读取、证明操作或预算。
-数据声明仍不得有根，program／specification 必须有有效根，并继续接受现有严格计划、
+数据声明必须显式给出空 `roots: []`，program／specification 必须有有效根，并继续接受现有严格计划、
 编译源码、原证明及真实消费者的绑定检查。独立预期同为 Verus，并作为 Rust 测试运行。
 
 本宿主 FILEMAP 已采用该字段，新增登记行必须分类，已有分类不得删除。
@@ -39,6 +39,28 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 本仓按批次把实际决策和状态逻辑迁到 Verus。完整目标是所有 SPEC 与仓内程序逻辑都有证明，
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
+
+缓存验收采用的私有 fixture 保管，沿用 `verify.runner-fixture-tests` 判断原测试结果与
+生产者退役观察必须同时具备；沿用 worktree lifecycle 两项严格根，规定对象登记为空、
+待退役元数据为空且命名空间成员均有明确归属，才允许外层夹具退出。生产者在原位置
+读取 v2 对象登记、核对身份和待退役目录；外部 IO 的成功与完整性不是这些布尔判断的
+证明结论。Rust 独立预期覆盖实际活跃、unknown、终态但消费者未释放、capability、
+失败、诊断、损坏登记与完整退役，并核四个生产者释放后外层目录实际消失。
+这些源码与 FILEMAP 影响边同时变更，原动作、线程和限制保留；本次交接未执行任何
+证明或行为检查，不能据根已登记宣称通过。全部编译、验证、IO、存储及 CI 成本未知。
+
+registry snapshot 的实际状态类型与初始双 map 构造由
+`verified_status.rs::RegistrySnapshot<V>` 和 `registry_snapshot_initial` 拥有。
+同源后置条件精确规定完整入口、有效路径和 selection 原值，以及两个 map 的全部键值：
+路径全文相同时只保留入口的原字节／解析值；路径不同时另外保留目标文档，不用目标内容
+覆盖入口身份。实际 `facts.rs::registry_snapshot_start` 直接消费此构造结果。
+四组独立 Verus 预期同时作为 Rust 测试执行，核完整字节、完整解析值、精确条目数、
+空路径、大小写、Unicode／NUL／换行，以及有无 selection；此构造不重新判断路径准入。
+逐项外部接口沿用固定 vstd 的 `BTreeMap::new`／`insert`、String 克隆和借用合同。
+目标原字节按值转交，去掉此前插入前的一次无用克隆；不增加 IO、集合副本、证明根或预算。
+entry／target 获取、严格 JSON、selector 解析与 selection 的 JSON 投影仍待证明，
+不把整个 snapshot 起始组合或外围适配器列为已证明。沿用现有两项状态整 crate 根及真实
+消费者测试；完整构建、证明、运行、CI 与存储成本未测。
 
 registry 的批量组装由 `verified_status.rs::registry_parse_batch` 定义。
 同源规格先核完整返回数量，再按请求顺序核路径、解析当前原字节并更新 bytes／values

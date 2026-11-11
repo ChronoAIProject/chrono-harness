@@ -34,6 +34,49 @@ pub fn release_local_directory(local: bool, owner_pid: u32, current_pid: u32) ->
     local && owner_pid == current_pid
 }
 
+/// 一次固定读取的完整原字节、解析值及入口／有效路径；JSON 值由实际使用方提供。
+pub struct RegistrySnapshot<V> {
+    pub bytes: BTreeMap<String, Vec<u8>>,
+    pub values: BTreeMap<String, V>,
+    pub entry_path: String,
+    pub effective_path: String,
+    pub selection: Option<V>,
+}
+
+/// 同路径保留入口文档；不同路径额外保留目标文档，不合并两个文档的身份。
+pub fn registry_snapshot_initial<V>(
+    entry_path: String, original: Vec<u8>, config: V,
+    effective_path: String, effective_bytes: Vec<u8>, effective_config: V,
+    selection: Option<V>,
+) -> (out: RegistrySnapshot<V>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures
+        out.entry_path == entry_path,
+        out.effective_path == effective_path,
+        out.selection == selection,
+        out.bytes@ == if entry_path@ == effective_path@ {
+            Map::empty().insert(entry_path, original)
+        } else {
+            Map::empty().insert(entry_path, original).insert(effective_path, effective_bytes)
+        },
+        out.values@ == if entry_path@ == effective_path@ {
+            Map::empty().insert(entry_path, config)
+        } else {
+            Map::empty().insert(entry_path, config).insert(effective_path, effective_config)
+        },
+{
+    let mut bytes = BTreeMap::new();
+    let mut values = BTreeMap::new();
+    bytes.insert(entry_path.clone(), original);
+    values.insert(entry_path.clone(), config);
+    if !identifiers::equal_text(entry_path.as_str(), effective_path.as_str()) {
+        bytes.insert(effective_path.clone(), effective_bytes);
+        values.insert(effective_path.clone(), effective_config);
+    }
+    RegistrySnapshot { bytes, values, entry_path, effective_path, selection }
+}
+
+
 /// 标准 JSON 解码仅提供四个固定字段的原字符串观察。
 pub enum RegistryPathError<'a> {
     Missing { message: &'static str },

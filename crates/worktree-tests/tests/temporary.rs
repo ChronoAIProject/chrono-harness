@@ -1,4 +1,4 @@
-#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 use super::*;
 
@@ -54,6 +54,94 @@ fn rolling_host_mode(keep_seconds: u64, mode: &str) -> Host {
     fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
     commit(&h.root);
     h
+}
+
+#[test]
+fn private_fixture_retirement_observes_actual_release_not_test_success() {
+    if !chrono_git_boundary::isolated_git() { return; }
+    if !super::isolated_capability::isolated_capability_test(
+        "temporary::private_fixture_retirement_observes_actual_release_not_test_success",
+    ) { return; }
+    for state in ["released", "active", "unknown", "diagnostic", "failed", "consumer", "capability"] {
+        let h = rolling_host(86400);
+        let policy_path = h.root.join(".chrono-harness/cleanup.json");
+        let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+        policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(0);
+        fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        commit(&h.root);
+        let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+            &h.root, POLICY, "test-allocation", "private retirement ",
+        ).unwrap();
+        let path = fixture.path().to_owned();
+        let store = path.parent().unwrap();
+        fs::write(path.join("original.bin"), b"actual fixture original\0\xff").unwrap();
+        let record = producer_record_path(store, &path);
+        let before = fs::read(&record).unwrap();
+        let retired = || chrono_worktree::TemporaryHost::retired_fixture_store(store, "test-allocation").unwrap();
+        assert!(!retired(), "{state}: active allocation has not released its consumers");
+        if state == "active" { continue; }
+        if state == "unknown" {
+            drop(fixture);
+            assert!(!retired(), "missing original terminal handoff stays unknown");
+            assert_eq!(fs::read(record).unwrap(), before);
+            assert_eq!(fs::read(path.join("original.bin")).unwrap(), b"actual fixture original\0\xff");
+            continue;
+        }
+        let reference = chrono_worktree::RetainedArtifact::resume(store, "test-allocation", &path).unwrap();
+        if state == "consumer" {
+            reference.acquire("assertion", "actual original-byte reader").unwrap();
+        }
+        let capability = (state == "capability").then(|| fixture.capability().unwrap());
+        if state == "diagnostic" { fixture.retain_diagnostic().unwrap(); }
+        let result = fixture.finish(state == "failed").unwrap();
+        assert_eq!(result["status"], "finished", "{state}: {result}");
+        assert_eq!(retired(), state == "released", "{state}: command return is not consumer release");
+        if matches!(state, "diagnostic" | "failed") {
+            assert_eq!(fs::read(path.join("original.bin")).unwrap(), b"actual fixture original\0\xff");
+        }
+        if state == "consumer" {
+            reference.release("assertion", "original-byte assertion ended").unwrap();
+        }
+        drop(capability);
+        if matches!(state, "consumer" | "capability") {
+            let (code, report, error) = h.auto("maintain", &[]);
+            assert_eq!(code, 0, "{report} {error}");
+            assert!(retired(), "last actual consumer released; existing maintenance retires it");
+            assert!(!path.exists());
+        }
+        if state == "released" {
+            assert!(!path.exists());
+            assert!(!record.exists());
+            let unknown = store.join("unfinished-birth");
+            fs::create_dir(&unknown).unwrap();
+            fs::write(unknown.join("original"), b"unfinished original").unwrap();
+            assert!(!retired(), "unregistered birth is unknown despite an empty registration namespace");
+            assert_eq!(fs::read(unknown.join("original")).unwrap(), b"unfinished original");
+        }
+    }
+}
+
+#[test]
+fn private_fixture_retirement_preserves_corrupt_and_pending_metadata_originals() {
+    if !chrono_git_boundary::isolated_git() { return; }
+    let h = rolling_host(0);
+    let policy_path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["retained_producers"][0]["rolling_directory"]["metadata_keep_seconds"] = value!(3600);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
+        &h.root, POLICY, "test-allocation", "retirement metadata ",
+    ).unwrap();
+    let store = fixture.path().parent().unwrap().to_owned();
+    // Keep the current metadata retention policy: physical disposal alone
+    // cannot authorize removal of its original metadata before that consumer ends.
+    assert_eq!(fixture.finish(false).unwrap()["status"], "finished");
+    assert!(!chrono_worktree::TemporaryHost::retired_fixture_store(&store, "test-allocation").unwrap());
+    let record = store.join("producer-records/unfinished.json");
+    fs::write(&record, b"original incomplete record").unwrap();
+    assert!(chrono_worktree::TemporaryHost::retired_fixture_store(&store, "test-allocation").is_err());
+    assert_eq!(fs::read(record).unwrap(), b"original incomplete record");
 }
 
 #[test]
