@@ -622,7 +622,7 @@ fn settle_effects(
         for (i, entry) in entries.iter().enumerate().rev() {
             let path = root.join(&entry.target);
             let backup = directory.join(format!("original-{i}"));
-            let action = (|| {
+            let action: Result<(), String> = (|| {
                 let path = target(root, &entry.target)?;
                 check_parents(root, plan, &path)?;
                 let current = observe(&path)?;
