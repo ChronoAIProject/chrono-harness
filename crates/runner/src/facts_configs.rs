@@ -2,7 +2,7 @@
 use crate::verified_git_binding::{
     GitConfigSchema, admit_git_selector_target, admit_selector_binding, classify_git_config_schema,
 };
-use crate::{json, no_symlink_parents, relative_path, sha256};
+use crate::{json, no_symlink_parents, sha256};
 use serde_json::{Value, json as value};
 use std::{fs, path::Path};
 
@@ -255,7 +255,7 @@ impl crate::verified_git_binding::RegistryMembership for CapturedRegistry<'_> {
 fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
     use crate::verified_git_binding::{
         admit_identity_configurations, admit_identity_object, admit_identity_program,
-        admit_identity_registry_target, collect_identity_paths, identity_registry_path,
+        collect_identity_paths, validate_identity_registry_paths,
     };
 
     admit_identity_object(
@@ -281,20 +281,18 @@ fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
         &mut hashes,
         &mut unique_paths,
     )?;
-    if version3 {
-        for row in rows {
-            let path = identity_registry_path(row["registry_path"].as_str())?;
-            host_path(path, None)?;
-            admit_identity_registry_target(path, &paths)?;
-        }
-    }
+    validate_identity_registry_paths(version3, &JsonSelectorRows(rows), &paths)
+        .map_err(render_selector_path_error)?;
     Ok(paths)
 }
 
 fn host_path(path: &str, entry: Option<&str>) -> Result<(), String> {
-    relative_path(path)?;
-    crate::verified_git_binding::admit_selector_host_path(path, entry)?;
-    Ok(())
+    crate::verified_git_binding::admit_complete_selector_host_path(path, entry)
+        .map_err(render_selector_path_error)
+}
+
+fn render_selector_path_error(error: crate::verified_git_binding::SelectorPathError<'_>) -> String {
+    error.render(|invalid| format!("invalid relative path: {invalid:?}"))
 }
 
 struct JsonSelectorRows<'a>(&'a [Value]);
@@ -313,6 +311,16 @@ impl<'a> crate::verified_git_binding::SelectorRows<'a> for JsonSelectorRows<'a> 
             path: row["path"].as_str(),
             registry_path_present: row.get("registry_path").is_some(),
         }
+    }
+}
+
+impl<'a> crate::verified_git_binding::SelectorRegistryRows<'a> for JsonSelectorRows<'a> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn registry_path(&self, index: usize) -> Option<&'a str> {
+        self.0[index]["registry_path"].as_str()
     }
 }
 
