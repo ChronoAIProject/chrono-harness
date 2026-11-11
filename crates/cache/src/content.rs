@@ -81,6 +81,7 @@ pub(crate) fn revalidate(
     if expected != *plan {
         return Err("E_CACHE_CONTENT: plan differs from current registration or host".into());
     }
+    super::attempt::validate(root, plan, false)?;
     Ok(config)
 }
 
@@ -301,6 +302,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             .and_then(|mut f| f.write_all(outputs.as_bytes()))
             .map_err(|e| e.to_string())?;
     }
+    if !options.contains_key("--cache") { super::attempt::validate(&root, &plan, true)?; }
     Ok(
         serde_json::to_string(&json!({"report":original,"observation":report}))
             .map_err(|e| e.to_string())?

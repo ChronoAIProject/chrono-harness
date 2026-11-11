@@ -15,6 +15,27 @@ use vstd::vpanic as panic;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn only_bound_terminal_attempts_replay() {
+    expect_cache_true(policy::replay_attempt(true, true));
+    expect_cache_true(!policy::replay_attempt(true, false));
+    expect_cache_true(!policy::replay_attempt(false, true));
+    expect_cache_true(!policy::replay_attempt(false, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn all_terminal_process_facts_are_required() {
+    expect_cache_true(policy::confirmed_probe(true, true, true));
+    expect_cache_true(!policy::confirmed_probe(false, true, true));
+    expect_cache_true(!policy::confirmed_probe(true, false, true));
+    expect_cache_true(!policy::confirmed_probe(true, true, false));
+    expect_cache_true(!policy::confirmed_probe(false, false, true));
+    expect_cache_true(!policy::confirmed_probe(false, true, false));
+    expect_cache_true(!policy::confirmed_probe(true, false, false));
+    expect_cache_true(!policy::confirmed_probe(false, false, false));
+}
+
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_observed_success_or_opted_in_failure_can_seal() {
     proof {
         reveal_strlit("success"); reveal_strlit("failure");

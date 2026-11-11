@@ -2,6 +2,10 @@ use std::io::Write;
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     match args[0].as_str() {
+        "count" => {
+            std::fs::OpenOptions::new().create(true).append(true).open(&args[1]).unwrap().write_all(b"x").unwrap();
+            println!("stable compiler");
+        }
         "echo" | "file" => println!("{}", args[1]),
         "exit" => {
             eprintln!("original probe failure");

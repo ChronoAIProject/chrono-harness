@@ -158,6 +158,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 "E_CACHE_RECOVERY: original plan differs from current registration or host".into(),
             );
         }
+        super::attempt::validate(&root, &plan, false)?;
         let steps: Value = decode(steps_raw.as_bytes())?;
         if !steps.is_object() {
             return Err("E_CACHE_RECOVERY: native step observations missing".into());

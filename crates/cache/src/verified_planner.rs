@@ -13,6 +13,18 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
+/// A result can be replayed only for the exact request, after confirmed work.
+pub fn replay_attempt(bound: bool, terminal: bool) -> (allowed: bool)
+    ensures allowed == (bound && terminal),
+{ bound && terminal }
+
+/// A process receipt alone does not establish joined, matched terminal work.
+/// Engine failures are conservatively unresolved even when a direct exit exists.
+pub fn confirmed_probe(launch_matches: bool, exit_known: bool, engine_clean: bool) -> (terminal: bool)
+    ensures terminal == (launch_matches && exit_known && engine_clean),
+{ launch_matches && exit_known && engine_clean }
+
+
 pub fn producer_can_seal(save_on_failure: bool, outcome: Option<&str>) -> (allowed: bool)
     ensures allowed <==> match outcome {
         Some(value) => value@ == "success"@ || (save_on_failure && value@ == "failure"@),

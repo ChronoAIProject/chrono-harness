@@ -752,6 +752,7 @@ pub fn run_process_observed_forwarded_for(
         s.output_limit_bytes,
         None,
         Some(forward),
+        None,
     ))
 }
 
@@ -927,6 +928,30 @@ pub fn run_process_observed_retained_for(
     ))
 }
 
+/// Use the caller's exact directory capability for live process originals.
+/// The caller reserves the bounded files before dispatch and keeps custody
+/// until its own result is published; no nested retention outputs are enrolled.
+pub fn run_process_observed_retained_owned(
+    root: &Path,
+    s: &CommandSpec,
+    input: &[u8],
+    digest: &str,
+    evidence: &ProcessEvidence<'_>,
+    publication: &retained_artifacts::retention::Publication,
+) -> Result<ProcessResult, String> {
+    for (path, limit) in [
+        (evidence.stdout, s.output_limit_bytes as u64),
+        (evidence.stderr, s.output_limit_bytes as u64),
+        (evidence.launch, 65536),
+    ] {
+        publication.reserve_external_file(path, limit)?;
+    }
+    finish_detailed(run_process_inner_with_stdout(
+        root, s, input, Some(digest), Duration::from_secs(s.timeout_seconds),
+        s.output_limit_bytes, Some(evidence), None, Some(publication),
+    ))
+}
+
 fn evidence_path(root: &Path, path: &Path, label: &str) -> Result<PathBuf, ProcessFailure> {
     let absolute = if path.is_absolute() {
         path.to_path_buf()
@@ -1086,6 +1111,7 @@ pub fn run_process_observed_data(
         stdout_limit,
         None,
         None,
+        None,
     ))
 }
 fn run_process_inner(
@@ -1104,6 +1130,7 @@ fn run_process_inner(
         timeout,
         s.output_limit_bytes,
         evidence,
+        None,
         None,
     )
     .map_err(|mut failure| {
@@ -1133,6 +1160,7 @@ fn run_process_inner_with_stdout(
     stdout_limit: usize,
     evidence: Option<&ProcessEvidence<'_>>,
     forward: Option<ProcessForward<'_>>,
+    publication: Option<&retained_artifacts::retention::Publication>,
 ) -> Result<ProcessResult, ProcessFailure> {
     let span = tracing::info_span!(
         "process",
@@ -1219,7 +1247,7 @@ fn run_process_inner_with_stdout(
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("stream path UTF-8")?;
-            if retained_artifacts::retention::Inventory::adopted(&root)?
+            if publication.is_none() && retained_artifacts::retention::Inventory::adopted(&root)?
                 .is_some_and(|i| i.accepts("check-original", relative))
             {
                 let publication = retained_artifacts::retention::create_adopted_for_consumer(
@@ -1379,7 +1407,7 @@ fn run_process_inner_with_stdout(
             let published = (|| -> Result<(), Failure> {
                 let relative = paths.launch.strip_prefix(&root).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?.to_str().ok_or_else(||Failure::new("E_PROCESS_EVIDENCE","launch path UTF-8"))?;
                 let raw = serde_json::to_vec(&record).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?;
-                if retained_artifacts::retention::publish_pending_original(&root, "check-original", relative, &raw,
+                if publication.is_none() && retained_artifacts::retention::publish_pending_original(&root, "check-original", relative, &raw,
                     serde_json::json!({"kind":"process-launch","child_pid":pid,"outcome":"not-established"})).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e))? { return Ok(()); }
                 let mut original = tempfile::NamedTempFile::new_in(
                     paths

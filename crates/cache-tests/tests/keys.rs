@@ -1,3 +1,6 @@
+#[path = "continuity.rs"]
+mod continuity;
+
 #[path = "recovery.rs"]
 mod recovery;
 

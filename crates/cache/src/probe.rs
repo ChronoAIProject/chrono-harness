@@ -1,9 +1,9 @@
 use chrono_harness::{
-    CommandSpec, file_identity, no_symlink_parents, resolve_program, run_process_observed, sha256,
+    CommandSpec, ProcessEvidence, file_identity, resolve_program, run_process_observed_retained_owned, sha256, validate_launch_evidence,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, fs, io::Write, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -17,48 +17,56 @@ pub fn observe(
     command: &CommandSpec,
     inherit: &[String],
     result: &ResultKind,
+    attempt: &super::attempt::Attempt,
+    input_id: &str,
 ) -> Result<(Value, String), String> {
-    let mut command = command.clone();
-    for name in inherit {
-        match std::env::var(name) {
-            Ok(value) => {
-                command.env.insert(name.clone(), value);
-            }
-            Err(std::env::VarError::NotPresent) => {}
-            Err(e) => return Err(format!("E_CACHE_PROBE: environment {name}: {e}")),
-        }
-    }
-    let executable = resolve_program(
-        root,
-        &command.program,
-        Some(command.env.get("PATH").map(String::as_str).unwrap_or("")),
-    )?;
-    let (executable_sha256, _) = file_identity(&executable)?;
-    command.program = executable
-        .to_str()
-        .ok_or("E_CACHE_PROBE: non-UTF8 executable path")?
-        .to_owned();
-    let process = run_process_observed(root, &command, &[], &executable_sha256)?;
-    let raw = serde_json::to_vec(&process).map_err(|e| e.to_string())?;
-    let original = format!(".chrono-harness/state/cache-probes/{}.json", sha256(&raw));
-    let output = no_symlink_parents(root, &original)?;
-    fs::create_dir_all(output.parent().ok_or("E_CACHE_PROBE: evidence parent")?)
-        .map_err(|e| e.to_string())?;
-    match fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&output)
-    {
-        Ok(mut file) => file.write_all(&raw).map_err(|e| e.to_string())?,
-        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-            if fs::read(&output).map_err(|e| e.to_string())? != raw {
-                return Err(format!(
-                    "E_CACHE_PROBE: retained evidence differs: {original}"
-                ));
+    let directory = attempt.directory.join(input_id);
+    attempt.publication.create_directory(&directory)?;
+    let original = format!("{}/{input_id}/process.json", attempt.relative);
+    let intent = json!({"schema":"chrono-cache-probe-intent/v1","attempt":attempt.relative,
+        "input":input_id,"command":command,"inherit":inherit,"result_kind":result,
+        "stdin_sha256":sha256(&[]),"task_identity":null,"terminal_result":null,
+        "launch":"launch.json","stdout":"stdout","stderr":"stderr",
+        "wait":"original process engine native join; absent terminal result stays unknown"});
+    attempt.record(&directory.join("intent.json"), &intent)?;
+    let mut invoked = false;
+    let evaluated = (|| {
+        let mut command = command.clone();
+        for name in inherit {
+            match std::env::var(name) {
+                Ok(value) => { command.env.insert(name.clone(), value); }
+                Err(std::env::VarError::NotPresent) => {}
+                Err(e) => return Err(format!("environment {name}: {e}")),
             }
         }
-        Err(e) => return Err(format!("E_CACHE_PROBE: cannot retain original: {e}")),
-    }
+        let executable = resolve_program(root, &command.program,
+            Some(command.env.get("PATH").map(String::as_str).unwrap_or("")))?;
+        let (executable_sha256, _) = file_identity(&executable)?;
+        command.program = executable.to_str().ok_or("non-UTF8 executable path")?.to_owned();
+        attempt.record(&directory.join("invocation.json"), &json!({"command":command,"executable_sha256":executable_sha256}))?;
+        invoked = true;
+        attempt.unknown.set(true);
+        run_process_observed_retained_owned(root, &command, &[], &executable_sha256,
+            &ProcessEvidence { stdout:&directory.join("stdout"), stderr:&directory.join("stderr"), launch:&directory.join("launch.json") },
+            &attempt.publication)
+    })();
+    let process = match evaluated {
+        Ok(process) => process,
+        Err(error) => {
+            let record = json!({"error":error,"engine_invoked":invoked,"task_identity":null,
+                "terminal_result":null,"completion":if invoked {"unknown"} else {"not-dispatched"}});
+            attempt.record(&directory.join("error.json"), &record)
+                .map_err(|publication| format!("E_CACHE_PROBE: {error}; error publication: {publication}; attempt {}", attempt.relative))?;
+            return Err(format!("E_CACHE_PROBE: {error}; original {}/{}", attempt.relative, format!("{input_id}/error.json")));
+        }
+    };
+    // Publish the actual receipt before evaluating launch, exit or file-path semantics.
+    attempt.record(&directory.join("process.json"), &serde_json::to_value(&process).map_err(|e| e.to_string())?)?;
+    let launch = validate_launch_evidence(&directory.join("launch.json"), &process);
+    let terminal = super::verified_planner::confirmed_probe(
+        launch.is_ok(), process.exit_code >= 0 || process.exit_signal.is_some(), process.failure.is_none());
+    attempt.unknown.set(!terminal);
+    launch.map_err(|e| format!("E_CACHE_PROBE: {e}; original {original}"))?;
     if process.exit_code != 0 || process.failure.is_some() {
         return Err(format!(
             "E_CACHE_PROBE: exit {}, failure {:?}; original {original}",

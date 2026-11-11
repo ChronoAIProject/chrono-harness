@@ -12,6 +12,7 @@
     }
   },
   "files": [
+    {"path":"crates/cache-tests/tests/continuity.rs","verification":{"role":"boundary","roots":[]},"owner":"cache-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache-tests"},{"kind":"test-execution","to":"test:cache-tests"}]},
     {"path":"crates/instructions-tests/tests/publication_decision.rs","verification":{"role":"program","roots":[{"path":"crates/instructions-tests/tests/publication_decision.rs","operation":"verify.instructions-publication-tests"}]},"owner":"instructions-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:instructions-tests"}]},
     {"path":"crates/instructions/src/publication_decision.rs","verification":{"role":"program","roots":[{"path":"crates/instructions/src/publication_decision.rs","operation":"verify.instructions-publication"},{"path":"crates/instructions-tests/tests/publication_decision.rs","operation":"verify.instructions-publication-tests"}]},"owner":"instructions","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:instructions"}]},
     {"path":"assets/instructions/standalone-retention.json","verification":{"role":"data","roots":[]},"owner":"instructions","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:instructions"},{"kind":"test-execution","to":"test:instructions-tests"}]},

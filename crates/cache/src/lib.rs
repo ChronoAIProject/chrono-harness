@@ -1,4 +1,5 @@
 //! Explicit cache key preparation. A plan is not a cache hit or a build verdict.
+mod attempt;
 mod content;
 mod freshness;
 mod probe;
@@ -418,7 +419,7 @@ fn consumer_operations(root: &Path, c: &Config, consumer: &str) -> Result<Value,
     Ok(json!({"status":"declared","operations":operations,"sources":sources}))
 }
 
-fn observe(root: &Path, input: &Input) -> Result<Value, String> {
+fn observe(root: &Path, input: &Input, attempt: Option<&attempt::Attempt>, input_id: &str) -> Result<Value, String> {
     if let Input::JsonValue {
         path: value,
         pointer,
@@ -440,7 +441,7 @@ fn observe(root: &Path, input: &Input) -> Result<Value, String> {
         result,
     } = input
     {
-        let (observation, original) = probe::observe(root, command, inherit, result)?;
+        let (observation, original) = probe::observe(root, command, inherit, result, attempt.ok_or("E_CACHE_ATTEMPT: missing probe owner")?, input_id)?;
         return Ok(json!({"declaration":input,"observation":observation,"original":original}));
     }
     let observation = match input {
@@ -576,7 +577,7 @@ fn registered_files(
 /// Read only the selected consumer's explicitly named inputs. Literal values are
 /// declarations; hashing them does not turn them into toolchain observations.
 pub fn prepare(root: &Path, c: &Config, consumer: &str) -> Result<Value, String> {
-    prepare_with_inputs(root, c, consumer, None)
+    attempt::prepare(root, c, consumer, None)
 }
 
 fn prepare_with_inputs(
@@ -584,6 +585,16 @@ fn prepare_with_inputs(
     c: &Config,
     consumer: &str,
     prior: Option<&Value>,
+) -> Result<Value, String> {
+    prepare_inputs(root, c, consumer, prior, None)
+}
+
+fn prepare_inputs(
+    root: &Path,
+    c: &Config,
+    consumer: &str,
+    prior: Option<&Value>,
+    attempt: Option<&attempt::Attempt>,
 ) -> Result<Value, String> {
     validate(c)?;
     name(consumer)?;
@@ -676,7 +687,7 @@ fn prepare_with_inputs(
                     }
                     value.clone()
                 } else {
-                    observe(&root, &c.inputs[input_id])?
+                    observe(&root, &c.inputs[input_id], attempt, input_id)?
                 };
                 observations.insert(input_id.clone(), observed);
             }
@@ -820,9 +831,13 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     if !config.starts_with(".chrono-harness/") {
         return Err("E_CACHE_CONFIG: registration must belong to host .chrono-harness".into());
     }
+    if let Some(path) = options.get("--plan-output") {
+        if !path.starts_with(".chrono-harness/state/") { return Err("E_CACHE_OUTPUT: plan must belong to retained host state".into()); }
+        no_symlink_parents(root, path)?;
+    }
     let c: Config =
         decode(&fs::read(no_symlink_parents(root, config)?).map_err(|e| e.to_string())?)?;
-    let mut plan = prepare(root, &c, options["--consumer"])?;
+    let plan = attempt::prepare(root, &c, options["--consumer"], options.get("--plan-output").copied())?;
     if let Some(path) = options.get("--plan-output") {
         if ![".chrono-harness/state/", ".chrono-harness/cache/"]
             .iter()
@@ -833,23 +848,6 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
         let target = no_symlink_parents(root, path)?;
         fs::create_dir_all(target.parent().ok_or("E_CACHE_OUTPUT: plan parent")?)
             .map_err(|e| e.to_string())?;
-        let directory = path
-            .rsplit_once('/')
-            .ok_or("E_CACHE_OUTPUT: plan parent")?
-            .0
-            .to_owned()
-            + "/";
-        for input in plan["inputs"]
-            .as_object_mut()
-            .ok_or("E_CACHE_OUTPUT: inputs missing")?
-            .values_mut()
-        {
-            if let Some(original) = input["original"].as_str() {
-                let raw =
-                    fs::read(no_symlink_parents(root, original)?).map_err(|e| e.to_string())?;
-                input["original"] = json!(retain_original(root, &directory, "probe", &raw)?.path);
-            }
-        }
         let raw = serde_json::to_vec(&plan).map_err(|e| e.to_string())?;
         match fs::OpenOptions::new()
             .write(true)
