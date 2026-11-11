@@ -5215,7 +5215,12 @@ proof fn registry_sequence_fixture_result(paths: Seq<String>,
     }
 }
 
-proof fn registry_sequence_fixture_texts() {
+proof fn registry_sequence_fixture_texts()
+    ensures "read-error"@.len() == 10, "empty"@.len() == 5, "decode-error"@.len() == 12,
+        "first"@.len() == 5, "first"@ != "empty"@,
+        "later"@.len() == 5, "later"@ != "empty"@, "same"@.len() == 4,
+        "旧/é"@.len() == 3, "../目录/é\0\n"@.len() == 9,
+{
     reveal_strlit("read-error"); reveal_strlit("empty"); reveal_strlit("decode-error");
     reveal_strlit("first"); reveal_strlit("later"); reveal_strlit("same");
     reveal_strlit("旧/é"); reveal_strlit("../目录/é\0\n");
@@ -5253,7 +5258,11 @@ fn expect_registry_sequence_fixture_error(paths: Vec<String>, count: u8, expecte
     let out = policy::registry_read_sequence(paths, 0u8,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         registry_sequence_read, decode_registry_fixture);
-    proof { registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out); }
+    proof {
+        assert(registry_sequence_bytes(Map::<String, Vec<u8>>::empty())
+            =~= Map::<String, Seq<u8>>::empty());
+        registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out);
+    }
     expect_status_true(out.0 == count);
     expect_registry_batch_error(out.1, expected);
 }
@@ -5322,6 +5331,7 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
     expect_status_true(out.0 == 1);
     match out.1 {
         Ok((bytes, values)) => {
+            proof { assert(registry_sequence_bytes(bytes@).dom() =~= bytes@.dom()); }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
             expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
             expect_registry_pair(&bytes, &values, &key, &[1u8, 0, 255], 1);
@@ -5341,10 +5351,15 @@ fn registry_read_sequence_duplicate_keys_replace_both_maps_in_order()
     let out = policy::registry_read_sequence(paths, 0u8,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         registry_sequence_read, decode_registry_fixture);
-    proof { registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out); }
+    proof {
+        assert(registry_sequence_bytes(Map::<String, Vec<u8>>::empty())
+            =~= Map::<String, Seq<u8>>::empty());
+        registry_sequence_fixture_result(requested, Map::empty(), Map::empty(), out);
+    }
     expect_status_true(out.0 == 2);
     match out.1 {
         Ok((bytes, values)) => {
+            proof { assert(registry_sequence_bytes(bytes@).dom() =~= bytes@.dom()); }
             expect_status_true(bytes.len() == 1 && values.len() == 1);
             expect_registry_pair(&bytes, &values, &key, &[2u8, 255, 0], 2);
         },
