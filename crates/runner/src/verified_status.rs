@@ -133,6 +133,81 @@ pub fn collect_registry_paths<'a>(entry: &str, rows: &[Option<&'a str>; 4])
     Ok(paths)
 }
 
+/// 按前缀定义完整待读序列：排除已读路径，每个其余路径只保留首次出现。
+pub open spec fn registry_pending_prefix(
+    paths: Seq<Seq<char>>, count: int, entry: Seq<char>, effective: Seq<char>,
+) -> Seq<Seq<char>>
+    decreases count,
+{
+    if count <= 0 {
+        Seq::empty()
+    } else {
+        let previous = registry_pending_prefix(paths, count - 1, entry, effective);
+        let path = paths[count - 1];
+        if path == entry || path == effective || previous.contains(path) { previous }
+        else { previous.push(path) }
+    }
+}
+
+fn pending_contains(paths: &Vec<String>, path: &str) -> (found: bool)
+    ensures found == paths@.map_values(|p: String| p@).contains(path@),
+{
+    let mut i = 0usize;
+    while i < paths.len()
+        invariant
+            i <= paths.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] paths@[j])@ != path@,
+        decreases paths.len() - i,
+    {
+        if identifiers::equal_text(paths[i].as_str(), path) {
+            assert(paths@.map_values(|p: String| p@)[i as int] == path@);
+            return true;
+        }
+        i += 1;
+    }
+    let ghost texts = paths@.map_values(|p: String| p@);
+    assert forall|j: int| 0 <= j < texts.len() implies (#[trigger] texts[j]) != path@ by {
+        assert(texts[j] == paths@[j]@);
+    }
+    false
+}
+
+/// 按值移交首次出现的待读路径，不复制文本或改写路径。
+pub fn pending_registry_paths(paths: Vec<String>, entry: &str, effective: &str) -> (out: Vec<String>)
+    ensures out@.map_values(|p: String| p@)
+        == registry_pending_prefix(paths@.map_values(|p: String| p@), paths@.len() as int, entry@, effective@),
+{
+    let ghost all = paths@;
+    let ghost text = all.map_values(|p: String| p@);
+    let mut iterator = paths.into_iter();
+    let mut pending: Vec<String> = Vec::new();
+    loop
+        invariant
+            all == paths@, text == all.map_values(|p: String| p@),
+            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            pending@.map_values(|p: String| p@)
+                == registry_pending_prefix(text, iterator@.0, entry@, effective@),
+        decreases all.len() - iterator@.0,
+    {
+        let ghost at = iterator@.0;
+        match iterator.next() {
+            None => { return pending; },
+            Some(path) => {
+                assert(text[at] == path@);
+                if !identifiers::equal_text(path.as_str(), entry)
+                    && !identifiers::equal_text(path.as_str(), effective)
+                    && !pending_contains(&pending, path.as_str())
+                {
+                    let ghost previous = pending@.map_values(|p: String| p@);
+                    let ghost original = path@;
+                    pending.push(path);
+                    assert(pending@.map_values(|p: String| p@) =~= previous.push(original));
+                }
+            },
+        }
+    }
+}
+
 /// 只核本次请求的数量，不推断路径、内容或解码结果。
 pub fn registry_acquisition_count(expected: usize, observed: usize) -> (out: Result<(), String>)
     ensures match out {
