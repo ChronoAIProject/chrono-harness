@@ -60,9 +60,8 @@ fn cli(h: &Host, base: &str, candidate: &str, selector: &[&str]) -> (i32, Value)
 
 fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, case: &str, reason: &str) {
     let h = host();
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     h.change_registry(CONFIG, |v| {
-        v["judge"]["program"] = json!(source.join("crates/judge-ci/target/debug/chrono-judge-ci"));
+        v["judge"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"));
         v["judge"]["timeout_seconds"] = json!(120);
         v["judge"]["output_limit_bytes"] = json!(4 * 1024 * 1024);
     });
@@ -961,9 +960,8 @@ fn exit_zero_infrastructure_launcher_helper() {
 #[test]
 fn exit_zero_infrastructure_failure_has_null_summary_and_retained_receipt_in_collection() {
     let h = host();
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     h.change_registry(CONFIG, |v| {
-        v["judge"] = json!({"program":source.join("crates/judge-ci/target/debug/chrono-judge-ci"),"args":[],"timeout_seconds":30,"output_limit_bytes":1048576});
+        v["judge"] = json!({"program":env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"),"args":[],"timeout_seconds":30,"output_limit_bytes":1048576});
     });
     let b = h.commit();
     let exe = std::env::current_exe().unwrap();
