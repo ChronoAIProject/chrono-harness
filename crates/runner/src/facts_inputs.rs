@@ -1,5 +1,5 @@
 //! Explicit Git input guards. Never discover files or register dependencies.
-use crate::{input_file::observe_file, relative_path, wire};
+use crate::{input_file::observe_file, relative_path, verified_git_binding};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -10,56 +10,46 @@ pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> 
     let Some(guard) = config["facts_git"].get("guard") else {
         return Ok(None);
     };
-    let object = guard
-        .as_object()
-        .ok_or("Git input guard must be an object")?;
-    if object.len() != 2
-        || guard["schema"] != "chrono-git-inputs/v1"
-        || !object.contains_key("inputs")
-    {
-        return Err("Git input guard requires only schema chrono-git-inputs/v1 and inputs".into());
-    }
-    let ids = guard["inputs"]
-        .as_array()
-        .filter(|ids| !ids.is_empty())
-        .ok_or("Git input guard requires nonempty inputs")?;
-    let inputs = config["environment"]["inputs"]
-        .as_array()
-        .ok_or("Git input guard requires file inputs")?;
+    verified_git_binding::admit_git_guard_object(
+        guard.as_object().map(|object| object.len()),
+        guard["schema"].as_str(),
+        guard.get("inputs").is_some(),
+    )?;
+    let ids = verified_git_binding::git_guard_ids(
+        guard["inputs"].as_array().map(|ids| (ids, ids.len())),
+    )?;
+    let inputs = verified_git_binding::git_guard_files(
+        config["environment"]["inputs"].as_array(),
+    )?;
     let mut seen = BTreeSet::new();
     let mut selected = vec![];
     for id in ids {
-        let id = id
-            .as_str()
-            .filter(|id| !id.is_empty())
-            .ok_or("invalid Git input ID")?;
-        if !seen.insert(id) {
-            return Err(format!("duplicate Git input {id}"));
-        }
-        let matches: Vec<_> = inputs.iter().filter(|input| input["id"] == id).collect();
-        if matches.len() != 1 {
-            return Err(format!("missing/ambiguous Git input {id}"));
-        }
-        let input = matches[0];
-        let location = input["location"]
-            .as_str()
-            .filter(|s| !s.is_empty())
-            .ok_or("Git input location required")?;
+        let id = verified_git_binding::git_guard_id(id.as_str())?;
+        let index = verified_git_binding::git_guard_reference(
+            &JsonGuardReferences(inputs), id, seen.insert(id),
+        ).map_err(guard_error)?;
+        let input = &inputs[index];
+        let location = verified_git_binding::git_guard_location(input["location"].as_str())?;
         if !Path::new(location).is_absolute() {
             relative_path(location)?;
         }
-        match input["presence"].as_str() {
-            Some("absent") if input.get("sha256").is_none() => {}
-            Some("present") if input["sha256"].as_str().is_some_and(wire::is_digest) => {}
-            _ => {
-                return Err(format!(
-                    "Git input {id} requires explicit absence or a present digest"
-                ));
-            }
-        }
+        verified_git_binding::admit_git_guard_presence(
+            id, input["presence"].as_str(), input.get("sha256").is_some(), input["sha256"].as_str(),
+        ).map_err(guard_error)?;
         selected.push(input.clone());
     }
     Ok(Some(selected))
+}
+
+struct JsonGuardReferences<'a>(&'a [Value]);
+
+impl verified_git_binding::BindingReferenceRows for JsonGuardReferences<'_> {
+    fn len(&self) -> usize { self.0.len() }
+    fn id(&self, index: usize) -> Option<&str> { self.0[index]["id"].as_str() }
+}
+
+fn guard_error(error: verified_git_binding::GitGuardError<'_>) -> String {
+    format!("{}{}{}", error.prefix, error.id, error.suffix)
 }
 
 pub(crate) struct Guard {

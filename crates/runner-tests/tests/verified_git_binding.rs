@@ -214,6 +214,118 @@ fn expect_identity_error<T>(result: Result<T, &str>, expected: &str)
     }
 }
 
+fn expect_guard_error<T>(result: Result<T, policy::GitGuardError<'_>>, prefix: &str, id: &str, suffix: &str)
+    requires match result {
+        Ok(_) => false,
+        Err(error) => error.prefix@ == prefix@ && error.id@ == id@ && error.suffix@ == suffix@,
+    },
+{
+    match result {
+        Ok(_) => { panic!(); },
+        Err(error) => {
+            expect_true(policy::matches_expected(error.prefix, Some(prefix)));
+            expect_true(policy::matches_expected(error.id, Some(id)));
+            expect_true(policy::matches_expected(error.suffix, Some(suffix)));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_header_keeps_object_shape_schema_and_array_boundaries() {
+    let shape = "Git input guard requires only schema chrono-git-inputs/v1 and inputs";
+    proof {
+        reveal_strlit("chrono-git-inputs/v1"); reveal_strlit("chrono-git-inputs/v1 ");
+        assert("chrono-git-inputs/v1"@.len() != "chrono-git-inputs/v1 "@.len());
+    }
+    expect_identity_error(policy::admit_git_guard_object(None, None, false),
+        "Git input guard must be an object");
+    expect_identity_error(policy::admit_git_guard_object(Some(3), Some("chrono-git-inputs/v1"), true), shape);
+    expect_identity_error(policy::admit_git_guard_object(Some(2), None, true), shape);
+    expect_identity_error(policy::admit_git_guard_object(Some(2), Some("chrono-git-inputs/v1 "), true), shape);
+    expect_identity_error(policy::admit_git_guard_object(Some(2), Some("chrono-git-inputs/v1"), false), shape);
+    expect_true(policy::admit_git_guard_object(Some(2), Some("chrono-git-inputs/v1"), true).is_ok());
+    expect_identity_error(policy::git_guard_ids::<u8>(None), "Git input guard requires nonempty inputs");
+    expect_identity_error(policy::git_guard_ids(Some((&7u8, 0))), "Git input guard requires nonempty inputs");
+    match policy::git_guard_ids(Some((&7u8, 2))) {
+        Ok(original) => { expect_true(*original == 7); }, Err(_) => { panic!(); },
+    }
+    expect_identity_error(policy::git_guard_files::<u8>(None), "Git input guard requires file inputs");
+    match policy::git_guard_files(Some(&9u8)) {
+        Ok(original) => { expect_true(*original == 9); }, Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_ids_and_locations_preserve_complete_nonempty_literals() {
+    proof { reveal_strlit(""); reveal_strlit(" λ\0 "); }
+    expect_identity_error(policy::git_guard_id(None), "invalid Git input ID");
+    expect_identity_error(policy::git_guard_id(Some("")), "invalid Git input ID");
+    expect_identity_error(policy::git_guard_location(None), "Git input location required");
+    expect_identity_error(policy::git_guard_location(Some("")), "Git input location required");
+    match policy::git_guard_id(Some(" λ\0 ")) {
+        Ok(original) => { expect_true(policy::matches_expected(original, Some(" λ\0 "))); },
+        Err(_) => { panic!(); },
+    }
+    match policy::git_guard_location(Some(" λ\0 ")) {
+        Ok(original) => { expect_true(policy::matches_expected(original, Some(" λ\0 "))); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_duplicate_precedes_lookup_and_unique_reference_preserves_original_index() {
+    let mut rows = ReferenceIds(Vec::new());
+    expect_guard_error(policy::git_guard_reference(&rows, " λ\0 ", false), "duplicate Git input ", " λ\0 ", "");
+    proof {
+        assert forall|i: int| !#[trigger] policy::unique_binding_reference_index(&rows, " λ\0 ", i) by {}
+    }
+    expect_guard_error(policy::git_guard_reference(&rows, " λ\0 ", true), "missing/ambiguous Git input ", " λ\0 ", "");
+    rows.0.push(None);
+    rows.0.push(Some("other"));
+    rows.0.push(Some(" λ\0 "));
+    proof {
+        reveal_strlit("other"); reveal_strlit(" λ\0 ");
+        assert("other"@[0] != " λ\0 "@[0]);
+        assert(policy::unique_binding_reference_index(&rows, " λ\0 ", 2));
+    }
+    match policy::git_guard_reference(&rows, " λ\0 ", true) {
+        Ok(index) => { expect_true(index == 2); }, Err(_) => { panic!(); },
+    }
+    rows.0.push(Some(" λ\0 "));
+    proof {
+        assert forall|i: int| !#[trigger] policy::unique_binding_reference_index(&rows, " λ\0 ", i) by {
+            if i == 2 { assert(policy::binding_reference_matches(&rows, 3, " λ\0 ")); }
+            else { assert(policy::binding_reference_matches(&rows, 2, " λ\0 ")); }
+        }
+    }
+    expect_guard_error(policy::git_guard_reference(&rows, " λ\0 ", true), "missing/ambiguous Git input ", " λ\0 ", "");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_presence_distinguishes_absent_digest_keys_and_requires_full_present_digest() {
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    let digest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    let suffix = " requires explicit absence or a present digest";
+    proof {
+        reveal_strlit("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef");
+        reveal_strlit("present"); reveal_strlit("present "); reveal_strlit("ABSENT"); reveal_strlit("absent");
+        reveal_strlit("");
+        assert(vstd::string::is_ascii(digest));
+        assert(policy::identifiers::digest_format(digest.spec_bytes()));
+        assert("present"@.len() != "present "@.len());
+        assert("ABSENT"@[0] != "absent"@[0] && "ABSENT"@.len() != "present"@.len());
+    }
+    expect_true(policy::admit_git_guard_presence(" λ\0 ", Some("absent"), false, None).is_ok());
+    expect_guard_error(policy::admit_git_guard_presence(" λ\0 ", Some("absent"), true, None), "Git input ", " λ\0 ", suffix);
+    expect_guard_error(policy::admit_git_guard_presence(" λ\0 ", Some("absent"), true, Some(digest)), "Git input ", " λ\0 ", suffix);
+    expect_guard_error(policy::admit_git_guard_presence(" λ\0 ", None, false, None), "Git input ", " λ\0 ", suffix);
+    expect_guard_error(policy::admit_git_guard_presence(" λ\0 ", Some("ABSENT"), false, None), "Git input ", " λ\0 ", suffix);
+    expect_guard_error(policy::admit_git_guard_presence(" λ\0 ", Some("present"), true, None), "Git input ", " λ\0 ", suffix);
+    expect_guard_error(policy::admit_git_guard_presence(" λ\0 ", Some("present"), true, Some("")), "Git input ", " λ\0 ", suffix);
+    expect_guard_error(policy::admit_git_guard_presence(" λ\0 ", Some("present "), true, Some(digest)), "Git input ", " λ\0 ", suffix);
+    expect_true(policy::admit_git_guard_presence(" λ\0 ", Some("present"), true, Some(digest)).is_ok());
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn identity_header_requires_exact_fields_then_nonempty_configurations() {
     let fields = "Git selector identity requires only program and configurations";
