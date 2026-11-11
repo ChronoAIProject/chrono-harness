@@ -247,6 +247,8 @@ Git 配置的选择器版本由同源 Verus 判定：只有全文为 `chrono-git
 
 请求、registrationview（选择器模式版本化为 `chrono-registration-view/v2`）、历史 decode（选择器输入版本化为 `chrono-historical-decode/v3`）、FILEMAP provenance、mixed documents 与 workflow checks 同时保留原始 entry identity、effective target identity 和结构化 selector binding，缺失、替换或漂移均拒绝。
 
+从已捕获的登记值恢复执行物身份选择器时，Verus 要求平台登记的配置路径中恰有一项存在于该快照。成功保留该项的完整路径，零项或多项都拒绝；此选择只观察快照，不读取现役执行物。
+
 Git facts 仍按原合同绑定 candidate，历史 endpoint 只读固定对象，不执行历史工具。选中输入快照使用版本化 `chrono-input-snapshot/v3` 绑定 entry、effectivetarget 与 selector；direct v1/v2/v3 和旧快照语义保持不变。
 
 本地与 CI 使用同一 唯一登记入口 argv，routes 仍登记稳定 entry；直接目标 argv

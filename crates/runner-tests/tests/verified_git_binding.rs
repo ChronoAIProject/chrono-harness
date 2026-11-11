@@ -33,6 +33,65 @@ fn input_is_optional_only_for_scoped_v4_and_other_link_constraints_remain() {
     expect_true(!policy::valid_link(0, true, true, false));
 }
 
+pub struct CapturedPath<'a>(pub &'a str);
+
+impl policy::RegistryMembership for CapturedPath<'_> {
+    open spec fn has_path(&self, path: &str) -> bool { path@ == self.0@ }
+
+    fn contains_path(&self, path: &str) -> bool {
+        policy::matches_expected(path, Some(self.0))
+    }
+}
+
+fn expect_captured_path(paths: &[&str], values: &CapturedPath, expected: &str, index: usize)
+    requires policy::unique_registry_index(paths@, values, index as int),
+        paths@[index as int]@ == expected@,
+{
+    match policy::select_captured_target(paths, values) {
+        Ok(actual) => {
+            proof {
+                use policy::RegistryMembership;
+
+                let actual_index = choose|i: int| policy::unique_registry_index(paths@, values, i)
+                    && paths@[i]@ == actual@;
+                assert(values.has_path(paths@[actual_index]));
+                assert(values.has_path(paths@[index as int]));
+                assert(actual_index == index);
+            }
+            expect_true(policy::matches_expected(actual, Some(expected)));
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+fn expect_no_captured_target(paths: &[&str], values: &CapturedPath)
+    requires forall|i: int| !policy::unique_registry_index(paths@, values, i),
+{
+    match policy::select_captured_target(paths, values) {
+        Ok(_) => { panic!(); },
+        Err(error) => {
+            expect_true(policy::matches_expected(
+                error, Some("registry values require exactly one registered effective policy")));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn captured_registry_requires_one_matching_slot_and_preserves_the_declared_path() {
+    let values = CapturedPath("目录/é\0");
+    let paths = ["", "目录/é\0", "目录/é"];
+    let misses = ["", "目录/é"];
+    let duplicate = ["目录/é\0", "", "目录/é\0"];
+    proof {
+        reveal_strlit(""); reveal_strlit("目录/é\0"); reveal_strlit("目录/é");
+        assert(""@.len() == 0 && "目录/é\0"@.len() == 5 && "目录/é"@.len() == 4);
+    }
+    expect_captured_path(&paths, &values, "目录/é\0", 1);
+    expect_no_captured_target(&[], &values);
+    expect_no_captured_target(&misses, &values);
+    expect_no_captured_target(&duplicate, &values);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn null_version_is_scoped_only_and_missing_empty_or_wrong_types_are_rejected() {
     proof { reveal_strlit(""); reveal_strlit("version"); }
