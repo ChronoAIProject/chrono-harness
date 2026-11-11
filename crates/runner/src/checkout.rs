@@ -8,7 +8,7 @@ use crate::{
     verified_status::{
         CheckoutPhysicalObservation, checkout_changed_paths, checkout_entry_supported,
         checkout_hash_stream, checkout_index_changes, checkout_metadata_observation,
-        checkout_object_hash, checkout_opened_file_matches, checkout_parent_observation,
+        checkout_object_hash, checkout_opened_file_matches, checkout_physical_path,
         checkout_physical_targets, checkout_regular_file_matches, checkout_symbolic_link,
         parse_git_index_rows, parse_git_tree_rows, record_checkout_physical_observations,
     },
@@ -58,22 +58,24 @@ pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>
 
 fn physical(root: &Path, path: &str) -> Result<Option<PathBuf>, String> {
     relative_path(path)?;
-    let mut current = root.to_path_buf();
-    let mut parts = Path::new(path).components().peekable();
-    while let Some(part) = parts.next() {
-        current.push(part);
-        if parts.peek().is_some() {
-            if !checkout_parent_observation(
-                fs::symlink_metadata(&current).map(|metadata| metadata.is_dir()),
-                |error| error.kind() == io::ErrorKind::NotFound,
-            )
-            .map_err(|error| format!("checkout path {path}: {error}"))?
-            {
-                return Ok(None);
-            }
-        }
-    }
-    Ok(Some(current))
+    checkout_physical_path(
+        Path::new(path).components(),
+        root.to_path_buf(),
+        |mut parts: std::path::Components<'_>| {
+            let part = parts.next();
+            (parts, part)
+        },
+        |mut current: PathBuf, part: std::path::Component<'_>| {
+            current.push(part);
+            current
+        },
+        |current: PathBuf| {
+            let observation = fs::symlink_metadata(&current).map(|metadata| metadata.is_dir());
+            (current, observation)
+        },
+        |error: &io::Error| error.kind() == io::ErrorKind::NotFound,
+    )
+    .map_err(|error| format!("checkout path {path}: {error}"))
 }
 
 fn hash<D: Digest>(size: u64, source: &mut impl Read) -> Result<String, String> {

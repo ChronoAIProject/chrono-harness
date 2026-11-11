@@ -2353,6 +2353,180 @@ pub fn checkout_parent_observation<E, F>(observation: Result<bool, E>, is_missin
     }
 }
 
+pub open spec fn checkout_components_finite<S, C, N>(next: N, rank: spec_fn(S) -> nat) -> bool
+    where N: Fn(S) -> (S, Option<C>),
+{
+    forall|source: S, result: (S, Option<C>)|
+        #[trigger] next.ensures((source,), result) && result.1.is_some()
+            ==> rank(result.0) < rank(source)
+}
+
+#[verifier::opaque]
+pub open spec fn checkout_physical_step<S, P, C, E, N, A, M>(
+    before: (S, P, C), after: (S, P, C), next: N, append: A, metadata: M,
+) -> bool
+    where N: Fn(S) -> (S, Option<C>), A: Fn(P, C) -> P,
+          M: Fn(P) -> (P, Result<bool, E>),
+{
+    exists|built: P| append.ensures((before.1, before.2), built)
+        && next.ensures((before.0,), (after.0, Some(after.2)))
+        && metadata.ensures((built,), (after.1, Ok::<bool, E>(true)))
+}
+
+pub open spec fn checkout_physical_prefix<S, P, C, E, N, A, M>(
+    states: Seq<(S, P, C)>, first: (S, P, C), next: N, append: A, metadata: M,
+) -> bool
+    where N: Fn(S) -> (S, Option<C>), A: Fn(P, C) -> P,
+          M: Fn(P) -> (P, Result<bool, E>),
+{
+    states.len() > 0 && states[0] == first
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] checkout_physical_step::<S, P, C, E, N, A, M>(
+                states[i], states[i + 1], next, append, metadata)
+}
+
+pub open spec fn checkout_physical_terminal<S, P, C, E, N, A, M, F>(
+    before: (S, P, C), built: P, following: (S, Option<C>),
+    observed: Option<(P, Result<bool, E>)>,
+    next: N, append: A, metadata: M, is_missing: F, out: Result<Option<P>, E>,
+) -> bool
+    where N: Fn(S) -> (S, Option<C>), A: Fn(P, C) -> P,
+          M: Fn(P) -> (P, Result<bool, E>), F: Fn(&E) -> bool,
+{
+    append.ensures((before.1, before.2), built)
+        && next.ensures((before.0,), following)
+        && match following.1 {
+            None => observed.is_none() && out == Ok::<Option<P>, E>(Some(built)),
+            Some(_) => match observed {
+                None => false,
+                Some(observed) => metadata.ensures((built,), observed)
+                    && match observed.1 {
+                        Ok(false) => out == Ok::<Option<P>, E>(None),
+                        Ok(true) => false,
+                        Err(error) => (out == Ok::<Option<P>, E>(None)
+                                && is_missing.ensures((&error,), true))
+                            || (out == Err::<Option<P>, E>(error)
+                                && is_missing.ensures((&error,), false)),
+                    },
+            },
+        }
+}
+
+pub open spec fn checkout_physical_result<S, P, C, E, N, A, M, F>(
+    initial: S, root: P, next: N, append: A, metadata: M, is_missing: F,
+    out: Result<Option<P>, E>,
+) -> bool
+    where N: Fn(S) -> (S, Option<C>), A: Fn(P, C) -> P,
+          M: Fn(P) -> (P, Result<bool, E>), F: Fn(&E) -> bool,
+{
+    exists|first: (S, Option<C>)| next.ensures((initial,), first)
+        && match first.1 {
+            None => out == Ok::<Option<P>, E>(Some(root)),
+            Some(component) => exists|states: Seq<(S, P, C)>, built: P, following: (S, Option<C>), observed: Option<(P, Result<bool, E>)>|
+                checkout_physical_prefix::<S, P, C, E, N, A, M>(states,
+                    (first.0, root, component), next, append, metadata)
+                    && checkout_physical_terminal(states.last(), built, following, observed, next, append, metadata, is_missing, out),
+        }
+}
+
+/// 逐组件构造路径；只查询父路径，首个非目录、缺失或错误立即终止。
+pub fn checkout_physical_path<S, P, C, E, N, A, M, F>(
+    initial: S, root: P, next: N, append: A, metadata: M, is_missing: F,
+) -> (out: Result<Option<P>, E>)
+    where N: Fn(S) -> (S, Option<C>), A: Fn(P, C) -> P,
+          M: Fn(P) -> (P, Result<bool, E>), F: Fn(&E) -> bool,
+    requires
+        forall|source: S| #[trigger] next.requires((source,)),
+        exists|rank: spec_fn(S) -> nat| checkout_components_finite::<S, C, N>(next, rank),
+        forall|path: P, component: C| #[trigger] append.requires((path, component)),
+        forall|path: P| #[trigger] metadata.requires((path,)),
+        forall|error: &E| #[trigger] is_missing.requires((error,)),
+    ensures checkout_physical_result(initial, root, next, append, metadata, is_missing, out),
+{
+    let ghost rank = choose|rank: spec_fn(S) -> nat| checkout_components_finite::<S, C, N>(next, rank);
+    let first_observation = next(initial);
+    let ghost first = first_observation;
+    let (mut source, initial_part) = first_observation;
+    let mut component = match initial_part {
+        None => {
+            assert(checkout_physical_result(initial, root, next, append, metadata, is_missing, Ok(Some(root))));
+            return Ok(Some(root));
+        },
+        Some(part) => part,
+    };
+    let ghost first_state = (source, root, component);
+    let ghost states = seq![first_state];
+    let mut path = root;
+    loop
+        invariant
+            next.ensures((initial,), first), first.0 == first_state.0,
+            first.1 == Some(first_state.2), first_state.1 == root,
+            states.last() == (source, path, component),
+            checkout_physical_prefix::<S, P, C, E, N, A, M>(states, first_state, next, append, metadata),
+            checkout_components_finite::<S, C, N>(next, rank),
+            forall|source: S| #[trigger] next.requires((source,)),
+            forall|path: P, component: C| #[trigger] append.requires((path, component)),
+            forall|path: P| #[trigger] metadata.requires((path,)),
+            forall|error: &E| #[trigger] is_missing.requires((error,)),
+        decreases rank(source),
+    {
+        path = append(path, component);
+        let ghost built = path;
+        let following = next(source);
+        let ghost following_observation = following;
+        let (after, following_part) = following;
+        source = after;
+        component = match following_part {
+            None => {
+                assert(checkout_physical_terminal(states.last(), built, following_observation, None, next, append, metadata, is_missing, Ok(Some(path))));
+                assert(checkout_physical_result(initial, root, next, append, metadata, is_missing, Ok(Some(path))));
+                return Ok(Some(path));
+            },
+            Some(part) => part,
+        };
+        let observed = metadata(path);
+        let ghost original_observation = observed;
+        let (after_path, observation) = observed;
+        path = after_path;
+        let permitted = checkout_parent_observation(observation,
+            |error: &E| -> (missing: bool)
+                ensures is_missing.ensures((error,), missing),
+            { is_missing(error) });
+        match permitted {
+            Err(error) => {
+                assert(checkout_physical_terminal(states.last(), built, following_observation, Some(original_observation), next, append, metadata, is_missing, Err(error)));
+                assert(checkout_physical_result(initial, root, next, append, metadata, is_missing, Err(error)));
+                return Err(error);
+            },
+            Ok(false) => {
+                assert(checkout_physical_terminal(states.last(), built, following_observation, Some(original_observation), next, append, metadata, is_missing, Ok(None)));
+                assert(checkout_physical_result(initial, root, next, append, metadata, is_missing, Ok(None)));
+                return Ok(None);
+            },
+            Ok(true) => {},
+        }
+        let ghost after = (source, path, component);
+        assert(original_observation.1 == Ok::<bool, E>(true));
+        assert(append.ensures((states.last().1, states.last().2), built));
+        assert(next.ensures((states.last().0,), (source, Some(component))));
+        assert(metadata.ensures((built,), (path, Ok::<bool, E>(true))));
+        assert(checkout_physical_step::<S, P, C, E, N, A, M>(states.last(), after, next, append, metadata)) by {
+            reveal(checkout_physical_step);
+        }
+        proof {
+            let previous = states;
+            states = states.push(after);
+            assert forall|i: int| 0 <= i < states.len() - 1 implies
+                #[trigger] checkout_physical_step::<S, P, C, E, N, A, M>(states[i], states[i + 1], next, append, metadata) by {
+                if i < previous.len() - 1 {
+                    assert(checkout_physical_step::<S, P, C, E, N, A, M>(previous[i], previous[i + 1], next, append, metadata));
+                }
+            }
+        }
+    }
+}
+
+
 /// checkout 只支持原有三种 blob 模式，完整文本决定支持与否。
 pub fn checkout_entry_supported(kind: &str, mode: &str) -> (supported: bool)
     ensures supported == (kind@ == "blob"@
