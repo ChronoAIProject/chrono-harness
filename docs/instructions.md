@@ -1,6 +1,6 @@
 # 宿主指令生成：atomic-rules/relative-alias/v3
 
-`chrono-instructions` 把登记的规则生成工作指南。它是独立 Rust 库，CLI 只负责参数和调用；生产项目与专属测试项目为 instructions ↔ instructions-tests，没有根 workspace，也不依赖 runner。
+`chrono-instructions` 把登记的规则生成工作指南。它有独立的 Rust 库和 CLI，CLI 只负责参数和调用；生产项目与专属测试项目为 instructions ↔ instructions-tests，没有根 workspace。发布恢复复用 runner 的原件保管能力。
 
 专属测试自行编译真实库和 CLI 源码，只消费测试项目的 target；测试计划和单元缓存不再包含未被读取的生产 target。日常构建、生成及发布仍保留各自的正式入口；发布所用生产缓存不受此删减影响。
 
