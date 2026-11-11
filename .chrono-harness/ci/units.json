@@ -748,7 +748,6 @@
         ],
         "consumer": "check.unit_ci",
         "caches": [
-          "check.ci",
           "check.ci-tests",
           "check.judge-ci",
           "check.judge-registration",
@@ -756,7 +755,6 @@
         ],
         "save_caches": [
           "check.ci-tests",
-          "check.ci",
           "check.runner"
         ]
       },
@@ -1287,7 +1285,6 @@
           "source_files": [
             ".chrono-harness/ci/native/Cargo.lock",
             "crates/ci-tests/Cargo.lock",
-            "crates/ci/Cargo.lock",
             "crates/judge-ci/Cargo.lock",
             "crates/judge-registration/Cargo.lock",
             "crates/runner/Cargo.lock",
