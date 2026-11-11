@@ -292,10 +292,7 @@ struct Bound {
     selection: Option<crate::facts_configs::Selection>,
 }
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
-    v[key]
-        .as_str()
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| format!("missing {key}"))
+    verified_git_binding::required_binding_text(v[key].as_str(), key)
 }
 /// Validate the new link without interpreting any historical config as v3.
 pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
@@ -342,30 +339,26 @@ pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
             .map(|index| &config["environment"]["inputs"][index])
         })
         .transpose()?;
-    text(tool, "program")?;
-    if !verified_git_binding::valid_version(
+    verified_git_binding::admit_binding_tool(
         config["schema_version"].as_u64().unwrap(),
-        tool.get("expected_version").is_some(),
-        tool["expected_version"].is_null(),
-        tool["expected_version"].as_str(),
-    ) {
-        return Err("facts_git requires an expected version, or null in v4".into());
-    }
-    if tool["resolution"] != "PATH-once" {
-        return Err("facts_git requires a PATH-once tool".into());
-    }
-    if let Some(input) = input {
-        text(input, "location")?;
-        if input["presence"] != "present" || !input["sha256"].as_str().is_some_and(wire::is_digest)
-        {
-            return Err("facts_git requires a present digest-bound input when declared".into());
-        }
-    }
+        tool["program"].as_str(),
+        (
+            tool.get("expected_version").is_some(),
+            tool["expected_version"].is_null(),
+            tool["expected_version"].as_str(),
+        ),
+        tool["resolution"].as_str(),
+        input.map(|input| {
+            (
+                input["location"].as_str(),
+                input["presence"].as_str(),
+                input["sha256"].as_str(),
+            )
+        }),
+    )?;
     let args: Vec<String> =
         serde_json::from_value(tool["version_argv"].clone()).map_err(|e| e.to_string())?;
-    if args.is_empty() {
-        return Err("facts_git requires version_argv".into());
-    }
+    verified_git_binding::admit_binding_version_argv(args.len())?;
     crate::facts_inputs::declaration(config)?;
     Ok((tool, input))
 }
