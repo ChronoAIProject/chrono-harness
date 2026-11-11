@@ -2384,6 +2384,30 @@ pub fn checkout_opened_file_matches(
     is_file && opened_size == observed_size && opened_permissions == observed_permissions
 }
 
+pub enum CheckoutHashAlgorithm {
+    Sha1,
+    Sha256,
+}
+
+/// 先复用完整 OID 准入，再选择原有 Git 对象摘要算法；不截取或归一化输入。
+pub fn checkout_hash_algorithm(text: &str) -> (out: Result<CheckoutHashAlgorithm, String>)
+    ensures
+        out.is_ok() == identifiers::oid(text.spec_bytes()),
+        match out {
+            Ok(CheckoutHashAlgorithm::Sha1) => text.spec_bytes().len() == 40,
+            Ok(CheckoutHashAlgorithm::Sha256) => text.spec_bytes().len() == 64,
+            Err(message) => message@ == "expected full nonzero lowercase commit OID"@,
+        },
+{
+    match identifiers::full_oid(text) {
+        Err(message) => Err(message),
+        Ok(()) => {
+            if text.len() == 40 { Ok(CheckoutHashAlgorithm::Sha1) }
+            else { Ok(CheckoutHashAlgorithm::Sha256) }
+        },
+    }
+}
+
 pub open spec fn checkout_hash_advance_spec(total: u64, size: u64, chunk: u64)
     -> Result<u64, Seq<char>>
 {

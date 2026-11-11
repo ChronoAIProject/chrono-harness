@@ -169,7 +169,7 @@
     {"path":"crates/judge-ci/Cargo.lock","owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-ci"}]},
     {"path":"crates/judge-ci/src/lib.rs","owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci"}]},
     {"path":"crates/judge-ci/src/source_binding.rs","owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci"}]},
-    {"path":"crates/judge-ci/src/main.rs","owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci"}]},
+    {"path":"crates/judge-ci/src/main.rs","owner":"judge-ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci"},{"kind":"compile","to":"project:judge-ci-tests"}]},
     {"path":"crates/judge-ci-tests/Cargo.toml","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-ci-tests"}]},
     {"path":"crates/judge-ci-tests/Cargo.lock","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-ci-tests"}]},
     {"path":"crates/judge-ci-tests/tests/behavior.rs","owner":"judge-ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-ci-tests"}]},
@@ -1303,7 +1303,6 @@
         "fmt.judge-ci",
         "fmt.judge-ci-tests",
         "build.runner",
-        "build.judge-ci",
         "test.judge-ci-tests"
       ],
       "timeout_seconds": 900,

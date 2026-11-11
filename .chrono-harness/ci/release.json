@@ -603,8 +603,7 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/",
       "needs": [
         "linux_release_frontend",
-        "linux_build_runner",
-        "linux_build_judge_ci"
+        "linux_build_runner"
       ],
       "downloads": [
         {
@@ -614,10 +613,6 @@
         {
           "job": "linux_build_runner",
           "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
-        },
-        {
-          "job": "linux_build_judge_ci",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
         }
       ]
     },
@@ -1802,8 +1797,7 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_ci_tests/",
       "needs": [
         "macos_release_frontend",
-        "macos_build_runner",
-        "macos_build_judge_ci"
+        "macos_build_runner"
       ],
       "downloads": [
         {
@@ -1813,10 +1807,6 @@
         {
           "job": "macos_build_runner",
           "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
-        },
-        {
-          "job": "macos_build_judge_ci",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_ci/"
         }
       ]
     },

@@ -48,8 +48,7 @@ impl BoundHost {
         );
         host.change_registry(CONFIG, |c| {
             c["schema"] = json!("chrono-ci-check/v2");
-            c["judge"]["program"] =
-                json!(source().join("crates/judge-ci/target/debug/chrono-judge-ci"));
+            c["judge"]["program"] = json!(env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"));
             c["judge"]["timeout_seconds"] = json!(120);
             c["judge"]["output_limit_bytes"] = json!(4 * 1024 * 1024);
             c["policy"]["facts_config"] = json!(FACTS);

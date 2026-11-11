@@ -223,7 +223,6 @@
       ],
       "build.judge-ci": [
         "ci",
-        "judge-ci",
         "judge-projects"
       ],
       "build.judge-cost": [
