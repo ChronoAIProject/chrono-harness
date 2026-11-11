@@ -20,6 +20,81 @@ fn expect(actual: bool)
     if !actual { panic!(); }
 }
 
+fn expect_source(actual: policy::AbsentPolicySource, expected: policy::AbsentPolicySource)
+    requires actual == expected,
+{
+    use policy::AbsentPolicySource::*;
+    expect(match (actual, expected) {
+        (ImportedOriginal, ImportedOriginal) | (Current, Current)
+        | (RetainedTarget, RetainedTarget) => true,
+        _ => false,
+    });
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn imported_original_precedes_target_binding_and_explicit_migration_supersedes_it() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("import"); reveal_strlit("birth"); reveal_strlit("import\0");
+        reveal_strlit("old"); reveal_strlit("new");
+        assert("old"@[0] != "new"@[0]);
+        assert("import"@.len() == 6 && "birth"@.len() == 5 && "import\0"@.len() == 7);
+    }
+    use policy::AbsentPolicySource::*;
+    expect_source(policy::absent_policy_source("import", false, "old", "old", "old", "old"), ImportedOriginal);
+    expect_source(policy::absent_policy_source("import", false, "old", "new", "old", "new"), ImportedOriginal);
+    expect_source(policy::absent_policy_source("import", true, "old", "old", "old", "old"), Current);
+    expect_source(policy::absent_policy_source("import", true, "old", "new", "old", "old"), RetainedTarget);
+    expect_source(policy::absent_policy_source("import", true, "old", "old", "old", "new"), RetainedTarget);
+    expect_source(policy::absent_policy_source("birth", false, "old", "old", "old", "old"), Current);
+    expect_source(policy::absent_policy_source("birth", false, "old", "new", "old", "old"), RetainedTarget);
+    expect_source(policy::absent_policy_source("birth", true, "old", "old", "old", "new"), RetainedTarget);
+    expect_source(policy::absent_policy_source("import\0", false, "old", "old", "old", "old"), Current);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn imported_policy_requires_published_original_and_exact_receipt_fields() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("chrono-worktree-report/v1"); reveal_strlit("chrono-worktree-report/v2");
+        reveal_strlit("import"); reveal_strlit("migrate");
+        reveal_strlit("imported"); reveal_strlit("failed");
+        reveal_strlit("/owner"); reveal_strlit("/owner\0");
+        reveal_strlit("report"); reveal_strlit("report/other");
+        reveal_strlit("config"); reveal_strlit("config\0");
+        assert("chrono-worktree-report/v1"@[24] != "chrono-worktree-report/v2"@[24]);
+        assert("import"@.len() == 6 && "migrate"@.len() == 7);
+        assert("imported"@.len() == 8 && "failed"@.len() == 6);
+        assert("/owner"@.len() == 6 && "/owner\0"@.len() == 7);
+        assert("report"@.len() == 6 && "report/other"@.len() == 12);
+        assert("config"@.len() == 6 && "config\0"@.len() == 7);
+    }
+    let mut r = policy::ImportedPolicyReceipt {
+        schema: Some("chrono-worktree-report/v1"), operation: Some("import"),
+        status: Some("imported"), source_root: Some("/owner"),
+        report_path: Some("report"), config_path: Some("config"),
+    };
+    expect(policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    expect(!policy::imported_policy_receipt_valid(&r, false, "/owner", "report", "config"));
+    r.schema = None;
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.schema = Some("chrono-worktree-report/v2");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.schema = Some("chrono-worktree-report/v1");
+    r.operation = Some("migrate");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.operation = Some("import"); r.status = Some("failed");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.status = Some("imported"); r.source_root = Some("/owner\0");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.source_root = Some("/owner"); r.report_path = Some("report/other");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.report_path = Some("report"); r.config_path = Some("config\0");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.config_path = None;
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn reusable_outputs_wait_for_release_and_evidence_keeps_its_own_permission() {
     use policy::Disposition::*;
