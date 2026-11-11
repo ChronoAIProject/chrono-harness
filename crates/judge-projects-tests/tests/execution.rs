@@ -300,10 +300,6 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
                     append("effects", "b"),
                     stdout([254, 1]),
                     Step::Stderr(vec![253]),
-                    Step::Rendezvous {
-                        address: listener.local_addr().unwrap().to_string(),
-                        id: "b".into(),
-                    },
                 ],
             ),
         ],
@@ -314,7 +310,10 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
     let driver = env!("CARGO_BIN_EXE_chrono-test-project-execution-driver");
     let spec = chrono_harness::CommandSpec {
         program: driver.into(),
-        args: vec![encoded_plan.to_str().unwrap().into()],
+        args: vec![
+            encoded_plan.to_str().unwrap().into(),
+            listener.local_addr().unwrap().to_string(),
+        ],
         env: BTreeMap::new(),
         timeout_seconds: 3,
         output_limit_bytes: 65536,
@@ -326,8 +325,13 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         let worker = scope.spawn(|| {
             chrono_harness::run_process_observed(directory.path(), &spec, &[], &digest).unwrap()
         });
-        let (id, held) = arrival(&listener);
-        assert_eq!(id, "b");
+        let (event, held) = arrival(&listener);
+        let event: serde_json::Value = serde_json::from_str(&event).unwrap();
+        assert_eq!(event["event"], "process.completed");
+        assert_eq!(event["context"]["operation"], "b");
+        assert_eq!(event["fields"]["exit_code"], 0);
+        assert_eq!(event["fields"]["stdout_bytes"], 2);
+        assert_eq!(event["fields"]["stderr_bytes"], 1);
         let original = directory
             .path()
             .join(".chrono-harness/state/projects-run.operation-0/result.json");
@@ -348,6 +352,16 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         )
         .unwrap();
         assert!(!partial.join("result.json").exists());
+        // A child's socket arrival only orders its pipe writes. This handshake
+        // instead holds the producer after both original readers have joined.
+        assert_eq!(
+            std::fs::read(format!("{}.stdout", partial.display())).unwrap(),
+            [254, 1]
+        );
+        assert_eq!(
+            std::fs::read(format!("{}.stderr", partial.display())).unwrap(),
+            [253]
+        );
         let launcher = i32::try_from(launch["launcher_pid"].as_u64().unwrap()).unwrap();
         // An enclosing timeout cooperatively cancels nested operations, allowing
         // this producer to publish their terminal results. Interrupt the actual
@@ -647,34 +661,33 @@ fn barrier_plan(
 }
 fn arrival(listener: &std::net::TcpListener) -> (String, std::net::TcpStream) {
     use std::io::Read;
-    let start = std::time::Instant::now();
+    use std::os::fd::AsRawFd;
+    let mut ready = libc::pollfd {
+        fd: listener.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    assert_eq!(
+        unsafe { libc::poll(&mut ready, 1, 6000) },
+        1,
+        "no registered process reached rendezvous: {}",
+        std::io::Error::last_os_error()
+    );
+    assert_ne!(ready.revents & libc::POLLIN, 0);
+    let (mut s, _) = listener.accept().unwrap();
+    s.set_nonblocking(false).unwrap();
+    s.set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .unwrap();
+    let mut id = String::new();
     loop {
-        match listener.accept() {
-            Ok((mut s, _)) => {
-                s.set_nonblocking(false).unwrap();
-                s.set_read_timeout(Some(std::time::Duration::from_secs(5)))
-                    .unwrap();
-                let mut id = String::new();
-                loop {
-                    let mut byte = [0];
-                    s.read_exact(&mut byte).unwrap();
-                    if byte[0] == b'\n' {
-                        break;
-                    }
-                    id.push(byte[0] as char);
-                }
-                return (id, s);
-            }
-            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                assert!(
-                    start.elapsed() < std::time::Duration::from_secs(6),
-                    "no registered process reached rendezvous"
-                );
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
-            Err(e) => panic!("{e}"),
+        let mut byte = [0];
+        s.read_exact(&mut byte).unwrap();
+        if byte[0] == b'\n' {
+            break;
         }
+        id.push(byte[0] as char);
     }
+    (id, s)
 }
 fn release(mut s: std::net::TcpStream) {
     use std::io::Write;
