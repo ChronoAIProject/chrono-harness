@@ -4849,6 +4849,33 @@ fn never_decode_registry(bytes: &[u8]) -> (out: Result<u64, String>)
     panic!();
 }
 
+// 同一被测函数；只有 Verus 调用携带不会进入普通 Rust 的证明模型。
+fn registry_fixture_batch<P>(
+    expected: &[String], originals: Vec<(String, Vec<u8>)>,
+    bytes: std::collections::BTreeMap<String, Vec<u8>>,
+    values: std::collections::BTreeMap<String, u64>, decode: P,
+) -> (out: Result<(std::collections::BTreeMap<String, Vec<u8>>,
+    std::collections::BTreeMap<String, u64>), String>)
+    where P: Fn(&[u8]) -> Result<u64, String>,
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        forall|i: int, raw: &[u8]| 0 <= i < originals.len()
+            && policy::registry_batch_prefix(expected@, originals@, |raw: Seq<u8>| registry_decode_model(raw), i)
+            && expected@[i]@ == originals@[i].0@ && raw@ == originals@[i].1@
+            ==> decode.requires((raw,)),
+        forall|raw: &[u8], result: Result<u64, String>|
+            decode.requires((raw,)) && decode.ensures((raw,), result)
+            ==> policy::registry_decoded_view(result) == registry_decode_model(raw@),
+    ensures policy::registry_batch_view(out) == policy::registry_batch_spec(
+        expected@, originals@, bytes@, values@, |raw: Seq<u8>| registry_decode_model(raw)),
+{
+    #[cfg(verus_keep_ghost)]
+    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode,
+        Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+    #[cfg(not(verus_keep_ghost))]
+    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode);
+    out
+}
+
 fn expect_registry_batch_error(
     actual: Result<(std::collections::BTreeMap<String, Vec<u8>>,
         std::collections::BTreeMap<String, u64>), String>, expected: &str,
@@ -4891,8 +4918,8 @@ fn registry_parse_batch_empty_preserves_both_existing_maps()
     let mut values = std::collections::BTreeMap::new();
     bytes.insert(key.clone(), vec![0u8, 255, 10]);
     values.insert(key.clone(), u64::MAX);
-    let result = policy::registry_parse_batch(&[], Vec::new(), bytes, values,
-        never_decode_registry, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+    let result = registry_fixture_batch(&[], Vec::new(), bytes, values,
+        never_decode_registry);
     match result {
         Ok((bytes, values)) => {
             expect_status_true(bytes.len() == 1 && values.len() == 1);
@@ -4907,9 +4934,9 @@ fn registry_parse_batch_missing_rows_rejects_before_decoding()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     let expected = vec!["a".to_owned()];
-    let result = policy::registry_parse_batch(&expected, Vec::new(),
+    let result = registry_fixture_batch(&expected, Vec::new(),
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
-        never_decode_registry, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+        never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition count mismatch");
 }
 
@@ -4918,9 +4945,9 @@ fn registry_parse_batch_extra_rows_rejects_before_path_or_decode()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     let originals = vec![("unexpected".to_owned(), Vec::new())];
-    let result = policy::registry_parse_batch(&[], originals,
+    let result = registry_fixture_batch(&[], originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
-        never_decode_registry, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+        never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition count mismatch");
 }
 
@@ -4934,9 +4961,9 @@ fn registry_parse_batch_wrong_path_rejects_before_current_decode()
     }
     let expected = vec!["a".to_owned()];
     let originals = vec![("a\0".to_owned(), Vec::new())];
-    let result = policy::registry_parse_batch(&expected, originals,
+    let result = registry_fixture_batch(&expected, originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
-        never_decode_registry, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+        never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition path mismatch");
 }
 
@@ -4947,9 +4974,9 @@ fn registry_parse_batch_preserves_complete_empty_decode_error()
     let key = "".to_owned();
     let expected = vec![key.clone()];
     let originals = vec![(key, Vec::new())];
-    let result = policy::registry_parse_batch(&expected, originals,
+    let result = registry_fixture_batch(&expected, originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
-        decode_registry_fixture, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+        decode_registry_fixture);
     expect_registry_batch_error(result, "空输入\0\n");
 }
 
@@ -4960,9 +4987,9 @@ fn registry_parse_batch_decode_error_precedes_later_wrong_path()
     let key = "first".to_owned();
     let expected = vec![key.clone(), "later".to_owned()];
     let originals = vec![(key, vec![255u8, 0, 10]), ("wrong".to_owned(), Vec::new())];
-    let result = policy::registry_parse_batch(&expected, originals,
+    let result = registry_fixture_batch(&expected, originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
-        decode_registry_fixture, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+        decode_registry_fixture);
     expect_registry_batch_error(result, "解码失败：é\0\n");
 }
 
@@ -4978,9 +5005,9 @@ fn registry_parse_batch_path_error_after_success_precedes_decode_error()
     let first = "first".to_owned();
     let expected = vec![first.clone(), "a".to_owned()];
     let originals = vec![(first, vec![1u8]), ("A".to_owned(), vec![255u8])];
-    let result = policy::registry_parse_batch(&expected, originals,
+    let result = registry_fixture_batch(&expected, originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
-        decode_registry_fixture, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+        decode_registry_fixture);
     expect_registry_batch_error(result, "registry acquisition path mismatch");
 }
 
@@ -5001,8 +5028,8 @@ fn registry_parse_batch_success_preserves_full_bytes_and_unrelated_entries()
     values.insert(old.clone(), u64::MAX);
     let expected = vec![key.clone()];
     let originals = vec![(key.clone(), vec![0u8, 255, 10, 13, 254])];
-    let result = policy::registry_parse_batch(&expected, originals, bytes, values,
-        decode_registry_fixture, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+    let result = registry_fixture_batch(&expected, originals, bytes, values,
+        decode_registry_fixture);
     match result {
         Ok((bytes, values)) => {
             expect_status_true(bytes.len() == 2 && values.len() == 2);
@@ -5025,8 +5052,8 @@ fn registry_parse_batch_duplicate_keys_replace_both_maps_in_order()
     values.insert(key.clone(), 3);
     let expected = vec![key.clone(), key.clone()];
     let originals = vec![(key.clone(), vec![4u8, 0]), (key.clone(), vec![254u8, 255, 0])];
-    let result = policy::registry_parse_batch(&expected, originals, bytes, values,
-        decode_registry_fixture, #[cfg(verus_keep_ghost)] Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
+    let result = registry_fixture_batch(&expected, originals, bytes, values,
+        decode_registry_fixture);
     match result {
         Ok((bytes, values)) => {
             expect_status_true(bytes.len() == 1 && values.len() == 1);
