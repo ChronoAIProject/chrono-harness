@@ -3889,6 +3889,261 @@ fn checkout_stream_rejects_growth_and_early_eof() {
     expect_checkout_stream_failure(shrank, "checkout file shrank during observation");
 }
 
+fn checkout_parent_fixture_next(source: u8) -> (out: (u8, Option<u8>))
+    ensures out == if source == 0 { (0u8, None) }
+        else { ((source - 1) as u8, Some(if source == 1 { 0u8 } else { 1u8 })) },
+{
+    if source == 0 { (0, None) }
+    else { (source - 1, Some(if source == 1 { 0 } else { 1 })) }
+}
+
+fn checkout_parent_fixture_append(mut path: Vec<u8>, component: u8) -> (out: Vec<u8>)
+    ensures out@ == path@ + seq![component],
+{ path.push(component); path }
+
+spec fn checkout_parent_fixture_metadata_result(mode: u8, path: Seq<u8>, out: Result<bool, String>) -> bool {
+    if mode == 0 { out == Ok::<bool, String>(true) }
+    else if mode == 1 || mode == 2 {
+        if path == seq![77u8, 0, 255, 1] { out == Ok::<bool, String>(mode == 1) }
+        else { match out { Err(error) => error@ == "io: éfn index_nonzero_stage_always_changesdenied\nend"@, Ok(_) => false } }
+    } else if mode == 3 {
+        match out { Err(error) => error@ == "missing:fn index_nonzero_stage_always_changesé"@, Ok(_) => false }
+    } else {
+        match out { Err(error) => error@ == "missing:fn index_nonzero_stage_always_changesé/suffix"@, Ok(_) => false }
+    }
+}
+
+fn checkout_parent_fixture_metadata(mode: u8, path: Vec<u8>) -> (out: (Vec<u8>, Result<bool, String>))
+    ensures out.0 == path, checkout_parent_fixture_metadata_result(mode, path@, out.1),
+{
+    let observation = if mode == 0 { Ok(true) }
+        else if mode == 1 || mode == 2 {
+            if scope_text::equal_bytes(path.as_slice(), &[77u8, 0, 255, 1]) { Ok(mode == 1) }
+            else { Err("io: éfn index_nonzero_stage_always_changesdenied\nend".to_owned()) }
+        } else if mode == 3 { Err("missing:fn index_nonzero_stage_always_changesé".to_owned()) }
+        else { Err("missing:fn index_nonzero_stage_always_changesé/suffix".to_owned()) };
+    (path, observation)
+}
+
+fn checkout_parent_fixture_missing(error: &String) -> (missing: bool)
+    ensures missing == (error@ == "missing:fn index_nonzero_stage_always_changesé"@),
+{ scope_text::equal_text(error.as_str(), "missing:fn index_nonzero_stage_always_changesé") }
+
+spec fn checkout_parent_fixture_expected(count: u8, mode: u8, out: Result<Option<Vec<u8>>, String>) -> bool {
+    if count == 0 { match out { Ok(Some(path)) => path@ == seq![77u8, 0, 255], _ => false } }
+    else if count == 1 { match out { Ok(Some(path)) => path@ == seq![77u8, 0, 255, 0], _ => false } }
+    else if mode == 0 || (count == 2 && mode == 1) {
+        match out { Ok(Some(path)) => path@ == if count == 2 { seq![77u8, 0, 255, 1, 0] }
+            else { seq![77u8, 0, 255, 1, 1, 0] }, _ => false }
+    } else if mode == 2 || mode == 3 { out == Ok::<Option<Vec<u8>>, String>(None) }
+    else if mode == 1 { match out { Err(error) => error@ == "io: éfn index_nonzero_stage_always_changesdenied\nend"@, _ => false } }
+    else { match out { Err(error) => error@ == "missing:fn index_nonzero_stage_always_changesé/suffix"@, _ => false } }
+}
+
+proof fn checkout_parent_fixture_prefix_at<S, P, C, E, N, A, M>(
+    states: Seq<(S, P, C)>, first: (S, P, C), next: N, append: A, metadata: M, index: int,
+)
+    where N: Fn(S) -> (S, Option<C>), A: Fn(P, C) -> P,
+          M: Fn(P) -> (P, Result<bool, E>),
+    requires policy::checkout_physical_prefix::<S, P, C, E, N, A, M>(states, first, next, append, metadata),
+        0 <= index < states.len() - 1,
+    ensures policy::checkout_physical_step::<S, P, C, E, N, A, M>(
+        states[index], states[index + 1], next, append, metadata),
+{ }
+
+proof fn checkout_parent_fixture_step<M>(before: (u8, Vec<u8>, u8), after: (u8, Vec<u8>, u8), mode: u8, metadata: M)
+    where M: Fn(Vec<u8>) -> (Vec<u8>, Result<bool, String>),
+    requires before.2 == if before.0 == 0 { 0u8 } else { 1u8 },
+        policy::checkout_physical_step::<u8, Vec<u8>, u8, String, _, _, M>(
+            before, after, checkout_parent_fixture_next, checkout_parent_fixture_append, metadata),
+        forall|path: Vec<u8>, observed: (Vec<u8>, Result<bool, String>)|
+            #[trigger] metadata.ensures((path,), observed) ==>
+                observed.0 == path && checkout_parent_fixture_metadata_result(mode, path@, observed.1),
+    ensures before.0 > 0, after.0 as int == before.0 as int - 1,
+        after.2 == if after.0 == 0 { 0u8 } else { 1u8 },
+        after.1@ == before.1@ + seq![1u8],
+        checkout_parent_fixture_metadata_result(mode, after.1@, Ok::<bool, String>(true)),
+{ reveal(policy::checkout_physical_step); }
+
+proof fn checkout_parent_fixture_result<M>(count: u8, mode: u8, root: Vec<u8>, metadata: M,
+    out: Result<Option<Vec<u8>>, String>)
+    where M: Fn(Vec<u8>) -> (Vec<u8>, Result<bool, String>),
+    requires count <= 3, mode <= 4, root@ == seq![77u8, 0, 255],
+        forall|path: Vec<u8>, observed: (Vec<u8>, Result<bool, String>)|
+            #[trigger] metadata.ensures((path,), observed) ==>
+                observed.0 == path && checkout_parent_fixture_metadata_result(mode, path@, observed.1),
+        policy::checkout_physical_result(count, root, checkout_parent_fixture_next, checkout_parent_fixture_append,
+            metadata, checkout_parent_fixture_missing, out),
+    ensures checkout_parent_fixture_expected(count, mode, out),
+{
+    reveal_strlit("io: éfn index_nonzero_stage_always_changesdenied\nend");
+    reveal_strlit("missing:fn index_nonzero_stage_always_changesé");
+    reveal_strlit("missing:fn index_nonzero_stage_always_changesé/suffix");
+    let first = choose|first: (u8, Option<u8>)|
+        checkout_parent_fixture_next.ensures((count,), first)
+        && match first.1 {
+            None => out == Ok::<Option<Vec<u8>>, String>(Some(root)),
+            Some(component) => exists|states: Seq<(u8, Vec<u8>, u8)>, built: Vec<u8>,
+                following: (u8, Option<u8>), observed: Option<(Vec<u8>, Result<bool, String>)>|
+                policy::checkout_physical_prefix::<u8, Vec<u8>, u8, String, _, _, M>(states,
+                    (first.0, root, component), checkout_parent_fixture_next, checkout_parent_fixture_append, metadata)
+                && policy::checkout_physical_terminal(states.last(), built, following, observed,
+                    checkout_parent_fixture_next, checkout_parent_fixture_append, metadata, checkout_parent_fixture_missing, out),
+        };
+    if count == 0 { assert(first.1.is_none()); return; }
+    let component = first.1->Some_0;
+    let initial = (first.0, root, component);
+    let (states, built, following, observed) = choose|states: Seq<(u8, Vec<u8>, u8)>, built: Vec<u8>,
+        following: (u8, Option<u8>), observed: Option<(Vec<u8>, Result<bool, String>)>|
+        policy::checkout_physical_prefix::<u8, Vec<u8>, u8, String, _, _, M>(states,
+            initial, checkout_parent_fixture_next, checkout_parent_fixture_append, metadata)
+        && policy::checkout_physical_terminal(states.last(), built, following, observed,
+            checkout_parent_fixture_next, checkout_parent_fixture_append, metadata, checkout_parent_fixture_missing, out);
+    if states.len() > 1 {
+        checkout_parent_fixture_prefix_at(states, initial, checkout_parent_fixture_next, checkout_parent_fixture_append, metadata, 0);
+        checkout_parent_fixture_step(states[0], states[1], mode, metadata);
+        assert(states[1].0 as int == count as int - 2);
+        assert(states[1].1@ == seq![77u8, 0, 255, 1]);
+    }
+    if states.len() > 2 {
+        checkout_parent_fixture_prefix_at(states, initial, checkout_parent_fixture_next, checkout_parent_fixture_append, metadata, 1);
+        checkout_parent_fixture_step(states[1], states[2], mode, metadata);
+        assert(states[2].0 == 0 && count == 3);
+        assert(states[2].1@ == seq![77u8, 0, 255, 1, 1]);
+    }
+    if states.len() > 3 {
+        checkout_parent_fixture_prefix_at(states, initial, checkout_parent_fixture_next, checkout_parent_fixture_append, metadata, 2);
+        checkout_parent_fixture_step(states[2], states[3], mode, metadata);
+        assert(false);
+    }
+    assert(1 <= states.len() <= 3);
+    if states.len() == 1 { assert(states.last() == initial); }
+    else if states.len() == 2 { assert(states.last() == states[1]); }
+    else { assert(states.last() == states[2]); }
+    let last = states.last();
+    assert(last.0 as int == count as int - states.len());
+    assert(last.2 == if last.0 == 0 { 0u8 } else { 1u8 });
+    assert(built@ == last.1@ + seq![last.2]);
+    if states.len() == 1 {
+        if last.0 == 0 { assert(built@ =~= seq![77u8, 0, 255, 0]); }
+        else { assert(built@ =~= seq![77u8, 0, 255, 1]); }
+    } else if states.len() == 2 {
+        assert(mode == 0 || mode == 1);
+        if last.0 == 0 { assert(built@ =~= seq![77u8, 0, 255, 1, 0]); }
+        else { assert(built@ =~= seq![77u8, 0, 255, 1, 1]); }
+    } else {
+        assert(mode == 0);
+        assert(built@ =~= seq![77u8, 0, 255, 1, 1, 0]);
+    }
+    assert(checkout_parent_fixture_next.ensures((last.0,), following));
+    match following.1 {
+        None => {
+            assert(last.0 == 0);
+            assert(checkout_parent_fixture_expected(count, mode, out));
+        },
+        Some(_) => {
+            let observation = observed->Some_0;
+            assert(metadata.ensures((built,), observation));
+            assert(checkout_parent_fixture_metadata_result(mode, built@, observation.1));
+            assert(observation.0 == built);
+            match observation.1 {
+                Ok(_) => { assert(checkout_parent_fixture_expected(count, mode, out)); },
+                Err(error) => {
+                    assert(checkout_parent_fixture_missing.ensures((&error,), true)
+                        || checkout_parent_fixture_missing.ensures((&error,), false));
+                    if mode == 3 {
+                        assert(error@ == "missing:fn index_nonzero_stage_always_changesé"@);
+                        assert(out == Ok::<Option<Vec<u8>>, String>(None));
+                    } else {
+                        if mode == 1 || mode == 2 {
+                            assert(error@ == "io: éfn index_nonzero_stage_always_changesdenied\nend"@);
+                            assert(error@.len() != "missing:fn index_nonzero_stage_always_changesé"@.len());
+                        } else {
+                            assert(mode == 4);
+                            assert(error@ == "missing:fn index_nonzero_stage_always_changesé/suffix"@);
+                            assert(error@.len() != "missing:fn index_nonzero_stage_always_changesé"@.len());
+                        }
+                        assert(error@ != "missing:fn index_nonzero_stage_always_changesé"@);
+                        assert(out == Err::<Option<Vec<u8>>, String>(error));
+                    }
+                    assert(checkout_parent_fixture_expected(count, mode, out));
+                },
+            }
+        },
+    }
+}
+
+fn checkout_parent_fixture_run(count: u8, mode: u8) -> (out: Result<Option<Vec<u8>>, String>)
+    requires count <= 3, mode <= 4,
+    ensures checkout_parent_fixture_expected(count, mode, out),
+{
+    let root = vec![77u8, 0, 255];
+    let ghost original_root = root;
+    let metadata = |path: Vec<u8>| -> (observed: (Vec<u8>, Result<bool, String>))
+        ensures observed.0 == path, checkout_parent_fixture_metadata_result(mode, path@, observed.1),
+    { checkout_parent_fixture_metadata(mode, path) };
+    assert(policy::checkout_components_finite::<u8, u8, _>(checkout_parent_fixture_next, |source: u8| source as nat));
+    assert(exists|rank: spec_fn(u8) -> nat| policy::checkout_components_finite::<u8, u8, _>(checkout_parent_fixture_next, rank));
+    let out = policy::checkout_physical_path(count, root, checkout_parent_fixture_next, checkout_parent_fixture_append,
+        metadata, checkout_parent_fixture_missing);
+    proof { checkout_parent_fixture_result(count, mode, original_root, metadata, out); }
+    out
+}
+
+fn expect_checkout_parent_path(out: Result<Option<Vec<u8>>, String>, expected: &[u8])
+    requires out matches Ok(Some(path)) && path@ == expected@,
+{
+    match out {
+        Ok(Some(path)) => expect_status_true(scope_text::equal_bytes(path.as_slice(), expected)),
+        _ => panic!(),
+    }
+}
+
+fn expect_checkout_parent_absent(out: Result<Option<Vec<u8>>, String>)
+    requires out == Ok::<Option<Vec<u8>>, String>(None),
+{
+    match out { Ok(None) => {}, _ => panic!() }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_parents_empty_and_final_never_query_metadata() {
+    let mut mode = 0u8;
+    while mode < 5
+        invariant mode <= 5,
+        decreases 5 - mode,
+    {
+        expect_checkout_parent_path(checkout_parent_fixture_run(0, mode), &[77u8, 0, 255]);
+        expect_checkout_parent_path(checkout_parent_fixture_run(1, mode), &[77u8, 0, 255, 0]);
+        mode = mode + 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_parents_append_and_query_in_component_order() {
+    expect_checkout_parent_path(checkout_parent_fixture_run(2, 0), &[77u8, 0, 255, 1, 0]);
+    expect_checkout_parent_path(checkout_parent_fixture_run(3, 0), &[77u8, 0, 255, 1, 1, 0]);
+    expect_checkout_parent_path(checkout_parent_fixture_run(2, 1), &[77u8, 0, 255, 1, 0]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_parents_stop_at_first_non_directory() {
+    expect_checkout_parent_absent(checkout_parent_fixture_run(2, 2));
+    expect_checkout_parent_absent(checkout_parent_fixture_run(3, 2));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_parents_stop_at_first_missing_component() {
+    expect_checkout_parent_absent(checkout_parent_fixture_run(2, 3));
+    expect_checkout_parent_absent(checkout_parent_fixture_run(3, 3));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_parents_preserve_full_initial_and_later_errors() {
+    expect_checkout_observation_error(checkout_parent_fixture_run(2, 4), "missing:fn index_nonzero_stage_always_changesé/suffix");
+    expect_checkout_observation_error(checkout_parent_fixture_run(3, 4), "missing:fn index_nonzero_stage_always_changesé/suffix");
+    expect_checkout_observation_error(checkout_parent_fixture_run(3, 1), "io: éfn index_nonzero_stage_always_changesdenied\nend");
+}
+
 fn index_nonzero_stage_always_changes(stage: &str, text: &str)
     requires stage@ != "0"@,
 {
