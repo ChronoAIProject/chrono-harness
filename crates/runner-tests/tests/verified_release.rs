@@ -415,7 +415,7 @@ fn read_only_peer_output_requires_complete_unchanged_bytes() {
     expect_true(policy::must_preserve_gate_peer(true, true));
     expect_true(!policy::must_preserve_gate_peer(false, true));
     expect_true(!policy::must_preserve_gate_peer(true, false));
-    let empty = policy::admit_gate_peer_output(b"", b"");
+    let empty = policy::admit_gate_peer_output(&[], &[]);
     let original = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187, 255]);
     let changed = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187, 254]);
     let shortened = policy::admit_gate_peer_output(&[0, 207, 187, 255], &[0, 207, 187]);

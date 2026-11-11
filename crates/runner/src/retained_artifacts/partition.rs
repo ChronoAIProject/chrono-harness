@@ -1474,6 +1474,12 @@ impl Inventory {
             }
         }
         for (id, record) in objects.iter_mut() {
+            if verified::must_preserve_gate_peer(
+                gate.observation_frontier,
+                gate.retained_dependencies.contains(id),
+            ) {
+                continue;
+            }
             record.policy_sha256 = ledger.policy_sha256.clone();
             if record.output.is_some() && !ledger.outputs.iter().any(|o| o.id == *id) {
                 let keep = record
@@ -1584,10 +1590,15 @@ impl Inventory {
         }
         // Prune only after the new source declarations are durable.
         for record in objects.values_mut() {
-            record.incoming.retain(|source| {
-                !before.contains_key(source)
-                    || objects_reference(&ledger.outputs, source, &record.id)
-            });
+            if !verified::must_preserve_gate_peer(
+                gate.observation_frontier,
+                gate.retained_dependencies.contains(&record.id),
+            ) {
+                record.incoming.retain(|source| {
+                    !before.contains_key(source)
+                        || objects_reference(&ledger.outputs, source, &record.id)
+                });
+            }
             for role in roles.values() {
                 if !role.ids.contains(&record.id) {
                     record.roles.remove(&role.role);
