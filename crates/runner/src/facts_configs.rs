@@ -71,7 +71,9 @@ pub(crate) fn resolve_target(
     target: Option<RegistryTarget<'_>>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
-    use crate::verified_git_binding::{admit_selector_object, admit_selector_platforms};
+    use crate::verified_git_binding::{
+        admit_selector_object, admit_selector_platform_name, admit_selector_platforms,
+    };
 
     let config = json(&bytes)?;
     let schema = config_schema(&config);
@@ -93,9 +95,7 @@ pub(crate) fn resolve_target(
     let version3 = schema.has_registry_path();
     let identities = schema.has_identity();
     for (platform, target) in platforms {
-        if platform.is_empty() || platform.trim() != platform {
-            return Err("Git config selector platform must be nonempty and literal".into());
-        }
+        admit_selector_platform_name(platform, platform.trim())?;
         let targets = if identities {
             identity_targets(target, version3)?
         } else {
@@ -342,10 +342,8 @@ impl<'a> crate::verified_git_binding::SelectorSeen<'a> for SeenSelectorText<'a> 
 
 impl Selection {
     pub fn unchanged(&self, root: &Path) -> Result<(), String> {
-        if fs::read(no_symlink_parents(root, &self.path)?).map_err(|e| e.to_string())? != self.bytes
-        {
-            return Err("Git config selector changed".into());
-        }
-        Ok(())
+        let actual = fs::read(no_symlink_parents(root, &self.path)?).map_err(|e| e.to_string())?;
+        crate::verified_git_binding::admit_selector_bytes(&actual, &self.bytes)
+            .map_err(Into::into)
     }
 }
