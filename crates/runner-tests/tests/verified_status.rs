@@ -3679,55 +3679,213 @@ fn expect_checkout_stream_failure(out: Result<String, String>, expected: &str)
     }
 }
 
+proof fn checkout_stream_prefix_at<S, B, D, R, V, U>(
+    states: Seq<(S, B, D, u64)>, initial: (S, B, D, u64), size: u64,
+    read: R, view: V, update: U, index: int,
+)
+    where R: Fn(S, B) -> (S, B, Result<usize, String>),
+          V: Fn(&B) -> &[u8], U: Fn(D, &[u8]) -> D,
+    requires policy::checkout_hash_stream_prefix(states, initial, size, read, view, update),
+        0 <= index < states.len() - 1,
+    ensures policy::checkout_hash_stream_step(states[index], states[index + 1], size, read, view, update),
+{ }
+
+proof fn checkout_stream_fixture_read_step(before: (u8, [u8; 4], u8, u64),
+    after: (u8, [u8; 4], u8, u64), size: u64)
+    requires before.0 < 2, before.2 == before.0, before.3 == before.0 as u64,
+        policy::checkout_hash_stream_step(before, after, size,
+            checkout_stream_fixture_read, checkout_stream_fixture_view, checkout_stream_fixture_update),
+    ensures after.0 as int == before.0 as int + 1,
+        after.2 == after.0, after.3 == after.0 as u64,
+{
+    reveal(policy::checkout_hash_stream_step);
+    let (count, bytes, chunk) = choose|count: usize, bytes: &[u8], chunk: &[u8]|
+        count > 0 && count <= bytes.len()
+        && checkout_stream_fixture_read.ensures((before.0, before.1),
+            (after.0, after.1, Ok::<usize, String>(count)))
+        && checkout_stream_fixture_view.ensures((&after.1,), bytes)
+        && chunk@ == bytes@.subrange(0, count as int)
+        && policy::checkout_hash_advance_spec(before.3, size, count as u64)
+            == Ok::<u64, Seq<char>>(after.3)
+        && checkout_stream_fixture_update.ensures((before.2, chunk), after.2);
+    assert(count == 1);
+    if before.0 == 0 { assert(chunk@ =~= seq![0u8]); }
+    else { assert(before.0 == 1); assert(chunk@ =~= seq![255u8]); }
+}
+
+proof fn checkout_stream_fixture_late_step(before: (u8, [u8; 4], u8, u64),
+    after: (u8, [u8; 4], u8, u64), size: u64)
+    requires policy::checkout_hash_stream_step(before, after, size,
+        checkout_stream_fixture_late_error, checkout_stream_fixture_view, checkout_stream_fixture_update),
+    ensures before.0 == 0, after.0 == 1, after.3 as int == before.3 as int + 1,
+{ reveal(policy::checkout_hash_stream_step); }
+
+proof fn checkout_stream_fixture_eof_cannot_advance(before: (u8, [u8; 4], u8, u64),
+    after: (u8, [u8; 4], u8, u64), size: u64)
+    requires policy::checkout_hash_stream_step(before, after, size,
+        checkout_stream_fixture_eof, checkout_stream_fixture_view, checkout_stream_fixture_update),
+    ensures false,
+{ reveal(policy::checkout_hash_stream_step); }
+
+proof fn checkout_stream_fixture_read_result(buffer: [u8; 4], size: u64, out: Result<String, String>)
+    requires size <= 2,
+        policy::checkout_hash_stream_result((0u8, buffer, 0u8, 0u64), size,
+            checkout_stream_fixture_read, checkout_stream_fixture_view,
+            checkout_stream_fixture_update, checkout_stream_fixture_finalize, out),
+    ensures if size == 2 { match out { Ok(value) => value@ == "digest: \0ÿ"@, Err(_) => false } }
+        else { match out { Err(value) => value@ == "checkout file grew during observation"@, Ok(_) => false } },
+{
+    let initial = (0u8, buffer, 0u8, 0u64);
+    let (states, observation) = choose|states: Seq<(u8, [u8; 4], u8, u64)>,
+        observation: (u8, [u8; 4], Result<usize, String>)|
+        policy::checkout_hash_stream_prefix(states, initial, size,
+            checkout_stream_fixture_read, checkout_stream_fixture_view, checkout_stream_fixture_update)
+        && policy::checkout_hash_stream_terminal(states.last(), observation, size,
+            checkout_stream_fixture_read, checkout_stream_fixture_finalize, out);
+    assert(states.last().3 <= size);
+    assert(1 <= states.len() <= 3);
+    if states.len() >= 2 {
+        checkout_stream_prefix_at(states, initial, size, checkout_stream_fixture_read,
+            checkout_stream_fixture_view, checkout_stream_fixture_update, 0);
+        checkout_stream_fixture_read_step(states[0], states[1], size);
+    }
+    if states.len() >= 3 {
+        checkout_stream_prefix_at(states, initial, size, checkout_stream_fixture_read,
+            checkout_stream_fixture_view, checkout_stream_fixture_update, 1);
+        checkout_stream_fixture_read_step(states[1], states[2], size);
+    }
+    if states.len() == 1 { assert(states.last() == initial); }
+    else if states.len() == 2 { assert(states.last() == states[1]); }
+    else { assert(states.len() == 3 && states.last() == states[2]); }
+}
+
+proof fn checkout_stream_fixture_late_error_result(buffer: [u8; 4], size: u64, out: Result<String, String>)
+    requires 1 <= size <= 2,
+        policy::checkout_hash_stream_result((0u8, buffer, 0u8, 0u64), size,
+            checkout_stream_fixture_late_error, checkout_stream_fixture_view,
+            checkout_stream_fixture_update, checkout_stream_fixture_finalize, out),
+    ensures match out { Err(value) => value@ == "read: é\0original\nend"@, Ok(_) => false },
+{
+    let initial = (0u8, buffer, 0u8, 0u64);
+    let (states, observation) = choose|states: Seq<(u8, [u8; 4], u8, u64)>,
+        observation: (u8, [u8; 4], Result<usize, String>)|
+        policy::checkout_hash_stream_prefix(states, initial, size,
+            checkout_stream_fixture_late_error, checkout_stream_fixture_view, checkout_stream_fixture_update)
+        && policy::checkout_hash_stream_terminal(states.last(), observation, size,
+            checkout_stream_fixture_late_error, checkout_stream_fixture_finalize, out);
+    assert(states.last().3 <= size);
+    assert(1 <= states.len() <= 3);
+    if states.len() >= 2 {
+        checkout_stream_prefix_at(states, initial, size, checkout_stream_fixture_late_error,
+            checkout_stream_fixture_view, checkout_stream_fixture_update, 0);
+        checkout_stream_fixture_late_step(states[0], states[1], size);
+        assert(states[1].0 == 1 && states[1].3 == 1);
+    }
+    if states.len() == 3 {
+        checkout_stream_prefix_at(states, initial, size, checkout_stream_fixture_late_error,
+            checkout_stream_fixture_view, checkout_stream_fixture_update, 1);
+        checkout_stream_fixture_late_step(states[1], states[2], size);
+        assert(false);
+    }
+    if states.len() == 1 { assert(states.last() == initial); }
+    else { assert(states.len() == 2 && states.last() == states[1]); }
+}
+
+proof fn checkout_stream_fixture_eof_result(buffer: [u8; 4], size: u64, out: Result<String, String>)
+    requires size <= 1,
+        policy::checkout_hash_stream_result((0u8, buffer, 0u8, 0u64), size,
+            checkout_stream_fixture_eof, checkout_stream_fixture_view,
+            checkout_stream_fixture_update, checkout_stream_fixture_finalize, out),
+    ensures if size == 0 { match out { Ok(value) => value@ == "empty"@, Err(_) => false } }
+        else { match out { Err(value) => value@ == "checkout file shrank during observation"@, Ok(_) => false } },
+{
+    let initial = (0u8, buffer, 0u8, 0u64);
+    let (states, observation) = choose|states: Seq<(u8, [u8; 4], u8, u64)>,
+        observation: (u8, [u8; 4], Result<usize, String>)|
+        policy::checkout_hash_stream_prefix(states, initial, size,
+            checkout_stream_fixture_eof, checkout_stream_fixture_view, checkout_stream_fixture_update)
+        && policy::checkout_hash_stream_terminal(states.last(), observation, size,
+            checkout_stream_fixture_eof, checkout_stream_fixture_finalize, out);
+    if states.len() > 1 {
+        checkout_stream_prefix_at(states, initial, size, checkout_stream_fixture_eof,
+            checkout_stream_fixture_view, checkout_stream_fixture_update, 0);
+        checkout_stream_fixture_eof_cannot_advance(states[0], states[1], size);
+    }
+    assert(states.len() == 1 && states.last() == initial);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_preserves_chunk_bytes_and_update_order_until_eof() {
-    let out = policy::checkout_hash_stream(2, 0u8, 0u8, [77u8; 4],
+    let out_buffer = [77u8, 77, 77, 77];
+    let ghost out_initial = out_buffer;
+    let out = policy::checkout_hash_stream(2, 0u8, 0u8, out_buffer,
         checkout_stream_fixture_read, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    proof { checkout_stream_fixture_read_result(out_initial, 2, out); }
     expect_checkout_stream_success(out, "digest: \0ÿ");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_empty_eof_finalizes_the_initial_digest() {
-    let out = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
+    let out_buffer = [77u8, 77, 77, 77];
+    let ghost out_initial = out_buffer;
+    let out = policy::checkout_hash_stream(0, 0u8, 0u8, out_buffer,
         checkout_stream_fixture_eof, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    proof { checkout_stream_fixture_eof_result(out_initial, 0, out); }
     expect_checkout_stream_success(out, "empty");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_preserves_first_and_late_read_error_in_full() {
-    let first = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
+    let first_buffer = [77u8, 77, 77, 77];
+    let ghost first_initial = first_buffer;
+    let first = policy::checkout_hash_stream(0, 0u8, 0u8, first_buffer,
         checkout_stream_fixture_error, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
     expect_checkout_stream_failure(first, "read: é\0original\nend");
-    let late = policy::checkout_hash_stream(2, 0u8, 0u8, [77u8; 4],
+    let late_buffer = [77u8, 77, 77, 77];
+    let ghost late_initial = late_buffer;
+    let late = policy::checkout_hash_stream(2, 0u8, 0u8, late_buffer,
         checkout_stream_fixture_late_error, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    proof { checkout_stream_fixture_late_error_result(late_initial, 2, late); }
     expect_checkout_stream_failure(late, "read: é\0original\nend");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_reads_again_after_expected_length_and_preserves_error_priority() {
-    let out = policy::checkout_hash_stream(1, 0u8, 0u8, [77u8; 4],
+    let out_buffer = [77u8, 77, 77, 77];
+    let ghost out_initial = out_buffer;
+    let out = policy::checkout_hash_stream(1, 0u8, 0u8, out_buffer,
         checkout_stream_fixture_late_error, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    proof { checkout_stream_fixture_late_error_result(out_initial, 1, out); }
     expect_checkout_stream_failure(out, "read: é\0original\nend");
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_rejects_growth_and_early_eof() {
-    let grew = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
+    let grew_buffer = [77u8, 77, 77, 77];
+    let ghost grew_initial = grew_buffer;
+    let grew = policy::checkout_hash_stream(0, 0u8, 0u8, grew_buffer,
         checkout_stream_fixture_read, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    proof { checkout_stream_fixture_read_result(grew_initial, 0, grew); }
     expect_checkout_stream_failure(grew, "checkout file grew during observation");
-    let late_growth = policy::checkout_hash_stream(1, 0u8, 0u8, [77u8; 4],
+    let late_growth_buffer = [77u8, 77, 77, 77];
+    let ghost late_growth_initial = late_growth_buffer;
+    let late_growth = policy::checkout_hash_stream(1, 0u8, 0u8, late_growth_buffer,
         checkout_stream_fixture_read, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    proof { checkout_stream_fixture_read_result(late_growth_initial, 1, late_growth); }
     expect_checkout_stream_failure(late_growth, "checkout file grew during observation");
-    let shrank = policy::checkout_hash_stream(1, 0u8, 0u8, [77u8; 4],
+    let shrank_buffer = [77u8, 77, 77, 77];
+    let ghost shrank_initial = shrank_buffer;
+    let shrank = policy::checkout_hash_stream(1, 0u8, 0u8, shrank_buffer,
         checkout_stream_fixture_eof, checkout_stream_fixture_view,
         checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    proof { checkout_stream_fixture_eof_result(shrank_initial, 1, shrank); }
     expect_checkout_stream_failure(shrank, "checkout file shrank during observation");
 }
 
