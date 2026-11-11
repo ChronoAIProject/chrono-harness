@@ -277,9 +277,7 @@
       "build.runner": [
         "ci",
         "inputs",
-        "judge-cost",
         "judge-filemap",
-        "judge-mixed",
         "judge-projects",
         "judge-registration",
         "judge-workflow",

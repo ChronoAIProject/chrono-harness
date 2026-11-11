@@ -887,7 +887,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
       "needs": [
         "linux_release_frontend",
-        "linux_build_runner",
         "linux_build_judge_registration",
         "linux_build_judge_filemap",
         "linux_build_judge_cost"
@@ -896,10 +895,6 @@
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
         },
         {
           "job": "linux_build_judge_registration",
@@ -934,7 +929,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
       "needs": [
         "linux_release_frontend",
-        "linux_build_runner",
         "linux_build_judge_registration",
         "linux_build_judge_filemap",
         "linux_build_judge_cost",
@@ -944,10 +938,6 @@
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
         },
         {
           "job": "linux_build_judge_registration",
@@ -2061,7 +2051,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
       "needs": [
         "macos_release_frontend",
-        "macos_build_runner",
         "macos_build_judge_registration",
         "macos_build_judge_filemap",
         "macos_build_judge_cost"
@@ -2070,10 +2059,6 @@
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
         },
         {
           "job": "macos_build_judge_registration",
@@ -2108,7 +2093,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
       "needs": [
         "macos_release_frontend",
-        "macos_build_runner",
         "macos_build_judge_registration",
         "macos_build_judge_filemap",
         "macos_build_judge_cost",
@@ -2118,10 +2102,6 @@
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_runner",
-          "directory": ".chrono-harness/cache/release-handoffs/build_runner/"
         },
         {
           "job": "macos_build_judge_registration",
