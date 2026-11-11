@@ -1459,7 +1459,8 @@ impl Inventory {
     }
     /// Hand off explicitly declared process originals to an already sealed, rooted
     /// consumer output. The caller holds read guards and has verified actual bytes.
-    /// Reuse the existing consumer transfer; never create a second durable root.
+    /// Validate every publisher under the existing exclusion, then release their
+    /// interim roots together; the destination already owns every dependency.
     pub fn settle_publication_inputs(
         &self,
         destination: &str,
@@ -1473,7 +1474,7 @@ impl Inventory {
             false,
             true,
         )?;
-        let ledger = self.load(&gate)?;
+        let mut ledger = self.load(&gate)?;
         let output = ledger
             .outputs
             .iter()
@@ -1486,6 +1487,7 @@ impl Inventory {
             return Err("publication handoff destination is not sealed and protected".into());
         }
         let mut transfers = Vec::new();
+        let mut leases = Vec::new();
         for path in paths {
             let input = ledger
                 .outputs
@@ -1506,19 +1508,21 @@ impl Inventory {
                 return Err("publication handoff requires a sealed process file".into());
             }
             Manifest::validate(&input.manifest.entries[0], &self.root)?;
-            let consumer = format!("publication-recheck:{}", input.id);
-            if ledger.roots.contains_key(&self.consumer_role(&consumer)?) {
-                transfers.push(Consumer {
-                    schema: "chrono-retention-consumer/v1".into(),
-                    consumer,
-                    purpose: "Verified process originals accepted by the sealed domain result"
-                        .into(),
-                    originals: vec![OriginalIdentity {
+            let role = self.consumer_role(&format!("publication-recheck:{}", input.id))?;
+            if let Some(ids) = ledger.roots.get(&role) {
+                if !verified::same_members(ids, &[input.id.clone()]) {
+                    return Err("caller original handoff root differs".into());
+                }
+                leases.extend(self.original_leases(
+                    &ledger,
+                    &[OriginalIdentity {
                         id: input.id.clone(),
                         path: input.path.clone(),
                         identity: input.identity.clone(),
                     }],
-                });
+                    false,
+                )?);
+                transfers.push(role);
             }
         }
         // A completed handoff remains a no-op after the domain root is released.
@@ -1526,9 +1530,14 @@ impl Inventory {
         if !transfers.is_empty() && !ledger.roots.values().any(|ids| ids.contains(&output.id)) {
             return Err("publication handoff destination is not sealed and protected".into());
         }
-        drop(gate);
-        for consumer in transfers {
-            self.transfer_consumer(&consumer, destination)?;
+        for role in &transfers {
+            self.reference_locked(&mut ledger, role, &[])?;
+        }
+        if !transfers.is_empty() {
+            self.save(&ledger, &gate)?;
+        }
+        for lease in &leases {
+            self.remember_input(lease)?;
         }
         Ok(())
     }

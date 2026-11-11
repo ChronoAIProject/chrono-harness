@@ -6134,6 +6134,81 @@ fn sealed_tree_member_qualification_requires_exact_producer_identity_and_bytes()
 }
 
 #[test]
+fn publication_input_handoff_validates_every_publisher_before_releasing_any() {
+    if !isolated_capability_test(
+        "publication_input_handoff_validates_every_publisher_before_releasing_any",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let inputs = ["first", "second", "independent"].map(|name| {
+        let path = format!(".chrono-harness/state/fixtures/{name}.stdout");
+        retained_artifacts::retention::publish_pending_original(
+            h.path(),
+            "fixture",
+            &path,
+            name.as_bytes(),
+            json!({}),
+        )
+        .unwrap();
+        path
+    });
+    let destination = ".chrono-harness/state/fixtures/domain-result";
+    let publication = inventory(h.path())
+        .plan("fixture", destination, true, json!({}))
+        .unwrap();
+    publication.materialize().unwrap();
+    inventory(h.path())
+        .reference_paths("domain-recovery", &[destination.into()])
+        .unwrap();
+    inventory(h.path())
+        .dependencies_paths(destination, &inputs[..2])
+        .unwrap();
+    publication.complete(json!({"exit_code":0})).unwrap();
+    let state = ledger(h.path());
+    let id = |path: &str| {
+        state["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["path"] == path)
+            .unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned()
+    };
+    let second = id(&inputs[1]);
+    let role = format!("consumer:publication-recheck:{second}");
+    inventory(h.path())
+        .reference(&role, &[second.clone(), id(&inputs[2])])
+        .unwrap();
+    let before = ledger(h.path())["roots"].clone();
+    assert!(
+        inventory(h.path())
+            .settle_publication_inputs(destination, &inputs[..2])
+            .is_err()
+    );
+    assert_eq!(
+        ledger(h.path())["roots"],
+        before,
+        "a later publisher's changed declaration must preserve every earlier handoff"
+    );
+    inventory(h.path()).reference(&role, &[second]).unwrap();
+    inventory(h.path())
+        .settle_publication_inputs(destination, &inputs[..2])
+        .unwrap();
+    let roots = ledger(h.path())["roots"].clone();
+    assert_eq!(roots.as_object().unwrap().len(), 2, "{roots}");
+    assert!(roots.get("domain-recovery").is_some());
+    assert!(
+        roots
+            .get(format!("consumer:publication-recheck:{}", id(&inputs[2])))
+            .is_some(),
+        "the independent publisher keeps its protection"
+    );
+}
+
+#[test]
 fn publication_input_handoff_requires_sealed_referenced_unchanged_originals() {
     if !isolated_capability_test(
         "publication_input_handoff_requires_sealed_referenced_unchanged_originals",
