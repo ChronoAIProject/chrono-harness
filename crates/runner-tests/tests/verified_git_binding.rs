@@ -86,6 +86,119 @@ fn input_is_optional_only_for_scoped_v4_and_other_link_constraints_remain() {
 
 pub struct CapturedPath<'a>(pub &'a str);
 
+pub struct ReferenceIds<'a>(pub Vec<Option<&'a str>>);
+
+impl policy::BindingReferenceRows for ReferenceIds<'_> {
+    open spec fn count(&self) -> nat { self.0@.len() }
+    open spec fn id_at(&self, index: int) -> Option<&str> { self.0@[index] }
+    fn len(&self) -> usize { self.0.len() }
+    fn id(&self, index: usize) -> Option<&str> { self.0[index] }
+}
+
+fn expect_reference_index(rows: &ReferenceIds, id: &str, expected: Option<usize>)
+    requires match expected {
+        Some(index) => policy::unique_binding_reference_index(rows, id, index as int),
+        None => forall|i: int| !#[trigger] policy::unique_binding_reference_index(rows, id, i),
+    },
+{
+    match policy::unique_binding_reference(Some(rows), id) {
+        Ok(actual) => {
+            proof {
+                match (actual, expected) {
+                    (Some(a), Some(e)) => {
+                        if a != e {
+                            assert(policy::binding_reference_matches(rows, e as int, id));
+                            assert(!policy::binding_reference_matches(rows, e as int, id));
+                        }
+                    },
+                    (Some(a), None) => {
+                        assert(!policy::unique_binding_reference_index(rows, id, a as int));
+                    },
+                    (None, Some(e)) => {
+                        assert(!policy::unique_binding_reference_index(rows, id, e as int));
+                    },
+                    (None, None) => {},
+                }
+            }
+            expect_true(actual == expected);
+        },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_reference_requires_an_array_even_when_the_requested_id_is_empty() {
+    expect_identity_error(policy::unique_binding_reference::<ReferenceIds>(None, ""),
+        "binding collection must be array");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_reference_keeps_empty_and_nonmatching_collections_distinct_from_missing_arrays() {
+    let mut rows = ReferenceIds(Vec::new());
+    expect_reference_index(&rows, "id", None);
+    rows.0.push(None);
+    rows.0.push(Some("ID"));
+    rows.0.push(Some("id\0"));
+    rows.0.push(Some("idx"));
+    proof {
+        reveal_strlit("id"); reveal_strlit("ID"); reveal_strlit("id\0"); reveal_strlit("idx");
+        assert("id"@[0] != "ID"@[0]);
+        assert("id"@.len() != "id\0"@.len() && "id"@.len() != "idx"@.len());
+        assert forall|i: int| !#[trigger] policy::unique_binding_reference_index(&rows, "id", i) by {}
+    }
+    expect_reference_index(&rows, "id", None);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_reference_returns_the_original_last_index_after_missing_and_other_ids() {
+    let mut rows = ReferenceIds(Vec::new());
+    rows.0.push(None);
+    rows.0.push(Some("other"));
+    rows.0.push(Some("git"));
+    proof {
+        reveal_strlit("other"); reveal_strlit("git");
+        assert("other"@.len() != "git"@.len());
+        assert(policy::unique_binding_reference_index(&rows, "git", 2));
+    }
+    expect_reference_index(&rows, "git", Some(2));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_reference_rejects_nonadjacent_duplicates_and_keeps_another_unique_id() {
+    let mut rows = ReferenceIds(Vec::new());
+    rows.0.push(Some("git"));
+    rows.0.push(Some("other"));
+    rows.0.push(Some("git"));
+    proof {
+        reveal_strlit("other"); reveal_strlit("git");
+        assert("other"@.len() != "git"@.len());
+        assert forall|i: int| !#[trigger] policy::unique_binding_reference_index(&rows, "git", i) by {
+            if i == 0 { assert(policy::binding_reference_matches(&rows, 2, "git")); }
+            else { assert(policy::binding_reference_matches(&rows, 0, "git")); }
+        }
+        assert(policy::unique_binding_reference_index(&rows, "other", 1));
+    }
+    expect_reference_index(&rows, "git", None);
+    expect_reference_index(&rows, "other", Some(1));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_reference_preserves_first_index_and_full_unicode_nul_and_empty_text() {
+    let mut rows = ReferenceIds(Vec::new());
+    rows.0.push(Some("λ\0"));
+    rows.0.push(Some("λ"));
+    rows.0.push(Some(""));
+    proof {
+        reveal_strlit("λ\0"); reveal_strlit("λ"); reveal_strlit("");
+        assert("λ\0"@.len() != "λ"@.len());
+        assert("λ\0"@.len() != ""@.len() && "λ"@.len() != ""@.len());
+        assert(policy::unique_binding_reference_index(&rows, "λ\0", 0));
+        assert(policy::unique_binding_reference_index(&rows, "", 2));
+    }
+    expect_reference_index(&rows, "λ\0", Some(0));
+    expect_reference_index(&rows, "", Some(2));
+}
+
 impl policy::RegistryMembership for CapturedPath<'_> {
     open spec fn has_path(&self, path: &str) -> bool { path@ == self.0@ }
 
