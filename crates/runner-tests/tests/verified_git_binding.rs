@@ -101,14 +101,12 @@ fn expect_reference_index<R: policy::BindingReferenceRows>(rows: &R, id: &str, e
         None => forall|i: int| !#[trigger] policy::unique_binding_reference_index(rows, id, i),
     },
 {
-    hide(policy::unique_binding_reference_index);
     let result = policy::unique_binding_reference(Some(rows), id);
     match result {
         Ok(actual) => {
             proof {
                 match (actual, expected) {
                     (Some(a), Some(e)) => {
-                        reveal(policy::unique_binding_reference_index);
                         if a != e {
                             assert(policy::binding_reference_matches(rows, e as int, id));
                             assert(!policy::binding_reference_matches(rows, e as int, id));
@@ -118,7 +116,7 @@ fn expect_reference_index<R: policy::BindingReferenceRows>(rows: &R, id: &str, e
                         assert(!policy::unique_binding_reference_index(rows, id, a as int));
                     },
                     (None, Some(e)) => {
-                        assert(!policy::unique_binding_reference_index(rows, id, e as int));
+                        assert(result == Ok::<Option<usize>, &str>(Some(e)));
                     },
                     (None, None) => {},
                 }

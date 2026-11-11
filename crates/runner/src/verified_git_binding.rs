@@ -436,6 +436,11 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
             },
             Err(_) => true,
         },
+        match rows {
+            Some(rows) => forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+                ==> out == Ok::<Option<usize>, &'static str>(Some(i)),
+            None => true,
+        },
 {
     let Some(rows) = rows else { return Err("binding collection must be array"); };
     let observed = BindingMatches { rows, id };
@@ -465,6 +470,19 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
         if selected.is_none() {
             assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {
                 assert(!unique_match_index(&observed, i));
+            }
+        }
+        assert forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+            implies selected == Some(i) by {
+            match selected {
+                Some(actual) => {
+                    assert(unique_binding_reference_index(rows, id, actual as int));
+                    if actual != i {
+                        assert(binding_reference_matches(rows, i as int, id));
+                        assert(!binding_reference_matches(rows, i as int, id));
+                    }
+                },
+                None => { assert(!unique_binding_reference_index(rows, id, i as int)); },
             }
         }
     }
