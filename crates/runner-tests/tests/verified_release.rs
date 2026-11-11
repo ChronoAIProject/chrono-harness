@@ -49,6 +49,39 @@ fn expect_true(actual: bool)
     if !actual { panic!(); }
 }
 
+fn expect_discovery(plan: policy::GateDiscovery, object: bool, role: bool, member: bool)
+    requires plan.object_excluded == object, plan.role_excluded == role,
+        plan.retain_member == member,
+{
+    expect_true(plan.object_excluded == object);
+    expect_true(plan.role_excluded == role);
+    expect_true(plan.retain_member == member);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn ordinary_discovery_excludes_before_reading_only_for_nonblocking_maintenance() {
+    expect_discovery(policy::gate_discovery(false, false, false, false), false, false, false);
+    expect_discovery(policy::gate_discovery(false, false, false, true), false, false, false);
+    expect_discovery(policy::gate_discovery(false, false, true, false), false, false, false);
+    expect_discovery(policy::gate_discovery(false, false, true, true), false, false, false);
+    expect_discovery(policy::gate_discovery(false, true, false, false), true, true, false);
+    expect_discovery(policy::gate_discovery(false, true, false, true), false, false, false);
+    expect_discovery(policy::gate_discovery(false, true, true, false), false, false, false);
+    expect_discovery(policy::gate_discovery(false, true, true, true), false, false, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn observation_discovery_always_excludes_the_role_and_preserves_member_dependencies() {
+    expect_discovery(policy::gate_discovery(true, false, false, false), false, true, true);
+    expect_discovery(policy::gate_discovery(true, false, false, true), false, true, true);
+    expect_discovery(policy::gate_discovery(true, false, true, false), false, true, true);
+    expect_discovery(policy::gate_discovery(true, false, true, true), false, true, true);
+    expect_discovery(policy::gate_discovery(true, true, false, false), true, true, true);
+    expect_discovery(policy::gate_discovery(true, true, false, true), false, true, true);
+    expect_discovery(policy::gate_discovery(true, true, true, false), false, true, true);
+    expect_discovery(policy::gate_discovery(true, true, true, true), false, true, true);
+}
+
 #[cfg(not(verus_keep_ghost))]
 #[test]
 #[should_panic]
