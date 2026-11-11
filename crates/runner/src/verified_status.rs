@@ -378,6 +378,156 @@ pub fn registry_parse_batch<V, P>(
     }
 }
 
+pub open spec fn registry_read_sequence_step<S, V, R, P>(
+    before: (S, Map<String, Vec<u8>>, Map<String, V>),
+    after: (S, Map<String, Vec<u8>>, Map<String, V>), path: String, read: R, decode: P,
+) -> bool
+    where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
+{
+    exists|argument: &str, raw: Vec<u8>, input: &[u8], value: V|
+        argument@ == path@ && input@ == raw@
+        && read.ensures((before.0, argument), (after.0, Ok::<Vec<u8>, String>(raw)))
+        && decode.ensures((input,), Ok::<V, String>(value))
+        && after.1 == before.1.insert(path, raw)
+        && after.2 == before.2.insert(path, value)
+}
+
+pub open spec fn registry_read_sequence_prefix<S, V, R, P>(
+    states: Seq<(S, Map<String, Vec<u8>>, Map<String, V>)>,
+    initial: (S, Map<String, Vec<u8>>, Map<String, V>), paths: Seq<String>, read: R, decode: P,
+) -> bool
+    where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
+{
+    1 <= states.len() <= paths.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] registry_read_sequence_step(states[i], states[i + 1], paths[i], read, decode)
+}
+
+pub open spec fn registry_read_sequence_terminal<S, V, R, P>(
+    before: (S, Map<String, Vec<u8>>, Map<String, V>), at: int, paths: Seq<String>,
+    read: R, decode: P,
+    out: (S, Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>),
+) -> bool
+    where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
+{
+    match out.1 {
+        Ok((bytes, values)) => at == paths.len() && out.0 == before.0
+            && bytes@ == before.1 && values@ == before.2,
+        Err(error) => 0 <= at < paths.len()
+            && exists|argument: &str, observation: (S, Result<Vec<u8>, String>)|
+                argument@ == paths[at]@
+                && read.ensures((before.0, argument), observation)
+                && out.0 == observation.0
+                && match observation.1 {
+                    Err(original) => error@ == original@,
+                    Ok(raw) => exists|input: &[u8]| input@ == raw@
+                        && decode.ensures((input,), Err::<V, String>(error)),
+                },
+    }
+}
+
+pub open spec fn registry_read_sequence_result<S, V, R, P>(
+    initial: (S, Map<String, Vec<u8>>, Map<String, V>), paths: Seq<String>, read: R, decode: P,
+    out: (S, Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>),
+) -> bool
+    where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
+{
+    exists|states: Seq<(S, Map<String, Vec<u8>>, Map<String, V>)>|
+        registry_read_sequence_prefix(states, initial, paths, read, decode)
+        && registry_read_sequence_terminal(states.last(), states.len() - 1, paths, read, decode, out)
+}
+
+/// 逐条读取后立即解析；首错终止，不预读后续项或发布部分 map。
+pub fn registry_read_sequence<S, V, R, P>(
+    paths: Vec<String>, input_source: S,
+    bytes: BTreeMap<String, Vec<u8>>, values: BTreeMap<String, V>, read: R, decode: P,
+) -> (out: (S, Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>))
+    where R: Fn(S, &str) -> (S, Result<Vec<u8>, String>), P: Fn(&[u8]) -> Result<V, String>,
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        paths.len() > 0 ==> (forall|source: S, path: &str| #[trigger] read.requires((source, path))),
+        paths.len() > 0 ==> (forall|raw: &[u8]| #[trigger] decode.requires((raw,))),
+    ensures registry_read_sequence_result((input_source, bytes@, values@), paths@, read, decode, out),
+{
+    let ghost all = paths@;
+    let ghost initial = (input_source, bytes@, values@);
+    let ghost states = seq![initial];
+    let mut source = input_source;
+    let mut collected_bytes = bytes;
+    let mut collected_values = values;
+    let mut remaining = paths.into_iter();
+    loop
+        invariant vstd::laws_cmp::obeys_cmp::<String>(),
+            all == paths@, initial == (input_source, bytes@, values@),
+            remaining@.1 == all, 0 <= remaining@.0 <= all.len(),
+            states.len() == remaining@.0 + 1,
+            states.last() == (source, collected_bytes@, collected_values@),
+            registry_read_sequence_prefix(states, initial, all, read, decode),
+            all.len() > 0 ==> (forall|source: S, path: &str| #[trigger] read.requires((source, path))),
+            all.len() > 0 ==> (forall|raw: &[u8]| #[trigger] decode.requires((raw,))),
+        decreases all.len() - remaining@.0,
+    {
+        let ghost at = remaining@.0;
+        let ghost before = states.last();
+        let path = match remaining.next() {
+            None => {
+                let out = (source, Ok((collected_bytes, collected_values)));
+                assert(registry_read_sequence_terminal(before, at, all, read, decode, out));
+                assert(registry_read_sequence_result(initial, all, read, decode, out));
+                return out;
+            },
+            Some(path) => path,
+        };
+        let argument = path.as_str();
+        let observation = read(source, argument);
+        let ghost observed = observation;
+        assert(read.ensures((before.0, argument), observed));
+        let (next_source, result) = observation;
+        source = next_source;
+        let original = match result {
+            Err(error) => {
+                let out = (source, Err(error));
+                assert(registry_read_sequence_terminal(before, at, all, read, decode, out));
+                assert(registry_read_sequence_result(initial, all, read, decode, out));
+                return out;
+            },
+            Ok(original) => original,
+        };
+        let input = original.as_slice();
+        let decoded = decode(input);
+        assert(decode.ensures((input,), decoded));
+        let value = match decoded {
+            Err(error) => {
+                let out = (source, Err(error));
+                assert(registry_read_sequence_terminal(before, at, all, read, decode, out));
+                assert(registry_read_sequence_result(initial, all, read, decode, out));
+                return out;
+            },
+            Ok(value) => value,
+        };
+        let ghost key = path;
+        let ghost raw = original;
+        let ghost parsed = value;
+        collected_bytes.insert(path.clone(), original);
+        collected_values.insert(path, value);
+        let ghost after = (source, collected_bytes@, collected_values@);
+        assert(read.ensures((before.0, argument), (after.0, Ok::<Vec<u8>, String>(raw))));
+        assert(decode.ensures((input,), Ok::<V, String>(parsed)));
+        assert(registry_read_sequence_step(before, after, key, read, decode)) by {
+            reveal(registry_read_sequence_step);
+        }
+        proof {
+            let previous = states;
+            states = states.push(after);
+            assert forall|i: int| 0 <= i < states.len() - 1 implies
+                #[trigger] registry_read_sequence_step(states[i], states[i + 1], all[i], read, decode) by {
+                if i < previous.len() - 1 {
+                    assert(registry_read_sequence_step(previous[i], previous[i + 1], all[i], read, decode));
+                }
+            }
+        }
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct IndexFlag {
