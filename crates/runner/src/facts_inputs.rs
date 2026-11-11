@@ -18,24 +18,30 @@ pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> 
     let ids = verified_git_binding::git_guard_ids(
         guard["inputs"].as_array().map(|ids| (ids, ids.len())),
     )?;
-    let inputs = verified_git_binding::git_guard_files(
-        config["environment"]["inputs"].as_array(),
-    )?;
+    let inputs =
+        verified_git_binding::git_guard_files(config["environment"]["inputs"].as_array())?;
     let mut seen = BTreeSet::new();
     let mut selected = vec![];
     for id in ids {
         let id = verified_git_binding::git_guard_id(id.as_str())?;
         let index = verified_git_binding::git_guard_reference(
-            &JsonGuardReferences(inputs), id, seen.insert(id),
-        ).map_err(guard_error)?;
+            &JsonGuardReferences(inputs),
+            id,
+            seen.insert(id),
+        )
+        .map_err(guard_error)?;
         let input = &inputs[index];
         let location = verified_git_binding::git_guard_location(input["location"].as_str())?;
         if !Path::new(location).is_absolute() {
             relative_path(location)?;
         }
         verified_git_binding::admit_git_guard_presence(
-            id, input["presence"].as_str(), input.get("sha256").is_some(), input["sha256"].as_str(),
-        ).map_err(guard_error)?;
+            id,
+            input["presence"].as_str(),
+            input.get("sha256").is_some(),
+            input["sha256"].as_str(),
+        )
+        .map_err(guard_error)?;
         selected.push(input.clone());
     }
     Ok(Some(selected))
@@ -44,8 +50,12 @@ pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> 
 struct JsonGuardReferences<'a>(&'a [Value]);
 
 impl verified_git_binding::BindingReferenceRows for JsonGuardReferences<'_> {
-    fn len(&self) -> usize { self.0.len() }
-    fn id(&self, index: usize) -> Option<&str> { self.0[index]["id"].as_str() }
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+    fn id(&self, index: usize) -> Option<&str> {
+        self.0[index]["id"].as_str()
+    }
 }
 
 fn guard_error(error: verified_git_binding::GitGuardError<'_>) -> String {

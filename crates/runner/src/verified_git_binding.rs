@@ -879,7 +879,15 @@ pub fn git_guard_reference<'a, R: BindingReferenceRows>(rows: &R, id: &'a str, f
             Ok(index)
         },
         None => {
-            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {}
+            let count = rows.len();
+            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {
+                if unique_binding_reference_index(rows, id, i) {
+                    assert(0 <= i < count);
+                    let index = i as usize;
+                    assert(index as int == i);
+                    assert(checked == Ok::<Option<usize>, &'static str>(Some(index)));
+                }
+            }
             Err(GitGuardError { prefix: "missing/ambiguous Git input ", id, suffix: "" })
         },
     }
