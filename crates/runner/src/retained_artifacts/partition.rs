@@ -892,7 +892,8 @@ impl Inventory {
         wait: bool,
         membership_only: bool,
     ) -> Result<Gate, String> {
-        let discovery = verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
+        let discovery =
+            verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
         let discover_under_lease = discovery.object_excluded;
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
