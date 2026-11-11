@@ -1459,21 +1459,39 @@ impl Inventory {
     }
     /// Hand off explicitly declared process originals to an already sealed, rooted
     /// consumer output. The caller holds read guards and has verified actual bytes.
-    /// Validate every publisher under the existing exclusion, then release their
+    /// Exclude and validate every publisher declaration, then release their
     /// interim roots together; the destination already owns every dependency.
     pub fn settle_publication_inputs(
         &self,
         destination: &str,
         paths: &[String],
     ) -> Result<(), String> {
-        let gate = self.addressed_gate(
-            &[],
-            &[paths, &[destination.into()]].concat(),
-            &[],
-            None,
-            false,
-            true,
-        )?;
+        let addressed_paths = [paths, &[destination.into()]].concat();
+        let gate = self.addressed_gate(&[], paths, &[], None, false, true)?;
+        let ledger = self.load(&gate)?;
+        let originals = paths
+            .iter()
+            .map(|path| {
+                let input = ledger
+                    .outputs
+                    .iter()
+                    .find(|o| o.path == *path)
+                    .ok_or("publication handoff input is not enrolled")?;
+                Ok(OriginalIdentity {
+                    id: input.id.clone(),
+                    path: input.path.clone(),
+                    identity: input.identity.clone(),
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let roles = originals
+            .iter()
+            .map(|input| self.consumer_role(&format!("publication-recheck:{}", input.id)))
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(gate);
+        // Ordinary path discovery projects roots onto its selected objects.
+        // Explicit roles bring every publisher's full declaration under exclusion.
+        let gate = self.addressed_gate(&[], &addressed_paths, &roles, None, false, true)?;
         let mut ledger = self.load(&gate)?;
         let output = ledger
             .outputs
@@ -1488,13 +1506,16 @@ impl Inventory {
         }
         let mut transfers = Vec::new();
         let mut leases = Vec::new();
-        for path in paths {
+        for (original, role) in originals.iter().zip(&roles) {
+            let path = &original.path;
             let input = ledger
                 .outputs
                 .iter()
                 .find(|o| o.path == *path)
                 .ok_or("publication handoff input is not enrolled")?;
-            if input.id == output.id
+            if input.id != original.id
+                || input.identity != original.identity
+                || input.id == output.id
                 || !output.references.contains(&input.id)
                 || input.phase != "released"
                 || !input.manifest.sealed
@@ -1508,21 +1529,16 @@ impl Inventory {
                 return Err("publication handoff requires a sealed process file".into());
             }
             Manifest::validate(&input.manifest.entries[0], &self.root)?;
-            let role = self.consumer_role(&format!("publication-recheck:{}", input.id))?;
-            if let Some(ids) = ledger.roots.get(&role) {
+            if let Some(ids) = ledger.roots.get(role) {
                 if !crate::verified_release::same_members(ids, &[input.id.clone()]) {
                     return Err("caller original handoff root differs".into());
                 }
                 leases.extend(self.original_leases(
                     &ledger,
-                    &[OriginalIdentity {
-                        id: input.id.clone(),
-                        path: input.path.clone(),
-                        identity: input.identity.clone(),
-                    }],
+                    std::slice::from_ref(original),
                     false,
                 )?);
-                transfers.push(role);
+                transfers.push(role.clone());
             }
         }
         // A completed handoff remains a no-op after the domain root is released.
