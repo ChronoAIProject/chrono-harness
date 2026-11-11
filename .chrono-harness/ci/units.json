@@ -984,7 +984,6 @@
         "consumer": "check.unit_worktree",
         "caches": [
           "check.ci",
-          "check.runner",
           "check.worktree-tests"
         ],
         "save_caches": [
@@ -1061,7 +1060,6 @@
         "consumer": "check.unit_worktree-adoption",
         "caches": [
           "check.ci",
-          "check.runner",
           "check.worktree-tests.worktree-adoption"
         ],
         "save_caches": [

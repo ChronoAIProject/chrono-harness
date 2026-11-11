@@ -285,9 +285,7 @@
         "judge-registration",
         "judge-workflow",
         "judge-workflow-short",
-        "judge-workflow-units",
-        "worktree",
-        "worktree-adoption"
+        "judge-workflow-units"
       ],
       "fmt.judge-workflow": [
         "judge-workflow",

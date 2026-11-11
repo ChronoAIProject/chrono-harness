@@ -1123,9 +1123,7 @@
         "check.unit_judge-registration",
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units",
-        "check.unit_worktree",
-        "check.unit_worktree-adoption"
+        "check.unit_judge-workflow-units"
       ],
       "artifacts": [
         "runner.target"
