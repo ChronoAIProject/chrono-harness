@@ -43,7 +43,10 @@ fn retained_measurements(
     [
         u64::from(output.is_some()),
         retired as u64,
-        output.and_then(|o| o.length).unwrap_or(0),
+        output
+            .filter(|o| o.phase != "disposing" || !o.manifest.entries.is_empty())
+            .and_then(|o| o.length)
+            .unwrap_or(0),
         output.map_or(0, |o| {
             o.manifest
                 .entries
@@ -577,11 +580,12 @@ impl Inventory {
             }
         }
         for o in &l.outputs {
-            // A finalized frontier original is excluded and retained for this
-            // entire retirement. Its unchanged outward edges may deliberately
-            // remain unread; every output eligible for mutation still needs its
-            // complete dependencies in the excluded ledger.
+            // A retained original's unchanged outward edges remain unread.
+            // A rootless retiring report also keeps its unvisited edges until
+            // its bytes are absent and each edge is durably detached. Other
+            // mutable outputs still require their complete excluded closure.
             if !gate.retained_dependencies().contains(&o.id)
+                && !gate.retiring_report(&o.id)
                 && o.references.iter().any(|id| !ids.contains(id))
             {
                 return Err("missing retained output dependency".into());
@@ -2279,6 +2283,9 @@ impl Inventory {
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
         for index in 0..l.outputs.len() {
+            if gate.retained_dependencies().contains(&l.outputs[index].id) {
+                continue;
+            }
             if metadata_steps
                 >= self
                     .round_node_limit
@@ -2363,6 +2370,9 @@ impl Inventory {
             .map(|n| (l.cursor + n) % l.outputs.len().max(1))
             .collect();
         for index in account_order {
+            if gate.retained_dependencies().contains(&l.outputs[index].id) {
+                continue;
+            }
             if !self.metadata_room()
                 || metadata_steps
                     >= self
@@ -2433,10 +2443,7 @@ impl Inventory {
         let mut pending: Vec<_> = l.roots.values().flatten().cloned().collect();
         for id in gate.retained_dependencies() {
             pending.push(id.clone());
-            protection_reasons.insert(
-                id.clone(),
-                "finalized original outside this retirement target".into(),
-            );
+            protection_reasons.insert(id.clone(), "original outside this retirement target".into());
         }
         for o in &l.outputs {
             if matches!(o.phase.as_str(), "reserving" | "creating") {
@@ -2816,6 +2823,35 @@ impl Inventory {
             })();
             match effect {
                 Ok(true) => {
+                    if gate.retiring_report(&id) {
+                        // The report can no longer be consumed. Keep its
+                        // existing disposing declaration until every outgoing
+                        // edge is detached, so interruption never leaves an
+                        // original with an unavailable reverse-reference owner.
+                        l.outputs[i].phase = "disposing".into();
+                        l.outputs[i].manifest.entries.clear();
+                        l.outputs[i].reserved_bytes = 0;
+                        if !l.outputs[i].references.is_empty()
+                            && nodes
+                                < self
+                                    .round_node_limit
+                                    .get()
+                                    .unwrap_or(self.policy.max_nodes_per_round)
+                            && self.metadata_room()
+                            && began.elapsed().as_millis()
+                                < self.policy.max_millis_per_round as u128
+                        {
+                            nodes += 1;
+                            l.outputs[i]
+                                .references
+                                .retain(|target| !gate.retained_dependencies().contains(target));
+                        }
+                        if !l.outputs[i].references.is_empty() {
+                            self.save(&l, &gate)?;
+                            protected.push(json!({"id":id,"reason":"report bytes absent; bounded reference detachment resumes on ordinary entry"}));
+                            continue;
+                        }
+                    }
                     let o = Arc::unwrap_or_clone(l.outputs.remove(i).value);
                     let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"observed_return":o.observed_return,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
                     disposed.push(summary.clone());
