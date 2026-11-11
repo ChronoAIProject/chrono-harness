@@ -3361,8 +3361,8 @@ fn checkout_metadata_preserves_complete_success_even_when_classifier_says_missin
 fn checkout_metadata_only_collapses_the_observed_missing_error() {
     proof {
         reveal_strlit("missing"); reveal_strlit("missing\0detail"); reveal_strlit("é\npermission");
-        assert("missing\0detail"@ != "missing"@);
-        assert("é\npermission"@ != "missing"@);
+        assert("missing\0detail"@.len() != "missing"@.len());
+        assert("é\npermission"@.len() != "missing"@.len());
     }
     let absent = policy::checkout_metadata_observation(
         Err::<String, String>("missing".to_owned()),
@@ -3407,8 +3407,8 @@ fn checkout_parent_success_preserves_the_actual_directory_observation() {
 fn checkout_parent_missing_stops_and_other_errors_preserve_the_complete_error() {
     proof {
         reveal_strlit("missing"); reveal_strlit("missing\0detail"); reveal_strlit("é\npermission");
-        assert("missing\0detail"@ != "missing"@);
-        assert("é\npermission"@ != "missing"@);
+        assert("missing\0detail"@.len() != "missing"@.len());
+        assert("é\npermission"@.len() != "missing"@.len());
     }
     expect_checkout_parent(policy::checkout_parent_observation(
         Err::<bool, String>("missing".to_owned()),
