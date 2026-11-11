@@ -41,16 +41,27 @@ impl GitConfigSchema {
     }
 }
 
+pub open spec fn text_has_prefix(text: &str, prefix: &str) -> bool {
+    text.spec_bytes().len() >= prefix.spec_bytes().len()
+        && text.spec_bytes().take(prefix.spec_bytes().len() as int) == prefix.spec_bytes()
+}
+
+fn has_prefix(text: &str, prefix: &str) -> (valid: bool)
+    ensures valid == text_has_prefix(text, prefix),
+{
+    let bytes = text.as_bytes();
+    let prefix = prefix.as_bytes();
+    bytes.len() >= prefix.len() && identifiers::equal_bytes(&bytes[0..prefix.len()], prefix)
+}
+
 pub open spec fn git_config_schema(schema: Option<&str>) -> GitConfigSchema {
     match schema {
         None => GitConfigSchema::Direct,
         Some(text) => {
-            let bytes = text.spec_bytes();
-            let prefix = "chrono-git-configs/".spec_bytes();
             if text@ == "chrono-git-configs/v1"@ { GitConfigSchema::V1 }
             else if text@ == "chrono-git-configs/v2"@ { GitConfigSchema::V2 }
             else if text@ == "chrono-git-configs/v3"@ { GitConfigSchema::V3 }
-            else if bytes.len() >= prefix.len() && bytes.take(prefix.len() as int) == prefix {
+            else if text_has_prefix(text, "chrono-git-configs/") {
                 GitConfigSchema::Unsupported
             } else { GitConfigSchema::Direct }
         },
@@ -62,14 +73,73 @@ pub fn classify_git_config_schema(schema: Option<&str>) -> (out: GitConfigSchema
     ensures out == git_config_schema(schema),
 {
     let Some(text) = schema else { return GitConfigSchema::Direct; };
-    let bytes = text.as_bytes();
-    let prefix = "chrono-git-configs/".as_bytes();
     if identifiers::equal_text(text, "chrono-git-configs/v1") { GitConfigSchema::V1 }
     else if identifiers::equal_text(text, "chrono-git-configs/v2") { GitConfigSchema::V2 }
     else if identifiers::equal_text(text, "chrono-git-configs/v3") { GitConfigSchema::V3 }
-    else if bytes.len() >= prefix.len() && identifiers::equal_bytes(&bytes[0..prefix.len()], prefix) {
+    else if has_prefix(text, "chrono-git-configs/") {
         GitConfigSchema::Unsupported
     } else { GitConfigSchema::Direct }
+}
+
+pub fn admit_selector_object(fields: Option<usize>, has_platforms: bool)
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => fields == Some(2usize) && has_platforms,
+        Err(error) => if fields.is_none() {
+            error@ == "Git config selector object required"@
+        } else {
+            (fields != Some(2usize) || !has_platforms)
+                && error@ == "Git config selector requires only schema and platforms"@
+        },
+    },
+{
+    match fields {
+        None => Err("Git config selector object required"),
+        Some(2) if has_platforms => Ok(()),
+        Some(_) => Err("Git config selector requires only schema and platforms"),
+    }
+}
+
+pub fn admit_selector_platforms<T>(object: Option<(&T, usize)>)
+    -> (out: Result<&T, &'static str>)
+    ensures match out {
+        Ok(platforms) => match object {
+            Some((original, count)) => count > 0 && platforms == original,
+            None => false,
+        },
+        Err(error) => (match object { Some((_, count)) => count == 0, None => true })
+            && error@ == "Git config selector requires nonempty platforms"@,
+    },
+{
+    match object {
+        Some((platforms, count)) if count > 0 => Ok(platforms),
+        _ => Err("Git config selector requires nonempty platforms"),
+    }
+}
+
+/// 相对路径由现有路径准入负责；这里先判宿主范围，再拒绝目标指向入口自身。
+pub fn admit_selector_host_path(path: &str, entry: Option<&str>)
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => text_has_prefix(path, ".chrono-harness/")
+            && match entry { None => true, Some(origin) => origin@ != path@ },
+        Err(error) => if !text_has_prefix(path, ".chrono-harness/") {
+            error@ == "Git config selector paths must reside in .chrono-harness/"@
+        } else {
+            (exists|origin: &str| entry == Some(origin) && origin@ == path@)
+                && error@ == "Git config selector cannot select itself"@
+        },
+    },
+{
+    if !has_prefix(path, ".chrono-harness/") {
+        return Err("Git config selector paths must reside in .chrono-harness/");
+    }
+    if let Some(origin) = entry {
+        if identifiers::equal_text(origin, path) {
+            return Err("Git config selector cannot select itself");
+        }
+    }
+    Ok(())
 }
 
 /// 选择器只能指向直接 v3／v4；schema 键即使为 null 也算存在。
