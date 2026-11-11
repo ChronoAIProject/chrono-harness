@@ -149,7 +149,9 @@ fn configured(build_at_export: bool) -> Fixture {
         "CHRONO_TEST_BOOTSTRAP_NATIVE".into(),
         env!("CARGO_BIN_EXE_chrono-test-bootstrap-native").into(),
     );
-    fixture.config["tools"]["sh"] = json!("/bin/sh");
+    let shell=fixture.tools.join("sh");
+    fs::copy(env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"),&shell).unwrap();
+    fixture.config["tools"]["sh"] = json!(shell);
     fs::write(fixture.root.join("out/bundle.zip"), b"archive bytes").unwrap();
     fs::set_permissions(
         fixture.root.join("out/bundle.zip"),

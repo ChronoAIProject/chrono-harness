@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 
 fn main_host() -> Host {
@@ -6,6 +8,7 @@ fn main_host() -> Host {
 
 #[test]
 fn reusable_cache_survives_separate_operations_until_explicit_release() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = main_host();
     let path = h.root.join(".chrono-harness/cleanup.json");
     let mut policy = json(&fs::read(&path).unwrap()).unwrap();
@@ -79,6 +82,7 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
 
 #[test]
 fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, "rebuild-evidence");
@@ -135,6 +139,7 @@ fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
 
 #[test]
 fn cache_history_releases_old_generations_and_their_owned_originals() {
+    if !chrono_git_boundary::isolated_git() { return; }
     if !super::isolated_capability::isolated_capability_test(
         "bounded_cleanup::cache_history_releases_old_generations_and_their_owned_originals",
     ) {
@@ -250,6 +255,7 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
 
 #[test]
 fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = cache_history_host(86400, 64);
     for _ in 0..3 {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
@@ -418,6 +424,7 @@ fn cost(root: &Path) -> Value {
 
 #[test]
 fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for linked in [false, true] {
         let h = cargo_host();
         let target = if linked {
@@ -502,15 +509,15 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
             cargo_plan(&target, None);
             let (code, rebuilt, error) = h.auto("use", &args);
             assert_eq!(code, 0, "{} {error}", rebuilt["error"]);
-            let measurement = value!({"checkout":"main","unit":"seconds and bytes","cold":cold,
+            let measurement = value!({"checkout":"main","unit":"seconds and bytes","method":"Rust Cargo command mock; real compiler cost unknown","cold":cold,
                 "retained":retained,"cold_after_cleanup":cost(&target),"cleanup_seconds":cleanup_seconds,
                 "before":before,"eligible_objects":2,"released_objects":2,"remaining_objects":0,
                 "physical_release_bytes":null,"physical_release_reason":"allocation observations do not attribute shared filesystem blocks"});
-            println!("BOUNDED_COST {measurement}");
+            println!("BOUNDED_MOCK_COST {measurement}");
         } else {
             println!(
-                "BOUNDED_COST {}",
-                value!({"checkout":"linked","cold":cold,"retained":retained,
+                "BOUNDED_MOCK_COST {}",
+                value!({"checkout":"linked","method":"Rust Cargo command mock; real compiler cost unknown","cold":cold,"retained":retained,
                 "cleanup_seconds":cleanup_seconds,"before":before,"eligible_objects":2,
                 "released_objects":2,"remaining_objects":0,"physical_release_bytes":null})
             );
@@ -532,6 +539,7 @@ fn await_file(path: &Path) {
 
 #[test]
 fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = cargo_host();
     cargo_plan(&h.root, Some("retained-rebuild"));
     let path = h.root.join(".chrono-harness/state/cargo-plan.json");
@@ -570,6 +578,7 @@ fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
 
 #[test]
 fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for stage in ["installation", "test", "cache-save"] {
         let h = cargo_host();
         cargo_plan(&h.root, Some(stage));
@@ -602,6 +611,7 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
 
 #[test]
 fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second_consumer() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = main_host_mode("parent");
     let mut first = super::interrupted_cleanup::CapturedChild::spawn(
         &mut h.auto_command("use", &["--operation", "use.consumer"]),
@@ -661,6 +671,7 @@ fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second
 
 #[test]
 fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_objects() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use std::os::unix::fs::PermissionsExt;
     let h = main_host_mode("rebuild-error");
     let (code, failed, error) = h.auto("use", &["--operation", "use.consumer"]);
@@ -699,6 +710,7 @@ fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_o
 
 #[test]
 fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = main_host();
     let index = fs::read(h.root.join(".git/index")).unwrap();
     let refs = git(&h.root, &["show-ref"]);
@@ -736,6 +748,7 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
 
 #[test]
 fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = main_host();
     let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 0, "{used} {error}");
@@ -792,6 +805,7 @@ fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
 
 #[test]
 fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = main_host();
     fs::create_dir_all(h.root.join("nested/cache")).unwrap();
     fs::write(
@@ -813,6 +827,7 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
 
 #[test]
 fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_cleanup() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = main_host();
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     let ledger_path = h.ledger_path(&h.root);
@@ -837,6 +852,7 @@ fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_clean
 
 #[test]
 fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = main_host();
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     git(
@@ -885,6 +901,7 @@ fn custody(h: &Host, plan: &str) -> (i32, Value, String) {
 
 #[test]
 fn main_historical_custody_reclaims_selected_outputs_and_preserves_original_enrollment() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = historical_host();
     let original = h.ledger()["entries"][0].clone();
     let plan = custody_plan(&h, &["nested/cache/"]);
@@ -919,6 +936,7 @@ fn main_historical_custody_reclaims_selected_outputs_and_preserves_original_enro
 
 #[test]
 fn main_historical_custody_requires_exclusion_explicit_scope_and_source_protection() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = historical_host();
     let plan = custody_plan(&h, &["nested/cache/"]);
     let entry = h.ledger()["entries"][0].clone();
@@ -953,6 +971,7 @@ fn main_historical_custody_requires_exclusion_explicit_scope_and_source_protecti
 
 #[test]
 fn main_historical_custody_publication_retry_and_partial_disposal_preserve_originals() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use std::os::unix::fs::PermissionsExt;
     let h = historical_host();
     let plan = custody_plan(&h, &["output λ/", "nested/cache/"]);

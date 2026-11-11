@@ -1,3 +1,7 @@
+#[path = "../../../worktree-tests/tests/support/cargo_model.rs"]
+mod cargo_model;
+#[path = "../../../runner-tests/tests/support/git_model.rs"]
+mod git_model;
 use serde_json::{Value, json};
 #[path = "../fixtures/transition_decoder.rs"]
 mod transition_decoder;
@@ -221,13 +225,13 @@ fn main() -> ExitCode {
         return ExitCode::from(83);
     }
     let (variable, trace) = match name.to_str().unwrap() {
-        "selected Git λ" => ("CHRONO_WORKFLOW_REAL_GIT", Some("git-trace")),
-        "facts-git" => ("CHRONO_WORKFLOW_REAL_GIT", None),
-        "cargo-fixture" => ("CHRONO_WORKFLOW_REAL_CARGO", Some("business-launches")),
+        "selected Git λ" => ("git-model", Some("git-trace")),
+        "facts-git" => ("git-model", None),
+        "cargo-fixture" => ("cargo-model", Some("business-launches")),
         "execution-migration" => ("CHRONO_WORKFLOW_REAL_EXECUTION", Some("business-launches")),
         other => panic!("unknown registered test tool: {other}"),
     };
-    if variable == "CHRONO_WORKFLOW_REAL_GIT"
+    if variable == "git-model"
         && env::var_os("FACTS_SENTINEL").as_deref() != Some(OsStr::new("declared"))
     {
         return ExitCode::from(81);
@@ -254,7 +258,9 @@ fn main() -> ExitCode {
             return ExitCode::from(7);
         }
     }
-    let real = env::var_os(variable).expect("explicit native fixture tool binding");
+    if variable == "git-model" { git_model::main(); return ExitCode::SUCCESS; }
+    if variable == "cargo-model" { return cargo_model::dispatch(&args.iter().map(|a|a.to_str().unwrap().to_owned()).collect::<Vec<_>>()); }
+    let real = env::var_os(variable).expect("explicit Rust test executable binding");
     panic!(
         "test tool exec failed: {}",
         Command::new(real).args(args).exec()

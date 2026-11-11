@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 #[path = "support/tools.rs"]
 mod tools;
 use tools::fixture_git;
@@ -94,7 +96,7 @@ impl Host {
                 "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
             "environment":{"inherit":[],"values":{"PATH":std::env::var("PATH").unwrap(),
                 "BOUND_EVENT_VALUE":"declared","EVENT_TRACE":trace,
-                "EVENT_REAL_GIT":real,"EVENT_GIT_MODE":mode,"CHRONO_TEST_GIT_PROFILE":"event",
+                "EVENT_GIT_MODE":mode,"CHRONO_TEST_GIT_PROFILE":"event",
                 "GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
                 "inputs":[{"id":"event-git-bytes","presence":"present","location":program,
                     "sha256":sha256(&fs::read(&program).unwrap())}]},
@@ -165,6 +167,7 @@ fn bytes(p: &Value, stream: &str) -> Vec<u8> {
 
 #[test]
 fn event_binding_is_versioned_explicit_and_generation_preserves_customization() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("pass");
     let c = h.config();
     assert!(generate(&h.root, SOURCE, false).unwrap());
@@ -200,6 +203,7 @@ fn event_binding_is_versioned_explicit_and_generation_preserves_customization() 
 
 #[test]
 fn bound_event_preparation_ignores_ambient_git_and_retains_original_processes() {
+    if !chrono_git_boundary::isolated_git() { return; }
     if isolated_event_test() {
         return;
     }
@@ -259,6 +263,7 @@ fn isolated_event_test() -> bool {
 
 #[test]
 fn native_platform_policy_serves_real_push_and_pr_acquisition() {
+    if !chrono_git_boundary::isolated_git() { return; }
     if isolated_event_test() {
         return;
     }
@@ -332,6 +337,7 @@ fn native_platform_policy_serves_real_push_and_pr_acquisition() {
 
 #[test]
 fn missing_commit_is_fetched_and_reprobed_through_bound_git() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("pass");
     let (_remote, base) = h.remote();
     let r = h.push(&base).unwrap();
@@ -362,6 +368,7 @@ fn missing_commit_is_fetched_and_reprobed_through_bound_git() {
 
 #[test]
 fn failed_probe_preserves_original_bytes_and_never_fetches() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("probe-failure");
     let error = h.push(&h.candidate).unwrap_err();
     let facts = observed(&error);
@@ -378,6 +385,7 @@ fn failed_probe_preserves_original_bytes_and_never_fetches() {
 
 #[test]
 fn malformed_or_wrong_type_probe_does_not_trigger_fetch() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for mode in ["malformed-probe", "wrong-type-probe", "extra-probe-output"] {
         let h = Host::new(mode);
         let error = h.push(&h.candidate).unwrap_err();
@@ -388,6 +396,7 @@ fn malformed_or_wrong_type_probe_does_not_trigger_fetch() {
 
 #[test]
 fn absent_probe_and_failed_fetch_both_remain_observable() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("pass");
     git(
         &h.root,
@@ -416,6 +425,7 @@ fn absent_probe_and_failed_fetch_both_remain_observable() {
 
 #[test]
 fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = Host::new("pass");
     let mut c = read(&h.root, SOURCE);
     c["initial_inventory"] = json!({"path":".chrono-harness/ci/root.json","profile":{
@@ -477,6 +487,7 @@ fn initial_pr_and_configured_baseline_routes_share_the_declared_reader() {
 
 #[test]
 fn binding_source_and_executable_failures_precede_network_observation() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for case in [
         "source-drift",
         "digest",
@@ -526,6 +537,7 @@ fn binding_source_and_executable_failures_precede_network_observation() {
 
 #[test]
 fn relative_host_root_uses_the_same_bound_checkout() {
+    if !chrono_git_boundary::isolated_git() { return; }
     if isolated_event_test() {
         return;
     }

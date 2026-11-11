@@ -1,4 +1,6 @@
 //! Selected projects/workflow fixture publishers share the existing custody owner.
+#[path = "../../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod fixture_coordinator;
 use chrono_worktree::TemporaryHost;
 use std::{
     fs,
@@ -19,12 +21,7 @@ fn store(producer: &str) -> &'static (PathBuf, Vec<String>) {
     };
     selected
         .get_or_init(|| {
-            let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent()
-                .unwrap()
-                .parent()
-                .unwrap();
-            TemporaryHost::registered_store(source, ".chrono-harness/worktree.json", producer)
+            TemporaryHost::registered_store(fixture_coordinator::root(), ".chrono-harness/worktree.json", producer)
         })
         .as_ref()
         .unwrap_or_else(|error| panic!("fixture custody prerequisite: {error}"))
@@ -102,13 +99,8 @@ pub fn tool_directory(prefix: &str) -> FixtureDirectory {
 }
 fn allocate(producer: &'static str, prefix: &str) -> FixtureDirectory {
     store(producer);
-    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .unwrap()
-        .parent()
-        .unwrap();
     let host = TemporaryHost::registered_allocate(
-        source,
+        fixture_coordinator::root(),
         ".chrono-harness/worktree.json",
         producer,
         prefix,

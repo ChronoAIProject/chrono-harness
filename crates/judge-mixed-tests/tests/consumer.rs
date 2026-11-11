@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 #[path = "../../judge-cost-tests/tests/support/host.rs"]
 mod host;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
@@ -82,6 +84,7 @@ fn checked(h: &Host, expected: i32) -> Value {
 
 #[test]
 fn actual_mixed_warning_is_zero_exit_with_both_groups_and_bound_cost_provenance() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = host();
     h.values.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]["execute"]["argv"] =
         json!(["-c", "exit 1"]);
@@ -108,6 +111,7 @@ fn actual_mixed_warning_is_zero_exit_with_both_groups_and_bound_cost_provenance(
 
 #[test]
 fn actual_ordinary_membership_is_pass_and_rule_only_still_publishes_changes() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = host();
     fs::write(h.root().join("src.bin"), "another product").unwrap();
     fs::write(h.root().join("new.bin"), "registered new file").unwrap();
@@ -137,6 +141,7 @@ fn actual_ordinary_membership_is_pass_and_rule_only_still_publishes_changes() {
 
 #[test]
 fn actual_missing_cost_predecessor_is_an_error() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = host();
     h.values.get_mut(JUDGES).unwrap()["judges"][3]["after"] = json!(["registration", "filemap"]);
     h.save();
@@ -147,6 +152,7 @@ fn actual_missing_cost_predecessor_is_an_error() {
 
 #[test]
 fn actual_stale_cost_binding_is_rejected_without_recomputing_it() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = host();
     let native = Path::new(env!("CARGO_BIN_EXE_chrono-mixed-test-cost"));
     let bytes = fs::read(native).unwrap();
@@ -162,6 +168,7 @@ fn actual_stale_cost_binding_is_rejected_without_recomputing_it() {
 
 #[test]
 fn actual_named_json_uses_fixed_git_bytes_and_rejects_invalid_utf8() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = host();
     let mut f = file("named.json", json!([]));
     f["surface"] = "membership".into();

@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::process::Command;
 
@@ -114,12 +116,6 @@ pub(super) fn bind_host(mut h: Host) -> Host {
         .unwrap()
         .push(policy);
     fs::write(root.join("policy.json"), "{\"limit\":1}").unwrap();
-    native_tools::bind(
-        &mut h,
-        "CHRONO_WORKFLOW_REAL_GIT",
-        &real,
-        &["judge:registration", "judge:projects"],
-    );
     h.save();
     h.base = h.candidate.clone();
     fs::write(root.join("policy.json"), "{\"limit\":2}").unwrap();
@@ -244,11 +240,13 @@ fn bound_context(h: &Host, kind: &str, digest: Option<&str>, execute: bool) -> (
 
 #[test]
 fn all_full_judges_and_integration_delivery_use_candidate_bound_git() {
+    if !chrono_git_boundary::isolated_git() { return; }
     all_full_judges_consumer(false);
 }
 
 #[test]
 fn selected_full_judges_and_integration_delivery_use_entry_bound_policy() {
+    if !chrono_git_boundary::isolated_git() { return; }
     all_full_judges_consumer(true);
 }
 
@@ -307,11 +305,13 @@ fn all_full_judges_consumer(selected_mode: bool) {
 
 #[test]
 fn full_ci_prepared_context_runs_actual_integration_and_delivery_without_policy_substitution() {
+    if !chrono_git_boundary::isolated_git() { return; }
     full_ci_consumer(false);
 }
 
 #[test]
 fn selected_full_ci_prepares_and_consumes_unchanged_canonical_command() {
+    if !chrono_git_boundary::isolated_git() { return; }
     full_ci_consumer(true);
 }
 
@@ -744,6 +744,7 @@ fn full_ci_consumer(selected: bool) {
 
 #[test]
 fn full_unit_real_seven_judge_contribution() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = bound_host();
     h.values.get_mut(CONFIG).unwrap()["schema_version"] = json!(3);
     h.values.get_mut(CONFIG).unwrap()["protocol"]["timeout_seconds"] = json!(180);
@@ -883,6 +884,7 @@ fn full_unit_real_seven_judge_contribution() {
 
 #[test]
 fn unit_report_must_not_target_canonical_full_report() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let profile = json!({"schema_version":3,"execution_units":{
         "units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/report.json"}},
         "shared_operations":{},

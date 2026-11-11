@@ -245,8 +245,8 @@ impl Fixture {
     }
 
     pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
-        let mut command = context::command("/bin/bash");
-        command
+        let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
+        command.arg("--consume-launcher")
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
             .arg(self.host.root())
             .arg(directory)

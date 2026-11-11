@@ -18,6 +18,7 @@ fn main() {
         _ => {}
     }
     match std::env::args().nth(1).unwrap().as_str() {
+        "git-version" => { assert_eq!(std::env::args().len(),2); print!("git"); }
         "exit" => std::process::exit(std::env::args().nth(2).unwrap().parse().unwrap()),
         "echo" => {
             println!("{}", std::env::args().nth(2).unwrap());

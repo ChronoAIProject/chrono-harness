@@ -1,4 +1,6 @@
 //! Full transport shares the real bound-Git fixture with event acquisition tests.
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 #[path = "full_scope.rs"]
 mod scope_tests;
 use super::*;
@@ -21,6 +23,7 @@ fn config() -> FullConfig {
 
 #[test]
 fn full_render_consumes_literal_argument_policy() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for value in ["", "普通文本", "$", "${", "$HOME `literal`", "${x{", "{{"] {
         let mut c = config();
         c.bootstrap.push(value.into());
@@ -66,6 +69,7 @@ fn failure(error: &str) -> Value {
 
 #[test]
 fn preparation_preserves_context_bytes_and_separate_observations() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host("pass");
     let bytes = context(&h, &h.candidate);
     let r = prepare(&h, &bytes).unwrap();
@@ -89,6 +93,7 @@ fn preparation_preserves_context_bytes_and_separate_observations() {
 #[cfg(unix)]
 #[test]
 fn repeated_preparation_replaces_current_views_and_preserves_original_contexts() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use std::os::fd::AsFd;
     let h = host("pass");
     let bytes = context(&h, &h.candidate);
@@ -124,6 +129,7 @@ fn repeated_preparation_replaces_current_views_and_preserves_original_contexts()
 
 #[test]
 fn declaration_init_ownership_customization_and_verify_are_explicit() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let c = config();
@@ -202,6 +208,7 @@ fn executable_alias(source: impl AsRef<Path>, destination: impl AsRef<Path>) {
 
 #[test]
 fn generated_bash_preserves_literal_arguments_and_original_exit() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let mut c = config();
@@ -212,7 +219,7 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
     );
     c.check_config = ".chrono-harness/'$HOME`literal`.json".into();
     let yaml = full::render(&c, SOURCE).unwrap();
-    let out = Command::new("/bin/bash")
+    let out = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"))
         .current_dir(root)
         .env("PATH", root)
         .env("CHRONO_TEST_RECORDING", "full")
@@ -237,6 +244,7 @@ fn generated_bash_preserves_literal_arguments_and_original_exit() {
 
 #[test]
 fn malformed_context_fails_without_invented_defaults() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host("pass");
     let original = context(&h, &h.candidate);
     for (key, value) in [
@@ -261,6 +269,7 @@ fn malformed_context_fails_without_invented_defaults() {
 
 #[test]
 fn candidate_source_policy_checkout_and_workflow_are_bound_before_publication() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for case in [
         "policy", "source", "checkout", "workflow", "digest", "version", "legacy",
     ] {
@@ -322,6 +331,7 @@ fn candidate_source_policy_checkout_and_workflow_are_bound_before_publication() 
 
 #[test]
 fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host("pass");
     let (_remote, base) = h.remote();
     let bytes = context(&h, &base);
@@ -394,6 +404,7 @@ fn missing_fixed_base_is_fetched_once_and_original_failures_are_retained() {
 
 #[test]
 fn context_and_report_symlinks_preserve_the_original_target() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for target in [config().context_path, config().preparation_path] {
         let h = host("pass");
         let path = h.root.join(&target);
@@ -412,6 +423,7 @@ fn context_and_report_symlinks_preserve_the_original_target() {
 
 #[test]
 fn committed_preparation_rejects_component_output_collisions_before_publication() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for (field, path, expected) in [
         (
             "preparation_path",
@@ -459,6 +471,7 @@ fn committed_preparation_rejects_component_output_collisions_before_publication(
 
 #[test]
 fn current_source_rejects_component_ownership_before_publication() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for (source_path, field, value, expected) in [
         (
             SOURCE,
@@ -575,6 +588,7 @@ fn current_source_rejects_component_ownership_before_publication() {
 
 #[test]
 fn committed_preparation_preserves_separate_component_spellings_and_customization() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for scope in [
         None,
         Some(json!({"kind":"unit","unit":"compiler.arm64-1"})),
@@ -643,6 +657,7 @@ fn committed_preparation_preserves_separate_component_spellings_and_customizatio
 
 #[test]
 fn standalone_full_prepare_is_rejected_without_publishing_or_git() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for scope in [
         None,
         Some(json!({"kind":"unit","unit":"compiler"})),

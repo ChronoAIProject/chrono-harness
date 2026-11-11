@@ -97,7 +97,9 @@ dependencies = [
  "chrono-diagnostics",
  "chrono-harness",
  "chrono-judge-ci",
+ "serde",
  "serde_json",
+ "sha1",
  "tempfile",
  "tracing",
 ]

@@ -1,10 +1,12 @@
+#[path = "../../../runner-tests/tests/support/git_model.rs"]
+mod git_model;
 use std::{
     env,
     ffi::OsStr,
     fs::OpenOptions,
     io::{self, Write},
-    os::unix::{ffi::OsStrExt, process::CommandExt},
-    process::{self, Command},
+    os::unix::ffi::OsStrExt,
+    process::{self},
 };
 
 fn main() -> io::Result<()> {
@@ -27,9 +29,6 @@ fn main() -> io::Result<()> {
     }
     trace.write_all(b"\n")?;
     drop(trace);
-    Err(
-        Command::new(env::var_os("SNAPSHOT_REAL_GIT").expect("registered real Git"))
-            .args(arguments)
-            .exec(),
-    )
+    git_model::main();
+    Ok(())
 }

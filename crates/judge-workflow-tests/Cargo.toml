@@ -12,6 +12,8 @@ test = false
 bench = false
 
 [dependencies]
+shlex = "=2.0.1"
+sha1 = "0.10"
 chrono-judge-workflow = { path = "../judge-workflow" }
 chrono-worktree = { path = "../worktree" }
 chrono-harness = { path = "../runner" }
@@ -74,3 +76,21 @@ overflow-checks = true
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+[[bin]]
+name = "chrono-test-git-model"
+path = "../runner-tests/tests/support/git_model.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-cargo-model"
+path = "../worktree-tests/tests/support/cargo_model.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-generated-command"
+path = "../ci-tests/tests/support/generated_command.rs"
+test = false
+bench = false

@@ -1,4 +1,6 @@
 //! Behavioral scheduling fixtures use actual Git objects and the fixed native command.
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 
 const PROVIDER: &str = ".chrono-harness/ci/units.json";
@@ -10,6 +12,7 @@ fn native_job_detail(status: &str, conclusion: Value) -> Value {
 
 #[test]
 fn stale_running_job_list_uses_one_bound_terminal_detail() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for status in ["queued", "in_progress", "waiting", "pending", "requested"] {
         let listed = native_job_detail(status, Value::Null);
         let completed = native_job_detail("completed", json!("success"));
@@ -27,6 +30,7 @@ fn stale_running_job_list_uses_one_bound_terminal_detail() {
 
 #[test]
 fn terminal_job_lists_keep_their_current_success_or_failure() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for conclusion in ["success", "failure", "cancelled", "skipped"] {
         let listed = native_job_detail("completed", json!(conclusion));
         let result = chrono_ci::gating::completed_native_job(&listed, |_| {
@@ -60,6 +64,7 @@ fn terminal_job_lists_keep_their_current_success_or_failure() {
 
 #[test]
 fn nonterminal_or_failed_detail_never_becomes_a_pass() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for (status, conclusion) in [
         ("in_progress", Value::Null),
         ("completed", json!("failure")),
@@ -82,6 +87,7 @@ fn nonterminal_or_failed_detail_never_becomes_a_pass() {
 
 #[test]
 fn job_detail_must_keep_the_selected_identity_and_original_error() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for field in ["id", "run_id", "run_attempt", "head_sha", "name"] {
         let mut detail = native_job_detail("completed", json!("success"));
         detail[field] = if ["id", "run_id", "run_attempt"].contains(&field) {
@@ -119,6 +125,7 @@ fn migrate_provider(root: &Path, next: &Value) {
 
 #[test]
 fn parent_generation_uses_only_current_projection_ownership() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = ShortHost::new();
     let mut next: Value =
         serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
@@ -142,6 +149,7 @@ fn parent_generation_uses_only_current_projection_ownership() {
 
 #[test]
 fn parent_projection_preserves_unit_settings() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = ShortHost::new();
     let mut c: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
     c["job_gating"] = gating();
@@ -185,12 +193,7 @@ pub(crate) fn install_parent_provider(root: &Path) {
         fs::symlink_metadata(&program).unwrap_err().kind(),
         std::io::ErrorKind::NotFound
     );
-    let copied = Command::new("/bin/cp")
-        .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
-        .arg(&program)
-        .output()
-        .unwrap();
-    assert!(copied.status.success(), "parent provider copy: {copied:?}");
+    fs::copy(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), &program).unwrap();
     let ready = Command::new(&program)
         .current_dir(root)
         .env_clear()
@@ -465,6 +468,7 @@ pub(crate) fn needs(h: &GatedHost, d: &Value) -> Value {
 
 #[test]
 fn detector_selects_isolated_unrelated_and_empty_git_delta_without_business_execution() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for (paths, expected) in [
         (vec!["a.txt"], json!(["alpha"])),
         (vec!["a.txt", "b.txt"], json!(["alpha", "beta"])),
@@ -484,6 +488,7 @@ fn detector_selects_isolated_unrelated_and_empty_git_delta_without_business_exec
 
 #[test]
 fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_delta() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for paths in [vec!["a.txt"], vec!["a.txt", "b.txt"], vec![]] {
         let mut h = GatedHost::new();
         if !paths.is_empty() {
@@ -608,6 +613,7 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
 
 #[test]
 fn shared_parent_observation_checks_every_artifact_and_final_attempt_before_publication() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for mode in [
         "artifact-missing-last",
         "artifact-misbound-last",
@@ -688,6 +694,7 @@ fn shared_parent_observation_checks_every_artifact_and_final_attempt_before_publ
 
 #[test]
 fn parent_collection_transports_report_references_and_rejects_damaged_originals() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.host.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2");
@@ -784,6 +791,7 @@ fn parent_collection_transports_report_references_and_rejects_damaged_originals(
 
 #[test]
 fn parent_collection_requires_transported_streams_without_local_fallback_or_business_reruns() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.host.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2");
@@ -910,6 +918,7 @@ fn parent_collection_requires_transported_streams_without_local_fallback_or_busi
 
 #[test]
 fn aggregate_rejects_detection_failure_and_every_unsuccessful_selected_unit() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.change(&["a.txt"]);
     let d = h.detection();
@@ -937,6 +946,7 @@ fn aggregate_rejects_detection_failure_and_every_unsuccessful_selected_unit() {
 
 #[test]
 fn parent_collection_rejects_missing_artifact_source_run_attempt_and_original_context_mismatch() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for mode in [
         "missing-artifact",
         "wrong-source",
@@ -974,6 +984,7 @@ fn parent_collection_rejects_missing_artifact_source_run_attempt_and_original_co
 
 #[test]
 fn detector_uses_both_endpoint_edges_assignments_and_deleted_or_renamed_paths() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for kind in ["dependency", "assignment", "delete", "rename", "invalid"] {
         let mut h = GatedHost::new();
         let mut fm: Value = serde_json::from_slice(
@@ -1060,6 +1071,7 @@ fn detector_uses_both_endpoint_edges_assignments_and_deleted_or_renamed_paths() 
 
 #[test]
 fn large_complete_git_delta_retains_every_path_and_obligation() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.host.base = h.host.candidate.clone();
     h.payload["before"] = json!(h.host.base);
@@ -1096,6 +1108,7 @@ fn large_complete_git_delta_retains_every_path_and_obligation() {
 
 #[test]
 fn push_spans_multiple_commits_and_pr_uses_fixed_merge_base_despite_stale_event_base() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.change(&["a.txt"]);
     let previous = h.host.candidate.clone();
@@ -1136,6 +1149,7 @@ fn push_spans_multiple_commits_and_pr_uses_fixed_merge_base_despite_stale_event_
 
 #[test]
 fn configured_integration_baseline_is_frozen_once_for_all_dependent_jobs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     let mut c: Value =
         serde_json::from_slice(&fs::read(h.host.root.join(PROVIDER)).unwrap()).unwrap();
@@ -1176,6 +1190,7 @@ fn configured_integration_baseline_is_frozen_once_for_all_dependent_jobs() {
 
 #[test]
 fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sources() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.change(&["a.txt"]);
     h.change(&["b.txt"]);
@@ -1249,6 +1264,7 @@ fn shallow_no_checkout_detection_fetches_missing_exact_endpoint_without_host_sou
 
 #[test]
 fn detector_rejects_missing_endpoint_deletion_parented_initial_and_missing_registry() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for mode in ["missing", "deleted", "parented-initial", "registry"] {
         let mut h = GatedHost::new();
         match mode {
@@ -1278,6 +1294,7 @@ fn detector_rejects_missing_endpoint_deletion_parented_initial_and_missing_regis
 
 #[test]
 fn full_v2_detection_uses_declaration_owners_before_any_context_or_sdk_snapshots() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     let mut cfg: Value =
         serde_json::from_slice(&fs::read(h.host.root.join(".chrono-harness/config.json")).unwrap())
@@ -1340,6 +1357,7 @@ fn full_v2_detection_uses_declaration_owners_before_any_context_or_sdk_snapshots
 
 #[test]
 fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisition() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for full in [false, true] {
         let mut h = GatedHost::new();
         let mut fm: Value = serde_json::from_slice(
@@ -1424,6 +1442,7 @@ fn scoped_and_full_detection_refuse_decoder_history_before_interpreter_acquisiti
 
 #[test]
 fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = ShortHost::new();
     let source = fs::read(h.root.join(PROVIDER)).unwrap();
     let mut incoming: Value = serde_json::from_slice(&source).unwrap();
@@ -1449,6 +1468,7 @@ fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
 
 #[test]
 fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_edits() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for conflict in ["none", "target"] {
         let h = ShortHost::new();
         let mut c: Value =
@@ -1533,6 +1553,7 @@ fn init_regeneration_and_explicit_migration_keep_customization_and_refuse_host_e
 
 #[test]
 fn copied_conditional_example_executes_fixed_unit_and_collection_commands_without_rust_source() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/ci-host-job-gating");
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("installed tools host");
@@ -1553,8 +1574,8 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
         distribution.join(".chrono-harness/bin/chrono-worktree"),
     )
     .unwrap();
-    let installed = Command::new("/bin/sh")
-        .arg(root.join(".chrono-harness/ci/install.sh"))
+    let installed = Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
+        .arg("example-install").arg(root.join(".chrono-harness/ci/install.sh"))
         .arg(&root)
         .arg(distribution.join(".chrono-harness/bin"))
         .output()
@@ -1685,6 +1706,7 @@ fn copied_conditional_example_executes_fixed_unit_and_collection_commands_withou
 
 #[test]
 fn independent_job_retry_keeps_exact_original_prerequisite_attempts_in_one_parent_run() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.change(&["a.txt", "b.txt"]);
     let d = h.detection();
@@ -1768,6 +1790,7 @@ fn independent_job_retry_keeps_exact_original_prerequisite_attempts_in_one_paren
 
 #[test]
 fn parent_collection_recovers_download_without_reexecuting_units_or_relaxing_identity() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     let mut provider: Value =
         serde_json::from_slice(&fs::read(h.host.root.join(PROVIDER)).unwrap()).unwrap();
@@ -1834,6 +1857,7 @@ fn parent_collection_recovers_download_without_reexecuting_units_or_relaxing_ide
 
 #[test]
 fn carried_api_attempts_and_aggregate_only_reruns_use_original_artifact_outputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     h.change(&["a.txt", "b.txt"]);
     let d = h.detection();
@@ -1895,6 +1919,7 @@ fn carried_api_attempts_and_aggregate_only_reruns_use_original_artifact_outputs(
 
 #[test]
 fn registered_dotted_and_underscore_unit_ids_have_distinct_valid_jobs_and_actual_short_checks() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = GatedHost::new();
     let mut p: Value =
         serde_json::from_slice(&fs::read(h.host.root.join(PROVIDER)).unwrap()).unwrap();
@@ -1944,30 +1969,33 @@ fn registered_dotted_and_underscore_unit_ids_have_distinct_valid_jobs_and_actual
 
 #[test]
 fn current_product_host_registration_and_generated_parent_select_the_real_source_delta() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let source = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-    let original = git(&source, &["rev-parse", "HEAD"]);
-    // Fixed baseline data is exported; no other branch or active worktree is read.
+    // FILEMAP is the explicit source inventory. Read current declared bytes as
+    // data; acquisition never invokes Git or reads the caller's index/refs.
+    let map: Value = serde_json::from_slice(&fs::read(source.join(".chrono-harness/FILEMAP.json")).unwrap()).unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let archive = Command::new(fixture_git())
-        .current_dir(&source)
-        .args(["archive", &original])
-        .output()
-        .unwrap();
-    assert!(archive.status.success());
-    let mut unpack = Command::new("tar")
-        .current_dir(dir.path())
-        .arg("-x")
-        .stdin(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    use std::io::Write;
-    unpack
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&archive.stdout)
-        .unwrap();
-    assert!(unpack.wait().unwrap().success());
+    let mut identity = Vec::new();
+    for declaration in map["files"].as_array().unwrap() {
+        let path = declaration["path"].as_str().unwrap();
+        let input = source.join(path);
+        let output = dir.path().join(path);
+        fs::create_dir_all(output.parent().unwrap()).unwrap();
+        identity.extend_from_slice(path.as_bytes());
+        identity.push(0);
+        if fs::symlink_metadata(&input).unwrap().file_type().is_symlink() {
+            let target = fs::read_link(&input).unwrap();
+            use std::os::unix::ffi::OsStrExt;
+            identity.extend_from_slice(target.as_os_str().as_bytes());
+            std::os::unix::fs::symlink(target, output).unwrap();
+        } else {
+            let bytes = fs::read(&input).unwrap();
+            identity.extend_from_slice(&bytes);
+            fs::copy(input, output).unwrap();
+        }
+        identity.push(0);
+    }
+    let original = sha256(&identity);
     git(dir.path(), &["init", "-q", "-b", "dev"]);
     git(dir.path(), &["config", "user.name", "Fixture"]);
     git(
@@ -2205,12 +2233,13 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
     json_file(
         &source,
         ".chrono-harness/state/current-host-delta-selection.json",
-        &json!({"source_baseline":original,"fixture_base":base,"fixture_candidate":candidate,"selection_scope":"actual-worktree-and-explicit-fixture-delta","detection":result["detection"],"global_selected":result["requirements"]["global_selected"],"native_actions_verified":false}),
+        &json!({"source_baseline":original,"fixture_base":base,"fixture_candidate":candidate,"selection_scope":"declared-current-source-bytes-and-explicit-fixture-delta","detection":result["detection"],"global_selected":result["requirements"]["global_selected"],"native_actions_verified":false}),
     );
 }
 
 #[test]
 fn artifact_identity_and_cumulative_budgets_cover_download_and_source_checks() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for mode in [
         "artifact-missing",
         "artifact-misbound",

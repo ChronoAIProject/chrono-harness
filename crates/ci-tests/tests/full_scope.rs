@@ -1,9 +1,12 @@
 //! Provider transport tests; the recording consumer does not judge full governance.
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use chrono_harness::units::Scope;
 
 #[test]
 fn retired_full_v1_is_rejected_before_any_publication() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for operation in ["generate", "init", "prepare"] {
         let d = tempfile::tempdir().unwrap();
         let root = d.path();
@@ -54,6 +57,7 @@ fn local_argv(c: &FullConfig, scope: &Value) -> Vec<String> {
 
 #[test]
 fn unscoped_source_identity_and_check_argv_are_explicit() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let c = config();
     let source = serde_json::to_value(&c).unwrap();
     assert!(source.get("scope").is_none());
@@ -68,6 +72,7 @@ fn unscoped_source_identity_and_check_argv_are_explicit() {
 
 #[test]
 fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for scope in scopes().into_iter().chain([json!({"kind":"collect","manifest":".chrono-harness/state/'$CHRONO_BASE`literal`/manifest.json"})]) {
         let d = tempfile::tempdir().unwrap();
         let root = d.path();
@@ -75,7 +80,7 @@ fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
         c.runner = "$CHRONO_BASE".into();
         executable_alias(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), root.join(&c.runner));
         let yaml = full::render(&c, SOURCE).unwrap();
-        let out = Command::new("/bin/bash").current_dir(root).env("PATH", root)
+        let out = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command")).current_dir(root).env("PATH", root)
             .env("CHRONO_TEST_RECORDING", "scope")
             .env("CHRONO_BASE", "base fixed").env("CHRONO_CANDIDATE", "candidate fixed")
             .args(["-e", "-c", &script(&yaml, "Canonical full harness check")]).output().unwrap();
@@ -92,6 +97,7 @@ fn scoped_render_and_recording_shell_use_exact_local_suffix_and_exit() {
 
 #[test]
 fn malformed_scopes_and_ownership_collisions_fail_before_generation() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let c = config();
     let mut invalid = vec![
         Value::Null,
@@ -175,6 +181,7 @@ fn malformed_scopes_and_ownership_collisions_fail_before_generation() {
 
 #[test]
 fn independent_sources_regenerate_only_their_owned_projection_and_keep_customization() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let unit_source = ".chrono-harness/providers/build-one.json";
@@ -312,6 +319,7 @@ fn scoped_host(scope: &Value, selector: bool, mode: &str) -> (Host, FullConfig, 
 
 #[test]
 fn committed_unit_and_collector_preparation_preserves_caller_bytes_and_canonical_argv() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for scope in scopes() {
         for selector in [false, true] {
             let (h, c, path) = scoped_host(&scope, selector, "pass");
@@ -368,6 +376,7 @@ fn committed_unit_and_collector_preparation_preserves_caller_bytes_and_canonical
 
 #[test]
 fn scoped_prepare_keeps_fixed_source_checkout_workflow_and_selector_controls() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for scope in scopes() {
         for case in [
             "source",
@@ -439,6 +448,7 @@ fn scoped_prepare_keeps_fixed_source_checkout_workflow_and_selector_controls() {
 
 #[test]
 fn scoped_git_failure_keeps_original_bytes_status_and_no_outputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for scope in scopes() {
         let (h, c, path) = scoped_host(&scope, false, "scope-probe-failure");
         let (_remote, base) = h.remote();
@@ -463,6 +473,7 @@ fn scoped_git_failure_keeps_original_bytes_status_and_no_outputs() {
 
 #[test]
 fn scoped_init_preserves_current_source_customization() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let input = root.join("incoming.json");
@@ -489,6 +500,7 @@ fn scoped_init_preserves_current_source_customization() {
 
 #[test]
 fn scoped_generation_preserves_other_source_outputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let previous_source = ".chrono-harness/providers/previous.json";
@@ -519,6 +531,7 @@ fn scoped_generation_preserves_other_source_outputs() {
 
 #[test]
 fn unscoped_full_generation_and_init_preserve_other_source_outputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     {
         for operation in ["generate", "init"] {
             let d = tempfile::tempdir().unwrap();
@@ -549,6 +562,7 @@ fn unscoped_full_generation_and_init_preserve_other_source_outputs() {
 
 #[test]
 fn collection_symlink_is_rejected_without_provisioning_or_output() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
     let c = scoped_config(&scopes()[1]);

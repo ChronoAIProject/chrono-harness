@@ -6,6 +6,7 @@ publish = false
 autotests = false
 
 [dependencies]
+sha1 = "0.10"
 chrono-harness = { path = "../runner" }
 chrono-inputs = { path = "../inputs" }
 serde = { version = "1", features = ["derive"] }
@@ -72,3 +73,9 @@ path = "tests/decoder_contract.rs"
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+[[bin]]
+name = "chrono-test-git-model"
+path = "../runner-tests/tests/support/git_model.rs"
+test = false
+bench = false

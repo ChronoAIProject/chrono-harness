@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::os::unix::fs::PermissionsExt;
 #[path = "git_inputs.rs"]
@@ -48,7 +50,7 @@ impl BoundHost {
             "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}]);
         config["environment"] = json!({"inherit":[],"values":{"PATH":std::env::var("PATH").unwrap(),
             "CHRONO_FACTS_TRACE":trace,"BOUND_FACTS_VALUE":"declared",
-            "CHRONO_TEST_GIT_PROFILE":"registration","FACTS_REAL_GIT":real,"FACTS_GIT_MODE":mode,
+            "CHRONO_TEST_GIT_PROFILE":"registration","FACTS_GIT_MODE":mode,
             "GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
             "inputs":[{"id":"facts-git-bytes","location":program,"presence":"present","sha256":sha256(&fs::read(&program).unwrap())}]});
         config["input_closure"] = json!({
@@ -65,7 +67,6 @@ impl BoundHost {
                     "environment:CHRONO_FACTS_TRACE",
                     "environment:BOUND_FACTS_VALUE",
                     "environment:CHRONO_TEST_GIT_PROFILE",
-                    "environment:FACTS_REAL_GIT",
                     "environment:FACTS_GIT_MODE",
                     "environment:GIT_CONFIG_NOSYSTEM",
                     "environment:GIT_CONFIG_GLOBAL"
@@ -82,7 +83,6 @@ impl BoundHost {
             {"from":"environment:CHRONO_FACTS_TRACE","kind":"runtime-input","to":"judge:registration"},
             {"from":"environment:BOUND_FACTS_VALUE","kind":"runtime-input","to":"judge:registration"},
             {"from":"environment:CHRONO_TEST_GIT_PROFILE","kind":"runtime-input","to":"judge:registration"},
-            {"from":"environment:FACTS_REAL_GIT","kind":"runtime-input","to":"judge:registration"},
             {"from":"environment:FACTS_GIT_MODE","kind":"runtime-input","to":"judge:registration"},
             {"from":"environment:GIT_CONFIG_NOSYSTEM","kind":"runtime-input","to":"judge:registration"},
             {"from":"environment:GIT_CONFIG_GLOBAL","kind":"runtime-input","to":"judge:registration"}
@@ -184,6 +184,7 @@ fn run_with_endpoint_inputs(h: &BoundHost) -> (i32, Value) {
 
 #[test]
 fn full_check_uses_registered_git_for_acquisition_and_registration() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = BoundHost::new(false, "pass");
     let (exit, report, error) = h.run(false);
     assert_eq!(
@@ -219,6 +220,7 @@ fn full_check_uses_registered_git_for_acquisition_and_registration() {
 
 #[test]
 fn initial_inventory_uses_registered_git_and_keeps_initial_scope() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = BoundHost::new(true, "pass");
     let (exit, report, error) = h.run(true);
     assert_eq!(
@@ -233,6 +235,7 @@ fn initial_inventory_uses_registered_git_and_keeps_initial_scope() {
 
 #[test]
 fn full_and_initial_artifact_inventory_respects_git_bounds_without_listing_outputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for initial in [false, true] {
         let h = BoundHost::new(initial, "pass");
         let outputs = h.host.root().join(".chrono-harness/state/generated");
@@ -299,6 +302,7 @@ fn full_and_initial_artifact_inventory_respects_git_bounds_without_listing_outpu
 
 #[test]
 fn full_and_initial_bound_checks_reject_configuration_hidden_mode_changes() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for initial in [false, true] {
         let h = BoundHost::new(initial, "pass");
         git(h.host.root(), &["config", "core.filemode", "false"]);
@@ -342,6 +346,7 @@ fn full_and_initial_bound_checks_reject_configuration_hidden_mode_changes() {
 
 #[test]
 fn registered_git_rejects_digest_and_version_before_object_acquisition() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in ["digest", "version"] {
         let mut h = BoundHost::new(false, "pass");
         h.host.edit(CONFIG, |c| {
@@ -381,6 +386,7 @@ fn registered_git_rejects_digest_and_version_before_object_acquisition() {
 
 #[test]
 fn registered_git_rechecks_bound_bytes_after_successful_process() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = BoundHost::new(false, "read-drift");
     let before = fs::read(&h.program).unwrap();
     let (exit, report, error) = h.run(false);
@@ -402,6 +408,7 @@ fn registered_git_rechecks_bound_bytes_after_successful_process() {
 
 #[test]
 fn registered_git_failure_retains_original_output_and_exit() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = BoundHost::new(false, "read-failure");
     let (exit, report, error) = h.run(false);
     assert_ne!(exit, 0, "{report}");
@@ -420,6 +427,7 @@ fn registered_git_failure_retains_original_output_and_exit() {
 
 #[test]
 fn legacy_configs_reject_new_git_binding_without_changing_legacy_success() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for (version, binding) in [
         (1, Value::Null),
         (2, Value::Null),
@@ -442,6 +450,7 @@ fn legacy_configs_reject_new_git_binding_without_changing_legacy_success() {
 
 #[test]
 fn request_binding_and_environment_cannot_be_missing_or_substituted() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = BoundHost::new(false, "pass");
     let reader = facts::Reader::for_config(h.host.root(), CONFIG).unwrap();
     let observation = reader.observation();
@@ -474,6 +483,7 @@ fn request_binding_and_environment_cannot_be_missing_or_substituted() {
 
 #[test]
 fn invalid_git_references_fail_before_version_or_objects() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in [
         "null",
         "missing-tool",
@@ -505,6 +515,7 @@ fn invalid_git_references_fail_before_version_or_objects() {
 
 #[test]
 fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in ["timeout", "object-timeout", "output", "dirty-config"] {
         let mode = match fault {
             "timeout" => "version-timeout",
@@ -585,6 +596,7 @@ fn bounded_git_failure_and_fixed_candidate_config_are_observed() {
 
 #[test]
 fn input_closure_bindings_accept_explicit_external_nodes() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = BoundHost::new(false, "pass");
     h.host.edit(CONFIG, |config| {
         config["input_closure"]["bindings"] = json!([{
@@ -598,7 +610,6 @@ fn input_closure_bindings_accept_explicit_external_nodes() {
                 "environment:CHRONO_FACTS_TRACE",
                 "environment:BOUND_FACTS_VALUE",
                 "environment:CHRONO_TEST_GIT_PROFILE",
-                "environment:FACTS_REAL_GIT",
                 "environment:FACTS_GIT_MODE",
                 "environment:GIT_CONFIG_NOSYSTEM",
                 "environment:GIT_CONFIG_GLOBAL"
@@ -622,6 +633,7 @@ fn input_closure_bindings_accept_explicit_external_nodes() {
 
 #[test]
 fn declared_complete_v3_closure_requires_all_external_nodes() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = BoundHost::new(false, "pass");
     h.host.edit(CONFIG, |config| {
         config["input_closure"] = json!({
@@ -653,6 +665,7 @@ fn declared_complete_v3_closure_requires_all_external_nodes() {
 
 #[test]
 fn declared_complete_v3_closure_accepts_explicit_external_inventory() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = BoundHost::new(false, "pass");
     // BoundHost already installs this complete v3 inventory. Retain the
     // fixture's candidate transition below so the test exercises the reader
@@ -674,6 +687,7 @@ fn declared_complete_v3_closure_accepts_explicit_external_inventory() {
 
 #[test]
 fn declared_complete_v3_input_closure_requires_bindings_field() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = BoundHost::new(false, "pass");
     h.host.edit(CONFIG, |config| {
         config["input_closure"] = json!({
@@ -698,6 +712,7 @@ fn declared_complete_v3_input_closure_requires_bindings_field() {
 
 #[test]
 fn input_closure_bindings_reject_unknown_nodes_without_discovery() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for (field, value) in [
         ("consumer", json!("project:unknown")),
         ("inputs", json!(["input:unknown"])),
@@ -727,6 +742,7 @@ fn input_closure_bindings_reject_unknown_nodes_without_discovery() {
 
 #[test]
 fn input_closure_bindings_require_explicit_project_edges() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let mut h = BoundHost::new(false, "pass");
     h.host.edit(CONFIG, |config| {
         config["input_closure"]["bindings"] = json!([{

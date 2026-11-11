@@ -6,6 +6,8 @@ publish = false
 autotests = false
 
 [dependencies]
+sha1 = "0.10"
+serde = { version = "1", features = ["derive"] }
 chrono-diagnostics = { path = "../diagnostics" }
 chrono-judge-ci = { path = "../judge-ci" }
 chrono-harness = { path = "../runner" }
@@ -47,5 +49,11 @@ bench = false
 [[bin]]
 name = "chrono-harness-test-cli"
 path = "../runner/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-git-model"
+path = "../runner-tests/tests/support/git_model.rs"
 test = false
 bench = false

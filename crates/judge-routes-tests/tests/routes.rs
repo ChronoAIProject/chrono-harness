@@ -534,8 +534,9 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
     fs::create_dir(&a).unwrap();
     fs::create_dir(&b).unwrap();
     let source = declarations();
+    let shadow=dir.path().join("private shadow executable");let mut bytes=fs::read(TOOL).unwrap();bytes.extend_from_slice(b"\nprivate Rust command mock\n");fs::write(&shadow,bytes).unwrap();fs::set_permissions(&shadow,fs::metadata(TOOL).unwrap().permissions()).unwrap();
     symlink(TOOL, a.join("routes-helper")).unwrap();
-    symlink("/bin/sh", b.join("routes-helper")).unwrap();
+    symlink(&shadow, b.join("routes-helper")).unwrap();
     let mut tools = source;
     tools[0]["program"] = json!("routes-helper");
     let methods = BTreeMap::from([("test".into(), vec![method("test", vec!["bound".into()])])]);
@@ -572,7 +573,7 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
         "changed effective PATH cannot use old receipt binding"
     );
     fs::remove_file(a.join("routes-helper")).unwrap();
-    symlink("/bin/sh", a.join("routes-helper")).unwrap();
+    symlink(&shadow, a.join("routes-helper")).unwrap();
     assert!(
         run_process_observed(dir.path(), &spec, &[], &tool.sha256)
             .unwrap_err()

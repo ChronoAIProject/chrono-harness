@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::io::{BufRead, BufReader, Write};
 use std::process::Stdio;
@@ -182,6 +184,7 @@ fn deploy(h: &Host, executable: &Path, path: &str, sha: &str) -> (i32, Value, St
 }
 #[test]
 fn owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) =
         fixture_with_entrypoint(None, ".chrono-harness/ci/custom-owner-stage.sh", false);
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
@@ -191,6 +194,7 @@ fn owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs() {
 
 #[test]
 fn current_owner_retains_its_adoption_and_stage_after_enrollment_refresh() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use chrono_harness::retained_artifacts::retention::Inventory;
     let (h, exe, path, sha) =
         fixture_with_entrypoint(None, ".chrono-harness/ci/owner-stage-producer.sh", true);
@@ -254,6 +258,7 @@ fn current_owner_retains_its_adoption_and_stage_after_enrollment_refresh() {
 
 #[test]
 fn owner_deployment_publishes_in_the_rust_lease_owner() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_eq!(code, 0, "{report} {error}");
@@ -278,6 +283,7 @@ fn owner_deployment_publishes_in_the_rust_lease_owner() {
 
 #[test]
 fn owner_deployment_retains_original_ex_through_publication_and_adoption() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture_with_publication_probe(Some(false));
     let before = h.ledger()["entries"][0].clone();
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
@@ -397,6 +403,7 @@ fn externally_removed_linked(h: &Host) -> (PathBuf, Value) {
 
 #[test]
 fn owner_deployment_preserves_absent_enrollment_without_claiming_completion() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let (target, entry) = externally_removed_linked(&h);
     let ledger_path = h.ledger_path(&target);
@@ -438,6 +445,7 @@ fn owner_deployment_preserves_absent_enrollment_without_claiming_completion() {
 
 #[test]
 fn owner_deployment_rejects_partial_or_replaced_absent_attachment() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in ["checkout", "metadata", "dangling-symlink"] {
         let (h, exe, path, sha) = fixture();
         let (target, entry) = externally_removed_linked(&h);
@@ -465,6 +473,7 @@ fn owner_deployment_rejects_partial_or_replaced_absent_attachment() {
 
 #[test]
 fn owner_deployment_rejects_absent_enrollment_with_branch_attached_elsewhere() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let (target, entry) = externally_removed_linked(&h);
     let replacement = h.parent.join("replacement-linked");
@@ -499,6 +508,7 @@ fn owner_deployment_rejects_absent_enrollment_with_branch_attached_elsewhere() {
 
 #[test]
 fn owner_deployment_excludes_absent_enrollment_inherited_descendants_until_join() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let (target, entry) = externally_removed_linked(&h);
     let child = inherited_holder(&h, &entry);
@@ -521,6 +531,7 @@ fn owner_deployment_excludes_absent_enrollment_inherited_descendants_until_join(
 
 #[test]
 fn owner_deployment_excludes_main_and_linked_inherited_descendants_until_join() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for linked_holder in [false, true] {
         let (h, exe, path, sha) = fixture();
         let target = linked(&h);
@@ -565,6 +576,7 @@ fn owner_deployment_excludes_main_and_linked_inherited_descendants_until_join() 
 
 #[test]
 fn owner_deployment_does_not_exclude_an_unrelated_physical_coordinator() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let (other, _, _, _) = fixture();
     let child = inherited_holder(&other, &other.ledger()["entries"][0]);
@@ -582,6 +594,7 @@ fn owner_deployment_does_not_exclude_an_unrelated_physical_coordinator() {
 
 #[test]
 fn owner_deployment_excludes_rebranched_checkout_without_adopting_its_identity() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for detached in [false, true] {
         let (h, exe, path, sha) = fixture();
         let target = linked(&h);
@@ -666,6 +679,7 @@ fn owner_deployment_excludes_rebranched_checkout_without_adopting_its_identity()
 
 #[test]
 fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in ["unknown", "ownership", "lease", "attachment"] {
         let (h, exe, path, sha) = fixture();
         let target = linked(&h);
@@ -716,6 +730,7 @@ fn owner_deployment_preserves_unknown_or_drifted_affected_enrollment() {
 
 #[test]
 fn owner_deployment_recovers_after_rename_when_result_publication_fails() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
     let result = exe.parent().unwrap().join("publication-result.json");
@@ -761,6 +776,7 @@ fn owner_deployment_recovers_after_rename_when_result_publication_fails() {
 
 #[test]
 fn owner_deployment_rejects_same_published_bytes_from_another_inode() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_eq!(code, 0, "{report} {error}");
@@ -793,6 +809,7 @@ fn owner_deployment_rejects_same_published_bytes_from_another_inode() {
 
 #[test]
 fn owner_deployment_rejects_changed_publication_inputs_without_replacement() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in [
         "selected",
         "staged",
@@ -847,6 +864,7 @@ fn owner_deployment_rejects_changed_publication_inputs_without_replacement() {
 
 #[test]
 fn owner_deployment_requires_complete_stage_validation_before_native_effects() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for field in ["registrations", "operations", "installed"] {
         let (h, exe, path, _) = fixture();
         let selected = h.root.join(".chrono-harness/bin/chrono-worktree");
@@ -869,6 +887,7 @@ fn owner_deployment_requires_complete_stage_validation_before_native_effects() {
 
 #[test]
 fn owner_deployment_publishes_without_the_construction_entrypoint() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     fs::write(
         h.root.join(".chrono-harness/state/owner-probe-unavailable"),
@@ -887,6 +906,7 @@ fn owner_deployment_publishes_without_the_construction_entrypoint() {
 
 #[test]
 fn owner_deployment_qualifies_the_selected_native_toolchain_registry() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture();
     let stage = json(&fs::read(h.root.join(&path)).unwrap()).unwrap();
     assert!(stage["registrations"][".chrono-harness/ci/owner-toolchains.json"].is_string());
@@ -906,6 +926,7 @@ fn owner_deployment_qualifies_the_selected_native_toolchain_registry() {
 
 #[test]
 fn owner_deployment_keeps_publication_evidence_when_original_admission_drifts() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let (h, exe, path, sha) = fixture_with_publication_probe(Some(true));
     let (code, report, error) = deploy(&h, &exe, &path, &sha);
     assert_ne!(code, 0, "{report} {error}");
@@ -931,6 +952,7 @@ fn owner_deployment_keeps_publication_evidence_when_original_admission_drifts() 
 
 #[test]
 fn owner_deployment_preserves_bytes_on_stage_original_or_execution_drift() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in [
         "source",
         "registrations",

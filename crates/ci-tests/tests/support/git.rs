@@ -1,11 +1,13 @@
+#[path = "../../../runner-tests/tests/support/git_model.rs"]
+mod git_model;
 use std::{
     env,
     ffi::OsStr,
     fs::OpenOptions,
     io::{self, BufRead, Write},
-    os::unix::{ffi::OsStrExt, process::CommandExt},
+    os::unix::ffi::OsStrExt,
     path::Path,
-    process::{self, Command},
+    process::{self},
 };
 
 fn failure(bytes: &[u8], code: i32) -> ! {
@@ -19,28 +21,25 @@ fn main() -> io::Result<()> {
     if Path::new(&program).file_name() == Some(OsStr::new("git")) {
         failure(b"ambient-git\n", 83);
     }
-    let (bound, ambient, trace_name, mode_name, real_git) =
+    let (bound, ambient, trace_name, mode_name) =
         match env::var("CHRONO_TEST_GIT_PROFILE").as_deref() {
             Ok("event") => (
                 "BOUND_EVENT_VALUE",
                 "CHRONO_EVENT_AMBIENT",
                 "EVENT_TRACE",
                 "EVENT_GIT_MODE",
-                "EVENT_REAL_GIT",
             ),
             Ok("scoped") => (
                 "BOUND_SCOPED_VALUE",
                 "SCOPED_AMBIENT",
                 "SCOPED_TRACE",
                 "SCOPED_GIT_MODE",
-                "SCOPED_REAL_GIT",
             ),
             Ok("registration") => (
                 "BOUND_FACTS_VALUE",
                 "CHRONO_AMBIENT_PROBE",
                 "CHRONO_FACTS_TRACE",
                 "FACTS_GIT_MODE",
-                "FACTS_REAL_GIT",
             ),
             _ => failure(b"unknown registered Git fixture profile\n", 84),
         };
@@ -120,10 +119,9 @@ fn main() -> io::Result<()> {
             io::stdout().write_all(b"0123456789abcdef")?;
         },
         "read-drift" if arguments.iter().any(|argument| argument == "rev-parse") => {
-            let status = Command::new(env::var_os(real_git).expect("registered real Git"))
-                .args(arguments)
-                .status()?;
-            if status.success() {
+            let output = git_model::run(env::current_dir()?, &arguments.iter().map(|a| a.to_str().unwrap().to_owned()).collect::<Vec<_>>(), &[]);
+            if let Ok(bytes) = &output { io::stdout().write_all(bytes)?; }
+            if output.is_ok() {
                 // Replace this test's private copied image after Git exits.
                 // Reuse the transport fixture's permission-preserving rename
                 // method on platforms that forbid writing an executing image.
@@ -138,7 +136,8 @@ fn main() -> io::Result<()> {
                 )?;
                 std::fs::rename(replacement, executable)?;
             }
-            process::exit(status.code().unwrap_or(1));
+            if let Err(error) = output { failure(error.as_bytes(), 93); }
+            return Ok(());
         }
         "probe-failure" if probe => {
             io::copy(&mut io::stdin(), &mut io::sink())?;
@@ -181,9 +180,6 @@ fn main() -> io::Result<()> {
         | "read-limit" => {}
         _ => failure(b"unknown registered Git fixture mode\n", 84),
     }
-    Err(
-        Command::new(env::var_os(real_git).expect("registered real Git"))
-            .args(arguments)
-            .exec(),
-    )
+    git_model::main();
+    Ok(())
 }

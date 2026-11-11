@@ -3,9 +3,10 @@
 #[path = "isolated_capability.rs"]
 mod process;
 
+#[cfg(not(verus_keep_ghost))]
 pub fn isolated(name: &str) -> bool {
     const MARKER: &str = "CHRONO_RUNNER_GIT_FIXTURE";
-    if std::env::var(MARKER).as_deref() == Ok(name) {
+    if process::same_test(name, std::env::var(MARKER).ok().as_deref()) {
         assert_eq!(
             chrono_harness::resolve_program(std::path::Path::new("."), "git", None).unwrap(),
             program(),
@@ -26,6 +27,7 @@ pub fn isolated(name: &str) -> bool {
     ])
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn program() -> std::path::PathBuf {
     std::env::var_os("CHRONO_RUNNER_GIT_FIXTURE_TOOL")
         .expect("isolated test must bind the command-boundary Git fixture")

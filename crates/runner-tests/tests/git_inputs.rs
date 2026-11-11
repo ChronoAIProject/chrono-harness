@@ -2479,3 +2479,74 @@ fn immutable_input_rejects_invalid_metadata_and_preserves_acquisition_errors() {
         assert_eq!(calls, if fail_data { 2 } else { 1 });
     }
 }
+
+#[test]
+fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_git() {
+    if !git_fixture::isolated("selected_git_mock_models_revision_cas_and_linked_metadata_without_external_git") {
+        return;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path().join("main");
+    fs::create_dir(&root).unwrap();
+    let call = |at: &std::path::Path, args: &[&str]| {
+        Command::new(git_fixture::program()).current_dir(at).args(args).output().unwrap()
+    };
+    let ok = |at: &std::path::Path, args: &[&str]| {
+        let output = call(at, args);
+        assert!(output.status.success(), "{args:?}: {output:?}");
+        assert!(output.stderr.is_empty(), "{output:?}");
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    ok(&root, &["init", "-q", "-b", "dev"]);
+    fs::write(root.join("payload"), "before\n").unwrap();
+    ok(&root, &["add", "."]);
+    ok(&root, &["commit", "-qm", "base"]);
+    let base = ok(&root, &["rev-parse", "HEAD"]);
+    fs::write(root.join("payload"), "after\n").unwrap();
+    ok(&root, &["commit", "-qam", "candidate"]);
+    let head = ok(&root, &["rev-parse", "HEAD"]);
+    assert_ne!(base, head);
+    assert_eq!(ok(&root, &["show", "HEAD:payload"]), "after");
+    assert_eq!(ok(&root, &["rev-parse", "HEAD^"]), base);
+    let identity = ok(&root, &["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"]);
+    assert_eq!(identity, format!("{head}\nrefs/heads/dev"));
+    let rejected = call(&root, &["update-ref", "refs/heads/dev", &base, &base]);
+    assert_eq!(rejected.status.code(), Some(93));
+    assert!(rejected.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&rejected.stderr).contains("compare failed"));
+    assert_eq!(ok(&root, &["rev-parse", "dev"]), head);
+    let target = directory.path().join("linked λ");
+    let target_text = target.to_str().unwrap();
+    ok(&root, &["worktree", "add", "--detach", "--lock", "--reason", "fixture-owner", target_text, &base]);
+    assert!(fs::read_to_string(target.join(".git")).unwrap().starts_with("gitdir: "));
+    assert_eq!(ok(&target, &["rev-parse", "HEAD"]), base);
+    assert_eq!(fs::read(target.join("payload")).unwrap(), b"before\n");
+    assert_eq!(ok(&root, &["rev-parse", "HEAD"]), head);
+    assert!(!call(&root, &["worktree", "remove", "--force", target_text]).status.success());
+    assert!(target.is_dir());
+    ok(&root, &["worktree", "unlock", target_text]);
+    ok(&root, &["worktree", "remove", "--force", target_text]);
+    assert!(!target.exists());
+    let remote = directory.path().join("remote.git");fs::create_dir(&remote).unwrap();
+    ok(&remote,&["init","--bare"]);
+    ok(&root,&["remote","add","origin",remote.to_str().unwrap()]);
+    ok(&root,&["push","origin","dev"]);
+    ok(&root,&["reset","--hard",&base]);
+    let stale=call(&root,&["push","origin","dev"]);
+    assert_eq!(stale.status.code(),Some(93));
+    assert!(stale.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&stale.stderr).contains("non-fast-forward rejected"));
+    assert_eq!(ok(&remote,&["rev-parse","dev"]),head);
+    ok(&root,&["push","--force","origin","dev"]);
+    assert_eq!(ok(&remote,&["rev-parse","dev"]),base);
+    assert_eq!(ok(&root,&["rev-list","--count","HEAD"]),"1");
+    ok(&root,&["symbolic-ref","refs/remotes/origin/HEAD","refs/remotes/origin/dev"]);
+    ok(&root,&["config","fixture.key","roundtrip"]);
+    assert_eq!(ok(&root,&["symbolic-ref","refs/remotes/origin/HEAD"]),"refs/remotes/origin/dev");
+    assert_eq!(ok(&root,&["reflog","show","--format=%H","HEAD"]).lines().next(),Some(base.as_str()));
+    let unsupported=call(&root,&["add","--unknown","."]);assert_eq!(unsupported.status.code(),Some(93));assert!(unsupported.stdout.is_empty());assert!(String::from_utf8_lossy(&unsupported.stderr).contains("unhandled Git fixture argv"));
+    let unknown = call(&root, &["unregistered-command"]);
+    assert_eq!(unknown.status.code(), Some(93));
+    assert!(unknown.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("unhandled Git fixture command"));
+}

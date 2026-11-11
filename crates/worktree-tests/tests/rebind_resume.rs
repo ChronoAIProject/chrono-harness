@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::os::unix::process::ExitStatusExt;
 
@@ -85,6 +87,7 @@ fn assert_original(
 }
 #[test]
 fn metadata_rebind_resumes_real_interruptions_at_all_git_boundaries() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for stage in [
         "before-preservation",
         "before-add",
@@ -140,6 +143,7 @@ fn metadata_rebind_resumes_real_interruptions_at_all_git_boundaries() {
 }
 #[test]
 fn metadata_rebind_resume_preserves_absent_partial_and_failed_original_results() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for state in ["absent", "empty", "truncated", "failed"] {
         let h = Host::new("payload");
         wrapper(&h);
@@ -196,6 +200,7 @@ fn metadata_rebind_resume_preserves_absent_partial_and_failed_original_results()
 }
 #[test]
 fn metadata_rebind_resume_refuses_conflicting_state_before_effects() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in [
         "visible",
         "backup-pointer",
@@ -269,6 +274,7 @@ fn metadata_rebind_resume_refuses_conflicting_state_before_effects() {
 }
 #[test]
 fn metadata_rebind_continuation_can_itself_be_interrupted_and_retried() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     wrapper(&h);
     let (decl, target, _, _) = declaration(&h, true);
@@ -301,6 +307,7 @@ fn metadata_rebind_continuation_can_itself_be_interrupted_and_retried() {
 }
 #[test]
 fn metadata_rebind_resume_rejects_completed_results_and_binding_substitution() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in [
         "completed",
         "wrong-head",

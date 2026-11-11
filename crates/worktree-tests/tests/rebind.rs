@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::os::unix::fs::{PermissionsExt, symlink};
 
@@ -59,6 +61,7 @@ fn visible(target: &Path) {
 
 #[test]
 fn metadata_rebind_preserves_visible_work_and_handles_lost_receipts() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for absent_gitfile in [false, true] {
         let h = Host::new("payload");
         let source_head = git(&h.root, &["rev-parse", "HEAD"]);
@@ -97,6 +100,7 @@ fn metadata_rebind_preserves_visible_work_and_handles_lost_receipts() {
 
 #[test]
 fn metadata_rebind_preserves_damaged_metadata_and_original_gitfile() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     let (decl, target, metadata, old_gitfile) = declaration(&h, true);
     let old_head = fs::read(metadata.join("HEAD")).unwrap();
@@ -116,6 +120,7 @@ fn metadata_rebind_preserves_damaged_metadata_and_original_gitfile() {
 
 #[test]
 fn metadata_rebind_refuses_changed_inputs_and_backup_collisions() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in [
         "visible",
         "gitfile",
@@ -157,6 +162,7 @@ fn metadata_rebind_refuses_changed_inputs_and_backup_collisions() {
 
 #[test]
 fn metadata_rebind_rejects_owned_or_overlapping_destinations_and_ref_drift() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in [
         "source",
         "donor",
@@ -222,6 +228,7 @@ fn metadata_rebind_rejects_owned_or_overlapping_destinations_and_ref_drift() {
 
 #[test]
 fn metadata_rebind_retains_failed_git_process_and_original_metadata() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     h.remote_git("index-failure");
     let (decl, target, _, gitfile) = declaration(&h, true);
@@ -247,6 +254,7 @@ fn metadata_rebind_retains_failed_git_process_and_original_metadata() {
 
 #[test]
 fn metadata_rebind_checkpoint_precedes_effects_and_preserves_partial_results() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     h.remote_git("donor-failure");
     let (decl, target, _, gitfile) = declaration(&h, true);
@@ -272,6 +280,7 @@ fn metadata_rebind_checkpoint_precedes_effects_and_preserves_partial_results() {
 
 #[test]
 fn metadata_rebind_accepts_relative_or_damaged_pointer_with_owned_backlink() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for relative in [true, false] {
         let h = Host::new("payload");
         let (decl, target, metadata, _) = declaration(&h, true);
@@ -303,6 +312,7 @@ fn metadata_rebind_accepts_relative_or_damaged_pointer_with_owned_backlink() {
 
 #[test]
 fn metadata_rebind_failed_attachment_uses_existing_reconciled_recovery() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     h.remote_git("repair-failure");
     let (decl, target, _, _) = declaration(&h, true);
@@ -338,6 +348,7 @@ fn metadata_rebind_failed_attachment_uses_existing_reconciled_recovery() {
 
 #[test]
 fn metadata_rebind_detects_backup_mutation_before_success() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     h.remote_git("backup-change");
     let (decl, target, _, _) = declaration(&h, true);

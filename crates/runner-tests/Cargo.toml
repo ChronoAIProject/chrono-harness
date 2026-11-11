@@ -123,3 +123,7 @@ name = "chrono-test-retention-child"
 path = "tests/support/retention_child.rs"
 test = false
 bench = false
+
+[[test]]
+name = "verified_fixture"
+path = "tests/verified_fixture.rs"

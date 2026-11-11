@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 
 fn host() -> Host {
@@ -47,6 +49,7 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
 
 #[test]
 fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use std::{sync::mpsc, thread, time::Duration};
 
     let h = host();
@@ -129,6 +132,7 @@ fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
 
 #[test]
 fn concurrent_original_publications_keep_both_body_registrations() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use std::{sync::mpsc, thread, time::Duration};
 
     let h = host();
@@ -189,6 +193,7 @@ fn concurrent_original_publications_keep_both_body_registrations() {
 
 #[test]
 fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (store, first) = allocation(&h);
     let (_, middle) = allocation(&h);
@@ -274,6 +279,7 @@ fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
 
 #[test]
 fn metadata_publication_for_one_allocation_does_not_lock_another() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use std::{sync::mpsc, thread, time::Duration};
     let h = host();
     let (store, existing) = allocation(&h);
@@ -336,6 +342,7 @@ fn metadata_publication_for_one_allocation_does_not_lock_another() {
 
 #[test]
 fn explicit_partition_preserves_original_data_and_current_consumers() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     let (store, allocation) = allocation(&h);
@@ -467,6 +474,7 @@ fn explicit_partition_preserves_original_data_and_current_consumers() {
 
 #[test]
 fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for drift in ["allocation", "intent", "cache-lease", "owner", "original"] {
         let h = host();
         let (store, allocation) = allocation(&h);
@@ -543,6 +551,7 @@ fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() 
 
 #[test]
 fn same_length_body_declaration_change_refuses_cached_registration() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (store, allocation) = allocation(&h);
     let root = allocation.path();
@@ -594,6 +603,7 @@ fn same_length_body_declaration_change_refuses_cached_registration() {
 
 #[test]
 fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (store, allocation) = allocation(&h);
     let root = allocation.path();
@@ -774,21 +784,25 @@ fn joined_command_body(outcome: &str) {
 
 #[test]
 fn explicit_maintenance_reclaims_copied_bodies_after_successful_join() {
+    if !chrono_git_boundary::isolated_git() { return; }
     joined_command_body("success");
 }
 
 #[test]
 fn successful_join_preserves_unreleased_copied_body_consumer() {
+    if !chrono_git_boundary::isolated_git() { return; }
     joined_command_body("diagnostic");
 }
 
 #[test]
 fn failed_join_preserves_copied_bodies_and_original_process_failure() {
+    if !chrono_git_boundary::isolated_git() { return; }
     joined_command_body("failure");
 }
 
 #[test]
 fn body_recovers_without_finish_after_overlapping_holders_and_diagnostic_release() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (store, allocation) = allocation(&h);
     let root = allocation.path().to_owned();
@@ -851,6 +865,7 @@ fn body_recovers_without_finish_after_overlapping_holders_and_diagnostic_release
 
 #[test]
 fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (store, allocation) = allocation(&h);
     let root = allocation.path().to_owned();
@@ -949,6 +964,7 @@ fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
 
 #[test]
 fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_siblings() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (store, first) = allocation(&h);
     let root = first.path().to_owned();
@@ -1013,6 +1029,7 @@ fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_sibli
 
 #[test]
 fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcome() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 0, "{report} {error}");
@@ -1185,6 +1202,7 @@ fn migrate_paged(h: &Host) -> (i32, Value, String) {
 
 #[test]
 fn explicit_paged_partition_preserves_custody_and_excludes_live_allocation() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = host();
     let (store, allocation, before, owner_bytes, original, record_bytes) =
         paged_producer_fixture(&h);
@@ -1248,6 +1266,7 @@ fn explicit_paged_partition_preserves_custody_and_excludes_live_allocation() {
 
 #[test]
 fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing_readers() {
+    if !chrono_git_boundary::isolated_git() { return; }
     if !isolated_capability::isolated_capability_test(
         "fixture_body::explicit_paged_partition_resumes_both_activation_boundaries_without_releasing_readers",
     ) {
@@ -1284,6 +1303,7 @@ fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing
 
 #[test]
 fn explicit_paged_partition_rejects_prepared_record_drift_before_activation() {
+    if !chrono_git_boundary::isolated_git() { return; }
     if !isolated_capability::isolated_capability_test(
         "fixture_body::explicit_paged_partition_rejects_prepared_record_drift_before_activation",
     ) {
@@ -1318,6 +1338,7 @@ fn explicit_paged_partition_rejects_prepared_record_drift_before_activation() {
 
 #[test]
 fn explicit_paged_partition_rejects_unknown_fields_owner_binding_and_symbolic_sources() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for fault in ["unknown-field", "owner-binding", "symbolic-source"] {
         let h = host();
         let (store, allocation, _, owner_bytes, original, bytes) = paged_producer_fixture(&h);

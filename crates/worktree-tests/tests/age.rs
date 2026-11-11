@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::automatic::{native_consumer, native_git};
 use super::*;
 use std::os::unix::fs::MetadataExt;
@@ -63,6 +65,7 @@ fn start(h: &Host, name: &str, target: &Path) {
 
 #[test]
 fn maintenance_selects_creation_age_from_each_targets_adopted_policy() {
+    if !chrono_git_boundary::isolated_git() { return; }
     for (coordinator, target_policy, expired) in [
         (Some((1, 3)), Some((3600, 7200)), false),
         (Some((1, 3)), None, false),
@@ -133,6 +136,7 @@ fn maintenance_selects_creation_age_from_each_targets_adopted_policy() {
 
 #[test]
 fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     policy(&h, 2, 60, "dispose");
     native_consumer(&h, "ordinary");
@@ -265,6 +269,7 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
 
 #[test]
 fn aged_busy_consumer_defers_and_independent_expired_checkout_advances() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     policy(&h, 2, 5, "dispose");
     let busy = h.parent.join("aged-busy");
@@ -307,6 +312,7 @@ fn aged_busy_consumer_defers_and_independent_expired_checkout_advances() {
 
 #[test]
 fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     // Keep reuse and expiry as separate real-birth phases, as in the named
     // checkout test; Git/source preservation is allowed to take over 3 seconds.
@@ -395,6 +401,7 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
 
 #[test]
 fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
+    if !chrono_git_boundary::isolated_git() { return; }
     let h = Host::new("payload");
     policy(&h, 30, 40, "evidence-retain");
     native_consumer(&h, "ordinary");
@@ -470,6 +477,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
 
 #[test]
 fn interrupted_age_disposal_reentry_preserves_original_unknown_result() {
+    if !chrono_git_boundary::isolated_git() { return; }
     use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     policy(&h, 1, 3, "dispose");

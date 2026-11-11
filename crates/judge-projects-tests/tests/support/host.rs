@@ -37,8 +37,7 @@ pub fn install_executable(root: &Path, source: &Path, binary: &str, probe: Fixtu
     // A joined copy owns all writable descriptors before concurrent test
     // children can inherit them. Each host retains its own executable file.
     copied_fixture_input(root, source, &destination);
-    let copied = capture_native(root, Command::new("/bin/cp").arg(source).arg(&destination));
-    assert!(copied.status.success(), "fixture installation: {copied:?}");
+    fs::copy(source, &destination).unwrap();
     let digest = sha256(&fs::read(&destination).unwrap());
     let mut command = Command::new(&destination);
     command
