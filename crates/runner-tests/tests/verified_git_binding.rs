@@ -95,7 +95,7 @@ impl policy::BindingReferenceRows for ReferenceIds<'_> {
     fn id(&self, index: usize) -> Option<&str> { self.0[index] }
 }
 
-fn expect_reference_index(rows: &ReferenceIds, id: &str, expected: Option<usize>)
+fn expect_reference_index<R: policy::BindingReferenceRows>(rows: &R, id: &str, expected: Option<usize>)
     requires match expected {
         Some(index) => policy::unique_binding_reference_index(rows, id, index as int),
         None => forall|i: int| !#[trigger] policy::unique_binding_reference_index(rows, id, i),
@@ -105,10 +105,6 @@ fn expect_reference_index(rows: &ReferenceIds, id: &str, expected: Option<usize>
     match result {
         Ok(actual) => {
             proof {
-                if actual.is_none() {
-                    assert(result == Ok::<Option<usize>, &str>(None));
-                    assert forall|i: int| !#[trigger] policy::unique_binding_reference_index(rows, id, i) by {}
-                }
                 match (actual, expected) {
                     (Some(a), Some(e)) => {
                         if a != e {
