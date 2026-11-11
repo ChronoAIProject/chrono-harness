@@ -437,7 +437,22 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
 {
     let Some(rows) = rows else { return Err("binding collection must be array"); };
     let observed = BindingMatches { rows, id };
-    Ok(unique_matching_index(&observed))
+    proof {
+        assert(observed.count() == rows.count());
+        assert forall|i: int| #[trigger] observed.matches(i)
+            == binding_reference_matches(rows, i, id) by {}
+        assert forall|i: int| #[trigger] unique_match_index(&observed, i)
+            == unique_binding_reference_index(rows, id, i) by {}
+    }
+    let selected = unique_matching_index(&observed);
+    proof {
+        if selected.is_none() {
+            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {
+                assert(!unique_match_index(&observed, i));
+            }
+        }
+    }
+    Ok(selected)
 }
 
 struct CapturedMatches<'a, 'p, M: RegistryMembership> {
@@ -470,6 +485,13 @@ pub fn select_captured_target<'a, M: RegistryMembership>(paths: &[&'a str], valu
 {
     let message = "registry values require exactly one registered effective policy";
     let observed = CapturedMatches { paths, values };
+    proof {
+        assert(observed.count() == paths@.len());
+        assert forall|i: int| #[trigger] observed.matches(i)
+            == values.has_path(paths@[i]) by {}
+        assert forall|i: int| #[trigger] unique_match_index(&observed, i)
+            == unique_registry_index(paths@, values, i) by {}
+    }
     let selected = unique_matching_index(&observed);
     match selected {
         Some(index) => {
@@ -477,7 +499,9 @@ pub fn select_captured_target<'a, M: RegistryMembership>(paths: &[&'a str], valu
             Ok(paths[index])
         },
         None => {
-            assert forall|j: int| !#[trigger] unique_registry_index(paths@, values, j) by {}
+            assert forall|j: int| !#[trigger] unique_registry_index(paths@, values, j) by {
+                assert(!unique_match_index(&observed, j));
+            }
             Err(message)
         },
     }
