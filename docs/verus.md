@@ -40,6 +40,16 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
+registry snapshot 的最终成功／失败状态由
+`verified_status.rs::registry_snapshot_complete` 拥有。逐路径读取和批量解析两条真实路径
+直接传入剩余的入口、有效路径、selection 和原始双 map 结果；成功时保留两个 map 的
+全部键值及三个身份字段，失败时返回完整原错误，不发布部分 snapshot。
+四组独立 Verus 预期同时作为 Rust 测试执行，核空 map／无 selection、两份完整字节与值、
+原路径及 selection、Unicode／NUL／换行错误和空错误保持失败。
+此函数只有 Result 分支和按值组装，不增加外部假设、克隆、IO、工具或证明根；
+沿用现有状态整 crate 证明及真实消费者测试。外围读取、严格 JSON、selector 与整个
+snapshot 的组合仍待证明，完整构建、证明、运行、CI 和存储成本未测。
+
 registry snapshot 的实际状态类型与初始双 map 构造由
 `verified_status.rs::RegistrySnapshot<V>` 和 `registry_snapshot_initial` 拥有。
 同源后置条件精确规定完整入口、有效路径和 selection 原值，以及两个 map 的全部键值：
