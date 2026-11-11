@@ -863,14 +863,32 @@ fn checkout_result_fixture() -> (Host, PathBuf, Value) {
 
 #[test]
 fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
+    use std::os::unix::fs::MetadataExt;
+
+    let (h, target, used) = checkout_result_fixture();
+    let path = h.root.join(used["report_path"].as_str().unwrap());
+    let saved_original = path.with_extension("saved-original");
+    let bytes = fs::read(&path).unwrap();
+    let metadata = fs::metadata(&path).unwrap();
+    let original_identity = (metadata.dev(), metadata.ino());
+    git(&target, &["checkout", "-b", "integration/preserve-pending"]);
+    let before = fs::read(h.ledger_path(&target)).unwrap();
+    let receipt_path = h
+        .root
+        .join(used["managed_use_receipt"]["path"].as_str().unwrap());
+    let receipt = fs::read(&receipt_path).unwrap();
     for fault in [
         "missing", "partial", "binding", "changed", "replaced", "unsealed",
     ] {
-        let (h, target, used) = checkout_result_fixture();
-        let path = h.root.join(used["report_path"].as_str().unwrap());
-        let bytes = fs::read(&path).unwrap();
+        let metadata = fs::metadata(&path).unwrap();
+        assert_eq!(
+            (metadata.dev(), metadata.ino()),
+            original_identity,
+            "{fault}"
+        );
+        assert_eq!(fs::read(&path).unwrap(), bytes, "{fault}");
         match fault {
-            "missing" => fs::remove_file(&path).unwrap(),
+            "missing" => fs::rename(&path, &saved_original).unwrap(),
             "partial" => fs::write(&path, b"{\"status\":").unwrap(),
             "binding" | "changed" => {
                 let mut report = json(&bytes).unwrap();
@@ -882,7 +900,7 @@ fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
                 fs::write(&path, serde_json::to_vec(&report).unwrap()).unwrap();
             }
             "replaced" => {
-                fs::rename(&path, path.with_extension("saved-original")).unwrap();
+                fs::rename(&path, &saved_original).unwrap();
                 fs::write(&path, &bytes).unwrap();
             }
             "unsealed" => {
@@ -898,17 +916,21 @@ fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
             }
             _ => unreachable!(),
         }
-        git(&target, &["checkout", "-b", "integration/preserve-pending"]);
-        let before = fs::read(h.ledger_path(&target)).unwrap();
-        let receipt_path = h
-            .root
-            .join(used["managed_use_receipt"]["path"].as_str().unwrap());
-        let receipt = fs::read(&receipt_path).unwrap();
         let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
         assert_ne!(code, 0, "{fault}: {report} {error}");
         assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before, "{fault}");
         assert_eq!(fs::read(&receipt_path).unwrap(), receipt, "{fault}");
         assert!(target.is_dir(), "{fault}");
+        match fault {
+            "missing" => fs::rename(&saved_original, &path).unwrap(),
+            "replaced" => {
+                fs::remove_file(&path).unwrap();
+                fs::rename(&saved_original, &path).unwrap();
+            }
+            "partial" | "binding" | "changed" => fs::write(&path, &bytes).unwrap(),
+            "unsealed" => {}
+            _ => unreachable!(),
+        }
     }
 }
 
