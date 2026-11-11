@@ -197,6 +197,34 @@ fn matches_required(observed: Option<&str>, expected: &str) -> (valid: bool)
     }
 }
 
+pub open spec fn binding_text_present(observed: Option<&str>) -> bool {
+    match observed { Some(text) => text@.len() > 0, None => false }
+}
+
+fn has_binding_text(observed: Option<&str>) -> (present: bool)
+    ensures present == binding_text_present(observed),
+{
+    match observed { Some(text) => !text.is_empty(), None => false }
+}
+
+/// 缺失和空文本使用原字段名诊断；成功保留完整原切片。
+pub struct MissingBindingText<'a> {
+    pub prefix: &'static str,
+    pub field: &'a str,
+}
+
+pub fn required_binding_text<'a, 'f>(observed: Option<&'a str>, field: &'f str)
+    -> (out: Result<&'a str, MissingBindingText<'f>>)
+    ensures match out {
+        Ok(text) => observed == Some(text) && text@.len() > 0,
+        Err(message) => !binding_text_present(observed)
+            && message.prefix@ == "missing "@ && message.field@ == field@,
+    },
+{
+    if has_binding_text(observed) { return Ok(observed.unwrap()); }
+    Err(MissingBindingText { prefix: "missing ", field })
+}
+
 /// 目标策略必须声明执行物；缺声明先于任一字段不匹配。
 pub fn admit_selector_binding(
     program: &str,
@@ -933,16 +961,84 @@ pub fn admit_git_guard_presence<'a>(id: &'a str, presence: Option<&str>, digest_
         suffix: " requires explicit absence or a present digest" }) }
 }
 
-pub fn valid_version(schema: u64, present: bool, null: bool, text: Option<&str>) -> (valid: bool)
-    ensures valid <==> (present && match text {
+pub open spec fn binding_version(schema: u64, present: bool, null: bool, text: Option<&str>) -> bool {
+    present && match text {
         Some(value) => value@.len() > 0,
         None => schema == 4 && null,
-    }),
+    }
+}
+
+pub fn valid_version(schema: u64, present: bool, null: bool, text: Option<&str>) -> (valid: bool)
+    ensures valid == binding_version(schema, present, null, text),
 {
     present && match text {
         Some(value) => !value.is_empty(),
         None => schema == 4 && null,
     }
+}
+
+pub open spec fn binding_tool_error(
+    schema: u64, program: Option<&str>, version: (bool, bool, Option<&str>),
+    resolution: Option<&str>, input: Option<(Option<&str>, Option<&str>, Option<&str>)>,
+) -> Option<Seq<char>> {
+    if !binding_text_present(program) { Some("missing program"@) }
+    else if !binding_version(schema, version.0, version.1, version.2) {
+        Some("facts_git requires an expected version, or null in v4"@)
+    } else if !required_text_matches(resolution, "PATH-once") {
+        Some("facts_git requires a PATH-once tool"@)
+    } else {
+        match input {
+            None => None,
+            Some((location, presence, digest)) => {
+                if !binding_text_present(location) { Some("missing location"@) }
+                else if !required_text_matches(presence, "present") || !(match digest {
+                    Some(text) => identifiers::digest_format(text.spec_bytes()),
+                    None => false,
+                }) {
+                    Some("facts_git requires a present digest-bound input when declared"@)
+                } else { None }
+            },
+        }
+    }
+}
+
+/// 工具、版本、解析方式及可选输入按原顺序准入，返回第一个原诊断。
+pub fn admit_binding_tool(
+    schema: u64, program: Option<&str>, version: (bool, bool, Option<&str>),
+    resolution: Option<&str>, input: Option<(Option<&str>, Option<&str>, Option<&str>)>,
+) -> (out: Result<(), &'static str>)
+    ensures match binding_tool_error(schema, program, version, resolution, input) {
+        None => out.is_ok(),
+        Some(expected) => match out { Err(message) => message@ == expected, Ok(()) => false },
+    },
+{
+    if !has_binding_text(program) { return Err("missing program"); }
+    if !valid_version(schema, version.0, version.1, version.2) {
+        return Err("facts_git requires an expected version, or null in v4");
+    }
+    if !matches_required(resolution, "PATH-once") {
+        return Err("facts_git requires a PATH-once tool");
+    }
+    if let Some((location, presence, digest)) = input {
+        if !has_binding_text(location) { return Err("missing location"); }
+        if !matches_required(presence, "present") || !(match digest {
+            Some(text) => identifiers::valid_digest_text(text),
+            None => false,
+        }) {
+            return Err("facts_git requires a present digest-bound input when declared");
+        }
+    }
+    Ok(())
+}
+
+pub fn admit_binding_version_argv(count: usize) -> (out: Result<(), &'static str>)
+    ensures out.is_ok() == (count > 0),
+        match out {
+            Err(message) => message@ == "facts_git requires version_argv"@,
+            Ok(()) => true,
+        },
+{
+    if count == 0 { Err("facts_git requires version_argv") } else { Ok(()) }
 }
 
 /// 无预期时保留真实观察；给出预期时必须完整相等。

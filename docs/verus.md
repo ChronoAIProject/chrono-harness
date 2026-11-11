@@ -635,6 +635,26 @@ Git 配置选择器的版本分类和目标版本准入归 `verified_git_binding
 独立 Verus 预期覆盖空名、前后空白、Unicode／控制文本，以及空字节、非 UTF-8、
 同长差异、截短和追加；现有真实回归继续核漂移后禁止下一进程及原失败进程保留。
 两项判断沿用现役整 crate 操作和 FILEMAP 证明根；其余外围组合仍待证明，完整成本未测。
+
+`facts_binding::text` 直接消费 `required_binding_text`：缺失或空文本返回完整的
+`missing ` 加原字段名，成功借出完整原切片，保留 Unicode、NUL 和前后空白。
+缺失状态、固定前缀和原字段名由 Verus 返回；适配层只沿用固定 Rust 的
+`format!("{}{}", prefix, field)` 接口拼接这两段，不重复非空判断或生成领域状态。
+`admit_binding_tool` 将程序名、版本、`PATH-once` 解析方式及可选输入按原顺序准入，
+保留首错；版本共用 `binding_version`，输入摘要共用原 `digest_format`／`valid_digest_text`。
+未声明输入时不增加输入要求；已声明时先要求非空 location，再要求完整 `present`
+和有效摘要。字段观察沿用固定 serde_json 的键读取、存在性、`is_null` 与 `as_str`，
+仅将原观察组成借用元组，不在适配层分类、比较或维护准入状态。
+标准 `Option::map` 和 `Result` 转交原观察与原错误，固定 Rust 的 `From<&str> for String`
+只复制已判定的完整静态诊断；诊断拼接接口保留两段完整文本及其顺序。
+
+`version_argv` 保留原 serde_json `from_value::<Vec<String>>` 解码及其错误文本接口，
+仍在上述准入成功后执行；`admit_binding_version_argv` 只拒绝已解码的空数组。
+独立 Verus 预期核动态字段诊断、完整借用文本、各层首错、v3／v4 null、全文差异、
+可选输入及摘要边界和参数数量，并作为原 Rust 测试运行。现有根、操作和预算不变，
+完整构建、证明、CI 与运行成本未测。最初的 link 结构／键遍历、JSON 解码算法、
+`facts_inputs::declaration` 及外围 IO 仍有未证明部分，本批不宣称全仓覆盖。
+
 实际配置解析、快照身份重建和 canonical 入口共用同一个类型化结果。三种版本按全文匹配，
 同一前缀下的其他文本由配置解析拒绝；v2／v3 的执行物身份选择及 v3 的登记路径选择也由该类型决定。
 目标只接受没有 `schema` 键的直接 v3／v4，失败保留原诊断。明确外部接口为固定

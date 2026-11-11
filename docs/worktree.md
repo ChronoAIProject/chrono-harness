@@ -536,6 +536,7 @@ chrono-worktree migrate --path /exact/enrolled-worktree
 v2 政策可显式选择 `age_policy`，例如
 `{"reuse_after_seconds":7200,"delete_after_seconds":14400,"preserved_branch_prefix":"cleanup-preserved/automatic/"}`。
 年龄取物理检出的创建时间，严格大于阈值才具备资格；边界相等、创建时间不可读或在未来时保留。
+维护在选择和执行前采用目标检出自己的已提交政策；协调者的年龄阈值或未选择年龄政策不替代目标选择。
 主检出、当前调用者、活跃或未知使用方仍受原租约和身份检查保护。
 
 普通 use／check／bootstrap 保留正在复用的工作树与缓存，不因创建年龄先保存源码或回收缓存。

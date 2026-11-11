@@ -453,6 +453,127 @@ fn null_version_is_scoped_only_and_missing_empty_or_wrong_types_are_rejected() {
     expect_true(policy::valid_version(3, true, false, Some("version")));
 }
 
+fn expect_missing_binding_text(result: Result<&str, policy::MissingBindingText>, expected_field: &str)
+    requires match result {
+        Err(message) => message.prefix@ == "missing "@ && message.field@ == expected_field@,
+        Ok(_) => false,
+    },
+{
+    match result {
+        Err(message) => {
+            expect_true(policy::matches_expected(message.prefix, Some("missing ")));
+            expect_true(policy::matches_expected(message.field, Some(expected_field)));
+        },
+        Ok(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn required_binding_text_preserves_original_and_complete_missing_field_diagnostics() {
+    proof {
+        reveal_strlit(""); reveal_strlit(" \0工具 ");
+    }
+    expect_missing_binding_text(policy::required_binding_text(None, "program"), "program");
+    expect_missing_binding_text(policy::required_binding_text(Some(""), "工具\0"), "工具\0");
+    expect_missing_binding_text(policy::required_binding_text(None, ""), "");
+    match policy::required_binding_text(Some(" \0工具 "), "program") {
+        Ok(text) => { expect_true(policy::matches_expected(text, Some(" \0工具 "))); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_tool_checks_program_before_all_other_invalid_fields() {
+    proof { reveal_strlit(""); reveal_strlit("git"); }
+    expect_identity_error(policy::admit_binding_tool(3, None, (false, false, None), None,
+        Some((None, None, None))), "missing program");
+    expect_identity_error(policy::admit_binding_tool(4, Some(""), (false, false, None), None,
+        Some((None, None, None))), "missing program");
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (false, false, None), None,
+        Some((None, None, None))), "facts_git requires an expected version, or null in v4");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_tool_keeps_v3_v4_null_and_nonempty_version_boundaries() {
+    proof { reveal_strlit("git"); reveal_strlit(""); reveal_strlit(" \0v "); }
+    let error = "facts_git requires an expected version, or null in v4";
+    expect_identity_error(policy::admit_binding_tool(3, Some("git"), (true, true, None),
+        Some("PATH-once"), None), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (false, true, None),
+        Some("PATH-once"), None), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (true, false, None),
+        Some("PATH-once"), None), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (true, false, Some("")),
+        Some("PATH-once"), None), error);
+    expect_true(policy::admit_binding_tool(4, Some("git"), (true, true, None), Some("PATH-once"), None).is_ok());
+    expect_true(policy::admit_binding_tool(3, Some("git"), (true, false, Some(" \0v ")),
+        Some("PATH-once"), None).is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_tool_requires_exact_resolution_before_examining_optional_input() {
+    proof {
+        reveal_strlit(""); reveal_strlit("git"); reveal_strlit("PATH-once"); reveal_strlit("path-once");
+        reveal_strlit("PATH-once\0");
+        assert("PATH-once"@[0] != "path-once"@[0]);
+        assert("PATH-once"@.len() != "PATH-once\0"@.len());
+    }
+    let error = "facts_git requires a PATH-once tool";
+    let input = Some((None, None, None));
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (true, true, None), None, input), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (true, true, None),
+        Some("path-once"), input), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (true, true, None),
+        Some("PATH-once\0"), input), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (true, true, None),
+        Some("PATH-once"), input), "missing location");
+    expect_identity_error(policy::admit_binding_tool(4, Some("git"), (true, true, None),
+        Some("PATH-once"), Some((Some(""), None, None))), "missing location");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_tool_requires_present_digest_input_and_preserves_nonempty_literals() {
+    let digest = "0000000000000000000000000000000000000000000000000000000000000000";
+    let uppercase = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    let short = "000000000000000000000000000000000000000000000000000000000000000";
+    proof {
+        reveal_strlit("0000000000000000000000000000000000000000000000000000000000000000");
+        reveal_strlit("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+        reveal_strlit("000000000000000000000000000000000000000000000000000000000000000");
+        reveal_strlit(" \0工具 "); reveal_strlit("present"); reveal_strlit("present\0");
+        assert(vstd::string::is_ascii(digest) && vstd::string::is_ascii(uppercase) && vstd::string::is_ascii(short));
+        vstd::string::is_ascii_spec_bytes(digest);
+        vstd::string::is_ascii_spec_bytes(uppercase);
+        vstd::string::is_ascii_spec_bytes(short);
+        assert(policy::identifiers::digest_format(digest.spec_bytes()));
+        assert(uppercase.spec_bytes()[0] == 65);
+        assert(!policy::identifiers::digest_format(uppercase.spec_bytes()));
+        assert(short.spec_bytes().len() == 63);
+        assert(!policy::identifiers::digest_format(short.spec_bytes()));
+        assert("present"@.len() != "present\0"@.len());
+    }
+    let error = "facts_git requires a present digest-bound input when declared";
+    expect_identity_error(policy::admit_binding_tool(4, Some(" \0工具 "), (true, true, None),
+        Some("PATH-once"), Some((Some(" \0工具 "), None, Some(digest)))), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some(" \0工具 "), (true, true, None),
+        Some("PATH-once"), Some((Some(" \0工具 "), Some("present\0"), Some(digest)))), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some(" \0工具 "), (true, true, None),
+        Some("PATH-once"), Some((Some(" \0工具 "), Some("present"), None))), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some(" \0工具 "), (true, true, None),
+        Some("PATH-once"), Some((Some(" \0工具 "), Some("present"), Some(uppercase)))), error);
+    expect_identity_error(policy::admit_binding_tool(4, Some(" \0工具 "), (true, true, None),
+        Some("PATH-once"), Some((Some(" \0工具 "), Some("present"), Some(short)))), error);
+    expect_true(policy::admit_binding_tool(4, Some(" \0工具 "), (true, true, None),
+        Some("PATH-once"), Some((Some(" \0工具 "), Some("present"), Some(digest)))).is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn binding_version_arguments_reject_only_the_empty_decoded_array() {
+    expect_identity_error(policy::admit_binding_version_argv(0), "facts_git requires version_argv");
+    expect_true(policy::admit_binding_version_argv(1).is_ok());
+    expect_true(policy::admit_binding_version_argv(usize::MAX).is_ok());
+}
+
 pub struct TargetRows<'a>(pub &'a [(Option<&'a str>, Option<&'a str>)]);
 
 impl policy::GitTargetRows for TargetRows<'_> {
