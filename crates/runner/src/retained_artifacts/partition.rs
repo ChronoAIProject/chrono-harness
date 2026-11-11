@@ -124,7 +124,15 @@ impl Inventory {
         if !verified::observation_role(role.trim(), role.len(), attempt) {
             return Err("invalid observation role/attempt".into());
         }
-        let gate = self.addressed_gate(&[], &[path.into()], &[role.into()], None, false, true)?;
+        let gate = self.addressed_gate_scope(
+            &[],
+            &[path.into()],
+            &[role.into()],
+            None,
+            false,
+            true,
+            true,
+        )?;
         let mut ledger = self.load(&gate)?;
         let output = ledger
             .outputs
@@ -199,12 +207,13 @@ impl Inventory {
         ) {
             return Err("invalid observation token".into());
         }
-        let gate = self.addressed_gate(
+        let gate = self.addressed_gate_scope(
             &[request.original.id.clone()],
             &[request.original.path.clone()],
             &[request.role.clone()],
             None,
             false,
+            true,
             true,
         )?;
         let mut ledger = self.load(&gate)?;
@@ -876,6 +885,18 @@ impl Inventory {
         maintenance: bool,
         wait: bool,
     ) -> Result<Gate, String> {
+        self.addressed_gate_scope(ids, paths, roles, birth, maintenance, wait, false)
+    }
+    fn addressed_gate_scope(
+        &self,
+        ids: &[String],
+        paths: &[String],
+        roles: &[String],
+        birth: Option<(&str, &str)>,
+        maintenance: bool,
+        wait: bool,
+        membership_only: bool,
+    ) -> Result<Gate, String> {
         let discover_under_lease = maintenance && !wait && birth.is_none();
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
@@ -916,8 +937,9 @@ impl Inventory {
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
         // order never waits behind an ordinary publisher holding path locks.
-        // Waiting activities retain their path/role/object order and recheck
-        // the discovered closure under exclusion below.
+        // Observation membership holds its known role before discovering its
+        // members. Other waiting activities recheck their discovered closure
+        // under the same path/role/object exclusion order below.
         loop {
             if selected.len() > self.policy.max_related_outputs {
                 return Err("related retention graph capacity; originals preserved".into());
@@ -927,12 +949,16 @@ impl Inventory {
                 .find(|role| !observed_roles.contains_key(*role))
                 .cloned();
             if let Some(role) = next_role {
-                if discover_under_lease {
+                if discover_under_lease || membership_only {
                     let directory = self.role_directory(&role)?;
                     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
                     leases.push(
-                        DirectoryLease::acquire(&directory, true, None)?
-                            .ok_or("retention consumer metadata is busy")?,
+                        DirectoryLease::acquire(
+                            &directory,
+                            true,
+                            wait.then(|| Duration::from_secs(5)),
+                        )?
+                        .ok_or("retention consumer metadata is busy")?,
                     );
                 }
                 let record = self.read_role(&role)?;
@@ -995,6 +1021,14 @@ impl Inventory {
                 );
             }
             let record = self.read_object(&id, &directory)?;
+            if membership_only {
+                // Observation transitions own the role and member declarations,
+                // not their output dependencies. Keep every member excluded and
+                // preserve its edges without reading another publisher's graph.
+                retained_dependencies.insert(id.clone());
+                observed.insert(id, record);
+                continue;
+            }
             if initial.as_ref() == Some(&id) && finalized(&record) {
                 wanted_roles.extend(record.roles.iter().cloned());
                 observed.insert(id, record);
@@ -1033,7 +1067,7 @@ impl Inventory {
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
             let directory = self.role_directory(&role)?;
-            let actual = if discover_under_lease {
+            let actual = if discover_under_lease || membership_only {
                 expected
             } else {
                 fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
@@ -1197,9 +1231,9 @@ impl Inventory {
             }
             ledger.summaries.extend(record.summaries.clone());
             ledger.retired_leases.extend(record.retired_leases.clone());
-            // These originals are explicit roots for this retirement.
-            // Their metadata stays excluded, but no consumer membership changes
-            // and no physical disposal of their bytes is permitted.
+            // Frontier originals remain protected during retirement. Observation
+            // members also keep their outputs and edges intact; their explicit
+            // role below owns the only permitted membership transition.
             if gate.retained_dependencies.contains(&record.id) {
                 continue;
             }

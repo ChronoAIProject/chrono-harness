@@ -3190,6 +3190,133 @@ fn declared_policy_migration_isolates_other_bindings_and_protects_forward_depend
 }
 
 #[test]
+fn declared_policy_migration_preserves_unrelated_live_and_interrupted_publishers() {
+    if !isolated_capability_test(
+        "declared_policy_migration_preserves_unrelated_live_and_interrupted_publishers",
+    ) {
+        return;
+    }
+    for phase in ["active", "reserving", "retiring"] {
+        let h = report_host();
+        let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+        fs::write(h.path().join("previous-policy.json"), &previous).unwrap();
+        let selected_path = tree(h.path(), "selected");
+        fs::write(h.path().join(&selected_path).join("original"), b"selected").unwrap();
+        let selected = inventory(h.path())
+            .begin("fixture", &selected_path, json!({"exit":9}))
+            .unwrap();
+        let selected_id = selected.id().to_owned();
+        selected.complete(json!({"exit":9})).unwrap();
+        let unrelated_path = ".chrono-harness/state/preparation/unrelated.json";
+        retained_artifacts::retention::publish_owned_original(
+            h.path(),
+            "check-original",
+            unrelated_path,
+            b"unrelated original failure",
+            json!({"exit":7}),
+        )
+        .unwrap();
+        let slot = ".chrono-harness/state/unrelated-slot.json";
+        let publisher = retained_artifacts::retention::reference_report(
+            h.path(),
+            slot,
+            unrelated_path,
+            &[],
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        let transaction_path = h.path().join(format!(
+            ".chrono-harness/state/output-retention-v1/transaction-slot-{}.json",
+            chrono_harness::sha256(slot.as_bytes())
+        ));
+        let mut transaction: Value =
+            serde_json::from_slice(&fs::read(&transaction_path).unwrap()).unwrap();
+        transaction["phase"] = json!(phase);
+        if phase == "reserving" {
+            transaction["lease_id"] = json!("");
+        }
+        let transaction_bytes = serde_json::to_vec(&transaction).unwrap();
+        fs::write(&transaction_path, &transaction_bytes).unwrap();
+        let before = ledger(h.path());
+        let role_paths: Vec<_> = before["roots"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .map(|role| {
+                let path = retention_state::role_path(h.path(), role);
+                let bytes = fs::read(&path).unwrap();
+                (path, bytes)
+            })
+            .collect();
+        let records: Vec<_> = before["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|output| {
+                let id = output["id"].as_str().unwrap();
+                let path = retention_state::object_path(h.path(), id);
+                let bytes = fs::read(&path).unwrap();
+                (id.to_owned(), path, bytes)
+            })
+            .collect();
+        let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+        policy["keep_seconds"] = json!(3600);
+        let current = serde_json::to_vec(&policy).unwrap();
+        fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+        let mut request = json!({"operation":"migrate-policy","previous_policy":{"path":"previous-policy.json","sha256":chrono_harness::sha256(&previous)},"originals":[selected_id]});
+
+        let migrated = consumer_call(h.path(), request.clone());
+        assert_eq!(migrated.exit_code, 0, "{phase}: {}", migrated.stderr);
+        let receipt: Value = serde_json::from_str(&migrated.stdout).unwrap();
+        assert_eq!(receipt["outputs_preserved"], 1);
+        assert_eq!(receipt["scope"]["kind"], "declared-components");
+        assert_eq!(receipt["scope"]["complete"], false);
+        for (id, path, bytes) in records {
+            let actual = fs::read(path).unwrap();
+            if id == selected_id {
+                let mut expected: Value = serde_json::from_slice(&bytes).unwrap();
+                expected["policy_sha256"] = json!(chrono_harness::sha256(&current));
+                assert_eq!(
+                    serde_json::from_slice::<Value>(&actual).unwrap(),
+                    expected,
+                    "{phase}: {id}"
+                );
+            } else {
+                assert_eq!(actual, bytes, "{phase}: {id}");
+            }
+        }
+        for (path, bytes) in role_paths {
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
+        let migrated_state = ledger(h.path());
+        request.as_object_mut().unwrap().remove("originals");
+        let blocked = consumer_call(h.path(), request);
+        assert_eq!(blocked.exit_code, 2, "{phase}");
+        assert!(
+            blocked.stderr.contains(if phase == "active" {
+                "live addressed publisher"
+            } else {
+                "still owned"
+            }),
+            "{phase}: {}",
+            blocked.stderr
+        );
+        assert_eq!(ledger(h.path()), migrated_state);
+        assert_eq!(fs::read(&transaction_path).unwrap(), transaction_bytes);
+        assert_eq!(
+            fs::read(h.path().join(unrelated_path)).unwrap(),
+            b"unrelated original failure"
+        );
+        assert_eq!(
+            fs::read(h.path().join(&selected_path).join("original")).unwrap(),
+            b"selected"
+        );
+        drop(publisher);
+    }
+}
+
+#[test]
 fn explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion() {
     if !isolated_capability_test(
         "explicit_policy_migration_accepts_mixed_bindings_and_preserves_exclusion",
@@ -6176,6 +6303,64 @@ fn observation_publication(
         )
         .unwrap();
     (path, publication)
+}
+
+#[test]
+fn observation_membership_does_not_exclude_another_publishers_dependencies() {
+    if !isolated_capability_test(
+        "observation_membership_does_not_exclude_another_publishers_dependencies",
+    ) {
+        return;
+    }
+    let h = host(512, 16);
+    let owner = inventory(h.path());
+    let (input, input_publication) = observation_publication(h.path(), "shared-input");
+    let input_id = input_publication.id().to_owned();
+    input_publication.complete(json!({})).unwrap();
+    let (older, older_publication) = observation_publication(h.path(), "pending-command");
+    let older_id = older_publication.id().to_owned();
+    let (newer, newer_publication) = observation_publication(h.path(), "later-query");
+    owner.dependencies_paths(&older, &[input.clone()]).unwrap();
+    let first = owner.reserve_observation("pr42", &older, 1).unwrap();
+    let input_record = retention_state::object_path(h.path(), &input_id);
+    let before_input = fs::read(&input_record).unwrap();
+    let before_older = fs::read(retention_state::object_path(h.path(), &older_id)).unwrap();
+    // Another activity owns this dependency's metadata. Booking and settling
+    // the later query only change the PR's membership, not that dependency.
+    let excluded = chrono_harness::ownership::DirectoryLease::acquire(
+        input_record.parent().unwrap(),
+        true,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let later = owner
+        .reserve_observation("pr42", &newer, 1)
+        .expect("a query must not wait for another publisher's dependencies");
+    assert!(later.serial > first.serial);
+    newer_publication.complete(json!({})).unwrap();
+    owner
+        .settle_observation(&later, Some((&later, true)))
+        .expect("sealing the later query does not consume the pending command's inputs");
+    assert_eq!(fs::read(&input_record).unwrap(), before_input);
+    assert_eq!(
+        fs::read(retention_state::object_path(h.path(), &older_id)).unwrap(),
+        before_older,
+        "the still-pending operation keeps its exact output and dependency edges"
+    );
+    let retained = ledger(h.path());
+    assert_eq!(retained["roots"]["pr42"].as_array().unwrap().len(), 2);
+    assert!(h.path().join(&older).exists());
+    assert!(h.path().join(&input).exists());
+    drop(excluded);
+    older_publication.complete(json!({})).unwrap();
+    owner
+        .settle_observation(&first, Some((&first, true)))
+        .unwrap();
+    assert_eq!(
+        ledger(h.path())["roots"]["pr42"],
+        json!([later.original.id])
+    );
 }
 
 #[test]

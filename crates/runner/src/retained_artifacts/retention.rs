@@ -580,10 +580,10 @@ impl Inventory {
             }
         }
         for o in &l.outputs {
-            // A retained original's unchanged outward edges remain unread.
-            // A rootless retiring report also keeps its unvisited edges until
-            // its bytes are absent and each edge is durably detached. Other
-            // mutable outputs still require their complete excluded closure.
+            // Retained frontier originals and observation members keep their
+            // outward edges unchanged. A rootless retiring report also keeps
+            // its unvisited edges until its bytes are absent and each edge is
+            // durably detached. Other mutable outputs need full dependencies.
             if !gate.retained_dependencies().contains(&o.id)
                 && !gate.retiring_report(&o.id)
                 && o.references.iter().any(|id| !ids.contains(id))
@@ -764,7 +764,11 @@ impl Inventory {
         if let Some(originals) = originals {
             self.validate_originals(originals)?;
         }
-        for key in self.transaction_keys()? {
+        for key in if crate::verified_release::global_maintenance(originals) {
+            self.transaction_keys()?
+        } else {
+            Vec::new()
+        } {
             let record = match self.transaction(&key)? {
                 Some(record) if record.phase == "active" => record,
                 _ => {
