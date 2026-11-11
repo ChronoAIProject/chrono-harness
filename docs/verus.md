@@ -40,6 +40,19 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
+registry snapshot 的实际状态类型与初始双 map 构造由
+`verified_status.rs::RegistrySnapshot<V>` 和 `registry_snapshot_initial` 拥有。
+同源后置条件精确规定完整入口、有效路径和 selection 原值，以及两个 map 的全部键值：
+路径全文相同时只保留入口的原字节／解析值；路径不同时另外保留目标文档，不用目标内容
+覆盖入口身份。实际 `facts.rs::registry_snapshot_start` 直接消费此构造结果。
+四组独立 Verus 预期同时作为 Rust 测试执行，核完整字节、完整解析值、精确条目数、
+空路径、大小写、Unicode／NUL／换行，以及有无 selection；此构造不重新判断路径准入。
+逐项外部接口沿用固定 vstd 的 `BTreeMap::new`／`insert`、String 克隆和借用合同。
+目标原字节按值转交，去掉此前插入前的一次无用克隆；不增加 IO、集合副本、证明根或预算。
+entry／target 获取、严格 JSON、selector 解析与 selection 的 JSON 投影仍待证明，
+不把整个 snapshot 起始组合或外围适配器列为已证明。沿用现有两项状态整 crate 根及真实
+消费者测试；完整构建、证明、运行、CI 与存储成本未测。
+
 registry 的批量组装由 `verified_status.rs::registry_parse_batch` 定义。
 同源规格先核完整返回数量，再按请求顺序核路径、解析当前原字节并更新 bytes／values
 两个 map；任一错误立即返回完整原消息，成功保留已有无关项，重复键采用最后一项。
