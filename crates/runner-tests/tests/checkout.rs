@@ -10,7 +10,9 @@ fn payload() -> (tempfile::TempDir, String) {
 
 #[test]
 fn raw_checkout_rejects_mode_hidden_by_local_git_configuration() {
-    if !git_fixture::isolated("checkout::raw_checkout_rejects_mode_hidden_by_local_git_configuration") {
+    if !git_fixture::isolated(
+        "checkout::raw_checkout_rejects_mode_hidden_by_local_git_configuration",
+    ) {
         return;
     }
     let (dir, candidate) = payload();
@@ -24,7 +26,9 @@ fn raw_checkout_rejects_mode_hidden_by_local_git_configuration() {
 
 #[test]
 fn raw_checkout_rejects_bytes_hidden_by_clean_filter_without_running_filter() {
-    if !git_fixture::isolated("checkout::raw_checkout_rejects_bytes_hidden_by_clean_filter_without_running_filter") {
+    if !git_fixture::isolated(
+        "checkout::raw_checkout_rejects_bytes_hidden_by_clean_filter_without_running_filter",
+    ) {
         return;
     }
     let (dir, _) = payload();
@@ -60,7 +64,9 @@ fn raw_checkout_rejects_bytes_hidden_by_clean_filter_without_running_filter() {
 
 #[test]
 fn raw_checkout_rejects_line_endings_hidden_by_git_conversion() {
-    if !git_fixture::isolated("checkout::raw_checkout_rejects_line_endings_hidden_by_git_conversion") {
+    if !git_fixture::isolated(
+        "checkout::raw_checkout_rejects_line_endings_hidden_by_git_conversion",
+    ) {
         return;
     }
     let (dir, _) = payload();
@@ -75,7 +81,9 @@ fn raw_checkout_rejects_line_endings_hidden_by_git_conversion() {
 
 #[test]
 fn raw_checkout_checks_symlinks_types_and_literal_parent_paths() {
-    if !git_fixture::isolated("checkout::raw_checkout_checks_symlinks_types_and_literal_parent_paths") {
+    if !git_fixture::isolated(
+        "checkout::raw_checkout_checks_symlinks_types_and_literal_parent_paths",
+    ) {
         return;
     }
     use std::os::unix::fs::symlink;
@@ -113,7 +121,9 @@ fn raw_checkout_checks_symlinks_types_and_literal_parent_paths() {
 
 #[test]
 fn raw_checkout_supports_sha256_and_keeps_index_changes_separate() {
-    if !git_fixture::isolated("checkout::raw_checkout_supports_sha256_and_keeps_index_changes_separate") {
+    if !git_fixture::isolated(
+        "checkout::raw_checkout_supports_sha256_and_keeps_index_changes_separate",
+    ) {
         return;
     }
     let dir = tempfile::tempdir().unwrap();

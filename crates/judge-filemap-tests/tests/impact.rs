@@ -165,7 +165,9 @@ fn typed_content_mode_binary_add_modify_delete_and_rename() {
 }
 #[test]
 fn nonancestor_and_multicommit_facts_use_complete_endpoints() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     git(root, &["init", "-q"]);
@@ -616,7 +618,9 @@ fn complete_seed_order_matches_all_four_fields_and_preserves_btree_members() {
 
 #[test]
 fn seed_json_adapters_preserve_each_field_and_reject_missing_or_nonstring_fields() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let seed = Seed {
         id: "id\0".into(),
         node: "根".into(),
@@ -939,7 +943,9 @@ fn predecessor_state_roundtrips_the_actual_sparse_json_and_cloned_witnesses() {
 
 #[test]
 fn predecessor_witness_rejects_serialized_cycles_missing_rows_and_wrong_targets() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for parents in [
         json!({"a":{"from":"a", "kind":"compile", "to":"a"}}),
         json!({"a":{"from":"b", "kind":"compile", "to":"a"},
@@ -970,7 +976,9 @@ fn predecessor_witness_rejects_serialized_cycles_missing_rows_and_wrong_targets(
 
 #[test]
 fn loader_missing_malformed_inputs_are_errors_not_empty_impact() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut a = values();
     a.remove(FM);
     assert!(Registrations::load(&a, CONFIG).is_err());

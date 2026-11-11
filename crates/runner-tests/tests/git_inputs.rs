@@ -88,7 +88,9 @@ fn expanded_observation(reader: &Reader) -> Value {
 
 #[test]
 fn command_boundary_fixture_preserves_git_wire_bytes_and_rejects_unknown_commands() {
-    if !git_fixture::isolated("command_boundary_fixture_preserves_git_wire_bytes_and_rejects_unknown_commands") {
+    if !git_fixture::isolated(
+        "command_boundary_fixture_preserves_git_wire_bytes_and_rejects_unknown_commands",
+    ) {
         return;
     }
     let case: Value = serde_json::from_slice(include_bytes!("fixtures/git-command.json")).unwrap();
@@ -99,24 +101,37 @@ fn command_boundary_fixture_preserves_git_wire_bytes_and_rejects_unknown_command
     let mut spec = chrono_harness::CommandSpec {
         program: git_fixture::program().to_str().unwrap().into(),
         args: vec!["cat-file".into(), "--batch-check".into(), "-z".into()],
-        env: Default::default(), timeout_seconds:30, output_limit_bytes:4096,
+        env: Default::default(),
+        timeout_seconds: 30,
+        output_limit_bytes: 4096,
     };
     let digest = sha256(&fs::read(&spec.program).unwrap());
     let input = format!("{oid}:payload\0");
-    let metadata = chrono_harness::run_process_observed(&h.root, &spec, input.as_bytes(), &digest).unwrap();
+    let metadata =
+        chrono_harness::run_process_observed(&h.root, &spec, input.as_bytes(), &digest).unwrap();
     assert_eq!(metadata.exit_code, 0);
     assert!(metadata.failure.is_none());
-    assert_eq!(metadata.stdout_bytes, case["metadata"].as_str().unwrap().as_bytes());
+    assert_eq!(
+        metadata.stdout_bytes,
+        case["metadata"].as_str().unwrap().as_bytes()
+    );
     assert!(metadata.stderr_bytes.is_empty());
     assert_eq!(metadata.stdin_sha256, sha256(input.as_bytes()));
     assert_eq!(&metadata.argv[1..], spec.args);
-    spec.args = vec!["cat-file".into(), "blob".into(), case["blob_oid"].as_str().unwrap().into()];
+    spec.args = vec![
+        "cat-file".into(),
+        "blob".into(),
+        case["blob_oid"].as_str().unwrap().into(),
+    ];
     let blob = chrono_harness::run_process_observed(&h.root, &spec, &[], &digest).unwrap();
     assert_eq!(blob.exit_code, 0);
     assert_eq!(blob.stdout_bytes, bytes);
     spec.args = serde_json::from_value(case["unknown_argv"].clone()).unwrap();
     let unknown = chrono_harness::run_process_observed(&h.root, &spec, &[], &digest).unwrap();
-    assert_eq!(unknown.exit_code, case["unknown_exit"].as_i64().unwrap() as i32);
+    assert_eq!(
+        unknown.exit_code,
+        case["unknown_exit"].as_i64().unwrap() as i32
+    );
     assert!(unknown.stdout_bytes.is_empty());
     assert!(unknown.stderr.contains("unhandled Git fixture command"));
     assert_eq!(&unknown.argv[1..], spec.args);
@@ -250,7 +265,9 @@ fn actual_registry_test_inputs_have_explicit_runner_test_consumers() {
 
 #[test]
 fn facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git() {
-    if !git_fixture::isolated("facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git") {
+    if !git_fixture::isolated(
+        "facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git",
+    ) {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -307,7 +324,8 @@ fn facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git() {
 
 #[test]
 fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
-    if !git_fixture::isolated("actual_host_registry_bytes_have_lossless_bounded_process_transport") {
+    if !git_fixture::isolated("actual_host_registry_bytes_have_lossless_bounded_process_transport")
+    {
         return;
     }
     let mut h = Host::new(json!({"mode":"repository"}));
@@ -427,7 +445,9 @@ fn explicit_git_configuration_is_checked_before_each_real_read() {
 
 #[test]
 fn artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs() {
-    if !git_fixture::isolated("artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs") {
+    if !git_fixture::isolated(
+        "artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs",
+    ) {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -525,7 +545,9 @@ fn mismatches_and_undeclared_guard_references_do_not_launch_git() {
 
 #[test]
 fn a_git_process_mutating_an_input_preserves_its_original_failed_receipt() {
-    if !git_fixture::isolated("a_git_process_mutating_an_input_preserves_its_original_failed_receipt") {
+    if !git_fixture::isolated(
+        "a_git_process_mutating_an_input_preserves_its_original_failed_receipt",
+    ) {
         return;
     }
     let h = Host::new(json!({"mode":"input-drift"}));
@@ -544,7 +566,8 @@ fn a_git_process_mutating_an_input_preserves_its_original_failed_receipt() {
 
 #[test]
 fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
-    if !git_fixture::isolated("legacy_binding_has_no_guard_and_current_observations_cannot_omit_it") {
+    if !git_fixture::isolated("legacy_binding_has_no_guard_and_current_observations_cannot_omit_it")
+    {
         return;
     }
     let mut h = Host::new(json!({"mode":"repository"}));
@@ -603,7 +626,8 @@ fn identity_selection(h: &Host) -> Value {
 
 #[test]
 fn exact_host_identity_selects_registered_policy_and_preserves_guards() {
-    if !git_fixture::isolated("exact_host_identity_selects_registered_policy_and_preserves_guards") {
+    if !git_fixture::isolated("exact_host_identity_selects_registered_policy_and_preserves_guards")
+    {
         return;
     }
     let mut h = Host::new(json!({"mode":"repository"}));
@@ -723,7 +747,9 @@ fn empty_registries(h: &mut Host) {
 
 #[test]
 fn registered_data_paths_cover_each_current_executable_without_runtime_fallback() {
-    if !git_fixture::isolated("registered_data_paths_cover_each_current_executable_without_runtime_fallback") {
+    if !git_fixture::isolated(
+        "registered_data_paths_cover_each_current_executable_without_runtime_fallback",
+    ) {
         return;
     }
     const ADDITIONAL: &str = ".chrono-harness/additional.json";
@@ -921,7 +947,9 @@ fn commit(h: &Host) -> String {
 
 #[test]
 fn selected_platform_binds_both_candidate_files_and_request_observation() {
-    if !git_fixture::isolated("selected_platform_binds_both_candidate_files_and_request_observation") {
+    if !git_fixture::isolated(
+        "selected_platform_binds_both_candidate_files_and_request_observation",
+    ) {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -1036,7 +1064,8 @@ fn invalid_platform_maps_and_unbound_targets_never_launch_git() {
 
 #[test]
 fn platform_selector_and_selected_policy_drift_block_the_next_process() {
-    if !git_fixture::isolated("platform_selector_and_selected_policy_drift_block_the_next_process") {
+    if !git_fixture::isolated("platform_selector_and_selected_policy_drift_block_the_next_process")
+    {
         return;
     }
     for path in [SELECTOR, CONFIG] {
@@ -1123,7 +1152,8 @@ fn processes(reader: &Reader) -> usize {
 
 #[test]
 fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
-    if !git_fixture::isolated("snapshot_export_batches_literal_blobs_and_preserves_original_bytes") {
+    if !git_fixture::isolated("snapshot_export_batches_literal_blobs_and_preserves_original_bytes")
+    {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -1238,7 +1268,9 @@ fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
 
 #[test]
 fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations() {
-    if !git_fixture::isolated("fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations") {
+    if !git_fixture::isolated(
+        "fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations",
+    ) {
         return;
     }
     let mut h = Host::new(json!({"mode":"repository"}));
@@ -1306,7 +1338,9 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
 
 #[test]
 fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes() {
-    if !git_fixture::isolated("immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes") {
+    if !git_fixture::isolated(
+        "immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes",
+    ) {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -1347,7 +1381,8 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
 
 #[test]
 fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
-    if !git_fixture::isolated("immutable_tree_reuse_preserves_live_checkout_and_original_evidence") {
+    if !git_fixture::isolated("immutable_tree_reuse_preserves_live_checkout_and_original_evidence")
+    {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -1429,7 +1464,9 @@ fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
 
 #[test]
 fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
-    if !git_fixture::isolated("invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure") {
+    if !git_fixture::isolated(
+        "invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure",
+    ) {
         return;
     }
     for drift in [false, true] {
@@ -1459,7 +1496,9 @@ fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
 
 #[test]
 fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() {
-    if !git_fixture::isolated("cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects") {
+    if !git_fixture::isolated(
+        "cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects",
+    ) {
         return;
     }
     for case in [
@@ -1622,7 +1661,9 @@ fn mutable_refs_index_checkout_and_untracked_facts_remain_fresh() {
 
 #[test]
 fn immutable_reuse_does_not_cross_reader_environment_or_binding_changes() {
-    if !git_fixture::isolated("immutable_reuse_does_not_cross_reader_environment_or_binding_changes") {
+    if !git_fixture::isolated(
+        "immutable_reuse_does_not_cross_reader_environment_or_binding_changes",
+    ) {
         return;
     }
     let mut h = Host::new(json!({"mode":"bound-value"}));
@@ -1701,7 +1742,9 @@ fn oid_shaped_ref_for_another_object_format_is_still_mutable() {
 
 #[test]
 fn reads_before_a_successful_identity_observation_stay_fresh_without_extra_probes() {
-    if !git_fixture::isolated("reads_before_a_successful_identity_observation_stay_fresh_without_extra_probes") {
+    if !git_fixture::isolated(
+        "reads_before_a_successful_identity_observation_stay_fresh_without_extra_probes",
+    ) {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -1836,7 +1879,9 @@ fn registry_host(
 
 #[test]
 fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges() {
-    if !git_fixture::isolated("registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges") {
+    if !git_fixture::isolated(
+        "registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges",
+    ) {
         return;
     }
     let (h, originals, oid) = registry_host(json!({"mode":"repository"}), 40);
@@ -1908,7 +1953,9 @@ fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges(
 
 #[test]
 fn registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blobs() {
-    if !git_fixture::isolated("registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blobs") {
+    if !git_fixture::isolated(
+        "registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blobs",
+    ) {
         return;
     }
     for exact_limit in [false, true] {
@@ -1943,7 +1990,9 @@ fn registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blo
 
 #[test]
 fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused() {
-    if !git_fixture::isolated("registry_batch_failures_and_malformed_originals_are_retained_and_never_reused") {
+    if !git_fixture::isolated(
+        "registry_batch_failures_and_malformed_originals_are_retained_and_never_reused",
+    ) {
         return;
     }
     for phase in ["--batch-check", "--batch"] {
@@ -2008,7 +2057,9 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
 
 #[test]
 fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
-    if !git_fixture::isolated("registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing") {
+    if !git_fixture::isolated(
+        "registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing",
+    ) {
         return;
     }
     let body = json!({"mode":"batch-response","phase":"--batch"});
@@ -2156,7 +2207,8 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
 
 #[test]
 fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
-    if !git_fixture::isolated("unverified_registry_endpoints_and_mutable_refs_keep_original_reads") {
+    if !git_fixture::isolated("unverified_registry_endpoints_and_mutable_refs_keep_original_reads")
+    {
         return;
     }
     let (h, originals, old) = registry_host(json!({"mode":"repository"}), 20);
@@ -2201,7 +2253,9 @@ fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
 
 #[test]
 fn immutable_input_contract_reads_complete_large_bytes_with_original_processes() {
-    if !git_fixture::isolated("immutable_input_contract_reads_complete_large_bytes_with_original_processes") {
+    if !git_fixture::isolated(
+        "immutable_input_contract_reads_complete_large_bytes_with_original_processes",
+    ) {
         return;
     }
     let h = Host::new(json!({"mode":"repository"}));
@@ -2482,14 +2536,20 @@ fn immutable_input_rejects_invalid_metadata_and_preserves_acquisition_errors() {
 
 #[test]
 fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_git() {
-    if !git_fixture::isolated("selected_git_mock_models_revision_cas_and_linked_metadata_without_external_git") {
+    if !git_fixture::isolated(
+        "selected_git_mock_models_revision_cas_and_linked_metadata_without_external_git",
+    ) {
         return;
     }
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().join("main");
     fs::create_dir(&root).unwrap();
     let call = |at: &std::path::Path, args: &[&str]| {
-        Command::new(git_fixture::program()).current_dir(at).args(args).output().unwrap()
+        Command::new(git_fixture::program())
+            .current_dir(at)
+            .args(args)
+            .output()
+            .unwrap()
     };
     let ok = |at: &std::path::Path, args: &[&str]| {
         let output = call(at, args);
@@ -2508,7 +2568,10 @@ fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_gi
     assert_ne!(base, head);
     assert_eq!(ok(&root, &["show", "HEAD:payload"]), "after");
     assert_eq!(ok(&root, &["rev-parse", "HEAD^"]), base);
-    let identity = ok(&root, &["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"]);
+    let identity = ok(
+        &root,
+        &["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"],
+    );
     assert_eq!(identity, format!("{head}\nrefs/heads/dev"));
     let rejected = call(&root, &["update-ref", "refs/heads/dev", &base, &base]);
     assert_eq!(rejected.status.code(), Some(93));
@@ -2517,34 +2580,76 @@ fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_gi
     assert_eq!(ok(&root, &["rev-parse", "dev"]), head);
     let target = directory.path().join("linked λ");
     let target_text = target.to_str().unwrap();
-    ok(&root, &["worktree", "add", "--detach", "--lock", "--reason", "fixture-owner", target_text, &base]);
-    assert!(fs::read_to_string(target.join(".git")).unwrap().starts_with("gitdir: "));
+    ok(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            "--lock",
+            "--reason",
+            "fixture-owner",
+            target_text,
+            &base,
+        ],
+    );
+    assert!(
+        fs::read_to_string(target.join(".git"))
+            .unwrap()
+            .starts_with("gitdir: ")
+    );
     assert_eq!(ok(&target, &["rev-parse", "HEAD"]), base);
     assert_eq!(fs::read(target.join("payload")).unwrap(), b"before\n");
     assert_eq!(ok(&root, &["rev-parse", "HEAD"]), head);
-    assert!(!call(&root, &["worktree", "remove", "--force", target_text]).status.success());
+    assert!(
+        !call(&root, &["worktree", "remove", "--force", target_text])
+            .status
+            .success()
+    );
     assert!(target.is_dir());
     ok(&root, &["worktree", "unlock", target_text]);
     ok(&root, &["worktree", "remove", "--force", target_text]);
     assert!(!target.exists());
-    let remote = directory.path().join("remote.git");fs::create_dir(&remote).unwrap();
-    ok(&remote,&["init","--bare"]);
-    ok(&root,&["remote","add","origin",remote.to_str().unwrap()]);
-    ok(&root,&["push","origin","dev"]);
-    ok(&root,&["reset","--hard",&base]);
-    let stale=call(&root,&["push","origin","dev"]);
-    assert_eq!(stale.status.code(),Some(93));
+    let remote = directory.path().join("remote.git");
+    fs::create_dir(&remote).unwrap();
+    ok(&remote, &["init", "--bare"]);
+    ok(
+        &root,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    ok(&root, &["push", "origin", "dev"]);
+    ok(&root, &["reset", "--hard", &base]);
+    let stale = call(&root, &["push", "origin", "dev"]);
+    assert_eq!(stale.status.code(), Some(93));
     assert!(stale.stdout.is_empty());
     assert!(String::from_utf8_lossy(&stale.stderr).contains("non-fast-forward rejected"));
-    assert_eq!(ok(&remote,&["rev-parse","dev"]),head);
-    ok(&root,&["push","--force","origin","dev"]);
-    assert_eq!(ok(&remote,&["rev-parse","dev"]),base);
-    assert_eq!(ok(&root,&["rev-list","--count","HEAD"]),"1");
-    ok(&root,&["symbolic-ref","refs/remotes/origin/HEAD","refs/remotes/origin/dev"]);
-    ok(&root,&["config","fixture.key","roundtrip"]);
-    assert_eq!(ok(&root,&["symbolic-ref","refs/remotes/origin/HEAD"]),"refs/remotes/origin/dev");
-    assert_eq!(ok(&root,&["reflog","show","--format=%H","HEAD"]).lines().next(),Some(base.as_str()));
-    let unsupported=call(&root,&["add","--unknown","."]);assert_eq!(unsupported.status.code(),Some(93));assert!(unsupported.stdout.is_empty());assert!(String::from_utf8_lossy(&unsupported.stderr).contains("unhandled Git fixture argv"));
+    assert_eq!(ok(&remote, &["rev-parse", "dev"]), head);
+    ok(&root, &["push", "--force", "origin", "dev"]);
+    assert_eq!(ok(&remote, &["rev-parse", "dev"]), base);
+    assert_eq!(ok(&root, &["rev-list", "--count", "HEAD"]), "1");
+    ok(
+        &root,
+        &[
+            "symbolic-ref",
+            "refs/remotes/origin/HEAD",
+            "refs/remotes/origin/dev",
+        ],
+    );
+    ok(&root, &["config", "fixture.key", "roundtrip"]);
+    assert_eq!(
+        ok(&root, &["symbolic-ref", "refs/remotes/origin/HEAD"]),
+        "refs/remotes/origin/dev"
+    );
+    assert_eq!(
+        ok(&root, &["reflog", "show", "--format=%H", "HEAD"])
+            .lines()
+            .next(),
+        Some(base.as_str())
+    );
+    let unsupported = call(&root, &["add", "--unknown", "."]);
+    assert_eq!(unsupported.status.code(), Some(93));
+    assert!(unsupported.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&unsupported.stderr).contains("unhandled Git fixture argv"));
     let unknown = call(&root, &["unregistered-command"]);
     assert_eq!(unknown.status.code(), Some(93));
     assert!(unknown.stdout.is_empty());

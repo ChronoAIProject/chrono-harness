@@ -5,7 +5,9 @@ use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn raw_checkout_scoped_rejects_hidden_mode_before_and_after_operations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for after in [false, true] {
         let h = Host::new();
         h.git(&["config", "core.filemode", "false"]);
@@ -34,7 +36,9 @@ fn raw_checkout_scoped_rejects_hidden_mode_before_and_after_operations() {
 
 #[test]
 fn raw_checkout_scoped_rejects_clean_filter_without_running_it() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     h.write(".gitattributes", "src.txt filter=hide\n");
     let mut map = h.read(".chrono-harness/FILEMAP.json");

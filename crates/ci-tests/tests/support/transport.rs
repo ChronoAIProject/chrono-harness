@@ -137,7 +137,6 @@ fn diagnostic(mode: &str) {
 }
 
 fn declared_git() -> ! {
-
     let config: serde_json::Value =
         serde_json::from_slice(&std::fs::read("declared-git.json").unwrap()).unwrap();
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
@@ -320,8 +319,14 @@ fn main() {
     }
     let executable = std::env::args_os().next().unwrap();
     match Path::new(&executable).file_name().unwrap().as_bytes() {
-        b"bash" => { assert_eq!(std::env::args().skip(1).collect::<Vec<_>>(), ["--version"]); return println!("Bash shadowed"); }
-        b"selected-bash" => { assert_eq!(std::env::args().skip(1).collect::<Vec<_>>(), ["--version"]); return println!("Bash selected fixture/v1"); }
+        b"bash" => {
+            assert_eq!(std::env::args().skip(1).collect::<Vec<_>>(), ["--version"]);
+            return println!("Bash shadowed");
+        }
+        b"selected-bash" => {
+            assert_eq!(std::env::args().skip(1).collect::<Vec<_>>(), ["--version"]);
+            return println!("Bash selected fixture/v1");
+        }
         b"mutating-producer" => return mutating_producer(),
         b"fixture-producer" => return preparation_fixture(),
         b"retention-failure" => return retention_failure_fixture(),
@@ -354,10 +359,22 @@ fn main() {
     }
     let mode = std::env::args().nth(1).expect("transport mode");
     if mode == "example-install" {
-        let args=std::env::args().skip(2).collect::<Vec<_>>();assert_eq!(args.len(),3);
-        assert_eq!(std::fs::read(&args[0]).unwrap(),include_bytes!("../../../../examples/ci-host-job-gating/.chrono-harness/ci/install.sh"));
-        let destination=Path::new(&args[1]).join(".chrono-harness/bin");std::fs::create_dir_all(&destination).unwrap();
-        for name in ["chrono-harness","chrono-judge-ci","chrono-ci","chrono-worktree"] {std::fs::copy(Path::new(&args[2]).join(name),destination.join(name)).unwrap();}
+        let args = std::env::args().skip(2).collect::<Vec<_>>();
+        assert_eq!(args.len(), 3);
+        assert_eq!(
+            std::fs::read(&args[0]).unwrap(),
+            include_bytes!("../../../../examples/ci-host-job-gating/.chrono-harness/ci/install.sh")
+        );
+        let destination = Path::new(&args[1]).join(".chrono-harness/bin");
+        std::fs::create_dir_all(&destination).unwrap();
+        for name in [
+            "chrono-harness",
+            "chrono-judge-ci",
+            "chrono-ci",
+            "chrono-worktree",
+        ] {
+            std::fs::copy(Path::new(&args[2]).join(name), destination.join(name)).unwrap();
+        }
         return;
     }
     if mode == "inventory-listing" {

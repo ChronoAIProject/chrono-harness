@@ -115,7 +115,9 @@ fn install_readonly_file_owned(
 }
 #[test]
 fn fixture_executable_identity_survives_neighbor_teardown() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::MetadataExt;
 
     let built = Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"));
@@ -202,7 +204,9 @@ fn inputs_owned(
 }
 #[test]
 fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     // Keep this last-close boundary independent of other tests' forked descriptors.
     if !super::isolated_capability::isolated_capability_test(
         "check_inputs::local_input_original_survives_child_exit_until_exact_parent_handoff",
@@ -309,7 +313,9 @@ fn local_input_original_survives_child_exit_until_exact_parent_handoff() {
 }
 #[test]
 fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     // Native workflows inherit the CI selector, while this fixture exercises
     // the local producer and validator contract. Run the whole fixture in a
     // child with an explicit local selector so no test-global environment is
@@ -466,7 +472,9 @@ fn creation_publishes_exact_birth_and_full_short_check_uses_original_fork() {
 }
 #[test]
 fn local_preparation_rejects_clean_replacement_after_candidate_head_observation() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     bind(&h);
     let dest = h.parent.join("moving-head");
@@ -512,7 +520,9 @@ fn local_preparation_rejects_clean_replacement_after_candidate_head_observation(
 }
 #[test]
 fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("any/file");
     bind(&h);
     install(&h.root);
@@ -555,7 +565,9 @@ fn full_missing_origin_historical_snapshot_and_changed_branch_are_named_failures
 }
 #[test]
 fn generated_full_native_short_step_preserves_exact_context_bytes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::retained("non rust/input");
     bind(&h);
     install_owned(&h.root, Some(&h));
@@ -802,7 +814,9 @@ fn generated_full_native_short_step_preserves_exact_context_bytes() {
 }
 #[test]
 fn reconstructed_destination_publishes_its_real_new_birth_association() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("plain input/data");
     bind(&h);
     let base = git(&h.root, &["rev-parse", "HEAD"]);
@@ -870,7 +884,9 @@ fn published_full_report(root: &Path, directory: &str, out: &std::process::Outpu
 
 #[test]
 fn full_short_console_projects_warnings_failures_transport_and_blocked_from_originals() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in ["warn", "fail", "transport", "blocked"] {
         let h = Host::new("data.txt");
         bind(&h);
@@ -960,7 +976,9 @@ fn full_short_console_projects_warnings_failures_transport_and_blocked_from_orig
 
 #[test]
 fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writing_fails() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for retain in [true, false] {
         let h = Host::new("data.txt");
         bind(&h);
@@ -1046,7 +1064,9 @@ fn full_short_outer_git_error_retains_large_original_or_preserves_it_when_writin
 
 #[test]
 fn local_physical_root_uses_bound_inventory_without_fetch_and_shallow_child_needs_base() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("registered data");
     bind(&h);
     let profile = ".chrono-harness/initial.json";

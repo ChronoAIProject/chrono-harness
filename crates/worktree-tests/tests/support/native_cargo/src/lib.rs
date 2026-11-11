@@ -1,5 +1,7 @@
 #[test]
-fn native_holder() { hold(); }
+fn native_holder() {
+    hold();
+}
 
 pub fn hold() {
     if let Some(root) = std::env::var_os("CHRONO_TEMPORARY_CARGO_ROOT") {

@@ -187,7 +187,9 @@ impl Fixture {
 
     pub fn capture(&self, mut command: Command) -> std::process::Output {
         let mut paths = vec![self.case.path().join("tools")];
-        paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
+        paths.extend(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ));
         command.env("PATH", std::env::join_paths(paths).unwrap());
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output = command.output().unwrap();
@@ -246,7 +248,8 @@ impl Fixture {
 
     pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
         let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
-        command.arg("--consume-launcher")
+        command
+            .arg("--consume-launcher")
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
             .arg(self.host.root())
             .arg(directory)

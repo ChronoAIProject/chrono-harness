@@ -15,7 +15,9 @@ fn registration() -> Value {
 
 #[test]
 fn declared_startup_is_published_once_and_installed_before_each_actual_consumer() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     let base: chrono_ci::units::Config = serde_json::from_value(value.clone()).unwrap();
     let before = chrono_ci::units::render(&base, ".chrono-harness/ci/units.json").unwrap();
@@ -105,7 +107,9 @@ fn declared_startup_is_published_once_and_installed_before_each_actual_consumer(
 
 #[test]
 fn startup_consumers_and_transfer_paths_must_be_explicit_and_separate_from_evidence() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["job_gating"]["startup"] = registration();
     for (pointer, replacement) in [
@@ -175,7 +179,9 @@ fn startup_consumers_and_transfer_paths_must_be_explicit_and_separate_from_evide
 
 #[test]
 fn shared_producer_preserves_original_cache_save_identity() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut value = source("examples/ci-host-job-gating/.chrono-harness/ci/units.json");
     value["job_gating"]["startup"] = registration();
     value["persistent_cache"] = adoption("detect");

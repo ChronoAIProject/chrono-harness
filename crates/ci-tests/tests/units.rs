@@ -35,7 +35,9 @@ fn fixture() -> tempfile::TempDir {
 
 #[test]
 fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut valid = config_value();
     valid["schema"] = json!("chrono-github-units/v2");
     valid["collection"]["schema"] = json!("chrono-github-ci/v4");
@@ -106,7 +108,9 @@ fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
 
 #[test]
 fn parent_provider_has_no_independent_workflow_or_polling_inputs() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let current = config_value();
     let c: chrono_ci::units::Config = serde_json::from_value(current.clone()).unwrap();
     chrono_ci::units::validate(&c).unwrap();
@@ -144,7 +148,9 @@ fn parent_provider_has_no_independent_workflow_or_polling_inputs() {
 
 #[test]
 fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut raw = config_value();
     raw["collection"]["schema"] = json!("chrono-github-ci/v4");
     raw["collection"]["facts_config"] = json!(".chrono-harness/config.json");
@@ -186,7 +192,9 @@ fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
 
 #[test]
 fn generator_preserves_unowned_parent_before_any_write() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = fixture();
     fs::create_dir_all(d.path().join(".github/workflows")).unwrap();
     fs::write(
@@ -300,7 +308,9 @@ fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained:
 
 #[test]
 fn fixture_executable_identity_survives_neighbor_teardown() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::MetadataExt;
 
     let source = Path::new(env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"));
@@ -416,7 +426,9 @@ fn consumer_source() -> (tempfile::TempDir, String, String) {
 
 #[test]
 fn real_unit_checkouts_execute_concurrently_and_collect_original_reports() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (host, _, _) = consumer();
     let mut copies = vec![];
     for _ in 0..2 {
@@ -558,7 +570,9 @@ fn collect_cli(host: &short::gating::GatedHost) -> std::process::Output {
 
 #[test]
 fn standalone_gather_is_rejected_without_transport_or_publication() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (host, _, _) = gather_host("success");
     let root = host.path();
     let launches = root.join(".chrono-harness/state/parent-calls");
@@ -626,7 +640,9 @@ fn alpha_downloads(report: &Value) -> Vec<&Value> {
 
 #[test]
 fn download_recovery_retains_failed_attempt_and_selects_only_complete_artifact() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (host, _, _) = gather_host_config("success", |cfg| {
         cfg["gather"]["download_retry"] = download_retry();
     });
@@ -678,7 +694,9 @@ fn download_recovery_retains_failed_attempt_and_selects_only_complete_artifact()
 
 #[test]
 fn download_recovery_is_opt_in_and_exhaustion_or_unlisted_status_stays_failed() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (enabled, failures, status, expected_attempts) in
         [(false, 1, 503, 1), (true, 1, 401, 1), (true, 9, 503, 3)]
     {
@@ -703,7 +721,9 @@ fn download_recovery_is_opt_in_and_exhaustion_or_unlisted_status_stays_failed() 
 
 #[test]
 fn download_recovery_does_not_accept_invalid_evidence_after_transport_recovers() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (host, _, _) = gather_host_config("wrong-source", |cfg| {
         cfg["gather"]["download_retry"] = download_retry();
     });
@@ -727,7 +747,9 @@ fn download_recovery_does_not_accept_invalid_evidence_after_transport_recovers()
 
 #[test]
 fn download_recovery_configuration_rejects_ambiguous_or_unbounded_policy() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut valid = config_value();
     valid["gather"]["download_retry"] = download_retry();
     let c: chrono_ci::units::Config = serde_json::from_value(valid.clone()).unwrap();
@@ -756,7 +778,9 @@ fn download_recovery_configuration_rejects_ambiguous_or_unbounded_policy() {
 
 #[test]
 fn download_recovery_shares_original_time_and_output_budgets() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (mode, expected_attempts) in [("deadline", 1), ("output", 2), ("ambiguous-status", 1)] {
         let (host, _, _) = gather_host_config("success", |cfg| {
             cfg["gather"]["download_retry"] = download_retry();
@@ -835,7 +859,9 @@ fn download_recovery_shares_original_time_and_output_budgets() {
 
 #[test]
 fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (host, _, _) = gather_host("success");
     let result = collect_cli(&host);
     assert!(
@@ -872,7 +898,9 @@ fn provider_gathers_pinned_attempts_and_keeps_credentials_out_of_reports() {
 
 #[test]
 fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (mode, needle) in [
         ("artifact-ambiguous-last", "ambiguous"),
         ("stale-context", "artifact differs"),
@@ -949,7 +977,9 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
 
 #[test]
 fn unit_init_preserves_host_customization_across_generation() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = fixture();
     let root = d.path();
     let source = ".chrono-harness/ci/units.json";
@@ -989,7 +1019,9 @@ fn migrate(root: &Path, prior: &str, prior_source: Option<&str>) -> Result<Strin
 
 #[test]
 fn migration_adopts_units_preserving_custom_source_and_unrelated_workflow() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = fixture();
     let root = d.path();
     let prior = ".chrono-harness/ci/github.json";
@@ -1028,7 +1060,9 @@ fn migration_adopts_units_preserving_custom_source_and_unrelated_workflow() {
 
 #[test]
 fn migration_retires_renamed_parent_and_rejects_host_edits_before_writes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for conflict in ["none", "old-edit", "new-collision"] {
         let d = fixture();
         let root = d.path();

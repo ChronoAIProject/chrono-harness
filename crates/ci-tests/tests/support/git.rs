@@ -119,8 +119,17 @@ fn main() -> io::Result<()> {
             io::stdout().write_all(b"0123456789abcdef")?;
         },
         "read-drift" if arguments.iter().any(|argument| argument == "rev-parse") => {
-            let output = git_model::run(env::current_dir()?, &arguments.iter().map(|a| a.to_str().unwrap().to_owned()).collect::<Vec<_>>(), &[]);
-            if let Ok(bytes) = &output { io::stdout().write_all(bytes)?; }
+            let output = git_model::run(
+                env::current_dir()?,
+                &arguments
+                    .iter()
+                    .map(|a| a.to_str().unwrap().to_owned())
+                    .collect::<Vec<_>>(),
+                &[],
+            );
+            if let Ok(bytes) = &output {
+                io::stdout().write_all(bytes)?;
+            }
             if output.is_ok() {
                 // Replace this test's private copied image after Git exits.
                 // Reuse the transport fixture's permission-preserving rename
@@ -136,7 +145,9 @@ fn main() -> io::Result<()> {
                 )?;
                 std::fs::rename(replacement, executable)?;
             }
-            if let Err(error) = output { failure(error.as_bytes(), 93); }
+            if let Err(error) = output {
+                failure(error.as_bytes(), 93);
+            }
             return Ok(());
         }
         "probe-failure" if probe => {

@@ -69,7 +69,12 @@ fn fixture_operation(path: &str) -> ExitCode {
         }
         "index-assume-unchanged" | "index-skip-worktree" => {
             let flag = format!("--{}", case.strip_prefix("index-").unwrap());
-            git_model::run(std::env::current_dir().unwrap(), &["update-index".into(), flag, "src.txt".into()], &[]).unwrap();
+            git_model::run(
+                std::env::current_dir().unwrap(),
+                &["update-index".into(), flag, "src.txt".into()],
+                &[],
+            )
+            .unwrap();
             std::fs::write("src.txt", b"hidden").unwrap();
         }
         #[cfg(unix)]

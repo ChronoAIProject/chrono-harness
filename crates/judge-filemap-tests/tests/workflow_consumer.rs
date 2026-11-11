@@ -22,7 +22,9 @@ fn stable_host(test: &str) -> Host {
 
 #[test]
 fn actual_stability_selection_executes_shared_methods_exactly_once() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = stable_host("t");
     let (code, r) = h.run(|_| {});
     assert_eq!(code, 0, "{}", r["findings"]);
@@ -56,7 +58,9 @@ fn actual_stability_selection_executes_shared_methods_exactly_once() {
 
 #[test]
 fn actual_selected_missing_test_blocks_operations_without_fallback() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = stable_host("missing");
     let (code, r) = h.run(|_| {});
     assert_ne!(code, 0);
@@ -73,7 +77,9 @@ fn actual_selected_missing_test_blocks_operations_without_fallback() {
 
 #[test]
 fn actual_docs_do_not_run_an_unrelated_integration_suite() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = stable_host("missing");
     h.base = h.candidate.clone();
     fs::write(h.root().join("doc.txt"), "documentation only").unwrap();
@@ -156,7 +162,9 @@ fn add_extra_pair(h: &mut Host) {
 
 #[test]
 fn actual_semantic_change_runs_additional_declared_suite_with_one_shared_prerequisite() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(true);
     add_extra_pair(&mut h);
     for f in h.values.get_mut(FM).unwrap()["files"]

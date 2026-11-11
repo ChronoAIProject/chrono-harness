@@ -90,7 +90,8 @@ fn update_remote(git: &str, home: &Path, reference: &str) {
     let mut directory = OsString::from("--git-dir=");
     directory.push(home.join("declared upstream.git"));
     require_success(
-        Command::new(git).arg("--git-model")
+        Command::new(git)
+            .arg("--git-model")
             .arg(directory)
             .args(["update-ref", reference, head.trim_end_matches('\n')])
             .status()
@@ -101,7 +102,8 @@ fn update_remote(git: &str, home: &Path, reference: &str) {
 fn main() {
     let model_args: Vec<String> = std::env::args().skip(1).collect();
     if model_args.first().is_some_and(|s| s == "--git-model") {
-        git_model::dispatch(&model_args[1..]); return;
+        git_model::dispatch(&model_args[1..]);
+        return;
     }
     let path = std::env::var_os("CHRONO_TEST_GIT_FIXTURE").expect("explicit Git fixture input");
     let config: Value = serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
@@ -232,14 +234,26 @@ fn main() {
                 update_remote(git, &home, "refs/heads/integration/owned");
             }
             "post-delete" if arg(1, "push") => {
-                require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                require_success(
+                    Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .status()
+                        .unwrap(),
+                );
                 io::stderr()
                     .write_all(b"\xfforiginal post-delete failure\n")
                     .unwrap();
                 std::process::exit(73);
             }
             fault @ ("remote-target" | "remote-plan") if arg(1, "push") => {
-                require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                require_success(
+                    Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .status()
+                        .unwrap(),
+                );
                 if fault == "remote-target" {
                     update_remote(git, &home, "refs/heads/dev");
                 } else {
@@ -260,12 +274,24 @@ fn main() {
                 if !Path::new(".chrono-harness/state/original-metadata/metadata/index").is_file() {
                     std::process::exit(79);
                 }
-                require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                require_success(
+                    Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .status()
+                        .unwrap(),
+                );
                 eprintln!("original failure after donor creation");
                 std::process::exit(31);
             }
             "repair-failure" if arg(1, "worktree") && arg(2, "repair") => {
-                require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                require_success(
+                    Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .status()
+                        .unwrap(),
+                );
                 eprintln!("original failure after repair");
                 std::process::exit(32);
             }
@@ -311,7 +337,13 @@ fn main() {
                 };
                 if trigger {
                     if after {
-                        require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                        require_success(
+                            Command::new(git)
+                                .arg("--git-model")
+                                .args(&args)
+                                .status()
+                                .unwrap(),
+                        );
                     }
                     fs::write(home.join("rebind-interrupted"), "stopped").unwrap();
                     if home.join("rebind-fail").is_file() {
@@ -331,7 +363,11 @@ fn main() {
                     && !args.iter().any(|arg| arg == "--ignored") =>
             {
                 fs::write(".git/info/exclude", "unregistered-work\n").unwrap();
-                let status = Command::new(git).arg("--git-model").args(&args).status().unwrap();
+                let status = Command::new(git)
+                    .arg("--git-model")
+                    .args(&args)
+                    .status()
+                    .unwrap();
                 fs::write(".git/info/exclude", "").unwrap();
                 require_success(status);
                 return;
@@ -358,7 +394,13 @@ fn main() {
                     args.get(2).map_or("", |v| v.to_str().unwrap())
                 );
                 if stage.trim_end_matches('\n') == observed {
-                    require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                    require_success(
+                        Command::new(git)
+                            .arg("--git-model")
+                            .args(&args)
+                            .status()
+                            .unwrap(),
+                    );
                     fs::write(home.join("interruption-observed"), "completed").unwrap();
                     interrupt_parent();
                     return;
@@ -389,7 +431,13 @@ fn main() {
                         && arg(2, "--no-deref")
                         && arg(3, "-d")
                     {
-                        require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                        require_success(
+                            Command::new(git)
+                                .arg("--git-model")
+                                .args(&args)
+                                .status()
+                                .unwrap(),
+                        );
                         let path = fs::read_to_string(result).unwrap();
                         fs::write(path.trim_end_matches('\n'), "changed").unwrap();
                         return;
@@ -409,7 +457,8 @@ fn main() {
                             String::new()
                         }
                     };
-                    Command::new(git).arg("--git-model")
+                    Command::new(git)
+                        .arg("--git-model")
                         .args([
                             "update-ref",
                             "refs/heads/feature/saved",
@@ -425,10 +474,17 @@ fn main() {
         }
         "retention-race" => {
             if arg(1, "worktree") && arg(2, "lock") {
-                require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                require_success(
+                    Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .status()
+                        .unwrap(),
+                );
                 let head = fs::read_to_string(home.join("new-head")).unwrap();
                 require_success(
-                    Command::new(git).arg("--git-model")
+                    Command::new(git)
+                        .arg("--git-model")
                         .args(["update-ref", "refs/heads/dev", head.trim_end_matches('\n')])
                         .status()
                         .unwrap(),
@@ -438,7 +494,13 @@ fn main() {
         }
         "unsaved-after-unlock" => {
             if home.join("arm").is_file() && arg(1, "worktree") && arg(2, "unlock") {
-                require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                require_success(
+                    Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .status()
+                        .unwrap(),
+                );
                 fs::write(Path::new(&args[3]).join("payload"), "new unsaved work").unwrap();
                 return;
             }
@@ -447,7 +509,13 @@ fn main() {
             if arg(1, "fetch") {
                 let action = fs::read_to_string(home.join("fetch-action")).unwrap();
                 if action.trim_end_matches('\n') == "fetch-block" {
-                    require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                    require_success(
+                        Command::new(git)
+                            .arg("--git-model")
+                            .args(&args)
+                            .status()
+                            .unwrap(),
+                    );
                     eprintln!("failure-after-fetch");
                     std::process::exit(72);
                 }
@@ -468,7 +536,8 @@ fn main() {
                     "race" => {
                         let head = fs::read_to_string(home.join("fetch-new-head")).unwrap();
                         require_success(
-                            Command::new(git).arg("--git-model")
+                            Command::new(git)
+                                .arg("--git-model")
                                 .arg("update-ref")
                                 .arg(&args[4])
                                 .arg(head.trim_end_matches('\n'))
@@ -477,7 +546,13 @@ fn main() {
                         );
                     }
                     "remove-fail" => {
-                        require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                        require_success(
+                            Command::new(git)
+                                .arg("--git-model")
+                                .args(&args)
+                                .status()
+                                .unwrap(),
+                        );
                         eprintln!("failure-after-ref-removal");
                         std::process::exit(73);
                     }
@@ -538,10 +613,15 @@ fn main() {
                     && home.join("local-fetch-complete").is_file()
                     && !home.join("head-drift-applied").exists()
                 {
-                    let observed = Command::new(git).arg("--git-model").args(&args).output().unwrap();
+                    let observed = Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .output()
+                        .unwrap();
                     require_success(observed.status);
                     require_success(
-                        Command::new(git).arg("--git-model")
+                        Command::new(git)
+                            .arg("--git-model")
                             .args(["reset", "--hard", config["replacement"].as_str().unwrap()])
                             .stdout(Stdio::null())
                             .status()
@@ -562,11 +642,18 @@ fn main() {
                 && std::env::current_dir().unwrap() == home.join("tree-index")
                 && arg(1, "ls-tree")
             {
-                require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                require_success(
+                    Command::new(git)
+                        .arg("--git-model")
+                        .args(&args)
+                        .status()
+                        .unwrap(),
+                );
                 fs::create_dir_all("output λ").unwrap();
                 fs::write("output λ/staged-source", "source").unwrap();
                 require_success(
-                    Command::new(git).arg("--git-model")
+                    Command::new(git)
+                        .arg("--git-model")
                         .args(["add", "-f", "--", "output λ/staged-source"])
                         .status()
                         .unwrap(),
@@ -651,7 +738,13 @@ fn main() {
         "automatic-remove" => {
             if home.join("fail-remove").is_file() && arg(1, "worktree") && arg(2, "remove") {
                 if config["after_effect"] == true {
-                    require_success(Command::new(git).arg("--git-model").args(&args).status().unwrap());
+                    require_success(
+                        Command::new(git)
+                            .arg("--git-model")
+                            .args(&args)
+                            .status()
+                            .unwrap(),
+                    );
                 }
                 eprintln!("original automatic removal failure");
                 std::process::exit(71);

@@ -53,7 +53,9 @@ fn action<'a>(s: &'a mut Endpoint, op: &str) -> &'a mut Value {
 
 #[test]
 fn registered_startup_chain_requires_declared_mock_evidence() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let s = host();
     let result = consumption::validate_delta(None, &s, &BTreeSet::new(), &BTreeSet::new()).unwrap();
     assert_eq!(result.checked, paths(&["runner-startup"]));
@@ -94,7 +96,9 @@ fn registered_startup_chain_requires_declared_mock_evidence() {
 
 #[test]
 fn startup_commands_preserve_registered_arguments() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let old = host();
     for operation in [
         "host.bootstrap-shared-produce",
@@ -117,7 +121,9 @@ fn startup_commands_preserve_registered_arguments() {
 
 #[test]
 fn startup_data_requires_installed_output_and_selected_producer_and_consumer() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for defect in [
         "uninstalled",
         "producer",
@@ -171,7 +177,9 @@ fn startup_data_requires_installed_output_and_selected_producer_and_consumer() {
 
 #[test]
 fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for defect in [
         "need",
         "use",
@@ -274,7 +282,9 @@ fn affected_chain_rejects_missing_dangling_and_misbound_truths() {
 
 #[test]
 fn preparation_requires_registered_invocation_and_early_verification() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for defect in [
         "invocation",
         "missing",
@@ -327,7 +337,9 @@ fn preparation_requires_registered_invocation_and_early_verification() {
 
 #[test]
 fn both_endpoints_select_removed_inputs_and_old_owners_without_global_rejudgment() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut old = host();
     let mut new = host();
     // A historical malformed need remains scoped until its chain is affected.
@@ -386,7 +398,9 @@ fn both_endpoints_select_removed_inputs_and_old_owners_without_global_rejudgment
 
 #[test]
 fn retired_contract_and_unknown_versions_fail_while_legacy_consumers_keep_meaning() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let old = host();
     let mut new = host();
     new.adoption = None;
@@ -437,7 +451,9 @@ fn retired_contract_and_unknown_versions_fail_while_legacy_consumers_keep_meanin
 
 #[test]
 fn scoped_adapter_reads_fixed_native_git_endpoints_and_retains_original_failure() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::process::Command;
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();

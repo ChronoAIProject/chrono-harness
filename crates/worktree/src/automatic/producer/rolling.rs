@@ -96,10 +96,14 @@ impl TemporaryHost {
             }
             Ok(_) => (),
         }
-        let Some(gate) = DirectoryGate::available(directory)? else { return Ok(false); };
+        let Some(gate) = DirectoryGate::available(directory)? else {
+            return Ok(false);
+        };
         let store = Store::open(directory, producer, false)?;
         let (objects, errors) = store.records()?;
-        if !errors.is_empty() { return Err("fixture producer registrations are unknown".into()); }
+        if !errors.is_empty() {
+            return Err("fixture producer registrations are unknown".into());
+        }
         let mut metadata_empty = true;
         let mut members_known = true;
         for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
@@ -107,15 +111,23 @@ impl TemporaryHost {
             let kind = entry.file_type().map_err(|e| e.to_string())?;
             use crate::verified_lifecycle::{ProducerNamespaceMember, producer_namespace_member};
             let name = entry.file_name();
-            let member = name.to_str().map(producer_namespace_member)
+            let member = name
+                .to_str()
+                .map(producer_namespace_member)
                 .unwrap_or(ProducerNamespaceMember::Unknown);
             match member {
                 ProducerNamespaceMember::Owner => members_known &= kind.is_file(),
                 ProducerNamespaceMember::Records => members_known &= kind.is_dir(),
                 ProducerNamespaceMember::Metadata => {
-                    if !kind.is_dir() { return Ok(false); }
-                    metadata_empty &= fs::read_dir(entry.path()).map_err(|e| e.to_string())?
-                        .next().transpose().map_err(|e| e.to_string())?.is_none();
+                    if !kind.is_dir() {
+                        return Ok(false);
+                    }
+                    metadata_empty &= fs::read_dir(entry.path())
+                        .map_err(|e| e.to_string())?
+                        .next()
+                        .transpose()
+                        .map_err(|e| e.to_string())?
+                        .is_none();
                 }
                 ProducerNamespaceMember::Disposals if kind.is_dir() => {
                     let (trash, _) = trash(&store)?;
@@ -130,7 +142,9 @@ impl TemporaryHost {
         gate.stable()?;
         store.owner_stable()?;
         Ok(crate::verified_lifecycle::producer_namespace_retired(
-            objects.is_empty(), metadata_empty, members_known,
+            objects.is_empty(),
+            metadata_empty,
+            members_known,
         ))
     }
 

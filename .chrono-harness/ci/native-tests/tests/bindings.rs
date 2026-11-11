@@ -127,7 +127,11 @@ fn actual_rustup_tools_keep_identity_relocation_and_inherited_compiler_constrain
     let directory = tempfile::tempdir().unwrap();
     let root = fs::canonicalize(directory.path()).unwrap();
     for name in ["rustup", "cargo", "rustc"] {
-        fs::copy(env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"), root.join(name)).unwrap();
+        fs::copy(
+            env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"),
+            root.join(name),
+        )
+        .unwrap();
     }
     let rustup = root.join("rustup");
     let cargo = selected(&rustup, "cargo");

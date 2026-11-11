@@ -214,7 +214,9 @@ fn report(root: &Path, path: &str, out: &std::process::Output, exit: i32) -> Val
 }
 #[test]
 fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for unregistered in [false, true] {
         let h = Host::new(unregistered, true);
         let local = report(
@@ -304,7 +306,9 @@ fn genuine_root_bare_local_and_generated_native_preserve_inventory_and_originals
 }
 #[test]
 fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registered() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false, true);
     let base = h.candidate.clone();
     git(&h.root, &["push", "-q", "origin", "dev"]);
@@ -339,7 +343,9 @@ fn nonroot_bare_local_and_native_use_delta_even_with_initial_inventory_registere
 }
 #[test]
 fn absent_or_incorrect_initial_binding_and_shallow_parented_creation_fail() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new(false, false);
     let out = h.command().output().unwrap();
     assert_eq!(out.status.code(), Some(2));

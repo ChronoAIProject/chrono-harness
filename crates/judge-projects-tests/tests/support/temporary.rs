@@ -21,7 +21,11 @@ fn store(producer: &str) -> &'static (PathBuf, Vec<String>) {
     };
     selected
         .get_or_init(|| {
-            TemporaryHost::registered_store(fixture_coordinator::root(), ".chrono-harness/worktree.json", producer)
+            TemporaryHost::registered_store(
+                fixture_coordinator::root(),
+                ".chrono-harness/worktree.json",
+                producer,
+            )
         })
         .as_ref()
         .unwrap_or_else(|error| panic!("fixture custody prerequisite: {error}"))

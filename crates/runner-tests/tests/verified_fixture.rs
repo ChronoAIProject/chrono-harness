@@ -1,24 +1,24 @@
 //! 命令替身的封闭派发域；IO 行为仍由独立 Rust 边界预期核验。
 #![allow(unexpected_cfgs)]
-#[cfg(verus_keep_ghost)]
-#[path = "../../identifiers/src/lib.rs"]
-mod identifiers;
-#[path = "../../ci-tests/tests/support/generated_command.rs"]
-mod generated_command;
-#[path = "../../distribution-tests/tests/support/bootstrap.rs"]
-mod distribution_bootstrap;
-#[path = "support/git_model.rs"]
-mod git;
 #[path = "../../worktree-tests/tests/support/cargo_model.rs"]
 mod cargo;
 #[cfg(verus_keep_ghost)]
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod custody;
-#[path = "support/isolated_capability.rs"]
-mod isolation;
+#[path = "../../distribution-tests/tests/support/bootstrap.rs"]
+mod distribution_bootstrap;
+#[path = "../../ci-tests/tests/support/generated_command.rs"]
+mod generated_command;
+#[path = "support/git_model.rs"]
+mod git;
 #[cfg(verus_keep_ghost)]
 #[path = "support/git_fixture.rs"]
 mod git_fixture;
+#[cfg(verus_keep_ghost)]
+#[path = "../../identifiers/src/lib.rs"]
+mod identifiers;
+#[path = "support/isolated_capability.rs"]
+mod isolation;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

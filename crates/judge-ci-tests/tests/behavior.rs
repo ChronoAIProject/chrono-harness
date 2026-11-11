@@ -13,7 +13,9 @@ const OPERATION_TOOL: &str = env!("CARGO_BIN_EXE_chrono-test-ci-diagnostics");
 
 #[test]
 fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_output_bound() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     h.change_registry(CONFIG, |v| {
         v["policy"]["selection_evidence"] = json!("explicit-graph/v1")
@@ -211,7 +213,9 @@ fn explicit_plans(h: &Host) {
 }
 #[test]
 fn source_closure_executes_real_command() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.write("src.txt", "two");
@@ -230,7 +234,9 @@ fn source_closure_executes_real_command() {
 }
 #[test]
 fn documentation_outside_closure_has_no_project_checks() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.write("doc.txt", "two");
@@ -243,7 +249,9 @@ fn documentation_outside_closure_has_no_project_checks() {
 }
 #[test]
 fn identical_commit_is_honest_noop() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let r = h.check(&h.head(), &h.head());
     pass(&r);
@@ -252,7 +260,9 @@ fn identical_commit_is_honest_noop() {
 }
 #[test]
 fn deletion_keeps_old_consumer() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     fs::remove_file(h.root().join("src.txt")).unwrap();
@@ -268,7 +278,9 @@ fn deletion_keeps_old_consumer() {
 }
 #[test]
 fn rename_is_delete_plus_add() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     fs::rename(h.root().join("src.txt"), h.root().join("new name.txt")).unwrap();
@@ -303,7 +315,9 @@ fn rename_is_delete_plus_add() {
 }
 #[test]
 fn removed_project_edge_still_selects_surviving_consumer() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
@@ -315,7 +329,9 @@ fn removed_project_edge_still_selects_surviving_consumer() {
 }
 #[test]
 fn removed_file_edge_seeds_old_graph() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
@@ -331,7 +347,9 @@ fn removed_file_edge_seeds_old_graph() {
 }
 #[test]
 fn operation_only_change_is_selected_and_failure_is_real() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.change_registry(".chrono-harness/projects.json", |v| {
@@ -347,7 +365,9 @@ fn operation_only_change_is_selected_and_failure_is_real() {
 }
 #[test]
 fn removed_affected_binding_fails_closed() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.change_registry(".chrono-harness/projects.json", |v| {
@@ -366,7 +386,9 @@ fn removed_affected_binding_fails_closed() {
 }
 #[test]
 fn retirement_current_test_methods_can_evolve_without_replaying_removed_operations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.change_registry(".chrono-harness/projects.json", |v| {
@@ -385,7 +407,9 @@ fn retirement_current_test_methods_can_evolve_without_replaying_removed_operatio
 }
 #[test]
 fn unknown_changed_path_never_green() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.write("unknown.txt", "new");
@@ -394,7 +418,9 @@ fn unknown_changed_path_never_green() {
 }
 #[test]
 fn absent_registered_path_never_green() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     fs::remove_file(h.root().join("src.txt")).unwrap();
@@ -403,7 +429,9 @@ fn absent_registered_path_never_green() {
 }
 #[test]
 fn duplicate_and_unresolved_registration_fail() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for duplicate in [true, false] {
         let h = Host::new();
         let b = h.head();
@@ -428,7 +456,9 @@ fn duplicate_and_unresolved_registration_fail() {
 }
 #[test]
 fn missing_or_short_oid_and_checkout_mismatch_fail() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.write("doc.txt", "two");
@@ -447,7 +477,9 @@ fn missing_or_short_oid_and_checkout_mismatch_fail() {
 }
 #[test]
 fn dirty_tracked_untracked_ignored_and_staged_fail() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for mode in ["tracked", "untracked", "ignored", "staged"] {
         let h = Host::new();
         let b = h.head();
@@ -475,7 +507,9 @@ fn dirty_tracked_untracked_ignored_and_staged_fail() {
 }
 #[test]
 fn artifact_outputs_are_allowed_but_tracked_artifacts_are_not() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.write(".chrono-harness/state/log", "out");
@@ -500,7 +534,9 @@ fn artifact_outputs_are_allowed_but_tracked_artifacts_are_not() {
 }
 #[test]
 fn profile_bytes_and_request_digest_bind_candidate() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     let mut r = h.request(Some(&b), &b);
@@ -513,7 +549,9 @@ fn profile_bytes_and_request_digest_bind_candidate() {
 }
 #[test]
 fn initial_requires_parentless_commit_and_runs_declared_inventory() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     let r = judge(&h.request(None, &b));
@@ -529,7 +567,9 @@ fn initial_requires_parentless_commit_and_runs_declared_inventory() {
 
 #[test]
 fn initial_inventory_reads_original_parents_through_git_replace_overlays() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let root = h.head();
     let child = h.commit();
@@ -547,7 +587,9 @@ fn initial_inventory_reads_original_parents_through_git_replace_overlays() {
 }
 #[test]
 fn initial_rejects_actual_parents_in_full_and_shallow_history_before_operations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for shallow in [false, true] {
         let h = Host::new();
         let b = h.head();
@@ -583,7 +625,9 @@ fn initial_rejects_actual_parents_in_full_and_shallow_history_before_operations(
 }
 #[test]
 fn output_mutating_inputs_fails_after_execution() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.write("check.case", "dirty-input\n");
@@ -592,7 +636,9 @@ fn output_mutating_inputs_fails_after_execution() {
 }
 #[test]
 fn mode_only_change_is_delta() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.git(&["update-index", "--chmod=+x", "src.txt"]);
@@ -605,7 +651,9 @@ fn mode_only_change_is_delta() {
 }
 #[test]
 fn adoption_uses_real_base_and_requires_exact_opt_in() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     h.git(&["rm", CONFIG]);
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
@@ -631,7 +679,9 @@ fn adoption_uses_real_base_and_requires_exact_opt_in() {
 }
 #[test]
 fn explicitly_registered_extension_executes_without_scheduler_changes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let b = h.head();
     h.write("extra.case", "extra\n");
@@ -650,7 +700,9 @@ fn explicitly_registered_extension_executes_without_scheduler_changes() {
 }
 #[test]
 fn tool_or_environment_change_reexecutes_its_registered_bindings() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for env in [false, true] {
         let h = Host::new();
         let b = h.head();
@@ -673,7 +725,9 @@ fn tool_or_environment_change_reexecutes_its_registered_bindings() {
 }
 #[test]
 fn index_changes_cannot_cancel_against_worktree_changes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let base = h.head();
     h.write("src.txt", "staged change");
@@ -684,7 +738,9 @@ fn index_changes_cannot_cancel_against_worktree_changes() {
 
 #[test]
 fn hidden_worktree_bytes_fail_before_execution_without_changing_index() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (flag, reason) in [
         ("--assume-unchanged", "assume-unchanged"),
         ("--skip-worktree", "skip-worktree"),
@@ -721,7 +777,9 @@ fn hidden_worktree_bytes_fail_before_execution_without_changing_index() {
 
 #[test]
 fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (flag, reason) in [
         ("--assume-unchanged", "assume-unchanged"),
         ("--skip-worktree", "skip-worktree"),
@@ -751,7 +809,9 @@ fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
 
 #[test]
 fn adapter_explains_legacy_only_selection_without_graph_edges() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
         v["project_edges"] = json!([]);
@@ -778,7 +838,9 @@ fn adapter_explains_legacy_only_selection_without_graph_edges() {
 }
 #[test]
 fn operation_bounds_changes_execute_registered_command() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (key, value, reason) in [
         ("operation_timeout_seconds", 4, "changed operation timeout"),
         (
@@ -805,7 +867,9 @@ fn operation_bounds_changes_execute_registered_command() {
 
 #[test]
 fn filemap_v2_unchanged_plans_ignore_legacy_bound_changes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     explicit_plans(&h);
     let b = h.commit();
@@ -822,7 +886,9 @@ fn filemap_v2_unchanged_plans_ignore_legacy_bound_changes() {
 
 #[test]
 fn filemap_v2_plan_operations_additions_and_removals_keep_obligations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for change in ["operations", "shrink", "reorder", "add", "remove"] {
         let h = Host::new();
         h.change_registry(".chrono-harness/projects.json", |v| {
@@ -924,7 +990,9 @@ fn language_host(scripts: bool, implementation: &str, testing: &str) -> Host {
 
 #[test]
 fn v2_languages_accept_literal_ids_and_shell_python_for_projects_and_scripts() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for scripts in [false, true] {
         for (implementation, testing) in [("custom/λ", "custom/λ"), ("shell", "python")] {
             let h = language_host(scripts, implementation, testing);
@@ -939,7 +1007,9 @@ fn v2_languages_accept_literal_ids_and_shell_python_for_projects_and_scripts() {
 
 #[test]
 fn v2_languages_reject_mismatches_without_running_operations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for scripts in [false, true] {
         for (implementation, testing) in [("rust", "python"), ("python", "shell"), ("Rust", "rust")]
         {
@@ -955,7 +1025,9 @@ fn v2_languages_reject_mismatches_without_running_operations() {
 
 #[test]
 fn v2_languages_do_not_rejudge_unaffected_pairs() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = language_host(false, "rust", "python");
     let b = h.head();
     h.write("doc.txt", "two");
@@ -968,7 +1040,9 @@ fn v2_languages_do_not_rejudge_unaffected_pairs() {
 
 #[test]
 fn v2_languages_metadata_only_change_selects_the_explicit_pair() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for scripts in [false, true] {
         let h = language_host(scripts, "shell", "shell");
         let b = h.head();
@@ -984,7 +1058,9 @@ fn v2_languages_metadata_only_change_selects_the_explicit_pair() {
 
 #[test]
 fn v2_languages_missing_empty_or_non_string_declarations_are_rejected() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for scripts in [false, true] {
         for language in [None, Some(json!("")), Some(json!(42))] {
             let h = language_host(scripts, "shell", "shell");
@@ -1006,7 +1082,9 @@ fn v2_languages_missing_empty_or_non_string_declarations_are_rejected() {
 
 #[test]
 fn v2_languages_selected_test_and_initial_adoption_validate_the_pair() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = language_host(false, "rust", "python");
     let b = h.head();
     let mut fixture = fs::read_to_string(h.root().join("check.case")).unwrap();
@@ -1022,7 +1100,9 @@ fn v2_languages_selected_test_and_initial_adoption_validate_the_pair() {
 
 #[test]
 fn v2_languages_require_reciprocal_dedicated_pairs() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = language_host(false, "rust", "rust");
     let b = h.head();
     h.change_registry(".chrono-harness/projects.json", |v| {
@@ -1035,7 +1115,9 @@ fn v2_languages_require_reciprocal_dedicated_pairs() {
 
 #[test]
 fn v2_languages_valid_metadata_change_runs_project_and_script_obligations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for scripts in [false, true] {
         let h = language_host(scripts, "shell", "shell");
         let b = h.head();
@@ -1054,7 +1136,9 @@ fn v2_languages_valid_metadata_change_runs_project_and_script_obligations() {
 
 #[test]
 fn v2_languages_plan_only_selection_validates_registered_test_owner() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = language_host(false, "rust", "python");
     explicit_plans(&h);
     let b = h.commit();
@@ -1068,7 +1152,9 @@ fn v2_languages_plan_only_selection_validates_registered_test_owner() {
 
 #[test]
 fn v2_languages_schema_only_adoption_checks_existing_declarations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = language_host(true, "rust", "python");
     h.change_registry(".chrono-harness/projects.json", |v| {
         v["schema_version"] = json!(1);

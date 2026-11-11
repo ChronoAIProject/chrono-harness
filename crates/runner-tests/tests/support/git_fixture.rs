@@ -20,11 +20,20 @@ pub fn isolated(name: &str) -> bool {
     )
     .unwrap();
     let mut paths = vec![tools.path().to_path_buf()];
-    paths.extend(std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()));
-    process::isolated_test(name, MARKER, &[
-        ("CHRONO_RUNNER_GIT_FIXTURE_TOOL", tools.path().join("git").into_os_string()),
-        ("PATH", std::env::join_paths(paths).unwrap()),
-    ])
+    paths.extend(std::env::split_paths(
+        &std::env::var_os("PATH").unwrap_or_default(),
+    ));
+    process::isolated_test(
+        name,
+        MARKER,
+        &[
+            (
+                "CHRONO_RUNNER_GIT_FIXTURE_TOOL",
+                tools.path().join("git").into_os_string(),
+            ),
+            ("PATH", std::env::join_paths(paths).unwrap()),
+        ],
+    )
 }
 
 #[cfg(not(verus_keep_ghost))]

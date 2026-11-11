@@ -134,7 +134,9 @@ fn certificate(h: &Host) -> (Value, String) {
 }
 #[test]
 fn integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metadata_change() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     let (e, r) = run(&h, "integration", None, |_| {});
     passed(e, &r);
@@ -163,7 +165,9 @@ fn integration_then_delivery_preserves_actual_evidence_and_accepts_commit_metada
 
 #[test]
 fn retained_delivery_retry_expires_independently_born_producer_at_current_nanosecond() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::{
         full,
         wire::{self, Binding, Request, Status},
@@ -258,7 +262,9 @@ fn retained_delivery_retry_expires_independently_born_producer_at_current_nanose
 }
 #[test]
 fn delivery_from_integration_named_source_still_requires_successful_evidence() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let (e, r) = run(&h, "delivery", None, |_| {});
     assert_eq!(e, 1, "{}", r["findings"]);
@@ -271,7 +277,9 @@ fn delivery_from_integration_named_source_still_requires_successful_evidence() {
 }
 #[test]
 fn ordinary_doc_delta_runs_no_test_and_needs_no_integration() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     h.base = h.candidate.clone();
     fs::write(h.root().join("doc.txt"), "only prose").unwrap();
@@ -287,7 +295,9 @@ fn ordinary_doc_delta_runs_no_test_and_needs_no_integration() {
 
 #[test]
 fn no_delta_still_runs_the_full_workflow_gate_without_business_tests() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     h.base = h.candidate.clone();
     let (e, r) = run(&h, "delivery", None, |ctx| {
@@ -305,7 +315,9 @@ fn no_delta_still_runs_the_full_workflow_gate_without_business_tests() {
 
 #[test]
 fn changed_tree_and_stale_producer_evidence_are_rejected() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     let (e, r) = run(&h, "integration", None, |_| {});
     passed(e, &r);
@@ -329,7 +341,9 @@ fn changed_tree_and_stale_producer_evidence_are_rejected() {
 }
 #[test]
 fn certificate_requires_retained_completed_runner_report_and_untampered_results() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let (e, r) = run(&h, "integration", None, |_| {});
     passed(e, &r);
@@ -502,7 +516,9 @@ fn retire_grouped_project_pair(
 
 #[test]
 fn grouped_project_pair_joint_retirement_resolves_definition_owner() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = grouped_project_host();
     retire_grouped_project_pair(
         &mut h,
@@ -567,7 +583,9 @@ fn grouped_project_pair_joint_retirement_resolves_definition_owner() {
 
 #[test]
 fn legal_joint_retirement_preserves_old_cost_without_executing_absent_test() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     retire(&mut h, true);
     let (e, r) = run(&h, "integration", None, |_| {});
@@ -583,7 +601,9 @@ fn legal_joint_retirement_preserves_old_cost_without_executing_absent_test() {
 }
 #[test]
 fn retirement_request_without_joint_producer_declaration_fails_before_operations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     retire(&mut h, false);
     let (e, r) = run(&h, "integration", None, |_| {});
@@ -609,7 +629,9 @@ fn retirement_request_without_joint_producer_declaration_fails_before_operations
 }
 #[test]
 fn replacement_can_change_method_and_prerequisite_after_explicit_retirement() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     let p = h.values.get_mut(PROJECTS).unwrap();
     p["scripts"][0]["test_script"] = "replacement".into();
@@ -658,7 +680,9 @@ fn replacement_can_change_method_and_prerequisite_after_explicit_retirement() {
 
 #[test]
 fn retired_judge_needs_declaration_but_never_needs_its_old_binary() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     h.values.get_mut(JUDGES).unwrap()["judges"].as_array_mut().unwrap().push(json!({"id":"obsolete","executable":".chrono-harness/bin/missing-old-judge","version":"old","sha256":"a".repeat(64),"argv":[],"selector":"every-delta","after":["registration"],"modes":["evaluate"]}));
     h.save();
@@ -690,7 +714,9 @@ fn retired_judge_needs_declaration_but_never_needs_its_old_binary() {
 }
 #[test]
 fn configured_but_unexecuted_judge_cannot_be_certified() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     let mut extra = h.values[JUDGES]["judges"]
         .as_array()
@@ -720,7 +746,9 @@ fn configured_but_unexecuted_judge_cannot_be_certified() {
 }
 #[test]
 fn failed_required_test_never_creates_integration_evidence() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     host::write_product(&h.root(), "p/product.case", host::Product::DoubleAddOne);
     h.save();
@@ -741,7 +769,9 @@ fn failed_required_test_never_creates_integration_evidence() {
 }
 #[test]
 fn changed_base_rejects_old_integration_binding() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     let (e, r) = run(&h, "integration", None, |_| {});
     passed(e, &r);
@@ -900,7 +930,9 @@ fn migration_host() -> Host {
 
 #[test]
 fn schema_evolution_without_data_conversion_requires_only_the_current_transition() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     let transition = json!({"from_version":1,"to_version":2,"mappings":[],
         "reason":"adopt current workflow registration without converting retained data"});
@@ -943,7 +975,9 @@ fn schema_evolution_without_data_conversion_requires_only_the_current_transition
 
 #[test]
 fn candidate_decoder_and_real_compatibility_test_certify_the_declared_schema_transition() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = migration_host();
     let (e, r) = run(&h, "integration", None, |_| {});
     passed(e, &r);
@@ -986,7 +1020,9 @@ fn candidate_decoder_and_real_compatibility_test_certify_the_declared_schema_tra
 
 #[test]
 fn migration_artifacts_are_allowed_but_candidate_input_mutations_are_rejected() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for path in [
         ".chrono-harness/state/decoder-output",
         "unknown-input",
@@ -1028,7 +1064,9 @@ fn migration_artifacts_are_allowed_but_candidate_input_mutations_are_rejected() 
 
 #[test]
 fn explicit_alias_repair_can_keep_the_alias_and_replace_the_obsolete_method() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     h.values.get_mut(WORKFLOW).unwrap()["schema_version"] = 2.into();
     h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([]);
@@ -1069,7 +1107,9 @@ fn explicit_alias_repair_can_keep_the_alias_and_replace_the_obsolete_method() {
 
 #[test]
 fn certified_mixed_rule_product_delivery_remains_a_warning_without_acknowledgement() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = host();
     h.values.get_mut(WORKFLOW).unwrap()["mixed_change"]["code"] = "W_MIXED_JUDGE_PRODUCT".into();
     h.values.get_mut(WORKFLOW).unwrap()["staleness"]["max_age_hours"] = 25.into();

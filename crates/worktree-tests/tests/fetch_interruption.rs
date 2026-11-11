@@ -71,7 +71,9 @@ impl Host {
 
 #[test]
 fn interrupted_fetch_cleans_ref_and_preserves_absent_or_partial_result() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for state in ["absent", "empty", "truncated", "reconstruct"] {
         let h = Host::new("payload");
         h.interrupting_git("none");
@@ -128,7 +130,9 @@ fn interrupted_fetch_cleans_ref_and_preserves_absent_or_partial_result() {
 
 #[test]
 fn interrupted_fetch_after_deletion_requires_explicit_absence_retry() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.interrupting_git("none");
     h.crash_fetch("update-ref --no-deref");
@@ -144,7 +148,9 @@ fn interrupted_fetch_after_deletion_requires_explicit_absence_retry() {
 
 #[test]
 fn interrupted_fetch_rejects_identity_drift_symbolic_refs_and_lost_retention() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "intent",
         "result",
@@ -198,7 +204,9 @@ fn interrupted_fetch_rejects_identity_drift_symbolic_refs_and_lost_retention() {
 
 #[test]
 fn interrupted_fetch_terminal_result_requires_ordinary_receipt_cleanup() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let original = h.failed_fetch(true);
     let plan = h.interrupted_fetch_plan();
@@ -218,7 +226,9 @@ fn interrupted_fetch_terminal_result_requires_ordinary_receipt_cleanup() {
 
 #[test]
 fn interrupted_fetch_publication_collision_prevents_fetch() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.interrupting_git("fetch-collision");
     let target = h.parent.join("absent destination");
@@ -232,7 +242,9 @@ fn interrupted_fetch_publication_collision_prevents_fetch() {
 
 #[test]
 fn interrupted_fetch_rechecks_original_evidence_after_removal() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.interrupting_git("result-change");
     h.crash_fetch("fetch --no-tags");

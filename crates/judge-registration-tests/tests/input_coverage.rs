@@ -15,7 +15,9 @@ fn coverage() -> Value {
 
 #[test]
 fn optional_coverage_adopts_without_rewriting_legacy_v3_and_preserves_claim_boundary() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = BoundHost::new(false, "pass");
     let (exit, legacy, error) = h.run(false);
     assert_eq!(exit, 0, "{error}");
@@ -44,7 +46,9 @@ fn optional_coverage_adopts_without_rewriting_legacy_v3_and_preserves_claim_boun
 
 #[test]
 fn incomplete_domain_accounting_cannot_claim_declared_complete() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in [
         "missing-row",
         "empty-binding",
@@ -115,7 +119,9 @@ fn incomplete_domain_accounting_cannot_claim_declared_complete() {
 
 #[test]
 fn unresolved_draft_is_readable_but_not_activated_and_legacy_schemas_reject_coverage() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = BoundHost::new(false, "pass");
     h.host.edit(CONFIG, |config| {
         config["input_closure"]["coverage"] = coverage();
@@ -139,7 +145,9 @@ fn unresolved_draft_is_readable_but_not_activated_and_legacy_schemas_reject_cove
 
 #[test]
 fn coverage_never_admits_unknown_consumers_or_invents_absence() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in ["unknown-consumer", "file-consumer", "false-absence"] {
         let mut h = BoundHost::new(false, "pass");
         h.host.edit(CONFIG, |config| {
@@ -177,7 +185,9 @@ fn coverage_never_admits_unknown_consumers_or_invents_absence() {
 
 #[test]
 fn absent_domain_uses_retained_file_absence_and_detects_new_bytes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = BoundHost::new(false, "pass");
     let absent = fs::canonicalize(h.host.root())
         .unwrap()

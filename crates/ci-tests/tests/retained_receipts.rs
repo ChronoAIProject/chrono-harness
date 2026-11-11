@@ -219,7 +219,9 @@ impl Owner {
 
 #[test]
 fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     assert!(std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none());
     let owner = Owner::new();
     owner.participating();
@@ -317,7 +319,9 @@ fn linked_default_wrapper_reclaims_released_copies_on_explicit_maintenance() {
 
 #[test]
 fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_routes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let config = ".chrono-harness/worktree.json";
     for kind in [
         "undeclared",
@@ -435,7 +439,9 @@ fn producer_store_resolution_rejects_undeclared_ambiguous_drifted_and_symlink_ro
 
 #[test]
 fn producer_wrapper_refuses_unknown_destination_before_publication() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let owner = Owner::new();
     let (execution, output, argv) = cargo_result(true);
     let unknown = fs::canonicalize(owner._dir.path())
@@ -545,7 +551,9 @@ fn cargo_result(fail: bool) -> (tempfile::TempDir, std::process::Output, Vec<Str
 
 #[test]
 fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fail in [false, true] {
         let owner = Owner::new();
         let (execution, output, argv) = cargo_result(fail);
@@ -626,7 +634,9 @@ fn real_receipt_producer_expected_failure_diagnostic_release_and_legacy_unknown(
 
 #[test]
 fn receipt_interrupted_publication_and_unreleased_failure_remain_protected_on_reentry() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
     fs::create_dir_all(&directory).unwrap();
@@ -681,7 +691,9 @@ fn receipt_interrupted_publication_and_unreleased_failure_remain_protected_on_re
 
 #[test]
 fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::PermissionsExt;
     let owner = Owner::new();
     let (execution, output, argv) = cargo_result(true);
@@ -740,7 +752,9 @@ fn receipt_partial_disposal_retry_preserves_real_failure_and_remaining_objects()
 
 #[test]
 fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let owner = Owner::new();
     let directory = owner.root.join(".chrono-harness/state/registry-decoding");
     let allocation =
@@ -854,7 +868,9 @@ fn typed_registration_preserves_strict_maps_and_nested_fields_for_its_allocation
 
 #[test]
 fn established_namespace_does_not_reenter_birth_during_unrelated_store_exclusion() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
     let first = cargo_result(true);
@@ -905,7 +921,9 @@ fn established_namespace_does_not_reenter_birth_during_unrelated_store_exclusion
 
 #[test]
 fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for replaced in [false, true] {
         let owner = Owner::new();
         let directory = owner.root.join(FAMILY);
@@ -957,7 +975,9 @@ fn established_namespace_never_recreates_or_rebinds_its_records_directory() {
 
 #[test]
 fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_commands() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::{os::unix::fs::MetadataExt, sync::mpsc};
     let owner = Owner::new();
     let directory = owner.root.join(FAMILY);
@@ -1136,7 +1156,9 @@ fn producer_namespace_birth_excludes_competing_initialization_and_retains_both_c
 
 #[test]
 fn producer_registry_birth_preserves_unknown_preexisting_lease_and_registry() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::MetadataExt;
     for registry_kind in ["absent", "malformed", "foreign"] {
         let owner = Owner::new();
@@ -1220,7 +1242,9 @@ fn producer_registry_birth_preserves_unknown_preexisting_lease_and_registry() {
 
 #[test]
 fn producer_does_not_dispose_copied_outputs_without_exact_source_declarations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let owner = Owner::new();
     let (execution, output, argv) = cargo_result(false);
     fs::write(

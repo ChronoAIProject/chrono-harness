@@ -80,7 +80,9 @@ fn check(h: &Host, base: &str, candidate: &str) -> Response {
 
 #[test]
 fn registered_profile_removes_a_stale_duplicate_tool_table() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     h.change_registry(CONFIG, |v| {
         v["policy"]["tools"]["fixture"] = json!("unused-stale-program");
@@ -97,7 +99,9 @@ fn registered_profile_removes_a_stale_duplicate_tool_table() {
 
 #[test]
 fn registered_tool_change_reexecutes_its_binding_without_a_profile_copy_change() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let base = h.head();
     let tool = Path::new(OPERATION_TOOL);
@@ -121,7 +125,9 @@ fn registered_tool_change_reexecutes_its_binding_without_a_profile_copy_change()
 
 #[test]
 fn registered_action_cannot_fall_back_to_a_duplicate_tool_table() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     h.change_registry(CONFIG, |v| {
         v["policy"]["tools"] = json!({"fixture": OPERATION_TOOL});
@@ -165,7 +171,9 @@ fn remove_pair(h: &Host, remove_producer: bool) {
 
 #[test]
 fn joint_pair_removal_keeps_old_costs_without_executing_old_commands() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let base = h.head();
     remove_pair(&h, true);
@@ -187,7 +195,9 @@ fn joint_pair_removal_keeps_old_costs_without_executing_old_commands() {
 
 #[test]
 fn null_retirement_with_surviving_producer_fails_before_business_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let base = h.head();
     remove_pair(&h, false);
@@ -231,7 +241,9 @@ fn replace(h: &Host) {
 
 #[test]
 fn replacement_executes_current_method_and_retains_removed_identity() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let base = h.head();
     replace(&h);
@@ -251,7 +263,9 @@ fn replacement_executes_current_method_and_retains_removed_identity() {
 
 #[test]
 fn a_declared_replacement_that_fails_cannot_approve_retirement() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let base = h.head();
     replace(&h);

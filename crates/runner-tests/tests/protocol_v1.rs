@@ -963,7 +963,8 @@ fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
 
 #[test]
 fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
-    if !git_fixture::isolated("prelaunch_diagnostics_reach_real_full_reports_with_healthy_control") {
+    if !git_fixture::isolated("prelaunch_diagnostics_reach_real_full_reports_with_healthy_control")
+    {
         return;
     }
     use std::process::Command;

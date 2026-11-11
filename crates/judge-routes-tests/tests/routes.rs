@@ -534,7 +534,11 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
     fs::create_dir(&a).unwrap();
     fs::create_dir(&b).unwrap();
     let source = declarations();
-    let shadow=dir.path().join("private shadow executable");let mut bytes=fs::read(TOOL).unwrap();bytes.extend_from_slice(b"\nprivate Rust command mock\n");fs::write(&shadow,bytes).unwrap();fs::set_permissions(&shadow,fs::metadata(TOOL).unwrap().permissions()).unwrap();
+    let shadow = dir.path().join("private shadow executable");
+    let mut bytes = fs::read(TOOL).unwrap();
+    bytes.extend_from_slice(b"\nprivate Rust command mock\n");
+    fs::write(&shadow, bytes).unwrap();
+    fs::set_permissions(&shadow, fs::metadata(TOOL).unwrap().permissions()).unwrap();
     symlink(TOOL, a.join("routes-helper")).unwrap();
     symlink(&shadow, b.join("routes-helper")).unwrap();
     let mut tools = source;

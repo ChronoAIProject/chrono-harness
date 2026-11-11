@@ -170,7 +170,11 @@ fn rust_host() -> (Host, host::FixtureDirectory) {
             format!("#[test] fn real_implementation() {{ assert_eq!({prod}::double(21),42); }}\n"),
         )
         .unwrap();
-        fs::write(root.join(format!("{prod}/Cargo.lock")), format!("version = 4\n[[package]]\nname = \"{prod}\"\nversion = \"0.1.0\"\n")).unwrap();
+        fs::write(
+            root.join(format!("{prod}/Cargo.lock")),
+            format!("version = 4\n[[package]]\nname = \"{prod}\"\nversion = \"0.1.0\"\n"),
+        )
+        .unwrap();
         fs::write(root.join(format!("{test}/Cargo.lock")), format!("version = 4\n[[package]]\nname = \"{prod}\"\nversion = \"0.1.0\"\n[[package]]\nname = \"{test}\"\nversion = \"0.1.0\"\ndependencies = [\"{prod}\"]\n")).unwrap();
     }
     fm["execution_plans"] = json!({"test:t":{"operations":["shared.prepare","build.p","execute.t"],"timeout_seconds":30,"output_limit_bytes":32768},"test:t2":{"operations":["shared.prepare","build.p2","execute.t2"],"timeout_seconds":30,"output_limit_bytes":32768}});
@@ -353,7 +357,9 @@ fn collected(root: &Path, h: &Host) -> (i32, Value) {
 
 #[test]
 fn invalid_unit_input_preserves_original_failure_and_retained_report_without_business_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = git_facts::bound_host();
     h.values.get_mut(CONFIG).unwrap()["execution_units"] = json!({
         "units":{"one":{"tests":["test:t"],"report_path":".chrono-harness/state/unit-one.json"}},
@@ -415,7 +421,9 @@ fn invalid_unit_input_preserves_original_failure_and_retained_report_without_bus
 
 #[test]
 fn independent_rust_pairs_retry_offline_collection_and_delivery() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = rust_host();
     let (e, r) = git_facts::run_bound(&h, "integration", None);
     passed(e, &r);
@@ -714,7 +722,9 @@ fn change_environment(report: &mut Value) {
 
 #[test]
 fn collection_rejects_consistently_resealed_environment() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = rust_host();
     let (e, r) = git_facts::run_bound(&h, "integration", None);
     passed(e, &r);
@@ -749,7 +759,9 @@ fn collection_rejects_consistently_resealed_environment() {
 
 #[test]
 fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = rust_host();
     h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operation_bounds"] =
         json!({"build.p":{"timeout_seconds":29,"output_limit_bytes":32768}});
@@ -1077,7 +1089,9 @@ fn collection_rejects_resealed_semantics_artifacts_and_manifest_failures() {
 
 #[test]
 fn global_cycles_assignments_and_reserved_paths_precede_business_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = rust_host();
     let cfg = h.values[CONFIG].clone();
     let fm = h.values[FM].clone();
@@ -1130,7 +1144,9 @@ fn global_cycles_assignments_and_reserved_paths_precede_business_effects() {
 }
 #[test]
 fn delivery_contributions_and_empty_collection_are_not_completed_unit_proofs() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = rust_host();
     let (e, r) = git_facts::run_bound(&h, "integration", None);
     passed(e, &r);
@@ -1205,7 +1221,9 @@ fn delivery_contributions_and_empty_collection_are_not_completed_unit_proofs() {
 }
 #[test]
 fn cross_unit_replacement_and_joint_retirement_complete_at_collection() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, _tools) = rust_host();
     // Move the replacement to the other explicitly assigned unit while retaining the unaffected pair.
     let projects = h.values.get_mut(PROJECTS).unwrap();
@@ -1319,7 +1337,9 @@ fn cross_unit_replacement_and_joint_retirement_complete_at_collection() {
 
 #[test]
 fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let original = super::migration_host();
     let baseline = original.base.clone();
     let mut h = git_facts::bind_host(original);
@@ -1438,7 +1458,9 @@ fn migration_units_defer_decision_and_collection_reuses_original_conversion() {
 
 #[test]
 fn collection_manifest_must_not_be_its_output_destination() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = rust_host();
     for path in [
         ".chrono-harness/state/collected.json",
@@ -1464,7 +1486,9 @@ fn collection_manifest_must_not_be_its_output_destination() {
 
 #[test]
 fn unit_output_symlink_collision_must_reject_before_business_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = rust_host();
     let (e, r) = git_facts::run_bound(&h, "integration", None);
     passed(e, &r);
@@ -1481,7 +1505,9 @@ fn unit_output_symlink_collision_must_reject_before_business_effects() {
 
 #[test]
 fn nested_full_unit_and_collection_destinations_are_prepared_before_publish() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, _tools) = rust_host();
     h.values.get_mut(CONFIG).unwrap()["execution_units"]["units"]["one"]["report_path"] =
         ".chrono-harness/state/nested/one/report.json".into();
@@ -1527,7 +1553,9 @@ fn nested_full_unit_and_collection_destinations_are_prepared_before_publish() {
 
 #[test]
 fn collection_rejects_raw_entry_mismatch_without_business_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = rust_host();
     h.values.get_mut(WORKFLOW).unwrap()["integration"]["tests"] = json!(["t"]);
     h.save();
@@ -1552,7 +1580,9 @@ mod full_short;
 
 #[test]
 fn candidate_unit_projection_preserves_historical_plan_inputs() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::units::Scope;
     use chrono_judge_registration::{Registrations, inputs::project_effective};
     let (h, _tools) = rust_host();
@@ -1676,7 +1706,9 @@ fn candidate_unit_projection_preserves_historical_plan_inputs() {
 
 #[test]
 fn collection_binds_canonical_runner_resolution_to_original_declaration() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = rust_host();
     git_facts::prepare_bound(&h, "integration", None);
     for unit in ["one", "two"] {
@@ -1736,7 +1768,9 @@ fn collection_binds_canonical_runner_resolution_to_original_declaration() {
 
 #[test]
 fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = rust_host();
     let root = h.root();
     for (id, consumer) in [
@@ -1939,7 +1973,9 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
 
 #[test]
 fn collection_missing_named_outputs_reaches_checked_semantic_validator() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = rust_host();
     git_facts::prepare_bound(&h, "integration", None);
     for unit in ["one", "two"] {
@@ -1990,7 +2026,9 @@ fn collection_missing_named_outputs_reaches_checked_semantic_validator() {
 
 #[test]
 fn streamed_large_originals_survive_relocated_collection_finalization_and_delivery() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::io::Write;
     let (mut h, tools) = rust_host();
     let root = h.root();
@@ -2338,7 +2376,9 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
 
 #[test]
 fn docs_and_empty_collection_require_governance_but_no_business_sdk_snapshots() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = rust_host();
     for (id, consumer) in [
         ("one-sdk", "project:t"),

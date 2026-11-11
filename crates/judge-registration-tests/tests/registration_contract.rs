@@ -15,7 +15,9 @@ mod support;
 
 #[test]
 fn execution_report_registration_preserves_path_boundaries() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::Registrations;
     let mut values = support::values();
     let config = values.get_mut(support::CONFIG).unwrap();
@@ -72,7 +74,9 @@ fn execution_report_registration_preserves_path_boundaries() {
 
 #[test]
 fn retained_state_paths_require_nonempty_suffix_and_keep_lexical_spelling() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::inputs::retained_shape;
     for (path, accepted) in [
         (".chrono-harness/state/blob", true),
@@ -96,7 +100,9 @@ fn retained_state_paths_require_nonempty_suffix_and_keep_lexical_spelling() {
 
 #[test]
 fn schema_evolution_registers_conversion_tools_only_for_actual_data_conversion() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::Registrations;
     let mut values = support::values();
     let transition = json!({"from_version":1,"to_version":2,"mappings":[],
@@ -115,7 +121,9 @@ fn schema_evolution_registers_conversion_tools_only_for_actual_data_conversion()
 
 #[test]
 fn operation_bounds_are_explicit_complete_and_local_to_listed_operations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::execution::plans;
     let legacy = json!({"execution_plans":{"test:t":{"operations":["build","run"],
         "timeout_seconds":900,"output_limit_bytes":1048576}}});
@@ -165,7 +173,9 @@ fn operation_bounds_are_explicit_complete_and_local_to_listed_operations() {
 
 #[test]
 fn retained_input_duplicates_check_each_descriptor_and_refresh_on_each_validation() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::{Registrations, inputs};
     let h = Host::new();
     let root = fs::canonicalize(h.root()).unwrap();
@@ -568,7 +578,9 @@ fn amend_initial(h: &mut Host) {
 
 #[test]
 fn initial_inventory_checks_semantic_field_references_without_old_history() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = initial_host();
     let path = ".chrono-harness/config.json";
     let mut cfg: Value = serde_json::from_slice(&fs::read(h.root().join(path)).unwrap()).unwrap();
@@ -583,7 +595,9 @@ fn initial_inventory_checks_semantic_field_references_without_old_history() {
 
 #[test]
 fn initial_inventory_reads_original_parents_through_git_replace_overlays() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = initial_host();
     let root = h.candidate.clone();
     git(
@@ -620,7 +634,9 @@ fn initial_inventory_reads_original_parents_through_git_replace_overlays() {
 
 #[test]
 fn initial_inventory_uses_only_declared_dag_and_blocks_failed_dependents() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = initial_host();
     let script = ".chrono-harness/inventory-plugin";
     let digest = install_regression_child(&h, script);
@@ -708,7 +724,9 @@ fn initial_inventory_uses_only_declared_dag_and_blocks_failed_dependents() {
 
 #[test]
 fn initial_inventory_rejects_unregistered_dangling_and_malformed_declarations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in [
         "unregistered",
         "dangling",
@@ -761,7 +779,9 @@ fn initial_inventory_rejects_unregistered_dangling_and_malformed_declarations() 
 
 #[test]
 fn initial_inventory_rejects_dirty_hidden_and_wrong_checkouts() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in ["tracked", "ignored", "assume-unchanged", "head"] {
         let h = initial_host();
         match case {
@@ -787,7 +807,9 @@ fn initial_inventory_rejects_dirty_hidden_and_wrong_checkouts() {
 
 #[test]
 fn initial_inventory_rejects_real_parents_even_in_shallow_history_and_cannot_activate_delta() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = initial_host();
     h.base = h.candidate.clone();
     fs::write(h.root().join("document.txt"), "later change").unwrap();
@@ -843,7 +865,9 @@ fn initial_inventory_rejects_real_parents_even_in_shallow_history_and_cannot_act
 
 #[test]
 fn explicit_initial_inventory_runs_candidate_judge_without_a_delta_or_activation_claim() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = initial_host();
     let (exit, r) = initial_run(&h);
     assert_eq!(exit, 0, "{r}");
@@ -872,7 +896,9 @@ fn explicit_initial_inventory_runs_candidate_judge_without_a_delta_or_activation
 
 #[test]
 fn selected_initial_inventory_keeps_entry_identity_and_runs_the_effective_policy() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = initial_host();
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
     let selector = ".chrono-harness/platforms.json";
@@ -996,7 +1022,9 @@ fn assert_unresolved(report: &Value, field: &str) {
 }
 #[test]
 fn full_report_required_fields_and_unknowns_for_bounded_host() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let (exit, report) = h.run();
     assert_eq!(exit, 0, "{report:#}");
@@ -1013,7 +1041,9 @@ fn full_report_required_fields_and_unknowns_for_bounded_host() {
 }
 #[test]
 fn full_report_executable_list_distinguishes_observed_and_configured() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let (exit, report) = h.run();
     assert_eq!(exit, 0, "{report:#}");
@@ -1051,7 +1081,9 @@ fn full_report_executable_list_distinguishes_observed_and_configured() {
 }
 #[test]
 fn full_report_preserves_failure_findings_and_incomplete_status() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     fs::write(h.root().join("new.txt"), "unregistered").unwrap();
     h.candidate = commit(h.root());
@@ -1201,7 +1233,9 @@ fn install_report_fixture(h: &mut Host, mode: &str, plan: &[(&str, Vec<&str>)]) 
 }
 #[test]
 fn full_report_forwards_real_named_outputs_and_warn_without_inventing_observations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     install_report_fixture(&mut h, "named", &[("observations", vec![])]);
     let (exit, report) = h.run();
@@ -1310,7 +1344,9 @@ fn full_report_forwards_real_named_outputs_and_warn_without_inventing_observatio
 }
 #[test]
 fn full_report_missing_responses_and_conflicting_outputs_remain_unresolved() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     install_report_fixture(
         &mut h,
@@ -1472,22 +1508,30 @@ fn assert_removed_input_wakes_consumer(key: &str, field: &str, path: &str) {
 }
 #[test]
 fn removed_script_filemap_membership_wakes_unchanged_script() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     assert_removed_input_wakes_consumer("scripts", "path", "work.py");
 }
 #[test]
 fn removed_manifest_filemap_membership_wakes_unchanged_project() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     assert_removed_input_wakes_consumer("projects", "manifest", "work/Cargo.toml");
 }
 #[test]
 fn removed_lockfile_filemap_membership_wakes_unchanged_project() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     assert_removed_input_wakes_consumer("projects", "lockfile", "work/Cargo.lock");
 }
 #[test]
 fn retiring_paired_consumers_and_filemap_memberships_together_is_valid() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for key in ["projects", "scripts"] {
         let mut h = paired_host(key);
         h.edit(".chrono-harness/projects.json", |v| {
@@ -1507,7 +1551,9 @@ fn retiring_paired_consumers_and_filemap_memberships_together_is_valid() {
 }
 #[test]
 fn unrelated_historical_project_and_script_membership_omissions_are_not_rejudged() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (key, path) in [
         ("scripts", "work.py"),
         ("projects", "work/Cargo.toml"),
@@ -1527,7 +1573,9 @@ fn unrelated_historical_project_and_script_membership_omissions_are_not_rejudged
 }
 #[test]
 fn external_registration_passes_bounded_host_without_judging_historical_omission() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let (exit, r) = h.run();
     assert_eq!(exit, 0, "{r:#}");
@@ -1540,7 +1588,9 @@ fn external_registration_passes_bounded_host_without_judging_historical_omission
 }
 #[test]
 fn changed_unregistered_fails_and_explicit_registration_repairs() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     fs::write(h.root().join("new.txt"), "changed").unwrap();
     h.candidate = commit(h.root());
@@ -1554,7 +1604,9 @@ fn changed_unregistered_fails_and_explicit_registration_repairs() {
 }
 #[test]
 fn ignored_untracked_staged_and_wrong_checkout_fail() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for kind in ["ignored", "untracked", "staged", "unstaged", "head"] {
         let h = Host::new();
         match kind {
@@ -1577,7 +1629,9 @@ fn ignored_untracked_staged_and_wrong_checkout_fail() {
 }
 #[test]
 fn context_and_config_identity_mismatch() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let mut c = h.context();
     c["candidate"] = h.base.clone().into();
@@ -1594,7 +1648,9 @@ fn context_and_config_identity_mismatch() {
 }
 #[test]
 fn strict_five_schemas_duplicate_keys_ids_and_unknown_fields() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for name in ["config", "judges", "projects", "FILEMAP", "workflow"] {
         let mut h = Host::new();
         h.edit(&format!(".chrono-harness/{name}.json"), |v| {
@@ -1626,7 +1682,9 @@ fn strict_five_schemas_duplicate_keys_ids_and_unknown_fields() {
 
 #[test]
 fn input_closure_bindings_are_v3_only() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for schema_version in [1, 2] {
         let mut h = Host::new();
         h.edit(".chrono-harness/config.json", |v| {
@@ -1646,7 +1704,9 @@ fn input_closure_bindings_are_v3_only() {
 
 #[test]
 fn changed_references_fail_and_unrelated_historical_ones_are_not_rejudged() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     h.edit(".chrono-harness/FILEMAP.json", |v| {
         v["files"]
@@ -1662,7 +1722,9 @@ fn changed_references_fail_and_unrelated_historical_ones_are_not_rejudged() {
 }
 #[test]
 fn proposed_and_incomplete_never_receive_governance_success() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     h.edit(".chrono-harness/config.json", |v| {
         v["status"] = "proposed".into();
@@ -1675,7 +1737,9 @@ fn proposed_and_incomplete_never_receive_governance_success() {
 }
 #[test]
 fn real_host_pseudo_script_and_tool_defects_are_concrete() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     let host: Value = serde_json::from_slice(
         &chrono_harness::facts::blob(
@@ -1710,7 +1774,9 @@ fn real_host_pseudo_script_and_tool_defects_are_concrete() {
 }
 #[test]
 fn actual_host_registries_cannot_pass_full_governance() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     let explicit_config: Value =
         serde_json::from_slice(&fs::read(h.root().join(".chrono-harness/config.json")).unwrap())
@@ -1757,7 +1823,9 @@ fn actual_host_registries_cannot_pass_full_governance() {
 }
 #[test]
 fn rename_is_delete_add_and_no_delta_still_checks_inputs() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     fs::rename(h.root().join("document.txt"), h.root().join("renamed.txt")).unwrap();
     h.edit(".chrono-harness/FILEMAP.json", |v| {
@@ -1788,7 +1856,9 @@ fn rename_is_delete_add_and_no_delta_still_checks_inputs() {
 }
 #[test]
 fn missing_oid_and_symbolic_endpoint_are_errors() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     assert!(facts::verify_oid(h.root(), "HEAD").is_err());
     assert!(facts::verify_oid(h.root(), &"a".repeat(40)).is_err());
@@ -1796,7 +1866,9 @@ fn missing_oid_and_symbolic_endpoint_are_errors() {
 
 #[test]
 fn hidden_index_flags_and_submodules_are_visible_errors() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for flag in ["--assume-unchanged", "--skip-worktree"] {
         let h = Host::new();
         git(h.root(), &["update-index", flag, "document.txt"]);
@@ -1837,7 +1909,9 @@ fn hidden_index_flags_and_submodules_are_visible_errors() {
 }
 #[test]
 fn removed_reference_targets_wake_unchanged_consumers() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     h.edit(".chrono-harness/FILEMAP.json", |v| {
         v["files"]
@@ -1861,7 +1935,9 @@ fn removed_reference_targets_wake_unchanged_consumers() {
 
 #[test]
 fn base_executable_binding_is_data_only() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     let original: Value =
         serde_json::from_slice(&fs::read(h.root().join(".chrono-harness/judges.json")).unwrap())
@@ -1879,7 +1955,9 @@ fn base_executable_binding_is_data_only() {
 
 #[test]
 fn unrelated_historical_dangling_record_is_not_rejudged() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     h.edit(".chrono-harness/FILEMAP.json", |v| {
         let mut f = file("historical-unregistered.txt");
@@ -1895,7 +1973,9 @@ fn unrelated_historical_dangling_record_is_not_rejudged() {
 
 #[test]
 fn explicit_same_project_group_bindings_and_legacy_scripts_have_one_owner() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::execution::test_bindings;
     let legacy = json!({"projects":[{"id":"t","kind":"test","actions":{"execute":{"operation":"old"},"alpha":{"operation":"a"},"beta":{"operation":"b"}}}],"scripts":[{"id":"s","tests_for":"producer","actions":{"execute":{"operation":"script"}}}]});
     let bindings = test_bindings(&legacy).unwrap();
@@ -1931,7 +2011,9 @@ fn explicit_same_project_group_bindings_and_legacy_scripts_have_one_owner() {
 
 #[test]
 fn scheduling_accepts_valid_production_claims_outside_test_plans() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::execution::scheduling;
     let fm = json!({"execution_plans":{"test:t":{"operations":["run"],"timeout_seconds":30,"output_limit_bytes":4096}},"execution_scheduling":{"max_running":2,"resources":[],"claims":{"run":{"resources":[],"outputs":[]},"build.bootstrap":{"resources":[],"outputs":["out/"]}}}});
     let projects = json!({"projects":[{"id":"t","actions":{"execute":{"operation":"run","tool":"sh","argv":[]},"build":{"operation":"build.bootstrap","tool":"sh","argv":[]}}}],"scripts":[]});
@@ -1975,7 +2057,9 @@ fn scheduling_accepts_valid_production_claims_outside_test_plans() {
 
 #[test]
 fn scheduling_requires_complete_unambiguous_explicit_claims() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::execution::scheduling;
     let fm = json!({"execution_plans":{"test:t":{"operations":["run"],"timeout_seconds":30,"output_limit_bytes":4096}},"execution_scheduling":{"max_running":2,"resources":["db"],"claims":{"run":{"resources":["db"],"outputs":["out/"]}}}});
     let pr = json!({"projects":[{"id":"t","actions":{"execute":{"operation":"run","tool":"sh","argv":[]}}}],"scripts":[]});
@@ -2036,7 +2120,9 @@ fn scheduling_requires_complete_unambiguous_explicit_claims() {
 
 #[test]
 fn configuration_edges_select_exact_policy_without_changing_shared_graph() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::select_filemap;
     let shared = json!({"from":"project:p","kind":"test-execution","to":"test:t"});
     let private = json!({"from":"input:private","kind":"runtime-input","to":"project:p"});

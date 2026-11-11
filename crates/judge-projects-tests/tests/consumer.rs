@@ -44,7 +44,9 @@ pub fn failure_summary(report: &Value) -> Value {
 
 #[test]
 fn failure_diagnostics_keep_transport_cause_without_nested_output_amplification() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let report = json!({
         "status":"error",
         "transport_failure":"process timed out",
@@ -68,7 +70,9 @@ fn check_pass(code: i32, v: &Value) {
 }
 #[test]
 fn committed_project_and_script_hosts_execute_actual_four_judge_chain() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for script in [false, true] {
         let h = Host::new(script);
         let (code, v) = h.run(|_| {});
@@ -88,7 +92,9 @@ fn committed_project_and_script_hosts_execute_actual_four_judge_chain() {
 }
 #[test]
 fn full_chain_executes_registered_prerequisite_override_and_original_test_bound() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["timeout_seconds"] = json!(900);
     h.values.get_mut(FM).unwrap()["execution_plans"]["test:t"]["operation_bounds"] =
@@ -113,7 +119,9 @@ fn full_chain_executes_registered_prerequisite_override_and_original_test_bound(
 }
 #[test]
 fn retained_missing_changed_and_wrong_endpoint_cannot_pass() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new(true);
     for mode in 0..3 {
         let (code, v) = h.run(|i| match mode {
@@ -132,7 +140,9 @@ fn retained_missing_changed_and_wrong_endpoint_cannot_pass() {
 }
 #[test]
 fn docs_and_unrelated_historical_pair_defect_launch_zero_operations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     h.values.get_mut(PROJECTS).unwrap()["projects"][0]["test_project"] =
         json!("missing-historical");
@@ -147,7 +157,9 @@ fn docs_and_unrelated_historical_pair_defect_launch_zero_operations() {
 }
 #[test]
 fn pair_edge_ownership_and_route_counterexamples_launch_nothing() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for mode in 0..5 {
         let mut h = Host::new(false);
         match mode {
@@ -193,7 +205,9 @@ fn pair_edge_ownership_and_route_counterexamples_launch_nothing() {
 }
 #[test]
 fn failed_test_and_candidate_mutation_are_visible() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for mutation in [false, true] {
         let mut h = Host::new(true);
         let steps = if mutation {
@@ -224,7 +238,9 @@ fn failed_test_and_candidate_mutation_are_visible() {
 
 #[test]
 fn resource_failure_is_infrastructure_error_with_observed_output() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(true);
     let mut output = vec![b'x'; 8000];
     output.push(b'\n');
@@ -256,25 +272,33 @@ fn resource_failure_is_infrastructure_error_with_observed_output() {
 
 #[test]
 fn scoped_v2_adapter_uses_observed_canonical_invocation_and_shared_execution() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     scoped_adapter(false, None);
 }
 
 #[test]
 fn scoped_v2_git_binding_reuses_reader_through_full_registration_and_execution() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     scoped_adapter(true, None);
 }
 
 #[test]
 fn scoped_optional_direct_v3_registration_consumes_effective_policy() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     scoped_adapter(true, Some(false));
 }
 
 #[test]
 fn scoped_optional_selected_registration_consumes_effective_policy() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     scoped_adapter(true, Some(true));
 }
 
@@ -522,7 +546,9 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
 
 #[test]
 fn mapped_removed_obligation_executes_current_replacement_without_old_methods() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for mapping in [true, false] {
         let mut h = Host::new(true);
         h.values.get_mut(PROJECTS).unwrap()["scripts"][0]["test_script"] = json!("replacement");
@@ -599,7 +625,9 @@ fn mapped_removed_obligation_executes_current_replacement_without_old_methods() 
 
 #[test]
 fn finite_old_ambiguity_mapping_reaches_real_execution_without_dropping_either_method() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     h.values.get_mut(PROJECTS).unwrap()["scripts"] = json!([
       {"id":"s","path":"s.case","test_script":"t","actions":{"execute":{"operation":"script.s","tool":"fixture","argv":["run",json!([{"CheckProduct":{"path":"s.case","input":21,"expected":42}}]).to_string()]}}},
@@ -694,7 +722,9 @@ fn finite_old_ambiguity_mapping_reaches_real_execution_without_dropping_either_m
 
 #[test]
 fn operation_mutating_external_input_is_rejected_after_receipt() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(true);
     host::write_steps(
         &h.root(),
@@ -757,7 +787,9 @@ fn environment_host(connected: bool, overriding: bool) -> Host {
 }
 #[test]
 fn retained_present_to_absent_selects_and_executes_failing_consumer() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = environment_host(true, false);
     let (code, v) = h.run(|i| i["base"]["environment"]["DECLARED_ABSENT"] = json!("old"));
     assert_eq!(
@@ -784,7 +816,9 @@ fn retained_present_to_absent_selects_and_executes_failing_consumer() {
 }
 #[test]
 fn retained_absent_to_empty_selects_and_executes_failing_consumer() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = environment_host(true, false);
     let (code, v) = h.run(|i| i["base"]["environment"]["DECLARED_EMPTY"] = Value::Null);
     assert_eq!(
@@ -804,7 +838,9 @@ fn retained_absent_to_empty_selects_and_executes_failing_consumer() {
 }
 #[test]
 fn unchanged_disconnected_and_overridden_environment_do_not_execute() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (connected, overriding, changed) in [
         (true, false, false),
         (false, false, true),
@@ -823,7 +859,9 @@ fn unchanged_disconnected_and_overridden_environment_do_not_execute() {
 }
 #[test]
 fn unrepresented_retained_environment_is_not_no_work_success() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = environment_host(false, false);
     let (code, v) = h.run(|i| i["base"]["environment"]["UNDECLARED"] = json!("old"));
     assert_ne!(code, 0, "unrepresented input cannot silently disappear");
@@ -833,7 +871,9 @@ fn unrepresented_retained_environment_is_not_no_work_success() {
 
 #[test]
 fn full_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (mode, note_bytes, expected_exit) in [
         ("encoding-valid", &[0xef, 0xbf, 0xbd][..], 0),
         ("encoding-invalid", &[0xff][..], 2),
@@ -918,7 +958,9 @@ fn full_cli_embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes
 
 #[test]
 fn manifest_free_projects_custom_operations_and_arbitrary_paths_execute_full_chain() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     let root = h.root();
     for row in h.values.get_mut(PROJECTS).unwrap()["projects"]
@@ -972,7 +1014,9 @@ fn manifest_free_projects_custom_operations_and_arbitrary_paths_execute_full_cha
 
 #[test]
 fn opaque_legacy_paths_do_not_enable_language_or_directory_inference() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     // A manifest-looking name does not opt the host into Cargo semantics.
     fs::write(h.root().join("p/Cargo.toml"), "host-owned opaque input\n").unwrap();
@@ -993,7 +1037,9 @@ fn opaque_legacy_paths_do_not_enable_language_or_directory_inference() {
 
 #[test]
 fn overlapping_declared_outputs_fail_and_isolated_arbitrary_paths_pass() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for overlap in [false, true] {
         let mut h = Host::new(false);
         for row in h.values.get_mut(PROJECTS).unwrap()["projects"]
@@ -1037,7 +1083,9 @@ fn overlapping_declared_outputs_fail_and_isolated_arbitrary_paths_pass() {
 
 #[test]
 fn empty_action_name_and_duplicate_custom_operation_are_rejected() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for duplicate in [false, true] {
         let mut h = Host::new(false);
         let value = h.values[PROJECTS]["projects"][0]["actions"]["build"].clone();
@@ -1071,7 +1119,9 @@ fn empty_action_name_and_duplicate_custom_operation_are_rejected() {
 
 #[test]
 fn output_registration_delta_alone_wakes_its_owner_and_checks_isolation() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     h.base = h.candidate.clone();
     h.values.get_mut(CONFIG).unwrap()["artifacts"]
@@ -1105,7 +1155,9 @@ fn output_registration_delta_alone_wakes_its_owner_and_checks_isolation() {
 
 #[test]
 fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     let cargo = chrono_harness::resolve_program(&h.root(), "cargo", None).unwrap();
     let version = h.capture_native(Command::new(&cargo).arg("--version"));
@@ -1307,7 +1359,9 @@ fn one_actual_cargo_test_project_runs_two_registered_groups_full_and_scoped() {
 
 #[test]
 fn group_terminal_operation_and_producer_edge_are_required_before_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for omit_edge in [false, true] {
         let mut h = Host::new(false);
         let terminal = h.values[PROJECTS]["projects"][1]["actions"]["execute"].clone();
@@ -1341,7 +1395,9 @@ fn group_terminal_operation_and_producer_edge_are_required_before_effects() {
 
 #[test]
 fn full_route_retains_registered_policy_and_rejects_incomplete_claims_before_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (script, priority) in [(false, false), (true, false), (false, true), (true, true)] {
         let mut h = Host::new(script);
         let mut policy = json!({"max_running":2,"resources":["order"],"claims":{"prepare.p":{"resources":["order"],"outputs":[]},"execute.t":{"resources":["order"],"outputs":[]}}});
@@ -1382,7 +1438,9 @@ fn full_route_retains_registered_policy_and_rejects_incomplete_claims_before_eff
 
 #[test]
 fn offline_source_and_declared_external_input_survive_the_old_checkout_path() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new(true);
     let old_root = h.root();
     let source_bytes = fs::read(old_root.join("p/product.case")).unwrap();

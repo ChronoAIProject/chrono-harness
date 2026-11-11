@@ -258,8 +258,18 @@ fn main() -> ExitCode {
             return ExitCode::from(7);
         }
     }
-    if variable == "git-model" { git_model::main(); return ExitCode::SUCCESS; }
-    if variable == "cargo-model" { return cargo_model::dispatch(&args.iter().map(|a|a.to_str().unwrap().to_owned()).collect::<Vec<_>>()); }
+    if variable == "git-model" {
+        git_model::main();
+        return ExitCode::SUCCESS;
+    }
+    if variable == "cargo-model" {
+        return cargo_model::dispatch(
+            &args
+                .iter()
+                .map(|a| a.to_str().unwrap().to_owned())
+                .collect::<Vec<_>>(),
+        );
+    }
     let real = env::var_os(variable).expect("explicit Rust test executable binding");
     panic!(
         "test tool exec failed: {}",

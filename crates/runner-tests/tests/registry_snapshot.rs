@@ -1,7 +1,7 @@
-#[path = "support/native_executable.rs"]
-mod native_executable;
 #[path = "support/git_fixture.rs"]
 mod git_fixture;
+#[path = "support/native_executable.rs"]
+mod native_executable;
 use chrono_harness::facts;
 use serde_json::json;
 use std::{collections::BTreeMap, fs, path::Path, process::Command};
@@ -72,7 +72,9 @@ fn fixture() -> (tempfile::TempDir, BTreeMap<String, Vec<u8>>, String) {
 
 #[test]
 fn registry_snapshot_preserves_original_bytes_and_fixed_endpoint_values() {
-    if !git_fixture::isolated("registry_snapshot_preserves_original_bytes_and_fixed_endpoint_values") {
+    if !git_fixture::isolated(
+        "registry_snapshot_preserves_original_bytes_and_fixed_endpoint_values",
+    ) {
         return;
     }
     let (dir, originals, before) = fixture();
@@ -106,7 +108,9 @@ fn registry_snapshot_preserves_original_bytes_and_fixed_endpoint_values() {
 
 #[test]
 fn registry_snapshot_rejects_missing_objects_and_invalid_registered_json() {
-    if !git_fixture::isolated("registry_snapshot_rejects_missing_objects_and_invalid_registered_json") {
+    if !git_fixture::isolated(
+        "registry_snapshot_rejects_missing_objects_and_invalid_registered_json",
+    ) {
         return;
     }
     let (dir, _, valid) = fixture();

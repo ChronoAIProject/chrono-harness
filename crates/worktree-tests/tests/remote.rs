@@ -31,7 +31,9 @@ impl Host {
 
 #[test]
 fn remote_cleanup_preserves_local_work_and_uses_one_explicit_push_destination() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("strange/payload.ts");
     let mut workflow = json(&fs::read(h.root.join(WORKFLOW)).unwrap()).unwrap();
     workflow["target_branch"] = value!("trunk");
@@ -87,7 +89,9 @@ fn remote_cleanup_preserves_local_work_and_uses_one_explicit_push_destination() 
 
 #[test]
 fn remote_cleanup_checks_squash_retention_and_explicit_absence_retry() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let mut plan = h.remote_plan("feature/finished");
     let parent = plan["head"].as_str().unwrap();
@@ -132,7 +136,9 @@ fn remote_cleanup_checks_squash_retention_and_explicit_absence_retry() {
 
 #[test]
 fn remote_cleanup_rejects_endpoint_branch_and_retention_mismatches_before_push() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "multiple-urls",
         "wrong-url",
@@ -225,7 +231,9 @@ fn remote_cleanup_rejects_endpoint_branch_and_retention_mismatches_before_push()
 
 #[test]
 fn remote_cleanup_lease_preserves_a_concurrent_remote_update() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.remote_git("remote-lease");
     let plan = h.remote_plan("integration/owned");
@@ -269,7 +277,9 @@ fn remote_cleanup_lease_preserves_a_concurrent_remote_update() {
 
 #[test]
 fn remote_cleanup_retains_failure_after_deletion_and_allows_observed_retry() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.remote_git("post-delete");
     let mut plan = h.remote_plan("integration/owned");
@@ -297,7 +307,9 @@ fn remote_cleanup_retains_failure_after_deletion_and_allows_observed_retry() {
 
 #[test]
 fn remote_cleanup_does_not_claim_success_after_target_or_plan_changes() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["target", "plan"] {
         let h = Host::new("payload");
         h.remote_git(if fault == "target" {

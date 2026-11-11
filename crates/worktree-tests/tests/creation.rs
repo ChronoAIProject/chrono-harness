@@ -1,7 +1,7 @@
-#[path = "support/fixture_coordinator.rs"]
-mod fixture_coordinator;
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
+#[path = "support/fixture_coordinator.rs"]
+mod fixture_coordinator;
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
 mod isolated_capability;
 #[path = "../../runner-tests/tests/support/retention_state.rs"]
@@ -638,7 +638,9 @@ fn assert_bound_registry_process(report: &Value, row: &Value) {
 
 #[test]
 fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("arbitrary/input.data");
     let policy = fs::read(h.root.join(POLICY)).unwrap();
     select_config(&h.root, SOURCE_CONFIG);
@@ -769,7 +771,9 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
 
 #[test]
 fn registered_batch_failures_preserve_original_bytes_before_checkout_effects() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (exit, output, expected) in [
         (71, "original partial", "Git cat-file exited 71"),
         (0, "malformed frame", "batch blob header mismatch"),
@@ -798,7 +802,9 @@ fn registered_batch_failures_preserve_original_bytes_before_checkout_effects() {
 
 #[test]
 fn selected_endpoint_errors_preserve_fixed_evidence_without_creating_checkout() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "source-missing",
         "source-platform",
@@ -953,7 +959,9 @@ fn selected_endpoint_errors_preserve_fixed_evidence_without_creating_checkout() 
 
 #[test]
 fn fetches_advanced_registered_target_preserves_dirty_source_and_explicit_layouts() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for layout in ["deep/engine/rates.go", "unrelated/client/entry.mts"] {
         let h = Host::new(layout);
         let old = git(&h.root, &["rev-parse", "HEAD"]);
@@ -1004,7 +1012,9 @@ fn fetches_advanced_registered_target_preserves_dirty_source_and_explicit_layout
 }
 #[test]
 fn uses_registered_prefix_and_disables_inherited_tracking_without_changing_config() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let mut w = json(&fs::read(h.root.join(WORKFLOW)).unwrap()).unwrap();
     w["integration_prefix"] = value!("trial/");
@@ -1027,7 +1037,9 @@ fn uses_registered_prefix_and_disables_inherited_tracking_without_changing_confi
 }
 #[test]
 fn preserves_existing_destination_and_branch_instead_of_resetting_them() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let target = h.parent.join("keep");
     fs::create_dir(&target).unwrap();
@@ -1059,7 +1071,9 @@ fn preserves_existing_destination_and_branch_instead_of_resetting_them() {
 }
 #[test]
 fn rejects_nested_destinations_and_unregistered_or_changed_policy() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let (code, r, _) = h.invoke("feature", "task", &h.root.join("nested"));
     assert_ne!(code, 0);
@@ -1088,7 +1102,9 @@ fn rejects_nested_destinations_and_unregistered_or_changed_policy() {
 }
 #[test]
 fn remote_policy_change_requires_adoption_before_creating_a_branch() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let other = h.parent.join("writer");
     git(
@@ -1119,7 +1135,9 @@ fn remote_policy_change_requires_adoption_before_creating_a_branch() {
 }
 #[test]
 fn retains_actual_failed_fetch_and_version_observations() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.policy(|p| p["remote"] = value!("missing-remote"));
     let target = h.parent.join("target");
@@ -1154,7 +1172,9 @@ fn retains_actual_failed_fetch_and_version_observations() {
 }
 #[test]
 fn failed_checkout_hook_keeps_work_and_owned_lock_with_original_exit() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::retained("payload");
     h.hook(value!({"writes":[{"path":"recovery-file","contents":"recoverable\n"}],"stderr":"hook-failure\n","exit":37}));
     let target = h.parent.join("target");
@@ -1178,7 +1198,9 @@ fn failed_checkout_hook_keeps_work_and_owned_lock_with_original_exit() {
 }
 #[test]
 fn successful_hook_with_dirty_checkout_cannot_report_created() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.hook(value!({"writes":[{"path":"payload","contents":"changed\n"}]}));
     let target = h.parent.join("target");
@@ -1194,7 +1216,9 @@ fn successful_hook_with_dirty_checkout_cannot_report_created() {
 
 #[test]
 fn raw_checkout_creation_rejects_hidden_mode_from_successful_hook() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     git(&h.root, &["config", "core.filemode", "false"]);
     h.hook(value!({"executable":["payload"]}));
@@ -1207,7 +1231,9 @@ fn raw_checkout_creation_rejects_hidden_mode_from_successful_hook() {
 }
 #[test]
 fn strict_cli_and_configuration_fail_without_creating_a_worktree() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let target = h.parent.join("target");
     let (code, r, _) = h.invoke("unknown", "task", &target);
@@ -1224,7 +1250,9 @@ fn strict_cli_and_configuration_fail_without_creating_a_worktree() {
 
 #[test]
 fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let marker = h.parent.join("must-not-exist");
     automatic::native_git(&h, "mark-executed", value!({}));
@@ -1238,7 +1266,9 @@ fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
 
 #[test]
 fn adopted_policy_runs_the_actual_creation_consumer() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("host files/no-language-contract.data");
     let adopted_bytes = fs::read(source().join(POLICY)).unwrap();
     let adopted = json(&adopted_bytes).unwrap();
@@ -1301,7 +1331,9 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
 
 #[test]
 fn registered_artifacts_from_checkout_hooks_are_preserved() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.hook(value!({"writes":[{"path":".chrono-harness/state/hook-result","contents":"generated\n","create_parents":true}]}));
     let target = h.parent.join("target");
@@ -1364,7 +1396,9 @@ fn reconstruction(base: &str, candidate: &str, changes: Value) -> Value {
 
 #[test]
 fn selected_reconstruction_carries_explicit_work_onto_fetched_target() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     select_config(&h.root, SOURCE_CONFIG);
     let base = commit(&h.root);
@@ -1411,7 +1445,9 @@ fn selected_reconstruction_carries_explicit_work_onto_fetched_target() {
 
 #[test]
 fn reconstructs_explicit_choices_on_advanced_target_without_merging_old_branch() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("source.ts");
     fs::write(h.root.join("obsolete.data"), "original").unwrap();
     fs::write(h.root.join("remote-only"), "original").unwrap();
@@ -1465,7 +1501,9 @@ fn reconstructs_explicit_choices_on_advanced_target_without_merging_old_branch()
 
 #[test]
 fn reconstruction_preserves_binary_modes_symlinks_adds_deletes_and_literal_paths() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::{fs::PermissionsExt, fs::symlink};
     let h = Host::new("entry.go");
     for path in [
@@ -1530,7 +1568,9 @@ fn reconstruction_preserves_binary_modes_symlinks_adds_deletes_and_literal_paths
 
 #[test]
 fn reconstruction_conflict_preserves_both_worktrees_original_exit_and_owned_lock() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     fs::write(h.root.join("payload"), "local change\n").unwrap();
@@ -1563,7 +1603,9 @@ fn reconstruction_conflict_preserves_both_worktrees_original_exit_and_owned_lock
 
 #[test]
 fn invalid_reconstruction_choices_or_dirty_source_never_create_a_destination() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     fs::write(h.root.join("payload"), "committed").unwrap();
@@ -1602,7 +1644,9 @@ fn invalid_reconstruction_choices_or_dirty_source_never_create_a_destination() {
 
 #[test]
 fn retired_only_reconstruction_keeps_new_target_without_applying_a_patch() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     fs::write(h.root.join("payload"), "old work").unwrap();
@@ -1633,7 +1677,9 @@ fn retired_only_reconstruction_keeps_new_target_without_applying_a_patch() {
 
 #[test]
 fn source_mutation_during_reconstruction_fails_and_preserves_recovery_work() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     fs::write(h.root.join("payload"), "old work").unwrap();
@@ -1662,7 +1708,9 @@ fn source_mutation_during_reconstruction_fails_and_preserves_recovery_work() {
 
 #[test]
 fn reconstruction_patch_bound_fails_before_creating_work() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.policy(|p| p["output_limit_bytes"] = value!(16384));
     let base = git(&h.root, &["rev-parse", "HEAD"]);
@@ -1694,7 +1742,9 @@ fn reconstruction_patch_bound_fails_before_creating_work() {
 
 #[test]
 fn empty_reconstruction_and_existing_destination_keep_explicit_boundaries() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     let plan = reconstruction(&base, &base, value!([]));
@@ -1712,7 +1762,9 @@ fn empty_reconstruction_and_existing_destination_keep_explicit_boundaries() {
 
 #[test]
 fn large_registered_artifacts_do_not_exhaust_cleanliness_output_bound() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.policy(|p| p["output_limit_bytes"] = value!(16384));
     let base = git(&h.root, &["rev-parse", "HEAD"]);
@@ -1752,7 +1804,9 @@ fn large_registered_artifacts_do_not_exhaust_cleanliness_output_bound() {
 
 #[test]
 fn large_unregistered_directory_is_rejected_without_exhausting_cleanliness_output_bound() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.policy(|p| p["output_limit_bytes"] = value!(16384));
     let base = git(&h.root, &["rev-parse", "HEAD"]);
@@ -1810,7 +1864,9 @@ fn register_artifact(h: &Host, artifact: &str, ignore: &str) {
 
 #[test]
 fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_files_visible() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     register_artifact(&h, "cache[1]/allowed/", "cache*/");
     register_artifact(&h, "CacheCase/allowed/", "cache*/\nCacheCase/");
@@ -1852,7 +1908,9 @@ fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_f
 
 #[test]
 fn changing_ignore_rules_cannot_hide_unregistered_work_during_reconstruction() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.remote_git("ignore-race");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
@@ -1878,7 +1936,9 @@ fn changing_ignore_rules_cannot_hide_unregistered_work_during_reconstruction() {
 
 #[test]
 fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::symlink;
     let h = Host::new("tree/input");
     register_artifact(&h, "tree/", "");
@@ -1931,7 +1991,9 @@ fn adopt_lifecycle_retention(h: &Host) {
 
 #[test]
 fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     if !isolated_capability::isolated_capability_test(
         "adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window",
     ) {
@@ -1989,7 +2051,9 @@ fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window
 
 #[test]
 fn lifecycle_report_retains_exact_failure_streams_without_duplicate_aliases() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let diagnostic = "original failure detail\n".repeat(8192);
     automatic::native_git(&h, "large-diagnostic", value!({"diagnostic":diagnostic}));
@@ -2025,7 +2089,9 @@ fn lifecycle_report_retains_exact_failure_streams_without_duplicate_aliases() {
 
 #[test]
 fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = Host::new("payload");
     let diagnostic = "original failure detail\n".repeat(1000);
@@ -2085,50 +2151,116 @@ fn cargo_boundary_mock_preserves_source_outputs_original_failure_and_unknown_arg
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     for (path, bytes) in [
-        ("producer/Cargo.toml", include_bytes!("support/cargo_pair/producer/Cargo.toml").as_slice()),
-        ("producer/Cargo.lock", include_bytes!("support/cargo_pair/producer/Cargo.lock").as_slice()),
-        ("producer/src/lib.rs", include_bytes!("support/cargo_pair/producer/src/lib.rs").as_slice()),
-        ("tests/Cargo.toml", include_bytes!("support/cargo_pair/tests/Cargo.toml").as_slice()),
-        ("tests/Cargo.lock", include_bytes!("support/cargo_pair/tests/Cargo.lock").as_slice()),
-        ("tests/src/lib.rs", include_bytes!("support/cargo_pair/tests/src/lib.rs").as_slice()),
+        (
+            "producer/Cargo.toml",
+            include_bytes!("support/cargo_pair/producer/Cargo.toml").as_slice(),
+        ),
+        (
+            "producer/Cargo.lock",
+            include_bytes!("support/cargo_pair/producer/Cargo.lock").as_slice(),
+        ),
+        (
+            "producer/src/lib.rs",
+            include_bytes!("support/cargo_pair/producer/src/lib.rs").as_slice(),
+        ),
+        (
+            "tests/Cargo.toml",
+            include_bytes!("support/cargo_pair/tests/Cargo.toml").as_slice(),
+        ),
+        (
+            "tests/Cargo.lock",
+            include_bytes!("support/cargo_pair/tests/Cargo.lock").as_slice(),
+        ),
+        (
+            "tests/src/lib.rs",
+            include_bytes!("support/cargo_pair/tests/src/lib.rs").as_slice(),
+        ),
     ] {
         let path = root.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, bytes).unwrap();
     }
-    let call = |args: &[&str]| Command::new(env!("CARGO_BIN_EXE_chrono-test-cargo-model"))
-        .current_dir(root).args(args).output().unwrap();
-    let success = call(&["build", "--locked", "--offline", "--manifest-path", "producer/Cargo.toml"]);
+    let call = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_chrono-test-cargo-model"))
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let success = call(&[
+        "build",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "producer/Cargo.toml",
+    ]);
     assert_eq!(success.status.code(), Some(0));
-    assert_eq!(success.stdout, b"cargo fixture build: producer/Cargo.toml\n");
+    assert_eq!(
+        success.stdout,
+        b"cargo fixture build: producer/Cargo.toml\n"
+    );
     assert!(success.stderr.is_empty());
     let mut inputs = fs::read(root.join("producer/Cargo.toml")).unwrap();
     inputs.extend_from_slice(&fs::read(root.join("producer/src/lib.rs")).unwrap());
     inputs.extend_from_slice(&fs::read(root.join("producer/Cargo.lock")).unwrap());
-    assert_eq!(fs::read(root.join("producer/target/debug/deps/fixture-output")).unwrap(), sha256(&inputs).as_bytes());
-    assert!(root.join("producer/target/debug/libbounded_cache_producer.rlib").is_file());
-    let passing = call(&["test", "--locked", "--offline", "--manifest-path", "tests/Cargo.toml"]);
+    assert_eq!(
+        fs::read(root.join("producer/target/debug/deps/fixture-output")).unwrap(),
+        sha256(&inputs).as_bytes()
+    );
+    assert!(
+        root.join("producer/target/debug/libbounded_cache_producer.rlib")
+            .is_file()
+    );
+    let passing = call(&[
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tests/Cargo.toml",
+    ]);
     assert_eq!(passing.status.code(), Some(0));
     let source = root.join("tests/src/lib.rs");
     let mut bytes = fs::read(&source).unwrap();
     bytes.extend_from_slice(b"\n#[test] fn actual_failure() { assert_eq!(bounded_cache_producer::answer(), 0, \"original business exception\"); }\n");
     fs::write(&source, bytes).unwrap();
-    let failure = call(&["test", "--locked", "--offline", "--manifest-path", "tests/Cargo.toml"]);
+    let failure = call(&[
+        "test",
+        "--locked",
+        "--offline",
+        "--manifest-path",
+        "tests/Cargo.toml",
+    ]);
     assert_eq!(failure.status.code(), Some(101));
-    assert_eq!(failure.stdout, b"running 2 tests\noriginal business exception\n");
+    assert_eq!(
+        failure.stdout,
+        b"running 2 tests\noriginal business exception\n"
+    );
     assert_eq!(failure.stderr, b"original business exception\n");
-    for args in [vec!["unregistered-operation"], vec!["build", "--unknown", "--manifest-path", "producer/Cargo.toml"]] {
+    for args in [
+        vec!["unregistered-operation"],
+        vec![
+            "build",
+            "--unknown",
+            "--manifest-path",
+            "producer/Cargo.toml",
+        ],
+    ] {
         let output = call(&args);
         assert_eq!(output.status.code(), Some(93));
         assert!(output.stdout.is_empty());
         assert!(!output.stderr.is_empty());
     }
-    let manifest=root.join("producer/Cargo.toml");let original_manifest=fs::read(&manifest).unwrap();
-    fs::write(&manifest,b"[package]\nname='unregistered'\n").unwrap();
-    let malformed=call(&["build","--manifest-path","producer/Cargo.toml"]);
-    assert_eq!(malformed.status.code(),Some(93));assert!(malformed.stdout.is_empty());
-    assert!(String::from_utf8_lossy(&malformed.stderr).contains("unregistered Cargo fixture manifest or lock"));
-    fs::write(manifest,original_manifest).unwrap();
+    let manifest = root.join("producer/Cargo.toml");
+    let original_manifest = fs::read(&manifest).unwrap();
+    fs::write(&manifest, b"[package]\nname='unregistered'\n").unwrap();
+    let malformed = call(&["build", "--manifest-path", "producer/Cargo.toml"]);
+    assert_eq!(malformed.status.code(), Some(93));
+    assert!(malformed.stdout.is_empty());
+    assert!(
+        String::from_utf8_lossy(&malformed.stderr)
+            .contains("unregistered Cargo fixture manifest or lock")
+    );
+    fs::write(manifest, original_manifest).unwrap();
     fs::write(source, "unregistered fixture source").unwrap();
     let unknown = call(&["test", "--manifest-path", "tests/Cargo.toml"]);
     assert_eq!(unknown.status.code(), Some(93));
@@ -2139,9 +2271,13 @@ fn cargo_boundary_mock_preserves_source_outputs_original_failure_and_unknown_arg
 #[test]
 fn custody_fixture_selects_only_current_declared_producers() {
     assert!(fixture_coordinator::known_custody_producer("ci-test-host"));
-    assert!(fixture_coordinator::known_custody_producer("worktree-test-host"));
+    assert!(fixture_coordinator::known_custody_producer(
+        "worktree-test-host"
+    ));
     assert!(!fixture_coordinator::known_custody_producer(""));
-    assert!(!fixture_coordinator::known_custody_producer("unknown command"));
+    assert!(!fixture_coordinator::known_custody_producer(
+        "unknown command"
+    ));
     assert!(!fixture_coordinator::known_custody_producer("BUILD"));
 }
 
@@ -2152,19 +2288,36 @@ fn joined_fixture_case_removes_outer_custody_only_after_all_producers_retire() {
         *observed.borrow_mut() = Some(root.parent().unwrap().to_owned());
         fixture_coordinator::retired(root)
     }) {
-        for producer in ["ci-test-host", "projects-test-host", "workflow-test-tools", "worktree-test-host"] {
+        for producer in [
+            "ci-test-host",
+            "projects-test-host",
+            "workflow-test-tools",
+            "worktree-test-host",
+        ] {
             let mut fixture = chrono_worktree::TemporaryHost::registered_allocate(
-                fixture_coordinator::root(), POLICY, producer, "joined fixture release ",
-            ).unwrap();
+                fixture_coordinator::root(),
+                POLICY,
+                producer,
+                "joined fixture release ",
+            )
+            .unwrap();
             let path = fixture.path().to_owned();
             fs::write(path.join("original.bin"), b"consumed fixture original").unwrap();
-            assert_eq!(fs::read(path.join("original.bin")).unwrap(), b"consumed fixture original");
+            assert_eq!(
+                fs::read(path.join("original.bin")).unwrap(),
+                b"consumed fixture original"
+            );
             let result = fixture.finish(false).unwrap();
             assert_eq!(result["status"], "finished", "{result}");
             assert!(!path.exists());
         }
         return;
     }
-    let outer = observed.into_inner().expect("actual custody owner consulted after original child join");
-    assert!(!outer.exists(), "all four real producer owners retired; outer fixture must exit");
+    let outer = observed
+        .into_inner()
+        .expect("actual custody owner consulted after original child join");
+    assert!(
+        !outer.exists(),
+        "all four real producer owners retired; outer fixture must exit"
+    );
 }

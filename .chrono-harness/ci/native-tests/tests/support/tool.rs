@@ -89,13 +89,23 @@ fn run() -> Result<u8, String> {
         .and_then(|name| name.to_str())
         .ok_or("invalid tool name")?;
     let args: Vec<String> = env::args().skip(1).collect();
-    if name=="sh" {
-        let (script,forwarded)=args.split_first().ok_or("missing launcher fixture script")?;
-        if fs::read(script).map_err(|e|e.to_string())?!=include_bytes!("producer.sh") {return Err("unknown bootstrap Shell fixture bytes".into());}
-        let mut command=Command::new(env::var_os("CHRONO_TEST_BOOTSTRAP_PRODUCER").ok_or("missing Rust producer binding")?);
-        command.args(forwarded);chrono_harness::process_fds::forward_command(&mut command,&[])?;
+    if name == "sh" {
+        let (script, forwarded) = args
+            .split_first()
+            .ok_or("missing launcher fixture script")?;
+        if fs::read(script).map_err(|e| e.to_string())? != include_bytes!("producer.sh") {
+            return Err("unknown bootstrap Shell fixture bytes".into());
+        }
+        let mut command = Command::new(
+            env::var_os("CHRONO_TEST_BOOTSTRAP_PRODUCER").ok_or("missing Rust producer binding")?,
+        );
+        command.args(forwarded);
+        chrono_harness::process_fds::forward_command(&mut command, &[])?;
         use std::os::unix::process::CommandExt;
-        return Err(format!("bootstrap launcher fixture exec failed: {}",command.exec()));
+        return Err(format!(
+            "bootstrap launcher fixture exec failed: {}",
+            command.exec()
+        ));
     }
     if matches!(name, "git" | "chrono-worktree") {
         return command_mock(root, name, &args);

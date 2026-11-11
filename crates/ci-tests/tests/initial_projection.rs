@@ -47,7 +47,9 @@ fn git(root: &Path, args: &[&str]) -> String {
 
 #[test]
 fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let host = tempfile::Builder::new()
         .prefix("explicit CI host ")
         .tempdir()
@@ -117,7 +119,9 @@ fn initial_projection_is_explicit_idempotent_and_used_by_the_initial_event() {
 
 #[test]
 fn initial_projection_verification_detects_drift_without_repairing() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let host = tempfile::tempdir().unwrap();
     let inputs = tempfile::tempdir().unwrap();
     let input = inputs.path().join("source.json");
@@ -147,7 +151,9 @@ fn initial_projection_verification_detects_drift_without_repairing() {
 
 #[test]
 fn initial_adoption_collision_is_preflighted_before_any_output_is_written() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let host = tempfile::tempdir().unwrap();
     let inputs = tempfile::tempdir().unwrap();
     let input = inputs.path().join("source.json");
@@ -171,7 +177,9 @@ fn initial_adoption_collision_is_preflighted_before_any_output_is_written() {
 
 #[test]
 fn invalid_initial_sources_do_not_publish_partial_configuration() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in [
         "null",
         "bad-profile",
@@ -239,7 +247,9 @@ fn invalid_initial_sources_do_not_publish_partial_configuration() {
 
 #[test]
 fn initial_projection_symlink_is_rejected_without_touching_the_target() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let host = tempfile::tempdir().unwrap();
     let inputs = tempfile::tempdir().unwrap();
     let input = inputs.path().join("source.json");
@@ -261,7 +271,9 @@ fn initial_projection_symlink_is_rejected_without_touching_the_target() {
 
 #[test]
 fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let product = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     for unregistered in [false, true] {
         let host = tempfile::Builder::new()
@@ -416,7 +428,9 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
 
 #[test]
 fn standalone_v4_preserves_explicit_initial_inventory_and_fixed_bare_entry() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let host = tempfile::tempdir().unwrap();
     let inputs = tempfile::tempdir().unwrap();
     let input = inputs.path().join("source.json");
@@ -449,7 +463,9 @@ mod initial_short;
 
 #[test]
 fn standalone_initial_migration_preserves_inventory_and_refuses_edits_or_weakening() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in [
         "valid",
         "inventory-change",

@@ -12,22 +12,46 @@ use std::{
 
 fn run() -> Result<u8, String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
-    if args.first().map(String::as_str)==Some("--consume-launcher") {
-        if args.len()<5 {return Err("missing consume launcher arguments".into());}
-        let domain:Value=serde_json::from_str(include_str!("../fixtures/consume-launcher.json")).unwrap();
-        if chrono_harness::sha256(&fs::read(&args[1]).map_err(|e|e.to_string())?)!=domain["sha256"].as_str().unwrap(){return Err("unknown consume launcher bytes".into());}
-        let root=fs::canonicalize(&args[2]).map_err(|e|e.to_string())?;
-        let directory=fs::canonicalize(root.join(&args[3])).map_err(|e|e.to_string())?;
-        let mut archive=tar::Archive::new(fs::File::open(directory.join("executable.tar")).map_err(|e|e.to_string())?);
-        let mut entries=archive.entries().map_err(|e|e.to_string())?;
-        let mut entry=entries.next().ok_or("missing launcher executable")?.map_err(|e|e.to_string())?;
-        if entry.path().map_err(|e|e.to_string())?.as_ref()!=Path::new("executable"){return Err("unknown launcher archive member".into());}
-        entry.unpack(directory.join("executable")).map_err(|e|e.to_string())?;
-        if entries.next().is_some(){return Err("unknown extra launcher archive member".into());}
-        let executable=directory.join("chrono-host-release");fs::rename(directory.join("executable"),&executable).map_err(|e|e.to_string())?;
-        let mut command=Command::new(executable);command.arg(root).args(&args[4..]);chrono_harness::process_fds::forward_command(&mut command,&[])?;
+    if args.first().map(String::as_str) == Some("--consume-launcher") {
+        if args.len() < 5 {
+            return Err("missing consume launcher arguments".into());
+        }
+        let domain: Value =
+            serde_json::from_str(include_str!("../fixtures/consume-launcher.json")).unwrap();
+        if chrono_harness::sha256(&fs::read(&args[1]).map_err(|e| e.to_string())?)
+            != domain["sha256"].as_str().unwrap()
+        {
+            return Err("unknown consume launcher bytes".into());
+        }
+        let root = fs::canonicalize(&args[2]).map_err(|e| e.to_string())?;
+        let directory = fs::canonicalize(root.join(&args[3])).map_err(|e| e.to_string())?;
+        let mut archive = tar::Archive::new(
+            fs::File::open(directory.join("executable.tar")).map_err(|e| e.to_string())?,
+        );
+        let mut entries = archive.entries().map_err(|e| e.to_string())?;
+        let mut entry = entries
+            .next()
+            .ok_or("missing launcher executable")?
+            .map_err(|e| e.to_string())?;
+        if entry.path().map_err(|e| e.to_string())?.as_ref() != Path::new("executable") {
+            return Err("unknown launcher archive member".into());
+        }
+        entry
+            .unpack(directory.join("executable"))
+            .map_err(|e| e.to_string())?;
+        if entries.next().is_some() {
+            return Err("unknown extra launcher archive member".into());
+        }
+        let executable = directory.join("chrono-host-release");
+        fs::rename(directory.join("executable"), &executable).map_err(|e| e.to_string())?;
+        let mut command = Command::new(executable);
+        command.arg(root).args(&args[4..]);
+        chrono_harness::process_fds::forward_command(&mut command, &[])?;
         use std::os::unix::process::CommandExt;
-        return Err(format!("consume launcher fixture exec failed: {}",command.exec()));
+        return Err(format!(
+            "consume launcher fixture exec failed: {}",
+            command.exec()
+        ));
     }
     if args == ["--fixture-parent-context"] || args == ["--fixture-parent-context", "explicit"] {
         let mut child = context::command(std::env::current_exe().map_err(|e| e.to_string())?);
@@ -218,7 +242,11 @@ fn run() -> Result<u8, String> {
 }
 
 fn executable_name() -> Option<String> {
-    std::env::current_exe().ok()?.file_name()?.to_str().map(str::to_owned)
+    std::env::current_exe()
+        .ok()?
+        .file_name()?
+        .to_str()
+        .map(str::to_owned)
 }
 
 fn main() -> ExitCode {

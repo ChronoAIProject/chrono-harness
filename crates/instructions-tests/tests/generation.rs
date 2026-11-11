@@ -1706,8 +1706,14 @@ fn completed_synchronous_operation_releases_lock_while_unrelated_fork_retains_de
     let host = Host::new();
     host.init().unwrap();
     let lease = chrono_harness::ownership::DirectoryLease::acquire_local(
-        &host.root.join(".chrono-harness/state/instructions-operations"), true, None,
-    ).unwrap().unwrap();
+        &host
+            .root
+            .join(".chrono-harness/state/instructions-operations"),
+        true,
+        None,
+    )
+    .unwrap()
+    .unwrap();
     let (read, write) = UnixStream::pair().unwrap();
     let child = unsafe { libc::fork() };
     assert!(child >= 0);
@@ -1722,29 +1728,47 @@ fn completed_synchronous_operation_releases_lock_while_unrelated_fork_retains_de
             let mut byte = 0u8;
             loop {
                 let result = libc::read(read.as_raw_fd(), (&mut byte as *mut u8).cast(), 1);
-                if result == 0 { break; }
+                if result == 0 {
+                    break;
+                }
                 #[cfg(target_os = "macos")]
                 let interrupted = *libc::__error() == libc::EINTR;
                 #[cfg(target_os = "linux")]
                 let interrupted = *libc::__errno_location() == libc::EINTR;
-                if result < 0 && interrupted { continue; }
+                if result < 0 && interrupted {
+                    continue;
+                }
                 libc::_exit(91);
             }
             libc::_exit(0);
         }
     }
-    struct JoinedFork { write: Option<UnixStream>, child: libc::pid_t }
+    struct JoinedFork {
+        write: Option<UnixStream>,
+        child: libc::pid_t,
+    }
     impl Drop for JoinedFork {
         fn drop(&mut self) {
             drop(self.write.take());
             let mut status = 0;
-            assert_eq!(unsafe { libc::waitpid(self.child, &mut status, 0) }, self.child);
+            assert_eq!(
+                unsafe { libc::waitpid(self.child, &mut status, 0) },
+                self.child
+            );
             assert_eq!(status, 0);
         }
     }
-    let mut joined = JoinedFork { write: Some(write), child };
+    let mut joined = JoinedFork {
+        write: Some(write),
+        child,
+    };
     let mut ready = [0];
-    joined.write.as_mut().unwrap().read_exact(&mut ready).unwrap();
+    joined
+        .write
+        .as_mut()
+        .unwrap()
+        .read_exact(&mut ready)
+        .unwrap();
     assert_eq!(ready, *b"r");
     let busy = cli_init(&host, None, None);
     assert_eq!(busy.exit_code, 1, "{busy:?}");

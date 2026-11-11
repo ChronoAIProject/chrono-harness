@@ -1,10 +1,10 @@
 //! Test-owned custody coordinator. The real producer API still reads committed
 //! policy and owns allocations; its external Git interface is the Rust mock.
 #![allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::{verified_identifiers as identifiers, verus};
 #[cfg(verus_keep_ghost)]
 use super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers as identifiers, verus};
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -17,34 +17,45 @@ pub fn known_custody_producer(command: &str) -> (allowed: bool)
 #[cfg(not(verus_keep_ghost))]
 #[path = "."]
 mod runtime {
-#[path = "../../../judge-filemap-tests/tests/support/mod.rs"]
-mod policy;
-#[path = "../../../runner-tests/tests/support/isolated_capability.rs"]
-mod isolation;
-use std::{fs,path::{Path,PathBuf},sync::OnceLock};
-use serde_json::{Value,json};
+    #[path = "../../../runner-tests/tests/support/isolated_capability.rs"]
+    mod isolation;
+    #[path = "../../../judge-filemap-tests/tests/support/mod.rs"]
+    mod policy;
+    use serde_json::{Value, json};
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::OnceLock,
+    };
 
-/// Join the original libtest child, then ask the existing producer owner about
-/// each declared store. A passed test alone is never a release observation.
-pub fn isolated_git() -> bool {
-    isolation::isolated_git_with_retirement(retired)
-}
-
-pub fn retired(root: &Path) -> Result<bool, String> {
-    for producer in ["ci-test-host", "projects-test-host", "workflow-test-tools", "worktree-test-host"] {
-        let (directory, _) = chrono_worktree::TemporaryHost::registered_store(
-            root, ".chrono-harness/worktree.json", producer,
-        )?;
-        if !chrono_worktree::TemporaryHost::retired_fixture_store(&directory, producer)? {
-            return Ok(false);
-        }
+    /// Join the original libtest child, then ask the existing producer owner about
+    /// each declared store. A passed test alone is never a release observation.
+    pub fn isolated_git() -> bool {
+        isolation::isolated_git_with_retirement(retired)
     }
-    Ok(true)
-}
 
-pub fn root() -> &'static Path {
-    static ROOT: OnceLock<PathBuf> = OnceLock::new();
-    ROOT.get_or_init(|| {
+    pub fn retired(root: &Path) -> Result<bool, String> {
+        for producer in [
+            "ci-test-host",
+            "projects-test-host",
+            "workflow-test-tools",
+            "worktree-test-host",
+        ] {
+            let (directory, _) = chrono_worktree::TemporaryHost::registered_store(
+                root,
+                ".chrono-harness/worktree.json",
+                producer,
+            )?;
+            if !chrono_worktree::TemporaryHost::retired_fixture_store(&directory, producer)? {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+
+    pub fn root() -> &'static Path {
+        static ROOT: OnceLock<PathBuf> = OnceLock::new();
+        ROOT.get_or_init(|| {
         let root=PathBuf::from(std::env::var_os("CHRONO_TEST_CUSTODY_ROOT").expect("isolated fixture custody root"));
         fs::create_dir_all(&root).unwrap();let root=fs::canonicalize(root).unwrap();
         policy::git(&root,&["init","-q","-b","dev"]);
@@ -81,8 +92,7 @@ pub fn root() -> &'static Path {
         policy::commit(&root);
         root
     })
-}
-
+    }
 }
 #[cfg(not(verus_keep_ghost))]
 pub use runtime::{isolated_git, retired, root};
