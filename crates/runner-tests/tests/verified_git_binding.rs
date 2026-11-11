@@ -290,7 +290,7 @@ fn binding_tool_keeps_v3_v4_null_and_nonempty_version_boundaries() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn binding_tool_requires_exact_resolution_before_examining_optional_input() {
     proof {
-        reveal_strlit("git"); reveal_strlit("PATH-once"); reveal_strlit("path-once");
+        reveal_strlit(""); reveal_strlit("git"); reveal_strlit("PATH-once"); reveal_strlit("path-once");
         reveal_strlit("PATH-once\0");
         assert("PATH-once"@[0] != "path-once"@[0]);
         assert("PATH-once"@.len() != "PATH-once\0"@.len());
