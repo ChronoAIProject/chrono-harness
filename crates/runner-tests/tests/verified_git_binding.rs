@@ -1123,6 +1123,13 @@ fn expect_observation_mismatch(id: &str, result: Result<Option<(&str, u64)>, (&s
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn guard_absence_requires_exact_presence_and_does_not_check_a_digest() {
+    proof {
+        reveal_strlit("absent"); reveal_strlit("present");
+        reveal_strlit(""); reveal_strlit("absent\0");
+        assert("absent"@.len() != "present"@.len());
+        assert("absent"@.len() != ""@.len());
+        assert("absent"@.len() != "absent\0"@.len());
+    }
     expect_absent_observation(policy::admit_git_guard_observation("id", Some("absent"), None, None));
     expect_absent_observation(policy::admit_git_guard_observation("id", Some("absent"), Some("arbitrary"), None));
     expect_observation_mismatch("id", policy::admit_git_guard_observation("id", None, None, None));
@@ -1167,6 +1174,13 @@ fn guard_digest_comparison_keeps_case_unicode_nul_and_empty_text() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn guard_presence_mismatch_keeps_the_complete_original_id() {
+    proof {
+        reveal_strlit("absent"); reveal_strlit("present");
+        reveal_strlit("present\0"); reveal_strlit("PRESENT");
+        assert("absent"@.len() != "present"@.len());
+        assert("present"@.len() != "present\0"@.len());
+        assert("present"@[0] != "PRESENT"@[0]);
+    }
     let id = "输入 λ\0 ";
     expect_observation_mismatch(id, policy::admit_git_guard_observation(
         id, Some("absent"), Some("hash"), Some(("hash", 9))));
