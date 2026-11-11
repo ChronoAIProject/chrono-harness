@@ -174,7 +174,10 @@ impl EnrollmentOriginalsFixture {
         let mut retained = BTreeMap::<String, String>::new();
         for path in fixture["paths"].as_array().unwrap() {
             let path = path.as_str().unwrap();
-            retained.insert(path.into(), fs::read_to_string(self.root.join(path)).unwrap());
+            retained.insert(
+                path.into(),
+                fs::read_to_string(self.root.join(path)).unwrap(),
+            );
         }
         let config_bytes = serde_json::to_string(&config).unwrap();
         let policy_bytes = fs::read_to_string(self.root.join(AUTO_POLICY)).unwrap();
@@ -221,7 +224,9 @@ fn absent_adoption_rejects_invalid_addresses_and_original_drift() {
         match fault {
             "host-type" => config["host_config"] = Value::Null,
             "policy-type" => config["automatic_cleanup"] = value!(7),
-            "relocated-policy" => config["automatic_cleanup"] = value!(".chrono-harness/other.json"),
+            "relocated-policy" => {
+                config["automatic_cleanup"] = value!(".chrono-harness/other.json")
+            }
             "bytes" => (),
             _ => unreachable!(),
         }
