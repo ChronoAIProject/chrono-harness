@@ -1,5 +1,5 @@
 //! Explicit Git input guards. Never discover files or register dependencies.
-use crate::{input_file::observe_file, relative_path, wire};
+use crate::{input_file::observe_file, relative_path, verified_git_binding, wire};
 use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
