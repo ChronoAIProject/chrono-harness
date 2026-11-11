@@ -88,7 +88,6 @@ fn selection_projection_fixture(state: SelectionProjectionFixture)
         None => { panic!(); },
         Some(out) => {
             proof {
-                reveal(policy::registry_selection_object_result);
                 let (middle, removed, field, value) = choose|
                     middle: SelectionProjectionFixture, removed: &str, field: &str, value: &str|
                     removed@ == "sha256"@ && field@ == "schema"@
@@ -107,7 +106,6 @@ fn selection_projection_without_object_never_calls_either_interface() {
         None::<SelectionProjectionFixture>,
         selection_projection_never_remove, selection_projection_never_insert,
     );
-    proof { reveal(policy::registry_selection_object_result); }
     expect_status_true(out.is_none());
 }
 

@@ -71,24 +71,6 @@ pub fn registry_snapshot_initial<V>(
 
 
 
-/// 对象投影只在存在时改写；回调是实际外部 map 接口，规格绑定完整参数及操作次序。
-pub open spec fn registry_selection_object_result<M, R, I>(
-    before: Option<M>, after: Option<M>, remove: R, insert: I,
-) -> bool
-    where R: Fn(M, &str) -> M, I: Fn(M, &str, &str) -> M,
-{
-    match (before, after) {
-        (None, None) => true,
-        (Some(initial), Some(normalized)) =>
-            exists|middle: M, removed: &str, field: &str, value: &str|
-                removed@ == "sha256"@ && field@ == "schema"@
-                && value@ == "chrono-registry-selection/v1"@
-                && remove.ensures((initial, removed), middle)
-                && insert.ensures((middle, field, value), normalized),
-        _ => false,
-    }
-}
-
 /// 保留非对象；对象先删除原字节摘要，再写入结构化 registry selection schema。
 pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R, insert: I)
     -> (out: Option<M>)
@@ -102,7 +84,16 @@ pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R
                 && field@ == "schema"@ && value@ == "chrono-registry-selection/v1"@
                 ==> insert.requires((middle, field, value))),
     },
-    ensures registry_selection_object_result(object, out, remove, insert),
+    ensures match (object, out) {
+        (None, None) => true,
+        (Some(initial), Some(normalized)) =>
+            exists|middle: M, removed: &str, field: &str, value: &str|
+                removed@ == "sha256"@ && field@ == "schema"@
+                && value@ == "chrono-registry-selection/v1"@
+                && remove.ensures((initial, removed), middle)
+                && insert.ensures((middle, field, value), normalized),
+        _ => false,
+    },
 {
     match object {
         None => None,
@@ -113,7 +104,6 @@ pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R
             let middle = remove(initial, removed);
             let normalized = insert(middle, field, value);
             proof {
-                reveal(registry_selection_object_result);
                 assert(remove.ensures((initial, removed), middle));
                 assert(insert.ensures((middle, field, value), normalized));
                 assert(exists|observed: M, key: &str, target: &str, schema: &str|
@@ -121,8 +111,6 @@ pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R
                     && schema@ == "chrono-registry-selection/v1"@
                     && remove.ensures((initial, key), observed)
                     && insert.ensures((observed, target, schema), normalized));
-                assert(registry_selection_object_result(
-                    Some(initial), Some(normalized), remove, insert));
             }
             Some(normalized)
         },
