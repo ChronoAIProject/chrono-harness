@@ -275,10 +275,7 @@
         "judge-workflow-units"
       ],
       "build.judge-workflow": [
-        "inputs",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
+        "inputs"
       ],
       "build.runner": [
         "ci",

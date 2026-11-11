@@ -727,7 +727,6 @@
         "linux_build_judge_projects",
         "linux_build_judge_cost",
         "linux_build_judge_mixed",
-        "linux_build_judge_workflow",
         "linux_build_inputs"
       ],
       "downloads": [
@@ -766,10 +765,6 @@
         {
           "job": "linux_build_judge_mixed",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-        },
-        {
-          "job": "linux_build_judge_workflow",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
         },
         {
           "job": "linux_build_inputs",
@@ -1911,7 +1906,6 @@
         "macos_build_judge_projects",
         "macos_build_judge_cost",
         "macos_build_judge_mixed",
-        "macos_build_judge_workflow",
         "macos_build_inputs"
       ],
       "downloads": [
@@ -1950,10 +1944,6 @@
         {
           "job": "macos_build_judge_mixed",
           "directory": ".chrono-harness/cache/release-handoffs/build_judge_mixed/"
-        },
-        {
-          "job": "macos_build_judge_workflow",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_workflow/"
         },
         {
           "job": "macos_build_inputs",
