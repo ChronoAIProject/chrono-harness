@@ -2232,7 +2232,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["linux_release_frontend","linux_build_runner","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs"]
+    needs: ["linux_release_frontend","linux_build_runner","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_inputs"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2263,7 +2263,6 @@ jobs:
       - *chrono_release_download_6
       - *chrono_release_download_3
       - *chrono_release_download_5
-      - *chrono_release_download_9
       - &chrono_release_download_2
         name: Download selected original artifact from linux_build_inputs
         if: ${{ always() && needs.linux_build_inputs.outputs.artifact_id != '' }}
@@ -5292,7 +5291,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
-    needs: ["macos_release_frontend","macos_build_runner","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs"]
+    needs: ["macos_release_frontend","macos_build_runner","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_inputs"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5323,7 +5322,6 @@ jobs:
       - *chrono_release_download_18
       - *chrono_release_download_15
       - *chrono_release_download_17
-      - *chrono_release_download_21
       - &chrono_release_download_14
         name: Download selected original artifact from macos_build_inputs
         if: ${{ always() && needs.macos_build_inputs.outputs.artifact_id != '' }}

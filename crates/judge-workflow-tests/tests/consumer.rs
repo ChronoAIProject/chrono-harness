@@ -13,10 +13,17 @@ mod transition_decoder;
 #[path = "fixtures/transition_decoder_tests.rs"]
 mod transition_decoder_tests;
 use chrono_harness::sha256;
-use host::{FixtureProbe, Host, install_program};
+use host::{FixtureProbe, Host, install_executable};
 use serde_json::{Value, json};
 use std::fs;
 use support::*;
+fn judge_executable(id: &str) -> std::path::PathBuf {
+    if id == "workflow" {
+        env!("CARGO_BIN_EXE_chrono-judge-workflow-test-cli").into()
+    } else {
+        source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"))
+    }
+}
 fn host() -> Host {
     let mut h = Host::new(true);
     for (id, deps) in [
@@ -34,9 +41,9 @@ fn host() -> Host {
             ],
         ),
     ] {
-        let digest = install_program(
+        let digest = install_executable(
             &h.root(),
-            &format!("judge-{id}"),
+            &judge_executable(id),
             &format!("chrono-judge-{id}"),
             FixtureProbe::JudgeEof,
         );
@@ -382,9 +389,7 @@ fn grouped_project_host() -> Host {
             ],
         ),
     ] {
-        let bytes =
-            fs::read(source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}")))
-                .expect("build registered judge first");
+        let bytes = fs::read(judge_executable(id)).expect("build registered judge first");
         let path = format!(".chrono-harness/bin/chrono-judge-{id}");
         fs::write(h.root().join(&path), &bytes).unwrap();
         #[cfg(unix)]

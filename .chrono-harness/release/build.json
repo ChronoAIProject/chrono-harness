@@ -424,7 +424,6 @@
         "build_judge_projects",
         "build_judge_cost",
         "build_judge_mixed",
-        "build_judge_workflow",
         "build_inputs"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests",
@@ -828,7 +827,7 @@
       ]
     },
     "verify_judge_workflow_tests": {
-      "need": "judge-workflow-tests 调用 runner、全部 full 判官、chrono-ci 与 inputs 发布 CLI，核治理、固定上下文、快照及汇总；worktree CLI 由测试项目从生产 main.rs 编译，不消费 worktree 发布资产。",
+      "need": "judge-workflow-tests 调用 runner、其余 full 判官、chrono-ci 与 inputs 发布 CLI，核治理、固定上下文、快照及汇总；workflow 与 worktree CLI 由测试项目从各自唯一生产 main.rs 编译，不消费对应发布资产。",
       "release_assets": [
         "chrono-harness",
         "chrono-ci",
@@ -838,7 +837,6 @@
         "chrono-judge-projects",
         "chrono-judge-cost",
         "chrono-judge-mixed",
-        "chrono-judge-workflow",
         "chrono-inputs"
       ]
     },

@@ -916,12 +916,10 @@
           "check.judge-projects",
           "check.judge-registration",
           "check.judge-routes",
-          "check.judge-workflow",
           "check.judge-workflow-tests",
           "check.runner"
         ],
         "save_caches": [
-          "check.judge-workflow",
           "check.judge-workflow-tests"
         ]
       },
@@ -949,7 +947,8 @@
           "check.runner"
         ],
         "save_caches": [
-          "check.inputs-tests"
+          "check.inputs-tests",
+          "check.judge-workflow"
         ]
       },
       "unit_distribution": {
@@ -1013,7 +1012,6 @@
           "check.judge-projects",
           "check.judge-registration",
           "check.judge-routes",
-          "check.judge-workflow",
           "check.judge-workflow-tests.judge-workflow-units",
           "check.runner"
         ],
@@ -1042,7 +1040,6 @@
           "check.judge-projects",
           "check.judge-registration",
           "check.judge-routes",
-          "check.judge-workflow",
           "check.judge-workflow-tests.judge-workflow-short",
           "check.runner"
         ],
