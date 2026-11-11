@@ -1,6 +1,7 @@
 #[path = "../../runner-tests/tests/support/retention_state.rs"]
 mod retention_state;
 use super::*;
+use std::collections::BTreeMap;
 const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
 
 // A metadata fixture with a fully mocked Git boundary. The absent checkout's
@@ -164,6 +165,102 @@ impl EnrollmentOriginalsFixture {
         let report = json(output.stdout.as_bytes())
             .unwrap_or_else(|error| panic!("{error}: {} {}", output.stdout, output.stderr));
         (output.exit_code, report)
+    }
+
+    fn adopt_retained_inputs(&self, config: Value) {
+        let fixture_path = self.root.join("git-fixture.json");
+        let mut fixture = json(&fs::read(&fixture_path).unwrap()).unwrap();
+        let head = "b".repeat(64);
+        let mut retained = BTreeMap::<String, String>::new();
+        for path in fixture["paths"].as_array().unwrap() {
+            let path = path.as_str().unwrap();
+            retained.insert(
+                path.into(),
+                fs::read_to_string(self.root.join(path)).unwrap(),
+            );
+        }
+        let config_bytes = serde_json::to_string(&config).unwrap();
+        let policy_bytes = fs::read_to_string(self.root.join(AUTO_POLICY)).unwrap();
+        retained.insert(POLICY.into(), config_bytes.clone());
+        retained.insert(AUTO_POLICY.into(), policy_bytes.clone());
+        fixture["retained"] = value!({(head):retained});
+        fs::write(&fixture_path, serde_json::to_vec(&fixture).unwrap()).unwrap();
+        let path = self.record.join("ledger.json");
+        let mut record = json(&fs::read(&path).unwrap()).unwrap();
+        let entry = &mut record["entries"][0];
+        entry["policy_sha256"] = value!(sha256(policy_bytes.as_bytes()));
+        entry["enrollment"]["policy_inputs"] = value!({
+            (POLICY):Some(sha256(config_bytes.as_bytes())),
+            (AUTO_POLICY):Some(sha256(policy_bytes.as_bytes()))
+        });
+        fs::write(path, serde_json::to_vec(&record).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn absent_adoption_reads_only_bound_policy_addresses_and_preserves_originals() {
+    let h = EnrollmentOriginalsFixture::new();
+    let mut config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
+    config["git"] = value!({"execution-only":"not an executable choice"});
+    config["unconsumed"] = value!({"arbitrary":[null, true, "retained data"]});
+    h.adopt_retained_inputs(config);
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+    assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_eq!(
+        fs::read(h.root.join(&h.original)).unwrap(),
+        b"original failure bytes\n"
+    );
+}
+
+#[test]
+fn absent_adoption_rejects_invalid_addresses_and_original_drift() {
+    for fault in ["host-type", "policy-type", "relocated-policy", "bytes"] {
+        let h = EnrollmentOriginalsFixture::new();
+        let mut config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
+        match fault {
+            "host-type" => config["host_config"] = Value::Null,
+            "policy-type" => config["automatic_cleanup"] = value!(7),
+            "relocated-policy" => {
+                config["automatic_cleanup"] = value!(".chrono-harness/other.json")
+            }
+            "bytes" => (),
+            _ => unreachable!(),
+        }
+        h.adopt_retained_inputs(config);
+        if fault == "bytes" {
+            let path = h.root.join("git-fixture.json");
+            let mut fixture = json(&fs::read(&path).unwrap()).unwrap();
+            let bytes = fixture["retained"]["b".repeat(64)][POLICY]
+                .as_str()
+                .unwrap()
+                .to_owned();
+            fixture["retained"]["b".repeat(64)][POLICY] = value!(format!("{bytes}\n"));
+            fs::write(path, serde_json::to_vec(&fixture).unwrap()).unwrap();
+        }
+        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 2, "{fault}: {report}");
+        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+        assert_eq!(
+            fs::read(h.root.join(&h.original)).unwrap(),
+            b"original failure bytes\n",
+            "{fault}: {report}"
+        );
+        let role = format!(
+            "worktree-enrollment:{}",
+            sha256(h.target.to_str().unwrap().as_bytes())
+        );
+        assert_eq!(
+            retention_state::snapshot(&h.root)["roots"][&role]
+                .as_array()
+                .map(Vec::len),
+            Some(1),
+            "{fault}: {report}"
+        );
     }
 }
 
