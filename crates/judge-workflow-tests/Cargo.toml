@@ -74,3 +74,9 @@ overflow-checks = true
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+[[bin]]
+name = "chrono-harness-test-cli"
+path = "../runner/src/main.rs"
+test = false
+bench = false

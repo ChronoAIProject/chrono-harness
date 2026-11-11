@@ -345,10 +345,14 @@ impl Host {
             ("runner", "chrono-harness"),
             ("judge-registration", "chrono-judge-registration"),
         ] {
-            let p = source().join(format!("crates/{project}/target/debug/{binary}"));
+            let p = if (project, binary) == ("runner", "chrono-harness") {
+                PathBuf::from(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
+            } else {
+                source().join(format!("crates/{project}/target/debug/{binary}"))
+            };
             assert!(
                 p.is_file(),
-                "build registered production binaries first: {}",
+                "build registered fixture binaries first: {}",
                 p.display()
             );
             fs::copy(p, root.join(format!(".chrono-harness/bin/{binary}"))).unwrap();

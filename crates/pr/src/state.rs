@@ -456,7 +456,7 @@ impl State {
         inventory.dependencies_paths(&self.path, &inputs)?;
         let root = self.root.clone();
         let path = self.path.clone();
-        self.publication.complete(json!({"kind":"pr-operation","operation":path,"command_exit_code":result["command_exit_code"],"pr_state":result["pr_state"],"result":"result.json"}))?;
+        self.publication.complete_sealed(json!({"kind":"pr-operation","operation":path,"command_exit_code":result["command_exit_code"],"pr_state":result["pr_state"],"result":"result.json"}))?;
         let inventory = Inventory::adopted(&root)?.ok_or("PR retention owner disappeared")?;
         inventory.retain_diagnostic_path(&path)?;
         let _reader = read_guard(&root, &path)?.ok_or("PR result disappeared before handoff")?;
