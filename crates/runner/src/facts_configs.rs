@@ -268,30 +268,25 @@ fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
         .as_array()
         .filter(|rows| !rows.is_empty())
         .ok_or("Git selector requires nonempty configurations")?;
-    let mut hashes = std::collections::BTreeSet::new();
-    let mut unique_paths = std::collections::BTreeSet::new();
+    use crate::verified_git_binding::{SelectorRow, admit_identity_row};
+
+    let mut hashes = SeenSelectorText::default();
+    let mut unique_paths = SeenSelectorText::default();
     let mut paths = vec![];
     for row in rows {
-        let object = row
-            .as_object()
-            .ok_or("Git selector configuration object required")?;
-        let hash = row["sha256"]
-            .as_str()
-            .filter(|s| crate::wire::is_digest(s))
-            .ok_or("Git selector configuration digest required")?;
-        if object.len() != if version3 { 3 } else { 2 }
-            || !object.contains_key("path")
-            || (version3 && !object.contains_key("registry_path"))
-            || !hashes.insert(hash)
-        {
-            return Err("Git selector configuration requires a unique digest/path and the declared v3 registry_path only".into());
-        }
-        let path = row["path"]
-            .as_str()
-            .ok_or("Git selector configuration path required")?;
-        if !unique_paths.insert(path) {
-            return Err("Git selector configuration paths must be unique".into());
-        }
+        let object = row.as_object();
+        let path = admit_identity_row(
+            SelectorRow {
+                fields: object.map(|map| map.len()),
+                digest: row["sha256"].as_str(),
+                path_present: row.get("path").is_some(),
+                path: row["path"].as_str(),
+                registry_path_present: row.get("registry_path").is_some(),
+            },
+            version3,
+            &mut hashes,
+            &mut unique_paths,
+        )?;
         paths.push(path);
     }
     if version3 {
@@ -337,6 +332,15 @@ impl crate::verified_git_binding::GitTargetRows for JsonTargetRows<'_> {
             GitTargetField::Path => "path",
         };
         self.0[index][key].as_str()
+    }
+}
+
+#[derive(Default)]
+struct SeenSelectorText<'a>(std::collections::BTreeSet<&'a str>);
+
+impl<'a> crate::verified_git_binding::SelectorSeen<'a> for SeenSelectorText<'a> {
+    fn record(&mut self, text: &'a str) -> bool {
+        self.0.insert(text)
     }
 }
 

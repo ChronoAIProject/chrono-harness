@@ -290,6 +290,94 @@ fn git_selector_schema_distinguishes_exact_versions_from_direct_and_unknown() {
     expect_schema(Some("chrono-git-configs/v1\0"), Unsupported);
 }
 
+pub struct SeenRows<'a>(pub Vec<&'a str>);
+
+impl<'a> policy::SelectorSeen<'a> for SeenRows<'a> {
+    open spec fn seen(&self) -> Set<Seq<char>> {
+        self.0@.map_values(|text: &str| text@).to_set()
+    }
+
+    fn record(&mut self, text: &'a str) -> bool {
+        let ghost keys = self.0@.map_values(|value: &str| value@);
+        let mut i = 0;
+        while i < self.0.len()
+            invariant 0 <= i <= self.0.len(), keys == self.0@.map_values(|value: &str| value@),
+                forall|j: int| 0 <= j < i ==> #[trigger] keys[j] != text@,
+            decreases self.0.len() - i,
+        {
+            if policy::matches_expected(self.0[i], Some(text)) {
+                assert(keys[i as int] == text@);
+                assert(keys.contains(text@));
+                assert(keys.to_set().insert(text@) =~= keys.to_set());
+                return false;
+            }
+            i += 1;
+        }
+        proof {
+            assert(!keys.contains(text@));
+            keys.lemma_push_to_set_commute(text@);
+            self.0@.lemma_push_map_commute(|value: &str| value@, text);
+        }
+        self.0.push(text);
+        true
+    }
+}
+
+fn expect_row_error(actual: Result<&str, &str>, expected: &str)
+    requires match actual { Ok(_) => false, Err(error) => error@ == expected@ },
+{
+    match actual {
+        Ok(_) => { panic!(); },
+        Err(error) => { expect_true(policy::matches_expected(error, Some(expected))); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_identity_rows_keep_shape_digest_and_path_error_order() {
+    use policy::SelectorSeen;
+
+    let mut hashes = SeenRows(Vec::new());
+    let mut paths = SeenRows(Vec::new());
+    let zero = "0000000000000000000000000000000000000000000000000000000000000000";
+    let one = "1111111111111111111111111111111111111111111111111111111111111111";
+    let target = ".chrono-harness/git.json";
+    let malformed = "Git selector configuration requires a unique digest/path and the declared v3 registry_path only";
+    proof {
+        reveal_strlit("0000000000000000000000000000000000000000000000000000000000000000");
+        reveal_strlit("1111111111111111111111111111111111111111111111111111111111111111");
+        assert(vstd::string::is_ascii(zero) && vstd::string::is_ascii(one));
+        vstd::string::is_ascii_spec_bytes(zero);
+        vstd::string::is_ascii_spec_bytes(one);
+        assert(zero.spec_bytes().len() == 64 && one.spec_bytes().len() == 64);
+        assert(policy::identifiers::digest_format(zero.spec_bytes()));
+        assert(policy::identifiers::digest_format(one.spec_bytes()));
+        assert(zero@[0] != one@[0]);
+        assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty());
+    }
+    expect_row_error(policy::admit_identity_row(policy::SelectorRow {
+        fields: None, digest: None, path_present: false, path: None, registry_path_present: false,
+    }, true, &mut hashes, &mut paths), "Git selector configuration object required");
+    expect_row_error(policy::admit_identity_row(policy::SelectorRow {
+        fields: Some(1), digest: None, path_present: false, path: None, registry_path_present: false,
+    }, true, &mut hashes, &mut paths), "Git selector configuration digest required");
+    expect_row_error(policy::admit_identity_row(policy::SelectorRow {
+        fields: Some(3), digest: Some(zero), path_present: true, path: Some(target), registry_path_present: false,
+    }, true, &mut hashes, &mut paths), malformed);
+    let accepted = policy::admit_identity_row(policy::SelectorRow {
+        fields: Some(3), digest: Some(zero), path_present: true, path: Some(target), registry_path_present: true,
+    }, true, &mut hashes, &mut paths);
+    match accepted {
+        Ok(path) => { expect_true(policy::matches_expected(path, Some(target))); },
+        Err(_) => { panic!(); },
+    }
+    expect_row_error(policy::admit_identity_row(policy::SelectorRow {
+        fields: Some(3), digest: Some(zero), path_present: true, path: None, registry_path_present: true,
+    }, true, &mut hashes, &mut paths), malformed);
+    expect_row_error(policy::admit_identity_row(policy::SelectorRow {
+        fields: Some(2), digest: Some(one), path_present: true, path: Some(target), registry_path_present: false,
+    }, false, &mut hashes, &mut paths), "Git selector configuration paths must be unique");
+}
+
 fn expect_target_schema(version: Option<u64>, schema_present: bool, expected: bool)
     requires expected == (!schema_present && (version == Some(3u64) || version == Some(4u64))),
 {

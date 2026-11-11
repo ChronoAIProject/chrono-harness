@@ -7,7 +7,7 @@ use vstd::prelude::*;
 use vstd::string::StringSliceAdditionalSpecFns;
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
-mod identifiers;
+pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 
@@ -90,6 +90,85 @@ pub fn valid_link(schema: u64, tool: bool, input: bool, unknown: bool) -> (valid
         && (schema == 4 || input)),
 {
     (schema == 3 || schema == 4) && tool && !unknown && (schema == 4 || input)
+}
+
+/// 有序集合的外部接口只观察完整文本的成员与插入。
+pub trait SelectorSeen<'a> {
+    spec fn seen(&self) -> Set<Seq<char>>;
+
+    fn record(&mut self, text: &'a str) -> (fresh: bool)
+        ensures self.seen() == old(self).seen().insert(text@),
+            fresh == !old(self).seen().contains(text@);
+}
+
+pub struct SelectorRow<'a> {
+    pub fields: Option<usize>,
+    pub digest: Option<&'a str>,
+    pub path_present: bool,
+    pub path: Option<&'a str>,
+    pub registry_path_present: bool,
+}
+
+pub open spec fn identity_row_shape(row: &SelectorRow, v3: bool) -> bool {
+    row.fields == Some(if v3 { 3usize } else { 2usize })
+        && row.path_present && (!v3 || row.registry_path_present)
+}
+
+pub open spec fn identity_row_error(
+    row: &SelectorRow, v3: bool, hashes: Set<Seq<char>>, paths: Set<Seq<char>>,
+) -> Option<Seq<char>> {
+    if row.fields.is_none() {
+        Some("Git selector configuration object required"@)
+    } else if !matches!(row.digest, Some(text) if identifiers::digest_format(text.spec_bytes())) {
+        Some("Git selector configuration digest required"@)
+    } else if !identity_row_shape(row, v3) || hashes.contains(row.digest.unwrap()@) {
+        Some("Git selector configuration requires a unique digest/path and the declared v3 registry_path only"@)
+    } else {
+        match row.path {
+            None => Some("Git selector configuration path required"@),
+            Some(path) => if paths.contains(path@) {
+                Some("Git selector configuration paths must be unique"@)
+            } else { None },
+        }
+    }
+}
+
+pub fn admit_identity_row<'a, S: SelectorSeen<'a>>(
+    row: SelectorRow<'a>, v3: bool, hashes: &mut S, paths: &mut S,
+) -> (out: Result<&'a str, &'static str>)
+    ensures hashes.seen() == (if identity_row_shape(&row, v3)
+        && matches!(row.digest, Some(text) if identifiers::digest_format(text.spec_bytes()))
+        { old(hashes).seen().insert(row.digest.unwrap()@) } else { old(hashes).seen() }),
+    match out {
+        Ok(path) => row.path == Some(path)
+            && identity_row_error(&row, v3, old(hashes).seen(), old(paths).seen()).is_none()
+            && paths.seen() == old(paths).seen().insert(path@),
+        Err(error) => identity_row_error(&row, v3, old(hashes).seen(), old(paths).seen()) == Some(error@)
+            && paths.seen() == old(paths).seen(),
+    },
+{
+    if row.fields.is_none() {
+        return Err("Git selector configuration object required");
+    }
+    let Some(digest) = row.digest else {
+        return Err("Git selector configuration digest required");
+    };
+    if !identifiers::valid_digest_text(digest) {
+        return Err("Git selector configuration digest required");
+    }
+    if row.fields != Some(if v3 { 3 } else { 2 })
+        || !row.path_present || (v3 && !row.registry_path_present)
+        || !hashes.record(digest)
+    {
+        return Err("Git selector configuration requires a unique digest/path and the declared v3 registry_path only");
+    }
+    let Some(path) = row.path else {
+        return Err("Git selector configuration path required");
+    };
+    if !paths.record(path) {
+        return Err("Git selector configuration paths must be unique");
+    }
+    Ok(path)
 }
 
 /// 只观察捕获的快照是否包含完整路径，不选择目标或读取现役执行物。
