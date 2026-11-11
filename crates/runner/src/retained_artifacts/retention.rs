@@ -3094,6 +3094,13 @@ impl Publication {
         reference: Option<&str>,
     ) -> Result<(), String> {
         self.lease.stable()?;
+        if let Some(reference) = reference {
+            let mut ids = l.roots.get(reference).cloned().unwrap_or_default();
+            if !ids.contains(&self.id) {
+                ids.push(self.id.clone());
+            }
+            self.inventory.reference_locked(l, reference, &ids)?;
+        }
         let o = l
             .outputs
             .iter_mut()
