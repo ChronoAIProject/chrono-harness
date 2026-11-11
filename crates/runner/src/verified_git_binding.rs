@@ -399,6 +399,13 @@ pub fn collect_identity_paths<'a, R: SelectorRows<'a>, S: SelectorSeen<'a>>(
             },
             Err(error) => {
                 assert(identity_failure_at(rows.rows(), v3, i as int, error@));
+                assert(hashes.seen() == identity_row_hashes(&rows.rows()[i as int], v3,
+                    identity_prefix_hashes(rows.rows(), i as int)));
+                assert(paths.seen() == identity_prefix_paths(rows.rows(), i as int));
+                assert(exists|index: int| #[trigger] identity_failure_at(rows.rows(), v3, index, error@)
+                    && hashes.seen() == identity_row_hashes(&rows.rows()[index], v3,
+                        identity_prefix_hashes(rows.rows(), index))
+                    && paths.seen() == identity_prefix_paths(rows.rows(), index));
                 return Err(error);
             },
         }

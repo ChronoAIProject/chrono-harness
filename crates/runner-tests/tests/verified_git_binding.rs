@@ -576,6 +576,7 @@ impl<'a> policy::SelectorRows<'a> for ObservedRows<'a> {
 fn observed_row<'a>(digest: &'a str, path: &'a str) -> (row: policy::SelectorRow<'a>)
     ensures row.fields == Some(2usize), row.digest == Some(digest), row.path_present,
         row.path == Some(path), !row.registry_path_present,
+        row.digest.unwrap().spec_bytes() == digest.spec_bytes(),
 {
     policy::SelectorRow {
         fields: Some(2), digest: Some(digest), path_present: true,
@@ -656,6 +657,15 @@ fn identity_row_walk_preserves_empty_and_ordered_original_paths() {
         valid_walk_digest_literals();
         reveal_strlit(""); reveal_strlit("λ\0");
         assert(""@.len() != "λ\0"@.len());
+        assert(policy::identifiers::digest_format(rows.0@[0].digest.unwrap().spec_bytes()));
+        assert(policy::identifiers::digest_format(rows.0@[1].digest.unwrap().spec_bytes()));
+        assert(policy::identity_prefix_hashes(rows.0@, 1) =~=
+            Set::empty().insert(rows.0@[0].digest.unwrap()@));
+        assert(policy::identity_prefix_paths(rows.0@, 1) =~= Set::empty().insert(""@));
+        assert(policy::identity_row_error(&rows.0@[0], false,
+            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None);
+        assert(policy::identity_row_error(&rows.0@[1], false,
+            policy::identity_prefix_hashes(rows.0@, 1), policy::identity_prefix_paths(rows.0@, 1)) == None);
         assert(policy::identity_prefix_valid(rows.0@, false, 2));
     }
     match policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths) {
@@ -704,6 +714,11 @@ fn identity_row_walk_rejects_nonadjacent_digest_reuse_before_collecting_its_path
         reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("later");
         assert("a"@[0] != "b"@[0]);
         assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty());
+        assert(policy::identity_row_error(&rows.0@[0], false,
+            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None);
+        assert(policy::identity_row_error(&rows.0@[1], false,
+            policy::identity_prefix_hashes(rows.0@, 1), policy::identity_prefix_paths(rows.0@, 1)) == None);
+        assert(policy::identity_prefix_valid(rows.0@, false, 2));
         assert(policy::identity_failure_at(rows.0@, false, 2, expected@));
     }
     let result = policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths);
@@ -727,6 +742,9 @@ fn identity_row_walk_keeps_the_second_digest_when_its_path_is_a_duplicate() {
     proof {
         valid_walk_digest_literals();
         assert(hashes.seen() =~= Set::empty() && paths.seen() =~= Set::empty());
+        assert(policy::identity_row_error(&rows.0@[0], false,
+            policy::identity_prefix_hashes(rows.0@, 0), policy::identity_prefix_paths(rows.0@, 0)) == None);
+        assert(policy::identity_prefix_valid(rows.0@, false, 1));
         assert(policy::identity_failure_at(rows.0@, false, 1, expected@));
     }
     let result = policy::collect_identity_paths(&rows, false, &mut hashes, &mut paths);
