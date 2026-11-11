@@ -343,7 +343,6 @@ impl<'a> crate::verified_git_binding::SelectorSeen<'a> for SeenSelectorText<'a> 
 impl Selection {
     pub fn unchanged(&self, root: &Path) -> Result<(), String> {
         let actual = fs::read(no_symlink_parents(root, &self.path)?).map_err(|e| e.to_string())?;
-        crate::verified_git_binding::admit_selector_bytes(&actual, &self.bytes)
-            .map_err(Into::into)
+        crate::verified_git_binding::admit_selector_bytes(&actual, &self.bytes).map_err(Into::into)
     }
 }
