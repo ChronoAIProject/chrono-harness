@@ -117,4 +117,79 @@ pub fn matches_expected(actual: &str, expected: Option<&str>) -> (valid: bool)
     }
 }
 
+pub enum GitTargetField { Digest, Path }
+
+/// 只观察原数组长度与指定槽位的完整字符串，不在接口内选择目标。
+pub trait GitTargetRows {
+    spec fn count(&self) -> nat;
+    spec fn text_at(&self, index: int, field: GitTargetField) -> Option<&str>;
+
+    fn len(&self) -> (out: usize)
+        ensures out == self.count();
+
+    fn text(&self, index: usize, field: &GitTargetField) -> (out: Option<&str>)
+        requires index < self.count(),
+        ensures out == self.text_at(index as int, *field);
+}
+
+pub open spec fn target_matches<R: GitTargetRows>(
+    rows: &R, index: int, field: GitTargetField, expected: Option<&str>,
+) -> bool {
+    match (rows.text_at(index, field), expected) {
+        (Some(actual), Some(expected)) => actual@ == expected@,
+        _ => false,
+    }
+}
+
+pub open spec fn first_target<R: GitTargetRows>(
+    rows: &R, field: GitTargetField, expected: Option<&str>, out: Option<usize>,
+) -> bool {
+    match out {
+        Some(i) => i < rows.count() && target_matches(rows, i as int, field, expected)
+            && forall|j: int| 0 <= j < i ==> !target_matches(rows, j, field, expected),
+        None => forall|j: int| 0 <= j < rows.count() ==> !target_matches(rows, j, field, expected),
+    }
+}
+
+fn find_target<R: GitTargetRows>(rows: &R, field: GitTargetField, expected: Option<&str>)
+    -> (out: Option<usize>)
+    ensures first_target(rows, field, expected, out),
+{
+    let Some(text) = expected else { return None; };
+    let len = rows.len();
+    let mut i = 0;
+    while i < len
+        invariant
+            i <= len, len == rows.count(), expected == Some(text),
+            forall|j: int| 0 <= j < i ==> !target_matches(rows, j, field, expected),
+        decreases len - i,
+    {
+        if let Some(actual) = rows.text(i, &field) {
+            if identifiers::equal_text(actual, text) { return Some(i); }
+        }
+        assert(!target_matches(rows, i as int, field, expected));
+        i += 1;
+    }
+    None
+}
+
+pub open spec fn preferred_target<R: GitTargetRows>(
+    rows: &R, digest: Option<&str>, path: Option<&str>, out: Option<usize>,
+) -> bool {
+    (out.is_some() && first_target(rows, GitTargetField::Digest, digest, out))
+    || (first_target(rows, GitTargetField::Digest, digest, None)
+        && first_target(rows, GitTargetField::Path, path, out))
+}
+
+/// 优先选摘要首个匹配；只有摘要无匹配才按已给出的登记路径选首项。
+pub fn select_git_target<R: GitTargetRows>(rows: &R, digest: Option<&str>, path: Option<&str>)
+    -> (out: Option<usize>)
+    ensures preferred_target(rows, digest, path, out),
+{
+    match find_target(rows, GitTargetField::Digest, digest) {
+        Some(index) => Some(index),
+        None => find_target(rows, GitTargetField::Path, path),
+    }
+}
+
 }
