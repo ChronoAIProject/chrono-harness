@@ -119,6 +119,7 @@ dependencies = [
  "chrono-judge-registration",
  "chrono-judge-routes",
  "chrono-worktree",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",
