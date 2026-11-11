@@ -2411,6 +2411,10 @@ fn checkout_physical_plan_keeps_empty_tree_and_prior_changes() {
     let mut changed = policy::CheckoutChanges::new();
     policy::record_checkout_change(&mut changed, "keep");
     let targets = policy::checkout_physical_targets(&tree, &lookup, &mut changed);
+    proof {
+        assert(tree@.kv_pairs() =~= Set::empty());
+        assert(policy::tree_rows_view(targets@).to_set() =~= Set::empty());
+    }
     expect_status_true(targets.len() == 0);
     expect_checkout_path(&changed, "keep", true);
 }
@@ -2424,13 +2428,26 @@ fn checkout_physical_plan_marks_missing_stage_zero_without_a_file_probe() {
         assert("1".spec_bytes()[0] != "0".spec_bytes()[0]);
     }
     let mut tree = policy::Tree::new();
+    let key = policy::TreePath::from_text("a");
+    let ghost expected_key = key;
     expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
-        policy::TreePath::from_text("a"), "mode", "oid", "kind"));
+        key, "mode", "oid", "kind"));
     let mut stages = policy::GitIndexStages::new();
     expect_status_true(policy::record_git_index_stage(&mut stages, "a", "1").is_ok());
     let lookup = policy::snapshot_git_index_stages(&stages);
     let mut changed = policy::CheckoutChanges::new();
     let targets = policy::checkout_physical_targets(&tree, &lookup, &mut changed);
+    proof {
+        assert(tree@.kv_pairs() =~= set![(expected_key, tree@[expected_key])]);
+        assert(!policy::checkout_stage_zero(lookup@, expected_key.bytes())) by {
+            assert forall|key: policy::GitIndexStage| lookup@.to_set().contains(key)
+                implies key.stage.spec_bytes() != "0".spec_bytes() by {
+                assert(key.stage.spec_bytes() == "1".spec_bytes());
+            }
+        }
+        assert(policy::tree_rows_view(targets@).to_set() =~= Set::empty());
+        assert(tree@.kv_pairs().contains((expected_key, tree@[expected_key])));
+    }
     expect_status_true(targets.len() == 0);
     expect_checkout_path(&changed, "a", true);
 }
@@ -2447,16 +2464,47 @@ fn checkout_physical_plan_preserves_probe_order_and_complete_entry_fields() {
         assert("a"@[0] != "b"@[0]);
     }
     let mut tree = policy::Tree::new();
+    let key_b = policy::TreePath::from_text("b");
+    let ghost kb = key_b;
     expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
-        policy::TreePath::from_text("b"), "b-mode", "b-oid", "b-kind"));
+        key_b, "b-mode", "b-oid", "b-kind"));
+    let key_a = policy::TreePath::from_text("a");
+    let ghost ka = key_a;
     expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
-        policy::TreePath::from_text("a"), "a-mode", "a-oid", "a-kind"));
+        key_a, "a-mode", "a-oid", "a-kind"));
     let mut stages = policy::GitIndexStages::new();
     expect_status_true(policy::record_git_index_stage(&mut stages, "b", "0").is_ok());
     expect_status_true(policy::record_git_index_stage(&mut stages, "a", "0").is_ok());
     let lookup = policy::snapshot_git_index_stages(&stages);
     let mut changed = policy::CheckoutChanges::new();
     let targets = policy::checkout_physical_targets(&tree, &lookup, &mut changed);
+    proof {
+        let a = (ka, tree@[ka]);
+        let b = (kb, tree@[kb]);
+        assert(tree@.kv_pairs() =~= set![a, b]);
+        assert(stages@.contains_key(policy::GitIndexStage { path: "a", stage: "0" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path: "b", stage: "0" }));
+        assert(lookup@.to_set().contains(policy::GitIndexStage { path: "a", stage: "0" }));
+        assert(lookup@.to_set().contains(policy::GitIndexStage { path: "b", stage: "0" }));
+        assert(policy::checkout_stage_zero(lookup@, ka.bytes()));
+        assert(policy::checkout_stage_zero(lookup@, kb.bytes()));
+        assert(policy::tree_rows_view(targets@).to_set() =~= set![a, b]);
+        let expected = seq![a, b];
+        assert(expected.no_duplicates());
+        expected.unique_seq_to_set();
+        assert(expected.to_set() =~= set![a, b]);
+        assert(targets.len() == 2);
+        let values = policy::tree_rows_view(targets@);
+        assert(values.to_set().contains(values[0]));
+        assert(values.to_set().contains(values[1]));
+        if values[0] == b {
+            assert(values[1] == a);
+            assert(scope_text::byte_lt(kb.bytes(), ka.bytes()));
+            scope_text::byte_lt_transitive(ka.bytes(), kb.bytes(), ka.bytes());
+            scope_text::byte_lt_strict(ka.bytes(), ka.bytes());
+        }
+        assert(values[0] == a && values[1] == b);
+    }
     expect_status_true(targets.len() == 2);
     expect_status_text(targets[0].0.as_str(), "a");
     expect_status_text(targets[0].1.mode.as_str(), "a-mode");
