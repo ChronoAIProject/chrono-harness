@@ -347,11 +347,19 @@ fn expect_selector_bytes(actual: &[u8], captured: &[u8], unchanged: bool)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn selector_stability_compares_every_original_byte_including_non_utf8() {
+    let captured: &[u8] = &[0u8, 255, 10];
+    let shorter: &[u8] = &[0u8, 255];
+    let longer: &[u8] = &[0u8, 255, 10, 0];
+    proof {
+        assert(captured@.len() == 3);
+        assert(shorter@.len() == 2);
+        assert(longer@.len() == 4);
+    }
     expect_selector_bytes(&[], &[], true);
     expect_selector_bytes(&[0u8, 255, 10], &[0u8, 255, 10], true);
     expect_selector_bytes(&[0u8, 254, 10], &[0u8, 255, 10], false);
-    expect_selector_bytes(&[0u8, 255], &[0u8, 255, 10], false);
-    expect_selector_bytes(&[0u8, 255, 10, 0], &[0u8, 255, 10], false);
+    expect_selector_bytes(shorter, captured, false);
+    expect_selector_bytes(longer, captured, false);
     expect_selector_bytes(&[], &[0u8], false);
 }
 
