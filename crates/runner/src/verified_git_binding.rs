@@ -117,6 +117,32 @@ pub fn admit_selector_platforms<T>(object: Option<(&T, usize)>)
     }
 }
 
+/// 标准 trim 只提供原观察；非空与完整文本一致性由本函数判定。
+pub fn admit_selector_platform_name(name: &str, trimmed: &str)
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => name@.len() > 0 && name@ == trimmed@,
+        Err(error) => (name@.len() == 0 || name@ != trimmed@)
+            && error@ == "Git config selector platform must be nonempty and literal"@,
+    },
+{
+    if name.is_empty() || !identifiers::equal_text(name, trimmed) {
+        Err("Git config selector platform must be nonempty and literal")
+    } else { Ok(()) }
+}
+
+pub fn admit_selector_bytes(actual: &[u8], captured: &[u8])
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => actual@ == captured@,
+        Err(error) => actual@ != captured@
+            && error@ == "Git config selector changed"@,
+    },
+{
+    if identifiers::equal_bytes(actual, captured) { Ok(()) }
+    else { Err("Git config selector changed") }
+}
+
 /// 相对路径由现有路径准入负责；这里先判宿主范围，再拒绝目标指向入口自身。
 pub fn admit_selector_host_path(path: &str, entry: Option<&str>)
     -> (out: Result<(), &'static str>)

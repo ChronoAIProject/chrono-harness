@@ -374,6 +374,73 @@ fn expect_selector_error<T>(actual: Result<T, &str>, expected: &str)
     }
 }
 
+fn expect_platform_name(name: &str, trimmed: &str, expected: bool)
+    requires expected == (name@.len() > 0 && name@ == trimmed@),
+{
+    match policy::admit_selector_platform_name(name, trimmed) {
+        Ok(()) => { expect_true(expected); },
+        Err(error) => {
+            expect_true(!expected);
+            expect_true(policy::matches_expected(error, Some(
+                "Git config selector platform must be nonempty and literal")));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn platform_names_require_nonempty_original_text_equal_to_the_trim_observation() {
+    proof {
+        reveal_strlit(""); reveal_strlit("linux"); reveal_strlit(" linux");
+        reveal_strlit("linux\n"); reveal_strlit("\u{2003}λ"); reveal_strlit("λ");
+        reveal_strlit("\0"); reveal_strlit("lin\nux"); reveal_strlit("\u{200b}");
+        assert("linux"@.len() != " linux"@.len());
+        assert("linux"@.len() != "linux\n"@.len());
+        assert("\u{2003}λ"@.len() != "λ"@.len());
+    }
+    expect_platform_name("", "", false);
+    expect_platform_name("linux", "linux", true);
+    expect_platform_name(" linux", "linux", false);
+    expect_platform_name("linux\n", "linux", false);
+    expect_platform_name("\u{2003}λ", "λ", false);
+    expect_platform_name("λ", "λ", true);
+    expect_platform_name("\0", "\0", true);
+    expect_platform_name("lin\nux", "lin\nux", true);
+    expect_platform_name("\u{200b}", "\u{200b}", true);
+}
+
+fn expect_selector_bytes(actual: &[u8], captured: &[u8], unchanged: bool)
+    requires unchanged == (actual@ == captured@),
+{
+    match policy::admit_selector_bytes(actual, captured) {
+        Ok(()) => { expect_true(unchanged); },
+        Err(error) => {
+            expect_true(!unchanged);
+            expect_true(policy::matches_expected(error, Some("Git config selector changed")));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_stability_compares_every_original_byte_including_non_utf8() {
+    let captured: &[u8] = &[0u8, 255, 10];
+    let shorter: &[u8] = &[0u8, 255];
+    let longer: &[u8] = &[0u8, 255, 10, 0];
+    let empty: &[u8] = &[];
+    let nul: &[u8] = &[0u8];
+    proof {
+        assert(captured@.len() == 3);
+        assert(shorter@.len() == 2);
+        assert(longer@.len() == 4);
+        assert(empty@.len() == 0 && nul@.len() == 1);
+    }
+    expect_selector_bytes(&[], &[], true);
+    expect_selector_bytes(&[0u8, 255, 10], &[0u8, 255, 10], true);
+    expect_selector_bytes(&[0u8, 254, 10], &[0u8, 255, 10], false);
+    expect_selector_bytes(shorter, captured, false);
+    expect_selector_bytes(longer, captured, false);
+    expect_selector_bytes(empty, nul, false);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn selector_envelope_requires_exact_fields_and_a_nonempty_platform_object() {
     let shape = "Git config selector requires only schema and platforms";
