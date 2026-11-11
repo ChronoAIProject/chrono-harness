@@ -230,7 +230,10 @@ fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal
     let store = path.parent().unwrap();
     let result = fixture.finish(false).unwrap();
     assert_eq!(result["status"], "finished", "{result}");
-    assert!(!path.exists(), "released fixture must be disposed: {result}");
+    assert!(
+        !path.exists(),
+        "released fixture must be disposed: {result}"
+    );
     let record_path = producer_record_path(store, &path);
     let original = fs::read(&record_path).unwrap();
     let record = json(&original).unwrap();
