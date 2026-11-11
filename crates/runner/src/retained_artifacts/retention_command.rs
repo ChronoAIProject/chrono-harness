@@ -74,6 +74,9 @@ enum Request {
         artifact_id: u64,
         artifact_digest: String,
     },
+    RecoverReport {
+        report: crate::prepared::Original,
+    },
 }
 fn evidence(root: &Path, e: &Evidence) -> Result<Vec<u8>, String> {
     let path = no_symlink_parents(root, &e.path)?;
@@ -118,6 +121,7 @@ fn bounded_json(root: &Path, path: &str, limit: u64) -> Result<(Value, Vec<u8>),
 fn execute(root: &Path, request: Request) -> Result<Value, String> {
     let inventory = Inventory::adopted(root)?.ok_or("host has not adopted output retention")?;
     match request {
+        Request::RecoverReport { report } => crate::scoped_report::recover(root, &report),
         Request::ProtectConsumer { declaration } => {
             let consumer = consumer(root, &declaration)?;
             inventory.protect_consumer(&consumer.consumer, &consumer.originals)?;
