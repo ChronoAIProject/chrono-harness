@@ -278,6 +278,48 @@ impl Commands for Executor<'_> {
     }
 }
 
+/// frontend 在导出前使用现有发布执行器观察工作流，失败原流也归该 artifact 保管。
+pub(crate) fn workflow_preflight(
+    root: &Path,
+    output: &Path,
+    loaded: &Loaded,
+    workflow_path: &str,
+    source_commit: &str,
+    environment: &Environment,
+) -> Result<identity::WorkflowIdentity, String> {
+    let program = loaded
+        .recipe
+        .tools
+        .get("git")
+        .ok_or("missing release Git")?;
+    let git = chrono_harness::resolve_program(root, program, Some(env(environment, "PATH")?))?;
+    let mut executor = Executor {
+        root,
+        output,
+        environment,
+        tools: BTreeMap::from([("git".into(), git)]),
+        started: Instant::now(),
+        seconds: loaded.recipe.limits.unit_seconds,
+        report: json!({"schema":"chrono-release-workflow/v1","status":"failed","processes":[]}),
+        bodies: 0,
+    };
+    let outcome =
+        identity::verify_workflow(workflow_path, source_commit, environment, &mut executor);
+    match &outcome {
+        Ok(identity) => {
+            executor.report["status"] = json!("passed");
+            executor.report["identity"] = serde_json::to_value(identity).map_err(error)?;
+        }
+        Err(failure) => executor.report["failure"] = json!(failure),
+    }
+    fs::write(
+        output.join("workflow.json"),
+        serde_json::to_vec_pretty(&executor.report).map_err(error)?,
+    )
+    .map_err(error)?;
+    outcome
+}
+
 fn checked(
     executor: &mut impl Commands,
     program: &str,

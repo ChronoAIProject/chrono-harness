@@ -28,6 +28,15 @@ pub struct Identity {
     pub verified_ci: Option<VerifiedCi>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowIdentity {
+    pub path: String,
+    pub workflow_commit: String,
+    pub source_commit: String,
+    pub blob: String,
+}
+
 fn error(message: impl std::fmt::Display) -> String {
     format!("E_RELEASE_IDENTITY: {message}")
 }
@@ -37,6 +46,74 @@ fn text<'a>(environment: &'a Environment, name: &str) -> Result<&'a str, String>
         .get(OsStr::new(name))
         .map(|v| v.to_str().ok_or_else(|| error(format!("non UTF-8 {name}"))))
         .unwrap_or(Ok(""))
+}
+
+/// GitHub 的工作流修订可以前移；只有同一路径的完整字节相同才可消费本候选。
+pub fn verify_workflow(
+    path: &str,
+    source_commit: &str,
+    environment: &Environment,
+    commands: &mut impl crate::publication::Commands,
+) -> Result<WorkflowIdentity, String> {
+    chrono_harness::relative_path(path).map_err(error)?;
+    if !path.starts_with(".github/workflows/") || !path.ends_with(".yml") {
+        return Err(error("workflow path must be a declared GitHub workflow"));
+    }
+    let repository = text(environment, "GITHUB_REPOSITORY")?;
+    let workflow_commit = text(environment, "GITHUB_WORKFLOW_SHA")?;
+    let workflow_ref = text(environment, "GITHUB_WORKFLOW_REF")?;
+    if repository.is_empty()
+        || !chrono_identifiers::valid_oid(workflow_commit.as_bytes())
+        || !chrono_identifiers::valid_oid(source_commit.as_bytes())
+        || !workflow_ref
+            .strip_prefix(&format!("{repository}/{path}@"))
+            .is_some_and(|reference| !reference.is_empty())
+    {
+        return Err(error("missing or mismatched GitHub workflow identity"));
+    }
+    let mut blob = |commit: &str| -> Result<String, String> {
+        let reply = commands
+            .execute(
+                "git",
+                &[
+                    "--no-replace-objects".into(),
+                    "rev-parse".into(),
+                    "--verify".into(),
+                    "--end-of-options".into(),
+                    format!("{commit}:{path}"),
+                ],
+            )
+            .map_err(error)?;
+        if reply.exit != 0 {
+            return Err(error(format!(
+                "workflow Git observation exited {} for {commit}:{path}",
+                reply.exit
+            )));
+        }
+        let value = reply
+            .stdout
+            .strip_suffix(b"\n")
+            .filter(|oid| chrono_identifiers::valid_oid(oid))
+            .ok_or_else(|| error("incomplete workflow blob identity"))?;
+        String::from_utf8(value.to_vec()).map_err(error)
+    };
+    let workflow_blob = blob(workflow_commit)?;
+    let source_blob = if workflow_commit == source_commit {
+        workflow_blob.clone()
+    } else {
+        blob(source_commit)?
+    };
+    if workflow_blob != source_blob {
+        return Err(error(format!(
+            "executing workflow {workflow_commit}:{path} differs from candidate {source_commit}:{path}; dispatch from the fixed candidate ref"
+        )));
+    }
+    Ok(WorkflowIdentity {
+        path: path.into(),
+        workflow_commit: workflow_commit.into(),
+        source_commit: source_commit.into(),
+        blob: workflow_blob,
+    })
 }
 
 fn positive(environment: &Environment, name: &str) -> Result<u64, String> {
