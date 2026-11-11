@@ -4298,7 +4298,9 @@ fn synchronous_completion_seals_across_exhausted_rounds_before_handoff() {
     assert_eq!(output["phase"], "released", "{output}");
     assert_eq!(output["manifest"]["sealed"], true, "{output}");
     assert_eq!(output["outcome"]["publication"], "committed");
-    let _guard = inventory(h.path()).read_guard(path).unwrap();
+    let _guard = retained_artifacts::retention::read_guard(h.path(), path)
+        .unwrap()
+        .unwrap();
     assert!(
         inventory(h.path())
             .published_tree_member(
