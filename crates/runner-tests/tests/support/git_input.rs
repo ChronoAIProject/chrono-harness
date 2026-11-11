@@ -1,7 +1,7 @@
 use serde_json::Value;
 use std::io::{self, Write};
-use std::os::unix::process::CommandExt;
-use std::{fs, path::Path, process::Command};
+use std::{fs, path::Path};
+mod git_model;
 
 fn emit(stdout: &[u8], stderr: &[u8], code: i32) -> ! {
     io::stdout().write_all(stdout).unwrap();
@@ -14,6 +14,9 @@ fn emit(stdout: &[u8], stderr: &[u8], code: i32) -> ! {
 fn main() {
     let executable = std::env::current_exe().unwrap();
     let root = executable.parent().unwrap();
+    if !root.join("git-case.json").exists() {
+        return git_model::main();
+    }
     let case: Value =
         serde_json::from_slice(&fs::read(root.join("git-case.json")).unwrap()).unwrap();
     let root = Path::new(case["root"].as_str().unwrap());
@@ -108,8 +111,5 @@ fn main() {
     {
         emit(&fs::read("response").unwrap(), b"", 0);
     }
-    let error = Command::new(case["git"].as_str().unwrap())
-        .args(args)
-        .exec();
-    panic!("execute real Git: {error}");
+    git_model::main();
 }

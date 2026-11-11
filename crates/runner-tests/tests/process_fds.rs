@@ -218,7 +218,10 @@ fn reserved_descriptor_helper() {
     let slot: i32 = slot.parse().unwrap();
     assert!((198..=200).contains(&slot));
     let dir = tempfile::tempdir().unwrap();
-    let warm = spec("/usr/bin/true", vec![]);
+    let warm = spec(
+        env!("CARGO_BIN_EXE_chrono-test-process-lifecycle"),
+        vec!["exit".into(), "0".into()],
+    );
     let result = run_process_observed(
         dir.path(),
         &warm,
@@ -278,7 +281,10 @@ fn first_launch_descriptor_helper() {
     };
     assert_eq!(unsafe { libc::fcntl(198, libc::F_SETFD, flags) }, 0);
     let dir = tempfile::tempdir().unwrap();
-    let command = spec("/usr/bin/true", vec![]);
+    let command = spec(
+        env!("CARGO_BIN_EXE_chrono-test-process-lifecycle"),
+        vec!["exit".into(), "0".into()],
+    );
     let result = run_process_observed(
         dir.path(),
         &command,

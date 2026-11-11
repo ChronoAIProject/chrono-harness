@@ -7,6 +7,10 @@ use std::{fs, path::Path};
 #[path = "support/isolated_capability.rs"]
 mod isolated_capability;
 use isolated_capability::isolated_capability_test;
+#[path = "support/git_fixture.rs"]
+mod git_fixture;
+#[path = "support/native_executable.rs"]
+mod native_executable;
 fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
     fs::create_dir_all(d.path().join(".chrono-harness/state/fixtures")).unwrap();
@@ -3596,7 +3600,7 @@ fn independent_live_writers_keep_their_own_sealed_tree_accounting() {
 
 #[test]
 fn staged_source_added_after_publication_prevents_disposal() {
-    if !isolated_capability_test("staged_source_added_after_publication_prevents_disposal") {
+    if !git_fixture::isolated("staged_source_added_after_publication_prevents_disposal") {
         return;
     }
     let h = host(256, 16);
@@ -3607,7 +3611,7 @@ fn staged_source_added_after_publication_prevents_disposal() {
     fs::write(h.path().join(&p).join("source.rs"), b"source").unwrap();
     publication.complete(json!({"exit":0})).unwrap();
     let git = |args: &[&str]| {
-        std::process::Command::new("/usr/bin/git")
+        std::process::Command::new(git_fixture::program())
             .args(args)
             .current_dir(h.path())
             .output()

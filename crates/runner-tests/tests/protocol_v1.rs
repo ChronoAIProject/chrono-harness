@@ -1,3 +1,5 @@
+#[path = "support/git_fixture.rs"]
+mod git_fixture;
 #[path = "support/native_executable.rs"]
 mod native_executable;
 #[path = "support/retention_state.rs"]
@@ -961,6 +963,9 @@ fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
 
 #[test]
 fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
+    if !git_fixture::isolated("prelaunch_diagnostics_reach_real_full_reports_with_healthy_control") {
+        return;
+    }
     use std::process::Command;
     for case in [
         "missing",
@@ -995,7 +1000,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
             fs::copy(policy, root.join(".chrono-harness/retention.json")).unwrap();
         }
         let git = |args: &[&str]| {
-            let output = Command::new("git")
+            let output = Command::new(git_fixture::program())
                 .arg("-C")
                 .arg(root)
                 .args([

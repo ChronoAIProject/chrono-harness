@@ -1,3 +1,5 @@
+#[path = "support/git_fixture.rs"]
+mod git_fixture;
 #[path = "support/native_executable.rs"]
 mod native_executable;
 
@@ -37,7 +39,6 @@ impl Host {
         let version = Command::new(&git).arg("--version").output().unwrap();
         assert!(version.status.success());
         native_executable::install(env!("CARGO_BIN_EXE_chrono-test-git-input"), &tool).unwrap();
-        case["git"] = json!(git);
         case["root"] = json!(root);
         fs::write(
             tools.join("git-case.json"),
@@ -83,6 +84,42 @@ fn expanded_observation(reader: &Reader) -> Value {
         *process = chrono_harness::full::expand_process(process).unwrap();
     }
     observed
+}
+
+#[test]
+fn command_boundary_fixture_preserves_git_wire_bytes_and_rejects_unknown_commands() {
+    if !git_fixture::isolated("command_boundary_fixture_preserves_git_wire_bytes_and_rejects_unknown_commands") {
+        return;
+    }
+    let case: Value = serde_json::from_slice(include_bytes!("fixtures/git-command.json")).unwrap();
+    let bytes: Vec<u8> = serde_json::from_value(case["bytes"].clone()).unwrap();
+    let h = Host::new(json!({"mode":"repository"}));
+    fs::write(h.root.join("payload"), &bytes).unwrap();
+    let oid = commit(&h);
+    let mut spec = chrono_harness::CommandSpec {
+        program: git_fixture::program().to_str().unwrap().into(),
+        args: vec!["cat-file".into(), "--batch-check".into(), "-z".into()],
+        env: Default::default(), timeout_seconds:30, output_limit_bytes:4096,
+    };
+    let digest = sha256(&fs::read(&spec.program).unwrap());
+    let input = format!("{oid}:payload\0");
+    let metadata = chrono_harness::run_process_observed(&h.root, &spec, input.as_bytes(), &digest).unwrap();
+    assert_eq!(metadata.exit_code, 0);
+    assert!(metadata.failure.is_none());
+    assert_eq!(metadata.stdout_bytes, case["metadata"].as_str().unwrap().as_bytes());
+    assert!(metadata.stderr_bytes.is_empty());
+    assert_eq!(metadata.stdin_sha256, sha256(input.as_bytes()));
+    assert_eq!(&metadata.argv[1..], spec.args);
+    spec.args = vec!["cat-file".into(), "blob".into(), case["blob_oid"].as_str().unwrap().into()];
+    let blob = chrono_harness::run_process_observed(&h.root, &spec, &[], &digest).unwrap();
+    assert_eq!(blob.exit_code, 0);
+    assert_eq!(blob.stdout_bytes, bytes);
+    spec.args = serde_json::from_value(case["unknown_argv"].clone()).unwrap();
+    let unknown = chrono_harness::run_process_observed(&h.root, &spec, &[], &digest).unwrap();
+    assert_eq!(unknown.exit_code, case["unknown_exit"].as_i64().unwrap() as i32);
+    assert!(unknown.stdout_bytes.is_empty());
+    assert!(unknown.stderr.contains("unhandled Git fixture command"));
+    assert_eq!(&unknown.argv[1..], spec.args);
 }
 
 // 新 scoped 绑定只在命令边界模拟 Git，不初始化仓库或委托真实 Git。
@@ -213,7 +250,10 @@ fn actual_registry_test_inputs_have_explicit_runner_test_consumers() {
 
 #[test]
 fn facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     h.save();
     let oid = commit(&h);
     let reader = h.open().unwrap();
@@ -267,7 +307,10 @@ fn facts_observation_v2_is_lossless_and_request_consumers_gate_v1_before_git() {
 
 #[test]
 fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
-    let mut h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("actual_host_registry_bytes_have_lossless_bounded_process_transport") {
+        return;
+    }
+    let mut h = Host::new(json!({"mode":"repository"}));
     // The registered macOS declaration is fixture data on every test platform.
     let product = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let original = fs::read(product.join(".chrono-harness/git/macos-27.json")).unwrap();
@@ -344,7 +387,10 @@ fn actual_host_registry_bytes_have_lossless_bounded_process_transport() {
 
 #[test]
 fn explicit_git_configuration_is_checked_before_each_real_read() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("explicit_git_configuration_is_checked_before_each_real_read") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
     let bytes = reader
         .git(
@@ -381,7 +427,10 @@ fn explicit_git_configuration_is_checked_before_each_real_read() {
 
 #[test]
 fn artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     fs::create_dir_all(h.root.join("cache[1]/allowed")).unwrap();
     fs::write(h.root.join("cache[1]/allowed/output"), "generated").unwrap();
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
@@ -430,6 +479,9 @@ fn artifact_inventory_preserves_noncanonical_paths_and_checks_bound_inputs() {
 
 #[test]
 fn mismatches_and_undeclared_guard_references_do_not_launch_git() {
+    if !git_fixture::isolated("mismatches_and_undeclared_guard_references_do_not_launch_git") {
+        return;
+    }
     for case in [
         "digest",
         "presence",
@@ -441,7 +493,7 @@ fn mismatches_and_undeclared_guard_references_do_not_launch_git() {
         "directory",
         "symlink",
     ] {
-        let mut h = Host::new(json!({"mode":"passthrough"}));
+        let mut h = Host::new(json!({"mode":"repository"}));
         match case {
             "digest" => h.config["environment"]["inputs"][1]["sha256"] = json!("0".repeat(64)),
             "presence" => fs::write(h.root.join(".git/config.worktree"), "").unwrap(),
@@ -473,6 +525,9 @@ fn mismatches_and_undeclared_guard_references_do_not_launch_git() {
 
 #[test]
 fn a_git_process_mutating_an_input_preserves_its_original_failed_receipt() {
+    if !git_fixture::isolated("a_git_process_mutating_an_input_preserves_its_original_failed_receipt") {
+        return;
+    }
     let h = Host::new(json!({"mode":"input-drift"}));
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
     let error = reader
@@ -489,7 +544,10 @@ fn a_git_process_mutating_an_input_preserves_its_original_failed_receipt() {
 
 #[test]
 fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
-    let mut h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("legacy_binding_has_no_guard_and_current_observations_cannot_omit_it") {
+        return;
+    }
+    let mut h = Host::new(json!({"mode":"repository"}));
     h.config["facts_git"]
         .as_object_mut()
         .unwrap()
@@ -503,7 +561,7 @@ fn legacy_binding_has_no_guard_and_current_observations_cannot_omit_it() {
             .is_ok()
     );
 
-    let h = Host::new(json!({"mode":"passthrough"}));
+    let h = Host::new(json!({"mode":"repository"}));
     let reader = h.open().unwrap_or_else(|e| panic!("{}", e.message));
     let mut observation = expanded_observation(&reader);
     let environment = observation["environment"].clone();
@@ -545,7 +603,10 @@ fn identity_selection(h: &Host) -> Value {
 
 #[test]
 fn exact_host_identity_selects_registered_policy_and_preserves_guards() {
-    let mut h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("exact_host_identity_selects_registered_policy_and_preserves_guards") {
+        return;
+    }
+    let mut h = Host::new(json!({"mode":"repository"}));
     h.config["tools"][0]["program"] = json!(h.tool);
     select(&h, &identity_selection(&h));
     let candidate = commit(&h);
@@ -572,7 +633,10 @@ fn exact_host_identity_selects_registered_policy_and_preserves_guards() {
 
 #[test]
 fn fixed_selector_data_does_not_require_the_retired_executable() {
-    let mut h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("fixed_selector_data_does_not_require_the_retired_executable") {
+        return;
+    }
+    let mut h = Host::new(json!({"mode":"repository"}));
     empty_registries(&mut h);
     h.config["tools"][0]["program"] = json!(h.tool);
     let current = h.config.clone();
@@ -659,9 +723,12 @@ fn empty_registries(h: &mut Host) {
 
 #[test]
 fn registered_data_paths_cover_each_current_executable_without_runtime_fallback() {
+    if !git_fixture::isolated("registered_data_paths_cover_each_current_executable_without_runtime_fallback") {
+        return;
+    }
     const ADDITIONAL: &str = ".chrono-harness/additional.json";
     for additional in [false, true] {
-        let mut h = Host::new(json!({"mode":"passthrough"}));
+        let mut h = Host::new(json!({"mode":"repository"}));
         empty_registries(&mut h);
         h.config["tools"][0]["program"] = json!(h.tool);
         let current = h.config.clone();
@@ -758,6 +825,9 @@ fn registered_data_paths_cover_each_current_executable_without_runtime_fallback(
 
 #[test]
 fn invalid_host_identity_selection_never_executes_git() {
+    if !git_fixture::isolated("invalid_host_identity_selection_never_executes_git") {
+        return;
+    }
     for case in [
         "unknown-bytes",
         "duplicate",
@@ -769,7 +839,7 @@ fn invalid_host_identity_selection_never_executes_git() {
         "wrong-target-hash",
         "wrong-target-program",
     ] {
-        let mut h = Host::new(json!({"mode":"passthrough"}));
+        let mut h = Host::new(json!({"mode":"repository"}));
         h.config["tools"][0]["program"] = json!(h.tool);
         let mut selector = identity_selection(&h);
         let host = &mut selector["platforms"][platform()];
@@ -851,7 +921,10 @@ fn commit(h: &Host) -> String {
 
 #[test]
 fn selected_platform_binds_both_candidate_files_and_request_observation() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("selected_platform_binds_both_candidate_files_and_request_observation") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     let mut selector = selection();
     // Another registered platform need not exist on this machine.
     selector["platforms"]["other-system"] = json!(".chrono-harness/elsewhere.json");
@@ -908,6 +981,9 @@ fn selected_platform_binds_both_candidate_files_and_request_observation() {
 
 #[test]
 fn invalid_platform_maps_and_unbound_targets_never_launch_git() {
+    if !git_fixture::isolated("invalid_platform_maps_and_unbound_targets_never_launch_git") {
+        return;
+    }
     for case in [
         "empty",
         "unregistered",
@@ -921,7 +997,7 @@ fn invalid_platform_maps_and_unbound_targets_never_launch_git() {
         "duplicate",
         "symlink",
     ] {
-        let mut h = Host::new(json!({"mode":"passthrough"}));
+        let mut h = Host::new(json!({"mode":"repository"}));
         let mut selector = selection();
         match case {
             "empty" => selector["platforms"] = json!({}),
@@ -960,8 +1036,11 @@ fn invalid_platform_maps_and_unbound_targets_never_launch_git() {
 
 #[test]
 fn platform_selector_and_selected_policy_drift_block_the_next_process() {
+    if !git_fixture::isolated("platform_selector_and_selected_policy_drift_block_the_next_process") {
+        return;
+    }
     for path in [SELECTOR, CONFIG] {
-        let h = Host::new(json!({"mode":"passthrough"}));
+        let h = Host::new(json!({"mode":"repository"}));
         select(&h, &selection());
         let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
         assert!(reader.is_bound());
@@ -993,6 +1072,9 @@ fn platform_selector_and_selected_policy_drift_block_the_next_process() {
 
 #[test]
 fn selector_mutation_during_git_retains_the_original_failed_process() {
+    if !git_fixture::isolated("selector_mutation_during_git_retains_the_original_failed_process") {
+        return;
+    }
     let h = Host::new(json!({"mode":"selector-drift"}));
     select(&h, &selection());
     let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
@@ -1009,8 +1091,11 @@ fn selector_mutation_during_git_retains_the_original_failed_process() {
 
 #[test]
 fn platform_selection_must_match_both_fixed_candidate_blobs() {
+    if !git_fixture::isolated("platform_selection_must_match_both_fixed_candidate_blobs") {
+        return;
+    }
     for path in [SELECTOR, CONFIG] {
-        let mut h = Host::new(json!({"mode":"passthrough"}));
+        let mut h = Host::new(json!({"mode":"repository"}));
         let selector = selection();
         select(&h, &selector);
         let candidate = commit(&h);
@@ -1038,7 +1123,10 @@ fn processes(reader: &Reader) -> usize {
 
 #[test]
 fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("snapshot_export_batches_literal_blobs_and_preserves_original_bytes") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     h.save();
     fs::create_dir(h.root.join("objects")).unwrap();
     let mut originals = std::collections::BTreeMap::new();
@@ -1116,6 +1204,9 @@ fn snapshot_export_batches_literal_blobs_and_preserves_original_bytes() {
 
 #[test]
 fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
+    if !git_fixture::isolated("snapshot_export_retains_failed_batch_and_reacquires_on_retry") {
+        return;
+    }
     let (h, originals, oid) = registry_host(json!({"mode":"batch-fail"}), 20);
     let reader = h.open().unwrap();
     reader.verify_oid(&h.root, &oid).unwrap();
@@ -1147,7 +1238,10 @@ fn snapshot_export_retains_failed_batch_and_reacquires_on_retry() {
 
 #[test]
 fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations() {
-    let mut h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations") {
+        return;
+    }
+    let mut h = Host::new(json!({"mode":"repository"}));
     let mut registries = serde_json::Map::new();
     for role in ["judges", "projects", "filemap", "workflow"] {
         let path = format!(".chrono-harness/{role} café.json");
@@ -1212,7 +1306,10 @@ fn fixed_registry_reads_reuse_real_acquisitions_without_replaying_observations()
 
 #[test]
 fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     h.save();
     let path = "payload café\t.bin";
     let bytes = b"\0\xff\nbody\0";
@@ -1231,7 +1328,7 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
     reader.verify_oid(&h.root, &new).unwrap();
     assert_eq!(reader.blob(&h.root, &new, path).unwrap(), b"new");
     assert_eq!(reader.blob(&h.root, &old, path).unwrap(), bytes);
-    let other = Host::new(json!({"mode":"passthrough"}));
+    let other = Host::new(json!({"mode":"repository"}));
     let count = processes(&reader);
     assert!(
         reader
@@ -1250,7 +1347,10 @@ fn immutable_reuse_separates_root_oid_and_exact_path_and_preserves_binary_bytes(
 
 #[test]
 fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("immutable_tree_reuse_preserves_live_checkout_and_original_evidence") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     h.save();
     fs::write(h.root.join("payload"), b"original").unwrap();
     let old = commit(&h);
@@ -1297,7 +1397,7 @@ fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
         .filter(|p| p["argv"].as_array().unwrap().iter().any(|v| v == "ls-tree"))
         .count();
     assert_eq!(reads, 1);
-    let other = Host::new(json!({"mode":"passthrough"}));
+    let other = Host::new(json!({"mode":"repository"}));
     let count = processes(&reader);
     assert!(
         reader
@@ -1329,6 +1429,9 @@ fn immutable_tree_reuse_preserves_live_checkout_and_original_evidence() {
 
 #[test]
 fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
+    if !git_fixture::isolated("invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure") {
+        return;
+    }
     for drift in [false, true] {
         let h = Host::new(if drift {
             json!({"mode":"tree-drift"})
@@ -1356,6 +1459,9 @@ fn invalid_or_drifted_tree_acquisition_is_retried_without_reusing_failure() {
 
 #[test]
 fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() {
+    if !git_fixture::isolated("cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects") {
+        return;
+    }
     for case in [
         "selector",
         "config",
@@ -1364,7 +1470,7 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
         "guard-absent",
         "symlink",
     ] {
-        let h = Host::new(json!({"mode":"passthrough"}));
+        let h = Host::new(json!({"mode":"repository"}));
         select(&h, &selection());
         fs::write(h.root.join("payload"), b"original").unwrap();
         let oid = commit(&h);
@@ -1409,6 +1515,9 @@ fn cached_immutable_bytes_still_reject_every_bound_guard_drift_before_effects() 
 
 #[test]
 fn failed_or_postprocess_drifted_blob_reads_are_never_reused() {
+    if !git_fixture::isolated("failed_or_postprocess_drifted_blob_reads_are_never_reused") {
+        return;
+    }
     for drift in [false, true] {
         let body = if drift {
             json!({"mode":"blob-drift"})
@@ -1459,7 +1568,10 @@ fn failed_or_postprocess_drifted_blob_reads_are_never_reused() {
 
 #[test]
 fn mutable_refs_index_checkout_and_untracked_facts_remain_fresh() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("mutable_refs_index_checkout_and_untracked_facts_remain_fresh") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     h.save();
     fs::write(h.root.join("payload"), b"old").unwrap();
     let old = commit(&h);
@@ -1510,6 +1622,9 @@ fn mutable_refs_index_checkout_and_untracked_facts_remain_fresh() {
 
 #[test]
 fn immutable_reuse_does_not_cross_reader_environment_or_binding_changes() {
+    if !git_fixture::isolated("immutable_reuse_does_not_cross_reader_environment_or_binding_changes") {
+        return;
+    }
     let mut h = Host::new(json!({"mode":"bound-value"}));
     h.config["environment"]["values"]["BOUND_VALUE"] = json!("first");
     h.save();
@@ -1545,7 +1660,10 @@ fn immutable_reuse_does_not_cross_reader_environment_or_binding_changes() {
 
 #[test]
 fn oid_shaped_ref_for_another_object_format_is_still_mutable() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("oid_shaped_ref_for_another_object_format_is_still_mutable") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     h.save();
     fs::write(h.root.join("payload"), b"old").unwrap();
     let old = commit(&h);
@@ -1583,7 +1701,10 @@ fn oid_shaped_ref_for_another_object_format_is_still_mutable() {
 
 #[test]
 fn reads_before_a_successful_identity_observation_stay_fresh_without_extra_probes() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("reads_before_a_successful_identity_observation_stay_fresh_without_extra_probes") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     h.save();
     fs::write(h.root.join("payload"), b"original").unwrap();
     let oid = commit(&h);
@@ -1607,6 +1728,9 @@ fn reads_before_a_successful_identity_observation_stay_fresh_without_extra_probe
 
 #[test]
 fn malformed_or_failed_identity_observations_never_enable_reuse() {
+    if !git_fixture::isolated("malformed_or_failed_identity_observations_never_enable_reuse") {
+        return;
+    }
     for case in [
         "type",
         "framing",
@@ -1712,7 +1836,10 @@ fn registry_host(
 
 #[test]
 fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges() {
-    let (h, originals, oid) = registry_host(json!({"mode":"passthrough"}), 40);
+    if !git_fixture::isolated("registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges") {
+        return;
+    }
+    let (h, originals, oid) = registry_host(json!({"mode":"repository"}), 40);
     let reader = h.open().unwrap();
     reader.verify_oid(&h.root, &oid).unwrap();
     let start = std::time::Instant::now();
@@ -1781,8 +1908,11 @@ fn registry_batch_retains_original_framed_processes_and_reuses_only_blob_ranges(
 
 #[test]
 fn registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blobs() {
+    if !git_fixture::isolated("registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blobs") {
+        return;
+    }
     for exact_limit in [false, true] {
-        let (mut h, mut originals, _) = registry_host(json!({"mode":"passthrough"}), 700);
+        let (mut h, mut originals, _) = registry_host(json!({"mode":"repository"}), 700);
         h.config["protocol"]["stdout_limit_bytes"] = json!(2048);
         if exact_limit {
             for (path, bytes) in &mut originals {
@@ -1813,6 +1943,9 @@ fn registry_batch_partitions_within_original_limit_and_preserves_exact_limit_blo
 
 #[test]
 fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused() {
+    if !git_fixture::isolated("registry_batch_failures_and_malformed_originals_are_retained_and_never_reused") {
+        return;
+    }
     for phase in ["--batch-check", "--batch"] {
         for response in [
             b"".as_slice(),
@@ -1875,6 +2008,9 @@ fn registry_batch_failures_and_malformed_originals_are_retained_and_never_reused
 
 #[test]
 fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
+    if !git_fixture::isolated("registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing") {
+        return;
+    }
     let body = json!({"mode":"batch-response","phase":"--batch"});
     let (h, _, oid) = registry_host(body, 30);
     let first = h.open().unwrap();
@@ -1933,6 +2069,9 @@ fn registry_batch_rejects_corrupted_lengths_identities_payloads_and_framing() {
 
 #[test]
 fn registry_batch_keeps_configured_process_output_and_time_failures() {
+    if !git_fixture::isolated("registry_batch_keeps_configured_process_output_and_time_failures") {
+        return;
+    }
     for case in ["output", "time"] {
         let body = if case == "output" {
             json!({"mode":"batch-output"})
@@ -1969,6 +2108,9 @@ fn registry_batch_keeps_configured_process_output_and_time_failures() {
 
 #[test]
 fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
+    if !git_fixture::isolated("registry_batch_ranges_preserve_selector_root_and_all_bound_guards") {
+        return;
+    }
     for case in [
         "selector",
         "config",
@@ -1977,7 +2119,7 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
         "guard-absent",
         "root",
     ] {
-        let (h, originals, _) = registry_host(json!({"mode":"passthrough"}), 20);
+        let (h, originals, _) = registry_host(json!({"mode":"repository"}), 20);
         select(&h, &selection());
         let oid = commit(&h);
         let reader = Reader::for_config(&h.root, SELECTOR).unwrap();
@@ -2014,7 +2156,10 @@ fn registry_batch_ranges_preserve_selector_root_and_all_bound_guards() {
 
 #[test]
 fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
-    let (h, originals, old) = registry_host(json!({"mode":"passthrough"}), 20);
+    if !git_fixture::isolated("unverified_registry_endpoints_and_mutable_refs_keep_original_reads") {
+        return;
+    }
+    let (h, originals, old) = registry_host(json!({"mode":"repository"}), 20);
     let reader = h.open().unwrap();
     for _ in 0..2 {
         let before = processes(&reader);
@@ -2056,7 +2201,10 @@ fn unverified_registry_endpoints_and_mutable_refs_keep_original_reads() {
 
 #[test]
 fn immutable_input_contract_reads_complete_large_bytes_with_original_processes() {
-    let h = Host::new(json!({"mode":"passthrough"}));
+    if !git_fixture::isolated("immutable_input_contract_reads_complete_large_bytes_with_original_processes") {
+        return;
+    }
+    let h = Host::new(json!({"mode":"repository"}));
     let original = vec![b'x'; 2_022_211];
     let path = ".chrono-harness/immutable-input.json";
     fs::write(h.root.join(path), &original).unwrap();
@@ -2168,6 +2316,9 @@ fn immutable_input_contract_reads_complete_large_bytes_with_original_processes()
 
 #[test]
 fn immutable_input_data_transport_keeps_stderr_and_failure_bounds() {
+    if !git_fixture::isolated("immutable_input_data_transport_keeps_stderr_and_failure_bounds") {
+        return;
+    }
     let h = Host::new(json!({"mode":"data-response"}));
     fs::write(h.root.join("data-stdout"), b"original partial\xff").unwrap();
     fs::write(h.root.join("data-stderr"), b"original error\xfe").unwrap();

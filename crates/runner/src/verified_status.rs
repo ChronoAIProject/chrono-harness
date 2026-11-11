@@ -27,6 +27,13 @@ pub mod scopes;
 
 verus! {
 
+/// Only the synchronous owner releases a local directory operation on return.
+pub fn release_local_directory(local: bool, owner_pid: u32, current_pid: u32) -> (out: bool)
+    ensures out == (local && owner_pid == current_pid),
+{
+    local && owner_pid == current_pid
+}
+
 /// 标准 JSON 解码仅提供四个固定字段的原字符串观察。
 pub enum RegistryPathError<'a> {
     Missing { message: &'static str },

@@ -62,7 +62,9 @@ impl Fixture {
         let preparation = nested.path().join("state/collection/preparation");
         fs::create_dir_all(&preparation).unwrap();
         fs::write(preparation.join("original.bytes"), [0u8, 253]).unwrap();
-        let git = chrono_harness::resolve_program(host.root(), "git", None).unwrap();
+        let git = tools.path().join("git");
+        fs::copy(env!("CARGO_BIN_EXE_chrono-test-release-git"), &git).unwrap();
+        fs::set_permissions(&git, fs::Permissions::from_mode(0o755)).unwrap();
         host.config["tools"]["git"] = json!(git);
         for name in ["cargo", "rustc", "rustup", "probe"] {
             let file = tools.path().join(name);

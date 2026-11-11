@@ -1663,6 +1663,65 @@ fn same_host_excludes_a_second_process_while_an_independent_host_progresses() {
 }
 
 #[test]
+fn completed_synchronous_operation_releases_lock_while_unrelated_fork_retains_descriptors() {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::net::UnixStream;
+    let host = Host::new();
+    host.init().unwrap();
+    let lease = chrono_harness::ownership::DirectoryLease::acquire_local(
+        &host.root.join(".chrono-harness/state/instructions-operations"), true, None,
+    ).unwrap().unwrap();
+    let (read, write) = UnixStream::pair().unwrap();
+    let child = unsafe { libc::fork() };
+    assert!(child >= 0);
+    if child == 0 {
+        // This unrelated pre-exec fork retains the open descriptions. It only
+        // uses async-signal-safe syscalls, and EOF is its native completion gate.
+        unsafe {
+            libc::close(write.as_raw_fd());
+            if libc::write(read.as_raw_fd(), b"r".as_ptr().cast(), 1) != 1 {
+                libc::_exit(90);
+            }
+            let mut byte = 0u8;
+            loop {
+                let result = libc::read(read.as_raw_fd(), (&mut byte as *mut u8).cast(), 1);
+                if result == 0 { break; }
+                #[cfg(target_os = "macos")]
+                let interrupted = *libc::__error() == libc::EINTR;
+                #[cfg(target_os = "linux")]
+                let interrupted = *libc::__errno_location() == libc::EINTR;
+                if result < 0 && interrupted { continue; }
+                libc::_exit(91);
+            }
+            libc::_exit(0);
+        }
+    }
+    struct JoinedFork { write: Option<UnixStream>, child: libc::pid_t }
+    impl Drop for JoinedFork {
+        fn drop(&mut self) {
+            drop(self.write.take());
+            let mut status = 0;
+            assert_eq!(unsafe { libc::waitpid(self.child, &mut status, 0) }, self.child);
+            assert_eq!(status, 0);
+        }
+    }
+    let mut joined = JoinedFork { write: Some(write), child };
+    let mut ready = [0];
+    joined.write.as_mut().unwrap().read_exact(&mut ready).unwrap();
+    assert_eq!(ready, *b"r");
+    let busy = cli_init(&host, None, None);
+    assert_eq!(busy.exit_code, 1, "{busy:?}");
+    assert!(busy.stderr.contains("busy"));
+    drop(lease);
+    // The inherited descriptor remains live. The real next caller must succeed
+    // immediately without a retry, sleep or weakened same-host exclusion.
+    let result = cli_init(&host, None, None);
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert_alias(&host);
+}
+
+#[test]
 fn recovery_preserves_destination_parent_input_and_literal_alias_drift() {
     for drift in ["destination", "parent", "input", "alias"] {
         let host = Host::new();

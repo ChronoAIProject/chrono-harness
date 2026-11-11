@@ -911,7 +911,7 @@ pub(super) fn run(
     let root = fs::canonicalize(host).map_err(|e| super::error(host, e))?;
     let host_identity = identity(&root)?;
     let store = scope(&root)?;
-    let exclusive = DirectoryLease::acquire(&store, true, None)?
+    let exclusive = DirectoryLease::acquire_local(&store, true, None)?
         .ok_or("instructions operation busy on this host")?;
     recover(&root, &fault)?;
     exclusive.stable()?;
@@ -1053,7 +1053,7 @@ pub(super) fn status(host: &Path, attempt: Option<&str>) -> Result<Value, String
 pub(super) fn maintain(host: &Path) -> Result<Value, String> {
     let root = fs::canonicalize(host).map_err(|e| super::error(host, e))?;
     let store = scope(&root)?;
-    let _exclusive = DirectoryLease::acquire(&store, true, None)?
+    let _exclusive = DirectoryLease::acquire_local(&store, true, None)?
         .ok_or("instructions operation busy on this host")?;
     recover(&root, &Fault::default())?;
     let report = inventory(&root)?.maintain_producer(PRODUCER)?;

@@ -24,6 +24,14 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn local_directory_release_respects_owner_and_descendant_lifetimes() {
+    expect_status_true(policy::release_local_directory(true, 10, 10));
+    expect_status_true(!policy::release_local_directory(true, 10, 11));
+    expect_status_true(!policy::release_local_directory(false, 10, 10));
+    expect_status_true(!policy::release_local_directory(false, 10, 11));
+}
+
 // 这些分支在普通 Rust 测试中也执行；证明不能替代真实调用的断言。
 fn expect_status_true(actual: bool)
     requires actual,

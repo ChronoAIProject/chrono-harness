@@ -73,6 +73,13 @@ fn run() -> Result<u8, String> {
         println!("fixture executable b");
         return Ok(0);
     }
+    if executable_name() == Some("probe".into())
+        && args == ["verify none", "space value", "$literal", "λ"]
+        && !Path::new(".chrono-harness/release/tool-fixture.json").exists()
+    {
+        println!("verify none space value $literal λ");
+        return Ok(0);
+    }
     let fixture: Value = serde_json::from_slice(
         &fs::read(".chrono-harness/release/tool-fixture.json").map_err(|e| e.to_string())?,
     )
@@ -191,6 +198,10 @@ fn run() -> Result<u8, String> {
         }
         _ => Err(format!("unknown external tool invocation: {name} {args:?}")),
     }
+}
+
+fn executable_name() -> Option<String> {
+    std::env::current_exe().ok()?.file_name()?.to_str().map(str::to_owned)
 }
 
 fn main() -> ExitCode {

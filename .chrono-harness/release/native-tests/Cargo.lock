@@ -114,6 +114,7 @@ dependencies = [
  "chrono-host-release",
  "serde",
  "serde_json",
+ "sha1",
  "tar",
  "tempfile",
  "verus_builtin_macros",
