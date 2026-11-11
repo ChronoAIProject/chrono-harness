@@ -429,8 +429,10 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
     ensures match rows {
         None => out == Err::<Option<usize>, &'static str>("binding collection must be array"),
         Some(rows) => match out {
-            Ok(Some(index)) => unique_binding_reference_index(rows, id, index as int),
-            Ok(None) => forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i),
+            Ok(selected) => match selected {
+                Some(index) => unique_binding_reference_index(rows, id, index as int),
+                None => forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i),
+            },
             Err(_) => false,
         },
     },
@@ -438,11 +440,25 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
     let Some(rows) = rows else { return Err("binding collection must be array"); };
     let observed = BindingMatches { rows, id };
     proof {
+        reveal(unique_match_index);
         assert(observed.count() == rows.count());
         assert forall|i: int| #[trigger] observed.matches(i)
             == binding_reference_matches(rows, i, id) by {}
         assert forall|i: int| #[trigger] unique_match_index(&observed, i)
-            == unique_binding_reference_index(rows, id, i) by {}
+            == unique_binding_reference_index(rows, id, i) by {
+            if unique_match_index(&observed, i) {
+                assert forall|j: int| 0 <= j < rows.count() && j != i implies
+                    !#[trigger] binding_reference_matches(rows, j, id) by {
+                    assert(!observed.matches(j));
+                }
+            }
+            if unique_binding_reference_index(rows, id, i) {
+                assert forall|j: int| 0 <= j < observed.count() && j != i implies
+                    !#[trigger] observed.matches(j) by {
+                    assert(!binding_reference_matches(rows, j, id));
+                }
+            }
+        }
     }
     let selected = unique_matching_index(&observed);
     proof {
@@ -486,11 +502,25 @@ pub fn select_captured_target<'a, M: RegistryMembership>(paths: &[&'a str], valu
     let message = "registry values require exactly one registered effective policy";
     let observed = CapturedMatches { paths, values };
     proof {
+        reveal(unique_match_index);
         assert(observed.count() == paths@.len());
-        assert forall|i: int| #[trigger] observed.matches(i)
+        assert forall|i: int| 0 <= i < paths@.len() implies #[trigger] observed.matches(i)
             == values.has_path(paths@[i]) by {}
         assert forall|i: int| #[trigger] unique_match_index(&observed, i)
-            == unique_registry_index(paths@, values, i) by {}
+            == unique_registry_index(paths@, values, i) by {
+            if unique_match_index(&observed, i) {
+                assert forall|j: int| 0 <= j < paths@.len() && j != i implies
+                    !values.has_path(#[trigger] paths@[j]) by {
+                    assert(!observed.matches(j));
+                }
+            }
+            if unique_registry_index(paths@, values, i) {
+                assert forall|j: int| 0 <= j < observed.count() && j != i implies
+                    !#[trigger] observed.matches(j) by {
+                    assert(!values.has_path(paths@[j]));
+                }
+            }
+        }
     }
     let selected = unique_matching_index(&observed);
     match selected {
