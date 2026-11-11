@@ -46,7 +46,7 @@ worktree 发布资产；配方的 `needs`、使用方声明与 CI 下载登记�
 worktree 专属测试仍复制并运行实际 CLI，保留只读安装、所有者发布和中断断言；原测试、分组、线程及限制不变。
 正式生产构建、最终打包和真实安装继续消费生产资产。测试根沿用原开发配置，完整发布耗时、传输和维护的净成本收益未测。
 
-CI 专属测试同时统一复用已有的 `chrono-ci-test-cli`，由相同生产 `main.rs` 编译。两平台 `verify_ci_tests` 不再等待、下载或暂存 ci 发布资产；runner、judge-ci 和 registration 的真实发布资产消费保留。完整上下文、发布命令和生成宿主的原未过滤测试、断言及限制不变；正式 `build_ci`、其它使用方、最终打包与安装仍保留，完整成本收益未测。
+CI 专属测试同时统一复用已有的 `chrono-ci-test-cli`，由相同生产 `main.rs` 编译。两平台 `verify_ci_tests` 不再等待、下载或暂存 ci 发布资产；runner 和 registration 的真实发布资产消费保留。CI、projects 和 judge-ci 专属测试也分别编译唯一的 judge-ci 生产 `main.rs`，各自发布验证不再依赖、下载或暂存 judge-ci 资产。projects 验证仍消费 runner、registration、filemap、routes 和 projects 的真实发布 CLI。完整上下文、发布命令和生成宿主的原未过滤测试、断言及限制不变；正式 `build_ci`、`build_judge_ci`、其它使用方、最终打包与安装仍保留，完整成本收益未测。
 
 cache 专属测试直接编译生产 CLI，恢复及封存样本绑定同一执行物的真实身份。两平台 `verify_cache_tests` 不再等待、下载或暂存 cache 发布资产，原未过滤操作保留；native 发布测试与最终打包仍消费生产 cache，完整发布成本收益未测。
 

@@ -311,8 +311,7 @@ fn install_tools_owned(root: &Path, tools: &[(&str, &str, ToolProbe)], retained:
 fn fixture_executable_identity_survives_neighbor_teardown() {
     use std::os::unix::fs::MetadataExt;
 
-    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../crates/judge-ci/target/debug/chrono-judge-ci");
+    let source = Path::new(env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"));
     let first = fixture();
     let second = fixture();
     let tools = [("judge-ci", "chrono-judge-ci", ToolProbe::JudgeEof)];
