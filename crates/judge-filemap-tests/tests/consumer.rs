@@ -24,7 +24,11 @@ impl Host {
             ("judge-registration", "chrono-judge-registration"),
             ("judge-filemap", "chrono-judge-filemap"),
         ] {
-            let p = source().join(format!("crates/{project}/target/debug/{binary}"));
+            let p = if (project, binary) == ("runner", "chrono-harness") {
+                std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
+            } else {
+                source().join(format!("crates/{project}/target/debug/{binary}"))
+            };
             assert!(
                 p.is_file(),
                 "build registered binary first: {}",
