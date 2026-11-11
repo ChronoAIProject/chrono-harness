@@ -76,27 +76,34 @@ fn ledger(root: &Path) -> Value {
 
 #[test]
 #[cfg(unix)]
-fn path_declaration_rejects_special_files_without_blocking_or_disposing_originals() {
+fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
     use std::os::unix::fs::{MetadataExt, symlink};
     if !isolated_capability_test(
-        "path_declaration_rejects_special_files_without_blocking_or_disposing_originals",
+        "declarations_reject_special_files_without_blocking_or_disposing_originals",
     ) {
         return;
     }
-    for kind in [
-        "fifo",
-        "symlink",
-        "dangling",
-        "symlink-fifo",
-        "directory",
-        "oversized",
-    ] {
+    for (namespace, kind) in ["path", "object", "consumer"]
+        .into_iter()
+        .flat_map(|namespace| {
+            [
+                "fifo",
+                "symlink",
+                "dangling",
+                "symlink-fifo",
+                "directory",
+                "oversized",
+            ]
+            .into_iter()
+            .map(move |kind| (namespace, kind))
+        })
+    {
         let h = host(256, 16);
         let path = tree(h.path(), "original");
         let original = h.path().join(&path).join("failure");
         fs::write(&original, b"necessary original failure").unwrap();
         let publication = inventory(h.path())
-            .begin("fixture", &path, json!(null))
+            .begin_rooted("fixture", &path, json!(null), &["current".into()])
             .unwrap();
         let id = publication.id().to_owned();
         publication.complete(json!({"exit":7})).unwrap();
@@ -106,7 +113,13 @@ fn path_declaration_rejects_special_files_without_blocking_or_disposing_original
         for component in path.split('/') {
             directory.push(chrono_harness::sha256(component.as_bytes()));
         }
-        let marker = directory.join("address.json");
+        let marker = match namespace {
+            "path" => directory.join("address.json"),
+            "object" => retention_state::object_path(h.path(), &id),
+            "consumer" => retention_state::role_path(h.path(), "current"),
+            _ => unreachable!(),
+        };
+        let directory = marker.parent().unwrap();
         let saved = directory.join("saved-address.json");
         let target = directory.join("fifo-target");
         fs::rename(&marker, &saved).unwrap();
@@ -183,6 +196,7 @@ fn path_declaration_rejects_special_files_without_blocking_or_disposing_original
             fs::remove_file(&target).unwrap();
         }
         fs::rename(&saved, &marker).unwrap();
+        inventory(h.path()).reference("current", &[]).unwrap();
         assert_eq!(maintain_fixture_to(h.path(), 0), 0, "{kind}");
         assert!(!original.exists(), "{kind}");
     }

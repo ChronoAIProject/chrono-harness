@@ -645,11 +645,16 @@ impl Inventory {
             Err(e) => return Err(e.to_string()),
         };
         let metadata = file.metadata().map_err(|e| e.to_string())?;
-        if !metadata.is_file()
-            || fs::symlink_metadata(path)
-                .map_err(|e| e.to_string())?
-                .file_type()
-                .is_symlink()
+        if !metadata.is_file() {
+            return Err("retention declaration must be a physical regular file".into());
+        }
+        // O_NOFOLLOW already rejects a linked leaf on Unix. Validate the opened
+        // file once; callers have checked/excluded its declaration directory.
+        #[cfg(not(unix))]
+        if fs::symlink_metadata(path)
+            .map_err(|e| e.to_string())?
+            .file_type()
+            .is_symlink()
         {
             return Err("retention declaration must be a physical regular file".into());
         }
@@ -697,7 +702,7 @@ impl Inventory {
     }
     fn read_object(&self, id: &str, directory: &Path) -> Result<Object, String> {
         let record: Object = self
-            .read_metadata(&no_symlink_parents(directory, "record.json")?)?
+            .read_metadata(&directory.join("record.json"))?
             .ok_or_else(|| format!("retained output unavailable: {id}"))?;
         if record.schema != "chrono-retained-output/v2"
             || record.id != id
@@ -717,8 +722,7 @@ impl Inventory {
     }
     fn read_role(&self, role: &str) -> Result<Option<Role>, String> {
         let directory = self.role_directory(role)?;
-        let record: Option<Role> =
-            self.read_metadata(&no_symlink_parents(&directory, "record.json")?)?;
+        let record: Option<Role> = self.read_metadata(&directory.join("record.json"))?;
         if record.as_ref().is_some_and(|r| {
             r.schema != "chrono-retained-role/v2"
                 || r.role != role
