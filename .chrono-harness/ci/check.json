@@ -221,10 +221,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.judge-ci": [
-        "ci",
-        "judge-projects"
-      ],
       "build.judge-cost": [
         "inputs",
         "judge-cost",

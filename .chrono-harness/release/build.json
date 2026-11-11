@@ -363,7 +363,6 @@
       "operation": "test.ci-tests",
       "needs": [
         "build_runner",
-        "build_judge_ci",
         "build_judge_registration"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
@@ -396,7 +395,6 @@
       "operation": "test.judge-projects-tests",
       "needs": [
         "build_runner",
-        "build_judge_ci",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -780,10 +778,9 @@
       ]
     },
     "verify_ci_tests": {
-      "need": "ci-tests 复用已有 chrono-ci-test-cli，由 Cargo 从唯一生产 main.rs 编译；worktree CLI 同样由测试项目编译。真实宿主测试仍消费 runner、judge-ci 和 registration 发布 CLI，核生成检查、固定 Git 输入与原回执。",
+      "need": "ci-tests 由 Cargo 从唯一生产 main.rs 编译 ci、worktree 和 judge-ci 测试 CLI。真实宿主测试仍消费 runner 和 registration 发布 CLI，核生成检查、固定 Git 输入与原回执。",
       "release_assets": [
         "chrono-harness",
-        "chrono-judge-ci",
         "chrono-judge-registration"
       ]
     },
@@ -801,10 +798,9 @@
       ]
     },
     "verify_judge_projects_tests": {
-      "need": "crates/judge-projects-tests/tests/support/host.rs runs runner with registration, filemap, routes and projects to execute declared project/script tests; consumer.rs also runs judge-ci through the scoped runner entry and inspects actual operation receipts.",
+      "need": "projects 测试通过 runner 调用 registration、filemap、routes 和 projects 发布 CLI，执行登记的项目／脚本测试；scoped runner 使用测试项目从唯一生产 main.rs 编译的 judge-ci CLI，并核实际操作回执。",
       "release_assets": [
         "chrono-harness",
-        "chrono-judge-ci",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-routes",
