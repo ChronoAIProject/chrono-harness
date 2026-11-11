@@ -39,6 +39,18 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 本仓按批次把实际决策和状态逻辑迁到 Verus。完整目标是所有 SPEC 与仓内程序逻辑都有证明，
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
+Git 输入 guard 的对象形状、完整 schema、非空 ID 清单、文件输入数组、单个 ID／location
+非空判断、重复先于引用选择、唯一引用原索引，以及 presence／digest 准入由同源
+`verified_git_binding.rs` 维护，`facts_inputs::declaration` 直接消费。
+引用唯一性复用已有遍历内核，摘要复用已有完整小写十六进制证明；错误的固定前缀、完整
+原 ID 和后缀由 Verus 返回，标准格式接口仅拼接。独立 Verus 预期同时作为 Rust 测试，
+覆盖非相邻重复、原索引、Unicode／NUL／空白全文、缺数组、空数组、额外字段和 schema
+全文差异；absence 区分缺失摘要键与显式 null，present 仍要求完整摘要。
+固定 serde_json 的对象／数组／键及字段投影和完整借用为明确接口，JsonGuardReferences
+只提供原数组长度与指定行的完整 id，不作选择。已有外层请求遍历、seen 集合维护、路径
+分支、选中值克隆及观察／IO 组合仍待整体证明，不把这些局部判断扩大为整个 guard 已证明。
+沿用现有两项整 crate 根、FILEMAP、工具和预算，完整验证与运行成本未测。
+
 Git 输入 guard 的实际缺失／摘要观察准入由现有 `verified_git_binding.rs` 维护，
 `facts_inputs::observe` 直接消费。缺失观察只接受完整 `absent`，存在观察只接受完整
 `present` 和实际摘要全文相等；成功保留原摘要借用与完整 u64 长度，失败保留完整 ID 和
@@ -50,7 +62,7 @@ Git 输入 guard 的实际缺失／摘要观察准入由现有 `verified_git_bin
 新增准入逻辑与独立预期沿用 FILEMAP 中实际 Verus 源码的两个整 crate 根登记；
 `facts_inputs.rs` 未进入这些根的编译依赖，仍保持存量未知覆盖，不取得整文件证明资格。
 不新增工具、证明入口或预算。
-外层遍历、ID／路径准入、路径组合、集合状态、IO 错误映射与完整 `Guard::unchanged`
+外层遍历、路径准入、路径组合、集合状态、IO 错误映射与完整 `Guard::unchanged`
 仍待证明，不把局部根当作整个 guard 已证明。比较成本随实际文本长度增长，
 完整构建、证明、CI 和运行成本未测。
 新增规格、决策、状态维护与独立边界预期直接写在 Verus 中，在源码所有者计划登记整 crate 证明；

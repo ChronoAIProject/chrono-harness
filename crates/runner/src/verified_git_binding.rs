@@ -599,6 +599,17 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
         },
 {
     let Some(rows) = rows else { return Err("binding collection must be array"); };
+    Ok(binding_reference_index(rows, id))
+}
+
+fn binding_reference_index<R: BindingReferenceRows>(rows: &R, id: &str) -> (selected: Option<usize>)
+    ensures match selected {
+        Some(index) => unique_binding_reference_index(rows, id, index as int),
+        None => forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i),
+    },
+        forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+            ==> selected == Some(i),
+{
     let observed = BindingMatches { rows, id };
     proof {
         reveal(unique_match_index);
@@ -642,7 +653,7 @@ pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &
             }
         }
     }
-    Ok(selected)
+    selected
 }
 
 struct CapturedMatches<'a, 'p, M: RegistryMembership> {
@@ -811,6 +822,143 @@ pub fn admit_identity_registry_target(path: &str, targets: &[&str])
         i += 1;
     }
     Err("Git selector registry_path must name a registered policy target")
+}
+
+/// guard 的对象准入保留原来的字段数、完整 schema 和 inputs 键要求。
+pub fn admit_git_guard_object(fields: Option<usize>, schema: Option<&str>, inputs: bool)
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => fields == Some(2usize)
+            && required_text_matches(schema, "chrono-git-inputs/v1") && inputs,
+        Err(message) => if fields.is_none() {
+            message@ == "Git input guard must be an object"@
+        } else {
+            (fields != Some(2usize) || !required_text_matches(schema, "chrono-git-inputs/v1") || !inputs)
+                && message@ == "Git input guard requires only schema chrono-git-inputs/v1 and inputs"@
+        },
+    },
+{
+    if fields.is_none() { return Err("Git input guard must be an object"); }
+    if fields != Some(2usize) || !matches_required(schema, "chrono-git-inputs/v1") || !inputs {
+        return Err("Git input guard requires only schema chrono-git-inputs/v1 and inputs");
+    }
+    Ok(())
+}
+
+pub fn git_guard_ids<T>(rows: Option<(&T, usize)>) -> (out: Result<&T, &'static str>)
+    ensures match out {
+        Ok(actual) => match rows { Some((original, count)) => actual == original && count > 0, None => false },
+        Err(message) => (match rows { Some((_, count)) => count == 0, None => true })
+            && message@ == "Git input guard requires nonempty inputs"@,
+    },
+{
+    match rows {
+        Some((rows, count)) if count > 0 => Ok(rows),
+        _ => Err("Git input guard requires nonempty inputs"),
+    }
+}
+
+pub fn git_guard_files<T>(rows: Option<&T>) -> (out: Result<&T, &'static str>)
+    ensures match out {
+        Ok(actual) => rows == Some(actual),
+        Err(message) => rows.is_none() && message@ == "Git input guard requires file inputs"@,
+    },
+{
+    rows.ok_or("Git input guard requires file inputs")
+}
+
+pub fn git_guard_id(id: Option<&str>) -> (out: Result<&str, &'static str>)
+    ensures match out {
+        Ok(actual) => id == Some(actual) && actual@.len() > 0,
+        Err(message) => (match id { Some(text) => text@.len() == 0, None => true })
+            && message@ == "invalid Git input ID"@,
+    },
+{
+    match id {
+        Some(text) if !text.is_empty() => Ok(text),
+        _ => Err("invalid Git input ID"),
+    }
+}
+
+/// 诊断片段由已证明分支产生；标准格式接口仅拼接这三个完整片段。
+pub struct GitGuardError<'a> {
+    pub prefix: &'static str,
+    pub id: &'a str,
+    pub suffix: &'static str,
+}
+
+pub fn git_guard_reference<'a, R: BindingReferenceRows>(rows: &R, id: &'a str, fresh: bool)
+    -> (out: Result<usize, GitGuardError<'a>>)
+    ensures match out {
+        Ok(index) => fresh && unique_binding_reference_index(rows, id, index as int),
+        Err(error) => error.id == id && error.suffix@ == ""@
+            && if !fresh { error.prefix@ == "duplicate Git input "@ }
+            else {
+                (forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i))
+                    && error.prefix@ == "missing/ambiguous Git input "@
+            },
+    },
+        fresh ==> (forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+            ==> out == Ok::<usize, GitGuardError<'a>>(i)),
+{
+    if !fresh {
+        return Err(GitGuardError { prefix: "duplicate Git input ", id, suffix: "" });
+    }
+    let selected = binding_reference_index(rows, id);
+    match selected {
+        Some(index) => {
+            assert(unique_binding_reference_index(rows, id, index as int));
+            assert forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+                implies i == index by {
+                assert(selected == Some(i));
+            }
+            Ok(index)
+        },
+        None => {
+            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {}
+            Err(GitGuardError { prefix: "missing/ambiguous Git input ", id, suffix: "" })
+        },
+    }
+}
+
+pub fn git_guard_location(location: Option<&str>) -> (out: Result<&str, &'static str>)
+    ensures match out {
+        Ok(actual) => location == Some(actual) && actual@.len() > 0,
+        Err(message) => (match location { Some(text) => text@.len() == 0, None => true })
+            && message@ == "Git input location required"@,
+    },
+{
+    match location {
+        Some(text) if !text.is_empty() => Ok(text),
+        _ => Err("Git input location required"),
+    }
+}
+
+pub open spec fn git_guard_presence(presence: Option<&str>, digest_present: bool, digest: Option<&str>) -> bool {
+    (required_text_matches(presence, "absent") && !digest_present)
+        || (required_text_matches(presence, "present") && match digest {
+            Some(text) => identifiers::digest_format(text.spec_bytes()),
+            None => false,
+        })
+}
+
+pub fn admit_git_guard_presence<'a>(id: &'a str, presence: Option<&str>, digest_present: bool, digest: Option<&str>)
+    -> (out: Result<(), GitGuardError<'a>>)
+    ensures out.is_ok() == git_guard_presence(presence, digest_present, digest),
+        match out {
+            Err(error) => error.id == id && error.prefix@ == "Git input "@
+                && error.suffix@ == " requires explicit absence or a present digest"@,
+            Ok(()) => true,
+        },
+{
+    if (matches_required(presence, "absent") && !digest_present)
+        || (matches_required(presence, "present") && match digest {
+            Some(text) => identifiers::valid_digest_text(text),
+            None => false,
+        })
+    { Ok(()) }
+    else { Err(GitGuardError { prefix: "Git input ", id,
+        suffix: " requires explicit absence or a present digest" }) }
 }
 
 pub open spec fn binding_version(schema: u64, present: bool, null: bool, text: Option<&str>) -> bool {
