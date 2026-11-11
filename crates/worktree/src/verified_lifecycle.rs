@@ -134,6 +134,69 @@ pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
     equal_text(kind, "import") || registered
 }
 
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, PartialEq, Eq))]
+pub enum AbsentPolicySource {
+    ImportedOriginal,
+    Current,
+    RetainedTarget,
+}
+
+pub fn absent_policy_source(kind: &str, migrated: bool, head: &str, current_head: &str,
+    digest: &str, current_digest: &str) -> (source: AbsentPolicySource)
+    ensures
+        (source == AbsentPolicySource::ImportedOriginal) <==>
+            (kind@ == "import"@ && !migrated),
+        (source == AbsentPolicySource::Current) <==>
+            (!(kind@ == "import"@ && !migrated)
+                && head@ == current_head@ && digest@ == current_digest@),
+        (source == AbsentPolicySource::RetainedTarget) <==>
+            (!(kind@ == "import"@ && !migrated)
+                && (head@ != current_head@ || digest@ != current_digest@)),
+{
+    if equal_text(kind, "import") && !migrated { AbsentPolicySource::ImportedOriginal }
+    else if equal_text(head, current_head) && equal_text(digest, current_digest) {
+        AbsentPolicySource::Current
+    } else { AbsentPolicySource::RetainedTarget }
+}
+
+pub struct ImportedPolicyReceipt<'a> {
+    pub schema: Option<&'a str>,
+    pub operation: Option<&'a str>,
+    pub status: Option<&'a str>,
+    pub source_root: Option<&'a str>,
+    pub report_path: Option<&'a str>,
+    pub config_path: Option<&'a str>,
+}
+
+pub open spec fn required_text(observed: Option<&str>, expected: &str) -> bool {
+    match observed { Some(text) => text@ == expected@, None => false }
+}
+
+fn matches_required(observed: Option<&str>, expected: &str) -> (valid: bool)
+    ensures valid == required_text(observed, expected),
+{
+    match observed { Some(text) => equal_text(text, expected), None => false }
+}
+
+pub fn imported_policy_receipt_valid(receipt: &ImportedPolicyReceipt, published: bool,
+    root: &str, path: &str, config: &str) -> (valid: bool)
+    ensures valid <==> (published
+        && required_text(receipt.schema, "chrono-worktree-report/v1")
+        && required_text(receipt.operation, "import")
+        && required_text(receipt.status, "imported")
+        && required_text(receipt.source_root, root)
+        && required_text(receipt.report_path, path)
+        && required_text(receipt.config_path, config)),
+{
+    published
+        && matches_required(receipt.schema, "chrono-worktree-report/v1")
+        && matches_required(receipt.operation, "import")
+        && matches_required(receipt.status, "imported")
+        && matches_required(receipt.source_root, root)
+        && matches_required(receipt.report_path, path)
+        && matches_required(receipt.config_path, config)
+}
+
 
 pub fn retire_history(disposed: bool, consumers_released: bool,
     confirmed_at: Option<u64>, observed: u64, keep_seconds: u64, over_limit: bool) -> (retire: bool)
