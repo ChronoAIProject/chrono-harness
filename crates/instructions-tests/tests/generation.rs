@@ -315,12 +315,16 @@ fn malformed_markers_fail_before_any_write() {
     for bytes in cases {
         let host = Host::new();
         host.write("AGENTS.md", "safe original");
-        host.write("CLAUDE.md", bytes);
+        host.write("CLAUDE.md", &bytes);
         let before = host.snapshot();
-        assert!(host.init().unwrap_err().contains("managed delimiters"));
+        let error = host.init().unwrap_err();
+        assert!(error.contains("managed delimiters"), "{bytes:?}: {error}");
         let result = cli_init(&host, None, None);
         assert_eq!(result.exit_code, 1, "{result:?}");
-        assert!(result.stderr.contains("managed delimiters"));
+        assert!(
+            result.stderr.contains("managed delimiters"),
+            "{bytes:?}: {result:?}"
+        );
         assert_eq!(host.snapshot(), before);
     }
 }
