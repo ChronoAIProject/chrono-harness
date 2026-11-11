@@ -1,10 +1,229 @@
 //! Scoped report storage keeps original process streams once, independently of read projections.
 use crate::{ProcessResult, prepared, sha256};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::path::Path;
 
 pub const SCHEMA: &str = "chrono-check-report/v2";
 const INLINE_STREAMS: &[&str] = &["stdout", "stderr", "stdout_bytes", "stderr_bytes"];
+
+/// The final original owns the exact remaining publication obligation. It is
+/// not another operation ledger and never authorizes judge dispatch.
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct Publication {
+    schema: String,
+    slot: String,
+    previous_sha256: Option<String>,
+    snapshot_failure: Option<String>,
+    originals: Vec<String>,
+    native_delivery: Option<String>,
+    recovery_root: Option<String>,
+    exit_code: u8,
+}
+
+fn slot_digest(root: &Path, slot: &str) -> Result<Option<String>, String> {
+    let path = crate::no_symlink_parents(root, slot)?;
+    match std::fs::symlink_metadata(&path) {
+        Ok(metadata) if metadata.is_file() => {
+            let raw = crate::units::read_bounded(root, slot, 64 * 1024 * 1024)?;
+            Ok(Some(sha256(&raw)))
+        }
+        // A conflicting directory remains a real write failure. After its
+        // owner repairs the destination, recovery still requires an empty slot.
+        Ok(_) => Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
+    }
+}
+
+pub(crate) fn publication(
+    root: &Path,
+    slot: &str,
+    originals: Vec<String>,
+    native_delivery: Option<String>,
+    recovery_root: Option<String>,
+    exit_code: u8,
+) -> (Publication, Option<crate::ownership::Lease>) {
+    let (guard, previous_sha256, snapshot_failure) =
+        match crate::retained_artifacts::retention::report_slot(root, slot) {
+            Ok(guard) => match slot_digest(root, slot) {
+                Ok(digest) => (guard, digest, None),
+                Err(error) => (guard, None, Some(error)),
+            },
+            Err(error) => (None, None, Some(error)),
+        };
+    let publication = Publication {
+        schema: "chrono-report-publication/v1".into(),
+        slot: slot.into(),
+        previous_sha256,
+        snapshot_failure,
+        originals,
+        native_delivery,
+        recovery_root,
+        exit_code,
+    };
+    (publication, guard)
+}
+
+impl Publication {
+    pub(crate) fn failure(&self) -> Option<&str> {
+        self.snapshot_failure.as_deref()
+    }
+}
+
+pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Value, String> {
+    use crate::retained_artifacts::retention;
+    use crate::verified_release as policy;
+    let _activity = retention::read_scope(root)?;
+    let inventory = retention::Inventory::adopted(root)?
+        .ok_or("report recovery requires the original retained producer")?;
+    let _reader = retention::read_guard(root, &original.path)?
+        .ok_or("original report is unavailable or not enrolled; preserve recovery")?;
+    let raw = prepared::read_original(root, original, None)?;
+    if !inventory.published_original(&original.path, &original.sha256, raw.len() as u64)? {
+        return Err(
+            "original report is not sealed or its physical identity changed; preserve recovery"
+                .into(),
+        );
+    }
+    let report: Value = crate::json(&raw)?;
+    let publication: Publication = serde_json::from_value(report["publication"].clone())
+        .map_err(|e| format!("original report publication obligation: {e}"))?;
+    if !policy::report_publication(&publication.schema, publication.exit_code) {
+        return Err("original report publication schema/exit code".into());
+    }
+    let kind = policy::recovered_report_kind(
+        report["schema"].as_str(),
+        report["schema_version"].as_u64(),
+        report["retained_report"].as_str(),
+        report["report_path"].as_str(),
+        &original.path,
+    );
+    let (producer, request_id) = match kind {
+        1 | 2 => {
+            let request: crate::Request =
+                serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
+            if request.host_root != root {
+                return Err("original report belongs to another host".into());
+            }
+            if report["judge"].is_object() {
+                let process: crate::ProcessResult = if kind == 2 {
+                    restore_process(&report["judge"], |o| prepared::read_original(root, o, None))?
+                } else {
+                    serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?
+                };
+                crate::full::validate_process_receipt(&process, "recovered judge")?;
+                if report.get("transport_failure").is_none() {
+                    let response: crate::Response = crate::decode(&process.stdout_bytes)?;
+                    crate::validate_response_protocol(
+                        &response,
+                        &request.request_id,
+                        process.exit_code,
+                        &request.protocol,
+                    )?;
+                }
+            }
+            ("check-original", request.request_id)
+        }
+        3 => {
+            let request: crate::wire::Request =
+                serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
+            if request.candidate.root != root {
+                return Err("original report belongs to another host".into());
+            }
+            let records = report["judges"]
+                .as_array()
+                .ok_or("original full judges")?
+                .iter()
+                .map(crate::full::expand_record)
+                .collect::<Result<Vec<_>, _>>()?;
+            let bindings = records
+                .iter()
+                .map(|row| {
+                    serde_json::from_value(row["binding"].clone()).map_err(|e| e.to_string())
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            let status: crate::wire::Status =
+                serde_json::from_value(report["status"].clone()).map_err(|e| e.to_string())?;
+            crate::full::validate_execution(&request, &bindings, &status, &records)?;
+            // The retained request is the first judge's sealed input. The
+            // producer seals the enclosing operation, which has its own ID.
+            let operation_request_id = report["operation_request_id"]
+                .as_str()
+                .ok_or("original full operation request identity")?;
+            ("full-original", operation_request_id.to_owned())
+        }
+        _ => return Err("original report format/address is not recoverable".into()),
+    };
+    let status = inventory.producer_status(producer, Some(&original.path))?;
+    let records = status["records"]
+        .as_array()
+        .ok_or("original report producer status")?;
+    let [record] = records.as_slice() else {
+        return Err("original report has no unique matching producer".into());
+    };
+    if !policy::report_outcome(
+        records.len(),
+        record["outcome"]["request_id"].as_str(),
+        record["outcome"]["exit_code"].as_u64(),
+        &request_id,
+        publication.exit_code,
+    ) {
+        return Err("original report outcome differs from sealed producer".into());
+    }
+    let _slot = retention::report_slot(root, &publication.slot)?;
+    let bytes = if kind == 2 {
+        serde_json::to_vec(&crate::units::ReportReference {
+            schema: crate::units::REPORT_REFERENCE.into(),
+            original: original.clone(),
+        })
+        .map_err(|e| e.to_string())?
+    } else {
+        raw.clone()
+    };
+    let current = slot_digest(root, &publication.slot)?;
+    let plan = policy::report_slot(
+        current.as_deref(),
+        publication.previous_sha256.as_deref(),
+        &sha256(&bytes),
+    );
+    let already_published = plan.already_published;
+    if !plan.allowed {
+        return Err(
+            "report slot changed after this original; preserve the newer report and recovery"
+                .into(),
+        );
+    }
+    retention::reference_report_held(
+        root,
+        &publication.slot,
+        &original.path,
+        &publication.originals,
+        if already_published {
+            None
+        } else {
+            publication.native_delivery.as_deref()
+        },
+    )?;
+    if !already_published {
+        retention::replace_report(&crate::no_symlink_parents(root, &publication.slot)?, &bytes)
+            .map_err(|e| e.to_string())?;
+    } else {
+        retention::sync_report(&crate::no_symlink_parents(root, &publication.slot)?)
+            .map_err(|e| e.to_string())?;
+    }
+    retention::settle_report(root, &publication.slot, &original.path)?;
+    if let Some(role) = &publication.recovery_root {
+        inventory.reference_paths(role, &[])?;
+    }
+    Ok(
+        json!({"schema":"chrono-report-recovery/v1","status":"recovered",
+        "report":original,"slot":publication.slot,"request_id":request_id,
+        "original_exit_code":publication.exit_code,"already_published":already_published,
+        "judge_dispatch":"not-performed"}),
+    )
+}
 
 fn publication_error(
     process: &ProcessResult,

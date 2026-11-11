@@ -1197,6 +1197,58 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
                     assert_eq!(consumed[field], output[field]);
                 }
                 assert_eq!(fs::read(root.join(path)).unwrap(), raw);
+
+                // Resume the sealed result across CLI calls. The judge is now
+                // unavailable: recovery must only publish these exact bytes.
+                fs::remove_file(root.join("judge")).unwrap();
+                fs::write(
+                    root.join("recover-report.json"),
+                    serde_json::to_vec(&value!({
+                        "operation":"recover-report",
+                        "report":{"path":path,"sha256":sha256(&raw)}
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+                let recover = || {
+                    chrono_harness::dispatch(&[
+                        "retention",
+                        "--host-root",
+                        root.to_str().unwrap(),
+                        "--request",
+                        "recover-report.json",
+                    ])
+                };
+                let blocked = recover();
+                assert_eq!(blocked.exit_code, 2, "{}", blocked.stdout);
+                assert_eq!(fs::read(root.join(path)).unwrap(), raw);
+                fs::remove_dir(root.join(".chrono-harness/state/report.json")).unwrap();
+                let recovered = recover();
+                assert_eq!(recovered.exit_code, 0, "{}", recovered.stderr);
+                let receipt: serde_json::Value = serde_json::from_str(&recovered.stdout).unwrap();
+                assert_eq!(receipt["status"], "recovered");
+                assert_eq!(receipt["request_id"], output["outcome"]["request_id"]);
+                assert_eq!(report["operation_request_id"], receipt["request_id"]);
+                assert_ne!(receipt["request_id"], report["request"]["request_id"]);
+                assert_eq!(
+                    receipt["original_exit_code"],
+                    if case == "publication-healthy" { 0 } else { 2 }
+                );
+                assert_eq!(
+                    fs::read(root.join(".chrono-harness/state/report.json")).unwrap(),
+                    raw
+                );
+                assert_eq!(recover().exit_code, 0, "recovery is idempotent");
+                fs::write(
+                    root.join(".chrono-harness/state/report.json"),
+                    b"newer report",
+                )
+                .unwrap();
+                assert_eq!(recover().exit_code, 2, "must not overwrite a newer result");
+                assert_eq!(
+                    fs::read(root.join(".chrono-harness/state/report.json")).unwrap(),
+                    b"newer report"
+                );
             }
             continue;
         }
@@ -1441,6 +1493,15 @@ fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() 
 
 #[test]
 fn process_encoding_preserves_actual_binary_failure_and_rejects_conflicting_views() {
+    for original in [
+        value!({"id":"blocked"}),
+        value!({"id":"error","process":null}),
+    ] {
+        assert_eq!(
+            chrono_harness::full::expand_record(&original).unwrap(),
+            original
+        );
+    }
     let stdout: Vec<u8> = (0..=255).collect();
     let stderr: Vec<u8> = (0..=255).rev().collect();
     let (_dir, request, binding) = fixture(value!({"kind":"raw", "consume_request":true,

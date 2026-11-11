@@ -2437,6 +2437,44 @@ fn execute_check(
         relative_path(path)?;
         collected_originals.push(path.to_owned());
     }
+    let preparation = &report["request"]["observations"]["preparation"];
+    for values in [
+        &preparation["result"]["originals"],
+        &preparation["receipts"],
+    ] {
+        if let Some(values) = values.as_array() {
+            for value in values {
+                collected_originals.push(
+                    value["path"]
+                        .as_str()
+                        .ok_or("declared original path")?
+                        .to_owned(),
+                );
+            }
+        }
+    }
+    for stream in ["stdout_original", "stderr_original", "launch_original"] {
+        if let Some(path) = report["judge"][stream]["path"].as_str() {
+            collected_originals.push(path.to_owned());
+        }
+    }
+    let pending_native = (preparation["request"]["source"] == "ci").then_some(request_id.clone());
+    let mut slot_failure = None;
+    let _slot = if retained_report.is_some() {
+        let (publication, guard) = scoped_report::publication(
+            &root,
+            &output_path,
+            collected_originals.clone(),
+            pending_native.clone(),
+            None,
+            code,
+        );
+        slot_failure = publication.failure().map(str::to_owned);
+        report["publication"] = serde_json::to_value(publication).map_err(|e| e.to_string())?;
+        guard
+    } else {
+        None
+    };
     let console = if retained_streams {
         let projection = serde_json::json!({
             "retained_report": report["retained_report"],
@@ -2474,37 +2512,26 @@ fn execute_check(
                 .map_err(|e| e.to_string())?;
             file.write_all(text.as_bytes()).map_err(|e| e.to_string())?;
         }
-        let preparation = &report["request"]["observations"]["preparation"];
-        let mut originals = collected_originals;
-        for values in [
-            &preparation["result"]["originals"],
-            &preparation["receipts"],
-        ] {
-            if let Some(values) = values.as_array() {
-                for value in values {
-                    originals.push(
-                        value["path"]
-                            .as_str()
-                            .ok_or("declared original path")?
-                            .to_owned(),
-                    );
-                }
-            }
+        let publication_error = |error: std::io::Error| {
+            format!(
+                "E_REPORT_EVIDENCE: {}",
+                serde_json::json!({
+                    "message":error.to_string(),"recovery":{"operation":"recover-report",
+                    "report":{"path":path,"sha256":sha256(text.as_bytes())}},"original_exit_code":code,
+                })
+            )
+        };
+        if let Some(error) = slot_failure {
+            return Err(publication_error(std::io::Error::other(error)));
         }
-        for stream in ["stdout_original", "stderr_original", "launch_original"] {
-            if let Some(path) = report["judge"][stream]["path"].as_str() {
-                originals.push(path.to_owned());
-            }
-        }
-        let pending_native =
-            (preparation["request"]["source"] == "ci").then_some(request_id.as_str());
-        let _publication = retained_artifacts::retention::reference_report(
+        retained_artifacts::retention::reference_report_held(
             &root,
             &output_path,
             &path,
-            &originals,
-            pending_native,
-        )?;
+            &collected_originals,
+            pending_native.as_deref(),
+        )
+        .map_err(|e| publication_error(std::io::Error::other(e)))?;
         if retained_streams {
             let reference = units::ReportReference {
                 schema: units::REPORT_REFERENCE.into(),
@@ -2513,16 +2540,19 @@ fn execute_check(
                     sha256: sha256(text.as_bytes()),
                 },
             };
-            fs::write(
-                report_path,
-                serde_json::to_vec(&reference).map_err(|e| e.to_string())?,
+            retained_artifacts::retention::replace_report(
+                &report_path,
+                &serde_json::to_vec(&reference).map_err(|e| e.to_string())?,
             )
-            .map_err(|e| e.to_string())?;
-            retained_artifacts::retention::settle_report(&root, &output_path, &path)?;
+            .map_err(&publication_error)?;
+            retained_artifacts::retention::settle_report(&root, &output_path, &path)
+                .map_err(|e| publication_error(std::io::Error::other(e)))?;
             return Ok((code, console.unwrap_or(text)));
         }
-        fs::write(report_path, &text).map_err(|e| e.to_string())?;
-        retained_artifacts::retention::settle_report(&root, &output_path, &path)?;
+        retained_artifacts::retention::replace_report(&report_path, text.as_bytes())
+            .map_err(&publication_error)?;
+        retained_artifacts::retention::settle_report(&root, &output_path, &path)
+            .map_err(|e| publication_error(std::io::Error::other(e)))?;
         return Ok((code, text));
     }
     fs::write(report_path, &text).map_err(|e| e.to_string())?;

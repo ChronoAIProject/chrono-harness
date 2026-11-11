@@ -1255,6 +1255,11 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
     let dir = tempfile::tempdir().unwrap();
     fs::create_dir_all(dir.path().join(".chrono-harness/ci")).unwrap();
     fs::create_dir_all(dir.path().join(".chrono-harness/state")).unwrap();
+    fs::copy(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/retention.json"),
+        dir.path().join(".chrono-harness/retention.json"),
+    )
+    .unwrap();
     fs::write(dir.path().join("cli-case.json"), b"{}").unwrap();
     let shell = "/bin/sh";
     let shell_hash = chrono_harness::sha256(&fs::read(shell).unwrap());
@@ -1389,6 +1394,133 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
     assert!(dir.path().join(launch["path"].as_str().unwrap()).is_file());
     assert!(judge.get("stdout_bytes").is_none());
     assert!(judge.get("stderr_bytes").is_none());
+
+    // Fail the actual replacement after judge completion. The previous fixed
+    // pointer and the new sealed result must both survive, and recovery must
+    // use the same original through real CLI calls without a working judge.
+    let slot = dir.path().join(".chrono-harness/state/check.json");
+    let previous = fs::read(&slot).unwrap();
+    let pending = ".chrono-harness/state/check.json.publication-pending";
+    fs::write(
+        dir.path().join("cli-case.json"),
+        serde_json::to_vec(&json!({
+            "block_pending":pending
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let failed = run_retained_cli_child(dir.path(), "local");
+    assert_eq!(failed["exit_code"], 2, "{failed}");
+    assert_eq!(fs::read(&slot).unwrap(), previous);
+    let error_path = failed["stderr"]
+        .as_str()
+        .unwrap()
+        .split("Original check error: ")
+        .nth(1)
+        .unwrap()
+        .split_whitespace()
+        .next()
+        .unwrap();
+    let error = fs::read_to_string(dir.path().join(error_path)).unwrap();
+    let error: Value =
+        serde_json::from_str(error.strip_prefix("E_REPORT_EVIDENCE: ").unwrap()).unwrap();
+    let recovery = error["recovery"].clone();
+    let original_path = recovery["report"]["path"].as_str().unwrap();
+    let original_raw = fs::read(dir.path().join(original_path)).unwrap();
+    let request_path = dir.path().join("recover-report.json");
+    fs::write(&request_path, serde_json::to_vec(&recovery).unwrap()).unwrap();
+    let recover = || {
+        Command::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
+            .args([
+                "retention",
+                "--host-root",
+                dir.path().to_str().unwrap(),
+                "--request",
+                "recover-report.json",
+            ])
+            .output()
+            .unwrap()
+    };
+    assert_eq!(
+        recover().status.code(),
+        Some(2),
+        "blocked replacement stays failed"
+    );
+    fs::remove_dir(dir.path().join(pending)).unwrap();
+    fs::write(
+        dir.path().join("cli-case.json"),
+        b"{\"kind\":\"raw\",\"text\":\"must not execute\"}",
+    )
+    .unwrap();
+    let mut wrong = recovery.clone();
+    wrong["report"]["sha256"] = json!("0".repeat(64));
+    fs::write(&request_path, serde_json::to_vec(&wrong).unwrap()).unwrap();
+    assert_eq!(
+        recover().status.code(),
+        Some(2),
+        "wrong original must not publish"
+    );
+    fs::write(&request_path, serde_json::to_vec(&recovery).unwrap()).unwrap();
+    let original_file = dir.path().join(original_path);
+    let saved_file = original_file.with_extension("original-inode");
+    fs::rename(&original_file, &saved_file).unwrap();
+    fs::write(&original_file, &original_raw).unwrap();
+    assert_eq!(
+        recover().status.code(),
+        Some(2),
+        "same bytes at another inode are not the sealed original"
+    );
+    fs::remove_file(&original_file).unwrap();
+    fs::rename(&saved_file, &original_file).unwrap();
+    let recovered = recover();
+    assert!(
+        recovered.status.success(),
+        "{}",
+        String::from_utf8_lossy(&recovered.stderr)
+    );
+    let receipt: Value = serde_json::from_slice(&recovered.stdout).unwrap();
+    assert_eq!(receipt["original_exit_code"], 0);
+    let reference: Value = serde_json::from_slice(&fs::read(&slot).unwrap()).unwrap();
+    assert_eq!(reference["original"], recovery["report"]);
+    assert_eq!(
+        fs::read(dir.path().join(original_path)).unwrap(),
+        original_raw
+    );
+    let report: Value = serde_json::from_slice(&original_raw).unwrap();
+    let stream = &report["judge"]["stdout_original"];
+    let stream_path = dir.path().join(stream["path"].as_str().unwrap());
+    let stream_raw = fs::read(&stream_path).unwrap();
+    fs::write(&stream_path, b"changed stream").unwrap();
+    assert_eq!(
+        recover().status.code(),
+        Some(2),
+        "stream corruption rejects even an existing pointer"
+    );
+    fs::write(&stream_path, stream_raw).unwrap();
+    assert!(
+        recover().status.success(),
+        "same-original recovery is idempotent"
+    );
+    let unfinished = ".chrono-harness/state/preparation/unfinished-report.json";
+    let publication = chrono_harness::retained_artifacts::retention::create_adopted_for_consumer(
+        dir.path(),
+        "check-original",
+        &dir.path().join(unfinished),
+        false,
+        json!({"outcome":"not-established"}),
+        None,
+        "report-recheck",
+    )
+    .unwrap()
+    .unwrap();
+    fs::write(dir.path().join(unfinished), &original_raw).unwrap();
+    drop(publication);
+    let mut unknown = recovery;
+    unknown["report"]["path"] = json!(unfinished);
+    fs::write(&request_path, serde_json::to_vec(&unknown).unwrap()).unwrap();
+    let refused = recover();
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&refused.stderr).contains("not sealed"));
 
     // The public check entry also exercises the lifecycle participation
     // parser.  A malformed lifecycle response must retain the outer process

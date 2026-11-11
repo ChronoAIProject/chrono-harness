@@ -1950,6 +1950,13 @@ fn known_evaluator_error_and_interrupted_unknown_return_remain_distinct() {
 
 #[test]
 fn interrupted_creation_recovery_can_be_interrupted_before_prepare_again() {
+    // Recovery requires the interrupted child's last metadata capability to be
+    // closed; unrelated fixture forks must not briefly retain the same lock.
+    if !isolated_capability::isolated_capability_test(
+        "interrupted_creation_recovery_can_be_interrupted_before_prepare_again",
+    ) {
+        return;
+    }
     let host = Host::new();
     PausedOperation::start(&host, "intent", "init").interrupt();
     PausedOperation::start(&host, "creation-recovered", "init").interrupt();

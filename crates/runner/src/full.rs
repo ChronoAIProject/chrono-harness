@@ -207,7 +207,9 @@ pub fn expand_process(value: &Value) -> Result<Value, String> {
 }
 pub fn expand_record(record: &Value) -> Result<Value, String> {
     let mut record = record.clone();
-    record["process"] = expand_process(&record["process"])?;
+    if let Some(process) = record.get("process") {
+        record["process"] = expand_process(process)?;
+    }
     Ok(record)
 }
 /// Current compressed reports charge metadata plus their original judge streams.
@@ -918,7 +920,10 @@ pub fn validate_execution(
 /// Check receipt invariants independently of the process loop.  These checks
 /// deliberately derive facts from retained bytes rather than enumerating
 /// possible runtime error strings.
-fn validate_process_receipt(process: &crate::ProcessResult, label: &str) -> Result<(), String> {
+pub(crate) fn validate_process_receipt(
+    process: &crate::ProcessResult,
+    label: &str,
+) -> Result<(), String> {
     if process.stdout_sha256 != sha256(&process.stdout_bytes)
         || process.stderr_sha256 != sha256(&process.stderr_bytes)
         || process.stdout != String::from_utf8_lossy(&process.stdout_bytes)
@@ -1439,6 +1444,7 @@ pub fn check_prepared(
     let mut report = value!({"schema_version":1,"scope":"configured-judges","status":status,"base":base,"candidate":candidate,"candidate_tree":candidate_tree,"context_digest":context_digest,"registry_digest":req.registries.digest,"runner":{"path":req.runner.path,"sha256":req.runner.sha256,"version":req.runner.version},"judge_sha256":judge_sha256,"executables":executables,"environment":environment,"parity":{"status":"unestablished","compared_report":null},"delta":delta,"judges":judges,"findings":findings,"base_snapshot":snapshot});
     let first = schedule(&bindings)?.remove(0);
     let original = judge_request(&req, &first, &[])?;
+    report["operation_request_id"] = value!(req.request_id);
     report["request"] = value!(original);
     report["request_digest"] = sha256(&original.canonical()?).into();
     let (artifacts, unavailable) = retain_artifacts(&req, &judges, status.exit_code() != 0)?;
@@ -1552,6 +1558,57 @@ pub fn check_prepared(
             record["process"] = projection["process"].clone();
         }
     }
+    let mut originals = Vec::new();
+    if let Some(path) = report["tests"]["operation_state"]["path"].as_str() {
+        crate::relative_path(path)?;
+        originals.push(path.to_owned());
+    }
+    if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
+        originals.push(path.into());
+    }
+    for map in [&report["artifacts"], &report["artifact_closure"]] {
+        if let Some(map) = map.as_object() {
+            for descriptor in map.values() {
+                if let Some(storage) = descriptor["storage"].as_str() {
+                    originals.push(storage.to_owned());
+                }
+            }
+        }
+    }
+    for name in ["base", "candidate"] {
+        if let Some(files) = req.observations["retained"][name]["files"].as_object() {
+            for file in files.values() {
+                if let Some(blob) = file["blob"].as_str() {
+                    originals.push(blob.to_owned());
+                }
+            }
+        }
+    }
+    if let Some(context) = req
+        .context
+        .path
+        .strip_prefix(root)
+        .ok()
+        .and_then(|p| p.to_str())
+    {
+        originals.push(context.into());
+    }
+    let delivery_id = report["request"]["request_id"]
+        .as_str()
+        .ok_or("full original request identity")?;
+    let pending_native = (req.observations["preparation"]["request"]["source"] == "ci")
+        .then_some(delivery_id.to_owned());
+    let recovery_root = format!("full-recovery:{}", sha256(config_path.as_bytes()));
+    let (publication, _slot) = crate::scoped_report::publication(
+        root,
+        &publication_path,
+        originals.clone(),
+        pending_native.clone(),
+        Some(recovery_root.clone()),
+        status.exit_code() as u8,
+    );
+    let mut handoff_error = publication.failure().map(str::to_owned);
+    report["publication"] = serde_json::to_value(publication).map_err(|e| e.to_string())?;
     let text = serde_json::to_string(&report).map_err(|e| e.to_string())? + "\n";
     if scope.is_some()
         && report_transport_bytes(&report, text.len() as u64)?
@@ -1561,30 +1618,16 @@ pub fn check_prepared(
     {
         return Err("full execution evidence exceeds registered report bound".into());
     }
-    let path = match &scope {
-        Some(crate::units::Scope::Unit { unit }) => {
-            let units = req.observations["execution_units"]["units"]
-                .as_object()
-                .ok_or("unit selection requires registered execution_units")?;
-            let definition = units.get(unit).ok_or("unregistered CI unit")?;
-            let path = definition["report_path"]
-                .as_str()
-                .ok_or("unit report path missing")?;
-            crate::units::artifact_path(path)?;
-            no_symlink_parents(root, path)?
-        }
-        Some(crate::units::Scope::Collect { .. }) => {
-            let path = req.observations["execution_units"]["report_path"]
-                .as_str()
-                .ok_or("execution unit collection report path missing")?;
-            crate::units::artifact_path(path)?;
-            no_symlink_parents(root, path)?
-        }
-        None => no_symlink_parents(root, &format!("{report_directory}report.json"))?,
-    };
+    // This exact destination was admitted before execution. Observe current
+    // path failures only after retaining the completed result below.
+    let path = root.join(&publication_path);
     let mut publication_failures = Vec::new();
     let mut published = Vec::new();
-    let mut publish = |path: &Path| match fs::write(path, &text) {
+    let mut publish = |path: &Path| match if path == retained_report {
+        fs::write(path, &text)
+    } else {
+        crate::retained_artifacts::retention::replace_report(path, text.as_bytes())
+    } {
         Ok(()) => {
             published
                 .push(value!({"path":path,"sha256":sha256(text.as_bytes()),"length":text.len()}));
@@ -1606,87 +1649,48 @@ pub fn check_prepared(
     if let Some(publication) = &retained_publication {
         publication.check_length(text.len() as u64)?;
     }
-    let mut _slot = None;
     let retained_written = publish(&retained_report);
     if retained_written {
-        let mut originals = Vec::new();
-        if let Some(path) = report["tests"]["operation_state"]["path"].as_str() {
-            crate::relative_path(path)?;
-            originals.push(path.to_owned());
+        if let Some(publication) = retained_publication {
+            publication.complete(value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()}))?;
         }
-        if let Some(path) = snapshot.strip_prefix(root).ok().and_then(|p| p.to_str()) {
-            originals.push(path.into());
+        if handoff_error.is_none() {
+            handoff_error = crate::retained_artifacts::retention::reference_report_held(
+                root,
+                &publication_path,
+                &report_path,
+                &originals,
+                pending_native.as_deref(),
+            )
+            .err();
         }
-        for map in [&report["artifacts"], &report["artifact_closure"]] {
-            if let Some(map) = map.as_object() {
-                for descriptor in map.values() {
-                    if let Some(storage) = descriptor["storage"].as_str() {
-                        originals.push(storage.to_owned());
-                    }
-                }
-            }
-        }
-        for name in ["base", "candidate"] {
-            if let Some(files) = req.observations["retained"][name]["files"].as_object() {
-                for file in files.values() {
-                    if let Some(blob) = file["blob"].as_str() {
-                        originals.push(blob.to_owned());
-                    }
-                }
-            }
-        }
-        if let Some(context) = req
-            .context
-            .path
-            .strip_prefix(root)
-            .ok()
-            .and_then(|p| p.to_str())
-        {
-            originals.push(context.into());
-        }
-        let delivery_id = report["request"]["request_id"]
-            .as_str()
-            .ok_or("full original request identity")?;
-        let pending_native = req.observations["preparation"]["request"]["source"]
-            .as_str()
-            .filter(|s| *s == "ci")
-            .map(|_| delivery_id);
-        _slot = crate::retained_artifacts::retention::reference_report(
-            root,
-            &publication_path,
-            &report_path,
-            &originals,
-            pending_native,
-        )?;
     }
-    let current_written = publish(&path);
+    let current_written = handoff_error.is_none() && publish(&path);
     drop(publish);
     if retained_written && current_written {
-        crate::retained_artifacts::retention::settle_report(root, &publication_path, &report_path)?;
-        if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)? {
-            inventory.reference_paths(
-                &format!("full-recovery:{}", sha256(config_path.as_bytes())),
-                &[],
+        handoff_error = (|| {
+            crate::retained_artifacts::retention::settle_report(
+                root,
+                &publication_path,
+                &report_path,
             )?;
-        }
-    }
-    if retained_written {
-        if let Some(publication) = retained_publication {
-            let outcome = value!({"status":report["status"],"request_id":req.request_id,"exit_code":status.exit_code()});
-            if current_written {
-                let consumer = format!("report-recheck:{}", publication.id());
-                publication.complete_releasing_consumer(outcome, &consumer)?;
-                if status.exit_code() != 0 {
-                    if let Some(inventory) =
-                        crate::retained_artifacts::retention::Inventory::adopted(root)?
-                    {
-                        inventory.retain_diagnostic_path(&report_path)?;
-                    }
-                }
-            } else {
-                publication.complete(outcome)?;
+            if let Some(inventory) = crate::retained_artifacts::retention::Inventory::adopted(root)?
+            {
+                inventory.reference_paths(&recovery_root, &[])?;
             }
-        }
+            Ok::<_, String>(())
+        })()
+        .err();
+    }
+    if let Some(error) = handoff_error {
+        publication_failures.push(
+            chrono_diagnostics::error::Failure::wrap(
+                "E_FULL_REPORT_HANDOFF",
+                "full report publication handoff failed",
+                chrono_diagnostics::error::NativeIoError::new(std::io::Error::other(error)),
+            )
+            .at("path", publication_path),
+        );
     }
     if !publication_failures.is_empty() {
         let original = report["judges"]
@@ -1713,6 +1717,8 @@ pub fn check_prepared(
             value!({
                 "schema":"chrono-full-report-publication-failure/v1",
                 "error":failure.record(),"report":report,"published":published,
+                "recovery":retained_written.then(|| value!({"operation":"recover-report",
+                    "report":{"path":report_path,"sha256":sha256(text.as_bytes())}})),
             })
         ));
     }

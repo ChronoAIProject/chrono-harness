@@ -11,6 +11,79 @@ use crate::verified_identifiers as identifiers;
 
 verus! {
 
+pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
+    match text { Some(value) => Some(value@), None => None }
+}
+
+fn same_recovery_text(left: Option<&str>, right: Option<&str>) -> (same: bool)
+    ensures same == (recovery_text(left) == recovery_text(right)),
+{
+    match (left, right) {
+        (Some(a), Some(b)) => identifiers::equal_text(a, b),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+pub fn report_publication(schema: &str, exit_code: u8) -> (valid: bool)
+    ensures valid == (schema@ == "chrono-report-publication/v1"@ && exit_code <= 2),
+{
+    identifiers::equal_text(schema, "chrono-report-publication/v1") && exit_code <= 2
+}
+
+/// 0 rejects the address/format; 1 and 2 are the two current scoped wire
+/// representations; 3 is the current full report. No historical decoder runs.
+pub fn recovered_report_kind(schema: Option<&str>, version: Option<u64>,
+    retained_path: Option<&str>, full_path: Option<&str>, original: &str) -> (kind: u8)
+    ensures kind == if recovery_text(schema) == Some("chrono-check-report/v1"@)
+            && recovery_text(retained_path) == Some(original@) { 1u8 }
+        else if recovery_text(schema) == Some("chrono-check-report/v2"@)
+            && recovery_text(retained_path) == Some(original@) { 2u8 }
+        else if schema.is_none() && version == Some(1u64)
+            && recovery_text(full_path) == Some(original@) { 3u8 }
+        else { 0u8 },
+{
+    match schema {
+        Some(value) => {
+            if identifiers::equal_text(value, "chrono-check-report/v1")
+                && same_recovery_text(retained_path, Some(original)) { 1 }
+            else if identifiers::equal_text(value, "chrono-check-report/v2")
+                && same_recovery_text(retained_path, Some(original)) { 2 }
+            else { 0 }
+        },
+        None => {
+            if version == Some(1) && same_recovery_text(full_path, Some(original)) { 3 }
+            else { 0 }
+        },
+    }
+}
+
+pub fn report_outcome(records: usize, request: Option<&str>, exit_code: Option<u64>,
+    expected_request: &str, expected_exit: u8) -> (matches: bool)
+    ensures matches == (records == 1 && recovery_text(request) == Some(expected_request@)
+        && exit_code == Some(expected_exit as u64)),
+{
+    records == 1 && same_recovery_text(request, Some(expected_request))
+        && exit_code == Some(expected_exit as u64)
+}
+
+pub struct ReportSlot {
+    pub allowed: bool,
+    pub already_published: bool,
+}
+
+/// A retry may reuse its exact bytes or replace only the originally observed
+/// slot. A removed/replaced slot is not authority to overwrite newer results.
+pub fn report_slot(current: Option<&str>, previous: Option<&str>, desired: &str) -> (plan: ReportSlot)
+    ensures plan.already_published == (recovery_text(current) == Some(desired@)),
+        plan.allowed == (recovery_text(current) == Some(desired@)
+            || recovery_text(current) == recovery_text(previous)),
+{
+    let already_published = same_recovery_text(current, Some(desired));
+    ReportSlot { already_published,
+        allowed: already_published || same_recovery_text(current, previous) }
+}
+
 pub fn domain_recovery(declared: bool, attached: bool) -> (protect: bool)
     ensures protect == (declared && attached),
 { declared && attached }
