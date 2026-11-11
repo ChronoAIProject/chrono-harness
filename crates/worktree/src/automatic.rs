@@ -1943,7 +1943,17 @@ impl Manager {
         ) {
             return Err("absent worktree policy input address changed".into());
         }
-        let policy = parse_policy(r, &root, &policy_bytes)?;
+        // Coordinator producers execute from anchor_policy, not from this
+        // absent checkout's retained data. Keep its original bytes bound.
+        let mut cleanup_policy = json(&policy_bytes)?;
+        if let Some(object) = cleanup_policy.as_object_mut() {
+            object.remove("retained_producers");
+        }
+        let policy = parse_policy(
+            r,
+            &root,
+            &serde_json::to_vec(&cleanup_policy).map_err(|e| e.to_string())?,
+        )?;
         if !policy_namespace_matches(
             &policy_namespace(&policy),
             &policy_namespace(&self.inputs.anchor_policy),

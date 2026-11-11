@@ -168,6 +168,11 @@ impl EnrollmentOriginalsFixture {
     }
 
     fn adopt_retained_inputs(&self, config: Value) {
+        let policy = json(&fs::read(self.root.join(AUTO_POLICY)).unwrap()).unwrap();
+        self.adopt_retained_policy(config, policy);
+    }
+
+    fn adopt_retained_policy(&self, config: Value, policy: Value) {
         let fixture_path = self.root.join("git-fixture.json");
         let mut fixture = json(&fs::read(&fixture_path).unwrap()).unwrap();
         let head = "b".repeat(64);
@@ -180,7 +185,7 @@ impl EnrollmentOriginalsFixture {
             );
         }
         let config_bytes = serde_json::to_string(&config).unwrap();
-        let policy_bytes = fs::read_to_string(self.root.join(AUTO_POLICY)).unwrap();
+        let policy_bytes = serde_json::to_string(&policy).unwrap();
         retained.insert(POLICY.into(), config_bytes.clone());
         retained.insert(AUTO_POLICY.into(), policy_bytes.clone());
         fixture["retained"] = value!({(head):retained});
@@ -214,6 +219,53 @@ fn absent_adoption_reads_only_bound_policy_addresses_and_preserves_originals() {
         fs::read(h.root.join(&h.original)).unwrap(),
         b"original failure bytes\n"
     );
+}
+
+#[test]
+fn absent_adoption_does_not_execute_coordinator_producer_declarations() {
+    let h = EnrollmentOriginalsFixture::new();
+    let config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
+    let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
+    policy["retained_producers"] = value!({"unconsumed":[null, true, "fixed data"]});
+    h.adopt_retained_policy(config, policy);
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+    assert_eq!(attention_row(&report, &h.target)["work_state"], "unknown");
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_eq!(
+        fs::read(h.root.join(&h.original)).unwrap(),
+        b"original failure bytes\n"
+    );
+}
+
+#[test]
+fn absent_adoption_keeps_consumed_policy_and_live_producer_validation() {
+    for live in [false, true] {
+        let h = EnrollmentOriginalsFixture::new();
+        let config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
+        let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
+        if live {
+            policy["retained_producers"] = value!({"invalid":"executed owner declaration"});
+            fs::write(
+                h.root.join(AUTO_POLICY),
+                serde_json::to_vec(&policy).unwrap(),
+            )
+            .unwrap();
+        } else {
+            policy["artifacts"] = value!({"invalid":"consumed cleanup declaration"});
+        }
+        h.adopt_retained_policy(config, policy);
+        let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+        let (code, report) = h.invoke("maintain", false);
+        assert_eq!(code, 2, "live={live}: {report}");
+        assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+        assert_eq!(
+            fs::read(h.root.join(&h.original)).unwrap(),
+            b"original failure bytes\n"
+        );
+    }
 }
 
 #[test]
