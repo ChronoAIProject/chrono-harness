@@ -262,7 +262,9 @@ fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
         program.is_some_and(|program| Path::new(program).is_absolute()),
     )?;
     let rows = admit_identity_configurations(
-        host["configurations"].as_array().map(|rows| (rows, rows.len())),
+        host["configurations"]
+            .as_array()
+            .map(|rows| (rows, rows.len())),
     )?;
     let mut hashes = std::collections::BTreeSet::new();
     let mut unique_paths = std::collections::BTreeSet::new();
