@@ -22,6 +22,9 @@ fn fixture() -> Values {
     v
 }
 fn report(a: &Values, b: &Values, paths: &[&str]) -> Result<Value, String> {
+    report_with_costs(a, b, paths).map(|(changes, _)| changes)
+}
+fn report_with_costs(a: &Values, b: &Values, paths: &[&str]) -> Result<(Value, Value), String> {
     let old = load(a);
     let new = load(b);
     let delta = paths.iter().map(|p| delta(p)).collect::<Vec<_>>();
@@ -36,7 +39,10 @@ fn report(a: &Values, b: &Values, paths: &[&str]) -> Result<Value, String> {
         return Err(error.message.clone());
     }
     let costs = chrono_judge_cost::produce(&old, &new, &impact).unwrap();
-    produce(&old, &new, &impact.delta, a, b, &costs)
+    let changes = produce(&old, &new, &impact.delta, a, b, &costs)?;
+    assert!(changes.get("costs").is_none());
+    assert_eq!(changes["schema"], "chrono-rule-changes/v2");
+    Ok((changes, costs))
 }
 
 #[test]
@@ -64,13 +70,13 @@ fn true_action_change_is_mixed_and_retains_exact_cost_values() {
     b.get_mut(PROJECTS).unwrap()["projects"][0]["actions"]["execute"]["argv"] =
         json!(["-c", "exit 1"]);
     b.get_mut(FM).unwrap()["cost_models"]["unknown"]["cpu_ms"] = 17.into();
-    let r = report(&a, &b, &["src.bin", PROJECTS]).unwrap();
+    let (r, costs) = report_with_costs(&a, &b, &["src.bin", PROJECTS]).unwrap();
     assert_eq!(r["mixed"], true);
     assert_eq!(r["rule_paths"], json!([PROJECTS]));
     assert_eq!(r["product_paths"], json!(["src.bin"]));
-    assert!(r["costs"]["declared_before"]["file:src.bin"]["costs"][0]["value"]["cpu_ms"].is_null());
+    assert!(costs["declared_before"]["file:src.bin"]["costs"][0]["value"]["cpu_ms"].is_null());
     assert_eq!(
-        r["costs"]["declared_after"]["file:src.bin"]["costs"][0]["value"]["cpu_ms"],
+        costs["declared_after"]["file:src.bin"]["costs"][0]["value"]["cpu_ms"],
         17
     );
     assert_eq!(
@@ -112,8 +118,8 @@ fn old_surfaces_survive_reclassification_and_deleted_files() {
         .as_array_mut()
         .unwrap()
         .retain(|f| f["path"] != "src.bin");
-    let r = report(&a, &b, &["src.bin", FM]).unwrap();
-    assert!(r["costs"]["declared_after"]["file:src.bin"].is_null());
+    let (r, costs) = report_with_costs(&a, &b, &["src.bin", FM]).unwrap();
+    assert!(costs["declared_after"]["file:src.bin"].is_null());
     assert!(
         r["rule_paths"]
             .as_array()
