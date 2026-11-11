@@ -4252,6 +4252,107 @@ fn independent_report_slots_publish_while_another_slot_is_held() {
 }
 
 #[test]
+fn synchronous_completion_seals_across_exhausted_rounds_before_handoff() {
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/synchronous-result";
+    let publication = inventory(h.path())
+        .plan_rooted(
+            "fixture",
+            path,
+            json!({"request":"original"}),
+            "domain-recovery",
+        )
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.materialize().unwrap();
+    let bytes = b"exact producer result";
+    fs::write(h.path().join(path).join("result.json"), bytes).unwrap();
+    let mut rounds = 0;
+    publication
+        .complete_sealed_with_round_budget(json!({"publication":"committed"}), |steps| {
+            if steps == 0 {
+                rounds += 1;
+                assert_eq!(
+                    inventory(h.path())
+                        .rooted_original("fixture", "domain-recovery")
+                        .unwrap()
+                        .unwrap()
+                        .0,
+                    id
+                );
+            }
+            steps >= 1
+        })
+        .unwrap();
+    assert!(
+        rounds > 1,
+        "the clock must force multiple actual sealing rounds"
+    );
+    let state = ledger(h.path());
+    let output = state["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["id"] == id)
+        .unwrap();
+    assert_eq!(output["phase"], "released", "{output}");
+    assert_eq!(output["manifest"]["sealed"], true, "{output}");
+    assert_eq!(output["outcome"]["publication"], "committed");
+    let _guard = inventory(h.path()).read_guard(path).unwrap();
+    assert!(
+        inventory(h.path())
+            .published_tree_member(
+                "fixture",
+                path,
+                &format!("{path}/result.json"),
+                &chrono_harness::sha256(bytes),
+                bytes.len() as u64
+            )
+            .unwrap()
+    );
+}
+
+#[test]
+fn synchronous_sealing_preserves_recovery_and_actual_error_on_changed_tree() {
+    let h = host(256, 16);
+    let path = ".chrono-harness/state/fixtures/changed-synchronous-result";
+    let publication = inventory(h.path())
+        .plan_rooted(
+            "fixture",
+            path,
+            json!({"request":"original"}),
+            "domain-recovery",
+        )
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.materialize().unwrap();
+    fs::write(h.path().join(path).join("result.json"), b"original").unwrap();
+    let mut rounds = 0;
+    let error = publication
+        .complete_sealed_with_round_budget(json!({"publication":"committed"}), |steps| {
+            if steps == 0 {
+                rounds += 1;
+                if rounds == 2 {
+                    fs::write(h.path().join(path).join("unexpected"), b"changed").unwrap();
+                }
+            }
+            steps >= 1
+        })
+        .unwrap_err();
+    assert!(error.contains("tree changed while sealing"), "{error}");
+    let original = inventory(h.path())
+        .rooted_original("fixture", "domain-recovery")
+        .unwrap()
+        .unwrap();
+    assert_eq!(original.0, id);
+    assert_eq!(original.2, "sealing");
+    assert_eq!(
+        fs::read(h.path().join(path).join("result.json")).unwrap(),
+        b"original"
+    );
+}
+
+#[test]
 fn completion_io_allows_independent_publication_and_preserves_new_references() {
     if !isolated_capability_test(
         "completion_io_allows_independent_publication_and_preserves_new_references",
