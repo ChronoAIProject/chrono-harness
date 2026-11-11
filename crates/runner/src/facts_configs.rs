@@ -71,6 +71,8 @@ pub(crate) fn resolve_target(
     target: Option<RegistryTarget<'_>>,
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
+    use crate::verified_git_binding::{admit_selector_object, admit_selector_platforms};
+
     let config = json(&bytes)?;
     let schema = config_schema(&config);
     match schema {
@@ -80,17 +82,14 @@ pub(crate) fn resolve_target(
         }
         GitConfigSchema::V1 | GitConfigSchema::V2 | GitConfigSchema::V3 => {}
     }
-    let object = config
-        .as_object()
-        .ok_or("Git config selector object required")?;
-    if object.len() != 2 || !object.contains_key("platforms") {
-        return Err("Git config selector requires only schema and platforms".into());
-    }
-    host_path(path)?;
-    let platforms = config["platforms"]
-        .as_object()
-        .filter(|map| !map.is_empty())
-        .ok_or("Git config selector requires nonempty platforms")?;
+    let object = config.as_object();
+    admit_selector_object(
+        object.map(|map| map.len()),
+        object.is_some_and(|map| map.contains_key("platforms")),
+    )?;
+    host_path(path, None)?;
+    let platforms =
+        admit_selector_platforms(config["platforms"].as_object().map(|map| (map, map.len())))?;
     let version3 = schema.has_registry_path();
     let identities = schema.has_identity();
     for (platform, target) in platforms {
@@ -103,10 +102,7 @@ pub(crate) fn resolve_target(
             vec![target.as_str().ok_or("Git config selector path required")?]
         };
         for target in targets {
-            host_path(target)?;
-            if target == path {
-                return Err("Git config selector cannot select itself".into());
-            }
+            host_path(target, Some(path))?;
         }
     }
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
@@ -294,7 +290,7 @@ fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
             let path = row["registry_path"]
                 .as_str()
                 .ok_or("Git selector registry_path required")?;
-            host_path(path)?;
+            host_path(path, None)?;
             if !paths.contains(&path) {
                 return Err(
                     "Git selector registry_path must name a registered policy target".into(),
@@ -305,11 +301,9 @@ fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
     Ok(paths)
 }
 
-fn host_path(path: &str) -> Result<(), String> {
+fn host_path(path: &str, entry: Option<&str>) -> Result<(), String> {
     relative_path(path)?;
-    if !path.starts_with(".chrono-harness/") {
-        return Err("Git config selector paths must reside in .chrono-harness/".into());
-    }
+    crate::verified_git_binding::admit_selector_host_path(path, entry)?;
     Ok(())
 }
 

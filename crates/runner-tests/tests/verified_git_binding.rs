@@ -180,6 +180,59 @@ fn observations_keep_empty_unicode_and_control_bytes_and_expectations_are_exact(
     a_declared_expectation_rejects_any_different_text("git", "GIT");
 }
 
+fn expect_selector_error<T>(actual: Result<T, &str>, expected: &str)
+    requires match actual { Ok(_) => false, Err(error) => error@ == expected@ },
+{
+    match actual {
+        Ok(_) => { panic!(); },
+        Err(error) => { expect_true(policy::matches_expected(error, Some(expected))); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_envelope_requires_exact_fields_and_a_nonempty_platform_object() {
+    let shape = "Git config selector requires only schema and platforms";
+    let platforms = "Git config selector requires nonempty platforms";
+    expect_selector_error(policy::admit_selector_object(None, false), "Git config selector object required");
+    expect_selector_error(policy::admit_selector_object(Some(2), false), shape);
+    expect_selector_error(policy::admit_selector_object(Some(3), true), shape);
+    expect_true(policy::admit_selector_object(Some(2), true).is_ok());
+    expect_selector_error(policy::admit_selector_platforms::<u8>(None), platforms);
+    expect_selector_error(policy::admit_selector_platforms(Some((&7u8, 0))), platforms);
+    match policy::admit_selector_platforms(Some((&7u8, 1))) {
+        Ok(value) => { expect_true(*value == 7); },
+        Err(_) => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_path_rejects_neighbor_prefix_and_self_after_host_admission() {
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    let root = ".chrono-harness/";
+    let target = ".chrono-harness/a";
+    let neighbor = ".chrono-harness-x";
+    proof {
+        reveal_strlit(".chrono-harness/");
+        reveal_strlit(".chrono-harness/a");
+        reveal_strlit(".chrono-harness-x");
+        assert(vstd::string::is_ascii(root) && vstd::string::is_ascii(target)
+            && vstd::string::is_ascii(neighbor));
+        assert(root.spec_bytes().len() == 16);
+        assert(target.spec_bytes().take(16) =~= root.spec_bytes());
+        assert(neighbor.spec_bytes()[15] != root.spec_bytes()[15]);
+    }
+    expect_true(policy::admit_selector_host_path(target, None).is_ok());
+    expect_true(policy::admit_selector_host_path(target, Some(root)).is_ok());
+    expect_selector_error(
+        policy::admit_selector_host_path(target, Some(target)),
+        "Git config selector cannot select itself",
+    );
+    expect_selector_error(
+        policy::admit_selector_host_path(neighbor, Some(neighbor)),
+        "Git config selector paths must reside in .chrono-harness/",
+    );
+}
+
 fn expect_schema(schema: Option<&str>, expected: policy::GitConfigSchema)
     requires policy::git_config_schema(schema) == expected,
 {
