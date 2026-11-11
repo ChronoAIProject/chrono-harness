@@ -1129,4 +1129,35 @@ pub fn select_git_target<R: GitTargetRows>(rows: &R, digest: Option<&str>, path:
     }
 }
 
+pub open spec fn git_guard_observation_matches(
+    presence: Option<&str>, expected_digest: Option<&str>, observation: Option<(&str, u64)>,
+) -> bool {
+    match observation {
+        None => required_text_matches(presence, "absent"),
+        Some((digest, _)) => required_text_matches(presence, "present")
+            && required_text_matches(expected_digest, digest),
+    }
+}
+
+/// 只准入原观察，不另加摘要格式要求；成功保留原摘要借用和完整长度。
+pub fn admit_git_guard_observation<'a, 'id>(
+    id: &'id str, presence: Option<&str>, expected_digest: Option<&str>,
+    observation: Option<(&'a str, u64)>,
+) -> (out: Result<Option<(&'a str, u64)>, (&'static str, &'id str, &'static str)>)
+    ensures out.is_ok() == git_guard_observation_matches(presence, expected_digest, observation),
+        match out {
+            Ok(actual) => actual == observation,
+            Err((prefix, actual_id, suffix)) => prefix@ == "Git input "@ && actual_id == id
+                && suffix@ == " digest/presence mismatch"@,
+        },
+{
+    let valid = match observation {
+        None => matches_required(presence, "absent"),
+        Some((digest, _)) => matches_required(presence, "present")
+            && matches_required(expected_digest, digest),
+    };
+    if valid { Ok(observation) }
+    else { Err(("Git input ", id, " digest/presence mismatch")) }
+}
+
 }

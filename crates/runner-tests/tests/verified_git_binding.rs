@@ -1190,4 +1190,118 @@ fn git_selector_target_accepts_only_direct_v3_or_v4_without_a_schema_key() {
     expect_target_schema(Some(4), true, false);
 }
 
+fn expect_absent_observation(result: Result<Option<(&str, u64)>, (&str, &str, &str)>)
+    requires match result { Ok(value) => value.is_none(), Err(_) => false },
+{
+    match result {
+        Ok(None) => (),
+        _ => { panic!(); },
+    }
+}
+
+fn expect_present_observation(
+    digest: &str, length: u64, result: Result<Option<(&str, u64)>, (&str, &str, &str)>,
+)
+    requires match result {
+        Ok(Some((actual_digest, actual_length))) => actual_digest@ == digest@ && actual_length == length,
+        _ => false,
+    },
+{
+    match result {
+        Ok(Some((actual_digest, actual_length))) => {
+            expect_true(policy::matches_expected(actual_digest, Some(digest)));
+            expect_true(actual_length == length);
+        },
+        _ => { panic!(); },
+    }
+}
+
+fn expect_observation_mismatch(id: &str, result: Result<Option<(&str, u64)>, (&str, &str, &str)>)
+    requires match result {
+        Err((prefix, actual_id, suffix)) => prefix@ == "Git input "@ && actual_id@ == id@
+            && suffix@ == " digest/presence mismatch"@,
+        _ => false,
+    },
+{
+    match result {
+        Err((prefix, actual_id, suffix)) => {
+            expect_true(policy::matches_expected(prefix, Some("Git input ")));
+            expect_true(policy::matches_expected(actual_id, Some(id)));
+            expect_true(policy::matches_expected(suffix, Some(" digest/presence mismatch")));
+        },
+        _ => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_absence_requires_exact_presence_and_does_not_check_a_digest() {
+    proof {
+        reveal_strlit("absent"); reveal_strlit("present");
+        reveal_strlit(""); reveal_strlit("absent\0");
+        assert("absent"@.len() != "present"@.len());
+        assert("absent"@.len() != ""@.len());
+        assert("absent"@.len() != "absent\0"@.len());
+    }
+    expect_absent_observation(policy::admit_git_guard_observation("id", Some("absent"), None, None));
+    expect_absent_observation(policy::admit_git_guard_observation("id", Some("absent"), Some("arbitrary"), None));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation("id", None, None, None));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation("id", Some("present"), Some("hash"), None));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation("id", Some(""), None, None));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation("id", Some("absent\0"), None, None));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_present_observation_preserves_the_original_digest_and_boundary_lengths() {
+    expect_present_observation("hash", 0, policy::admit_git_guard_observation(
+        "id", Some("present"), Some("hash"), Some(("hash", 0))));
+    expect_present_observation("hash", u64::MAX, policy::admit_git_guard_observation(
+        "id", Some("present"), Some("hash"), Some(("hash", u64::MAX))));
+    expect_present_observation("", 1, policy::admit_git_guard_observation(
+        "id", Some("present"), Some(""), Some(("", 1))));
+    expect_present_observation("摘要\0λ", 7, policy::admit_git_guard_observation(
+        "id", Some("present"), Some("摘要\0λ"), Some(("摘要\0λ", 7))));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_digest_comparison_keeps_case_unicode_nul_and_empty_text() {
+    proof {
+        reveal_strlit("hash"); reveal_strlit("HASH"); reveal_strlit("");
+        reveal_strlit("hash\0"); reveal_strlit("摘要"); reveal_strlit("摘要λ");
+        assert("hash"@[0] != "HASH"@[0]);
+        assert("hash"@.len() != ""@.len());
+        assert("hash"@.len() != "hash\0"@.len());
+        assert("摘要"@.len() != "摘要λ"@.len());
+    }
+    expect_observation_mismatch("id", policy::admit_git_guard_observation(
+        "id", Some("present"), None, Some(("hash", 0))));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation(
+        "id", Some("present"), Some("HASH"), Some(("hash", 0))));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation(
+        "id", Some("present"), Some(""), Some(("hash", 0))));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation(
+        "id", Some("present"), Some("hash\0"), Some(("hash", 0))));
+    expect_observation_mismatch("id", policy::admit_git_guard_observation(
+        "id", Some("present"), Some("摘要λ"), Some(("摘要", 0))));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn guard_presence_mismatch_keeps_the_complete_original_id() {
+    proof {
+        reveal_strlit("absent"); reveal_strlit("present");
+        reveal_strlit("present\0"); reveal_strlit("PRESENT");
+        assert("absent"@.len() != "present"@.len());
+        assert("present"@.len() != "present\0"@.len());
+        assert("present"@[0] != "PRESENT"@[0]);
+    }
+    let id = "输入 λ\0 ";
+    expect_observation_mismatch(id, policy::admit_git_guard_observation(
+        id, Some("absent"), Some("hash"), Some(("hash", 9))));
+    expect_observation_mismatch(id, policy::admit_git_guard_observation(
+        id, None, Some("hash"), Some(("hash", 9))));
+    expect_observation_mismatch(id, policy::admit_git_guard_observation(
+        id, Some("present\0"), Some("hash"), Some(("hash", 9))));
+    expect_observation_mismatch("", policy::admit_git_guard_observation(
+        "", Some("PRESENT"), Some("hash"), Some(("hash", u64::MAX))));
+}
+
 }
