@@ -553,20 +553,15 @@ fn clean(reader: &Reader, root: &Path, candidate: &str, p: &Policy) -> Result<()
     if utf8(reader.git(root, &["rev-parse", "HEAD"])?)?.trim() != candidate {
         return Err("checkout HEAD does not equal candidate".into());
     }
-    // -v lowercases tags for assume-unchanged; S/s marks skip-worktree.
-    // Paths follow the two-byte tag prefix and end at NUL, never whitespace.
-    for entry in reader.index_flags(root)? {
-        let assume_unchanged = entry.tag.as_bytes()[0].is_ascii_lowercase();
-        let skip_worktree = entry.tag.eq_ignore_ascii_case("S");
-        if assume_unchanged || skip_worktree {
-            let path = entry.path;
-            let flag = match (assume_unchanged, skip_worktree) {
-                (true, true) => "assume-unchanged and skip-worktree",
-                (true, false) => "assume-unchanged",
-                _ => "skip-worktree",
-            };
-            return Err(format!("unsupported index flags ({flag}): {path}"));
-        }
+    let flags = reader.index_flags(root)?;
+    if let Some((entry, reason)) =
+        chrono_harness::verified_status::first_unsupported_index_flag(&flags)
+    {
+        return Err(format!(
+            "unsupported index flags ({}): {}",
+            reason.message(),
+            entry.path
+        ));
     }
     if !reader.tracked_changes(root, candidate)?.is_empty() {
         return Err("dirty tracked candidate inputs/index".into());
