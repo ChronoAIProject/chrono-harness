@@ -114,6 +114,7 @@ pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R
             let middle = remove(initial, removed);
             let normalized = insert(middle, field, value);
             proof {
+                reveal(registry_selection_object_result);
                 assert(remove.ensures((initial, removed), middle));
                 assert(insert.ensures((middle, field, value), normalized));
                 assert(exists|observed: M, key: &str, target: &str, schema: &str|
