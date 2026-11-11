@@ -156,7 +156,9 @@ fn registry_snapshot_with_target(
 ) -> Result<RegistrySnapshot, String> {
     let (mut snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
     for path in crate::verified_status::pending_registry_paths(
-        paths, &snapshot.entry_path, &snapshot.effective_path,
+        paths,
+        &snapshot.entry_path,
+        &snapshot.effective_path,
     ) {
         let original = read(&path)?;
         let value = json(&original)?;
@@ -183,7 +185,9 @@ fn registry_snapshot_with_batches_target(
         crate::verified_status::single_registry_blob(path, originals)
     })?;
     let pending = crate::verified_status::pending_registry_paths(
-        paths, &snapshot.entry_path, &snapshot.effective_path,
+        paths,
+        &snapshot.entry_path,
+        &snapshot.effective_path,
     );
     let originals = read(&pending)?;
     crate::verified_status::registry_acquisition_count(pending.len(), originals.len())?;
