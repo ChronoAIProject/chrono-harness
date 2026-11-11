@@ -1,13 +1,17 @@
 //! Explicit native-platform selection for a separate Git facts policy.
+use crate::verified_git_binding::{
+    GitConfigSchema, admit_git_selector_target, classify_git_config_schema,
+};
 use crate::{json, no_symlink_parents, relative_path, sha256};
 use serde_json::{Value, json as value};
 use std::{fs, path::Path};
 
+fn config_schema(config: &Value) -> GitConfigSchema {
+    classify_git_config_schema(config["schema"].as_str())
+}
+
 pub(crate) fn is_selector(config: &Value) -> bool {
-    matches!(
-        config["schema"].as_str(),
-        Some("chrono-git-configs/v1" | "chrono-git-configs/v2" | "chrono-git-configs/v3")
-    )
+    config_schema(config).is_selector()
 }
 
 pub(crate) struct Selection {
@@ -68,14 +72,13 @@ pub(crate) fn resolve_target(
     mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<(String, Vec<u8>, Value, Option<Selection>), String> {
     let config = json(&bytes)?;
-    if !is_selector(&config) {
-        if config["schema"]
-            .as_str()
-            .is_some_and(|s| s.starts_with("chrono-git-configs/"))
-        {
+    let schema = config_schema(&config);
+    match schema {
+        GitConfigSchema::Direct => return Ok((path.into(), bytes, config, None)),
+        GitConfigSchema::Unsupported => {
             return Err("unsupported Git config selector schema".into());
         }
-        return Ok((path.into(), bytes, config, None));
+        GitConfigSchema::V1 | GitConfigSchema::V2 | GitConfigSchema::V3 => {}
     }
     let object = config
         .as_object()
@@ -88,8 +91,8 @@ pub(crate) fn resolve_target(
         .as_object()
         .filter(|map| !map.is_empty())
         .ok_or("Git config selector requires nonempty platforms")?;
-    let version3 = config["schema"] == "chrono-git-configs/v3";
-    let identities = config["schema"] != "chrono-git-configs/v1";
+    let version3 = schema.has_registry_path();
+    let identities = schema.has_identity();
     for (platform, target) in platforms {
         if platform.is_empty() || platform.trim() != platform {
             return Err("Git config selector platform must be nonempty and literal".into());
@@ -148,13 +151,10 @@ pub(crate) fn resolve_target(
     };
     let selected_bytes = read(selected)?;
     let selected_config = json(&selected_bytes)?;
-    if !matches!(selected_config["schema_version"].as_u64(), Some(3 | 4))
-        || selected_config.get("schema").is_some()
-    {
-        return Err(
-            "Git config selector requires a direct full-v3 policy or v4 policy, never another selector".into(),
-        );
-    }
+    admit_git_selector_target(
+        selected_config["schema_version"].as_u64(),
+        selected_config.get("schema").is_some(),
+    )?;
     if let Some((program, hash)) = identity {
         let (tool, input) = crate::facts_binding::declaration(&selected_config)?;
         let input = input.ok_or("Git identity selector requires a declared executable input")?;
@@ -189,7 +189,8 @@ pub fn identity(
     path: &str,
 ) -> Result<Identity, String> {
     let entry = values.get(path).ok_or("missing configuration entry")?;
-    if !is_selector(entry) {
+    let schema = config_schema(entry);
+    if !schema.is_selector() {
         return Ok(Identity {
             entry_path: path.into(),
             effective_path: path.into(),
@@ -199,9 +200,9 @@ pub fn identity(
     // A captured value map contains exactly one effective policy. Reconstruct
     // its declared identity from that data, without consulting today's Git.
     let platform = format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH);
-    let target = if entry["schema"] != "chrono-git-configs/v1" {
+    let target = if schema.has_identity() {
         let host = &entry["platforms"][&platform];
-        let present: Vec<_> = identity_targets(host, entry["schema"] == "chrono-git-configs/v3")?
+        let present: Vec<_> = identity_targets(host, schema.has_registry_path())?
             .into_iter()
             .filter(|target| values.contains_key(*target))
             .collect();

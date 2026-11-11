@@ -241,6 +241,8 @@ scoped 的可选 `registration_config` 及 full-CI `check_config` 均可显式�
 语言或目录；各平台文件仍由宿主明确登记。选择器及目标均为 `.chrono-harness/` 下的
 字面相对路径，拒绝链接、自引用、嵌套选择器和旧版目标。
 
+Git 配置的选择器版本由同源 Verus 判定：只有全文为 `chrono-git-configs/v1`、`v2` 或 `v3` 的对应完整标识才是选择器。解析入口拒绝同一前缀下的其他标识；无字符串标识或不同前缀按直接配置处理。v2／v3 使用执行物身份，只有 v3 另读登记路径。选择器目标必须为直接 v3 或 v4 配置，且不得含 `schema` 键，即使该键值为 null。
+
 固定端点读取器独立按各自 commit 解析 entry 与 selected target，并在 registry snapshot中按真实路径保留 selector、target 和五份 status-bearing registry 的原字节和值；不把target JSON 别名到 selector，也不把 candidate target 套到 base。
 
 请求、registrationview（选择器模式版本化为 `chrono-registration-view/v2`）、历史 decode（选择器输入版本化为 `chrono-historical-decode/v3`）、FILEMAP provenance、mixed documents 与 workflow checks 同时保留原始 entry identity、effective target identity 和结构化 selector binding，缺失、替换或漂移均拒绝。
