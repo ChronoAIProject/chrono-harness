@@ -49,6 +49,20 @@ fn expect_true(actual: bool)
     if !actual { panic!(); }
 }
 
+fn expect_gate_index(expected: Option<usize>, result: Result<Option<usize>, &str>)
+    requires match (expected, result) {
+        (Some(wanted), Ok(Some(actual))) => wanted == actual,
+        (None, Ok(None)) => true,
+        _ => false,
+    },
+{
+    match (expected, result) {
+        (Some(wanted), Ok(Some(actual))) => expect_true(wanted == actual),
+        (None, Ok(None)) => (),
+        _ => { panic!(); },
+    }
+}
+
 #[cfg(not(verus_keep_ghost))]
 #[test]
 #[should_panic]
@@ -440,15 +454,17 @@ fn peer_output_lookup_requires_the_complete_unique_original_id() {
     let empty = policy::gate_output_index(&ids, "");
     let middle = policy::gate_output_index(&ids, "peer");
     let last = policy::gate_output_index(&ids, "输入λ");
-    expect_true(empty == Ok(Some(0)) && middle == Ok(Some(1)) && last == Ok(Some(2)));
+    expect_gate_index(Some(0), empty);
+    expect_gate_index(Some(1), middle);
+    expect_gate_index(Some(2), last);
     let absent = policy::gate_output_index(&ids, "输入\0λ");
-    expect_true(absent == Ok(None));
+    expect_gate_index(None, absent);
     let repeated = ["peer", "", "peer"];
     let ambiguous = policy::gate_output_index(&repeated, "peer");
     expect_true(ambiguous.is_err());
     let distinct = ["peer", "peer\0"];
     let exact = policy::gate_output_index(&distinct, "peer\0");
-    expect_true(exact == Ok(Some(1)));
+    expect_gate_index(Some(1), exact);
 }
 
 }
