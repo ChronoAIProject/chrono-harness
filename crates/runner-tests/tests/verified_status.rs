@@ -3605,6 +3605,131 @@ fn checkout_hash_count_preserves_limits_and_error_priority() {
         "checkout file shrank during observation");
 }
 
+// 小缓冲区保留未读取的尾字节；摘要 fixture 只有收到按顺序的单字节 0、255 才成功。
+fn checkout_stream_fixture_view(buffer: &[u8; 4]) -> (bytes: &[u8])
+    ensures bytes@ == buffer@,
+{ buffer.as_slice() }
+
+fn checkout_stream_fixture_read(state: u8, buffer: [u8; 4])
+    -> (out: (u8, [u8; 4], Result<usize, String>))
+    ensures out == if state == 0 { (1u8, [0u8, 11, 12, 13], Ok::<usize, String>(1)) }
+        else if state == 1 { (2u8, [255u8, 21, 22, 23], Ok::<usize, String>(1)) }
+        else { (state, buffer, Ok::<usize, String>(0)) },
+{
+    if state == 0 { (1, [0, 11, 12, 13], Ok(1)) }
+    else if state == 1 { (2, [255, 21, 22, 23], Ok(1)) }
+    else { (state, buffer, Ok(0)) }
+}
+
+fn checkout_stream_fixture_error(state: u8, buffer: [u8; 4])
+    -> (out: (u8, [u8; 4], Result<usize, String>))
+    ensures out.0 == state, out.1 == buffer,
+        match out.2 { Err(error) => error@ == "read: é\0original\nend"@, Ok(_) => false },
+{ (state, buffer, Err("read: é\0original\nend".to_owned())) }
+
+fn checkout_stream_fixture_late_error(state: u8, buffer: [u8; 4])
+    -> (out: (u8, [u8; 4], Result<usize, String>))
+    ensures if state == 0 { out == (1u8, [0u8, 11, 12, 13], Ok::<usize, String>(1)) }
+        else { out.0 == state && out.1 == buffer
+            && match out.2 { Err(error) => error@ == "read: é\0original\nend"@, Ok(_) => false } },
+{
+    if state == 0 { (1, [0, 11, 12, 13], Ok(1)) }
+    else { (state, buffer, Err("read: é\0original\nend".to_owned())) }
+}
+
+fn checkout_stream_fixture_eof(state: u8, buffer: [u8; 4])
+    -> (out: (u8, [u8; 4], Result<usize, String>))
+    ensures out == (state, buffer, Ok::<usize, String>(0)),
+{ (state, buffer, Ok(0)) }
+
+fn checkout_stream_fixture_update(digest: u8, bytes: &[u8]) -> (out: u8)
+    ensures out == if digest == 0 && bytes@ == seq![0u8] { 1u8 }
+        else if digest == 1 && bytes@ == seq![255u8] { 2u8 } else { 99u8 },
+{
+    if bytes.len() == 1 && digest == 0 && bytes[0] == 0 { 1 }
+    else if bytes.len() == 1 && digest == 1 && bytes[0] == 255 { 2 }
+    else { 99 }
+}
+
+fn checkout_stream_fixture_finalize(digest: u8) -> (out: String)
+    ensures out@ == if digest == 0 { "empty"@ }
+        else if digest == 2 { "digest: \0ÿ"@ } else { "unexpected bytes or update order"@ },
+{
+    if digest == 0 { "empty".to_owned() }
+    else if digest == 2 { "digest: \0ÿ".to_owned() }
+    else { "unexpected bytes or update order".to_owned() }
+}
+
+fn expect_checkout_stream_success(out: Result<String, String>, expected: &str)
+    requires match out { Ok(value) => value@ == expected@, Err(_) => false },
+{
+    match out {
+        Ok(value) => expect_status_text(value.as_str(), expected),
+        Err(_) => panic!(),
+    }
+}
+
+fn expect_checkout_stream_failure(out: Result<String, String>, expected: &str)
+    requires match out { Err(value) => value@ == expected@, Ok(_) => false },
+{
+    match out {
+        Err(value) => expect_status_text(value.as_str(), expected),
+        Ok(_) => panic!(),
+    }
+}
+
+#[test]
+fn checkout_stream_preserves_chunk_bytes_and_update_order_until_eof() {
+    let out = policy::checkout_hash_stream(2, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_read, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_success(out, "digest: \0ÿ");
+}
+
+#[test]
+fn checkout_stream_empty_eof_finalizes_the_initial_digest() {
+    let out = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_eof, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_success(out, "empty");
+}
+
+#[test]
+fn checkout_stream_preserves_first_and_late_read_error_in_full() {
+    let first = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_error, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_failure(first, "read: é\0original\nend");
+    let late = policy::checkout_hash_stream(2, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_late_error, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_failure(late, "read: é\0original\nend");
+}
+
+#[test]
+fn checkout_stream_reads_again_after_expected_length_and_preserves_error_priority() {
+    let out = policy::checkout_hash_stream(1, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_late_error, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_failure(out, "read: é\0original\nend");
+}
+
+#[test]
+fn checkout_stream_rejects_growth_and_early_eof() {
+    let grew = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_read, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_failure(grew, "checkout file grew during observation");
+    let late_growth = policy::checkout_hash_stream(1, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_read, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_failure(late_growth, "checkout file grew during observation");
+    let shrank = policy::checkout_hash_stream(1, 0u8, 0u8, [77u8; 4],
+        checkout_stream_fixture_eof, checkout_stream_fixture_view,
+        checkout_stream_fixture_update, checkout_stream_fixture_finalize);
+    expect_checkout_stream_failure(shrank, "checkout file shrank during observation");
+}
+
 fn index_nonzero_stage_always_changes(stage: &str, text: &str)
     requires stage@ != "0"@,
 {
