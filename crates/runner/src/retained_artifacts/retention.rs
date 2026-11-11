@@ -759,7 +759,11 @@ impl Inventory {
         if let Some(originals) = originals {
             self.validate_originals(originals)?;
         }
-        for key in self.transaction_keys()? {
+        for key in if crate::verified_release::global_maintenance(originals) {
+            self.transaction_keys()?
+        } else {
+            Vec::new()
+        } {
             let record = match self.transaction(&key)? {
                 Some(record) if record.phase == "active" => record,
                 _ => {
