@@ -734,6 +734,9 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
     let blob = |spec: &str| {
         let (revision, path) = spec.split_once(':').unwrap();
         if revision != head {
+            if let Some(bytes) = config["retained"][revision][path].as_str() {
+                return bytes.as_bytes().to_vec();
+            }
             eprintln!("mock retained policy read failed");
             std::process::exit(71);
         }
@@ -782,10 +785,16 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
                         .as_array()
                         .unwrap()
                         .iter()
-                        .find_map(|path| {
-                            let bytes = fs::read(root.join(path.as_str().unwrap())).unwrap();
-                            (object(&bytes) == spec).then_some(bytes)
-                        })
+                        .map(|path| fs::read(root.join(path.as_str().unwrap())).unwrap())
+                        .chain(
+                            config["retained"]
+                                .as_object()
+                                .into_iter()
+                                .flat_map(|revisions| revisions.values())
+                                .flat_map(|paths| paths.as_object().unwrap().values())
+                                .map(|bytes| bytes.as_str().unwrap().as_bytes().to_vec()),
+                        )
+                        .find(|bytes| object(bytes) == spec)
                         .expect("explicit mocked blob object")
                 };
                 println!("{} blob {}", object(&bytes), bytes.len());
