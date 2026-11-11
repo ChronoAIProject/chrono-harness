@@ -354,6 +354,7 @@ fn read<T: serde::de::DeserializeOwned>(directory: &Path, name: &str) -> Result<
 }
 
 fn scope(root: &Path) -> Result<PathBuf, String> {
+    super::parents(root, STORE, &mut Default::default())?;
     let directory = no_symlink_parents(root, STORE)?;
     fs::create_dir_all(&directory).map_err(|e| super::error(&directory, e))?;
     // Persist the infrastructure itself before a producer can publish intent.
@@ -614,7 +615,7 @@ fn settle_effects(
     plan: &Plan,
     committed: bool,
     fault: &Fault,
-) -> Result<(), String> {
+) -> Result<Vec<PathBuf>, String> {
     let mut unrestored = Vec::new();
     let mut recovery = Vec::new();
     let mut published = Vec::new();
@@ -676,7 +677,7 @@ fn settle_effects(
         }
     }
     if unrestored.is_empty() {
-        Ok(())
+        Ok(published)
     } else {
         Err(format!(
             "published={published:?}; unrestored={unrestored:?}; recovery={recovery:?}"
@@ -989,11 +990,13 @@ pub(super) fn run(
                         "{error}; commit state needs recovery; attempt {attempt}"
                     ));
                 }
-                if let Some(plan) = &plan {
+                let published = if let Some(plan) = &plan {
                     settle_effects(&root, &directory, plan, false, &fault)
-                        .map_err(|repair| format!("{error}; {repair}; attempt {attempt}"))?;
-                }
-                Err(format!("{error}; unrestored=[]"))
+                        .map_err(|repair| format!("{error}; {repair}; attempt {attempt}"))?
+                } else {
+                    Vec::new()
+                };
+                Err(format!("{error}; published={published:?}; unrestored=[]"))
             }
         };
         fault.at("cleanup")?;

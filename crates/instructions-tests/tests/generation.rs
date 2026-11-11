@@ -1750,6 +1750,50 @@ fn inventory(host: &Host) -> chrono_harness::retained_artifacts::retention::Inve
     .unwrap()
 }
 
+fn maintain_until(
+    state: &chrono_harness::retained_artifacts::retention::Inventory,
+    observed: Option<u64>,
+    complete: impl Fn() -> bool,
+) -> Vec<serde_json::Value> {
+    // Maintenance is an explicit bounded action, not a synchronous drain.
+    // Drive a finite sequence of real rounds without changing the policy's
+    // time/node/byte bounds, and retain every round for failure diagnostics.
+    let mut rounds = Vec::new();
+    for _ in 0..32 {
+        let result = match observed {
+            Some(now) => state.maintain_producer_at(OP_PRODUCER, now),
+            None => state.maintain_producer(OP_PRODUCER),
+        }
+        .unwrap();
+        assert!(
+            result["quota_errors"].as_array().unwrap().is_empty(),
+            "{result}"
+        );
+        assert!(
+            result["round"]["accounting_errors"]
+                .as_array()
+                .unwrap()
+                .is_empty(),
+            "{result}"
+        );
+        assert!(
+            result["round"]["nodes"].as_u64().unwrap() <= 256,
+            "{result}"
+        );
+        rounds.push(result);
+        if complete() {
+            assert!(
+                rounds
+                    .iter()
+                    .any(|r| r["round"]["removed_logical_bytes"].as_u64().unwrap() > 0),
+                "no observed physical progress: {rounds:?}"
+            );
+            return rounds;
+        }
+    }
+    panic!("bounded maintenance did not retire the expected originals: {rounds:?}");
+}
+
 #[test]
 fn terminal_count_and_bytes_are_maintenance_targets_with_truthful_retired_queries() {
     for (count, bytes, expected) in [(1, 67108864, 1), (32, 1, 0)] {
@@ -1770,9 +1814,28 @@ fn terminal_count_and_bytes_are_maintenance_targets_with_truthful_retired_querie
                 )
             })
             .collect();
-        let result = inventory(&host).maintain_producer(OP_PRODUCER).unwrap();
-        assert_eq!(result["quota_scope_complete"], true, "{result}");
-        assert!(!result["quota_expired"].as_array().unwrap().is_empty());
+        let state = inventory(&host);
+        let rounds = maintain_until(&state, None, || {
+            let status = state.producer_status(OP_PRODUCER, None).unwrap();
+            assert!(status["errors"].as_array().unwrap().is_empty(), "{status}");
+            status["scope_complete"] == true
+                && status["records"].as_array().unwrap().len() == expected
+                && paths.iter().filter(|p| p.exists()).count() == expected
+                && retired_ids.iter().all(|(id, path)| {
+                    path.exists()
+                        || !host
+                            .root
+                            .join(".chrono-harness/state/output-retention-v1/objects")
+                            .join(id)
+                            .exists()
+                })
+        });
+        assert!(rounds.iter().any(|r| r["quota_scope_complete"] == true));
+        assert!(
+            rounds
+                .iter()
+                .any(|r| !r["quota_expired"].as_array().unwrap().is_empty())
+        );
         let status = chrono_instructions::status(&host.root, None).unwrap();
         assert_eq!(status["scope_complete"], true, "{status}");
         assert_eq!(
@@ -1826,9 +1889,7 @@ fn age_and_quota_maintenance_preserve_live_consumers_and_unresolved_attempts() {
         .unwrap();
     assert!(original.exists(), "live read capability: {result}");
     drop(live);
-    state
-        .maintain_producer_at(OP_PRODUCER, u64::MAX - 1)
-        .unwrap();
+    maintain_until(&state, Some(u64::MAX - 1), || !original.exists());
     assert!(!original.exists());
     let paused = PausedOperation::start(&host, "before-prepare", "generate");
     state
