@@ -335,7 +335,7 @@ trait UniqueMatchRows {
         ensures present == self.matches(index as int);
 }
 
-open spec fn unique_match_index<R: UniqueMatchRows>(rows: &R, index: int) -> bool {
+spec fn unique_match_index<R: UniqueMatchRows>(rows: &R, index: int) -> bool {
     0 <= index < rows.count() && rows.matches(index)
         && forall|j: int| 0 <= j < rows.count() && j != index ==> !#[trigger] rows.matches(j)
 }
@@ -410,8 +410,8 @@ pub open spec fn unique_binding_reference_index<R: BindingReferenceRows>(
 struct BindingMatches<'a, R: BindingReferenceRows> { rows: &'a R, id: &'a str }
 
 impl<R: BindingReferenceRows> UniqueMatchRows for BindingMatches<'_, R> {
-    open spec fn count(&self) -> nat { self.rows.count() }
-    open spec fn matches(&self, index: int) -> bool {
+    spec fn count(&self) -> nat { self.rows.count() }
+    spec fn matches(&self, index: int) -> bool {
         binding_reference_matches(self.rows, index, self.id)
     }
     fn len(&self) -> usize { self.rows.len() }
@@ -445,8 +445,8 @@ struct CapturedMatches<'a, 'p, M: RegistryMembership> {
 }
 
 impl<M: RegistryMembership> UniqueMatchRows for CapturedMatches<'_, '_, M> {
-    open spec fn count(&self) -> nat { self.paths@.len() }
-    open spec fn matches(&self, index: int) -> bool { self.values.has_path(self.paths@[index]) }
+    spec fn count(&self) -> nat { self.paths@.len() }
+    spec fn matches(&self, index: int) -> bool { self.values.has_path(self.paths@[index]) }
     fn len(&self) -> usize { self.paths.len() }
     fn matched(&self, index: usize) -> bool { self.values.contains_path(self.paths[index]) }
 }
