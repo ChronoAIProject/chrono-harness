@@ -5925,4 +5925,80 @@ fn entry_match_digest_prefix_never_matches_full_oid() {
 }
 
 
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_initial_same_path_keeps_entry_document()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let entry = ".chrono-harness/入口é\0\n.json".to_owned();
+    let same_text = ".chrono-harness/入口é\0\n.json".to_owned();
+    let snapshot = policy::registry_snapshot_initial(
+        entry.clone(), vec![0u8, 255, 10], 11u64,
+        same_text, vec![99u8], 22u64, None,
+    );
+    expect_status_text(snapshot.entry_path.as_str(), entry.as_str());
+    expect_status_text(snapshot.effective_path.as_str(), entry.as_str());
+    expect_status_true(snapshot.bytes.len() == 1 && snapshot.values.len() == 1);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], 11u64);
+    expect_status_true(snapshot.selection.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_initial_distinct_paths_keep_both_complete_documents()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let entry = ".chrono-harness/入口\0\n".to_owned();
+    let effective = ".chrono-harness/目标é\0\n".to_owned();
+    let snapshot = policy::registry_snapshot_initial(
+        entry.clone(), vec![0u8, 255, 10], u64::MAX,
+        effective.clone(), vec![17u8, 0, 254], 0u64, Some(71u64),
+    );
+    expect_status_text(snapshot.entry_path.as_str(), entry.as_str());
+    expect_status_text(snapshot.effective_path.as_str(), effective.as_str());
+    expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], u64::MAX);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, &[17u8, 0, 254], 0u64);
+    match snapshot.selection {
+        Some(value) => { expect_status_true(value == 71u64); },
+        None => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_initial_empty_identity_preserves_entry_and_selection()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let entry = "".to_owned();
+    let snapshot = policy::registry_snapshot_initial(
+        entry.clone(), Vec::new(), 0u64,
+        "".to_owned(), vec![255u8], u64::MAX, Some(u64::MAX),
+    );
+    expect_status_text(snapshot.entry_path.as_str(), "");
+    expect_status_text(snapshot.effective_path.as_str(), "");
+    expect_status_true(snapshot.bytes.len() == 1 && snapshot.values.len() == 1);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[], 0u64);
+    match snapshot.selection {
+        Some(value) => { expect_status_true(value == u64::MAX); },
+        None => { panic!(); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_initial_paths_remain_literal_and_case_sensitive()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let entry = "../A/é\0\n".to_owned();
+    let effective = "../a/é\0\n".to_owned();
+    let snapshot = policy::registry_snapshot_initial(
+        entry.clone(), Vec::new(), 13u64,
+        effective.clone(), Vec::new(), 17u64, None,
+    );
+    expect_status_text(snapshot.entry_path.as_str(), "../A/é\0\n");
+    expect_status_text(snapshot.effective_path.as_str(), "../a/é\0\n");
+    expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[], 13u64);
+    expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, &[], 17u64);
+    expect_status_true(snapshot.selection.is_none());
+}
+
 }
