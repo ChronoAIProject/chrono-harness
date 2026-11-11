@@ -6009,6 +6009,64 @@ fn observation_publication(
 }
 
 #[test]
+fn observation_membership_does_not_exclude_another_publishers_dependencies() {
+    if !isolated_capability_test(
+        "observation_membership_does_not_exclude_another_publishers_dependencies",
+    ) {
+        return;
+    }
+    let h = host(512, 16);
+    let owner = inventory(h.path());
+    let (input, input_publication) = observation_publication(h.path(), "shared-input");
+    let input_id = input_publication.id().to_owned();
+    input_publication.complete(json!({})).unwrap();
+    let (older, older_publication) = observation_publication(h.path(), "pending-command");
+    let older_id = older_publication.id().to_owned();
+    let (newer, newer_publication) = observation_publication(h.path(), "later-query");
+    owner.dependencies_paths(&older, &[input.clone()]).unwrap();
+    let first = owner.reserve_observation("pr42", &older, 1).unwrap();
+    let input_record = retention_state::object_path(h.path(), &input_id);
+    let before_input = fs::read(&input_record).unwrap();
+    let before_older = fs::read(retention_state::object_path(h.path(), &older_id)).unwrap();
+    // Another activity owns this dependency's metadata. Booking and settling
+    // the later query only change the PR's membership, not that dependency.
+    let excluded = chrono_harness::ownership::DirectoryLease::acquire(
+        input_record.parent().unwrap(),
+        true,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let later = owner
+        .reserve_observation("pr42", &newer, 1)
+        .expect("a query must not wait for another publisher's dependencies");
+    assert!(later.serial > first.serial);
+    newer_publication.complete(json!({})).unwrap();
+    owner
+        .settle_observation(&later, Some((&later, true)))
+        .expect("sealing the later query does not consume the pending command's inputs");
+    assert_eq!(fs::read(&input_record).unwrap(), before_input);
+    assert_eq!(
+        fs::read(retention_state::object_path(h.path(), &older_id)).unwrap(),
+        before_older,
+        "the still-pending operation keeps its exact output and dependency edges"
+    );
+    let retained = ledger(h.path());
+    assert_eq!(retained["roots"]["pr42"].as_array().unwrap().len(), 2);
+    assert!(h.path().join(&older).exists());
+    assert!(h.path().join(&input).exists());
+    drop(excluded);
+    older_publication.complete(json!({})).unwrap();
+    owner
+        .settle_observation(&first, Some((&first, true)))
+        .unwrap();
+    assert_eq!(
+        ledger(h.path())["roots"]["pr42"],
+        json!([later.original.id])
+    );
+}
+
+#[test]
 fn observation_order_keeps_newer_facts_pending_unknown_and_independent_objects() {
     if !isolated_capability_test(
         "observation_order_keeps_newer_facts_pending_unknown_and_independent_objects",
