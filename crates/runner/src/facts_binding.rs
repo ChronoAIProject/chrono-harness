@@ -293,6 +293,7 @@ struct Bound {
 }
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
     verified_git_binding::required_binding_text(v[key].as_str(), key)
+        .map_err(|missing| format!("{}{}", missing.prefix, missing.field))
 }
 /// Validate the new link without interpreting any historical config as v3.
 pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {

@@ -230,11 +230,17 @@ fn null_version_is_scoped_only_and_missing_empty_or_wrong_types_are_rejected() {
     expect_true(policy::valid_version(3, true, false, Some("version")));
 }
 
-fn expect_owned_binding_error(result: Result<&str, String>, expected: &str)
-    requires match result { Err(message) => message@ == expected@, Ok(_) => false },
+fn expect_missing_binding_text(result: Result<&str, policy::MissingBindingText>, expected_field: &str)
+    requires match result {
+        Err(message) => message.prefix@ == "missing "@ && message.field@ == expected_field@,
+        Ok(_) => false,
+    },
 {
     match result {
-        Err(message) => { expect_true(policy::matches_expected(message.as_str(), Some(expected))); },
+        Err(message) => {
+            expect_true(policy::matches_expected(message.prefix, Some("missing ")));
+            expect_true(policy::matches_expected(message.field, Some(expected_field)));
+        },
         Ok(_) => { panic!(); },
     }
 }
@@ -242,15 +248,11 @@ fn expect_owned_binding_error(result: Result<&str, String>, expected: &str)
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn required_binding_text_preserves_original_and_complete_missing_field_diagnostics() {
     proof {
-        reveal_strlit(""); reveal_strlit("missing "); reveal_strlit("program");
-        reveal_strlit("missing program"); reveal_strlit("工具\0");
-        reveal_strlit("missing 工具\0"); reveal_strlit(" \0工具 ");
-        vstd::assert_seqs_equal!("missing program"@, "missing "@ + "program"@);
-        vstd::assert_seqs_equal!("missing 工具\0"@, "missing "@ + "工具\0"@);
+        reveal_strlit(""); reveal_strlit(" \0工具 ");
     }
-    expect_owned_binding_error(policy::required_binding_text(None, "program"), "missing program");
-    expect_owned_binding_error(policy::required_binding_text(Some(""), "工具\0"), "missing 工具\0");
-    expect_owned_binding_error(policy::required_binding_text(None, ""), "missing ");
+    expect_missing_binding_text(policy::required_binding_text(None, "program"), "program");
+    expect_missing_binding_text(policy::required_binding_text(Some(""), "工具\0"), "工具\0");
+    expect_missing_binding_text(policy::required_binding_text(None, ""), "");
     match policy::required_binding_text(Some(" \0工具 "), "program") {
         Ok(text) => { expect_true(policy::matches_expected(text, Some(" \0工具 "))); },
         Err(_) => { panic!(); },

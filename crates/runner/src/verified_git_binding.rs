@@ -208,17 +208,21 @@ fn has_binding_text(observed: Option<&str>) -> (present: bool)
 }
 
 /// 缺失和空文本使用原字段名诊断；成功保留完整原切片。
-pub fn required_binding_text<'a>(observed: Option<&'a str>, field: &str)
-    -> (out: Result<&'a str, String>)
+pub struct MissingBindingText<'a> {
+    pub prefix: &'static str,
+    pub field: &'a str,
+}
+
+pub fn required_binding_text<'a, 'f>(observed: Option<&'a str>, field: &'f str)
+    -> (out: Result<&'a str, MissingBindingText<'f>>)
     ensures match out {
         Ok(text) => observed == Some(text) && text@.len() > 0,
-        Err(message) => !binding_text_present(observed) && message@ == "missing "@ + field@,
+        Err(message) => !binding_text_present(observed)
+            && message.prefix@ == "missing "@ && message.field@ == field@,
     },
 {
     if has_binding_text(observed) { return Ok(observed.unwrap()); }
-    let mut message = String::from("missing ");
-    message.push_str(field);
-    Err(message)
+    Err(MissingBindingText { prefix: "missing ", field })
 }
 
 /// 目标策略必须声明执行物；缺声明先于任一字段不匹配。
