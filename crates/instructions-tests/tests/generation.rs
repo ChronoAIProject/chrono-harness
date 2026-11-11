@@ -6,6 +6,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
 use tempfile::TempDir;
 
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod isolated_capability;
+
 const METHOD: &str = ".chrono-harness/instructions/methodology.md";
 const CONTEXT: &str = ".chrono-harness/instructions/host-context.md";
 const MANIFEST: &str = ".chrono-harness/instructions/manifest.json";
@@ -1562,6 +1565,11 @@ impl Drop for PausedOperation {
 
 #[test]
 fn independent_process_interruptions_recover_before_prepare_and_preserve_unknown_exit() {
+    if !isolated_capability::isolated_capability_test(
+        "independent_process_interruptions_recover_before_prepare_and_preserve_unknown_exit",
+    ) {
+        return;
+    }
     for point in [
         "intent",
         "before-prepare",
@@ -1577,7 +1585,8 @@ fn independent_process_interruptions_recover_before_prepare_and_preserve_unknown
     ] {
         let host = Host::new();
         PausedOperation::start(&host, point, "init").interrupt();
-        chrono_instructions::maintain(&host.root).unwrap();
+        chrono_instructions::maintain(&host.root)
+            .unwrap_or_else(|error| panic!("{point}: {error}"));
         assert_eq!(attempts(&host).len(), 1, "{point}");
         let path = attempts(&host).pop().unwrap();
         let result = operation_json(&path, "result.json");
