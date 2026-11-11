@@ -3646,6 +3646,7 @@ fn checkout_stream_fixture_update(digest: u8, bytes: &[u8]) -> (out: u8)
     ensures out == if digest == 0 && bytes@ == seq![0u8] { 1u8 }
         else if digest == 1 && bytes@ == seq![255u8] { 2u8 } else { 99u8 },
 {
+    if bytes.len() == 1 { assert(bytes@ =~= seq![bytes[0]]); }
     if bytes.len() == 1 && digest == 0 && bytes[0] == 0 { 1 }
     else if bytes.len() == 1 && digest == 1 && bytes[0] == 255 { 2 }
     else { 99 }
@@ -3678,7 +3679,7 @@ fn expect_checkout_stream_failure(out: Result<String, String>, expected: &str)
     }
 }
 
-#[test]
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_preserves_chunk_bytes_and_update_order_until_eof() {
     let out = policy::checkout_hash_stream(2, 0u8, 0u8, [77u8; 4],
         checkout_stream_fixture_read, checkout_stream_fixture_view,
@@ -3686,7 +3687,7 @@ fn checkout_stream_preserves_chunk_bytes_and_update_order_until_eof() {
     expect_checkout_stream_success(out, "digest: \0ÿ");
 }
 
-#[test]
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_empty_eof_finalizes_the_initial_digest() {
     let out = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
         checkout_stream_fixture_eof, checkout_stream_fixture_view,
@@ -3694,7 +3695,7 @@ fn checkout_stream_empty_eof_finalizes_the_initial_digest() {
     expect_checkout_stream_success(out, "empty");
 }
 
-#[test]
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_preserves_first_and_late_read_error_in_full() {
     let first = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
         checkout_stream_fixture_error, checkout_stream_fixture_view,
@@ -3706,7 +3707,7 @@ fn checkout_stream_preserves_first_and_late_read_error_in_full() {
     expect_checkout_stream_failure(late, "read: é\0original\nend");
 }
 
-#[test]
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_reads_again_after_expected_length_and_preserves_error_priority() {
     let out = policy::checkout_hash_stream(1, 0u8, 0u8, [77u8; 4],
         checkout_stream_fixture_late_error, checkout_stream_fixture_view,
@@ -3714,7 +3715,7 @@ fn checkout_stream_reads_again_after_expected_length_and_preserves_error_priorit
     expect_checkout_stream_failure(out, "read: é\0original\nend");
 }
 
-#[test]
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_stream_rejects_growth_and_early_eof() {
     let grew = policy::checkout_hash_stream(0, 0u8, 0u8, [77u8; 4],
         checkout_stream_fixture_read, checkout_stream_fixture_view,
