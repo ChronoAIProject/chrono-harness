@@ -865,10 +865,23 @@ pub fn git_guard_reference<'a, R: BindingReferenceRows>(rows: &R, id: &'a str, f
     if !fresh {
         return Err(GitGuardError { prefix: "duplicate Git input ", id, suffix: "" });
     }
-    let selected = unique_binding_reference(Some(rows), id).unwrap();
+    let checked = unique_binding_reference(Some(rows), id);
+    assert(checked.is_ok());
+    let selected = checked.unwrap();
+    assert(checked == Ok::<Option<usize>, &'static str>(selected));
     match selected {
-        Some(index) => Ok(index),
-        None => Err(GitGuardError { prefix: "missing/ambiguous Git input ", id, suffix: "" }),
+        Some(index) => {
+            assert(unique_binding_reference_index(rows, id, index as int));
+            assert forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+                implies i == index by {
+                assert(checked == Ok::<Option<usize>, &'static str>(Some(i)));
+            }
+            Ok(index)
+        },
+        None => {
+            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {}
+            Err(GitGuardError { prefix: "missing/ambiguous Git input ", id, suffix: "" })
+        },
     }
 }
 
