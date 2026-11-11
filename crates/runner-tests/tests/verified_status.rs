@@ -3683,6 +3683,141 @@ fn expect_checkout_hash_count(out: Result<u64, String>, expected: u64)
     match out { Ok(value) => expect_status_true(value == expected), Err(_) => panic!() }
 }
 
+fn blob_match_original_input(size: usize, bytes: &[u8])
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+{
+    expect_status_true(size == 4);
+    expect_status_true(bytes.len() == 4);
+    expect_status_true(bytes[0] == 0);
+    expect_status_true(bytes[1] == 255);
+    expect_status_true(bytes[2] == 10);
+    expect_status_true(bytes[3] == 13);
+}
+
+fn blob_match_short_digest(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+    ensures out@ == "1111111111111111111111111111111111111111"@,
+{
+    blob_match_original_input(size, bytes);
+    checkout_dispatch_short_oid().to_owned()
+}
+
+fn blob_match_long_digest(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+    ensures out@ == "1111111111111111111111111111111111111111111111111111111111111111"@,
+{
+    blob_match_original_input(size, bytes);
+    checkout_dispatch_long_oid().to_owned()
+}
+
+fn blob_match_full_digest(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+    ensures out@ == "digest: é\0original\nend"@,
+{
+    blob_match_original_input(size, bytes);
+    "digest: é\0original\nend".to_owned()
+}
+
+fn blob_match_empty_short(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 0, bytes@.len() == 0,
+    ensures out@ == "1111111111111111111111111111111111111111"@,
+{
+    expect_status_true(size == 0 && bytes.is_empty());
+    checkout_dispatch_short_oid().to_owned()
+}
+
+fn blob_match_empty_long(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 0, bytes@.len() == 0,
+    ensures out@ == "1111111111111111111111111111111111111111111111111111111111111111"@,
+{
+    expect_status_true(size == 0 && bytes.is_empty());
+    checkout_dispatch_long_oid().to_owned()
+}
+
+fn blob_match_never(_size: usize, _bytes: &[u8]) -> String
+    requires false,
+{ panic!() }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_rejects_every_wrong_length_before_hashing() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_short_oid(), 0, &bytes,
+        blob_match_never, blob_match_never));
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_long_oid(), 5, &bytes,
+        blob_match_never, blob_match_never));
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_long_oid(), usize::MAX, &bytes,
+        blob_match_never, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha1_keeps_original_length_bytes_and_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_short_oid(), 4, &bytes,
+        blob_match_short_digest, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha256_keeps_original_length_bytes_and_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_long_oid(), 4, &bytes,
+        blob_match_never, blob_match_long_digest));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha1_rejects_a_different_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_short_oid(), 4, &bytes,
+        blob_match_full_digest, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha256_rejects_a_different_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_long_oid(), 4, &bytes,
+        blob_match_never, blob_match_full_digest));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_empty_sha1_still_hashes_the_original_empty_body() {
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_short_oid(), 0, &[],
+        blob_match_empty_short, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_empty_sha256_still_hashes_the_original_empty_body() {
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_long_oid(), 0, &[],
+        blob_match_never, blob_match_empty_long));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_preserves_complete_unicode_nul_and_line_text() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    let exact = "digest: é\0original\nend";
+    let different = "digest: é\0original\nEnd";
+    proof {
+        reveal_strlit("digest: é\0original\nend");
+        reveal_strlit("digest: é\0original\nEnd");
+        assert(exact@ != different@);
+    }
+    expect_status_true(policy::git_blob_matches(exact, 4, &bytes,
+        blob_match_full_digest, blob_match_full_digest));
+    expect_status_true(!policy::git_blob_matches(different, 4, &bytes,
+        blob_match_full_digest, blob_match_full_digest));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_keeps_the_original_nonforty_byte_fallback() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    let oid = "1";
+    proof {
+        reveal_strlit("1");
+        assert(vstd::string::is_ascii(oid));
+        vstd::string::is_ascii_spec_bytes(oid);
+    }
+    expect_status_true(!policy::git_blob_matches(oid, 4, &bytes,
+        blob_match_never, blob_match_full_digest));
+}
+
 fn checkout_dispatch_success(size: u64, source: u8) -> (out: Result<String, String>)
     ensures if size == u64::MAX && source == 77 {
         out matches Ok(text) && text@ == "digest: é\0full\nend"@
