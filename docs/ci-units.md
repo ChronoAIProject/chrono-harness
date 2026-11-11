@@ -40,6 +40,8 @@ judge-ci、CI 和 projects 专属测试都在各自 target 编译同一份 judge
 
 workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.rs`，通过 Cargo 提供的路径复制并运行真实 CLI。三个 workflow 测试计划不再前置 `build.judge-workflow`，对应单元也不再恢复生产 target；`inputs` 仍消费生产 CLI，保留该构建及缓存，并负责保存缓存。测试根保留原 profile（含 `strip="debuginfo"`）、测试、断言、分组、线程和时限；完整成本收益未测。
 
+**宿主构建登记与测试安装同时修改：**CI、inputs、registration、filemap、projects、workflow 六个测试项目也从唯一的 runner 生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实检查调用。对应八个单元不再前置 `build.runner`，退役已无使用方的 `check.runner` 缓存及其订阅；detector 启动、正式生产构建和发布打包继续使用各自登记。原未过滤测试、断言、profile、线程、分组、cap=2 和时限保留。验证使用正式生成、canonical check 及两段 PR／落地检查，完整成本收益未测。
+
 CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
 
 现役单元 provider 只生成父工作流。独立工作流拓扑及其虚拟单元地址、等待／轮询参数已退役。四个现役外部示例的当前采用与迁移见[示例索引](examples.md)；历史运行仍查原提交与 CI，不要求现役源码继续支持旧拓扑。缺少调度声明或带已退役字段的配置会在写入输出前拒绝。公开新版本和宿主升级仍须分别验收。

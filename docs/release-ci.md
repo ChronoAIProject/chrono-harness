@@ -48,21 +48,23 @@ worktree 发布资产；配方的 `needs`、使用方声明与 CI 下载登记�
 worktree 专属测试仍复制并运行实际 CLI，保留只读安装、所有者发布和中断断言；原测试、分组、线程及限制不变。
 正式生产构建、最终打包和真实安装继续消费生产资产。测试根沿用原开发配置，完整发布耗时、传输和维护的净成本收益未测。
 
-CI 专属测试同时统一复用已有的 `chrono-ci-test-cli`，由相同生产 `main.rs` 编译。两平台 `verify_ci_tests` 不再等待、下载或暂存 ci 发布资产；runner 和 registration 的真实发布资产消费保留。CI、projects 和 judge-ci 专属测试也分别编译唯一的 judge-ci 生产 `main.rs`，各自发布验证不再依赖、下载或暂存 judge-ci 资产。projects 验证仍消费 runner、registration、filemap、routes 和 projects 的真实发布 CLI。完整上下文、发布命令和生成宿主的原未过滤测试、断言及限制不变；正式 `build_ci`、`build_judge_ci`、其它使用方、最终打包与安装仍保留，完整成本收益未测。
+CI 专属测试同时统一复用已有的 `chrono-ci-test-cli`，由相同生产 `main.rs` 编译。两平台 `verify_ci_tests` 不再等待、下载或暂存 ci 发布资产；registration 的真实发布资产消费保留。CI、projects 和 judge-ci 专属测试也分别编译唯一的 judge-ci 生产 `main.rs`，各自发布验证不再依赖、下载或暂存 judge-ci 资产。projects 验证仍消费 registration、filemap、routes 和 projects 的真实发布 CLI。完整上下文、发布命令和生成宿主的原未过滤测试、断言及限制不变；正式 `build_ci`、`build_judge_ci`、其它使用方、最终打包与安装仍保留，完整成本收益未测。
 
 workflow 专属测试也从唯一的 workflow 生产 `main.rs` 编译测试 CLI。两平台 `verify_judge_workflow_tests` 删除 workflow 发布资产的依赖、下载和消费声明，保留其余实际使用的 CLI。生产 `build_judge_workflow`、inputs 验证和最终打包仍消费生产资产；原未过滤测试、profile、断言及限制不变，完整发布成本收益未测。
 
 cache 专属测试直接编译生产 CLI，恢复及封存样本绑定同一执行物的真实身份。两平台 `verify_cache_tests` 不再等待、下载或暂存 cache 发布资产，原未过滤操作保留；native 发布测试与最终打包仍消费生产 cache，完整发布成本收益未测。
 
-runner 专属测试也直接编译生产 `main.rs`，通过 Cargo 提供的路径调用测试 CLI。两平台的 `verify_runner_tests` 不再依赖、下载或暂存 runner 发布资产，仍执行原未过滤操作。worktree 两平台的 `verify_worktree_tests` 也改用 Cargo 从同一生产 `main.rs` 编译的 runner 测试 CLI，删除 runner 发布资产的依赖、下载和消费声明，仍消费 CI 输入程序。其他验证和最终打包继续消费生产 runner；测试根保留原锁、开发配置、未过滤操作及断言，完整发布成本收益未测。
+runner 专属测试也直接编译生产 `main.rs`，通过 Cargo 提供的路径调用测试 CLI。两平台的 `verify_runner_tests` 不再依赖、下载或暂存 runner 发布资产，仍执行原未过滤操作。worktree 两平台的 `verify_worktree_tests` 也改用 Cargo 从同一生产 `main.rs` 编译的 runner 测试 CLI，删除 runner 发布资产的依赖、下载和消费声明，仍消费 CI 输入程序。发布前端和最终打包继续消费生产 runner；测试根保留原锁、开发配置、未过滤操作及断言，完整发布成本收益未测。
 
 judge-ci 两平台的 `verify_judge_ci_tests` 由测试项目编译 runner 和 judge-ci 两个生产入口，使用 Cargo 提供的 CLI 路径验证真实调用；不再依赖、下载或暂存 runner 发布资产。发布前端及原未过滤验证操作保留，测试根沿用原锁、开发配置、断言、线程和时限；两平台完整发布与公开采用仍须单独验收，完整成本收益未测。
 
 cost 和 mixed 两平台的 `verify_judge_cost_tests`／`verify_judge_mixed_tests` 也由各自测试项目编译 runner 唯一生产入口，共享 Host 使用 Cargo 提供的 CLI 路径；删除这两个验证对 runner 发布资产的前置、下载和消费声明。registration、filemap、cost 和 mixed 发布资产仍供原真实调用消费；发布前端、原未过滤操作、锁、开发配置、断言、线程和时限保留。测试与生产编译配置不同，不声称字节或性能相同；两平台完整发布与安装仍须单独验收，完整成本收益未测。
 
+CI、inputs、registration、filemap、projects、workflow 六项验证也改用各自测试项目从 runner 唯一生产入口编译的 CLI。两平台删除这六项验证的 runner 资产依赖、下载和暂存声明，其余发布资产仍供原调用消费。原 CLI 身份绑定、复制、探测、未过滤操作、断言、profile、线程和时限保留；生产 `build_runner`、发布前端、最终打包与安装仍按原登记执行。测试配置不证明发布字节或性能相同，完整原生发布与安装另行验收，完整成本收益未测。
+
 distribution 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，再经真实安装入口核对字节、权限和回执。两平台的 `verify_distribution_tests` 不再依赖、下载或暂存 distribution 发布资产，原未过滤操作与断言保留。生产 `build_distribution`、最终打包和实际安装仍消费发布资产；完整发布成本收益未测。
 
-inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI。两平台的 `verify_inputs_tests` 移除 inputs 发布资产的依赖、下载和消费声明，仍消费生产 runner 与七个判官，执行原未过滤操作。生产 `build_inputs`、其他真实使用方和最终打包保留；完整发布成本收益未测。
+inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI。两平台的 `verify_inputs_tests` 移除 inputs 发布资产的依赖、下载和消费声明，仍消费七个生产判官，执行原未过滤操作。生产 `build_inputs`、其他真实使用方和最终打包保留；完整发布成本收益未测。
 
 每个验证只登记实际消费的构建子集。instructions、routes、diagnostics 不消费发布二进制，`needs` 为空且 `rust_toolchain=true`，可独立启动。原生输入准备的行为验证归 Rust `ci-tests`，随原始未过滤 `test.ci-tests` 执行，复用其既有构建和发布资产依赖，不再单独启动 Python 验证 job。原 IO、执行物解析、凭据省略、纳秒时间顺序和有界失败回执均在 Rust 配对测试中核对；完整种子和转发链仍由 workflow 测试验证。新增验证／传输成本未测，原生两平台验收和公开发行须核对应候选的实际结果。
 

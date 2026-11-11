@@ -274,16 +274,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.runner": [
-        "ci",
-        "inputs",
-        "judge-filemap",
-        "judge-projects",
-        "judge-registration",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
       "fmt.judge-workflow": [
         "judge-workflow",
         "judge-workflow-short",

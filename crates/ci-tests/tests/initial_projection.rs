@@ -269,10 +269,10 @@ fn generated_profile_runs_actual_root_registration_and_retains_failed_inventory(
             ("judge-registration", "chrono-judge-registration"),
         ] {
             fs::copy(
-                product.join(format!("crates/{project}/target/debug/{name}")),
+                tools::fixture_binary(project, name),
                 bin.join(name),
             )
-            .expect("build the explicitly registered production prerequisites");
+            .expect("build the explicitly registered fixture prerequisites");
         }
         let mut c = source();
         tools::write_event_facts(root);
