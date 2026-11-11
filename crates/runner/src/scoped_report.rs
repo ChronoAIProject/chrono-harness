@@ -74,6 +74,7 @@ impl Publication {
 
 pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Value, String> {
     use crate::retained_artifacts::retention;
+    use crate::verified_release as policy;
     let _activity = retention::read_scope(root)?;
     let inventory = retention::Inventory::adopted(root)?
         .ok_or("report recovery requires the original retained producer")?;
@@ -89,18 +90,25 @@ pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Valu
     let report: Value = crate::json(&raw)?;
     let publication: Publication = serde_json::from_value(report["publication"].clone())
         .map_err(|e| format!("original report publication obligation: {e}"))?;
-    if publication.schema != "chrono-report-publication/v1" || publication.exit_code > 2 {
+    if !policy::report_publication(&publication.schema, publication.exit_code) {
         return Err("original report publication schema/exit code".into());
     }
-    let (producer, request_id) = match report["schema"].as_str() {
-        Some("chrono-check-report/v1" | SCHEMA) if report["retained_report"] == original.path => {
+    let kind = policy::recovered_report_kind(
+        report["schema"].as_str(),
+        report["schema_version"].as_u64(),
+        report["retained_report"].as_str(),
+        report["report_path"].as_str(),
+        &original.path,
+    );
+    let (producer, request_id) = match kind {
+        1 | 2 => {
             let request: crate::Request =
                 serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
             if request.host_root != root {
                 return Err("original report belongs to another host".into());
             }
             if report["judge"].is_object() {
-                let process: crate::ProcessResult = if report["schema"] == SCHEMA {
+                let process: crate::ProcessResult = if kind == 2 {
                     restore_process(&report["judge"], |o| prepared::read_original(root, o, None))?
                 } else {
                     serde_json::from_value(report["judge"].clone()).map_err(|e| e.to_string())?
@@ -118,7 +126,7 @@ pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Valu
             }
             ("check-original", request.request_id)
         }
-        None if report["schema_version"] == 1 && report["report_path"] == original.path => {
+        3 => {
             let request: crate::wire::Request =
                 serde_json::from_value(report["request"].clone()).map_err(|e| e.to_string())?;
             if request.candidate.root != root {
@@ -155,13 +163,17 @@ pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Valu
     let [record] = records.as_slice() else {
         return Err("original report has no unique matching producer".into());
     };
-    if record["outcome"]["request_id"] != request_id
-        || record["outcome"]["exit_code"] != publication.exit_code
-    {
+    if !policy::report_outcome(
+        records.len(),
+        record["outcome"]["request_id"].as_str(),
+        record["outcome"]["exit_code"].as_u64(),
+        &request_id,
+        publication.exit_code,
+    ) {
         return Err("original report outcome differs from sealed producer".into());
     }
     let _slot = retention::report_slot(root, &publication.slot)?;
-    let bytes = if report["schema"] == SCHEMA {
+    let bytes = if kind == 2 {
         serde_json::to_vec(&crate::units::ReportReference {
             schema: crate::units::REPORT_REFERENCE.into(),
             original: original.clone(),
@@ -171,8 +183,13 @@ pub(crate) fn recover(root: &Path, original: &prepared::Original) -> Result<Valu
         raw.clone()
     };
     let current = slot_digest(root, &publication.slot)?;
-    let already_published = current.as_deref() == Some(sha256(&bytes).as_str());
-    if !already_published && current != publication.previous_sha256 {
+    let plan = policy::report_slot(
+        current.as_deref(),
+        publication.previous_sha256.as_deref(),
+        &sha256(&bytes),
+    );
+    let already_published = plan.already_published;
+    if !plan.allowed {
         return Err(
             "report slot changed after this original; preserve the newer report and recovery"
                 .into(),
