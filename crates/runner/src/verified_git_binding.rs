@@ -277,12 +277,18 @@ pub open spec fn identity_row_error(
     }
 }
 
+pub open spec fn identity_row_hashes(
+    row: &SelectorRow, v3: bool, hashes: Set<Seq<char>>,
+) -> Set<Seq<char>> {
+    if identity_row_shape(row, v3)
+        && matches!(row.digest, Some(text) if identifiers::digest_format(text.spec_bytes()))
+    { hashes.insert(row.digest.unwrap()@) } else { hashes }
+}
+
 pub fn admit_identity_row<'a, S: SelectorSeen<'a>>(
     row: SelectorRow<'a>, v3: bool, hashes: &mut S, paths: &mut S,
 ) -> (out: Result<&'a str, &'static str>)
-    ensures hashes.seen() == (if identity_row_shape(&row, v3)
-        && matches!(row.digest, Some(text) if identifiers::digest_format(text.spec_bytes()))
-        { old(hashes).seen().insert(row.digest.unwrap()@) } else { old(hashes).seen() }),
+    ensures hashes.seen() == identity_row_hashes(&row, v3, old(hashes).seen()),
     match out {
         Ok(path) => row.path == Some(path)
             && identity_row_error(&row, v3, old(hashes).seen(), old(paths).seen()).is_none()
@@ -313,6 +319,128 @@ pub fn admit_identity_row<'a, S: SelectorSeen<'a>>(
         return Err("Git selector configuration paths must be unique");
     }
     Ok(path)
+}
+
+/// JSON 适配器只交付原数组的长度及指定行的原字段观察。
+pub trait SelectorRows<'a> {
+    spec fn rows(&self) -> Seq<SelectorRow<'a>>;
+
+    fn len(&self) -> (count: usize)
+        ensures count == self.rows().len();
+
+    fn row(&self, index: usize) -> (observed: SelectorRow<'a>)
+        requires index < self.rows().len(),
+        ensures observed == self.rows()[index as int];
+}
+
+pub open spec fn identity_prefix_hashes(rows: Seq<SelectorRow>, count: int) -> Set<Seq<char>>
+    decreases count,
+{
+    if count <= 0 { Set::empty() }
+    else {
+        let previous = identity_prefix_hashes(rows, count - 1);
+        match rows[count - 1].digest {
+            Some(text) => previous.insert(text@),
+            None => previous,
+        }
+    }
+}
+
+pub open spec fn identity_prefix_paths(rows: Seq<SelectorRow>, count: int) -> Set<Seq<char>>
+    decreases count,
+{
+    if count <= 0 { Set::empty() }
+    else {
+        let previous = identity_prefix_paths(rows, count - 1);
+        match rows[count - 1].path {
+            Some(text) => previous.insert(text@),
+            None => previous,
+        }
+    }
+}
+
+pub open spec fn identity_prefix_valid(rows: Seq<SelectorRow>, v3: bool, count: int) -> bool {
+    0 <= count <= rows.len()
+        && forall|i: int| 0 <= i < count ==> #[trigger] identity_row_error(
+            &rows[i], v3, identity_prefix_hashes(rows, i), identity_prefix_paths(rows, i),
+        ) == None::<Seq<char>>
+}
+
+pub open spec fn identity_failure_at(
+    rows: Seq<SelectorRow>, v3: bool, index: int, error: Seq<char>,
+) -> bool {
+    0 <= index < rows.len() && identity_prefix_valid(rows, v3, index)
+        && identity_row_error(&rows[index], v3,
+            identity_prefix_hashes(rows, index), identity_prefix_paths(rows, index),
+        ) == Some(error)
+}
+
+pub open spec fn identity_walk_failure(
+    rows: Seq<SelectorRow>, v3: bool, hashes: Set<Seq<char>>, paths: Set<Seq<char>>,
+    error: Seq<char>,
+) -> bool {
+    exists|i: int| #[trigger] identity_failure_at(rows, v3, i, error)
+        && hashes == identity_row_hashes(&rows[i], v3, identity_prefix_hashes(rows, i))
+        && paths == identity_prefix_paths(rows, i)
+}
+
+/// 按原顺序收集全部目标；失败精确对应首个不合格行及该行产生的集合状态。
+pub fn collect_identity_paths<'a, R: SelectorRows<'a>, S: SelectorSeen<'a>>(
+    rows: &R, v3: bool, hashes: &mut S, paths: &mut S,
+) -> (out: Result<Vec<&'a str>, &'static str>)
+    requires old(hashes).seen() == Set::<Seq<char>>::empty(),
+        old(paths).seen() == Set::<Seq<char>>::empty(),
+    ensures match out {
+        Ok(collected) => identity_prefix_valid(rows.rows(), v3, rows.rows().len() as int)
+            && collected@.len() == rows.rows().len()
+            && (forall|i: int| 0 <= i < collected@.len() ==>
+                rows.rows()[i].path == Some(#[trigger] collected@[i]))
+            && hashes.seen() == identity_prefix_hashes(rows.rows(), rows.rows().len() as int)
+            && paths.seen() == identity_prefix_paths(rows.rows(), rows.rows().len() as int),
+        Err(error) => identity_walk_failure(rows.rows(), v3, hashes.seen(), paths.seen(), error@),
+    },
+{
+    let count = rows.len();
+    let mut collected = Vec::new();
+    let mut i = 0;
+    while i < count
+        invariant i <= count, count == rows.rows().len(),
+            identity_prefix_valid(rows.rows(), v3, i as int),
+            collected@.len() == i,
+            forall|j: int| 0 <= j < i ==>
+                rows.rows()[j].path == Some(#[trigger] collected@[j]),
+            hashes.seen() == identity_prefix_hashes(rows.rows(), i as int),
+            paths.seen() == identity_prefix_paths(rows.rows(), i as int),
+        decreases count - i,
+    {
+        let observed = rows.row(i);
+        let ghost before_hashes = hashes.seen();
+        let ghost before_paths = paths.seen();
+        match admit_identity_row(observed, v3, hashes, paths) {
+            Ok(path) => {
+                proof {
+                    assert(identity_row_error(&rows.rows()[i as int], v3,
+                        before_hashes, before_paths).is_none());
+                    assert(identity_row_shape(&rows.rows()[i as int], v3));
+                    assert(match rows.rows()[i as int].digest {
+                        Some(text) => identifiers::digest_format(text.spec_bytes()),
+                        None => false,
+                    });
+                }
+                collected.push(path);
+            },
+            Err(error) => {
+                assert(identity_failure_at(rows.rows(), v3, i as int, error@));
+                assert(hashes.seen() == identity_row_hashes(&rows.rows()[i as int], v3,
+                    identity_prefix_hashes(rows.rows(), i as int)));
+                assert(paths.seen() == identity_prefix_paths(rows.rows(), i as int));
+                assert(identity_walk_failure(rows.rows(), v3, hashes.seen(), paths.seen(), error@));
+                return Err(error);
+            },
+        }
+        i += 1;
+    }
+    Ok(collected)
 }
 
 /// 只观察捕获的快照是否包含完整路径，不选择目标或读取现役执行物。

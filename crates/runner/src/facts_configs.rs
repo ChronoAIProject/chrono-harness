@@ -247,8 +247,8 @@ impl crate::verified_git_binding::RegistryMembership for CapturedRegistry<'_> {
 
 fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
     use crate::verified_git_binding::{
-        SelectorRow, admit_identity_configurations, admit_identity_object, admit_identity_program,
-        admit_identity_registry_target, admit_identity_row, identity_registry_path,
+        admit_identity_configurations, admit_identity_object, admit_identity_program,
+        admit_identity_registry_target, collect_identity_paths, identity_registry_path,
     };
 
     admit_identity_object(
@@ -268,23 +268,12 @@ fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
     )?;
     let mut hashes = SeenSelectorText::default();
     let mut unique_paths = SeenSelectorText::default();
-    let mut paths = vec![];
-    for row in rows {
-        let object = row.as_object();
-        let path = admit_identity_row(
-            SelectorRow {
-                fields: object.map(|map| map.len()),
-                digest: row["sha256"].as_str(),
-                path_present: row.get("path").is_some(),
-                path: row["path"].as_str(),
-                registry_path_present: row.get("registry_path").is_some(),
-            },
-            version3,
-            &mut hashes,
-            &mut unique_paths,
-        )?;
-        paths.push(path);
-    }
+    let paths = collect_identity_paths(
+        &JsonSelectorRows(rows),
+        version3,
+        &mut hashes,
+        &mut unique_paths,
+    )?;
     if version3 {
         for row in rows {
             let path = identity_registry_path(row["registry_path"].as_str())?;
@@ -299,6 +288,25 @@ fn host_path(path: &str, entry: Option<&str>) -> Result<(), String> {
     relative_path(path)?;
     crate::verified_git_binding::admit_selector_host_path(path, entry)?;
     Ok(())
+}
+
+struct JsonSelectorRows<'a>(&'a [Value]);
+
+impl<'a> crate::verified_git_binding::SelectorRows<'a> for JsonSelectorRows<'a> {
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn row(&self, index: usize) -> crate::verified_git_binding::SelectorRow<'a> {
+        let row = &self.0[index];
+        crate::verified_git_binding::SelectorRow {
+            fields: row.as_object().map(|map| map.len()),
+            digest: row["sha256"].as_str(),
+            path_present: row.get("path").is_some(),
+            path: row["path"].as_str(),
+            registry_path_present: row.get("registry_path").is_some(),
+        }
+    }
 }
 
 struct JsonTargetRows<'a>(&'a [Value]);
