@@ -645,11 +645,16 @@ impl Inventory {
             Err(e) => return Err(e.to_string()),
         };
         let metadata = file.metadata().map_err(|e| e.to_string())?;
-        if !metadata.is_file()
-            || fs::symlink_metadata(path)
-                .map_err(|e| e.to_string())?
-                .file_type()
-                .is_symlink()
+        if !metadata.is_file() {
+            return Err("retention declaration must be a physical regular file".into());
+        }
+        // O_NOFOLLOW already rejects a linked leaf on Unix. Validate the opened
+        // file once; callers have checked/excluded its declaration directory.
+        #[cfg(not(unix))]
+        if fs::symlink_metadata(path)
+            .map_err(|e| e.to_string())?
+            .file_type()
+            .is_symlink()
         {
             return Err("retention declaration must be a physical regular file".into());
         }
@@ -697,7 +702,7 @@ impl Inventory {
     }
     fn read_object(&self, id: &str, directory: &Path) -> Result<Object, String> {
         let record: Object = self
-            .read_metadata(&no_symlink_parents(directory, "record.json")?)?
+            .read_metadata(&directory.join("record.json"))?
             .ok_or_else(|| format!("retained output unavailable: {id}"))?;
         if record.schema != "chrono-retained-output/v2"
             || record.id != id
@@ -717,8 +722,7 @@ impl Inventory {
     }
     fn read_role(&self, role: &str) -> Result<Option<Role>, String> {
         let directory = self.role_directory(role)?;
-        let record: Option<Role> =
-            self.read_metadata(&no_symlink_parents(&directory, "record.json")?)?;
+        let record: Option<Role> = self.read_metadata(&directory.join("record.json"))?;
         if record.as_ref().is_some_and(|r| {
             r.schema != "chrono-retained-role/v2"
                 || r.role != role
@@ -993,6 +997,7 @@ impl Inventory {
                 for previous in &retained_dependencies {
                     let record: &Object =
                         observed.get(previous).ok_or("dependency was not read")?;
+                    wanted_roles.extend(record.roles.iter().cloned());
                     selected.extend(record.incoming.iter().cloned());
                     selected.extend(
                         record
@@ -1006,9 +1011,8 @@ impl Inventory {
             if report_frontier {
                 // Only the released report may retire here. Its finalized
                 // originals remain excluded and retained while their incoming
-                // edge is updated; unrelated referrers are left untouched.
+                // edge is updated; their consumers and bytes remain untouched.
                 retained_dependencies.insert(id.clone());
-                wanted_roles.extend(record.roles.iter().cloned());
                 observed.insert(id, record);
                 continue;
             }
@@ -1022,7 +1026,13 @@ impl Inventory {
             observed.insert(id, record);
         }
         if maintenance {
-            let target_paths: Vec<_> = observed.values().map(|r| r.path.clone()).collect();
+            let target_paths: Vec<_> = observed
+                .values()
+                .filter(|r| {
+                    initial.as_ref() == Some(&r.id) || !retained_dependencies.contains(&r.id)
+                })
+                .map(|r| r.path.clone())
+                .collect();
             let (additional, dirs) = self.path_gates(&target_paths, wait, !discover_under_lease)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
@@ -1189,6 +1199,12 @@ impl Inventory {
             }
             ledger.summaries.extend(record.summaries.clone());
             ledger.retired_leases.extend(record.retired_leases.clone());
+            // These finalized objects are explicit roots for this retirement.
+            // Their metadata stays excluded, but no consumer membership changes
+            // and no physical disposal of their bytes is permitted.
+            if gate.retained_dependencies.contains(&record.id) {
+                continue;
+            }
             for role in &record.roles {
                 let current = if let Some(current) = roles.get(role) {
                     Some(current.clone())
