@@ -362,7 +362,7 @@ fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<(
         );
     }
     for flag in &observed.index_flags {
-        if flag.tag.as_bytes()[0].is_ascii_lowercase() || flag.tag.eq_ignore_ascii_case("S") {
+        if chrono_harness::verified_status::unsupported_index_flag(&flag.tag).is_some() {
             issue(
                 r,
                 "E_INPUT_UNSUPPORTED",
