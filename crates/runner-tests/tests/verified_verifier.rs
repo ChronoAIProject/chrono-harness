@@ -186,6 +186,42 @@ fn classification_identity_is_complete_and_first_file_error_is_stable() {
     expect_verifier_true(unicode_result.is_err());
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn a_file_with_a_proof_obligation_cannot_be_reclassified_as_data() {
+    expect_downgrade_rejected(SourceRole::Program);
+    expect_downgrade_rejected(SourceRole::Specification);
+}
+
+fn expect_downgrade_rejected(role: SourceRole)
+    requires matches!(role, SourceRole::Program | SourceRole::Specification),
+{
+    let base = policy::sources::SourceRegistry {
+        files: vec![policy::sources::SourceFile { path: "logic".to_string(),
+            verification: Some(policy::sources::SourceVerification {
+                role, roots: vec![policy::sources::SourceProofRoot {
+                    path: "proof.rs".to_string(), operation: "prove".to_string(),
+                }],
+            }) }],
+        require_new_file_classification: Some(true),
+    };
+    let current = policy::sources::SourceRegistry {
+        files: vec![policy::sources::SourceFile { path: "logic".to_string(),
+            verification: Some(policy::sources::SourceVerification {
+                role: SourceRole::Data, roots: Vec::new(),
+            }) }],
+        require_new_file_classification: Some(true),
+    };
+    proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
+    let result = policy::sources::validate_file_classifications(&current, Ok(Some(&base)));
+    expect_verifier_true(result.is_err());
+    let error = result.unwrap_err();
+    expect_verifier_true(identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: proof-bearing file was reclassified as data: "));
+    expect_verifier_true(identifiers::equal_text(error.path, "logic"));
+    let original_data = policy::sources::validate_file_classifications(&current, Ok(Some(&current)));
+    expect_verifier_true(original_data.is_ok());
+}
+
 /// 普通测试执行失败分支；同一证明根要求每个原布尔预期成立。
 fn expect_verifier_true(actual: bool)
     requires actual,

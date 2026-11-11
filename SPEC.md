@@ -160,6 +160,8 @@ chrono-harness 保留同源 Verus 规范与 Rust 可执行实现、登记格式�
 
 FILEMAP 的文件可显式声明 `verification`：`role` 为 `program`、`specification` 或 `data`，并列出证明根的相对路径及登记操作。program／specification 必须至少有一个规范化根，根路径不能重复，且每个操作必须出现在现役 execution plan；data 不得列证明根。该字段由 runner 的 Verus 同源谓词解析和判定，登记层只转发结果。缺少声明的存量文件保持未知，不取得证明资格；新增或修改的受治理逻辑必须在同一 DELTA 登记声明并由真实生产调用消费。
 
+启用文件分类检查时，固定基线已登记为 `program` 或 `specification` 的路径，在候选中仍有登记行时不得改为 `data`。同源 Verus 判法用完整路径比对两端，违规返回 `E_VERUS_COVERAGE` 和原路径；整行删除仍走既有删除验收。
+
 全仓覆盖检查（coverage gate）的目标失败码为 `E_VERUS_COVERAGE`：证明缺失、未执行或与实际生产调用不符时，保持 `proposed`／`incomplete`，不能退回未证明判断后宣称已通过本节验收。只改语言声明、只编译证明根、普通测试或一次 CI 通过，都不能建立完整对应。当前已有局部证明和结果合同，全仓覆盖门仍未实现；普通 scoped 检查只证明现役登记的实际范围，不冒充全仓证明。当前实施范围见本文末尾及 [Verus 实施范围](docs/verus.md)。
 
 FILEMAP schema 2 可显式采用 `require_new_file_classification: true`，由同源 Verus 核对固定基线与候选的文件登记：新增行必须有有效 `verification` 声明，仍存在的行不得删除原有分类；未分类存量继续保持未知。固定基线已启用时，候选不得关闭或移除该字段。不能读取基线时保留原错误并失败；已确认的初始输入没有基线，启用后全部候选行视为新增。此开关选择当前已实现的机器分类检查范围，本节的全部规范义务继续适用。
