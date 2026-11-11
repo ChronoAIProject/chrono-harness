@@ -633,7 +633,8 @@ fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
     assert_eq!(code, 0, "{report} {error}");
     assert!(
         !report["processes"].as_array().unwrap().iter().any(|row| {
-            row["argv"] == value!(["--no-replace-objects", "rev-parse", "--git-common-dir"])
+            row["root"] == value!(h.root)
+                && row["argv"] == value!(["--no-replace-objects", "rev-parse", "--git-common-dir"])
         }),
         "the same invoking/coordinator checkout shares one live common-directory observation"
     );
