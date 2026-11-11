@@ -2403,6 +2403,155 @@ fn checkout_index_changes_compare_complete_mode_oid_and_path_text() {
     expect_checkout_path(&changes, "a", false);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_physical_plan_keeps_empty_tree_and_prior_changes() {
+    let tree = policy::Tree::new();
+    let stages = policy::GitIndexStages::new();
+    let lookup = policy::snapshot_git_index_stages(&stages);
+    let mut changed = policy::CheckoutChanges::new();
+    policy::record_checkout_change(&mut changed, "keep");
+    let targets = policy::checkout_physical_targets(&tree, &lookup, &mut changed);
+    proof {
+        assert(tree@.kv_pairs() =~= Set::empty());
+        assert(policy::tree_rows_view(targets@).to_set() =~= Set::empty());
+    }
+    expect_status_true(targets.len() == 0);
+    expect_checkout_path(&changed, "keep", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_physical_plan_marks_missing_stage_zero_without_a_file_probe() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("1"); reveal_strlit("0");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("1") && vstd::string::is_ascii("0"));
+        assert("1".spec_bytes()[0] != "0".spec_bytes()[0]);
+    }
+    let mut tree = policy::Tree::new();
+    let key = policy::TreePath::from_text("a");
+    let ghost expected_key = key;
+    expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
+        key, "mode", "oid", "kind"));
+    let mut stages = policy::GitIndexStages::new();
+    expect_status_true(policy::record_git_index_stage(&mut stages, "a", "1").is_ok());
+    let lookup = policy::snapshot_git_index_stages(&stages);
+    let mut changed = policy::CheckoutChanges::new();
+    let targets = policy::checkout_physical_targets(&tree, &lookup, &mut changed);
+    proof {
+        assert(tree@.kv_pairs() =~= set![(expected_key, tree@[expected_key])]);
+        assert(!policy::checkout_stage_zero(lookup@, expected_key.bytes())) by {
+            assert forall|key: policy::GitIndexStage| lookup@.to_set().contains(key)
+                implies key.stage.spec_bytes() != "0".spec_bytes() by {
+                assert(key.stage.spec_bytes() == "1".spec_bytes());
+            }
+        }
+        assert(policy::tree_rows_view(targets@).to_set() =~= Set::empty());
+        assert(tree@.kv_pairs().contains((expected_key, tree@[expected_key])));
+    }
+    expect_status_true(targets.len() == 0);
+    expect_checkout_path(&changed, "a", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_physical_plan_preserves_probe_order_and_complete_entry_fields() {
+    proof {
+        reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("0");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("b"));
+        assert("a".spec_bytes()[0] < "b".spec_bytes()[0]);
+        assert(scope_text::byte_prefix("a".spec_bytes(), "b".spec_bytes(), 0));
+        assert(scope_text::byte_lt("a".spec_bytes(), "b".spec_bytes()));
+        assert("a"@[0] != "b"@[0]);
+    }
+    let mut tree = policy::Tree::new();
+    let key_b = policy::TreePath::from_text("b");
+    let ghost kb = key_b;
+    expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
+        key_b, "b-mode", "b-oid", "b-kind"));
+    let key_a = policy::TreePath::from_text("a");
+    let ghost ka = key_a;
+    expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
+        key_a, "a-mode", "a-oid", "a-kind"));
+    let mut stages = policy::GitIndexStages::new();
+    expect_status_true(policy::record_git_index_stage(&mut stages, "b", "0").is_ok());
+    expect_status_true(policy::record_git_index_stage(&mut stages, "a", "0").is_ok());
+    let lookup = policy::snapshot_git_index_stages(&stages);
+    let mut changed = policy::CheckoutChanges::new();
+    let targets = policy::checkout_physical_targets(&tree, &lookup, &mut changed);
+    proof {
+        let a = (ka, tree@[ka]);
+        let b = (kb, tree@[kb]);
+        assert(tree@.kv_pairs() =~= set![a, b]);
+        assert(stages@.contains_key(policy::GitIndexStage { path: "a", stage: "0" }));
+        assert(stages@.contains_key(policy::GitIndexStage { path: "b", stage: "0" }));
+        assert(lookup@.to_set().contains(policy::GitIndexStage { path: "a", stage: "0" }));
+        assert(lookup@.to_set().contains(policy::GitIndexStage { path: "b", stage: "0" }));
+        assert(policy::checkout_stage_zero(lookup@, ka.bytes()));
+        assert(policy::checkout_stage_zero(lookup@, kb.bytes()));
+        assert(policy::tree_rows_view(targets@).to_set() =~= set![a, b]);
+        let expected = seq![a, b];
+        assert(expected.no_duplicates());
+        expected.unique_seq_to_set();
+        assert(expected.to_set() =~= set![a, b]);
+        assert(targets.len() == 2);
+        let values = policy::tree_rows_view(targets@);
+        assert(values.to_set().contains(values[0]));
+        assert(values.to_set().contains(values[1]));
+        if values[0] == b {
+            assert(values[1] == a);
+            assert(scope_text::byte_lt(kb.bytes(), ka.bytes()));
+            scope_text::byte_lt_transitive(ka.bytes(), kb.bytes(), ka.bytes());
+            scope_text::byte_lt_strict(ka.bytes(), ka.bytes());
+        }
+        assert(values[0] == a && values[1] == b);
+    }
+    expect_status_true(targets.len() == 2);
+    expect_status_text(targets[0].0.as_str(), "a");
+    expect_status_text(targets[0].1.mode.as_str(), "a-mode");
+    expect_status_text(targets[0].1.oid.as_str(), "a-oid");
+    expect_status_text(targets[0].1.kind.as_str(), "a-kind");
+    expect_status_text(targets[1].0.as_str(), "b");
+    expect_status_text(targets[1].1.mode.as_str(), "b-mode");
+    expect_status_text(targets[1].1.oid.as_str(), "b-oid");
+    expect_status_text(targets[1].1.kind.as_str(), "b-kind");
+    expect_checkout_path(&changed, "a", false);
+    expect_checkout_path(&changed, "b", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_physical_observations_preserve_prior_changes_and_exact_failed_paths() {
+    broadcast use vstd::array::group_array_axioms;
+    proof {
+        reveal_strlit("keep"); reveal_strlit("a"); reveal_strlit("a\0");
+        reveal_strlit("目录/é"); reveal_strlit("目录/e");
+        assert("a"@.len() != "a\0"@.len());
+        assert("目录/é"@[3] != "目录/e"@[3]);
+        assert("keep"@[0] != "目录/é"@[0]);
+        assert("keep"@.len() != "a"@.len() && "keep"@.len() != "a\0"@.len());
+        assert("a\0"@.len() != "目录/é"@.len());
+    }
+    let duplicate = "a\0".to_owned();
+    let observations = vec![
+        policy::CheckoutPhysicalObservation { path: "a", matches: true },
+        policy::CheckoutPhysicalObservation { path: "a\0", matches: false },
+        policy::CheckoutPhysicalObservation { path: "目录/é", matches: false },
+        policy::CheckoutPhysicalObservation { path: duplicate.as_str(), matches: false },
+        policy::CheckoutPhysicalObservation { path: "a\0", matches: true },
+    ];
+    let mut changed = policy::CheckoutChanges::new();
+    policy::record_checkout_change(&mut changed, "keep");
+    policy::record_checkout_physical_observations(&mut changed, observations.as_slice());
+    expect_checkout_path(&changed, "keep", true);
+    expect_checkout_path(&changed, "a", false);
+    expect_checkout_path(&changed, "a\0", true);
+    expect_checkout_path(&changed, "目录/é", true);
+    expect_checkout_path(&changed, "目录/e", false);
+    let empty: Vec<policy::CheckoutPhysicalObservation> = Vec::new();
+    policy::record_checkout_physical_observations(&mut changed, empty.as_slice());
+    expect_checkout_path(&changed, "keep", true);
+    expect_checkout_path(&changed, "a\0", true);
+}
+
 fn expect_index_stage_duplicate(out: Result<(), String>)
     requires match out {
         Err(message) => message@ == "duplicate Git index stage"@,

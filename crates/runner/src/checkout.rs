@@ -6,10 +6,11 @@ use crate::{
         equal_text, git_inventory_records, git_inventory_termination, git_inventory_text,
     },
     verified_status::{
-        checkout_changed_paths, checkout_entry_supported, checkout_hash_advance,
-        checkout_hash_complete, checkout_index_changes, checkout_opened_file_matches,
-        checkout_regular_file_matches, checkout_symbolic_link, parse_git_index_rows,
-        parse_git_tree_rows, record_checkout_change,
+        CheckoutPhysicalObservation, checkout_changed_paths, checkout_entry_supported,
+        checkout_hash_advance, checkout_hash_complete, checkout_index_changes,
+        checkout_opened_file_matches, checkout_physical_targets, checkout_regular_file_matches,
+        checkout_symbolic_link, parse_git_index_rows, parse_git_tree_rows,
+        record_checkout_physical_observations,
     },
 };
 use sha1::Sha1;
@@ -41,11 +42,17 @@ pub fn changes(root: &Path, expected: &Tree, index: &[u8]) -> Result<Vec<String>
     let inventory = parse_git_index_rows(&rows(index)?)
         .map_err(|error| error.render(|path| format!("invalid relative path: {path:?}")))?;
     let mut changed = checkout_index_changes(expected, inventory.rows.as_slice());
-    for (path, entry) in expected {
-        if !inventory.stages.contains(path.as_str(), "0") || !matches_entry(root, path, entry)? {
-            record_checkout_change(&mut changed, path.as_str());
-        }
-    }
+    let targets = checkout_physical_targets(expected, &inventory.stages, &mut changed);
+    let observations = targets
+        .into_iter()
+        .map(|(path, entry)| {
+            matches_entry(root, path, entry).map(|matches| CheckoutPhysicalObservation {
+                path: path.as_str(),
+                matches,
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
+    record_checkout_physical_observations(&mut changed, &observations);
     Ok(checkout_changed_paths(&changed))
 }
 

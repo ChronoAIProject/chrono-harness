@@ -499,7 +499,7 @@ tree 与 index 复用 `GitInventoryError` 的原消息／原路径及已证明�
 复用现有 runner-status 生产／独立整 crate 根及未过滤测试，不增加证明操作或预算。
 解析扫描完整行并保存三个借用字段；普通行保留原 map 查询，非零 stage 行现在也取得预期条目后
 交给同源比较，增加一次 O(log K) 路径查询。完整证明、构建、运行与 CI 成本未测。
-stage-zero 的全文查询与 changed 集合由下述同源入口维护；文件系统外层循环、观察和编译／实际调用完整绑定仍待证明。
+stage-zero 的全文查询、查询计划与 changed 集合由下述同源入口维护；文件系统观察和编译／实际调用完整绑定仍待证明。
 
 index 的实际 stage 键由同源 `GitIndexStage` 持有，仍借用完整 path／stage 字符串。
 相等要求两个字段的完整 UTF-8 字节都相等；排序先比较完整 path，再比较完整 stage。
@@ -532,8 +532,28 @@ index 的完整逐行解析和 stage 库存由同根 `parse_git_index_rows` 维�
 复用现有两项状态整 crate 根、FILEMAP 消费边及原未过滤行为测试，无新外部假设、操作、过滤或预算。
 完整解析仍进行 K 次 O(log K) map 插入，字符串比较与原字段扫描另计；
 新增 Vec 保存 K 个四字段借用记录，为 O(K) 额外空间，不复制字段文本，也不重复解析原行。
-证明、构建、CI 与完整生命周期成本未测；文件系统外层循环仍待证明，
-不能据此宣称完整 checkout 或全仓覆盖。
+证明、构建、CI 与完整生命周期成本未测；不能据此宣称完整 checkout 或全仓覆盖。
+
+文件系统查询计划现在由同根 `checkout_physical_targets` 直接消费实际 Tree 和完整 stage 库存。
+返回的借用条目恰为具有 stage 0 的全部预期条目，完整 path／mode／OID／kind 保留，
+按原 UTF-8 字节顺序严格排列且无重复。缺少 stage 0 的路径加入原 changed 集合，
+不进入文件观察；原有变化全部保留。
+`record_checkout_physical_observations` 拥有完整观察数组的集合更新：只加入 `matches:false`
+对应的完整路径；重复、空观察和后来匹配都不清除已有变化。两项完整循环和终止由 Verus 证明。
+独立预期核空树、原变化保留、只有非零 stage 时不查询、反序插入后的查询顺序及完整字段，
+以及重复、Unicode、NUL 和后来的匹配观察；同一预期在普通 Rust 中执行失败分支。
+
+`checkout::changes` 直接消费计划并将实际 `matches_entry` 结果交回集合更新函数。
+明确采用固定 Rust 的 `Vec::into_iter`、`Iterator::map`、`Result::map` 与
+`collect::<Result<Vec<_>, String>>` 外部容器接口：按原顺序逐项搬运借用条目与实际布尔观察，
+遇到首个 Err 立即停止并保留原错误，不调用其后文件观察；成功时保留全部观察。
+这项标准库搬运尚未在本仓机械精化，不授予仓内 `matches_entry` 或其文件路径、IO、
+哈希／类型／错误组合任何 `external_body` 或其他信任豁免。
+沿用已有两项状态整 crate 根和实际消费者登记，适配文件不取得整文件证明资格。
+计划新增 O(T+T0) 峰值借用条目空间，观察向量保存 T0 个路径／布尔记录；
+T 为预期条目数，T0 为其中具有 stage 0 的条目数，文本不复制。
+每个预期条目一次现有二分 stage 查询，缺失路径及不匹配路径沿用原集合插入；
+不预称性能收益，完整运行、证明、构建、CI 与存储成本未测。
 
 Git 索引标记的实际类型 `IndexFlag`、完整字段克隆与相等、原字节 NUL 拆分、
 单行准入及完整行遍历也由同一 `verified_status` 根拥有；`wire` 只重导出实际类型，

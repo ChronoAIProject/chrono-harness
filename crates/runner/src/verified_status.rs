@@ -2129,6 +2129,180 @@ pub fn checkout_index_changes(tree: &Tree, rows: &[GitIndexRow<'_>]) -> (changes
     changes
 }
 
+pub open spec fn checkout_stage_zero(stages: Seq<GitIndexStage>, path: Seq<u8>) -> bool {
+    exists|key: GitIndexStage| (#[trigger] stages.to_set().contains(key))
+        && key.path.spec_bytes() == path && key.stage.spec_bytes() == "0".spec_bytes()
+}
+
+pub open spec fn checkout_missing_physical_prefix(
+    rows: Seq<(&TreePath, &TreeEntry)>, stages: Seq<GitIndexStage>, end: int, path: Seq<char>,
+) -> bool {
+    exists|i: int| 0 <= i < end && (#[trigger] rows[i]).0@ == path
+        && !checkout_stage_zero(stages, rows[i].0.bytes())
+}
+
+/// 缺 stage 0 的路径只记变化；其余原条目按完整路径顺序交给实际文件观察。
+pub fn checkout_physical_targets<'a>(
+    tree: &'a Tree, stages: &GitIndexStageLookup, changes: &mut CheckoutChanges,
+) -> (targets: Vec<(&'a TreePath, &'a TreeEntry)>)
+    requires stages.valid(),
+    ensures
+        tree_rows_ordered(targets@),
+        tree_rows_view(targets@).no_duplicates(),
+        targets.len() == tree_rows_view(targets@).to_set().len(),
+        tree_rows_view(targets@).to_set() == tree@.kv_pairs().filter(
+            |row: (TreePath, TreeEntry)| checkout_stage_zero(stages@, row.0.bytes())),
+        forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+            == (checkout_change_has_path(old(changes)@, path)
+                || exists|row: (TreePath, TreeEntry)| (#[trigger] tree@.kv_pairs().contains(row))
+                    && row.0@ == path && !checkout_stage_zero(stages@, row.0.bytes())),
+{
+    let rows = tree_rows(tree);
+    let ghost before = changes@;
+    let mut targets: Vec<(&TreePath, &TreeEntry)> = Vec::new();
+    let mut i: usize = 0;
+    while i < rows.len()
+        invariant
+            0 <= i <= rows.len(), stages.valid(), tree_rows_ordered(rows@),
+            tree_rows_view(rows@).to_set() == tree@.kv_pairs(),
+            tree_rows_ordered(targets@),
+            forall|j: int| #![trigger targets@[j]] 0 <= j < targets.len() ==> exists|k: int|
+                0 <= k < i && targets@[j] == rows@[k],
+            tree_rows_view(targets@).to_set() == tree_rows_view(rows@.take(i as int)).to_set().filter(
+                |row: (TreePath, TreeEntry)| checkout_stage_zero(stages@, row.0.bytes())),
+            forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == (checkout_change_has_path(before, path)
+                    || checkout_missing_physical_prefix(rows@, stages@, i as int, path)),
+        decreases rows.len() - i,
+    {
+        let (path, entry) = rows[i];
+        let probe = stages.contains(path.as_str(), "0");
+        let ghost prior = targets@;
+        if probe {
+            proof {
+                assert forall|j: int| 0 <= j < targets.len()
+                    implies identifiers::byte_lt((#[trigger] targets@[j]).0.bytes(), path.bytes()) by {
+                    let k = choose|k: int| 0 <= k < i && targets@[j] == rows@[k];
+                    assert(identifiers::byte_lt(rows@[k].0.bytes(), rows@[i as int].0.bytes()));
+                }
+            }
+            targets.push((path, entry));
+        } else {
+            record_checkout_change(changes, path.as_str());
+        }
+        proof {
+            assert(probe == checkout_stage_zero(stages@, path.bytes()));
+            assert(tree_rows_view(targets@) =~= if probe {
+                tree_rows_view(prior).push((*path, *entry))
+            } else { tree_rows_view(prior) });
+            assert(tree_rows_view(rows@.take(i + 1))
+                =~= tree_rows_view(rows@.take(i as int)).push((*path, *entry)));
+            tree_rows_view(rows@.take(i as int)).lemma_push_to_set_commute((*path, *entry));
+            tree_rows_view(prior).lemma_push_to_set_commute((*path, *entry));
+            assert(tree_rows_view(targets@).to_set()
+                =~= tree_rows_view(rows@.take(i + 1)).to_set().filter(
+                    |row: (TreePath, TreeEntry)| checkout_stage_zero(stages@, row.0.bytes()))) by {
+                assert forall|row: (TreePath, TreeEntry)|
+                    #[trigger] tree_rows_view(targets@).to_set().contains(row)
+                    == tree_rows_view(rows@.take(i + 1)).to_set().filter(
+                        |row: (TreePath, TreeEntry)| checkout_stage_zero(stages@, row.0.bytes())).contains(row) by {
+                    assert(tree_rows_view(targets@).to_set().contains(row)
+                        == (tree_rows_view(prior).to_set().contains(row) || (probe && row == (*path, *entry))));
+                    assert(tree_rows_view(rows@.take(i + 1)).to_set().contains(row)
+                        == (tree_rows_view(rows@.take(i as int)).to_set().contains(row) || row == (*path, *entry)));
+                }
+            }
+            assert forall|j: int| #![trigger targets@[j]] 0 <= j < targets.len()
+                implies exists|k: int| 0 <= k < i + 1 && targets@[j] == rows@[k] by {
+                if j < prior.len() {
+                    let k = choose|k: int| 0 <= k < i && prior[j] == rows@[k];
+                    assert(targets@[j] == rows@[k]);
+                } else { assert(j == prior.len() && targets@[j] == rows@[i as int]); }
+            }
+            assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+                == (checkout_change_has_path(before, text)
+                    || checkout_missing_physical_prefix(rows@, stages@, i + 1, text)) by {
+                assert(checkout_missing_physical_prefix(rows@, stages@, i + 1, text)
+                    == (checkout_missing_physical_prefix(rows@, stages@, i as int, text)
+                        || (path@ == text && !probe)));
+            }
+        }
+        i += 1;
+    }
+    proof {
+        assert(rows@.take(rows.len() as int) =~= rows@);
+        assert(tree_rows_view(targets@).to_set() == tree@.kv_pairs().filter(
+            |row: (TreePath, TreeEntry)| checkout_stage_zero(stages@, row.0.bytes())));
+        assert forall|i: int, j: int| 0 <= i < j < targets.len()
+            implies tree_rows_view(targets@)[i] != tree_rows_view(targets@)[j] by {
+            identifiers::byte_lt_strict(targets@[i].0.bytes(), targets@[j].0.bytes());
+        }
+        tree_rows_view(targets@).unique_seq_to_set();
+        assert forall|path: Seq<char>| checkout_missing_physical_prefix(rows@, stages@, rows.len() as int, path)
+            == (exists|row: (TreePath, TreeEntry)| (#[trigger] tree@.kv_pairs().contains(row))
+                && row.0@ == path && !checkout_stage_zero(stages@, row.0.bytes())) by {
+            if checkout_missing_physical_prefix(rows@, stages@, rows.len() as int, path) {
+                let k = choose|k: int| 0 <= k < rows.len() && rows@[k].0@ == path
+                    && !checkout_stage_zero(stages@, rows@[k].0.bytes());
+                assert(tree_rows_view(rows@).contains(tree_rows_view(rows@)[k]));
+                assert(tree_rows_view(rows@)[k] == (*rows@[k].0, *rows@[k].1));
+                assert(tree@.kv_pairs().contains(tree_rows_view(rows@)[k]));
+            } else if exists|row: (TreePath, TreeEntry)| (#[trigger] tree@.kv_pairs().contains(row))
+                && row.0@ == path && !checkout_stage_zero(stages@, row.0.bytes()) {
+                let row = choose|row: (TreePath, TreeEntry)| (#[trigger] tree@.kv_pairs().contains(row))
+                    && row.0@ == path && !checkout_stage_zero(stages@, row.0.bytes());
+                assert(tree_rows_view(rows@).contains(row));
+                let k = tree_rows_view(rows@).lemma_contains_to_index(row);
+                assert(checkout_missing_physical_prefix(rows@, stages@, rows.len() as int, path));
+            }
+        }
+    }
+    targets
+}
+
+pub struct CheckoutPhysicalObservation<'a> {
+    pub path: &'a str,
+    pub matches: bool,
+}
+
+pub open spec fn checkout_failed_physical_prefix(
+    observations: Seq<CheckoutPhysicalObservation>, end: int, path: Seq<char>,
+) -> bool {
+    exists|i: int| 0 <= i < end && (#[trigger] observations[i]).path@ == path
+        && !observations[i].matches
+}
+
+/// 精确加入观察不匹配的原路径；匹配、空输入及重复都不清除既有变化。
+pub fn record_checkout_physical_observations(
+    changes: &mut CheckoutChanges, observations: &[CheckoutPhysicalObservation],
+)
+    ensures forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+        == (checkout_change_has_path(old(changes)@, path)
+            || checkout_failed_physical_prefix(observations@, observations.len() as int, path)),
+{
+    let ghost before = changes@;
+    let mut i: usize = 0;
+    while i < observations.len()
+        invariant 0 <= i <= observations.len(),
+            forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == (checkout_change_has_path(before, path)
+                    || checkout_failed_physical_prefix(observations@, i as int, path)),
+        decreases observations.len() - i,
+    {
+        if !observations[i].matches { record_checkout_change(changes, observations[i].path); }
+        proof {
+            assert forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+                == (checkout_change_has_path(before, path)
+                    || checkout_failed_physical_prefix(observations@, i + 1, path)) by {
+                assert(checkout_failed_physical_prefix(observations@, i + 1, path)
+                    == (checkout_failed_physical_prefix(observations@, i as int, path)
+                        || (observations@[i as int].path@ == path && !observations@[i as int].matches)));
+            }
+        }
+        i += 1;
+    }
+}
+
 /// checkout 只支持原有三种 blob 模式，完整文本决定支持与否。
 pub fn checkout_entry_supported(kind: &str, mode: &str) -> (supported: bool)
     ensures supported == (kind@ == "blob"@
