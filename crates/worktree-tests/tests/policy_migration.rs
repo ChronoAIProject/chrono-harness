@@ -773,6 +773,159 @@ fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history
 }
 
 #[test]
+fn checkout_migration_hands_off_a_sealed_result_without_maintaining_other_worktrees() {
+    let (h, target, used) = checkout_result_fixture();
+    let other = h.parent.join("unrelated-handoff");
+    let (code, created, error) = h.invoke("integration", "unrelated-handoff", &other);
+    assert_eq!(code, 0, "{created} {error}");
+    let other_ledger = fs::read(h.ledger_path(&other)).unwrap();
+    let entry = json(&other_ledger).unwrap()["entries"][0].clone();
+    let held = fs::File::open(h.root.join(entry["ownership"]["path"].as_str().unwrap())).unwrap();
+    held.lock_shared().unwrap();
+    let before = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
+    let original_path = h.root.join(used["report_path"].as_str().unwrap());
+    let original = fs::read(&original_path).unwrap();
+    let receipt_path = h
+        .root
+        .join(used["managed_use_receipt"]["path"].as_str().unwrap());
+    let receipt = fs::read(&receipt_path).unwrap();
+    cache(&target);
+    git(&target, &["checkout", "-b", "integration/next-handoff"]);
+
+    let report = migrate(&h, &target);
+    assert_eq!(report["checkout_migration"]["status"], "adopted");
+    let after = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
+    let mut expected = before["enrollment"].clone();
+    expected.as_object_mut().unwrap().remove("completed_uses");
+    assert_eq!(after["enrollment"], expected);
+    assert_eq!(after["branch"], before["branch"]);
+    assert_eq!(after["checkout_branch"], "integration/next-handoff");
+    assert_eq!(after["status"], "active");
+    assert!(after["terminal"].is_null());
+    assert_eq!(after["policy_migrations"], before["policy_migrations"]);
+    assert_eq!(fs::read(&original_path).unwrap(), original);
+    assert_eq!(fs::read(&receipt_path).unwrap(), receipt);
+    assert!(target.join("output λ/cache").is_file());
+    assert_eq!(fs::read(h.ledger_path(&other)).unwrap(), other_ledger);
+    assert!(
+        report["processes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|row| row["root"] != value!(other))
+    );
+    drop(held);
+}
+
+fn checkout_result_fixture() -> (Host, PathBuf, Value) {
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    automatic::native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    edit(&h.root, POLICY_PATH, |policy| {
+        policy["producers"]["lifecycle-original"] = value!([
+            ".chrono-harness/state/worktrees/",
+            ".chrono-harness/state/automatic-cleanup/"
+        ]);
+        policy["max_related_outputs"] = value!(512);
+    });
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("completed-use-handoff");
+    let (code, created, error) = h.invoke("integration", "completed-use-handoff", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
+    assert_eq!(
+        entry["enrollment"]["completed_uses"],
+        value!([used["managed_use_receipt"]])
+    );
+    Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap()
+        .reference_paths(
+            "fixture-use-report",
+            &[used["report_path"].as_str().unwrap().into()],
+        )
+        .unwrap();
+    (h, target, used)
+}
+
+#[test]
+fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
+    for fault in [
+        "missing", "partial", "binding", "changed", "replaced", "unsealed",
+    ] {
+        let (h, target, used) = checkout_result_fixture();
+        let path = h.root.join(used["report_path"].as_str().unwrap());
+        let bytes = fs::read(&path).unwrap();
+        match fault {
+            "missing" => fs::remove_file(&path).unwrap(),
+            "partial" => fs::write(&path, b"{\"status\":").unwrap(),
+            "binding" | "changed" => {
+                let mut report = json(&bytes).unwrap();
+                if fault == "binding" {
+                    report["managed_use_receipt"]["sha256"] = value!("0".repeat(64));
+                } else {
+                    report["untrusted_edit"] = value!(true);
+                }
+                fs::write(&path, serde_json::to_vec(&report).unwrap()).unwrap();
+            }
+            "replaced" => {
+                fs::rename(&path, path.with_extension("saved-original")).unwrap();
+                fs::write(&path, &bytes).unwrap();
+            }
+            "unsealed" => {
+                let mut output = retention_state::snapshot(&h.root)["outputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|output| output["path"] == used["report_path"])
+                    .unwrap()
+                    .clone();
+                output["phase"] = value!("publishing");
+                retention_state::replace_output(&h.root, &output);
+            }
+            _ => unreachable!(),
+        }
+        git(&target, &["checkout", "-b", "integration/preserve-pending"]);
+        let before = fs::read(h.ledger_path(&target)).unwrap();
+        let receipt_path = h
+            .root
+            .join(used["managed_use_receipt"]["path"].as_str().unwrap());
+        let receipt = fs::read(&receipt_path).unwrap();
+        let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before, "{fault}");
+        assert_eq!(fs::read(&receipt_path).unwrap(), receipt, "{fault}");
+        assert!(target.is_dir(), "{fault}");
+    }
+}
+
+#[test]
+fn checkout_migration_rejects_candidate_policy_before_releasing_a_completed_result() {
+    let (h, target, _) = checkout_result_fixture();
+    git(&target, &["checkout", "-b", "integration/wrong-policy"]);
+    edit(&target, CLEANUP, |policy| {
+        policy["allow_evidence_disposal"] = value!(false)
+    });
+    let before = fs::read(h.ledger_path(&target)).unwrap();
+    let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+    assert_ne!(code, 0, "{report} {error}");
+    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before);
+}
+
+#[test]
 fn checkout_migration_keeps_live_unjoined_and_terminal_work_protected() {
     let (h, target) = fixture();
     git(&target, &["checkout", "-b", "integration/reuse"]);
