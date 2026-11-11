@@ -30,9 +30,6 @@
     "fixture-retirement": [
       ".chrono-harness/state/temporary-hosts/worktree/body-inputs/"
     ],
-    "instructions-operation": [
-      ".chrono-harness/state/instructions-operations/"
-    ],
     "pr-original": [
       ".chrono-harness/state/pr-operations/"
     ]
