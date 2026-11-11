@@ -120,14 +120,14 @@ fn expect_registry_path_failure<'a, R: policy::SelectorRegistryRows<'a>>(
 {
     let actual = policy::validate_identity_registry_paths(true, rows, targets);
     proof {
-        match actual {
+        match &actual {
             Ok(()) => {
                 assert(policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@).is_none());
                 assert(false);
             },
             Err(error) => {
                 let i = choose|i: int| #[trigger] policy::selector_registry_failure_at(
-                    rows.registry_paths(), targets@, i, policy::selector_path_failure(error));
+                    rows.registry_paths(), targets@, i, policy::selector_path_failure(*error));
                 if i < first {
                     assert(policy::identity_registry_path_error(rows.registry_paths()[i], targets@).is_none());
                 }
@@ -135,7 +135,7 @@ fn expect_registry_path_failure<'a, R: policy::SelectorRegistryRows<'a>>(
                     assert(policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@).is_none());
                 }
                 assert(i == first as int);
-                assert(policy::selector_path_failure(error) == (invalid, expected@));
+                assert(policy::selector_path_failure(*error) == (invalid, expected@));
             },
         }
     }
