@@ -451,6 +451,183 @@ pub trait RegistryMembership {
         ensures present == self.has_path(path);
 }
 
+trait UniqueMatchRows {
+    spec fn count(&self) -> nat;
+    spec fn matches(&self, index: int) -> bool;
+
+    fn len(&self) -> (count: usize)
+        ensures count == self.count();
+
+    fn matched(&self, index: usize) -> (present: bool)
+        requires index < self.count(),
+        ensures present == self.matches(index as int);
+}
+
+spec fn unique_match_index<R: UniqueMatchRows>(rows: &R, index: int) -> bool {
+    0 <= index < rows.count() && rows.matches(index)
+        && forall|j: int| 0 <= j < rows.count() && j != index ==> !#[trigger] rows.matches(j)
+}
+
+fn unique_matching_index<R: UniqueMatchRows>(rows: &R) -> (out: Option<usize>)
+    ensures match out {
+        Some(index) => unique_match_index(rows, index as int),
+        None => forall|i: int| !#[trigger] unique_match_index(rows, i),
+    },
+{
+    let count = rows.len();
+    let mut selected: Option<usize> = None;
+    let mut i = 0;
+    while i < count
+        invariant i <= count, count == rows.count(),
+            match selected { Some(s) => s < i, None => true },
+            forall|j: int| 0 <= j < i ==>
+                (#[trigger] rows.matches(j) == (selected == Some(j as usize))),
+        decreases count - i,
+    {
+        if rows.matched(i) {
+            if let Some(_first) = selected {
+                assert(rows.matches(_first as int));
+                assert forall|j: int| !#[trigger] unique_match_index(rows, j) by {
+                    if j == i { assert(_first < j && rows.matches(_first as int)); }
+                    else { assert(rows.matches(i as int)); }
+                }
+                return None;
+            }
+            selected = Some(i);
+        }
+        i += 1;
+    }
+    match selected {
+        Some(_index) => { assert(unique_match_index(rows, _index as int)); },
+        None => {
+            assert forall|j: int| !#[trigger] unique_match_index(rows, j) by {
+                if 0 <= j < rows.count() { assert(!rows.matches(j)); }
+            }
+        },
+    }
+    selected
+}
+
+/// 外部 JSON 观察仅提供原数组长度及指定行的完整 id 文本。
+pub trait BindingReferenceRows {
+    spec fn count(&self) -> nat;
+    spec fn id_at(&self, index: int) -> Option<&str>;
+
+    fn len(&self) -> (count: usize)
+        ensures count == self.count();
+
+    fn id(&self, index: usize) -> (text: Option<&str>)
+        requires index < self.count(),
+        ensures text == self.id_at(index as int);
+}
+
+pub open spec fn binding_reference_matches<R: BindingReferenceRows>(
+    rows: &R, index: int, id: &str,
+) -> bool {
+    match rows.id_at(index) { Some(text) => text@ == id@, None => false }
+}
+
+pub open spec fn unique_binding_reference_index<R: BindingReferenceRows>(
+    rows: &R, id: &str, index: int,
+) -> bool {
+    0 <= index < rows.count() && binding_reference_matches(rows, index, id)
+        && forall|j: int| 0 <= j < rows.count() && j != index ==>
+            !#[trigger] binding_reference_matches(rows, j, id)
+}
+
+struct BindingMatches<'a, R: BindingReferenceRows> { rows: &'a R, id: &'a str }
+
+impl<R: BindingReferenceRows> UniqueMatchRows for BindingMatches<'_, R> {
+    spec fn count(&self) -> nat { self.rows.count() }
+    spec fn matches(&self, index: int) -> bool {
+        binding_reference_matches(self.rows, index, self.id)
+    }
+    fn len(&self) -> usize { self.rows.len() }
+    fn matched(&self, index: usize) -> bool {
+        match self.rows.id(index) {
+            Some(text) => identifiers::equal_text(text, self.id),
+            None => false,
+        }
+    }
+}
+
+/// 缺数组先报原错误；成功索引唯一且保留原位置，零项／多项均返回无唯一引用。
+pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &str)
+    -> (out: Result<Option<usize>, &'static str>)
+    ensures
+        out.is_err() == rows.is_none(),
+        rows.is_none() ==> out == Err::<Option<usize>, &'static str>("binding collection must be array"),
+        match out {
+            Ok(selected) => match selected {
+                Some(index) => unique_binding_reference_index(rows.unwrap(), id, index as int),
+                None => forall|i: int| !#[trigger] unique_binding_reference_index(rows.unwrap(), id, i),
+            },
+            Err(_) => true,
+        },
+        match rows {
+            Some(rows) => forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+                ==> out == Ok::<Option<usize>, &'static str>(Some(i)),
+            None => true,
+        },
+{
+    let Some(rows) = rows else { return Err("binding collection must be array"); };
+    let observed = BindingMatches { rows, id };
+    proof {
+        reveal(unique_match_index);
+        assert(observed.count() == rows.count());
+        assert forall|i: int| #[trigger] observed.matches(i)
+            == binding_reference_matches(rows, i, id) by {}
+        assert forall|i: int| #[trigger] unique_match_index(&observed, i)
+            == unique_binding_reference_index(rows, id, i) by {
+            if unique_match_index(&observed, i) {
+                assert forall|j: int| 0 <= j < rows.count() && j != i implies
+                    !#[trigger] binding_reference_matches(rows, j, id) by {
+                    assert(!observed.matches(j));
+                }
+            }
+            if unique_binding_reference_index(rows, id, i) {
+                assert forall|j: int| 0 <= j < observed.count() && j != i implies
+                    !#[trigger] observed.matches(j) by {
+                    assert(!binding_reference_matches(rows, j, id));
+                }
+            }
+        }
+    }
+    let selected = unique_matching_index(&observed);
+    proof {
+        if selected.is_none() {
+            assert forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i) by {
+                assert(!unique_match_index(&observed, i));
+            }
+        }
+        assert forall|i: usize| #[trigger] unique_binding_reference_index(rows, id, i as int)
+            implies selected == Some(i) by {
+            match selected {
+                Some(actual) => {
+                    assert(unique_binding_reference_index(rows, id, actual as int));
+                    if actual != i {
+                        assert(binding_reference_matches(rows, i as int, id));
+                        assert(!binding_reference_matches(rows, i as int, id));
+                    }
+                },
+                None => { assert(!unique_binding_reference_index(rows, id, i as int)); },
+            }
+        }
+    }
+    Ok(selected)
+}
+
+struct CapturedMatches<'a, 'p, M: RegistryMembership> {
+    paths: &'a [&'p str], values: &'a M,
+}
+
+impl<M: RegistryMembership> UniqueMatchRows for CapturedMatches<'_, '_, M> {
+    spec fn count(&self) -> nat { self.paths@.len() }
+    spec fn matches(&self, index: int) -> bool { self.values.has_path(self.paths@[index]) }
+    fn len(&self) -> usize { self.paths.len() }
+    fn matched(&self, index: usize) -> bool { self.values.contains_path(self.paths[index]) }
+}
+
 pub open spec fn unique_registry_index<M: RegistryMembership>(
     paths: Seq<&str>, values: &M, index: int,
 ) -> bool {
@@ -469,32 +646,29 @@ pub fn select_captured_target<'a, M: RegistryMembership>(paths: &[&'a str], valu
     },
 {
     let message = "registry values require exactly one registered effective policy";
-    let mut selected: Option<usize> = None;
-    let mut i = 0;
-    while i < paths.len()
-        invariant i <= paths.len(),
-            message@ == "registry values require exactly one registered effective policy"@,
-            match selected { Some(s) => s < i, None => true },
-            forall|j: int| 0 <= j < i ==>
-                (values.has_path(#[trigger] paths@[j]) == (selected == Some(j as usize))),
-        decreases paths.len() - i,
-    {
-        if values.contains_path(paths[i]) {
-            if let Some(first) = selected {
-                assert(values.has_path(paths@[first as int]));
-                assert forall|j: int| !#[trigger] unique_registry_index(paths@, values, j) by {
-                    if j == i {
-                        assert(first < j && values.has_path(paths@[first as int]));
-                    } else {
-                        assert(values.has_path(paths@[i as int]));
-                    }
+    let observed = CapturedMatches { paths, values };
+    proof {
+        reveal(unique_match_index);
+        assert(observed.count() == paths@.len());
+        assert forall|i: int| 0 <= i < paths@.len() implies #[trigger] observed.matches(i)
+            == values.has_path(paths@[i]) by {}
+        assert forall|i: int| #[trigger] unique_match_index(&observed, i)
+            == unique_registry_index(paths@, values, i) by {
+            if unique_match_index(&observed, i) {
+                assert forall|j: int| 0 <= j < paths@.len() && j != i implies
+                    !values.has_path(#[trigger] paths@[j]) by {
+                    assert(!observed.matches(j));
                 }
-                return Err(message);
             }
-            selected = Some(i);
+            if unique_registry_index(paths@, values, i) {
+                assert forall|j: int| 0 <= j < observed.count() && j != i implies
+                    !#[trigger] observed.matches(j) by {
+                    assert(!values.has_path(paths@[j]));
+                }
+            }
         }
-        i += 1;
     }
+    let selected = unique_matching_index(&observed);
     match selected {
         Some(index) => {
             assert(unique_registry_index(paths@, values, index as int));
@@ -502,7 +676,7 @@ pub fn select_captured_target<'a, M: RegistryMembership>(paths: &[&'a str], valu
         },
         None => {
             assert forall|j: int| !#[trigger] unique_registry_index(paths@, values, j) by {
-                if 0 <= j < paths.len() { assert(!values.has_path(paths@[j])); }
+                assert(!unique_match_index(&observed, j));
             }
             Err(message)
         },
