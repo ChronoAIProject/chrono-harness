@@ -71,9 +71,9 @@ registry selection 的对象投影由
 schema、空元数据、Unicode／NUL／换行保留及已匹配 schema 的情况。
 其 fixture 记录实际调用及完整参数，不冒充 Serde 对象内部模型；现役 snapshot、selector
 与 identity 消费测试继续验证真实 Rust 组合。两项状态根仍执行严格整 crate 证明，
-不新增依赖、工具、证明根、过滤或预算；本项尚须取得候选证明及消费测试原结果。
+不新增依赖、工具、证明根、过滤或预算；实际通过须由候选证明与消费测试原结果确认。
 JSON 内部语义与完整组合证明、文件到编译及生产调用的完整覆盖和全仓覆盖门仍未完成。
-运行成本增加一个无分配的转发调用；完整构建、验证、CI 和存储成本未测。
+源码增加一个无分配的转发函数；完整构建、验证、CI 和存储成本未测。
 
 registry 的批量组装由 `verified_status.rs::registry_parse_batch` 定义。
 同源规格先核完整返回数量，再按请求顺序核路径、解析当前原字节并更新 bytes／values
