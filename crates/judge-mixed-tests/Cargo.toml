@@ -5,13 +5,13 @@ edition = "2024"
 publish = false
 
 [dependencies]
+chrono-harness = { path = "../runner" }
 serde_json = "1"
 
 [dev-dependencies]
 chrono-judge-mixed = { path = "../judge-mixed" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 chrono-judge-registration = { path = "../judge-registration" }
-chrono-harness = { path = "../runner" }
 tempfile = "3"
 chrono-judge-cost = { path = "../judge-cost" }
 
@@ -23,3 +23,9 @@ bench = false
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+[[bin]]
+name = "chrono-harness-test-cli"
+path = "../runner/src/main.rs"
+test = false
+bench = false

@@ -465,7 +465,6 @@
       "kind": "verify",
       "operation": "test.judge-cost-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_cost"
@@ -478,7 +477,6 @@
       "kind": "verify",
       "operation": "test.judge-mixed-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_cost",
@@ -845,18 +843,16 @@
       ]
     },
     "verify_judge_cost_tests": {
-      "need": "crates/judge-cost-tests/tests/support/host.rs runs runner with registration, filemap and cost; consumer assertions read declared impact costs, source identities and unknown coordinates from real reports.",
+      "need": "cost 专属测试由 Cargo 从唯一生产 main.rs 编译 runner 测试 CLI；共享 Host 继续运行 registration、filemap 和 cost 发布 CLI，断言实际影响成本、来源身份、未知维度和失败传播。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-cost"
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
+      "need": "mixed 专属测试由 Cargo 从唯一生产 main.rs 编译 runner 测试 CLI，复用 cost Host 并运行 registration、filemap、cost 和 mixed 发布 CLI；保留混合修改警告、绑定和失败传播断言，Rust 过期成本样本仍实际调用 cost。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-cost",
