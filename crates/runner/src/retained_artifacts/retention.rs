@@ -3150,8 +3150,6 @@ impl Publication {
                                 .write(true)
                                 .create_new(true)
                                 .open(&staged)
-                                .map_err(|e| e.to_string())?
-                                .sync_all()
                                 .map_err(|e| e.to_string())?;
                         }
                     }
