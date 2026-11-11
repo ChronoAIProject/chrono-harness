@@ -555,6 +555,18 @@ T 为预期条目数，T0 为其中具有 stage 0 的条目数，文本不复制
 每个预期条目一次现有二分 stage 查询，缺失路径及不匹配路径沿用原集合插入；
 不预称性能收益，完整运行、证明、构建、CI 与存储成本未测。
 
+Git 对象哈希的算法选择直接消费同根 `checkout_hash_algorithm`：
+复用 identifiers 的完整 `full_oid` 准入，且仅有效的 40／64 字节 OID 分别选择 SHA-1／SHA-256。
+非法长度、全零、大小写及内部非法字节继续返回完整原错误
+`expected full nonzero lowercase commit OID`，不截取、归一化或提前读取文件。
+独立 Verus 预期核两种长度、混合小写十六进制、仅末位非零，以及全零、39／41 字节、
+内部大写、NUL 和换行的拒绝与原错误；同一预期在普通 Rust 中运行。
+`object_hash` 只把已证明的算法变体交给原 SHA-1／SHA-256 实例，不再另判长度或保留不可达兜底。
+固定直接依赖的 `sha1::Sha1`、`sha2::Sha256` 及其 `Digest` 接口提供实际密码学运算；
+这是明确外部库接口，不授予仓内 `hash`、读循环、头部构造或摘要编码任何信任豁免，
+也不据此宣称整个 checkout 已证明。复用原状态证明根、FILEMAP、工具、参数和预算，
+没有新增依赖、文本复制或文件观察；完整证明、构建、CI 与运行成本未测。
+
 Git 索引标记的实际类型 `IndexFlag`、完整字段克隆与相等、原字节 NUL 拆分、
 单行准入及完整行遍历也由同一 `verified_status` 根拥有；`wire` 只重导出实际类型，
 `Reader::index_flags` 直接消费 `git_nul_records`／`parse_git_index_flag_rows`。
