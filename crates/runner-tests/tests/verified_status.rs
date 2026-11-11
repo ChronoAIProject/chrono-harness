@@ -5131,6 +5131,14 @@ proof fn registry_sequence_bytes_insert(bytes: Map<String, Vec<u8>>, key: String
         =~= registry_sequence_bytes(bytes).insert(key, raw@));
 }
 
+proof fn registry_sequence_bytes_facts(bytes: Map<String, Vec<u8>>)
+    ensures registry_sequence_bytes(bytes).dom() == bytes.dom(),
+        forall|key: String| #[trigger] bytes.contains_key(key)
+            ==> registry_sequence_bytes(bytes)[key] == bytes[key]@,
+{
+    assert(registry_sequence_bytes(bytes).dom() =~= bytes.dom());
+}
+
 proof fn registry_sequence_fixture_step(paths: Seq<String>,
     before: (u8, Map<String, Vec<u8>>, Map<String, u64>),
     after: (u8, Map<String, Vec<u8>>, Map<String, u64>))
@@ -5224,6 +5232,8 @@ proof fn registry_sequence_fixture_texts()
     reveal_strlit("read-error"); reveal_strlit("empty"); reveal_strlit("decode-error");
     reveal_strlit("first"); reveal_strlit("later"); reveal_strlit("same");
     reveal_strlit("旧/é"); reveal_strlit("../目录/é\0\n");
+    assert("first"@[0] != "empty"@[0]);
+    assert("later"@[0] != "empty"@[0]);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -5331,7 +5341,10 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
     expect_status_true(out.0 == 1);
     match out.1 {
         Ok((bytes, values)) => {
-            proof { assert(registry_sequence_bytes(bytes@).dom() =~= bytes@.dom()); }
+            proof {
+                registry_sequence_bytes_facts(initial.1);
+                registry_sequence_bytes_facts(bytes@);
+            }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
             expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
             expect_registry_pair(&bytes, &values, &key, &[1u8, 0, 255], 1);
@@ -5359,7 +5372,7 @@ fn registry_read_sequence_duplicate_keys_replace_both_maps_in_order()
     expect_status_true(out.0 == 2);
     match out.1 {
         Ok((bytes, values)) => {
-            proof { assert(registry_sequence_bytes(bytes@).dom() =~= bytes@.dom()); }
+            proof { registry_sequence_bytes_facts(bytes@); }
             expect_status_true(bytes.len() == 1 && values.len() == 1);
             expect_registry_pair(&bytes, &values, &key, &[2u8, 255, 0], 2);
         },

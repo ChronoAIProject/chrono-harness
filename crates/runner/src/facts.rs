@@ -165,10 +165,10 @@ where
     );
     let (_, result) = crate::verified_status::registry_read_sequence(
         pending,
-        read,
+        &mut read,
         snapshot.bytes,
         snapshot.values,
-        |mut reader: F, path: &str| {
+        |reader: &mut F, path: &str| {
             let result = reader(path);
             (reader, result)
         },
