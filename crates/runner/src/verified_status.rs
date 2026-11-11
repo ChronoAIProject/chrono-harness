@@ -247,6 +247,137 @@ pub fn single_registry_blob(expected: &str, mut rows: Vec<(String, Vec<u8>)>)
     }
 }
 
+pub open spec fn registry_decoded_view<V>(decoded: Result<V, String>) -> Result<V, Seq<char>> {
+    match decoded { Ok(value) => Ok(value), Err(message) => Err(message@) }
+}
+
+pub open spec fn registry_batch_view<V>(
+    result: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>,
+) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>> {
+    match result { Ok((bytes, values)) => Ok((bytes@, values@)), Err(message) => Err(message@) }
+}
+
+/// 原顺序中此前所有路径与解析都已成功，才会到达当前项。
+pub open spec fn registry_batch_prefix<V>(
+    expected: Seq<String>, rows: Seq<(String, Vec<u8>)>,
+    model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>, end: int,
+) -> bool {
+    0 <= end <= rows.len() && expected.len() == rows.len()
+        && forall|i: int| 0 <= i < end ==> (expected[i]@ == rows[i].0@
+            && (#[trigger] model(rows[i].1@)).is_ok())
+}
+
+/// 双 map 只在当前路径和解析均成功后一起更新，重复键采用最后一项。
+pub open spec fn registry_batch_fold<V>(
+    expected: Seq<String>, rows: Seq<(String, Vec<u8>)>, at: int,
+    bytes: Map<String, Vec<u8>>, values: Map<String, V>,
+    model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
+) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>>
+    recommends expected.len() == rows.len(), 0 <= at <= rows.len(),
+    decreases rows.len() - at,
+{
+    if at >= rows.len() { Ok((bytes, values)) }
+    else if expected[at]@ != rows[at].0@ { Err("registry acquisition path mismatch"@) }
+    else {
+        match model(rows[at].1@) {
+            Err(message) => Err(message),
+            Ok(value) => registry_batch_fold(expected, rows, at + 1,
+                bytes.insert(rows[at].0, rows[at].1), values.insert(rows[at].0, value), model),
+        }
+    }
+}
+
+pub open spec fn registry_batch_spec<V>(
+    expected: Seq<String>, rows: Seq<(String, Vec<u8>)>,
+    bytes: Map<String, Vec<u8>>, values: Map<String, V>,
+    model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
+) -> Result<(Map<String, Vec<u8>>, Map<String, V>), Seq<char>> {
+    if expected.len() != rows.len() { Err("registry acquisition count mismatch"@) }
+    else { registry_batch_fold(expected, rows, 0, bytes, values, model) }
+}
+
+/// 固定批量观察的完整校验、首错及双 map 组装；失败不发布部分状态。
+pub fn registry_parse_batch<V, P>(
+    expected: &[String], originals: Vec<(String, Vec<u8>)>,
+    bytes: BTreeMap<String, Vec<u8>>, values: BTreeMap<String, V>, decode: P,
+    Ghost(model): Ghost<spec_fn(Seq<u8>) -> Result<V, Seq<char>>>,
+) -> (out: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>)
+    where P: Fn(&[u8]) -> Result<V, String>,
+    requires
+        vstd::laws_cmp::obeys_cmp::<String>(),
+        forall|i: int, raw: &[u8]| 0 <= i < originals.len()
+            && registry_batch_prefix(expected@, originals@, model, i)
+            && expected@[i]@ == originals@[i].0@ && raw@ == originals@[i].1@
+            ==> decode.requires((raw,)),
+        forall|raw: &[u8], result: Result<V, String>|
+            decode.requires((raw,)) && decode.ensures((raw,), result)
+            ==> registry_decoded_view(result) == model(raw@),
+    ensures registry_batch_view(out)
+        == registry_batch_spec(expected@, originals@, bytes@, values@, model),
+{
+    let ghost all = originals@;
+    let ghost initial_bytes = bytes@;
+    let ghost initial_values = values@;
+    let mut collected_bytes = bytes;
+    let mut collected_values = values;
+    match registry_acquisition_count(expected.len(), originals.len()) {
+        Err(error) => { return Err(error); },
+        Ok(()) => {},
+    }
+    let mut remaining = originals.into_iter();
+    let mut index = 0usize;
+    loop
+        invariant
+            vstd::laws_cmp::obeys_cmp::<String>(),
+            all == originals@, all.len() == expected.len(),
+            initial_bytes == bytes@, initial_values == values@,
+            remaining@.1 == all, 0 <= remaining@.0 <= all.len(), index as int == remaining@.0,
+            registry_batch_prefix(expected@, all, model, remaining@.0),
+            registry_batch_spec(expected@, all, initial_bytes, initial_values, model)
+                == registry_batch_fold(expected@, all, remaining@.0, collected_bytes@, collected_values@, model),
+            forall|i: int, raw: &[u8]| 0 <= i < all.len()
+                && registry_batch_prefix(expected@, all, model, i)
+                && expected@[i]@ == all[i].0@ && raw@ == all[i].1@
+                ==> decode.requires((raw,)),
+            forall|raw: &[u8], result: Result<V, String>|
+                decode.requires((raw,)) && decode.ensures((raw,), result)
+                ==> registry_decoded_view(result) == model(raw@),
+        decreases all.len() - remaining@.0,
+    {
+        let ghost at = remaining@.0;
+        proof { reveal_with_fuel(registry_batch_fold, 1); }
+        let (path, original) = match remaining.next() {
+            None => { return Ok((collected_bytes, collected_values)); },
+            Some(row) => row,
+        };
+        let ghost before_bytes = collected_bytes@;
+        let ghost before_values = collected_values@;
+        match registry_acquisition_path(expected[index].as_str(), path.as_str()) {
+            Err(error) => { return Err(error); },
+            Ok(()) => {},
+        }
+        let raw = original.as_slice();
+        assert(decode.requires((raw,)));
+        let decoded = decode(raw);
+        assert(registry_decoded_view(decoded) == model(all[at].1@));
+        let value = match decoded {
+            Err(error) => { return Err(error); },
+            Ok(value) => value,
+        };
+        collected_bytes.insert(path.clone(), original);
+        collected_values.insert(path, value);
+        assert(registry_batch_fold(expected@, all, at, before_bytes, before_values, model)
+            == registry_batch_fold(expected@, all, at + 1, collected_bytes@, collected_values@, model));
+        index += 1;
+        assert(registry_batch_prefix(expected@, all, model, at + 1)) by {
+            assert forall|i: int| 0 <= i < at + 1 implies
+                expected@[i]@ == all[i].0@ && (#[trigger] model(all[i].1@)).is_ok() by {
+                if i < at { assert(registry_batch_prefix(expected@, all, model, at)); }
+            }
+        }
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct IndexFlag {

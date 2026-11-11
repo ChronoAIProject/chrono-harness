@@ -40,6 +40,28 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
+registry 的批量组装由 `verified_status.rs::registry_parse_batch` 定义。
+同源规格先核完整返回数量，再按请求顺序核路径、解析当前原字节并更新 bytes／values
+两个 map；任一错误立即返回完整原消息，成功保留已有无关项，重复键采用最后一项。
+解析回调只需在实际可达的前缀和匹配路径上可调用；数量或当前路径不符时不调用解析器。
+实际 `facts.rs::registry_snapshot_with_batches_target` 直接消费返回的双 map，失败不发布部分 snapshot。
+九组独立 Verus 预期也作为 Rust 测试执行，覆盖空批保留、缺项、额外项、路径先于解析、
+解析先于后续路径、成功前缀后的错误、Unicode／NUL／换行完整错误、原字节和重复键覆盖。
+
+本项采用固定 Rust 1.95.0 的 `String::Ord` 全文顺序合同，明确要求满足固定 vstd 的
+`obeys_cmp::<String>()`；本仓不机械证明标准库比较器。`BTreeMap::insert`、`get`、`len`
+采用该前提下固定 vstd 的精确 map 视图合同，`String::clone` 保持原键，`String::as_str`、
+`Vec::as_slice`、`Vec::into_iter`／`next` 只借用或转交原字段。
+组装继续调用现役 `json`；证明模型绑定该回调对同一完整输入的成功值或完整错误。
+`json` 使用固定 `serde_json::Deserializer::from_slice`／`end`、Serde 访问器和标准错误显示，
+这些库接口保留各自合同；`strict_json_value` 的仓内严格解码逻辑仍待证明，
+不能把整个 `json` 函数当作外部接口或由本项取得解析正确性保证。
+模型、map 快照和前缀只在证明中存在；运行时按原数量逐项移动字节和值，沿用一次键克隆和两次插入，
+不增加 IO、集合复制、证明根、工具、信任属性或预算。
+FILEMAP 和源码所有者继续登记现有两个状态整 crate 根及真实 runner 测试。
+非批量读取循环、snapshot 起始组装／selector 投影、外部 IO 与全仓源码／编译／调用完整绑定仍待证明。
+比较成本计入原路径全文；完整构建、证明、运行和 CI 成本未测。
+
 checkout 的实际对象摘要读取循环由 `verified_status.rs::checkout_hash_stream` 定义。
 同源规格用仅在证明中保留的有限轨迹，绑定初始读取器、缓冲区、摘要和零计数，
 逐步对应读取回调的原结果、返回缓冲区的实际前缀、计数准入与摘要更新；
