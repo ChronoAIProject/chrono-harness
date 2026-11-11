@@ -426,16 +426,16 @@ impl<R: BindingReferenceRows> UniqueMatchRows for BindingMatches<'_, R> {
 /// 缺数组先报原错误；成功索引唯一且保留原位置，零项／多项均返回无唯一引用。
 pub fn unique_binding_reference<R: BindingReferenceRows>(rows: Option<&R>, id: &str)
     -> (out: Result<Option<usize>, &'static str>)
-    ensures match rows {
-        None => out == Err::<Option<usize>, &'static str>("binding collection must be array"),
-        Some(rows) => match out {
+    ensures
+        out.is_err() == rows.is_none(),
+        rows.is_none() ==> out == Err::<Option<usize>, &'static str>("binding collection must be array"),
+        match out {
             Ok(selected) => match selected {
-                Some(index) => unique_binding_reference_index(rows, id, index as int),
-                None => forall|i: int| !#[trigger] unique_binding_reference_index(rows, id, i),
+                Some(index) => unique_binding_reference_index(rows.unwrap(), id, index as int),
+                None => forall|i: int| !#[trigger] unique_binding_reference_index(rows.unwrap(), id, i),
             },
-            Err(_) => false,
+            Err(_) => true,
         },
-    },
 {
     let Some(rows) = rows else { return Err("binding collection must be array"); };
     let observed = BindingMatches { rows, id };
