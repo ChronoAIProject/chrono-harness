@@ -3295,9 +3295,6 @@ impl Publication {
     /// Reserve bounded bytes for the existing process engine, under this exact
     /// directory capability. Final sealing measures the bytes actually written.
     pub fn reserve_external_file(&self, path: &Path, limit: u64) -> Result<(), String> {
-        if !self.tree {
-            return Err("external process originals require a directory publication".into());
-        }
         self.write_destination(path, limit).map(|_| ())
     }
     pub fn create_directory(&self, path: &Path) -> Result<(), String> {

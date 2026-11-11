@@ -419,7 +419,12 @@ fn consumer_operations(root: &Path, c: &Config, consumer: &str) -> Result<Value,
     Ok(json!({"status":"declared","operations":operations,"sources":sources}))
 }
 
-fn observe(root: &Path, input: &Input, attempt: Option<&attempt::Attempt>, input_id: &str) -> Result<Value, String> {
+fn observe(
+    root: &Path,
+    input: &Input,
+    attempt: Option<&attempt::Attempt>,
+    input_id: &str,
+) -> Result<Value, String> {
     if let Input::JsonValue {
         path: value,
         pointer,
@@ -441,7 +446,14 @@ fn observe(root: &Path, input: &Input, attempt: Option<&attempt::Attempt>, input
         result,
     } = input
     {
-        let (observation, original) = probe::observe(root, command, inherit, result, attempt.ok_or("E_CACHE_ATTEMPT: missing probe owner")?, input_id)?;
+        let (observation, original) = probe::observe(
+            root,
+            command,
+            inherit,
+            result,
+            attempt.ok_or("E_CACHE_ATTEMPT: missing probe owner")?,
+            input_id,
+        )?;
         return Ok(json!({"declaration":input,"observation":observation,"original":original}));
     }
     let observation = match input {
@@ -827,40 +839,44 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
         return Err("plan requires host-root/config/consumer".into());
     }
     let root = Path::new(options["--host-root"]);
+    let _activity = chrono_harness::retained_artifacts::retention::read_scope(root)?;
     let config = options["--config"];
     if !config.starts_with(".chrono-harness/") {
         return Err("E_CACHE_CONFIG: registration must belong to host .chrono-harness".into());
     }
     if let Some(path) = options.get("--plan-output") {
-        if !path.starts_with(".chrono-harness/state/") { return Err("E_CACHE_OUTPUT: plan must belong to retained host state".into()); }
+        if !path.starts_with(".chrono-harness/state/") {
+            return Err("E_CACHE_OUTPUT: plan must belong to retained host state".into());
+        }
         no_symlink_parents(root, path)?;
     }
     let c: Config =
         decode(&fs::read(no_symlink_parents(root, config)?).map_err(|e| e.to_string())?)?;
-    let plan = attempt::prepare(root, &c, options["--consumer"], options.get("--plan-output").copied())?;
+    let plan = attempt::prepare(
+        root,
+        &c,
+        options["--consumer"],
+        options.get("--plan-output").copied(),
+    )?;
     if let Some(path) = options.get("--plan-output") {
-        if ![".chrono-harness/state/", ".chrono-harness/cache/"]
-            .iter()
-            .any(|p| path.starts_with(p))
-        {
-            return Err("E_CACHE_OUTPUT: plan must belong to retained host state".into());
-        }
         let target = no_symlink_parents(root, path)?;
         fs::create_dir_all(target.parent().ok_or("E_CACHE_OUTPUT: plan parent")?)
             .map_err(|e| e.to_string())?;
         let raw = serde_json::to_vec(&plan).map_err(|e| e.to_string())?;
-        match fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&target)
-        {
-            Ok(mut file) => file.write_all(&raw).map_err(|e| e.to_string())?,
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                if fs::read(target).map_err(|e| e.to_string())? != raw {
-                    return Err("E_CACHE_OUTPUT: retained plan differs".into());
+        if !attempt::publish_plan(root, path, &plan)? {
+            match fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&target)
+            {
+                Ok(mut file) => file.write_all(&raw).map_err(|e| e.to_string())?,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    if fs::read(target).map_err(|e| e.to_string())? != raw {
+                        return Err("E_CACHE_OUTPUT: retained plan differs".into());
+                    }
                 }
+                Err(e) => return Err(format!("E_CACHE_OUTPUT: {e}")),
             }
-            Err(e) => return Err(format!("E_CACHE_OUTPUT: {e}")),
         }
     }
     if let Some(output) = options.get("--github-output") {

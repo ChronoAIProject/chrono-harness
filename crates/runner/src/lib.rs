@@ -179,6 +179,9 @@ pub struct ProcessResult {
     #[serde(skip)]
     pub(crate) failure_cause: Option<Arc<ProcessFailure>>,
     pub exit_code: i32,
+    /// Actual process-owner drain and direct join, independent of command success.
+    #[serde(default)]
+    pub owned_work_joined: bool,
     /// Actual terminal signal, including cancellation; exit_code keeps its wire meaning.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit_signal: Option<i32>,
@@ -942,13 +945,19 @@ pub fn run_process_observed_retained_owned(
     for (path, limit) in [
         (evidence.stdout, s.output_limit_bytes as u64),
         (evidence.stderr, s.output_limit_bytes as u64),
-        (evidence.launch, 65536),
     ] {
         publication.reserve_external_file(path, limit)?;
     }
     finish_detailed(run_process_inner_with_stdout(
-        root, s, input, Some(digest), Duration::from_secs(s.timeout_seconds),
-        s.output_limit_bytes, Some(evidence), None, Some(publication),
+        root,
+        s,
+        input,
+        Some(digest),
+        Duration::from_secs(s.timeout_seconds),
+        s.output_limit_bytes,
+        Some(evidence),
+        None,
+        Some(publication),
     ))
 }
 
@@ -1247,8 +1256,9 @@ fn run_process_inner_with_stdout(
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("stream path UTF-8")?;
-            if publication.is_none() && retained_artifacts::retention::Inventory::adopted(&root)?
-                .is_some_and(|i| i.accepts("check-original", relative))
+            if publication.is_none()
+                && retained_artifacts::retention::Inventory::adopted(&root)?
+                    .is_some_and(|i| i.accepts("check-original", relative))
             {
                 let publication = retained_artifacts::retention::create_adopted_for_consumer(
                     &root, "check-original", path, false,
@@ -1279,6 +1289,25 @@ fn run_process_inner_with_stdout(
     let ownership = process_ownership::Launch::prepare()?;
     #[cfg(unix)]
     ownership.configure(&mut command);
+    // The record has one schema and producer. Reserve its actual metadata
+    // bound before spawn, using the widest possible child PID representation.
+    let launch_record = evidence.as_ref().map(|_| serde_json::json!({
+        "schema": "chrono-process-launch/v2",
+        "launcher_pid": launcher_pid, "child_pid": u32::MAX,
+        "argv": std::iter::once(executable.to_string_lossy().into_owned()).chain(s.args.clone()).collect::<Vec<_>>(),
+        "cwd": root, "executable": executable, "sha256": hash,
+        "environment_digest": environment_digest,
+        "ownership_fds": ownership_fds, "stdin_sha256": stdin_sha256,
+        "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
+    }));
+    if let (Some(paths), Some(publication), Some(record)) =
+        (evidence.as_ref(), publication, launch_record.as_ref())
+    {
+        publication.reserve_external_file(
+            paths.launch,
+            serde_json::to_vec(record).map_err(|e| e.to_string())?.len() as u64,
+        )?;
+    }
     // Delay file creation until every setup operation above has succeeded.
     // If spawn itself fails, these are the only files this invocation created
     // and can be removed without touching a pre-existing address.
@@ -1395,15 +1424,8 @@ fn run_process_inner_with_stdout(
         #[cfg(unix)]
         child.ownership.log_identity();
         let publication_failure = evidence.as_ref().and_then(|paths| {
-            let record = serde_json::json!({
-                "schema": "chrono-process-launch/v2",
-                "launcher_pid": launcher_pid, "child_pid": pid,
-                "argv": std::iter::once(executable.to_string_lossy().into_owned()).chain(s.args.clone()).collect::<Vec<_>>(),
-                "cwd": root, "executable": executable, "sha256": hash,
-                "environment_digest": environment_digest,
-                "ownership_fds": ownership_fds, "stdin_sha256": stdin_sha256,
-                "timeout_seconds": s.timeout_seconds, "output_limit_bytes": s.output_limit_bytes,
-            });
+            let mut record = launch_record.as_ref().expect("prepared launch record").clone();
+            record["child_pid"] = serde_json::json!(pid);
             let published = (|| -> Result<(), Failure> {
                 let relative = paths.launch.strip_prefix(&root).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?.to_str().ok_or_else(||Failure::new("E_PROCESS_EVIDENCE","launch path UTF-8"))?;
                 let raw = serde_json::to_vec(&record).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?;
@@ -1416,12 +1438,14 @@ fn run_process_inner_with_stdout(
                         .ok_or_else(|| Failure::new("E_PROCESS_EVIDENCE", "launch original parent missing"))?,
                 )
                 .map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e)).at("phase", "create"))?;
-                original.write_all(record.to_string().as_bytes())
+                original.write_all(&raw)
                     .map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e)).at("phase", "write"))?;
                 original.flush().map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e)).at("phase", "flush"))?;
                 original
                     .persist_noclobber(paths.launch)
                     .map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e.error)).at("phase", "persist"))?;
+                retained_artifacts::retention::sync_report(paths.launch)
+                    .map_err(|e| Failure::wrap("E_PROCESS_EVIDENCE", format!("launch original: {e}"), NativeIoError::new(e)).at("phase", "sync"))?;
                 Ok(())
             })();
             published
@@ -1685,7 +1709,11 @@ fn run_process_inner_with_stdout(
             "entering owned descendant drain"
         );
         #[cfg(unix)]
-        if !child.ownership.drain() {
+        let descendants_joined = child.ownership.drain();
+        #[cfg(not(unix))]
+        let descendants_joined = false;
+        #[cfg(unix)]
+        if !descendants_joined {
             if failure_detail.is_none() {
                 failure_detail = failure
                     .as_ref()
@@ -1810,6 +1838,7 @@ fn run_process_inner_with_stdout(
             stderr_complete,
             failure: failure.clone(),
             exit_code: status.and_then(|s| s.code()).unwrap_or(-1),
+            owned_work_joined: child.joined && descendants_joined,
             exit_signal: {
                 #[cfg(unix)]
                 {

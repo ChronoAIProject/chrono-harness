@@ -38,6 +38,9 @@
     ],
     "cache-probe-attempt": [
       ".chrono-harness/state/cache-probes/"
+    ],
+    "cache-plan": [
+      ".chrono-harness/state/"
     ]
   },
   "keep_seconds": 0,
@@ -59,6 +62,12 @@
       "metadata_keep_seconds": 0
     },
     "cache-probe-attempt": {
+      "keep_seconds": 86400,
+      "max_count": 32,
+      "max_bytes": 67108864,
+      "metadata_keep_seconds": 0
+    },
+    "cache-plan": {
       "keep_seconds": 86400,
       "max_count": 32,
       "max_bytes": 67108864,

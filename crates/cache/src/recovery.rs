@@ -72,6 +72,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             .ok_or_else(|| format!("E_CACHE_RECOVERY: missing {key}"))
     };
     let root = fs::canonicalize(required("--host-root")?).map_err(|e| e.to_string())?;
+    let _activity = chrono_harness::retained_artifacts::retention::read_scope(&root)?;
     let config_path = required("--config")?;
     let plan_path = required("--plan")?;
     if !config_path.starts_with(".chrono-harness/")
