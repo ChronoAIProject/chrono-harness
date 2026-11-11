@@ -77,16 +77,15 @@ pub open spec fn registry_selection_object_result<M, R, I>(
 ) -> bool
     where R: Fn(M, &str) -> M, I: Fn(M, &str, &str) -> M,
 {
-    match before {
-        None => after.is_none(),
-        Some(initial) => match after {
-            None => false,
-            Some(normalized) => exists|middle: M, removed: &str, field: &str, value: &str|
+    match (before, after) {
+        (None, None) => true,
+        (Some(initial), Some(normalized)) =>
+            exists|middle: M, removed: &str, field: &str, value: &str|
                 removed@ == "sha256"@ && field@ == "schema"@
                 && value@ == "chrono-registry-selection/v1"@
                 && remove.ensures((initial, removed), middle)
                 && insert.ensures((middle, field, value), normalized),
-        },
+        _ => false,
     }
 }
 
