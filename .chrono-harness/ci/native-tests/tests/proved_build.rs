@@ -270,7 +270,10 @@ fn unrelated_cached_outputs_do_not_consume_the_binary_dependency_bound() {
     f.run().unwrap();
     assert_eq!(fs::read(f.proof()).unwrap(), original);
     assert_eq!(fs::read_to_string(f.root.join("mock.calls")).unwrap(), "1");
-    assert_eq!(fs::read(deps.join("unrelated-4096.d")).unwrap(), b"unrelated");
+    assert_eq!(
+        fs::read(deps.join("unrelated-4096.d")).unwrap(),
+        b"unrelated"
+    );
 }
 
 #[test]
