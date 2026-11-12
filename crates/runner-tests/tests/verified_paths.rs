@@ -306,7 +306,7 @@ fn parent_fixture_append(mut path: Vec<u8>, component: u8) -> (out: Vec<u8>)
     ensures out@ == path@ + seq![component],
 { path.push(component); path }
 
-spec fn parent_fixture_kind(mode: u8, length: int) -> u8 {
+spec fn parent_fixture_kind(mode: u8, length: nat) -> u8 {
     if mode == 0 { 0 }
     else if mode == 1 { if length == 4 { 2 } else { 0 } }
     else if mode == 2 { 1 }
