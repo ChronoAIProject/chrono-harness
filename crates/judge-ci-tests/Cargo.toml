@@ -26,6 +26,11 @@ path = "tests/behavior.rs"
 name = "verified_collection"
 path = "tests/verified_collection.rs"
 
+# 与 runner 及现有 CI／workflow 测试根采用相同开发优化；保留原断言与时限。
+[profile.dev]
+opt-level = 1
+strip = "debuginfo"
+
 [profile.dev.package.sha2]
 opt-level = 3
 

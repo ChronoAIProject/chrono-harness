@@ -1899,7 +1899,21 @@ fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
         (ready, started)
     };
     let run = |args: &[&str]| {
-        let result = h.run(args);
+        // This isolated test exercises concurrent observations in the real
+        // command implementation. Extra CLI launcher processes add no ordering
+        // evidence; the native gh children and their originals remain real.
+        let args = args
+            .iter()
+            .copied()
+            .chain(["--host-root", h.root.path().to_str().unwrap()])
+            .map(std::ffi::OsString::from)
+            .collect::<Vec<_>>();
+        let output = chrono_pr::run(&args);
+        assert!(output.stderr.is_empty(), "{}", output.stderr);
+        let result = (
+            output.exit_code,
+            serde_json::from_str::<Value>(&output.stdout).unwrap(),
+        );
         if let Ok(mut ready) = UnixStream::connect(h.root.path().join("response.sock")) {
             let bytes = serde_json::to_vec(&json!({"completed_before_handshake":result})).unwrap();
             let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
