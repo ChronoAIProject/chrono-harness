@@ -191,11 +191,11 @@ fn no_delta_and_disconnected_docs_only_select_every_delta_judges() {
         assert!(f.is_empty());
         assert!(tests(&i).is_empty());
         assert_eq!(i.judges.len(), 2);
-        assert!(
-            i.judges
-                .iter()
-                .all(|j| j.every_delta && j.triggers.is_empty())
+        assert_eq!(
+            i.judges.iter().map(|j| j.node.as_str()).collect::<Vec<_>>(),
+            ["judge:filemap", "judge:registration"]
         );
+        assert!(i.judges.iter().all(|j| j.triggers.is_empty()));
     }
 }
 #[test]
@@ -401,7 +401,7 @@ fn judge_triggers_add_explanations_once() {
     let (i, f) = run(&a, &a, &[delta("src.bin")]);
     assert!(f.is_empty());
     let j = i.judges.iter().find(|j| j.node == "judge:filemap").unwrap();
-    assert!(j.every_delta);
+    assert!(i.judges.iter().any(|j| j.node == "judge:registration"));
     assert_eq!(j.triggers.len(), 1);
     assert_eq!(i.judges.len(), 2);
 }

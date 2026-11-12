@@ -83,7 +83,7 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<Value, String> {
         return Err("E_BRANCH_CONTEXT: invalid explicit run kind".into());
     }
     let impact = evidence::output(req, "impact")?;
-    if impact["schema"] != "chrono-filemap-impact/v4"
+    if impact["schema"] != "chrono-filemap-impact/v5"
         || impact["delta"] != serde_json::to_value(&req.delta).unwrap()
         || impact["workflow"]["schema"] != "chrono-workflow-selection/v1"
     {
