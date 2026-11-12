@@ -72,6 +72,10 @@ fn expect_cache_true(actual: bool)
 }
 
 #[cfg(not(verus_keep_ghost))]
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod capability;
+
+#[cfg(not(verus_keep_ghost))]
 mod behavior {
     use super::super::*;
 
@@ -919,6 +923,13 @@ mod behavior {
 
     #[test]
     fn recovery_and_seal_keep_probe_custody_until_final_consumer_releases() {
+        // This case asserts immediate last-close retirement. Unrelated libtest
+        // forks must not inherit its short-lived metadata exclusion leases.
+        if !super::capability::isolated_capability_test(
+            "continuity::behavior::recovery_and_seal_keep_probe_custody_until_final_consumer_releases",
+        ) {
+            return;
+        }
         let (root, mut config) = fixture();
         mock_git(root.path());
         config["require_primary_checkout"] = json!(true);
