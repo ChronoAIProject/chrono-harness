@@ -724,6 +724,17 @@ mod behavior {
         };
         let (root, mut config) = fixture();
         let socket_directory = tempfile::tempdir_in("/tmp").unwrap();
+        // Reuse the CLI's bounded adopted log sink for actual phase observations.
+        fs::write(
+            root.path().join(".chrono-harness/logging.json"),
+            serde_json::to_vec(&json!({
+                "schema":"chrono-runtime-logging/v1", "level":"debug",
+                "directory":".chrono-harness/state/cache-stage-logs/",
+                "max_bytes":1048576, "max_files":2, "stderr":false
+            }))
+            .unwrap(),
+        )
+        .unwrap();
         let socket = socket_directory.path().join("ready.sock");
         // Keep the native socket address within sockaddr_un on macOS.
         let listener = UnixListener::bind(&socket).unwrap();
@@ -803,6 +814,18 @@ mod behavior {
             String::from_utf8_lossy(&result.stdout_bytes),
             String::from_utf8_lossy(&result.stderr_bytes),
         );
+        let mut logs = fs::read_dir(root.path().join(".chrono-harness/state/cache-stage-logs"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        logs.sort();
+        for log in logs {
+            eprintln!(
+                "cache live phase log {}: {}",
+                log.display(),
+                String::from_utf8_lossy(&fs::read(&log).unwrap())
+            );
+        }
         assert_eq!(
             signalled, 0,
             "signal: {signal_error:?}; original exit: {}, signal: {:?}, failure: {:?}",
