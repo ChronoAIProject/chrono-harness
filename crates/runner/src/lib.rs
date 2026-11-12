@@ -1304,7 +1304,20 @@ fn run_process_inner_with_stdout(
         None => (None, None),
     };
     let mut result = std::thread::scope(|scope| {
-        let child = match command.spawn() {
+        let launched = {
+            // Rust's macOS pipe setup uses pipe + fcntl rather than pipe2.
+            // Another managed fork in that interval can inherit a sibling's
+            // output writer and hold its EOF until the unrelated child exits.
+            // Serialize only spawn; running children and stream readers remain
+            // independent, including the ownership observer's launch handshake.
+            #[cfg(target_os = "macos")]
+            let _spawn = {
+                static SPAWN: std::sync::Mutex<()> = std::sync::Mutex::new(());
+                SPAWN.lock().unwrap_or_else(|error| error.into_inner())
+            };
+            command.spawn()
+        };
+        let child = match launched {
             Ok(child) => child,
             Err(e) => {
                 drop(stdout_original);
