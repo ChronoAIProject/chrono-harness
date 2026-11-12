@@ -71,6 +71,12 @@ path = "tests/consumer.rs"
 name = "decoder_contract"
 path = "tests/decoder_contract.rs"
 
+[profile.dev]
+opt-level = 1
+strip = "debuginfo"
+debug-assertions = true
+overflow-checks = true
+
 [profile.dev.package.sha2]
 opt-level = 3
 

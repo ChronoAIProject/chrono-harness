@@ -1161,8 +1161,7 @@ fn checkout_migration_rejects_candidate_policy_before_recovering_uses_or_results
         let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
         assert_ne!(code, 0, "{report} {error}");
         assert_eq!(
-            report["error"],
-            "automatic cleanup policy differs from source commit",
+            report["error"], "automatic cleanup policy differs from source commit",
             "{report}"
         );
         assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before);
