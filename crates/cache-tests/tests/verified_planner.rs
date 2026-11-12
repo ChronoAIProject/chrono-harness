@@ -62,6 +62,8 @@ fn successful_restore_needs_a_nonempty_observed_key_and_exact_match_wins() {
     proof {
         reveal_strlit(""); reveal_strlit("key");
         broadcast use vstd::string::is_ascii_spec_bytes;
+        assert("key".spec_bytes().len() == 3);
+        assert("".spec_bytes().len() == 0);
     }
     expect_restore_text(policy::restore_status(Some("success"), Some("key"), None, &[]), "miss-or-unavailable");
     expect_restore_text(policy::restore_status(Some("success"), Some(""), Some(""), &[Some("")]), "miss-or-unavailable");
@@ -103,7 +105,7 @@ fn restore_identity_and_full_prefix_keep_unicode_nul_and_newline() {
         vstd::utf8::encode_utf8_decode_utf8(key@);
         assert(key.spec_bytes().len() > 0) by {
             if key.spec_bytes().len() == 0 {
-                assert(key.spec_bytes() == seq![]);
+                assert(key.spec_bytes() == Seq::<u8>::empty());
                 reveal(vstd::utf8::decode_utf8);
             }
         }
