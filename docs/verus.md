@@ -53,12 +53,16 @@ head→tracked→untracked→index flags 顺序接收实际观察，首个错误
 不同所产生的不等结果。同一预期作为 Rust 行为测试执行，沿用原状态根和整 crate
 操作。FILEMAP 补齐 wire 到实际 runner-tests 的编译和执行边；产品与宿主登记同改。
 
-本项采用固定 Rust／vstd 的 String、Vec 克隆及 Vec 全元素比较，已有 Result 转发、
+克隆保留完整 head、三个向量的元素与顺序，不要求新 Vec 保留原分配身份。
+路径序列比较由 Verus 逐项核完整文本及数量，index flags 沿用固定 vstd 的逐元素比较合同。
+本项采用固定 Rust／vstd 的 String、Vec 克隆，已有 Result 转发、
 Unicode trim 和完整文本复制接口继续逐值转交实际结果。回调不新增仓内准入判断，
 没有仓内函数的 `external_body` 例外。此组装合同保留真实阶段结果，但不证明 Git
 获取、原 UTF-8／库存适配、tracked changes、artifact 排除或 index flags 的全部
 外围实现，也不授予整个 facts／wire 文件证明资格。完整编译／调用绑定、export
 输出事务和全仓覆盖门仍待完成；新增构建、证明、运行、CI 和存储总成本未测。
+比较在首个不同字段或元素停止，额外运行状态为常量；阶段辅助函数只拆分已有顺序，
+不增加 IO、复制或外部接口假设。
 
 `Reader::verify_oid` 的仓内控制流由 `verified_status.rs::verify_oid` 拥有：
 先核完整输入 OID，按顺序观察 commit 与 tree，完整 commit 不匹配时不读 tree，
