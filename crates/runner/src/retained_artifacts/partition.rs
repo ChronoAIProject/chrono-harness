@@ -896,6 +896,11 @@ impl Inventory {
     ) -> Result<Gate, String> {
         self.addressed_gate_scope(ids, paths, roles, birth, maintenance, wait, false)
     }
+    /// Reading or updating one member's own fields preserves its durable
+    /// dependencies; it does not need directory descriptors for their closure.
+    pub(super) fn member_gate(&self, ids: &[String], paths: &[String]) -> Result<Gate, String> {
+        self.addressed_gate_scope(ids, paths, &[], None, false, true, true)
+    }
     pub(super) fn addressed_gate_scope(
         &self,
         ids: &[String],

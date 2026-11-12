@@ -2843,7 +2843,9 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
     );
     limit.rlim_cur = limit.rlim_cur.min(256);
     assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
-    let parent_path = tree(h.path(), "parent-report");
+    let parent_path = ".chrono-harness/state/fixtures/parent-report.json".to_owned();
+    let parent_bytes = b"original parent failure";
+    fs::write(h.path().join(&parent_path), parent_bytes).unwrap();
     let parent = inventory(h.path())
         .begin("fixture", &parent_path, json!(null))
         .unwrap();
@@ -2867,10 +2869,36 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
         .find(|o| o["path"] == parent_path)
         .unwrap();
     assert_eq!(output["references"].as_array().unwrap().len(), 64);
+    // Keep ordinary caller files open too. Reading a report and retaining its
+    // diagnostic only need that member; opening its 64 dependencies would
+    // exhaust this same native budget. These are private Rust-owned files.
+    let held: Vec<_> = (0..190)
+        .map(|_| fs::File::open("/dev/null").unwrap())
+        .collect();
+    parent.complete(json!({"exit": 2})).unwrap();
+    let retained = retained_artifacts::retention::read_guard(h.path(), &parent_path)
+        .unwrap()
+        .unwrap();
+    let consumed = inventory(h.path())
+        .consume(output["id"].as_str().unwrap())
+        .unwrap();
+    assert!(
+        inventory(h.path())
+            .published_original(
+                &parent_path,
+                &chrono_harness::sha256(parent_bytes),
+                parent_bytes.len() as u64,
+            )
+            .unwrap()
+    );
+    inventory(h.path())
+        .retain_diagnostic_path(&parent_path)
+        .unwrap();
+    assert_eq!(fs::read(h.path().join(&parent_path)).unwrap(), parent_bytes);
+    drop((retained, consumed, held));
     inventory(h.path())
         .dependencies_paths(&parent_path, &paths[32..])
         .unwrap();
-    parent.complete(json!({"exit": 2})).unwrap();
     let settled = ledger(h.path());
     let output = settled["outputs"]
         .as_array()

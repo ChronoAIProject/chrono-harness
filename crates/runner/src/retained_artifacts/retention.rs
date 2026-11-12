@@ -1220,7 +1220,7 @@ impl Inventory {
         ))
     }
     fn validate_original_reuse(&self, path: &str) -> Result<Option<String>, String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let l = self.load(&gate)?;
         if let Some(o) = l.outputs.iter().find(|o| o.path == path) {
             if o.phase == "disposing"
@@ -1236,7 +1236,7 @@ impl Inventory {
             .map(|o| o.id.clone()))
     }
     pub fn enrolled(&self, path: &str) -> Result<bool, String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let l = self.load(&gate)?;
         self.stable(&gate)?;
         Ok(l.outputs.iter().any(|o| o.path == path))
@@ -1250,7 +1250,7 @@ impl Inventory {
         digest: &str,
         length: u64,
     ) -> Result<bool, String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let ledger = self.load(&gate)?;
         let published = match ledger.outputs.iter().find(|o| o.path == path) {
             Some(output) if !output.tree && output.phase == "released" => {
@@ -1279,7 +1279,7 @@ impl Inventory {
         if !member.starts_with(&format!("{tree}/")) {
             return Err("original member is outside its declared tree".into());
         }
-        let gate = self.addressed_gate(&[], &[tree.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[tree.into()])?;
         let ledger = self.load(&gate)?;
         let published = match ledger.outputs.iter().find(|o| o.path == tree) {
             Some(output)
@@ -1416,7 +1416,7 @@ impl Inventory {
     /// before completion. Actual caller
     /// and recovery roots remain authoritative and are never released here.
     pub fn retain_diagnostic_path(&self, path: &str) -> Result<(), String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let mut ledger = self.load(&gate)?;
         let output = ledger
             .outputs
@@ -3257,7 +3257,7 @@ impl Inventory {
     }
     /// Actual consumers use a shared capability while reading an original.
     pub fn consume(&self, id: &str) -> Result<Lease, String> {
-        let gate = self.addressed_gate(&[id.into()], &[], &[], None, false, true)?;
+        let gate = self.member_gate(&[id.into()], &[])?;
         let l = self.load(&gate)?;
         let o = l
             .outputs
@@ -3959,7 +3959,7 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let gate = inventory.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+    let gate = inventory.member_gate(&[], &[path.into()])?;
     let l = inventory.load(&gate)?;
     let found = l
         .outputs
