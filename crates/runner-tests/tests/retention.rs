@@ -1147,8 +1147,7 @@ fn unrelated_fork_retains_a_reader_until_exec_closes_its_capability() {
         "the inherited capability must be the recorded protection reason: {protected}"
     );
     assert_eq!(fs::read(h.path().join(path)).unwrap(), [9; 4096]);
-    let retired = maintenance(h.path());
-    assert_eq!(retired["remaining_outputs"], 0, "{retired}");
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["exit"],
         101
