@@ -5220,12 +5220,13 @@ fn several_retirements_count_their_shared_finalized_original_once() {
     let mut rounds = Vec::new();
     let mut removed = 0;
     for _ in 0..4 {
-        let pending: Vec<_> = ids
+        // Deleted bytes can still have a disposing declaration whose
+        // references need another bounded round before retirement completes.
+        let observed: Vec<_> = ids
             .iter()
-            .zip(&paths)
-            .filter(|(_, path)| h.path().join(path).exists())
-            .map(|(id, _)| id.clone())
+            .map(|id| (id.clone(), output_retired(h.path(), id)))
             .collect();
+        let pending = chrono_harness::verified_release::pending_retirements(&observed);
         if pending.is_empty() {
             break;
         }
