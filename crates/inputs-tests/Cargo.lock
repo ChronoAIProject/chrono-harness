@@ -94,6 +94,7 @@ name = "chrono-inputs-tests"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-identifiers",
  "chrono-inputs",
  "chrono-judge-registration",
  "chrono-worktree",
@@ -102,6 +103,7 @@ dependencies = [
  "sha1",
  "sha2",
  "tempfile",
+ "verus_builtin_macros",
 ]
 
 [[package]]

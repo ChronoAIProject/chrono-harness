@@ -91,12 +91,14 @@ name = "chrono-judge-registration-tests"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-identifiers",
  "chrono-judge-registration",
  "serde",
  "serde_json",
  "sha1",
  "sha2",
  "tempfile",
+ "verus_builtin_macros",
 ]
 
 [[package]]

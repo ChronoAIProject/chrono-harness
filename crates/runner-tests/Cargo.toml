@@ -10,6 +10,8 @@ name = "runtime_logging"
 path = "tests/runtime_logging.rs"
 
 [dependencies]
+chrono-identifiers = { path = "../identifiers" }
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 serde = { version = "1", features = ["derive"] }
 sha1 = "0.10"
 serde_json = "1"
@@ -20,7 +22,6 @@ chrono-diagnostics = { path = "../diagnostics" }
 
 [dev-dependencies]
 tempfile = "3"
-verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 
 [[bin]]
 name = "chrono-harness-test-cli"
