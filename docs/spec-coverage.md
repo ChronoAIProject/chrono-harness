@@ -1,5 +1,12 @@
 # SPEC 当前覆盖情况
 
+运行日志 `RuntimeSink` 的双输出写入与独立刷新直接消费同源
+`verified_runtime.rs`。文件失败仍尝试镜像、镜像写入成功才刷新、单错原值／双错
+组合及 flush 首错停止由该根维护；独立 Verus 结果表同时普通运行。
+生产根、预期根和真实消费者测试须由同次 DELTA 核原件验收；仓内错误构造、日志
+政策、滚动文件和完整编译／调用绑定仍未证明，不声明整个 diagnostics 覆盖。
+范围、接口与登记成本见 [Verus 实施范围](verus.md)。
+
 快照导出的预取、blob 选择、逐文件阶段、溢出／容量优先级、symlink 与只读权限顺序
 由同源 `verified_export.rs` 协调，真实 `Reader::export_limited` 直接消费；沿用原状态
 生产根、独立 Verus 预期根和未过滤行为测试。其余 publication／目录 IO 组合、Git 获取及预取内部判断、完整
