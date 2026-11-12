@@ -1042,11 +1042,12 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
             .unwrap()
             .map(|r| r.unwrap().path())
             .find(|p| {
-                p.file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .starts_with("check-")
+                p.extension().is_some_and(|extension| extension == "json")
+                    && p.file_name()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .starts_with("check-")
             })
             .unwrap();
         let parent = fs::read(&report_path).unwrap();
@@ -1061,6 +1062,17 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
             report["managed_process"]["stderr_bytes"],
             value!(b"original warning\n".to_vec())
         );
+        let originals = h
+            .root
+            .join(report["managed_process_original"]["path"].as_str().unwrap());
+        assert_eq!(fs::read(originals.join("stdout")).unwrap(), out.stdout);
+        assert_eq!(
+            fs::read(originals.join("stderr")).unwrap(),
+            b"original warning\n"
+        );
+        let result = json(&fs::read(originals.join("result.json")).unwrap()).unwrap();
+        assert_eq!(result["exit_code"], exit);
+        assert_eq!(result["owned_work_joined"], true);
         assert_eq!(
             report["managed_command_failed"].as_bool().unwrap_or(false),
             exit != 0

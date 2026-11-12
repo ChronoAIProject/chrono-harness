@@ -2065,7 +2065,10 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
     assert_eq!(launch["argv"], value!(result.argv));
     assert_eq!(launch["cwd"], value!(result.cwd));
     assert_eq!(result.cwd, fs::canonicalize(working.path()).unwrap());
-    assert_eq!(result.launch_original.as_ref().unwrap()["path"], "launch.json");
+    assert_eq!(
+        result.launch_original.as_ref().unwrap()["path"],
+        "launch.json"
+    );
     assert_eq!(launch["sha256"], digest);
     assert_eq!(launch["schema"], "chrono-process-launch/v2");
     assert!(launch.get("environment").is_none());

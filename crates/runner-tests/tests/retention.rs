@@ -597,11 +597,13 @@ fn materialized_originals_extend_the_owners_reference_before_content_and_release
         "returning caller still consumes the released original"
     );
     drop(activity);
-    let released = inventory(h.path()).maintain().unwrap();
+    // Disposal can stop at the policy's round limit; the remaining rooted
+    // original must stay protected throughout ordinary continuation rounds.
+    let released = maintain_fixture_to(h.path(), 1);
     assert!(!h.path().join(first).exists(), "{released}");
     assert!(h.path().join(second).is_file());
     inventory(h.path()).reference_paths(role, &[]).unwrap();
-    let unreferenced = inventory(h.path()).maintain().unwrap();
+    let unreferenced = maintain_fixture_to(h.path(), 0);
     assert!(!h.path().join(second).exists(), "{unreferenced}");
 }
 
@@ -695,11 +697,20 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
         };
         let second_path = tree(h.path(), "independent-b");
         let began = std::time::Instant::now();
-        let second = inventory(h.path())
+        let publisher = inventory(h.path());
+        let adopted = began.elapsed();
+        let second = publisher
             .begin("fixture", &second_path, json!(null))
             .unwrap();
+        let reserved = began.elapsed();
         second.complete(json!({"exit": 101})).unwrap();
-        assert!(began.elapsed() < std::time::Duration::from_secs(5));
+        let completed = began.elapsed();
+        assert!(
+            completed < std::time::Duration::from_secs(5),
+            "damaged={damaged}; adopt={adopted:?}; reserve={:?}; complete={:?}; total={completed:?}",
+            reserved - adopted,
+            completed - reserved
+        );
         let round = maintenance(h.path());
         assert!(
             !h.path().join(&second_path).exists(),
