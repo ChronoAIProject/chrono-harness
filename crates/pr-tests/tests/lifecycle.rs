@@ -1261,9 +1261,17 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
             "--host-root".into(),
             h.root.path().to_str().unwrap().into(),
         ],
-        env: [("GH_TOKEN".into(), "fixture-secret-never-retain".into())]
-            .into_iter()
-            .collect(),
+        env: [
+            ("GH_TOKEN".into(), "fixture-secret-never-retain".into()),
+            // Completion must join the original result even when its diagnostic
+            // representation exceeds a native notification socket's capacity.
+            (
+                "CHRONO_TEST_INTERRUPTION_INPUT".into(),
+                "x".repeat(64 * 1024),
+            ),
+        ]
+        .into_iter()
+        .collect(),
         timeout_seconds: 30,
         output_limit_bytes: 1048576,
     };
@@ -1280,15 +1288,14 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
                 &digest,
                 Duration::from_secs(30),
             );
-            // If launch fails before the fixture handshake, wake the same native
-            // channel with the original result rather than hanging the test.
+            // Wake the same native channel if launch fails before the fixture
+            // handshake. Keep the notification bounded: after a real handshake,
+            // this pending connection has no reader while the caller joins us.
+            // The original result is transferred only by that join.
             if let Ok(mut ready) = UnixStream::connect(root.join("ready.sock")) {
-                let bytes = serde_json::to_vec(
-                    &json!({"completed_before_handshake":format!("{result:?}")}),
-                )
-                .unwrap();
+                let bytes = br#"{"completed_before_handshake":true}"#;
                 let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
-                let _ = ready.write_all(&bytes);
+                let _ = ready.write_all(bytes);
             }
             result
         });
@@ -1298,10 +1305,12 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
         let mut bytes = vec![0; u32::from_be_bytes(length) as usize];
         ready.read_exact(&mut bytes).unwrap();
         let message: Value = serde_json::from_slice(&bytes).unwrap();
-        assert!(
-            message.get("completed_before_handshake").is_none(),
-            "{message}"
-        );
+        if message.get("completed_before_handshake").is_some() {
+            panic!(
+                "process completed before handshake: {:?}",
+                task.join().unwrap()
+            );
+        }
         let operation = message["operation"].as_str().unwrap().to_owned();
         let call: Value = serde_json::from_slice(
             &fs::read(root.join(&operation).join("call-1.intent.json")).unwrap(),
