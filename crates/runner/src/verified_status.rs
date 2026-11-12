@@ -169,6 +169,30 @@ pub struct RegistrySnapshot<V> {
     pub selection: Option<V>,
 }
 
+/// 两条真实 registry 组装路径共用的终态：保留完整错误，成功时组合原身份与实际双 map。
+pub fn registry_snapshot_complete<V>(
+    entry_path: String, effective_path: String, selection: Option<V>,
+    documents: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>,
+) -> (out: Result<RegistrySnapshot<V>, String>)
+    ensures match documents {
+        Err(error) => out == Err::<RegistrySnapshot<V>, String>(error),
+        Ok((bytes, values)) => match out {
+            Err(_) => false,
+            Ok(snapshot) => snapshot.bytes@ == bytes@ && snapshot.values@ == values@
+                && snapshot.entry_path == entry_path
+                && snapshot.effective_path == effective_path
+                && snapshot.selection == selection,
+        },
+    },
+{
+    match documents {
+        Err(error) => Err(error),
+        Ok((bytes, values)) => Ok(RegistrySnapshot {
+            bytes, values, entry_path, effective_path, selection,
+        }),
+    }
+}
+
 /// 同路径保留入口文档；不同路径额外保留目标文档，不合并两个文档的身份。
 pub fn registry_snapshot_initial<V>(
     entry_path: String, original: Vec<u8>, config: V,

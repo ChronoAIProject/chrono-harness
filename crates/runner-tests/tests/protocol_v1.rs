@@ -1778,6 +1778,7 @@ fn retained_nested_helper() {
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
+            publication: None,
         },
     )
     .unwrap();
@@ -1812,6 +1813,7 @@ fn retained_launch_publication_failure_preserves_original_process() {
             stdout: &dir.path().join("original.stdout"),
             stderr: &dir.path().join("original.stderr"),
             launch: &launch,
+            publication: None,
         },
     )
     .unwrap();
@@ -1912,6 +1914,7 @@ fn retained_stream_publication_failure_helper() {
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
+            publication: None,
         },
     )
     .unwrap();
@@ -2023,6 +2026,7 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),
+        publication: None,
     };
     let result = chrono_harness::run_process_observed_retained(
         root.path(),
@@ -2109,6 +2113,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,
+            publication: None,
         },
     )
     .unwrap();
@@ -2266,6 +2271,7 @@ fn retained_originals_keep_the_existing_stream_limit_and_failure() {
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),
+        publication: None,
     };
     let result = chrono_harness::run_process_observed_retained(
         root.path(),
@@ -2645,6 +2651,17 @@ fn interrupted_nested_launcher_with_live_child_retains_cleanup_failure() {
         "{p:?}"
     );
     assert!(!d.path().join("escaped").exists());
+    let record = p.failure_record.as_ref().unwrap();
+    assert_eq!(record.error.code, "E_PROCESS_OWNERSHIP_CLEANUP");
+    assert_eq!(record.error.context["child_joined"], true);
+    let observed = &record.error.context["ownership_after_cleanup"];
+    assert_eq!(observed["child_pid"], value!(p.child_pid));
+    assert_eq!(observed["consistency"], "independent atomic reads");
+    assert_eq!(observed["cancelled"], true);
+    assert!(observed["generation"].as_u64().unwrap() > 0);
+    assert!(observed["launches"].as_array().unwrap().iter().any(|slot| {
+        slot["slot"] == observed["slot"] && slot["generation"] == observed["generation"]
+    }));
 }
 
 #[test]
