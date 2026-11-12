@@ -219,11 +219,12 @@ fn base_only_test_edge_preserves_removed_requirement_owner_and_cost() {
         "removed test edge must still require old test"
     );
     assert!(!i.required_tests[0].candidate_present);
-    assert_eq!(
-        i.required_tests[0].base_cost.as_ref().unwrap()["value"]["cpu_ms"],
-        json!(null)
-    );
-    assert!(i.required_tests[0].candidate_cost.is_none());
+    let cost = &i.records["/records/filemap/test_costs/t"];
+    assert_eq!(cost.base.as_ref().unwrap().value["cost"], "unknown");
+    assert!(cost.candidate.is_none());
+    let model = &i.records["/records/filemap/cost_models/unknown"];
+    assert_eq!(model.base.as_ref().unwrap().value["cpu_ms"], json!(null));
+    assert!(model.candidate.is_none());
     let old_file = &i.nodes["file:src.bin"].base_definitions;
     assert_eq!(old_file.len(), 1);
     assert_eq!(old_file[0].value["owner"], "host");
@@ -1087,12 +1088,23 @@ fn changed_cost_keeps_distinct_old_new_values_and_references() {
     let (i, f) = run(&a, &b, &[delta("src.bin"), delta(FM)]);
     assert!(f.is_empty());
     assert_eq!(tests(&i), ["test:t"]);
-    let t = &i.required_tests[0];
-    assert_eq!(t.base_cost.as_ref().unwrap()["reference"], "unknown");
-    assert_eq!(t.base_cost.as_ref().unwrap()["value"]["cpu_ms"], 17);
-    assert_eq!(t.candidate_cost.as_ref().unwrap()["reference"], "new");
+    let cost = &i.records["/records/filemap/test_costs/t"];
+    assert_eq!(cost.base.as_ref().unwrap().value["cost"], "unknown");
     assert_eq!(
-        t.candidate_cost.as_ref().unwrap()["value"]["cpu_ms"],
+        i.records["/records/filemap/cost_models/unknown"]
+            .base
+            .as_ref()
+            .unwrap()
+            .value["cpu_ms"],
+        17
+    );
+    assert_eq!(cost.candidate.as_ref().unwrap().value["cost"], "new");
+    assert_eq!(
+        i.records["/records/filemap/cost_models/new"]
+            .candidate
+            .as_ref()
+            .unwrap()
+            .value["cpu_ms"],
         json!(null)
     );
 }
