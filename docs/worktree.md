@@ -537,21 +537,22 @@ FILEMAP 将其登记为宿主数据；不另建清理程序或后台扫描器。
 | 配置保管 | 实例 plist 位于 main 的 `.chrono-harness/state/`，由本宿主调度保管；当前用户 LaunchAgents 仅保存指向该文件的链接。任务停用并结束、链接移除后，实例即可删除；模板保留在 Git |
 
 安装前，确认 `maintenance_root` 是本仓实际 Git main，现役所有者和政策可用，原手工
-maintain 已收取结果。下面是唯一的本机登记方法；模板路径来自已交付 main，路径通过
+maintain 已收取结果。下面是唯一的本机登记方法；模板从已核实交付的固定提交读取，路径通过
 `plutil` 的字符串参数写入，不能用未转义的文本替换拼 XML。操作只登记当前用户下本仓
 的原生任务，不需要提权。若同名任务、实例或链接已经存在，先核原件和运行身份，再按
 下面的停用流程处理，不能覆盖未知配置。
 
 ```sh
 (
-set -eu
+set -euC
 maintenance_root=/absolute/path/to/git-main
+maintenance_source=FULL_DELIVERED_COMMIT_OID
 maintenance_uid=$(id -u)
 maintenance_plist="$maintenance_root/.chrono-harness/state/org.chrono-harness.maintenance.plist"
 maintenance_link="$HOME/Library/LaunchAgents/org.chrono-harness.maintenance.plist"
 test ! -e "$maintenance_plist" && test ! -L "$maintenance_plist"
 test ! -e "$maintenance_link" && test ! -L "$maintenance_link"
-cp "$maintenance_root/.chrono-harness/maintenance.launchd.plist" "$maintenance_plist"
+git -C "$maintenance_root" show "$maintenance_source:.chrono-harness/maintenance.launchd.plist" > "$maintenance_plist"
 plutil -replace ProgramArguments.0 -string "$maintenance_root/.chrono-harness/bin/chrono-worktree" "$maintenance_plist"
 plutil -replace ProgramArguments.3 -string "$maintenance_root" "$maintenance_plist"
 plutil -replace WorkingDirectory -string "$maintenance_root" "$maintenance_plist"
