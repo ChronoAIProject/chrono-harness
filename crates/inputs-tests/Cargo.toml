@@ -71,6 +71,9 @@ path = "tests/consumer.rs"
 name = "decoder_contract"
 path = "tests/decoder_contract.rs"
 
+[profile.dev]
+opt-level = 1
+
 [profile.dev.package.sha2]
 opt-level = 3
 
