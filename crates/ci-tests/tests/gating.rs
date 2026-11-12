@@ -12,9 +12,6 @@ fn native_job_detail(status: &str, conclusion: Value) -> Value {
 
 #[test]
 fn stale_running_job_list_uses_one_bound_terminal_detail() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     for status in ["queued", "in_progress", "waiting", "pending", "requested"] {
         let listed = native_job_detail(status, Value::Null);
         let completed = native_job_detail("completed", json!("success"));
@@ -32,9 +29,6 @@ fn stale_running_job_list_uses_one_bound_terminal_detail() {
 
 #[test]
 fn terminal_job_lists_keep_their_current_success_or_failure() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     for conclusion in ["success", "failure", "cancelled", "skipped"] {
         let listed = native_job_detail("completed", json!(conclusion));
         let result = chrono_ci::gating::completed_native_job(&listed, |_| {
@@ -68,9 +62,6 @@ fn terminal_job_lists_keep_their_current_success_or_failure() {
 
 #[test]
 fn nonterminal_or_failed_detail_never_becomes_a_pass() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     for (status, conclusion) in [
         ("in_progress", Value::Null),
         ("completed", json!("failure")),
@@ -93,9 +84,6 @@ fn nonterminal_or_failed_detail_never_becomes_a_pass() {
 
 #[test]
 fn job_detail_must_keep_the_selected_identity_and_original_error() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     for field in ["id", "run_id", "run_attempt", "head_sha", "name"] {
         let mut detail = native_job_detail("completed", json!("success"));
         detail[field] = if ["id", "run_id", "run_attempt"].contains(&field) {
