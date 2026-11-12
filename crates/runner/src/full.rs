@@ -1213,36 +1213,6 @@ pub fn prepare_request(
     };
     Ok((req, bindings, reader, cfg.clone()))
 }
-pub fn check_observed(
-    root: &Path,
-    config_path: &str,
-    base: &str,
-    candidate: &str,
-    context: &Path,
-    entry: Value,
-) -> Result<(u8, String), String> {
-    check_observed_scoped(root, config_path, base, candidate, context, entry, None)
-}
-pub fn check_observed_scoped(
-    root: &Path,
-    config_path: &str,
-    base: &str,
-    candidate: &str,
-    context: &Path,
-    entry: Value,
-    scope: Option<crate::units::Scope>,
-) -> Result<(u8, String), String> {
-    check_prepared(
-        root,
-        config_path,
-        base,
-        candidate,
-        context,
-        entry,
-        scope,
-        None,
-    )
-}
 #[allow(clippy::too_many_arguments)]
 pub fn check_prepared(
     root: &Path,
@@ -1723,15 +1693,4 @@ pub fn check_prepared(
         ));
     }
     Ok((status.exit_code() as u8, text))
-}
-
-/// Library callers supply their own observed entry through check_observed for routes validation.
-pub fn check(
-    root: &Path,
-    config_path: &str,
-    base: &str,
-    candidate: &str,
-    context: &Path,
-) -> Result<(u8, String), String> {
-    check_observed(root, config_path, base, candidate, context, Value::Null)
 }
