@@ -2016,9 +2016,17 @@ fn registered_dotted_and_underscore_unit_ids_have_distinct_valid_jobs_and_actual
         .command(&["check", "--unit", "compiler.arm64-1"], &d, &Value::Null)
         .output()
         .unwrap();
+    retain_command_result(
+        &h.host.root,
+        &["check".into(), "--unit".into(), "compiler.arm64-1".into()],
+        &json!({"detection":d,"needs":Value::Null}),
+        &out,
+    );
     assert!(
         out.status.success(),
-        "{}",
+        "status {}; stdout {}; stderr {}",
+        out.status,
+        String::from_utf8_lossy(&out.stdout),
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(!h.host.root.join(".chrono-harness/state/calls-b").exists());
