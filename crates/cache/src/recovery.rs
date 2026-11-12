@@ -196,14 +196,14 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             if matches!(base_action, super::verified_planner::RecoveryAction::Keep)
                 && super::verified_planner::content_verification_applies(content_method, reason)
             {
-                let verification = super::content::verify(
+                let verified = super::content::verify(
                     &root,
                     &directory,
                     id,
                     cache,
                     restore["outputs"]["cache-matched-key"].as_str().unwrap(),
                 )?;
-                verification = Some(verification);
+                verification = Some(verified);
             }
             let content_status = verification
                 .as_ref()
