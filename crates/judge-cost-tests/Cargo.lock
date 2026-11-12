@@ -91,6 +91,7 @@ name = "chrono-judge-cost-tests"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
+ "chrono-identifiers",
  "chrono-judge-cost",
  "chrono-judge-filemap",
  "chrono-judge-registration",
@@ -99,6 +100,7 @@ dependencies = [
  "sha1",
  "sha2",
  "tempfile",
+ "verus_builtin_macros",
 ]
 
 [[package]]

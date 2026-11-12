@@ -75,6 +75,7 @@ version = "0.1.0"
 dependencies = [
  "chrono-diagnostics",
  "chrono-harness",
+ "chrono-identifiers",
  "libc",
  "serde",
  "serde_json",
