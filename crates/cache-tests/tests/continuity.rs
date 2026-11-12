@@ -823,7 +823,7 @@ mod behavior {
             eprintln!(
                 "cache live phase log {}: {}",
                 log.display(),
-                String::from_utf8_lossy(&fs::read(log).unwrap())
+                String::from_utf8_lossy(&fs::read(&log).unwrap())
             );
         }
         assert_eq!(
