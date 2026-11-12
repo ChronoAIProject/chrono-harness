@@ -267,6 +267,7 @@ fn incomplete_execution(delayed_admission: bool) {
                     &input,
                     &digest,
                     &chrono_harness::ProcessEvidence {
+                        root: h.root(),
                         stdout: &stdout,
                         stderr: &stderr,
                         launch: &launch,
@@ -647,6 +648,7 @@ fn execution_diagnostics_debug_process_preserves_context_and_originals() {
                 &input,
                 &digest,
                 &chrono_harness::ProcessEvidence {
+                    root: h.root(),
                     stdout: &stdout,
                     stderr: &stderr,
                     launch: &launch,

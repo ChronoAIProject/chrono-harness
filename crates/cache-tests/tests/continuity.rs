@@ -1139,6 +1139,7 @@ mod behavior {
                     .unwrap()
                     .0,
                 &chrono_harness::ProcessEvidence {
+                    root: root.path(),
                     stdout: &directory.join("stdout"),
                     stderr: &directory.join("stderr"),
                     launch: &launch,
@@ -1202,6 +1203,7 @@ mod behavior {
                 .unwrap()
                 .0,
             &chrono_harness::ProcessEvidence {
+                root: root.path(),
                 stdout: &root.path().join("outside"),
                 stderr: &directory.join("stderr"),
                 launch: &directory.join("launch.json"),

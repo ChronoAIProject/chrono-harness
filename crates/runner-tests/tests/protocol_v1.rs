@@ -1781,6 +1781,7 @@ fn retained_nested_helper() {
         &[],
         &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
         &chrono_harness::ProcessEvidence {
+            root,
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
@@ -1816,6 +1817,7 @@ fn retained_launch_publication_failure_preserves_original_process() {
         &[],
         binding.sha256.as_deref().unwrap(),
         &chrono_harness::ProcessEvidence {
+            root: dir.path(),
             stdout: &dir.path().join("original.stdout"),
             stderr: &dir.path().join("original.stderr"),
             launch: &launch,
@@ -1917,6 +1919,7 @@ fn retained_stream_publication_failure_helper() {
         &[],
         &digest,
         &chrono_harness::ProcessEvidence {
+            root,
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
@@ -2030,6 +2033,7 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
     };
     let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
     let paths = chrono_harness::ProcessEvidence {
+        root: root.path(),
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),
@@ -2119,6 +2123,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
         &[],
         &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
         &chrono_harness::ProcessEvidence {
+            root: root.path(),
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,
@@ -2277,6 +2282,7 @@ fn retained_originals_keep_the_existing_stream_limit_and_failure() {
         output_limit_bytes: 8,
     };
     let paths = chrono_harness::ProcessEvidence {
+        root: root.path(),
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),

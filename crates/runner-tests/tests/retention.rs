@@ -6047,6 +6047,7 @@ fn adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure() {
         b"exact stdin\0",
         &chrono_harness::file_identity(program).unwrap().0,
         &chrono_harness::ProcessEvidence {
+            root: h.path(),
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,

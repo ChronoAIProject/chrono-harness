@@ -232,6 +232,7 @@ impl Operation {
 
     pub(crate) fn evidence(&self) -> ProcessEvidence<'_> {
         ProcessEvidence {
+            root: &self.original.root,
             stdout: &self.streams[0],
             stderr: &self.streams[1],
             launch: &self.streams[2],

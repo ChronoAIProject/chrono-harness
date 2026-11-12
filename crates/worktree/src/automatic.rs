@@ -559,6 +559,107 @@ fn write_bytes_staged(
     }
     Ok(())
 }
+
+/// The lifecycle report owns these live process originals, even when the
+/// command runs in another checkout. The existing engine remains the only wait.
+struct ManagedProcessOriginals {
+    root: PathBuf,
+    directory: PathBuf,
+    publication: Option<chrono_harness::retained_artifacts::retention::Publication>,
+}
+impl ManagedProcessOriginals {
+    fn begin(report: &mut Value) -> Result<Self, String> {
+        let root = PathBuf::from(report["source_root"].as_str().ok_or("managed source root")?);
+        let path = format!(
+            "{}.process",
+            report["report_path"].as_str().ok_or("managed report path")?
+        );
+        let directory = no_symlink_parents(&root, &path)?;
+        let publication = chrono_harness::retained_artifacts::retention::create_adopted(
+            &root,
+            "lifecycle-original",
+            &directory,
+            true,
+            value!({"kind":"managed-process","completion":"not-established"}),
+        )?;
+        report["managed_process_original"] = value!({"path":path,"joined":false});
+        crate::recovery::bind_report_inputs(&root, report)?;
+        Ok(Self { root, directory, publication })
+    }
+
+    fn run(
+        self,
+        target: &Path,
+        command: &CommandSpec,
+        report: &mut Value,
+    ) -> Result<chrono_harness::ProcessResult, String> {
+        let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
+        let intent = value!({"schema":"chrono-worktree-managed-process-intent/v1",
+            "cwd":target,"program":command.program,"argv":command.args,
+            "environment_sha256":chrono_harness::wire::digest(&command.env)?,
+            "executable_sha256":digest,"stdin_sha256":sha256(&[]),
+            "timeout_seconds":command.timeout_seconds,"output_limit_bytes":command.output_limit_bytes,
+            "report_path":report["report_path"],"launch":"launch.json",
+            "stdout":"stdout","stderr":"stderr","result":"result.json",
+            "wait":"original runner native join; absent result remains unknown"});
+        self.record("intent.json", &intent)?;
+        let paths = ["stdout", "stderr", "launch.json"].map(|name| self.directory.join(name));
+        let process = chrono_harness::prepared::process_identities(
+            chrono_harness::run_process_observed_retained(
+                target,
+                command,
+                &[],
+                &digest,
+                &chrono_harness::ProcessEvidence {
+                    root: &self.root,
+                    stdout: &paths[0],
+                    stderr: &paths[1],
+                    launch: &paths[2],
+                    publication: self.publication.as_ref(),
+                },
+            )?,
+        );
+        // Preserve the returned result before any fallible validation or handoff.
+        report["managed_process"] = chrono_harness::full::compact_process(&value!(&process))?;
+        report["managed_process"]["environment_representation"] = value!("sha256");
+        let mut receipt = value!(&process);
+        for field in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
+            receipt.as_object_mut().unwrap().remove(field);
+        }
+        receipt["environment_representation"] = value!("sha256");
+        receipt["stdout_original"] = value!({"path":"stdout","sha256":process.stdout_sha256,"length":process.stdout_bytes.len()});
+        receipt["stderr_original"] = value!({"path":"stderr","sha256":process.stderr_sha256,"length":process.stderr_bytes.len()});
+        self.record("result.json", &receipt)?;
+        chrono_harness::validate_launch_evidence(&paths[2], &process)?;
+        for (path, expected, length) in [
+            (&paths[0], &process.stdout_sha256, process.stdout_bytes.len()),
+            (&paths[1], &process.stderr_sha256, process.stderr_bytes.len()),
+        ] {
+            let (actual, actual_length) = chrono_harness::file_identity(path)?;
+            if actual != *expected || actual_length != length as u64 {
+                return Err("managed process stream differs from returned original".into());
+            }
+        }
+        if let Some(publication) = self.publication {
+            publication.complete(value!({"kind":"managed-process","owned_work_joined":process.owned_work_joined,
+                "exit_code":process.exit_code,"exit_signal":process.exit_signal}))?;
+        }
+        report["managed_process_original"]["joined"] = value!(process.owned_work_joined);
+        Ok(process)
+    }
+
+    fn record(&self, name: &str, value: &Value) -> Result<(), String> {
+        chrono_harness::retained_artifacts::retention::write_adopted(
+            self.publication.as_ref(),
+            &self.directory.join(name),
+            &serde_json::to_vec(value).map_err(|e| e.to_string())?,
+        )?;
+        fs::File::open(&self.directory)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|e| e.to_string())
+    }
+}
+
 fn load_policy(
     r: &mut Runner,
     root: &Path,
