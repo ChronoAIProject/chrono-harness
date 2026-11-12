@@ -150,7 +150,7 @@ fn registry_snapshot_with_target<F>(
 where
     F: FnMut(&str) -> Result<Vec<u8>, String>,
 {
-    let (mut snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
+    let (snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
     let pending = crate::verified_status::pending_registry_paths(
         paths,
         &snapshot.entry_path,
@@ -167,10 +167,12 @@ where
         },
         json,
     );
-    let (bytes, values) = result?;
-    snapshot.bytes = bytes;
-    snapshot.values = values;
-    Ok(snapshot)
+    crate::verified_status::registry_snapshot_complete(
+        snapshot.entry_path,
+        snapshot.effective_path,
+        snapshot.selection,
+        result,
+    )
 }
 /// Resolve the entry and selector before acquiring their explicit registry list.
 /// The reader must return the requested paths in order with their original bytes.
@@ -185,7 +187,7 @@ fn registry_snapshot_with_batches_target(
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
     mut read: impl FnMut(&[String]) -> Result<Vec<(String, Vec<u8>)>, String>,
 ) -> Result<RegistrySnapshot, String> {
-    let (mut snapshot, paths) = registry_snapshot_start(path, target, |path| {
+    let (snapshot, paths) = registry_snapshot_start(path, target, |path| {
         let originals = read(&[path.to_owned()])?;
         crate::verified_status::single_registry_blob(path, originals)
     })?;
@@ -195,16 +197,19 @@ fn registry_snapshot_with_batches_target(
         &snapshot.effective_path,
     );
     let originals = read(&pending)?;
-    let (bytes, values) = crate::verified_status::registry_parse_batch(
+    let result = crate::verified_status::registry_parse_batch(
         &pending,
         originals,
         snapshot.bytes,
         snapshot.values,
         json,
-    )?;
-    snapshot.bytes = bytes;
-    snapshot.values = values;
-    Ok(snapshot)
+    );
+    crate::verified_status::registry_snapshot_complete(
+        snapshot.entry_path,
+        snapshot.effective_path,
+        snapshot.selection,
+        result,
+    )
 }
 fn registry_snapshot_start(
     path: &str,
@@ -248,23 +253,32 @@ pub fn registry_identity(
 
 impl Reader {
     pub fn verify_oid(&self, root: &Path, oid: &str) -> Result<String, String> {
-        full_oid(oid)?;
-        if utf8(self.git(
-            root,
-            &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
-        )?)?
-        .trim()
-            != oid
-        {
-            return Err("OID is not a commit".into());
-        }
-        let tree = utf8(self.git(root, &["rev-parse", &format!("{oid}^{{tree}}")])?)?
-            .trim()
-            .to_string();
-        if full_oid(&tree).is_ok() {
-            self.record_verified_oid(oid);
-        }
-        Ok(tree)
+        crate::verified_status::verify_oid(
+            self,
+            oid,
+            |reader, oid| {
+                let observed = reader
+                    .git(
+                        root,
+                        &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
+                    )
+                    .and_then(utf8)
+                    .map(|text| text.trim().to_owned());
+                (reader, observed)
+            },
+            |reader, oid| {
+                let observed = reader
+                    .git(root, &["rev-parse", &format!("{oid}^{{tree}}")])
+                    .and_then(utf8)
+                    .map(|text| text.trim().to_owned());
+                (reader, observed)
+            },
+            |reader, oid| {
+                reader.record_verified_oid(oid);
+                reader
+            },
+        )
+        .1
     }
     pub fn blob(&self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
         relative_path(path)?;
