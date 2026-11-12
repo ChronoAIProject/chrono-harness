@@ -1,5 +1,23 @@
 # Verus 实施范围
 
+diagnostics 的 `verified_error.rs` 维护实际 `Failure` 的完整字段元组：
+初始化保留原节点并建立空原因／关联表，设置原因时保留节点与原关联表，追加时
+保留原节点、原因、全部关联值及原顺序，再精确追加本次完整角色和错误。
+`Failure::new`、`wrap` 和 `with_related` 直接搬入、取回这些真实 owned 字段；
+原 `Failure` 结构、Debug 和动态错误类型保留，不增容器或额外分配。
+独立 Verus 预期核节点／错误的完整多字段载荷、零／最大值、已有原因替换、
+重复／空角色和多次追加，同一驱动沿原未过滤 diagnostics 测试运行。
+
+明确使用固定 Rust 的元组搬运、`Box::new` 的类型擦除和标准 `Vec`／`String`
+操作接口；真实适配器不把仓内错误生产者登记成外部接口。`ErrorNode` 构造、
+context 维护、`RecordedError` 投影、`ReceivedError` 递归及 IO 错误分类仍待证明，
+不授予外围 `error.rs` 整文件证明资格。
+
+**产品与宿主登记同时修改：**沿用固定 Verus／宏和原 diagnostics 单元入口，
+新增生产与独立预期两项整 crate 操作及显式源关系，顺序消费重叠的 state 输出。
+原行为测试、断言、线程和预算保留；构建、证明、CI 与存储的完整新增成本未知。
+实际验收须核固定候选的证明和真实调用原件，不能据登记或局部通过宣称全仓完成。
+
 diagnostics 的 `verified_runtime.rs` 拥有实际 `RuntimeSink` 的双输出控制。
 `write_mirrors` 先调用文件写入，再调用已配置镜像；文件失败不跳过镜像。
 镜像使用 `write_and_flush`，写入失败不刷新。全部成功才返回原字节数，单错原样

@@ -323,7 +323,17 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         .0;
     std::thread::scope(|scope| {
         let worker = scope.spawn(|| {
-            chrono_harness::run_process_observed(directory.path(), &spec, &[], &digest).unwrap()
+            let result =
+                chrono_harness::run_process_observed(directory.path(), &spec, &[], &digest);
+            // The controller may already be unwinding from a missing arrival.
+            // Publish the actual joined result before its scoped worker exits.
+            // libtest displays this capture on failure. A watchdog can also
+            // send SIGKILL, so the signal alone cannot select diagnostics.
+            eprintln!(
+                "interruption driver joined: {}",
+                json!({"plan": plan, "command": spec, "result": result})
+            );
+            result.unwrap()
         });
         let (event, held) = arrival(&listener);
         let event: serde_json::Value = serde_json::from_str(&event).unwrap();
@@ -667,11 +677,15 @@ fn arrival(listener: &std::net::TcpListener) -> (String, std::net::TcpStream) {
         events: libc::POLLIN,
         revents: 0,
     };
+    let polled = unsafe { libc::poll(&mut ready, 1, 6000) };
+    let failure = if polled < 0 {
+        std::io::Error::last_os_error().to_string()
+    } else {
+        format!("poll returned {polled}, revents {}", ready.revents)
+    };
     assert_eq!(
-        unsafe { libc::poll(&mut ready, 1, 6000) },
-        1,
-        "no registered process reached rendezvous: {}",
-        std::io::Error::last_os_error()
+        polled, 1,
+        "no registered process reached rendezvous: {failure}"
     );
     assert_ne!(ready.revents & libc::POLLIN, 0);
     let (mut s, _) = listener.accept().unwrap();

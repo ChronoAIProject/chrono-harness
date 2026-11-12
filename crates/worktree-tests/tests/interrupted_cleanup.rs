@@ -2177,6 +2177,26 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     let h = Host::new("payload");
     super::check_inputs::bind(&h);
     h.kernel_cleanup();
+    // Keep the original process timeline when this bounded participation or
+    // concurrent maintenance fails; the fixture's existing diagnostic owner
+    // retains state, including these finite native runtime logs.
+    let logging = ".chrono-harness/logging.json";
+    fs::write(
+        h.root.join(logging),
+        serde_json::to_vec(&value!({
+            "schema":"chrono-runtime-logging/v1", "level":"debug",
+            "directory":".chrono-harness/state/check-logs/",
+            "max_bytes":4194304, "max_files":2, "stderr":false,
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let mut filemap = json(&fs::read(h.root.join(FM)).unwrap()).unwrap();
+    filemap["files"]
+        .as_array_mut()
+        .unwrap()
+        .push(file(logging, value!([])));
+    fs::write(h.root.join(FM), serde_json::to_vec(&filemap).unwrap()).unwrap();
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     let trace = std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").map(PathBuf::from);
     if let Some(path) = &trace {
