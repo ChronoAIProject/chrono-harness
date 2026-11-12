@@ -1778,6 +1778,7 @@ fn retained_nested_helper() {
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
+            publication: None,
         },
     )
     .unwrap();
@@ -1812,6 +1813,7 @@ fn retained_launch_publication_failure_preserves_original_process() {
             stdout: &dir.path().join("original.stdout"),
             stderr: &dir.path().join("original.stderr"),
             launch: &launch,
+            publication: None,
         },
     )
     .unwrap();
@@ -1912,6 +1914,7 @@ fn retained_stream_publication_failure_helper() {
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
+            publication: None,
         },
     )
     .unwrap();
@@ -2023,6 +2026,7 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),
+        publication: None,
     };
     let result = chrono_harness::run_process_observed_retained(
         root.path(),
@@ -2109,6 +2113,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,
+            publication: None,
         },
     )
     .unwrap();
@@ -2266,6 +2271,7 @@ fn retained_originals_keep_the_existing_stream_limit_and_failure() {
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),
+        publication: None,
     };
     let result = chrono_harness::run_process_observed_retained(
         root.path(),
