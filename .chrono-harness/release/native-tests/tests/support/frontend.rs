@@ -30,22 +30,24 @@ impl Fixture {
             .unwrap();
         let tools = host.root().join("tools");
         fs::create_dir(&tools).unwrap();
-        for name in ["git", "probe", "tar", "mv"] {
-            fs::hard_link(
-                env!("CARGO_BIN_EXE_chrono-test-release-tool"),
-                tools.join(name),
-            )
-            .unwrap();
+        for (name, executable) in [
+            (
+                "git",
+                env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
+            ),
+            (
+                "probe",
+                env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
+            ),
+            ("tar", env!("CARGO_BIN_EXE_chrono-test-release-tool")),
+            ("mv", env!("CARGO_BIN_EXE_chrono-test-release-tool")),
+        ] {
+            fs::hard_link(executable, tools.join(name)).unwrap();
         }
         host.config["tools"]["git"] = json!(tools.join("git"));
         host.config["tools"]["probe"] = json!(tools.join("probe"));
         host.save();
         let root = host.root();
-        fs::write(
-            root.join(".gitignore"),
-            "/.chrono-harness/bin/\n/.chrono-harness/state/\n/frontend/\n/handoffs/\n/consumer/\n",
-        )
-        .unwrap();
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
         let binary = root.join(".chrono-harness/bin/chrono-host-release");
         // 测试父进程并发 fork 时，其他子进程可能短暂继承写描述符。

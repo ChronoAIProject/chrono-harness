@@ -1,4 +1,4 @@
-//! 发布测试的真实外部工具接口；业务判定在独立 Rust 测试中。
+//! 发布测试的通用命令替身；高频 frontend Git／探针另由轻量替身负责。
 #[path = "context.rs"]
 mod context;
 use serde_json::Value;
@@ -17,51 +17,8 @@ fn run() -> Result<u8, String> {
         .file_name()
         .and_then(|s| s.to_str())
         .ok_or("missing tool fixture name")?;
-    // frontend 专属边界：不调用真实 Git、tar、mv 或业务探针。
+    // frontend 的归档边界：不调用系统 tar 或 mv。
     match name {
-        "git" => {
-            let args = args
-                .strip_prefix(&["--no-optional-locks".into(), "--no-replace-objects".into()])
-                .unwrap_or(&args);
-            let args = args.iter().map(String::as_str).collect::<Vec<_>>();
-            match args.as_slice() {
-                ["rev-parse", "--show-toplevel", "--verify", "HEAD"] => {
-                    println!(
-                        "{}\n{}",
-                        std::env::current_dir()
-                            .map_err(|e| e.to_string())?
-                            .display(),
-                        "a".repeat(40)
-                    );
-                }
-                ["rev-parse", "--verify", "HEAD" | "HEAD^{tree}"]
-                | ["rev-parse", "HEAD" | "HEAD^{tree}"]
-                | [
-                    "rev-parse",
-                    "--verify",
-                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{tree}",
-                ] => {
-                    println!(
-                        "{}",
-                        if args.last().unwrap().ends_with("^{tree}") {
-                            "b"
-                        } else {
-                            "a"
-                        }
-                        .repeat(40)
-                    );
-                }
-                ["status", "--porcelain", "--untracked-files=normal"]
-                | [
-                    "status",
-                    "--porcelain=v1",
-                    "--untracked-files=normal",
-                    "--ignore-submodules=none",
-                ] => {}
-                _ => return Err(format!("unexpected frontend Git invocation: {args:?}")),
-            }
-            return Ok(0);
-        }
         "tar" => {
             let [flag, archive, cd, directory, member] = args.as_slice() else {
                 return Err(format!("unexpected frontend tar invocation: {args:?}"));
@@ -88,13 +45,6 @@ fn run() -> Result<u8, String> {
                 return Err(format!("changed frontend mv invocation: {args:?}"));
             }
             fs::rename(source, destination).map_err(|e| e.to_string())?;
-            return Ok(0);
-        }
-        "probe"
-            if args == ["verify none", "space value", "$literal", "λ"]
-                && !Path::new(".chrono-harness/release/tool-fixture.json").exists() =>
-        {
-            println!("original literal verifier passed");
             return Ok(0);
         }
         _ => {}
