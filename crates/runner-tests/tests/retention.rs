@@ -1238,7 +1238,7 @@ fn released_manifest_overflow_makes_bounded_progress_without_policy_growth() {
                     .unwrap_or(64 * 1024 * 1024)
         );
         removed += round["removed_logical_bytes"].as_u64().unwrap();
-        if round["remaining_outputs"] == 0 {
+        if round["remaining_outputs"] == 0 && round["remaining_capability_retirements"] == 0 {
             break;
         }
     }
