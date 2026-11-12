@@ -14,6 +14,7 @@ pub struct Config {
     pub workflow_id: u64,
     pub workflow_path: String,
     pub branch: String,
+    pub stable_branch: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -52,6 +53,8 @@ impl Config {
             || !self.workflow_path.starts_with(".github/workflows/")
             || !self.workflow_path.ends_with(".yml")
             || self.branch.is_empty()
+            || !name(&self.stable_branch)
+            || self.stable_branch == self.branch
         {
             return Err(error("invalid repository or landing workflow declaration"));
         }
@@ -173,6 +176,35 @@ pub fn verify_ci(
         ));
     }
     Ok(run)
+}
+
+fn verify_stable_branch(
+    config: &Config,
+    identity: &Identity,
+    commands: &mut impl Commands,
+) -> Result<Value, String> {
+    let reference = api(
+        commands,
+        "GET",
+        format!(
+            "repos/{}/git/ref/heads/{}",
+            config.repository, config.stable_branch
+        ),
+        None,
+        false,
+    )?
+    .ok_or_else(|| error("missing stable branch"))?;
+    if !policy::text_fields(&[
+        (
+            reference["ref"].as_str(),
+            &format!("refs/heads/{}", config.stable_branch),
+        ),
+        (reference["object"]["type"].as_str(), "commit"),
+        (reference["object"]["sha"].as_str(), &identity.source_commit),
+    ]) {
+        return Err(error("stable branch does not point at this fixed source"));
+    }
+    Ok(reference)
 }
 
 fn release_header(release: &Value, identity: &Identity) -> Result<u64, String> {
@@ -333,6 +365,11 @@ pub fn publish(
         }
     }
     let ci = verify_ci(config, identity, commands)?;
+    let release_branch = if identity.channel == Channel::Stable {
+        verify_stable_branch(config, identity, commands)?
+    } else {
+        Value::Null
+    };
     let endpoint = format!(
         "repos/{}/releases/tags/{}",
         config.repository, identity.version
@@ -394,5 +431,5 @@ pub fn publish(
         return Err(error("public release verification failed"));
     }
     verify_tag(config, identity, commands, false)?;
-    Ok(json!({"release":observed,"verified_ci":ci,"assets":assets}))
+    Ok(json!({"release":observed,"verified_ci":ci,"release_branch":release_branch,"assets":assets}))
 }

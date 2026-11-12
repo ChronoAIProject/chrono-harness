@@ -25,6 +25,9 @@ use crate::verified_paths as paths;
 #[path = "verified_scope.rs"]
 pub mod scopes;
 
+#[path = "verified_export.rs"]
+pub mod snapshot_export;
+
 verus! {
 
 /// Only the synchronous owner releases a local directory operation on return.

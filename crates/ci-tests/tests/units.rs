@@ -525,6 +525,13 @@ fn gather_host_config_and_retention(
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
     if let Some(policy) = retention {
+        // Keep the existing judge's phase and operation events in its original
+        // stderr when this fixture exercises retained publication boundaries.
+        let path = ".chrono-harness/ci/check.json";
+        let mut profile: Value =
+            serde_json::from_slice(&fs::read(root.join(path)).unwrap()).unwrap();
+        profile["policy"]["execution_diagnostics"] = json!("chrono-log-stderr/v1");
+        json_file(root, path, &profile);
         json_file(root, ".chrono-harness/retention.json", &policy);
         let path = ".chrono-harness/FILEMAP.json";
         let mut filemap: Value =

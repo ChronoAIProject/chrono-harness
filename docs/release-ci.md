@@ -124,7 +124,7 @@ Rust `test.host-release-native-tests` 运行全部发布行为测试。真实 di
 
 发布行为测试在创建临时宿主的 CLI／launcher 子进程时，统一移除外层发布的十个控制变量及四个 GitHub 工作流变量，再显式设置该样本的运行、依赖等输入。否则真实 preview 的源码 SHA 或工作流上下文会污染临时仓库，触发正确的身份拒绝。普通 CI 中的 Rust 命令替身回归模拟 build／preview／stable 父环境，核对清除继承值、保留显式输入与其他环境；它不调用 Git 或编译器，也不代替两平台原始未过滤测试与公开发布验收。
 
-frontend 专属用例的 Git 和探针在命令边界使用 Rust 替身，拒绝非预期参数；Git 复用 runner 的共享对象／索引模型，不初始化真实 Git 仓库。执行用输入硬链接已完成编译且不被测试改写的程序，内容变异样本独立解包，避免测试父进程把可执行 inode 的写描述符带入并发子进程。launcher 边界由 Rust 替身核原薄脚本摘要、唯一归档成员及字面参数，在独立进程中恢复执行权限并转交所有权描述符后 exec；测试不执行 shell、系统 tar 或 mv。真实薄脚本、系统归档和发布程序执行须由两平台生产入口验收。启动前保存意图，启动失败保存原错误和系统错误码，不能伪造子进程退出或输出。原断言、默认线程、未过滤操作和期限不变；该准备方式排除一类写入者竞争，不声称已定位旧 `ETXTBSY` 的具体描述符持有者。探针复用只依赖标准库的命令上下文模块 `context.rs`，Git 由共享模型维护源码身份，launcher 替身继续复用 `release_tool.rs`；不把进程引擎等大依赖带入反复核验的探针执行物。此前大型替身导致 Linux 样本单元原 30 秒时间窗耗尽，须沿原输入和期限验证替换结果，不修改开发配置。
+frontend 专属用例的 Git 和探针在命令边界复用只依赖标准库的 `context.rs`，严格核只读源码查询和探针参数；固定源码样本由替身返回，不初始化仓库。需要对象、索引和源码变更的 execution／staging 用例继续使用 runner 的共享 Git 模型。执行用输入硬链接已完成编译且不被测试改写的程序，内容变异样本独立解包，避免测试父进程把可执行 inode 的写描述符带入并发子进程。launcher 边界由 Rust 替身核原薄脚本摘要、唯一归档成员及字面参数，在独立进程中恢复执行权限并转交所有权描述符后 exec；测试不执行 shell、系统 tar 或 mv。真实薄脚本、系统归档和发布程序执行须由两平台生产入口验收。启动前保存意图，启动失败保存原错误和系统错误码，不能伪造子进程退出或输出。原断言、默认线程、未过滤操作和期限不变；该准备方式排除一类写入者竞争，不声称已定位旧 `ETXTBSY` 的具体描述符持有者。launcher 替身继续复用 `release_tool.rs`。此前 Linux 原件中的 Git 模型执行物为 46,686,040 字节，标准库替身为 4,658,392 字节，两个 frontend 样本耗尽原 30 秒时限；替换复用现有只读接口，去掉该样本不消费的对象／索引准备，不修改开发配置。字节数来自运行 43193884495 的失败原件，最终耗时和两平台发布效果仍须实际验收。
 
 发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。Git 按所选政策一次解析并固定本轮实际身份；显式配置版本或摘要预期时，不符仍在执行前拒绝。运行读数归 state／线上原件，候选是否可用仍须实际验证。
 
@@ -161,6 +161,8 @@ Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，�
 本批同时修改产品程序和宿主政策：`chrono-ci` 投影触发、固定检出和作业权限；Rust 发布程序负责版本、原件和 GitHub 状态；宿主的 [delivery.json](../.chrono-harness/release/delivery.json) 选择仓库、落地工作流 ID／路径／分支、平台包目录、frontend 和实际工具。新增一个发布作业，复用两平台 collector 与 Linux frontend；测试版与 build 通道的构建及测试保持原命令和时限。新增 IO、作业和存储的总成本未知。
 
 v2 可选 `delivery` 明确登记 `workflow`、`branch` 和 `publisher`。它与直接 push 触发互斥。所有作业检出原完成事件的 `head_sha`；只有发布作业取得 `contents: write` 和 `actions: read`，并接收当前 token。其余作业维持只读。手动输入 `channel` 可为 build、preview 或 stable；公开渠道还须提供固定 `source`、`verified_run` 和 `verified_attempt`。stable 另需匹配源码计划的 `version`，以及最终测试版的 `preview_run`／`preview_attempt`，依上文晋升合同消费已验收原件。
+
+**发布程序与宿主政策同时修改：**宿主 `delivery.json` 的 `publication.branch` 选择测试版原 CI 分支 `dev`，必需字段 `publication.stable_branch` 选择正式版分支 `main`，两者须不同。正式版在任何 Release 写入前，经现有 GitHub 命令边界读取实际分支引用，核 `ref`、commit 类型及完整源码 OID，并在发布结果保留原 `release_branch`；缺失、不符或 API 失败均停止。测试版继续只核 dev 原 CI。晋升与正式版安装合同归[发布迭代](release-iteration.md#推进正式版分支)。验证增加 Rust 命令 mock 的成功、拒绝与测试版隔离回归，复用现有发布测试和 canonical 检查；每次正式发布增加一个只读 API 请求，完整验证与维护成本未测。
 
 GitHub 的执行工作流由派发的 `--ref` 决定，`source` 只决定各作业检出的源码。派发前核两个固定修订的发布源、needs／downloads 与构建配方是否匹配；手动正式发布统一用已核验的最终测试版标签作为 `--ref`，标签须解析到完整 source，新 run 的工作流 head 也须一致。不要移动标签。自动 `workflow_run` 使用默认分支的工作流，列表 head 与发行源码可能不同；仅看到 head 不同不能判失败，但实际执行图与候选合同不符时，不能宣称该运行验收了候选。
 

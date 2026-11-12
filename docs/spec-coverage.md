@@ -1,5 +1,11 @@
 # SPEC 当前覆盖情况
 
+快照导出的预取、blob 选择、逐文件阶段、溢出／容量优先级、symlink 与只读权限顺序
+由同源 `verified_export.rs` 协调，真实 `Reader::export_limited` 直接消费；沿用原状态
+生产根、独立 Verus 预期根和未过滤行为测试。路径检查、Git 获取及预取内部判断、完整
+编译／调用对应和全仓覆盖门仍须各自证明与验收，不将整个 facts 文件列为已证明。
+范围、外部接口和额外借用库存成本见 [Verus 实施范围](verus.md)。
+
 projects 原件状态由 `verified_state.rs` 与独立 Verus 预期负责：
 终态／未知状态、完整汇总、原件身份和解除保护条件接入真实 `state.rs` 调用。
 正式整 crate 证明、独立预期与真实消费者行为由同次 DELTA 验收；外围原件发布事务和完整执行器

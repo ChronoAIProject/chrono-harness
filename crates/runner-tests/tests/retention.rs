@@ -532,6 +532,11 @@ fn live_publication_accepts_exact_caller_without_leaving_a_durable_root() {
 
 #[test]
 fn materialized_originals_extend_the_owners_reference_before_content_and_release_by_scope() {
+    if !isolated_capability_test(
+        "materialized_originals_extend_the_owners_reference_before_content_and_release_by_scope",
+    ) {
+        return;
+    }
     let h = host(256, 16);
     let role = "fixture-domain:address";
     let first = ".chrono-harness/state/fixtures/first";
@@ -592,12 +597,12 @@ fn materialized_originals_extend_the_owners_reference_before_content_and_release
         "returning caller still consumes the released original"
     );
     drop(activity);
-    inventory(h.path()).maintain().unwrap();
-    assert!(!h.path().join(first).exists());
+    let released = inventory(h.path()).maintain().unwrap();
+    assert!(!h.path().join(first).exists(), "{released}");
     assert!(h.path().join(second).is_file());
     inventory(h.path()).reference_paths(role, &[]).unwrap();
-    inventory(h.path()).maintain().unwrap();
-    assert!(!h.path().join(second).exists());
+    let unreferenced = inventory(h.path()).maintain().unwrap();
+    assert!(!h.path().join(second).exists(), "{unreferenced}");
 }
 
 #[test]
@@ -4067,16 +4072,7 @@ fn explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound()
     for (n, p) in live.into_iter().enumerate() {
         p.complete(json!({"exit":n})).unwrap();
     }
-    let mut remaining = 8;
-    for _ in 0..8 {
-        let round = maintenance(h.path());
-        assert!(round["nodes"].as_u64().unwrap() <= 256);
-        remaining = fixture_remaining(h.path(), &round).as_u64().unwrap();
-        if remaining == 0 {
-            break;
-        }
-    }
-    assert_eq!(remaining, 0);
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert_eq!(ledger(h.path())["summaries"].as_array().unwrap().len(), 9);
 }
 #[test]
@@ -5655,7 +5651,7 @@ fn producer_consumer_retains_interrupted_capture_and_releases_only_accounted_suc
     );
     let release = consumer_release(h.path(), &declaration, "released");
     assert_eq!(consumer_call(h.path(), release).exit_code, 0);
-    maintenance(h.path());
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!h.path().join(path).exists());
     let next = h
         .path()
@@ -5675,7 +5671,7 @@ fn producer_consumer_retains_interrupted_capture_and_releases_only_accounted_suc
     p.write_file(&next.join("stdout"), b"success").unwrap();
     p.complete_releasing_consumer(json!({"exit":0}), &consumer)
         .unwrap();
-    maintenance(h.path());
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!next.exists());
     assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
 }

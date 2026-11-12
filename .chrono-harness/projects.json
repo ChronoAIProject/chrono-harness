@@ -441,6 +441,19 @@
             "crates/runner-tests/Cargo.toml"
           ]
         },
+        "clean_output": {
+          "operation": "clean.runner-tests-output",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--package",
+            "chrono-harness-tests",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--target-dir",
+            "crates/runner-tests/target"
+          ]
+        },
         "update_lockfile": {
           "operation": "lock.runner-tests",
           "tool": "cargo",

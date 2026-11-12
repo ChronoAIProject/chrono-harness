@@ -139,14 +139,6 @@ pub fn registry_documents(r: &Registrations) -> Documents {
     out
 }
 /// Fixed-object reader shared by the mixed and FILEMAP process boundaries.
-pub fn load_documents(
-    req: &Request,
-    a: &Registrations,
-    b: &Registrations,
-) -> Result<[Documents; 2], String> {
-    let reader = facts::Reader::for_request(req)?;
-    load_documents_with_reader(req, a, b, &reader)
-}
 pub fn load_documents_with_reader(
     req: &Request,
     a: &Registrations,
