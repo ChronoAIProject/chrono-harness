@@ -159,7 +159,7 @@ fn typed_content_mode_binary_add_modify_delete_and_rename() {
     let (i, f) = run(&a, &n, &d);
     assert!(f.is_empty());
     assert_eq!(tests(&i), ["test:t"]);
-    assert!(i.nodes["file:src.bin"].candidate.is_none());
+    assert!(i.nodes["file:src.bin"].candidate_definitions.is_empty());
 }
 #[test]
 fn nonancestor_and_multicommit_facts_use_complete_endpoints() {
@@ -224,10 +224,9 @@ fn base_only_test_edge_preserves_removed_requirement_owner_and_cost() {
         json!(null)
     );
     assert!(i.required_tests[0].candidate_cost.is_none());
-    assert_eq!(
-        i.nodes["file:src.bin"].base.as_ref().unwrap()["owner"],
-        "host"
-    );
+    let old_file = &i.nodes["file:src.bin"].base_definitions;
+    assert_eq!(old_file.len(), 1);
+    assert_eq!(old_file[0].value["owner"], "host");
     assert!(i.records["/records/projects/owners/host"].base.is_some());
     assert!(i.edges.iter().all(|e| e.origin == Origin::Base));
     witnesses(
