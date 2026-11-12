@@ -25,7 +25,17 @@ use crate::verified_paths as paths;
 #[path = "verified_scope.rs"]
 pub mod scopes;
 
+#[path = "verified_export.rs"]
+pub mod snapshot_export;
+
 verus! {
+
+/// Only the synchronous owner releases a local directory operation on return.
+pub fn release_local_directory(local: bool, owner_pid: u32, current_pid: u32) -> (out: bool)
+    ensures out == (local && owner_pid == current_pid),
+{
+    local && owner_pid == current_pid
+}
 
 pub open spec fn oid_text_result(value: Result<String, String>) -> Result<Seq<char>, Seq<char>> {
     match value { Ok(text) => Ok(text@), Err(error) => Err(error@) }

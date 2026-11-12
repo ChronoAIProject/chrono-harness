@@ -36,8 +36,16 @@ fn main() -> ExitCode {
         eprintln!("construction entrypoint unavailable");
         return ExitCode::from(42);
     }
-    let mut child = Command::new("/bin/sh");
-    child.args(&args);
+    // The registered producer is a pure exec adapter; bind its exact bytes
+    // and exercise the real Rust producer with the original descriptors.
+    assert_eq!(
+        std::fs::read(root.join(&args[0])).unwrap(),
+        include_bytes!("../../../../.chrono-harness/ci/native-tests/tests/support/producer.sh")
+    );
+    let mut child = Command::new(
+        std::env::var_os("CHRONO_TEST_BOOTSTRAP_PRODUCER").expect("explicit Rust producer"),
+    );
+    child.args(&args[1..]);
     chrono_harness::process_fds::forward_command(&mut child, &[]).unwrap();
     let status = child.status().unwrap();
     ExitCode::from(u8::try_from(status.code().unwrap_or(1)).unwrap_or(1))

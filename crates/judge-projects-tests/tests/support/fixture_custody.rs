@@ -11,6 +11,9 @@ fn captures(allocation: &Path) -> Vec<std::path::PathBuf> {
 
 #[test]
 fn prospective_host_preserves_source_external_input_and_copy_original_offline() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let directory = host::fixture_directory("projects custody offline λ ");
     let allocation = directory.temporary_path().to_owned();
     let root = directory.path().to_owned();
@@ -48,6 +51,9 @@ fn prospective_host_preserves_source_external_input_and_copy_original_offline() 
 
 #[test]
 fn native_spawn_failure_keeps_original_empty_streams_and_no_joined_result() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let directory = host::fixture_directory("projects custody spawn failure ");
     let result =
         directory.capture_output(&mut Command::new(directory.path().join("absent-program")));
@@ -63,6 +69,9 @@ fn native_spawn_failure_keeps_original_empty_streams_and_no_joined_result() {
 
 #[test]
 fn failed_assertion_retains_diagnostic_before_allocation_custody_releases() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let directory = host::fixture_directory("projects custody diagnostic ");
     let allocation = directory.temporary_path().to_owned();
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(move || {

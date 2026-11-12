@@ -122,7 +122,7 @@ pub fn produce(
 }
 /// Known interpreted registries for declaration-only consumers. Other named JSON
 /// must be supplied explicitly; absence is an error when a pattern consumes it.
-pub fn registry_documents(r: &Registrations, _config_path: &str) -> Documents {
+pub fn registry_documents(r: &Registrations) -> Documents {
     let mut out = BTreeMap::from([(r.effective_config_path().into(), r.config().clone())]);
     out.insert(r.entry_path().into(), r.entry().clone());
     for (key, value) in [
@@ -228,7 +228,7 @@ fn documents(
 fn evaluate(req: &Request, reader: &facts::Reader) -> Result<(Value, String), String> {
     req.validate()?;
     let (base, candidate, _) = chrono_judge_registration::views_with_reader(req, reader)?;
-    if req.impact["schema"] != "chrono-filemap-impact/v4" {
+    if req.impact["schema"] != "chrono-filemap-impact/v5" {
         return Err("E_IMPACT: unsupported schema".into());
     }
     let delta: Vec<Delta> = serde_json::from_value(req.impact["delta"].clone())

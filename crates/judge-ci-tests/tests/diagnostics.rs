@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::collections::BTreeMap;
 use std::io::{BufRead, Read, Write};
@@ -68,6 +70,9 @@ fn event<'a>(rows: &'a [Value], name: &str) -> &'a Value {
 
 #[test]
 fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host(None);
     let req = request(&h);
     let assert_result = std::panic::catch_unwind(|| {
@@ -146,11 +151,17 @@ fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
 
 #[test]
 fn execution_diagnostics_incomplete_check_retains_live_producer_events() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     incomplete_execution(false);
 }
 
 #[test]
 fn execution_diagnostics_delayed_admission_does_not_consume_interruption_window() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     incomplete_execution(true);
 }
 
@@ -505,6 +516,9 @@ fn incomplete_execution(delayed_admission: bool) {
 #[test]
 #[cfg(unix)]
 fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host(Some("success".into()));
     h.change_registry(CONFIG, |v| {
         v["policy"]["tools"] = json!({"fixture":OPERATION_TOOL});
@@ -569,6 +583,9 @@ fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects
 
 #[test]
 fn execution_diagnostics_prepared_consumer_validates_request_and_uses_registered_execution() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host(Some("success".into()));
     let req = request(&h);
     let prepared = chrono_judge_ci::prepare_execution(&req).unwrap();
@@ -591,6 +608,9 @@ fn execution_diagnostics_prepared_consumer_validates_request_and_uses_registered
 
 #[test]
 fn execution_diagnostics_debug_process_preserves_context_and_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_diagnostics::logging::{Level, Logger};
     for (argument, exit) in [("success", 0), ("failure", 7)] {
         let h = Host::new();
@@ -716,6 +736,9 @@ fn execution_diagnostics_debug_process_preserves_context_and_originals() {
 
 #[test]
 fn execution_diagnostics_success_and_unselected_sink_preserve_verdicts() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     struct Reject;
     impl Write for Reject {
         fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {
@@ -768,6 +791,9 @@ fn execution_diagnostics_success_and_unselected_sink_preserve_verdicts() {
 
 #[test]
 fn execution_diagnostics_sink_failure_retains_business_failure() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     struct Reject;
     impl Write for Reject {
         fn write(&mut self, _: &[u8]) -> std::io::Result<usize> {

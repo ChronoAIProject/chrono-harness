@@ -27,7 +27,6 @@ fn report(a: &Values, b: &Values, paths: &[&str]) -> (Value, Vec<chrono_harness:
     let (impact, findings) = produce(
         &load(a),
         &load(b),
-        CONFIG,
         &paths.iter().map(|p| delta(p)).collect::<Vec<_>>(),
     );
     (serde_json::to_value(impact).unwrap(), findings)
@@ -182,7 +181,7 @@ fn new_and_deleted_rule_paths_can_trigger_suites_at_the_other_endpoint() {
             d.new_blob = None;
             d.new_mode = None;
         }
-        let (impact, errors) = produce(&load(&a), &load(&b), CONFIG, &[d]);
+        let (impact, errors) = produce(&load(&a), &load(&b), &[d]);
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(impact.tests, vec!["test:t"]);
         assert_eq!(impact.required_tests[0].execution_edges.len(), 1);

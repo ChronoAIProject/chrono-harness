@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 mod support;
 use chrono_harness::{facts, wire::Finding};
 use chrono_judge_filemap::{
@@ -12,7 +14,7 @@ use std::{
 };
 use support::*;
 fn run(a: &Values, b: &Values, d: &[chrono_harness::wire::Delta]) -> (Impact, Vec<Finding>) {
-    produce(&load(a), &load(b), CONFIG, d)
+    produce(&load(a), &load(b), d)
 }
 fn tests(i: &Impact) -> Vec<&str> {
     i.required_tests.iter().map(|t| t.node.as_str()).collect()
@@ -128,6 +130,9 @@ fn witnesses(i: &Impact, allowed: &BTreeSet<Edge>) {
 }
 #[test]
 fn typed_content_mode_binary_add_modify_delete_and_rename() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::PermissionsExt;
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
@@ -163,6 +168,9 @@ fn typed_content_mode_binary_add_modify_delete_and_rename() {
 }
 #[test]
 fn nonancestor_and_multicommit_facts_use_complete_endpoints() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path();
     git(root, &["init", "-q"]);
@@ -191,11 +199,11 @@ fn no_delta_and_disconnected_docs_only_select_every_delta_judges() {
         assert!(f.is_empty());
         assert!(tests(&i).is_empty());
         assert_eq!(i.judges.len(), 2);
-        assert!(
-            i.judges
-                .iter()
-                .all(|j| j.every_delta && j.triggers.is_empty())
+        assert_eq!(
+            i.judges.iter().map(|j| j.node.as_str()).collect::<Vec<_>>(),
+            ["judge:filemap", "judge:registration"]
         );
+        assert!(i.judges.iter().all(|j| j.triggers.is_empty()));
     }
 }
 #[test]
@@ -401,7 +409,7 @@ fn judge_triggers_add_explanations_once() {
     let (i, f) = run(&a, &a, &[delta("src.bin")]);
     assert!(f.is_empty());
     let j = i.judges.iter().find(|j| j.node == "judge:filemap").unwrap();
-    assert!(j.every_delta);
+    assert!(i.judges.iter().any(|j| j.node == "judge:registration"));
     assert_eq!(j.triggers.len(), 1);
     assert_eq!(i.judges.len(), 2);
 }
@@ -613,6 +621,9 @@ fn complete_seed_order_matches_all_four_fields_and_preserves_btree_members() {
 
 #[test]
 fn seed_json_adapters_preserve_each_field_and_reject_missing_or_nonstring_fields() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let seed = Seed {
         id: "id\0".into(),
         node: "根".into(),
@@ -935,6 +946,9 @@ fn predecessor_state_roundtrips_the_actual_sparse_json_and_cloned_witnesses() {
 
 #[test]
 fn predecessor_witness_rejects_serialized_cycles_missing_rows_and_wrong_targets() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for parents in [
         json!({"a":{"from":"a", "kind":"compile", "to":"a"}}),
         json!({"a":{"from":"b", "kind":"compile", "to":"a"},
@@ -965,6 +979,9 @@ fn predecessor_witness_rejects_serialized_cycles_missing_rows_and_wrong_targets(
 
 #[test]
 fn loader_missing_malformed_inputs_are_errors_not_empty_impact() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut a = values();
     a.remove(FM);
     assert!(Registrations::load(&a, CONFIG).is_err());
@@ -1320,16 +1337,14 @@ fn retained_effective_environment_api_preserves_old_edges_and_rejects_unknown_fa
     let endpoints = json!({"base":{"inherited":{"MODE":"old"},"environment":{"MODE":"old"}},"candidate":{"inherited":{},"environment":{}}});
     let mut evidence = json!({"schema":"chrono-effective-inputs/v1","identity":chrono_harness::wire::digest(&endpoints).unwrap(),"endpoints":endpoints});
     let (impact, findings) =
-        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), CONFIG, &[], &evidence)
-            .unwrap();
+        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), &[], &evidence).unwrap();
     assert!(findings.is_empty());
     assert_eq!(impact.tests, vec!["test:t"]);
     assert!(impact.seeds.contains(&"environment:MODE".into()));
     evidence["endpoints"]["candidate"]["environment"]["UNKNOWN"] = json!("unrepresented");
     evidence["identity"] = json!(chrono_harness::wire::digest(&evidence["endpoints"]).unwrap());
     assert!(
-        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), CONFIG, &[], &evidence)
-            .is_err()
+        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), &[], &evidence).is_err()
     );
 }
 

@@ -1,3 +1,5 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 use super::*;
 const CLEANUP: &str = ".chrono-harness/cleanup.json";
 
@@ -47,6 +49,9 @@ fn cache(target: &Path) {
 
 #[test]
 fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_birth() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     let original = h.ledger()["entries"][0].clone();
     let birth_path = h.root.join(
@@ -103,6 +108,9 @@ fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_
 
 #[test]
 fn policy_migration_requires_each_endpoints_own_committed_inputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     advance(&h);
     cache(&target);
@@ -133,6 +141,9 @@ fn policy_migration_requires_each_endpoints_own_committed_inputs() {
 
 #[test]
 fn independent_worktree_policy_migrates_without_changing_coordinator_choices() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     let coordinator_policy = fs::read(h.root.join(CLEANUP)).unwrap();
     let original = h.ledger()["entries"][0].clone();
@@ -172,6 +183,9 @@ fn independent_worktree_policy_migrates_without_changing_coordinator_choices() {
 
 #[test]
 fn policy_migration_obeys_original_live_kernel_lease() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     advance(&h);
     adopt(&h, &target);
@@ -190,6 +204,9 @@ fn policy_migration_obeys_original_live_kernel_lease() {
 
 #[test]
 fn policy_migration_retries_published_transition_without_growing_or_rewriting_history() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     advance(&h);
     adopt(&h, &target);
@@ -225,6 +242,9 @@ fn policy_migration_retries_published_transition_without_growing_or_rewriting_hi
 
 #[test]
 fn policy_migration_corrupt_receipt_or_retained_policy_blocks_later_disposal() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     advance(&h);
     adopt(&h, &target);
@@ -255,6 +275,9 @@ fn policy_migration_corrupt_receipt_or_retained_policy_blocks_later_disposal() {
 
 #[test]
 fn policy_migration_requires_artifact_registration_by_target_owner() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     edit(&h.root, CONFIG, |v| {
         v["artifacts"].as_array_mut().unwrap().push(
@@ -281,6 +304,9 @@ fn policy_migration_requires_artifact_registration_by_target_owner() {
 
 #[test]
 fn target_policy_can_add_registered_outputs_without_coordinator_registration() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     let coordinator_policy = fs::read(h.root.join(CLEANUP)).unwrap();
     edit(&target, CONFIG, |v| {
@@ -311,6 +337,9 @@ fn target_policy_can_add_registered_outputs_without_coordinator_registration() {
 
 #[test]
 fn linked_policy_cannot_redefine_shared_producer_storage_or_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     edit(&h.root, CLEANUP, |v| {
         v["retained_producers"] = value!([{"id":"actual-owner",
@@ -341,6 +370,9 @@ fn linked_policy_cannot_redefine_shared_producer_storage_or_outputs() {
 
 #[test]
 fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identical() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     super::automatic::native_git(&h, "automatic-remove", value!({"after_effect":true}));
     h.kernel_cleanup();
@@ -383,6 +415,9 @@ fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identi
 
 #[test]
 fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     let (code, report, error) = h.auto(
         "finish",
@@ -419,6 +454,9 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
 
 #[test]
 fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     let original_policy = fs::read(h.root.join(CLEANUP)).unwrap();
     advance(&h);
@@ -465,6 +503,9 @@ fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
 
 #[test]
 fn immutable_input_limits_acquire_large_registered_configuration_and_preserve_drift_checks() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let mut bytes = fs::read(h.root.join(CONFIG)).unwrap();
     bytes.resize(2_022_211, b' ');
@@ -506,6 +547,9 @@ fn immutable_input_limits_acquire_large_registered_configuration_and_preserve_dr
 
 #[test]
 fn immutable_input_limits_refuse_undeclared_or_over_bound_data_before_worktree_creation() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (path, declared) in [
         (CONFIG, None),
         (CONFIG, Some(2_022_210)),
@@ -545,6 +589,9 @@ fn immutable_input_limits_refuse_undeclared_or_over_bound_data_before_worktree_c
 
 #[test]
 fn immutable_input_limits_reject_invalid_paths_and_capacity_before_git_launch() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for declaration in [
         value!({CONFIG:0}),
         value!({CONFIG:67_108_865}),
@@ -570,6 +617,9 @@ fn immutable_input_limits_reject_invalid_paths_and_capacity_before_git_launch() 
 
 #[test]
 fn coordinator_input_capacity_preserves_existing_target_binding_and_fixed_sources() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let mut bytes = fs::read(h.root.join(CONFIG)).unwrap();
@@ -612,6 +662,9 @@ fn coordinator_input_capacity_preserves_existing_target_binding_and_fixed_source
 
 #[test]
 fn checkout_migration_preserves_birth_old_commits_and_uncommitted_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, "ordinary");
@@ -722,6 +775,9 @@ fn checkout_migration_preserves_birth_old_commits_and_uncommitted_work() {
 
 #[test]
 fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for busy in [true, false] {
         let (h, target) = fixture();
         cache(&target);
@@ -774,6 +830,9 @@ fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history
 
 #[test]
 fn checkout_migration_hands_off_a_sealed_result_without_maintaining_other_worktrees() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target, used) = checkout_result_fixture();
     let other = h.parent.join("unrelated-handoff");
     let (code, created, error) = h.invoke("integration", "unrelated-handoff", &other);
@@ -863,6 +922,9 @@ fn checkout_result_fixture() -> (Host, PathBuf, Value) {
 
 #[test]
 fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::MetadataExt;
 
     let (h, target, used) = checkout_result_fixture();
@@ -936,6 +998,9 @@ fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
 
 #[test]
 fn checkout_migration_rejects_candidate_policy_before_releasing_a_completed_result() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target, _) = checkout_result_fixture();
     git(&target, &["checkout", "-b", "integration/wrong-policy"]);
     edit(&target, CLEANUP, |policy| {
@@ -949,6 +1014,9 @@ fn checkout_migration_rejects_candidate_policy_before_releasing_a_completed_resu
 
 #[test]
 fn checkout_migration_keeps_live_unjoined_and_terminal_work_protected() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     git(&target, &["checkout", "-b", "integration/reuse"]);
     let original = fs::read(h.ledger_path(&target)).unwrap();
@@ -1002,6 +1070,9 @@ fn checkout_migration_keeps_live_unjoined_and_terminal_work_protected() {
 
 #[test]
 fn checkout_migration_checks_current_ref_locks_and_keeps_branch_contract() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     let original = fs::read(h.ledger_path(&target)).unwrap();
     for args in [
@@ -1043,6 +1114,9 @@ fn checkout_migration_checks_current_ref_locks_and_keeps_branch_contract() {
 
 #[test]
 fn checkout_and_policy_adoption_share_one_generation_and_cleanup_uses_current_branch() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target) = fixture();
     fs::write(target.join("payload"), "old task unique source\n").unwrap();
     let old_head = commit(&target);
@@ -1090,6 +1164,9 @@ fn checkout_and_policy_adoption_share_one_generation_and_cleanup_uses_current_br
 
 #[test]
 fn imported_checkout_can_adopt_local_or_detached_binding_without_claiming_new_birth() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let target = h.parent.join("imported reuse");

@@ -140,12 +140,7 @@ fn actual_cache_plan_recover_staging_and_consumer_preserve_the_outer_transport_i
     cache_process(
         root,
         &mut index,
-        &chrono_harness::resolve_program(
-            &repository,
-            config["tools"]["git"].as_str().unwrap(),
-            None,
-        )
-        .unwrap(),
+        Path::new(env!("CARGO_BIN_EXE_chrono-test-release-git")),
         &["init", "-q", "."],
         None,
     );

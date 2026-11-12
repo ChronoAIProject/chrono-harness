@@ -1,3 +1,6 @@
+mod cargo_model;
+#[path = "../../../runner-tests/tests/support/git_model.rs"]
+mod git_model;
 use std::{
     fs,
     io::{self, Write},
@@ -49,7 +52,14 @@ fn main() -> ExitCode {
         }
         _ => (),
     }
-    let mode = std::env::args().nth(1).expect("consumer mode");
+    let arguments: Vec<_> = std::env::args().skip(1).collect();
+    let mode = arguments.first().expect("consumer mode");
+    if mode == "--cargo-model" {
+        return cargo_model::dispatch(&arguments[1..]);
+    }
+    if mode == "--native-holder" {
+        return cargo_model::dispatch(&arguments);
+    }
     match mode.as_str() {
         "--version" => println!("fixture"),
         "noop" => (),
@@ -96,9 +106,13 @@ fn main() -> ExitCode {
         "output-branch" => {
             fs::create_dir_all("output λ").unwrap();
             fs::write("output λ/use", "managed-output").unwrap();
-            let mut git = Command::new("git");
-            git.args(["symbolic-ref", "--short", "HEAD"]);
-            exec(git);
+            let bytes = git_model::run(
+                std::env::current_dir().unwrap(),
+                &["symbolic-ref".into(), "--short".into(), "HEAD".into()],
+                &[],
+            )
+            .unwrap();
+            io::stdout().write_all(&bytes).unwrap();
         }
         "rebuild" | "rebuild-evidence" | "rebuild-error" => {
             fs::create_dir_all("output λ").unwrap();
@@ -162,10 +176,10 @@ fn main() -> ExitCode {
         "cargo-prepare" | "cargo-run" => {
             let root = std::env::current_dir().unwrap();
             let fixture = Path::new(STATE).join("cargo-case");
-            let mut cargo = Command::new("cargo");
-            // This fixture owns one native library test. Compile/list/run that
-            // target without starting unrelated library or documentation builds.
-            // Keep compiler and linker stages in the original bounded stderr.
+            let mut cargo = Command::new(std::env::current_exe().unwrap());
+            cargo.arg("--cargo-model");
+            // Keep the original Cargo argv at an explicit mock boundary; the
+            // holder is a real Rust child and still owns its original leases.
             cargo.args(["test", "--lib", "--offline", "--verbose", "--manifest-path"]);
             cargo.env("RUSTC_LOG", "rustc_codegen_ssa::back::link=info");
             cargo.arg(fixture.join("Cargo.toml"));
@@ -262,7 +276,8 @@ fn main() -> ExitCode {
                     .zip(plan["operations"].as_array().unwrap())
                 {
                     let began = std::time::Instant::now();
-                    let mut cargo = Command::new("cargo");
+                    let mut cargo = Command::new(std::env::current_exe().unwrap());
+                    cargo.arg("--cargo-model");
                     cargo.env_remove("CARGO_TARGET_DIR").args([
                         operation.as_str().unwrap(),
                         "--locked",
@@ -274,10 +289,7 @@ fn main() -> ExitCode {
                     observations.push(serde_json::json!({"pass":pass,"manifest":manifest,"elapsed_seconds":began.elapsed().as_secs_f64(),"exit":output.status.code()}));
                     io::stdout().write_all(&output.stdout).unwrap();
                     io::stderr().write_all(&output.stderr).unwrap();
-                    assert!(
-                        output.status.success(),
-                        "actual independent Cargo project failed"
-                    );
+                    assert!(output.status.success(), "registered Cargo mock failed");
                 }
             }
             mark(

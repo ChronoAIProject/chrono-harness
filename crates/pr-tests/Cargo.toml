@@ -7,10 +7,10 @@ autotests = false
 
 [dependencies]
 chrono-pr = { path = "../pr" }
+chrono-harness = { path = "../runner" }
 serde_json = "1"
 
 [dev-dependencies]
-chrono-harness = { path = "../runner" }
 tempfile = "3"
 libc = "0.2"
 

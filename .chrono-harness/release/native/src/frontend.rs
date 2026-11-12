@@ -95,6 +95,10 @@ fn actual(path: &Path) -> Result<ExecutableIdentity, String> {
     transport::observe(parent, name)
 }
 
+fn same_content(actual: &ExecutableIdentity, expected: &ExecutableIdentity) -> bool {
+    policy::same_content(&actual.sha256, actual.size, &expected.sha256, expected.size)
+}
+
 fn same(actual: &ExecutableIdentity, expected: &ExecutableIdentity) -> bool {
     policy::same_executable(
         &actual.sha256,
@@ -133,7 +137,10 @@ pub fn export(root: &Path, output: &Path, environment: &Environment) -> Result<(
         .ok_or("missing bootstrap report path")?;
     let raw = profile::read(&root, report_path, b".chrono-harness/state/")?;
     let identity = transport::observe(&root, INSTALLED)?;
-    if !same(
+    // Cargo may execute the freshly built frontend with a different mode from
+    // the bootstrap installation. The installed identity remains the source
+    // for archive and consumer mode checks below.
+    if !same_content(
         &actual(&std::env::current_exe().map_err(error)?)?,
         &identity,
     ) {

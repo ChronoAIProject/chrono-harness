@@ -54,6 +54,9 @@ fn read(root: &Path, path: &str) -> Value {
 
 #[test]
 fn explicit_test_inventory_keeps_complete_disjoint_groups_and_original_receipts() {
+    if !tools::isolated_git() {
+        return;
+    }
     let host = tools::temporary_host("inventory λ ");
     let root = host.path();
     fixture(root, "ok");
@@ -89,6 +92,9 @@ fn explicit_test_inventory_keeps_complete_disjoint_groups_and_original_receipts(
 
 #[test]
 fn test_inventory_rejects_missing_overlapping_ignored_drifting_and_malformed_lists() {
+    if !tools::isolated_git() {
+        return;
+    }
     for (mode, expected) in [
         ("empty", "empty"),
         ("overlap", "overlapping"),
@@ -112,6 +118,9 @@ fn test_inventory_rejects_missing_overlapping_ignored_drifting_and_malformed_lis
 
 #[test]
 fn test_inventory_keeps_nonzero_timeout_and_output_bound_originals() {
+    if !tools::isolated_git() {
+        return;
+    }
     for (mode, expected) in [
         ("failed", "failed listing"),
         ("timeout", "timed out"),

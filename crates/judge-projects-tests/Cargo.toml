@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+sha1 = "0.10"
 chrono-diagnostics = { path = "../diagnostics" }
 chrono-harness = { path = "../runner" }
 chrono-judge-projects = { path = "../judge-projects" }
@@ -39,7 +40,7 @@ bench = false
 [dev-dependencies]
 libc = "0.2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
-chrono-worktree = { path = "../worktree" }
+chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 tempfile = "3"
@@ -51,6 +52,18 @@ opt-level = 3
 # Registry custody belongs to chrono-worktree; use its production dev optimization.
 [profile.dev.package.chrono-worktree]
 opt-level = 1
+
+[[bin]]
+name = "chrono-test-git-model"
+path = "../runner-tests/tests/support/git_model.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-cargo-model"
+path = "../worktree-tests/tests/support/cargo_model.rs"
+test = false
+bench = false
 
 [[bin]]
 name = "chrono-harness-test-cli"

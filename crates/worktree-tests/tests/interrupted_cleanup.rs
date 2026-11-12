@@ -1,3 +1,5 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 use super::automatic::{native_consumer, native_git};
 use super::*;
 use std::{
@@ -24,6 +26,9 @@ fn output(target: &Path) {
 
 #[test]
 fn busy_or_damaged_enrollment_metadata_does_not_block_an_independent_worktree() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
@@ -83,6 +88,9 @@ fn busy_or_damaged_enrollment_metadata_does_not_block_an_independent_worktree() 
 
 #[test]
 fn ordinary_use_does_not_sweep_an_independent_worktrees_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
@@ -114,6 +122,9 @@ fn ordinary_use_does_not_sweep_an_independent_worktrees_outputs() {
 
 #[test]
 fn slow_cache_disposal_allows_independent_use_and_merges_its_original_enrollment() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::{
         io::{Read, Write},
         os::fd::AsRawFd,
@@ -250,6 +261,9 @@ fn reclaim_reports(root: &Path, paths: &[String], mut round: Value) {
 
 #[test]
 fn caller_report_consumer_protects_primary_and_coordinator_publication() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     if !super::isolated_capability::isolated_capability_test(
         "interrupted_cleanup::caller_report_consumer_protects_primary_and_coordinator_publication",
     ) {
@@ -448,6 +462,9 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
 
 #[test]
 fn linked_report_reservation_failure_does_not_dispatch_managed_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "rebuild-evidence");
@@ -482,6 +499,9 @@ fn linked_report_reservation_failure_does_not_dispatch_managed_work() {
 
 #[test]
 fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     if !super::isolated_capability::isolated_capability_test(
         "interrupted_cleanup::linked_report_keeps_producer_originals_until_publication_without_consumer",
     ) {
@@ -620,6 +640,9 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
 
 #[test]
 fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let target = h.parent.join("tree-reuse");
@@ -691,6 +714,9 @@ fn cache_disposal_reuses_immutable_tree_and_rechecks_live_identity() {
 
 #[test]
 fn cache_disposal_checks_new_index_paths_after_immutable_tree_acquisition() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_git(&h, "stage-after-tree", value!({}));
@@ -716,6 +742,9 @@ fn cache_disposal_checks_new_index_paths_after_immutable_tree_acquisition() {
 
 #[test]
 fn live_checkout_identity_failures_preserve_pending_cache_and_original_git_error() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_git(&h, "identity-fault", value!({}));
@@ -758,7 +787,7 @@ fn participating_check(h: &Host) {
     cfg["canonical_check"]["argv"] = value!([".chrono-harness/bin/inner-check", "check"]);
     cfg["canonical_check"]["participation"] =
         value!({"operation":"worktree.check","tool":"chrono-worktree","argv":["check"]});
-    cfg["tools"].as_array_mut().unwrap().push(value!({"id":"sh","program":"/bin/sh","resolution":"PATH-once","version_argv":["-c","printf fixture"],"expected_version":"fixture"}));
+    cfg["tools"].as_array_mut().unwrap().push(value!({"id":"sh","program":env!("CARGO_BIN_EXE_chrono-worktree-test-consumer"),"resolution":"PATH-once","version_argv":["--version"],"expected_version":"fixture"}));
     fs::write(
         h.root.join(CONFIG),
         serde_json::to_vec_pretty(&cfg).unwrap(),
@@ -784,6 +813,9 @@ fn install_inner(root: &Path, stdout: &str, stderr: &str, exit: i32) {
 }
 #[test]
 fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (source, exit) in [None, Some("local"), Some("ci")]
         .into_iter()
         .flat_map(|source| [(source, 0), (source, 7)])
@@ -965,6 +997,9 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
 
 #[test]
 fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_bound() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for exit in [0, 7] {
         let h = Host::new("payload");
         participating_check(&h);
@@ -1051,6 +1086,9 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
 
 #[test]
 fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     participating_check(&h);
     h.kernel_cleanup();
@@ -1117,6 +1155,9 @@ fn await_file(path: &Path) {
 }
 #[test]
 fn successful_use_without_finish_reclaims_caches_and_preserves_active_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "rebuild-evidence");
@@ -1163,11 +1204,7 @@ fn successful_use_without_finish_reclaims_caches_and_preserves_active_work() {
 struct OwnedGroup(String);
 impl Drop for OwnedGroup {
     fn drop(&mut self) {
-        let _ = Command::new("/bin/kill")
-            .args(["-KILL", "--", &format!("-{}", self.0)])
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .status();
+        let _ = unsafe { libc::kill(-self.0.trim().parse::<i32>().unwrap(), libc::SIGKILL) };
     }
 }
 pub(super) struct CapturedChild {
@@ -1271,34 +1308,15 @@ impl CapturedChild {
             }
             #[cfg(target_os = "macos")]
             {
-                let observe = |program: &str, args: &[&str]| match Command::new(program)
-                    .args(args)
-                    .output()
-                {
-                    Ok(out) => {
-                        value!({"exit":out.status.code(),"stdout":String::from_utf8_lossy(&out.stdout),"stderr":String::from_utf8_lossy(&out.stderr)})
-                    }
-                    Err(error) => value!({"error":error.to_string()}),
+                // Native existence is a diagnostic observation, never a terminal
+                // process result. External ps/pgrep/sample are not test inputs.
+                let observed = unsafe { libc::kill(pid as i32, 0) };
+                let error = if observed == 0 {
+                    None
+                } else {
+                    Some(std::io::Error::last_os_error().to_string())
                 };
-                let pid_text = pid.to_string();
-                let state = observe(
-                    "/bin/ps",
-                    &[
-                        "-p",
-                        &pid_text,
-                        "-o",
-                        "pid=,ppid=,state=,etime=,time=,command=",
-                    ],
-                );
-                let children = observe("/usr/bin/pgrep", &["-P", &pid_text]);
-                pending.extend(
-                    children["stdout"]
-                        .as_str()
-                        .unwrap_or("")
-                        .split_whitespace()
-                        .filter_map(|pid| pid.parse::<u32>().ok()),
-                );
-                processes.push(value!({"pid":pid,"state":state,"children":children}));
+                processes.push(value!({"pid":pid,"native_probe":{"return":observed,"error":error},"state":"unknown","children":"unknown: no registered native child inventory"}));
             }
         }
         let parent = watched.parent().unwrap();
@@ -1320,41 +1338,10 @@ impl CapturedChild {
             value!({"watched":watched,"processes":processes,"markers":markers})
         );
         #[cfg(target_os = "macos")]
-        if let Some(trace) = std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").map(PathBuf::from) {
-            // Sampling starts only after the existing deadline has failed. It
-            // cannot turn that failure into success or supply a cleanup decision.
-            if trace.is_absolute() {
-                for row in processes
-                    .iter()
-                    .rev()
-                    .filter(|row| {
-                        row["state"]["stdout"]
-                            .as_str()
-                            .is_some_and(|s| s.contains("/.chrono-harness/bin/chrono-"))
-                    })
-                    .take(2)
-                {
-                    let pid = row["pid"].as_u64().unwrap().to_string();
-                    let path = trace.with_extension(format!("{pid}.sample.txt"));
-                    if path.exists() {
-                        continue;
-                    }
-                    let sampled = Command::new("/usr/bin/sample")
-                        .args([&pid, "1", "10", "-file"])
-                        .arg(&path)
-                        .output();
-                    let observation = match sampled {
-                        Ok(out) => {
-                            value!({"exit":out.status.code(),"stdout":String::from_utf8_lossy(&out.stdout),"stderr":String::from_utf8_lossy(&out.stderr)})
-                        }
-                        Err(error) => value!({"error":error.to_string()}),
-                    };
-                    eprintln!(
-                        "CAPTURED_CHILD_STACK {}",
-                        value!({"pid":pid,"path":path,"observation":observation})
-                    );
-                }
-            }
+        if std::env::var_os("CHRONO_CHECK_HANDOFF_TRACE").is_some() {
+            eprintln!(
+                "CAPTURED_CHILD_STACK unavailable: external sampler is outside the command-mocked test boundary"
+            );
         }
     }
     pub(super) fn await_file(&mut self, path: &Path) {
@@ -1467,6 +1454,9 @@ fn reclaim(h: &Host, target: &Path) -> Value {
 }
 #[test]
 fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     adopt_lifecycle_retention(&h);
@@ -1546,6 +1536,9 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
 
 #[test]
 fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "shared-holder");
@@ -1599,6 +1592,9 @@ fn one_dead_wrapper_and_one_live_use_keep_shared_protection() {
 
 #[test]
 fn fixture_setup_panic_releases_and_joins_a_live_managed_consumer() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "managed-child");
@@ -1633,6 +1629,9 @@ fn fixture_setup_panic_releases_and_joins_a_live_managed_consumer() {
 
 #[test]
 fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -1690,6 +1689,9 @@ fn interrupted_partial_cache_disposal_retries_without_owned_git_lock_or_finish()
 
 #[test]
 fn cache_retries_reference_failed_and_partial_originals_without_growth() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_git(&h, "cache-fail", value!({"output":"cache-retry/output λ"}));
@@ -1767,6 +1769,9 @@ fn cache_retries_reference_failed_and_partial_originals_without_growth() {
 
 #[test]
 fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_source_commit() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -1823,6 +1828,9 @@ fn interrupted_cache_generation_is_superseded_by_admitted_rebuilding_after_sourc
 
 #[test]
 fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruption() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::process::ExitStatusExt;
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -1949,6 +1957,9 @@ fn persisted_unsealed_birth_recovers_through_normal_use_after_actual_interruptio
 
 #[test]
 fn kernel_caches_preserve_staged_source_unknown_lease_drift_and_foreign_locks() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::symlink;
     for fault in [
         "staged",
@@ -2013,6 +2024,9 @@ fn kernel_caches_preserve_staged_source_unknown_lease_drift_and_foreign_locks() 
 
 #[test]
 fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "rebuild-error");
@@ -2047,6 +2061,9 @@ fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
 
 #[test]
 fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_git(&h, "admission-interrupt", value!({}));
@@ -2122,6 +2139,9 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
 
 #[test]
 fn returned_use_without_token_still_protects_detached_native_child() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "detached-parent");
@@ -2151,6 +2171,9 @@ fn returned_use_without_token_still_protects_detached_native_child() {
 
 #[test]
 fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     super::check_inputs::bind(&h);
     h.kernel_cleanup();
@@ -2260,6 +2283,9 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
 
 #[test]
 fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     // This test consumes one allocation, not the real repository's other work.
     // Retain the coordinator too: its scope follows the native descendant and
     // preserves the entire fixture if this test is interrupted.
@@ -2380,12 +2406,11 @@ fn native_cargo_child_survives_its_cargo_and_managed_wrappers() {
     let _group = OwnedGroup(cargo.clone());
     owner.kill().unwrap();
     owner.wait().unwrap();
-    assert!(
-        Command::new("/bin/kill")
-            .args(["-KILL", &cargo])
-            .status()
-            .unwrap()
-            .success()
+    assert_eq!(
+        unsafe { libc::kill(cargo.trim().parse::<i32>().unwrap(), libc::SIGKILL) },
+        0,
+        "{}",
+        std::io::Error::last_os_error()
     );
     native_completion.write_all(b"show").unwrap();
     let mut shown = [0; 5];

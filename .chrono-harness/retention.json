@@ -35,6 +35,12 @@
     ],
     "pr-original": [
       ".chrono-harness/state/pr-operations/"
+    ],
+    "cache-probe-attempt": [
+      ".chrono-harness/state/cache-probes/"
+    ],
+    "cache-plan": [
+      ".chrono-harness/state/"
     ]
   },
   "keep_seconds": 0,
@@ -50,6 +56,18 @@
   "max_metadata_bytes_per_round": 67108864,
   "terminal_limits": {
     "instructions-operation": {
+      "keep_seconds": 86400,
+      "max_count": 32,
+      "max_bytes": 67108864,
+      "metadata_keep_seconds": 0
+    },
+    "cache-probe-attempt": {
+      "keep_seconds": 86400,
+      "max_count": 32,
+      "max_bytes": 67108864,
+      "metadata_keep_seconds": 0
+    },
+    "cache-plan": {
       "keep_seconds": 86400,
       "max_count": 32,
       "max_bytes": 67108864,

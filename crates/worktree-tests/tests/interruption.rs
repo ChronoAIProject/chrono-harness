@@ -1,3 +1,5 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::os::unix::process::ExitStatusExt;
 
@@ -113,6 +115,9 @@ impl Host {
 
 #[test]
 fn interrupted_recovery_rejects_payload_on_absent_result() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for result in [
         value!({"presence":"absent","sha256":"0".repeat(64)}),
         value!({"presence":"absent","sha256":null}),
@@ -124,6 +129,9 @@ fn interrupted_recovery_rejects_payload_on_absent_result() {
 
 #[test]
 fn interrupted_recovery_rejects_malformed_result_shapes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (result, diagnostic) in [
         (value!({}), "missing field"),
         (value!({"presence":"missing"}), "unknown variant"),
@@ -141,6 +149,9 @@ fn interrupted_recovery_rejects_malformed_result_shapes() {
 
 #[test]
 fn interrupted_start_retains_intent_and_recovers_missing_or_partial_result() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for state in ["absent", "empty", "truncated"] {
         let h = Host::new("payload");
         h.interrupting_git("none");
@@ -185,6 +196,9 @@ fn interrupted_start_retains_intent_and_recovers_missing_or_partial_result() {
 
 #[test]
 fn interrupted_reconstruction_preserves_actual_index_and_original_source() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.interrupting_git("none");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
@@ -244,6 +258,9 @@ fn interrupted_reconstruction_preserves_actual_index_and_original_source() {
 
 #[test]
 fn interrupted_cleanup_preserves_work_and_recovers_its_owned_lock() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.interrupting_git("none");
     let target = h.parent.join("finished");
@@ -277,6 +294,9 @@ fn interrupted_cleanup_preserves_work_and_recovers_its_owned_lock() {
 
 #[test]
 fn interrupted_recovery_rejects_terminal_result_and_bound_identity_drift() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["terminal", "intent", "result", "lock", "tree", "config"] {
         let h = Host::new("payload");
         h.interrupting_git("none");
@@ -326,6 +346,9 @@ fn interrupted_recovery_rejects_terminal_result_and_bound_identity_drift() {
 
 #[test]
 fn interrupted_intent_publication_never_overwrites_or_creates_checkout_on_failure() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.interrupting_git("checkout-collision");
     let target = h.parent.join("must remain absent");

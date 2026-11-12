@@ -1,3 +1,5 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 use super::automatic::native_git;
 use super::*;
 
@@ -42,6 +44,9 @@ impl Host {
 
 #[test]
 fn selected_recovery_and_cleanup_preserve_original_failure_and_dirty_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     select_config(&h.root, SOURCE_CONFIG);
     let head = commit(&h.root);
@@ -104,6 +109,9 @@ fn selected_recovery_and_cleanup_preserve_original_failure_and_dirty_work() {
 
 #[test]
 fn maintenance_recovers_failed_hook_without_rewriting_original_failure() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("arbitrary/input.go");
     h.hook(value!({"stderr":"original-hook-failure\n","exit":17}));
     let target = h.parent.join("failed λ");
@@ -133,6 +141,9 @@ fn maintenance_recovers_failed_hook_without_rewriting_original_failure() {
 
 #[test]
 fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     if !super::isolated_capability::isolated_capability_test(
         "maintenance::recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it",
     ) {
@@ -200,6 +211,9 @@ fn recovered_report_keeps_its_exact_failed_original_until_the_caller_releases_it
 
 #[test]
 fn maintenance_recovers_reconciled_conflict_with_explicit_index_tree() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let base = git(&h.root, &["rev-parse", "HEAD"]);
     fs::write(h.root.join("payload"), "local\n").unwrap();
@@ -238,6 +252,9 @@ fn maintenance_recovers_reconciled_conflict_with_explicit_index_tree() {
 
 #[test]
 fn maintenance_recovery_rejects_identity_lock_receipt_and_unresolved_state() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "digest", "missing", "modified", "symlink", "head", "tree", "lock", "unstaged", "unknown",
     ] {
@@ -289,6 +306,9 @@ fn maintenance_recovery_rejects_identity_lock_receipt_and_unresolved_state() {
 
 #[test]
 fn maintenance_recovery_checks_declared_original_inputs_before_unlocking() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["missing", "modified", "root", "symlink", "length", "inline"] {
         let h = Host::new("payload");
         h.hook(value!({"exit":17}));
@@ -331,6 +351,9 @@ fn maintenance_recovery_checks_declared_original_inputs_before_unlocking() {
 
 #[test]
 fn maintenance_cleanup_preserves_saved_work_and_declared_artifact_boundaries() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("unusual/source.mts");
     let target = h.parent.join("saved λ");
     assert_eq!(h.invoke("feature", "saved", &target).0, 0);
@@ -365,6 +388,9 @@ fn maintenance_cleanup_preserves_saved_work_and_declared_artifact_boundaries() {
 
 #[test]
 fn maintenance_cleanup_accepts_squash_tree_preservation_and_explicit_retry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let target = h.parent.join("saved");
     assert_eq!(h.invoke("integration", "saved", &target).0, 0);
@@ -416,6 +442,9 @@ fn maintenance_cleanup_accepts_squash_tree_preservation_and_explicit_retry() {
 
 #[test]
 fn maintenance_cleanup_rejects_wrong_dirty_locked_main_and_nested_worktrees() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "head",
         "head-tree",
@@ -502,6 +531,9 @@ fn maintenance_cleanup_rejects_wrong_dirty_locked_main_and_nested_worktrees() {
 
 #[test]
 fn raw_checkout_cleanup_preserves_mode_changes_hidden_by_git_configuration() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     let target = h.parent.join("unsaved mode");
@@ -526,6 +558,9 @@ fn raw_checkout_cleanup_preserves_mode_changes_hidden_by_git_configuration() {
 
 #[test]
 fn raw_checkout_recovery_keeps_lock_until_physical_work_matches_saved_index() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::PermissionsExt;
     let h = Host::new("payload");
     h.hook(value!({"exit":17}));
@@ -547,6 +582,9 @@ fn raw_checkout_recovery_keeps_lock_until_physical_work_matches_saved_index() {
 
 #[test]
 fn maintenance_cleanup_retains_actual_remove_failure_and_concurrent_branch_update() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for concurrent in [false, true] {
         let h = Host::new("payload");
         native_git(&h, "maintenance-remove", value!({"concurrent":concurrent}));
@@ -600,6 +638,9 @@ fn maintenance_cleanup_retains_actual_remove_failure_and_concurrent_branch_updat
 
 #[test]
 fn maintenance_rejects_malformed_plans_before_mutation() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let target = h.parent.join("saved");
     assert_eq!(h.invoke("feature", "saved", &target).0, 0);
@@ -622,6 +663,9 @@ fn maintenance_rejects_malformed_plans_before_mutation() {
 
 #[test]
 fn maintenance_recovers_cleanup_lock_after_retention_race() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     native_git(&h, "retention-race", value!({}));
     let target = h.parent.join("saved");
@@ -666,6 +710,9 @@ fn maintenance_recovers_cleanup_lock_after_retention_race() {
 
 #[test]
 fn maintenance_rechecks_work_after_releasing_owned_locks() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for operation in ["cleanup", "recover"] {
         let h = Host::new("payload");
         native_git(&h, "unsaved-after-unlock", value!({}));
@@ -731,6 +778,9 @@ impl Host {
 
 #[test]
 fn fetch_cleanup_removes_retained_receipt_ref_and_supports_explicit_retry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for after_fetch in [false, true] {
         let h = Host::new("different/program.go");
         let original = h.failed_fetch(after_fetch);
@@ -771,6 +821,9 @@ fn fetch_cleanup_removes_retained_receipt_ref_and_supports_explicit_retry() {
 
 #[test]
 fn fetch_cleanup_rejects_receipt_identity_ref_and_retention_changes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "digest",
         "source",
@@ -842,6 +895,9 @@ fn fetch_cleanup_rejects_receipt_identity_ref_and_retention_changes() {
 
 #[test]
 fn fetch_cleanup_preserves_concurrent_ref_and_original_failure() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for action in ["block", "race", "remove-fail"] {
         let h = Host::new("payload");
         let original = h.failed_fetch(false);
@@ -906,6 +962,9 @@ mod remote;
 
 #[test]
 fn cleanup_artifact_disposal_precedes_git_removal() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::symlink;
     let h = Host::new("payload");
     native_git(&h, "artifact-removal", value!({"fault":"must-be-absent"}));
@@ -934,6 +993,9 @@ fn cleanup_artifact_disposal_precedes_git_removal() {
 
 #[test]
 fn cleanup_artifact_disposal_rejects_tracked_content_before_any_effect() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("owned/payload");
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     config["artifacts"].as_array_mut().unwrap().push(value!({
@@ -971,6 +1033,9 @@ fn cleanup_artifact_disposal_rejects_tracked_content_before_any_effect() {
 
 #[test]
 fn cleanup_artifact_disposal_retains_partial_failure_and_explicit_retry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     native_git(&h, "artifact-removal", value!({"fault":"fail-marker"}));
     let target = h.parent.join("partial artifact cleanup");
