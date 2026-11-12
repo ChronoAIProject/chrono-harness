@@ -18,6 +18,8 @@ diagnostics 的 `verified_runtime.rs` 拥有实际 `RuntimeSink` 的双输出控
 
 **产品与宿主登记同时修改：**diagnostics 增加现有固定版本的 Verus 宏依赖，
 FILEMAP 登记生产及独立预期整 crate 根，接入原 `test:diagnostics-tests` 计划。
+diagnostics CI 使用现有单元 bootstrap，从 detector 的原包解压固定 Verus，
+再执行同一个正式检查入口；仅验证 core 安装不能替代这一步。
 按显式项目依赖闭包补齐必要的 Cargo lock 更新操作，复用已有操作；锁更新不加入
 日常验收计划。原测试、工具版本、线程及预算保留；宏编译、证明、所有消费项目
 重建、CI 与存储的完整成本未测。证明和真实消费结果以固定候选原件为准。
