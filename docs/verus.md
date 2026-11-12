@@ -1,5 +1,7 @@
 # Verus 实施范围
 
+发布晋升的原运行事件／完整 head、逐字段身份、单一工件、正数 ID／体积、到期状态、原选中工件及平台／单元时间窗，由现有 `verified_delivery.rs` 定义并证明。`delivery.rs` 的真实原件导入与包校验直接供应 API／JSON 解码的原值，不预先计算通过标志。独立预期加入既有 `verified_recipe.rs` 测试根，并同时作为 Rust 测试运行；沿用原两项整 crate 证明、操作和预算。下载、JSON／文件 IO、编排、组包及公开／安装组合仍有各自义务，不把局部证明或原运行成功解释成整个发布器已证明。晋升编排保留在已有发布负责文件，不为外围代码登记并未编译它的证明根；真实发布和下游验收见[发布合同](release-ci.md#正式版复用最终测试版)。
+
 FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 本地 routes、scoped CI、full 调度和 collection 准备共用
 `validate_file_classifications`：固定基线未登记的新行必须给出有效分类；已有分类不得

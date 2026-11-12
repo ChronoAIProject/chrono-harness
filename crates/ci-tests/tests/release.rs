@@ -376,6 +376,65 @@ fn delivery_rejects_unregistered_publishers_push_bypasses_and_unsuccessful_depen
 }
 
 #[test]
+fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() {
+    let mut c = units_config();
+    c["push_branches"] = json!([]);
+    c["jobs"][1]["always"] = json!(false);
+    c["delivery"] = json!({"workflow":"landing CI","branch":"dev","publisher":"consumer","promotion_build_jobs":["native"]});
+    let rendered = release::render(&serde_json::from_value(c.clone()).unwrap()).unwrap();
+    let yaml: Value = serde_yaml_ng::from_str(&rendered).unwrap();
+    assert!(
+        yaml["jobs"]["native"]["if"]
+            .as_str()
+            .unwrap()
+            .contains("inputs.channel != 'stable'")
+    );
+    let publisher = &yaml["jobs"]["consumer"];
+    assert!(
+        publisher["if"]
+            .as_str()
+            .unwrap()
+            .contains("always() && (inputs.channel == 'stable' || success())")
+    );
+    assert_eq!(publisher["needs"], json!(["native"]));
+    assert_eq!(
+        yaml["jobs"]["native"]["timeout-minutes"],
+        c["jobs"][0]["timeout_minutes"]
+    );
+    let step = publisher["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "Run registered release command")
+        .unwrap();
+    assert_eq!(
+        step["env"]["CHRONO_RELEASE_PREVIEW_RUN"],
+        "${{ inputs.preview_run }}"
+    );
+    assert_eq!(
+        step["env"]["CHRONO_RELEASE_PREVIEW_ATTEMPT"],
+        "${{ inputs.preview_attempt }}"
+    );
+    assert!(
+        yaml["on"]["workflow_dispatch"]["inputs"]
+            .get("preview_run")
+            .is_some()
+    );
+    assert!(rendered.contains(".chrono-harness/pack.sh"));
+    for jobs in [
+        json!(["missing"]),
+        json!(["native", "native"]),
+        json!(["consumer"]),
+    ] {
+        c["delivery"]["promotion_build_jobs"] = jobs;
+        assert!(
+            release::render(&serde_json::from_value(c.clone()).unwrap()).is_err(),
+            "{c}"
+        );
+    }
+}
+
+#[test]
 fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_metadata() {
     let c: release::Config = serde_json::from_value(units_config()).unwrap();
     let yaml = release::render(&c).unwrap();

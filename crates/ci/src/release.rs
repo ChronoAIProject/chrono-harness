@@ -41,6 +41,8 @@ pub struct Delivery {
     pub workflow: String,
     pub branch: String,
     pub publisher: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub promotion_build_jobs: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -115,6 +117,14 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
             publisher.always,
         ) {
             return Err("publisher requires successful declared dependencies".into());
+        }
+        let mut build_jobs = BTreeSet::new();
+        for id in &delivery.promotion_build_jobs {
+            if !ids.contains(&id.as_str()) || id == &delivery.publisher || !build_jobs.insert(id) {
+                return Err(
+                    "promotion needs unique registered build jobs, excluding the publisher".into(),
+                );
+            }
         }
     }
     if let Some(cache) = &c.persistent_cache {
@@ -296,6 +306,12 @@ pub fn render(c: &Config) -> Result<String, String> {
     );
     if c.delivery.is_some() {
         output.push_str("      channel:\n        description: Build artifacts or publish a verified source\n        type: choice\n        default: build\n        options: [build, preview, stable]\n      verified_run:\n        description: Successful landing CI run ID\n        type: string\n      verified_attempt:\n        description: Original successful CI attempt\n        type: string\n      version:\n        description: Explicit stable version matching the source plan\n        type: string\n");
+        if c.delivery
+            .as_ref()
+            .is_some_and(|d| !d.promotion_build_jobs.is_empty())
+        {
+            output.push_str("      preview_run:\n        description: Successful final preview release run ID required for stable\n        type: string\n      preview_attempt:\n        description: Original successful preview release attempt required for stable\n        type: string\n");
+        }
     }
     output.push_str("permissions:\n  contents: read\n");
     output.push_str("jobs:\n");
@@ -384,6 +400,17 @@ fn render_unit<'a>(
     if c.delivery.is_some() {
         condition.push_str(" && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))");
     }
+    if let Some(delivery) = &c.delivery {
+        if !delivery.promotion_build_jobs.is_empty() {
+            if job.id == delivery.publisher {
+                // stable 的包来自显式原运行；其余渠道仍要求当前依赖成功。
+                condition =
+                    format!("always() && (inputs.channel == 'stable' || success()) && {condition}");
+            } else if delivery.promotion_build_jobs.contains(&job.id) {
+                condition.push_str(" && inputs.channel != 'stable'");
+            }
+        }
+    }
     output.push_str(&format!("  {}:\n    if: ${{{{ {condition} }}}}\n", job.id));
     if super::verified_literals::delivery_publisher(
         c.delivery.as_ref().map(|d| d.publisher.as_str()),
@@ -470,6 +497,12 @@ fn render_unit<'a>(
             c.delivery.as_ref().map(|d| d.publisher.as_str()),
             &job.id,
         ) {
+            if c.delivery
+                .as_ref()
+                .is_some_and(|d| !d.promotion_build_jobs.is_empty())
+            {
+                output.push_str("          CHRONO_RELEASE_PREVIEW_RUN: ${{ inputs.preview_run }}\n          CHRONO_RELEASE_PREVIEW_ATTEMPT: ${{ inputs.preview_attempt }}\n");
+            }
             output.push_str("          GH_TOKEN: ${{ github.token }}\n");
         }
     }

@@ -537,6 +537,76 @@ fn assemble_rejects_different_sources_and_corrupt_members_without_output() {
     }
 }
 
+#[test]
+fn assembly_promotion_preserves_input_bytes_and_requires_the_exact_input_version() {
+    for mutation in ["none", "version", "corrupt", "unpaired"] {
+        let f = Fixture::new();
+        let output = tempdir().unwrap();
+        let target = output.path().join("stable");
+        let original = fs::read(&f.manifest).unwrap();
+        if mutation == "corrupt" {
+            fs::write(
+                f.release.path().join(format!("alpha-{}", platform())),
+                b"changed",
+            )
+            .unwrap();
+        }
+        let mut args = vec![
+            "assemble".into(),
+            "--input".into(),
+            f.release.path().display().to_string(),
+            "--source-dir".into(),
+            f.release.path().display().to_string(),
+            "--output".into(),
+            target.display().to_string(),
+            "--version".into(),
+            "v0.1.0".into(),
+        ];
+        if mutation != "unpaired" {
+            args.extend([
+                "--from-version".into(),
+                if mutation == "version" {
+                    "v0.1.0-other"
+                } else {
+                    "v0.1.0-beta.1"
+                }
+                .into(),
+            ]);
+        }
+        let result = run(&args);
+        if mutation == "none" {
+            let report = result.unwrap();
+            assert_eq!(report["version"], "v0.1.0");
+            let promoted: Value =
+                serde_json::from_slice(&fs::read(target.join("release.json")).unwrap()).unwrap();
+            let input: Value = serde_json::from_slice(&original).unwrap();
+            assert_eq!(promoted["version"], "v0.1.0");
+            for key in ["source_commit", "source_tree", "platforms"] {
+                assert_eq!(promoted[key], input[key]);
+            }
+            for name in ["alpha", "beta", "chrono-distribution"] {
+                let file = format!("{name}-{}", platform());
+                assert_eq!(
+                    fs::read(target.join(&file)).unwrap(),
+                    fs::read(f.release.path().join(file)).unwrap()
+                );
+            }
+        } else {
+            let error = result.unwrap_err();
+            assert!(
+                error.contains(match mutation {
+                    "version" => "input version",
+                    "corrupt" => "integrity mismatch",
+                    _ => "together",
+                }),
+                "{mutation}: {error}"
+            );
+            assert!(!target.exists());
+        }
+        assert_eq!(fs::read(&f.manifest).unwrap(), original);
+    }
+}
+
 fn real_installer(f: &Fixture) {
     let installer = Path::new(env!("CARGO_BIN_EXE_chrono-distribution-test-cli"));
     let target = f
