@@ -24,7 +24,7 @@ fn fixture() -> tempfile::TempDir {
     let path = d.path().join(".chrono-harness/ci/units.json");
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(path, serde_json::to_vec_pretty(&config_value()).unwrap()).unwrap();
-    let check = json!({"schema":"chrono-ci-check/v3","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":20,"output_limit_bytes":1048576},"report_path":".chrono-harness/state/check.json","policy":{"units":{"alpha":{"tests":["test:a"],"report_path":".chrono-harness/state/alpha/check.json"},"beta":{"tests":["test:b"],"report_path":".chrono-harness/state/beta/check.json"}}}});
+    let check = json!({"schema":"chrono-ci-check/v3","judge":{"program":".chrono-harness/bin/chrono-judge-ci","args":[],"timeout_seconds":20,"output_limit_bytes":1048576},"report_path":".chrono-harness/state/check.json","policy":{"execution_diagnostics":"chrono-log-stderr/v1","units":{"alpha":{"tests":["test:a"],"report_path":".chrono-harness/state/alpha/check.json"},"beta":{"tests":["test:b"],"report_path":".chrono-harness/state/beta/check.json"}}}});
     fs::write(
         d.path().join(".chrono-harness/ci/check.json"),
         serde_json::to_vec(&check).unwrap(),
