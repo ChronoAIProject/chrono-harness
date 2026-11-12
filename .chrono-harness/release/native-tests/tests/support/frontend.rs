@@ -31,7 +31,11 @@ impl Fixture {
         let tools = case.path().join("tools");
         fs::create_dir(&tools).unwrap();
         let git_tool = tools.join("git");
-        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-git"), &git_tool).unwrap();
+        fs::hard_link(
+            env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
+            &git_tool,
+        )
+        .unwrap();
         host.config["tools"]["git"] = json!(git_tool);
         let probe = tools.join("probe");
         fs::hard_link(
@@ -42,11 +46,6 @@ impl Fixture {
         host.config["tools"]["probe"] = json!(probe);
         host.save();
         let root = host.root();
-        fs::write(
-            root.join(".gitignore"),
-            "/.chrono-harness/bin/\n/.chrono-harness/state/\n/frontend/\n/handoffs/\n/consumer/\n",
-        )
-        .unwrap();
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
         let binary = root.join(".chrono-harness/bin/chrono-host-release");
         // 测试父进程并发 fork 时，其他子进程可能短暂继承写描述符。
@@ -84,29 +83,6 @@ impl Fixture {
             "registered bootstrap fixture\n",
         )
         .unwrap();
-        for args in [
-            vec!["init", "--quiet"],
-            vec!["add", "--all"],
-            vec![
-                "-c",
-                "user.name=Release fixture",
-                "-c",
-                "user.email=release@example.invalid",
-                "commit",
-                "--quiet",
-                "-m",
-                "frontend inputs",
-            ],
-        ] {
-            assert!(
-                Command::new(&git_tool)
-                    .args(args)
-                    .current_dir(root)
-                    .status()
-                    .unwrap()
-                    .success()
-            );
-        }
         let git = |revision| {
             String::from_utf8(
                 Command::new(&git_tool)
