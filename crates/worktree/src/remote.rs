@@ -29,11 +29,12 @@ impl Cleanup {
     }
 
     fn saved(&self, r: &mut Runner, root: &Path) -> Result<(), String> {
+        // The remote target is bound by observed(); only the pinned commit is local.
         saved_commit(
             r,
             root,
             &self.head,
-            &self.retained_ref,
+            &format!("{}^{{commit}}", self.retained_commit),
             &self.retained_commit,
             &self.retention,
         )

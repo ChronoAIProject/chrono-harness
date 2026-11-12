@@ -116,7 +116,12 @@ fn remote_cleanup_preserves_stale_or_absent_local_targets() {
             assert_ne!(retained, head);
             git(
                 &h.root,
-                &["push", "-q", "warehouse", &format!("{retained}:refs/heads/dev")],
+                &[
+                    "push",
+                    "-q",
+                    "warehouse",
+                    &format!("{retained}:refs/heads/dev"),
+                ],
             );
             git(&h.root, &["checkout", "--detach", "-q", head]);
             if absent {
@@ -191,7 +196,9 @@ fn remote_cleanup_rejects_endpoint_branch_and_retention_mismatches_before_push()
     for fault in [
         "multiple-urls",
         "wrong-url",
-        "wrong-local-retention",
+        "missing-retained-object",
+        "unpreserved-work",
+        "different-tree",
         "wrong-remote-retention",
         "changed-head",
         "unregistered-branch",
@@ -227,8 +234,21 @@ fn remote_cleanup_rejects_endpoint_branch_and_retention_mismatches_before_push()
                 );
             }
             "wrong-url" => plan["expected_url"] = value!(h.parent.join("another remote")),
-            "wrong-local-retention" => {
-                git(&h.root, &["update-ref", "refs/heads/dev", &next]);
+            "missing-retained-object" => plan["retained_commit"] = value!("f".repeat(40)),
+            "unpreserved-work" | "different-tree" => {
+                plan["head"] = value!(next);
+                if fault == "different-tree" {
+                    plan["retention"] = value!("same-tree");
+                }
+                git(
+                    &h.root,
+                    &[
+                        "push",
+                        "-q",
+                        "warehouse",
+                        &format!("{next}:refs/heads/integration/owned"),
+                    ],
+                );
             }
             "wrong-remote-retention" => {
                 git(
