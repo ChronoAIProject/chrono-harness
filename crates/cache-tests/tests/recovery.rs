@@ -566,26 +566,37 @@ fn verified_host() -> (Host, Value, Value) {
 }
 
 fn seal(root: &Path, steps: &Value) -> std::process::Output {
-    Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli")))
-        .args([
-            "seal",
-            "--host-root",
-            root.to_str().unwrap(),
-            "--config",
-            ".chrono-harness/cache.json",
-            "--plan",
-            ".chrono-harness/state/restore/plan.json",
-            "--cache",
-            "project",
-            "--steps-env",
-            "CACHE_PRODUCER_STEPS",
-            "--work",
-            "work",
-            "--github-output",
-            root.join(".chrono-harness/state/restore/seal-output")
-                .to_str()
-                .unwrap(),
-        ])
+    seal_plan(
+        root,
+        steps,
+        ".chrono-harness/state/restore/plan.json",
+        Some("project"),
+    )
+}
+
+fn seal_plan(root: &Path, steps: &Value, plan: &str, cache: Option<&str>) -> std::process::Output {
+    let mut command = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli")));
+    command.args([
+        "seal",
+        "--host-root",
+        root.to_str().unwrap(),
+        "--config",
+        ".chrono-harness/cache.json",
+        "--plan",
+        plan,
+        "--steps-env",
+        "CACHE_PRODUCER_STEPS",
+        "--work",
+        "work",
+        "--github-output",
+        root.join(".chrono-harness/state/restore/seal-output")
+            .to_str()
+            .unwrap(),
+    ]);
+    if let Some(cache) = cache {
+        command.args(["--cache", cache]);
+    }
+    command
         .env(
             "CACHE_PRODUCER_STEPS",
             serde_json::to_string(steps).unwrap(),
@@ -651,6 +662,39 @@ fn producer_seal_records_absent_artifacts_without_authorizing_save() {
         let rejected = seal(root.path(), &json!({"work":{"outcome":"failure"}}));
         assert!(!rejected.status.success());
         assert!(String::from_utf8_lossy(&rejected.stderr).contains("no accepted outcome"));
+
+        // The ordinary complete seal must also release its enrolled plan.
+        let plan = ".chrono-harness/state/cache/absent/plan.json";
+        let managed = Command::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli"))
+            .args([
+                "plan",
+                "--host-root",
+                root.path().to_str().unwrap(),
+                "--config",
+                ".chrono-harness/cache.json",
+                "--consumer",
+                "check.one",
+                "--plan-output",
+                plan,
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            managed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&managed.stderr)
+        );
+        let complete = seal_plan(root.path(), &steps, plan, None);
+        assert!(
+            complete.status.success(),
+            "{}",
+            String::from_utf8_lossy(&complete.stderr)
+        );
+        let completed: Value = serde_json::from_slice(&complete.stdout).unwrap();
+        assert_eq!(
+            completed["observation"]["caches"]["project"]["status"],
+            "unavailable"
+        );
     }
 }
 
