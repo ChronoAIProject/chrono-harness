@@ -79,7 +79,7 @@ impl Original {
             inventory.dependencies_paths(&self.path, inputs)?;
         }
         if let Some(publication) = self.publication.take() {
-            publication.complete(outcome)?;
+            publication.complete_sealed(outcome)?;
         }
         if let Some(inventory) = inventory {
             inventory.retain_diagnostic_path(&self.path)?;
