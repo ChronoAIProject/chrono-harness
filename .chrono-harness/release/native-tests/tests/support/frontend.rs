@@ -84,7 +84,8 @@ impl Fixture {
         )
         .unwrap();
         // context 中的小型 Git 替身负责这组固定源码观察，无需仓库建模。
-        let source = json!({"commit":"a".repeat(40), "tree":"b".repeat(40), "dirty":false, "error":null});
+        let source =
+            json!({"commit":"a".repeat(40), "tree":"b".repeat(40), "dirty":false, "error":null});
         let mut registrations = serde_json::Map::new();
         for path in [
             ".chrono-harness/ci/bootstrap-release.json",
