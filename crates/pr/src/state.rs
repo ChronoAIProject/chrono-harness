@@ -39,7 +39,6 @@ pub(crate) struct State {
     publication: Publication,
     calls: usize,
     unreturned: bool,
-    inputs: Vec<(String, Lease)>,
     continuation: Option<Continuation>,
 }
 
@@ -48,7 +47,6 @@ struct Continuation {
     path: String,
     result_original: Value,
     _reader: Lease,
-    inputs: Vec<(String, Lease)>,
 }
 
 impl Continuation {
@@ -141,7 +139,6 @@ impl Continuation {
         let receipts = result["receipts"]
             .as_array()
             .ok_or("continued operation has no original process receipts")?;
-        let mut inputs = Vec::new();
         for (index, receipt) in receipts.iter().enumerate() {
             let (saved, _) = read(&format!("call-{}.result.json", index + 1), 16777216)?;
             if saved != *receipt {
@@ -153,25 +150,28 @@ impl Continuation {
                 ("launch_original", "launch.json"),
             ] {
                 let original = &receipt[field];
-                let expected = format!("{path}.call-{}.{suffix}", index + 1);
+                let expected = format!("{path}/call-{}.{suffix}", index + 1);
                 if original["path"] != expected {
                     return Err(
                         "continued process original address differs from its operation".into(),
                     );
                 }
-                let guard = read_guard(root, &expected)?
-                    .ok_or("continued process original is unavailable or not enrolled")?;
                 let (digest, length) = file_identity(&no_symlink_parents(root, &expected)?)?;
                 if original["sha256"] != digest
                     || original["length"] != length
-                    || !inventory.published_original(&expected, &digest, length)?
+                    || !inventory.published_tree_member(
+                        &config.state_producer,
+                        path,
+                        &expected,
+                        &digest,
+                        length,
+                    )?
                 {
                     return Err(
                         "continued process original changed or is not sealed; preserve originals"
                             .into(),
                     );
                 }
-                inputs.push((expected, guard));
             }
         }
         Ok(Some(Self {
@@ -179,7 +179,6 @@ impl Continuation {
             path: path.clone(),
             result_original,
             _reader: reader,
-            inputs,
         }))
     }
 }
@@ -237,7 +236,6 @@ impl State {
             publication,
             calls: 0,
             unreturned: false,
-            inputs: Vec::new(),
             continuation,
         };
         let saved = (|| {
@@ -317,8 +315,15 @@ impl State {
     }
 
     pub(crate) fn process_paths(&self, n: usize) -> [PathBuf; 3] {
-        ["stdout", "stderr", "launch.json"]
-            .map(|suffix| self.root.join(format!("{}.call-{n}.{suffix}", self.path)))
+        ["stdout", "stderr", "launch.json"].map(|suffix| {
+            self.root
+                .join(&self.path)
+                .join(format!("call-{n}.{suffix}"))
+        })
+    }
+
+    pub(crate) fn publication(&self) -> &Publication {
+        &self.publication
     }
 
     pub(crate) fn operation_state(&self) -> &'static str {
@@ -350,14 +355,6 @@ impl State {
                     .map(str::to_owned)
             })
             .collect::<Result<Vec<_>, _>>()?;
-        if originals
-            .iter()
-            .any(|path| !inventory.accepts("check-original", path))
-        {
-            return Err(
-                "PR process originals require registered check-original retention scopes".into(),
-            );
-        }
         let input_original = self.original(&format!("call-{n}.stdin"), input)?;
         self.write(&format!("call-{n}.intent.json"), &json!({
             "schema":"chrono-pr-call/v1", "operation":self.path, "attempt":n, "producer":"chrono-pr",
@@ -393,7 +390,6 @@ impl State {
     pub(crate) fn receipt(&mut self, n: usize, process: &ProcessResult) -> Result<Value, String> {
         self.unreturned = !verified::process_exit_known(process.exit_code, process.exit_signal);
         let paths = self.process_paths(n);
-        let inventory = Inventory::adopted(&self.root)?.ok_or("PR retention owner disappeared")?;
         let mut originals = Vec::new();
         for path in &paths {
             let relative = path
@@ -402,14 +398,11 @@ impl State {
                 .to_str()
                 .ok_or("process original path UTF-8")?
                 .to_owned();
-            let reader =
-                read_guard(&self.root, &relative)?.ok_or("process original is not enrolled")?;
+            fs::File::open(path)
+                .and_then(|file| file.sync_all())
+                .map_err(|e| e.to_string())?;
             let (digest, length) = file_identity(path)?;
-            if !inventory.published_original(&relative, &digest, length)? {
-                return Err("process original is not durably published; preserve originals".into());
-            }
             originals.push(json!({"path":relative,"sha256":digest,"length":length}));
-            self.inputs.push((relative, reader));
         }
         validate_launch_evidence(&paths[2], process)?;
         for (index, (digest, length)) in [
@@ -447,22 +440,12 @@ impl State {
             &serde_json::to_value(&self.object).map_err(|e| e.to_string())?,
         )?;
         self.write("result.json", result)?;
-        let inputs = self
-            .inputs
-            .iter()
-            .map(|(path, _)| path.clone())
-            .collect::<Vec<_>>();
-        let inventory = Inventory::adopted(&self.root)?.ok_or("PR retention owner disappeared")?;
-        inventory.dependencies_paths(&self.path, &inputs)?;
         let root = self.root.clone();
         let path = self.path.clone();
         self.publication.complete_sealed(json!({"kind":"pr-operation","operation":path,"command_exit_code":result["command_exit_code"],"pr_state":result["pr_state"],"result":"result.json"}))?;
         let inventory = Inventory::adopted(&root)?.ok_or("PR retention owner disappeared")?;
         inventory.retain_diagnostic_path(&path)?;
         let _reader = read_guard(&root, &path)?.ok_or("PR result disappeared before handoff")?;
-        if !inputs.is_empty() {
-            inventory.settle_publication_inputs(&path, &inputs)?;
-        }
         let complete = verified::settled_pr_command(
             self.unreturned,
             self.object.unresolved_create,
@@ -486,14 +469,6 @@ impl State {
                     result_bytes.len() as u64,
                 )? {
                     return Err("continued result is not sealed; preserve prior originals".into());
-                }
-                let prior_inputs = previous
-                    .inputs
-                    .iter()
-                    .map(|(path, _)| path.clone())
-                    .collect::<Vec<_>>();
-                if !prior_inputs.is_empty() {
-                    inventory.settle_publication_inputs(&previous.path, &prior_inputs)?;
                 }
                 inventory.retain_diagnostic_path(&previous.path)?;
                 if let Some(request) = &previous.object.request {
