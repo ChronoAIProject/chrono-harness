@@ -62,6 +62,19 @@
         "name": "diagnose-recurring-failures",
         "description": "诊断反复出现的失败，先检查实际证据，再修复产生问题的程序、工具或规则。同一症状第二次需要相同处理动作时使用。"
       }
+    },
+    {
+      "id": "release-skill",
+      "path": "skills/iterate-releases/SKILL.md",
+      "format": "skill",
+      "locale": "zh-CN",
+      "roots": [
+        "core.release-iteration"
+      ],
+      "skill": {
+        "name": "iterate-releases",
+        "description": "持续发布测试版，迁移和验证真实下游，修复反馈，并在稳定门槛满足后发布正式版和完成下游正式采用；每轮把真实证据写回迭代文档。"
+      }
     }
   ]
 }

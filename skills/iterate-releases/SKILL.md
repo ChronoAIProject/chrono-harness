@@ -1,11 +1,15 @@
 ---
-name: iterate-releases
-description: 持续发布测试版，迁移和验证真实下游，修复反馈，并在稳定门槛满足后发布正式版和完成下游正式采用；每轮把真实证据写回迭代文档。
+name: "iterate-releases"
+description: "持续发布测试版，迁移和验证真实下游，修复反馈，并在稳定门槛满足后发布正式版和完成下游正式采用；每轮把真实证据写回迭代文档。"
 ---
+<!-- chrono-instructions:output producer=chrono-instructions id=release-skill format=skill begin -->
+本文件由登记规则生成。请修改登记源后重新生成，不要单独编辑本文件。生成成功不代表规则已被遵守或检查已执行。
+
+<!-- 默认指令含修改、泛化和翻译的派生文本。原作 Copyright 2026 The Omega Institute；Apache-2.0。随分发提供的许可与来源说明是可选阅读资料，不是执行政策。 -->
 
 # 持续发布与下游迭代
 
-在用户已授权的仓库和发布范围内工作。先读取各仓库的 AGENTS、host_context、发布源、安装声明、当前 SPEC 和 `docs/release-iteration.md`，再审计真实使用方、验收入口、保留证据和失败现场。个人目录中的 skill 是安装副本，仓库 `skills/iterate-releases/SKILL.md` 是唯一维护源。
+在用户已授权的仓库和发布范围内工作。先读取各仓库的 AGENTS、host_context、发布源、安装声明、当前 SPEC 和 `docs/release-iteration.md`，再审计真实使用方、验收入口、保留证据和失败现场。`.chrono-harness/instructions/catalog.json` 中的登记 atom 是唯一维护源，仓库 `skills/iterate-releases/SKILL.md` 和个人目录中的 skill 都是生成或安装副本。
 
 ## 每轮执行
 
@@ -23,4 +27,6 @@ description: 持续发布测试版，迁移和验证真实下游，修复反馈�
 
 stable workflow 如果跳过安装 job，明确记录跳过状态，不宣称该 job 通过；可以由同一公开 stable 资产的真实下游 macOS 安装和 Linux dev CI 补齐平台采用证据，但仍保留 workflow 缺口和恢复条件。
 
-执行结束后更新本 skill 和其负责文档中暴露出的非显然问题，运行 FILEMAP/登记判官及受影响的文档检查，并同步个人安装副本。不要新增第二套发布器、常驻轮询器、人工审批关卡或为未来需求预建扩展层。
+执行结束后更新该登记 atom 和其负责文档中暴露出的非显然问题，运行 FILEMAP/登记判官及受影响的文档检查，并同步生成的个人安装副本。不要新增第二套发布器、常驻轮询器、人工审批关卡或为未来需求预建扩展层。
+
+<!-- chrono-instructions:output producer=chrono-instructions id=release-skill format=skill end -->
