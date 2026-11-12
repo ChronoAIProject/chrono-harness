@@ -3174,9 +3174,7 @@ pub fn checkout_parent_observation<E, F>(observation: Result<bool, E>, is_missin
 pub open spec fn checkout_components_finite<S, C, N>(next: N, rank: spec_fn(S) -> nat) -> bool
     where N: Fn(S) -> (S, Option<C>),
 {
-    forall|source: S, result: (S, Option<C>)|
-        #[trigger] next.ensures((source,), result) && result.1.is_some()
-            ==> rank(result.0) < rank(source)
+    paths::component_steps_finite::<S, C, N>(next, rank)
 }
 
 #[verifier::opaque]

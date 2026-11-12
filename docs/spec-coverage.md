@@ -2,9 +2,16 @@
 
 快照导出的预取、blob 选择、逐文件阶段、溢出／容量优先级、symlink 与只读权限顺序
 由同源 `verified_export.rs` 协调，真实 `Reader::export_limited` 直接消费；沿用原状态
-生产根、独立 Verus 预期根和未过滤行为测试。路径检查、Git 获取及预取内部判断、完整
+生产根、独立 Verus 预期根和未过滤行为测试。publication 目录准备、Git 获取及预取内部判断、完整
 编译／调用对应和全仓覆盖门仍须各自证明与验收，不将整个 facts 文件列为已证明。
 范围、外部接口和额外借用库存成本见 [Verus 实施范围](verus.md)。
+
+`no_symlink_parents_detailed` 的组件遍历、末项检查、NotFound 继续、首个 symlink／
+原生错误停止，以及失败渲染分支直接使用路径所有者的同源 Verus。独立成功／失败
+预期和驱动均为 Verus，沿原路径与状态整 crate 根及未过滤行为测试验收；流式组件
+接口保持原 IO 顺序，不额外收集组件。标准 Path／metadata／错误种类观察为逐项
+列明的接口，`ProcessFailure` 构造、其他 IO 组合及完整编译／调用对应仍待证明，
+不将整个 `lib.rs` 声明为已证明；实际结果以固定候选的原报告为准。
 
 projects 原件状态由 `verified_state.rs` 与独立 Verus 预期负责：
 终态／未知状态、完整汇总、原件身份和解除保护条件接入真实 `state.rs` 调用。

@@ -295,4 +295,257 @@ fn unicode_bytes_preserve_component_boundaries() {
     expect(&[228u8, 184, 173, 46, 46], true);
 }
 
+fn parent_fixture_next(source: u8) -> (out: (u8, Option<u8>))
+    ensures if source == 0 { out == (0u8, None::<u8>) }
+        else { out == ((source - 1) as u8, Some(source)) },
+{
+    if source == 0 { (0, None) } else { (source - 1, Some(source)) }
+}
+
+fn parent_fixture_append(mut path: Vec<u8>, component: u8) -> (out: Vec<u8>)
+    ensures out@ == path@ + seq![component],
+{ path.push(component); path }
+
+spec fn parent_fixture_kind(mode: u8, length: int) -> u8 {
+    if mode == 0 { 0 }
+    else if mode == 1 { if length == 4 { 2 } else { 0 } }
+    else if mode == 2 { 1 }
+    else if mode == 3 { if length == 4 { 0 } else { 1 } }
+    else if mode == 4 { 3 }
+    else if mode == 5 { if length == 4 { 2 } else { 3 } }
+    else { 2 }
+}
+
+spec fn parent_fixture_observation(mode: u8, path: Seq<u8>, observed: Result<bool, String>) -> bool {
+    match parent_fixture_kind(mode, path.len()) {
+        0 => observed == Ok::<bool, String>(false),
+        1 => observed == Ok::<bool, String>(true),
+        2 => match observed { Err(error) => error@ == "missing: é\0end"@, _ => false },
+        _ => match observed { Err(error) => error@ == "io: denied é\nend"@, _ => false },
+    }
+}
+
+fn parent_fixture_metadata(mode: u8, path: Vec<u8>) -> (out: (Vec<u8>, Result<bool, String>))
+    ensures out.0 == path, parent_fixture_observation(mode, path@, out.1),
+{
+    let kind = if mode == 0 { 0u8 }
+        else if mode == 1 { if path.len() == 4 { 2 } else { 0 } }
+        else if mode == 2 { 1 }
+        else if mode == 3 { if path.len() == 4 { 0 } else { 1 } }
+        else if mode == 4 { 3 }
+        else if mode == 5 { if path.len() == 4 { 2 } else { 3 } }
+        else { 2 };
+    let observed = match kind {
+        0 => Ok(false), 1 => Ok(true),
+        2 => Err("missing: é\0end".to_owned()),
+        _ => Err("io: denied é\nend".to_owned()),
+    };
+    (path, observed)
+}
+
+fn parent_fixture_missing(error: &String) -> (out: bool)
+    ensures out == (error@ == "missing: é\0end"@),
+{ identifiers::equal_text(error.as_str(), "missing: é\0end") }
+
+spec fn parent_fixture_path(count: u8, consumed: int) -> Seq<u8> {
+    seq![77u8, 0, 255] + if consumed == 0 { seq![] }
+    else if consumed == 1 { seq![count] }
+    else if consumed == 2 { seq![count, (count - 1) as u8] }
+    else { seq![count, (count - 1) as u8, (count - 2) as u8] }
+}
+
+// 预期直接列出七种外部观察和 0–3 个组件的结果，不调用生产规格作判定。
+spec fn parent_fixture_expected(count: u8, mode: u8,
+    out: Result<Vec<u8>, policy::ParentPathFailure<Vec<u8>, String>>) -> bool
+{
+    if count == 0 || mode == 0 || mode == 1 || mode == 6
+        || (count == 1 && (mode == 3 || mode == 5)) {
+        match out { Ok(path) => path@ == parent_fixture_path(count, count as int), _ => false }
+    } else if mode == 2 || mode == 3 {
+        match out {
+            Err(policy::ParentPathFailure::Symlink(path)) => path@ == parent_fixture_path(count,
+                if mode == 2 { 1int } else { 2int }),
+            _ => false,
+        }
+    } else {
+        match out { Err(policy::ParentPathFailure::Native(error)) => error@ == "io: denied é\nend"@, _ => false }
+    }
+}
+
+proof fn parent_fixture_step<M>(before: (u8, Vec<u8>), after: (u8, Vec<u8>), mode: u8, metadata: M)
+    where M: Fn(Vec<u8>) -> (Vec<u8>, Result<bool, String>),
+    requires policy::parent_path_step::<u8, Vec<u8>, u8, String, _, _, M, _>(
+        before, after, parent_fixture_next, parent_fixture_append, metadata, parent_fixture_missing),
+        forall|path: Vec<u8>, observed: (Vec<u8>, Result<bool, String>)|
+            #[trigger] metadata.ensures((path,), observed) ==>
+                observed.0 == path && parent_fixture_observation(mode, path@, observed.1),
+    ensures before.0 > 0, after.0 as int == before.0 as int - 1,
+        after.1@ == before.1@ + seq![before.0],
+        parent_fixture_kind(mode, after.1@.len()) != 1,
+        parent_fixture_kind(mode, after.1@.len()) != 3,
+{
+    reveal(policy::parent_path_step);
+    reveal_strlit("missing: é\0end");
+    reveal_strlit("io: denied é\nend");
+}
+
+proof fn parent_fixture_result<M>(count: u8, mode: u8, root: Vec<u8>, metadata: M,
+    out: Result<Vec<u8>, policy::ParentPathFailure<Vec<u8>, String>>)
+    where M: Fn(Vec<u8>) -> (Vec<u8>, Result<bool, String>),
+    requires count <= 3, mode <= 6, root@ == seq![77u8, 0, 255],
+        forall|path: Vec<u8>, observed: (Vec<u8>, Result<bool, String>)|
+            #[trigger] metadata.ensures((path,), observed) ==>
+                observed.0 == path && parent_fixture_observation(mode, path@, observed.1),
+        policy::parent_path_result(count, root, parent_fixture_next, parent_fixture_append,
+            metadata, parent_fixture_missing, out),
+    ensures parent_fixture_expected(count, mode, out),
+{
+    reveal_strlit("missing: é\0end");
+    reveal_strlit("io: denied é\nend");
+    let (states, following, built, observed) = choose|states: Seq<(u8, Vec<u8>)>, following: (u8, Option<u8>),
+        built: Option<Vec<u8>>, observed: Option<(Vec<u8>, Result<bool, String>)>|
+        policy::parent_path_prefix::<u8, Vec<u8>, u8, String, _, _, M, _>(states, (count, root),
+            parent_fixture_next, parent_fixture_append, metadata, parent_fixture_missing)
+        && policy::parent_path_terminal(states.last(), following, built, observed,
+            parent_fixture_next, parent_fixture_append, metadata, parent_fixture_missing, out);
+    if states.len() > 1 {
+        parent_fixture_step(states[0], states[1], mode, metadata);
+        assert(states[1].1@ == parent_fixture_path(count, 1));
+    }
+    if states.len() > 2 {
+        parent_fixture_step(states[1], states[2], mode, metadata);
+        assert(states[2].1@ == parent_fixture_path(count, 2));
+    }
+    if states.len() > 3 {
+        parent_fixture_step(states[2], states[3], mode, metadata);
+        assert(states[3].0 == 0);
+        assert(states[3].1@ == parent_fixture_path(count, 3));
+    }
+    if states.len() > 4 {
+        parent_fixture_step(states[3], states[4], mode, metadata);
+        assert(false);
+    }
+    assert(1 <= states.len() <= 4);
+    let last = states.last();
+    if states.len() == 1 { assert(last == states[0]); }
+    else if states.len() == 2 { assert(last == states[1]); }
+    else if states.len() == 3 { assert(last == states[2]); }
+    else { assert(last == states[3]); }
+    assert(last.0 as int == count as int + 1 - states.len());
+    assert(last.1@ == parent_fixture_path(count, states.len() - 1));
+    match following.1 {
+        None => {
+            assert(last.0 == 0);
+            assert(states.len() == count as int + 1);
+            assert(parent_fixture_expected(count, mode, out));
+        },
+        Some(component) => {
+            assert(component == last.0 && last.0 > 0);
+            let built = built->Some_0;
+            let observed = observed->Some_0;
+            assert(built@ == last.1@ + seq![component]);
+            assert(observed.0 == built);
+            assert(parent_fixture_observation(mode, built@, observed.1));
+            if states.len() == 1 { assert(built@ == parent_fixture_path(count, 1)); }
+            else if states.len() == 2 { assert(built@ == parent_fixture_path(count, 2)); }
+            else { assert(built@ == parent_fixture_path(count, 3)); }
+            match observed.1 {
+                Ok(true) => { assert(parent_fixture_expected(count, mode, out)); },
+                Err(error) => {
+                    assert(parent_fixture_kind(mode, built@.len()) == 3);
+                    assert(parent_fixture_expected(count, mode, out));
+                },
+                _ => { assert(false); },
+            }
+        },
+    }
+}
+
+fn parent_fixture_run(count: u8, mode: u8)
+    -> (out: Result<Vec<u8>, policy::ParentPathFailure<Vec<u8>, String>>)
+    requires count <= 3, mode <= 6,
+    ensures parent_fixture_expected(count, mode, out),
+{
+    let root = vec![77u8, 0, 255];
+    let ghost original_root = root;
+    let metadata = |path: Vec<u8>| -> (out: (Vec<u8>, Result<bool, String>))
+        ensures out.0 == path, parent_fixture_observation(mode, path@, out.1),
+    { parent_fixture_metadata(mode, path) };
+    assert(policy::component_steps_finite::<u8, u8, _>(parent_fixture_next, |source: u8| source as nat));
+    assert(exists|rank: spec_fn(u8) -> nat| policy::component_steps_finite::<u8, u8, _>(parent_fixture_next, rank));
+    let out = policy::no_symlink_path(count, root, parent_fixture_next, parent_fixture_append,
+        metadata, parent_fixture_missing);
+    proof { parent_fixture_result(count, mode, original_root, metadata, out); }
+    out
+}
+
+fn expect_parent_bytes(actual: &[u8], expected: &[u8])
+    requires actual@ == expected@,
+{
+    expect_path_true(actual.len() == expected.len());
+    let mut i = 0;
+    while i < actual.len()
+        invariant i <= actual.len(), actual@ == expected@,
+        decreases actual.len() - i,
+    { expect_path_true(actual[i] == expected[i]); i += 1; }
+}
+
+fn expect_parent_success(out: Result<Vec<u8>, policy::ParentPathFailure<Vec<u8>, String>>, expected: &[u8])
+    requires out matches Ok(path) && path@ == expected@,
+{
+    match out { Ok(path) => expect_parent_bytes(path.as_slice(), expected), _ => panic!() }
+}
+
+fn expect_parent_symlink(out: Result<Vec<u8>, policy::ParentPathFailure<Vec<u8>, String>>, expected: &[u8])
+    requires out matches Err(policy::ParentPathFailure::Symlink(path)) && path@ == expected@,
+{
+    match out { Err(policy::ParentPathFailure::Symlink(path)) => expect_parent_bytes(path.as_slice(), expected), _ => panic!() }
+}
+
+fn expect_parent_native(out: Result<Vec<u8>, policy::ParentPathFailure<Vec<u8>, String>>)
+    requires out matches Err(policy::ParentPathFailure::Native(error)) && error@ == "io: denied é\nend"@,
+{
+    match out { Err(policy::ParentPathFailure::Native(error)) => expect_path_text(error.as_str(), "io: denied é\nend"), _ => panic!() }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn parent_walk_empty_never_observes_metadata() {
+    let mut mode = 0u8;
+    while mode < 7
+        invariant mode <= 7,
+        decreases 7 - mode,
+    { expect_parent_success(parent_fixture_run(0, mode), &[77u8, 0, 255]); mode += 1; }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn parent_walk_checks_final_component_and_continues_after_missing() {
+    expect_parent_success(parent_fixture_run(3, 0), &[77u8, 0, 255, 3, 2, 1]);
+    expect_parent_success(parent_fixture_run(3, 1), &[77u8, 0, 255, 3, 2, 1]);
+    expect_parent_success(parent_fixture_run(3, 6), &[77u8, 0, 255, 3, 2, 1]);
+    expect_parent_success(parent_fixture_run(1, 3), &[77u8, 0, 255, 1]);
+    expect_parent_success(parent_fixture_run(1, 5), &[77u8, 0, 255, 1]);
+    expect_parent_symlink(parent_fixture_run(1, 2), &[77u8, 0, 255, 1]);
+    expect_parent_symlink(parent_fixture_run(3, 2), &[77u8, 0, 255, 3]);
+    expect_parent_symlink(parent_fixture_run(3, 3), &[77u8, 0, 255, 3, 2]);
+    expect_parent_native(parent_fixture_run(3, 4));
+    expect_parent_native(parent_fixture_run(3, 5));
+    expect_parent_native(parent_fixture_run(1, 4));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn parent_failure_renderer_preserves_complete_value_and_selects_one_branch() {
+    let symlink = policy::ParentPathFailure::<Vec<u8>, Vec<u8>>::Symlink(vec![77u8, 0, 255]);
+    let (kind, bytes) = symlink.render(
+        |path: Vec<u8>| -> (out: (bool, Vec<u8>)) ensures out == (true, path), { (true, path) },
+        |error: Vec<u8>| -> (out: (bool, Vec<u8>)) ensures out == (false, error), { (false, error) });
+    expect_path_true(kind);
+    expect_parent_bytes(bytes.as_slice(), &[77u8, 0, 255]);
+    let native = policy::ParentPathFailure::<Vec<u8>, Vec<u8>>::Native(vec![0u8, 10, 255, 99]);
+    let (kind, bytes) = native.render(
+        |path: Vec<u8>| -> (out: (bool, Vec<u8>)) ensures out == (true, path), { (true, path) },
+        |error: Vec<u8>| -> (out: (bool, Vec<u8>)) ensures out == (false, error), { (false, error) });
+    expect_path_true(!kind);
+    expect_parent_bytes(bytes.as_slice(), &[0u8, 10, 255, 99]);
+}
+
 }
