@@ -11,6 +11,12 @@ pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "verified_paths.rs"]
+pub mod paths;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_paths as paths;
+
 verus! {
 
 pub enum GitConfigSchema {
@@ -164,6 +170,166 @@ pub fn admit_selector_host_path(path: &str, entry: Option<&str>)
         if identifiers::equal_text(origin, path) {
             return Err("Git config selector cannot select itself");
         }
+    }
+    Ok(())
+}
+
+/// 动态非法路径保留完整原文；固定错误只转交原消息。
+pub enum SelectorPathError<'a> {
+    InvalidRelative(&'a str),
+    Message(&'static str),
+}
+
+pub open spec fn selector_path_failure(error: SelectorPathError) -> (bool, Seq<char>) {
+    match error {
+        SelectorPathError::InvalidRelative(path) => (true, path@),
+        SelectorPathError::Message(message) => (false, message@),
+    }
+}
+
+pub open spec fn selector_path_result(out: Result<(), SelectorPathError>)
+    -> Option<(bool, Seq<char>)>
+{
+    match out { Ok(()) => None, Err(error) => Some(selector_path_failure(error)) }
+}
+
+impl SelectorPathError<'_> {
+    pub fn render<F: Fn(&str) -> String>(self, invalid: F) -> (out: String)
+        requires match self {
+            Self::InvalidRelative(path) => invalid.requires((path,)),
+            Self::Message(_) => true,
+        },
+        ensures match self {
+            Self::InvalidRelative(path) => invalid.ensures((path,), out),
+            Self::Message(message) => out@ == message@,
+        },
+    {
+        match self {
+            Self::InvalidRelative(path) => invalid(path),
+            Self::Message(message) => message.to_owned(),
+        }
+    }
+}
+
+pub open spec fn complete_selector_host_error(path: &str, entry: Option<&str>)
+    -> Option<(bool, Seq<char>)>
+{
+    if !paths::relative_path(path.spec_bytes()) {
+        Some((true, path@))
+    } else if !text_has_prefix(path, ".chrono-harness/") {
+        Some((false, "Git config selector paths must reside in .chrono-harness/"@))
+    } else if match entry { Some(origin) => origin@ == path@, None => false } {
+        Some((false, "Git config selector cannot select itself"@))
+    } else { None }
+}
+
+/// 先判相对词法路径，再判宿主范围，最后拒绝入口自身。
+pub fn admit_complete_selector_host_path<'a>(path: &'a str, entry: Option<&str>)
+    -> (out: Result<(), SelectorPathError<'a>>)
+    ensures selector_path_result(out) == complete_selector_host_error(path, entry),
+{
+    if !paths::valid_relative_path(path.as_bytes()) {
+        return Err(SelectorPathError::InvalidRelative(path));
+    }
+    match admit_selector_host_path(path, entry) {
+        Ok(()) => Ok(()),
+        Err(message) => Err(SelectorPathError::Message(message)),
+    }
+}
+
+/// JSON 适配器只交付原数组长度及当前行 registry_path 的原文本观察。
+pub trait SelectorRegistryRows<'a> {
+    spec fn registry_paths(&self) -> Seq<Option<&'a str>>;
+    fn len(&self) -> (count: usize)
+        ensures count == self.registry_paths().len();
+    fn registry_path(&self, index: usize) -> (path: Option<&'a str>)
+        requires index < self.registry_paths().len(),
+        ensures path == self.registry_paths()[index as int];
+}
+
+pub open spec fn identity_registry_path_error(observed: Option<&str>, targets: Seq<&str>)
+    -> Option<(bool, Seq<char>)>
+{
+    match observed {
+        None => Some((false, "Git selector registry_path required"@)),
+        Some(path) => match complete_selector_host_error(path, None) {
+            Some(error) => Some(error),
+            None => if exists|i: int| 0 <= i < targets.len() && targets[i]@ == path@ {
+                None
+            } else {
+                Some((false, "Git selector registry_path must name a registered policy target"@))
+            },
+        },
+    }
+}
+
+pub fn admit_identity_registry_path<'a>(observed: Option<&'a str>, targets: &[&str])
+    -> (out: Result<(), SelectorPathError<'a>>)
+    ensures selector_path_result(out) == identity_registry_path_error(observed, targets@),
+{
+    let path = match identity_registry_path(observed) {
+        Ok(path) => path,
+        Err(message) => { return Err(SelectorPathError::Message(message)); },
+    };
+    match admit_complete_selector_host_path(path, None) {
+        Ok(()) => {},
+        Err(error) => { return Err(error); },
+    }
+    match admit_identity_registry_target(path, targets) {
+        Ok(()) => Ok(()),
+        Err(message) => Err(SelectorPathError::Message(message)),
+    }
+}
+
+pub open spec fn selector_registry_prefix(
+    rows: Seq<Option<&str>>, targets: Seq<&str>, count: int,
+) -> bool {
+    0 <= count <= rows.len()
+        && forall|i: int| 0 <= i < count ==>
+            (#[trigger] identity_registry_path_error(rows[i], targets)).is_none()
+}
+
+pub open spec fn selector_registry_failure_at(
+    rows: Seq<Option<&str>>, targets: Seq<&str>, index: int, error: (bool, Seq<char>),
+) -> bool {
+    0 <= index < rows.len() && selector_registry_prefix(rows, targets, index)
+        && identity_registry_path_error(rows[index], targets) == Some(error)
+}
+
+/// 非 v3 不遍历；v3 全部成功，或返回第一个不合格行的完整错误。
+pub fn validate_identity_registry_paths<'a, R: SelectorRegistryRows<'a>>(
+    version3: bool, rows: &R, targets: &[&str],
+) -> (out: Result<(), SelectorPathError<'a>>)
+    ensures if !version3 { out is Ok } else {
+        match out {
+            Ok(()) => selector_registry_prefix(rows.registry_paths(), targets@,
+                rows.registry_paths().len() as int),
+            Err(error) => exists|i: int| #[trigger] selector_registry_failure_at(
+                rows.registry_paths(), targets@, i, selector_path_failure(error)),
+        }
+    },
+{
+    if !version3 { return Ok(()); }
+    let count = rows.len();
+    let mut i = 0;
+    while i < count
+        invariant version3, count == rows.registry_paths().len(), i <= count,
+            selector_registry_prefix(rows.registry_paths(), targets@, i as int),
+        decreases count - i,
+    {
+        match admit_identity_registry_path(rows.registry_path(i), targets) {
+            Ok(()) => {},
+            Err(error) => {
+                assert(selector_registry_failure_at(rows.registry_paths(), targets@,
+                    i as int, selector_path_failure(error)));
+                return Err(error);
+            },
+        }
+        assert forall|j: int| 0 <= j < i + 1 implies
+            (#[trigger] identity_registry_path_error(rows.registry_paths()[j], targets@)).is_none() by {
+            if j < i { assert(identity_registry_path_error(rows.registry_paths()[j], targets@).is_none()); }
+        }
+        i += 1;
     }
     Ok(())
 }

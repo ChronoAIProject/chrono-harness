@@ -1,6 +1,6 @@
 use chrono_harness::{
-    CommandSpec, ProcessEvidence, file_identity, resolve_program,
-    run_process_observed_retained_owned, sha256, validate_launch_evidence,
+    CommandSpec, ProcessEvidence, file_identity, resolve_program, run_process_observed_retained,
+    sha256, validate_launch_evidence,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -61,7 +61,7 @@ pub fn observe(
         )?;
         invoked = true;
         attempt.unknown.set(true);
-        run_process_observed_retained_owned(
+        run_process_observed_retained(
             root,
             &command,
             &[],
@@ -70,8 +70,8 @@ pub fn observe(
                 stdout: &directory.join("stdout"),
                 stderr: &directory.join("stderr"),
                 launch: &directory.join("launch.json"),
+                publication: Some(&attempt.publication),
             },
-            &attempt.publication,
         )
     })();
     let process = match evaluated {

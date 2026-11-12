@@ -50,7 +50,7 @@ impl Host {
         };
         fs::create_dir(host.root.path().join(".chrono-harness")).unwrap();
         fs::write(host.root.path().join(".chrono-harness/retention.json"), json!({
-            "schema":"chrono-output-retention/v2", "producers":{"pr-original":[".chrono-harness/state/pr-operations/"],"check-original":[".chrono-harness/state/pr-operations/"]},
+            "schema":"chrono-output-retention/v2", "producers":{"pr-original":[".chrono-harness/state/pr-operations/"]},
             "keep_seconds":0,"diagnostic_keep_seconds":86400,"max_related_outputs":32,"max_summaries":32,
             "max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000
         }).to_string()).unwrap();
@@ -1159,6 +1159,24 @@ fn returned_pr_receipt_binds_durable_launch_without_retaining_credentials() {
     let (code, result) = h.status();
     assert_eq!(code, 0, "{result}");
     let receipt = &result["receipts"][0];
+    let operation = result["operation"].as_str().unwrap();
+    let inventory = Inventory::adopted(h.root.path()).unwrap().unwrap();
+    for field in ["stdout_original", "stderr_original", "launch_original"] {
+        let original = &receipt[field];
+        let path = original["path"].as_str().unwrap();
+        assert!(path.starts_with(&format!("{operation}/")), "{original}");
+        assert!(
+            inventory
+                .published_tree_member(
+                    "pr-original",
+                    operation,
+                    path,
+                    original["sha256"].as_str().unwrap(),
+                    original["length"].as_u64().unwrap(),
+                )
+                .unwrap()
+        );
+    }
     let original = &receipt["launch_original"];
     let path = original["path"]
         .as_str()
@@ -1193,11 +1211,16 @@ fn unregistered_process_originals_refuse_dispatch() {
     policy["producers"]
         .as_object_mut()
         .unwrap()
-        .remove("check-original");
+        .remove("pr-original");
     fs::write(path, policy.to_string()).unwrap();
     let (code, result) = h.status();
     assert_eq!(code, 2, "{result}");
-    assert!(result["error"].as_str().unwrap().contains("check-original"));
+    assert!(
+        result["error"]
+            .as_str()
+            .unwrap()
+            .contains("PR state producer")
+    );
     assert!(h.calls().is_empty());
 }
 
@@ -1354,24 +1377,16 @@ fn continuation_recovers_the_originals_handoff_before_releasing_the_prior_operat
     assert_eq!(code, 0, "{previous}");
     let path = previous["operation"].as_str().unwrap();
     let saved_result = fs::read(h.root.path().join(path).join("result.json")).unwrap();
-    // Re-consuming the actual immutable originals recreates the exact remaining
-    // producer protection after interruption between result sealing and handoff.
-    // All bytes and domain results still come from the real original producer.
-    for field in ["stdout_original", "stderr_original", "launch_original"] {
-        let original = &previous["receipts"][0][field];
-        let path = original["path"].as_str().unwrap();
-        let bytes = fs::read(h.root.path().join(path)).unwrap();
-        assert!(
-            chrono_harness::retained_artifacts::retention::publish_pending_original(
-                h.root.path(),
-                "check-original",
-                path,
-                &bytes,
-                json!({"consumer":"continuation regression re-reading the original publication"}),
-            )
-            .unwrap()
-        );
-    }
+    // Recreate the operation's actual recovery protection after interruption
+    // between sealing and custody handoff. All process originals belong to it.
+    Inventory::adopted(h.root.path())
+        .unwrap()
+        .unwrap()
+        .reference_paths(
+            &format!("pr-recovery:{}", chrono_harness::sha256(path.as_bytes())),
+            &[path.to_owned()],
+        )
+        .unwrap();
     let (code, failed) = h.run(&[
         "pr-status",
         "--pr",

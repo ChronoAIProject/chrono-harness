@@ -32,6 +32,185 @@ fn expect_selector_binding_result(actual: Result<(), &str>, expected: Result<(),
     }
 }
 
+pub struct RegistryPathsFixture<'a>(pub Vec<Option<&'a str>>);
+
+proof fn selector_fixture_path_facts()
+    ensures
+        policy::paths::relative_path(".chrono-harness/a".spec_bytes()),
+        policy::paths::relative_path(".chrono-harness/b".spec_bytes()),
+        policy::paths::relative_path(".chrono-harness/A".spec_bytes()),
+        policy::text_has_prefix(".chrono-harness/a", ".chrono-harness/"),
+        policy::text_has_prefix(".chrono-harness/b", ".chrono-harness/"),
+        policy::text_has_prefix(".chrono-harness/A", ".chrono-harness/"),
+        ".chrono-harness/a"@ != ".chrono-harness/A"@,
+        policy::paths::relative_path("other/policy".spec_bytes()),
+        !policy::text_has_prefix("other/policy", ".chrono-harness/"),
+        !policy::paths::relative_path(".chrono-harness/../a".spec_bytes()),
+        !policy::paths::relative_path(".chrono-harness/目录é\0\n尾部".spec_bytes()),
+{
+    broadcast use vstd::string::is_ascii_spec_bytes;
+    reveal_strlit(".chrono-harness/"); reveal_strlit(".chrono-harness/a");
+    reveal_strlit(".chrono-harness/b"); reveal_strlit(".chrono-harness/A");
+    reveal_strlit("other/policy"); reveal_strlit(".chrono-harness/../a");
+    assert(vstd::string::is_ascii(".chrono-harness/")
+        && vstd::string::is_ascii(".chrono-harness/a")
+        && vstd::string::is_ascii(".chrono-harness/b")
+        && vstd::string::is_ascii(".chrono-harness/A")
+        && vstd::string::is_ascii("other/policy")
+        && vstd::string::is_ascii(".chrono-harness/../a"));
+    assert(".chrono-harness/a".spec_bytes().take(16) =~= ".chrono-harness/".spec_bytes());
+    assert(".chrono-harness/b".spec_bytes().take(16) =~= ".chrono-harness/".spec_bytes());
+    assert(".chrono-harness/A".spec_bytes().take(16) =~= ".chrono-harness/".spec_bytes());
+    assert(".chrono-harness/a"@[16] != ".chrono-harness/A"@[16]);
+    assert(policy::paths::parent_component_at(".chrono-harness/../a".spec_bytes(), 16));
+    reveal_strlit(".chrono-harness/目录é\0\n尾部");
+    assert(".chrono-harness/目录é\0\n尾部"@ =~=
+        seq!['.', 'c', 'h', 'r', 'o', 'n', 'o', '-', 'h', 'a', 'r', 'n', 'e', 's', 's', '/',
+            '目', '录', 'é', '\0', '\n', '尾', '部']);
+    assert('目' as u32 == 30446 && '录' as u32 == 24405 && 'é' as u32 == 233);
+    assert(vstd::utf8::encode_scalar(30446) == seq![231u8, 155, 174]) by (compute);
+    assert(vstd::utf8::encode_scalar(24405) == seq![229u8, 189, 149]) by (compute);
+    assert(vstd::utf8::encode_scalar(233) == seq![195u8, 169]) by (compute);
+    assert(vstd::utf8::encode_scalar(0) == seq![0u8]) by (compute);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 21);
+    assert(".chrono-harness/目录é\0\n尾部".spec_bytes().len() > 24);
+    assert(".chrono-harness/目录é\0\n尾部".spec_bytes()[24] == 0);
+}
+
+impl<'a> policy::SelectorRegistryRows<'a> for RegistryPathsFixture<'a> {
+    open spec fn registry_paths(&self) -> Seq<Option<&'a str>> { self.0@ }
+    fn len(&self) -> usize { self.0.len() }
+    fn registry_path(&self, index: usize) -> Option<&'a str> { self.0[index] }
+}
+
+fn expect_selector_path_success(actual: Result<(), policy::SelectorPathError>)
+    requires actual is Ok,
+{
+    match actual { Ok(()) => {}, Err(_) => { panic!(); } }
+}
+
+fn expect_selector_path_error(actual: Result<(), policy::SelectorPathError>,
+    invalid_relative: bool, expected: &str)
+    requires match actual {
+        Ok(()) => false,
+        Err(policy::SelectorPathError::InvalidRelative(path)) => invalid_relative && path@ == expected@,
+        Err(policy::SelectorPathError::Message(message)) => !invalid_relative && message@ == expected@,
+    },
+{
+    match actual {
+        Ok(()) => { panic!(); },
+        Err(policy::SelectorPathError::InvalidRelative(path)) => {
+            expect_true(invalid_relative);
+            expect_true(policy::matches_expected(path, Some(expected)));
+        },
+        Err(policy::SelectorPathError::Message(message)) => {
+            expect_true(!invalid_relative);
+            expect_true(policy::matches_expected(message, Some(expected)));
+        },
+    }
+}
+
+fn expect_registry_path_failure<'a, R: policy::SelectorRegistryRows<'a>>(
+    rows: &R, targets: &[&str], first: usize, invalid: bool, expected: &str,
+)
+    requires first < rows.registry_paths().len(),
+        policy::selector_registry_prefix(rows.registry_paths(), targets@, first as int),
+        policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@)
+            == Some((invalid, expected@)),
+{
+    let actual = policy::validate_identity_registry_paths(true, rows, targets);
+    proof {
+        match &actual {
+            Ok(()) => {
+                assert(policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@).is_none());
+                assert(false);
+            },
+            Err(error) => {
+                let i = choose|i: int| #[trigger] policy::selector_registry_failure_at(
+                    rows.registry_paths(), targets@, i, policy::selector_path_failure(*error));
+                if i < first {
+                    assert(policy::identity_registry_path_error(rows.registry_paths()[i], targets@).is_none());
+                }
+                if i > first {
+                    assert(policy::identity_registry_path_error(rows.registry_paths()[first as int], targets@).is_none());
+                }
+                assert(i == first as int);
+                assert(policy::selector_path_failure(*error) == (invalid, expected@));
+            },
+        }
+    }
+    expect_selector_path_error(actual, invalid, expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_registry_paths_skip_non_v3_and_accept_empty_v3() {
+    let rows = RegistryPathsFixture(vec![None, Some("../bad\0\n"), Some("other/missing")]);
+    expect_selector_path_success(policy::validate_identity_registry_paths(false, &rows, &[]));
+    let empty = RegistryPathsFixture(Vec::new());
+    expect_selector_path_success(policy::validate_identity_registry_paths(true, &empty, &[]));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_registry_paths_accept_all_registered_rows_and_repeated_targets() {
+    proof { selector_fixture_path_facts(); }
+    let first = ".chrono-harness/a";
+    let second = ".chrono-harness/b";
+    let rows = RegistryPathsFixture(vec![Some(first), Some(second), Some(first)]);
+    expect_selector_path_success(policy::validate_identity_registry_paths(true, &rows, &[first, second]));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_registry_paths_return_first_missing_or_invalid_row() {
+    proof { selector_fixture_path_facts(); }
+    let first = ".chrono-harness/a";
+    let invalid = ".chrono-harness/目录é\0\n尾部";
+    let missing_first = RegistryPathsFixture(vec![Some(first), None, Some(invalid)]);
+    expect_registry_path_failure(&missing_first, &[first], 1, false, "Git selector registry_path required");
+    let invalid_first = RegistryPathsFixture(vec![Some(first), Some(invalid), None]);
+    expect_registry_path_failure(&invalid_first, &[first], 1, true, invalid);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_registry_paths_check_host_scope_before_exact_membership() {
+    proof { selector_fixture_path_facts(); }
+    let outside = RegistryPathsFixture(vec![Some("other/policy")]);
+    expect_registry_path_failure(&outside, &[], 0, false,
+        "Git config selector paths must reside in .chrono-harness/");
+    let different = RegistryPathsFixture(vec![Some(".chrono-harness/A")]);
+    expect_registry_path_failure(&different, &[".chrono-harness/a"], 0, false,
+        "Git selector registry_path must name a registered policy target");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_complete_host_path_preserves_relative_host_and_self_error_priority() {
+    proof { selector_fixture_path_facts(); }
+    let same = ".chrono-harness/a";
+    expect_selector_path_error(policy::admit_complete_selector_host_path(same, Some(same)),
+        false, "Git config selector cannot select itself");
+    let invalid = ".chrono-harness/../a";
+    expect_selector_path_error(policy::admit_complete_selector_host_path(invalid, Some(invalid)),
+        true, invalid);
+    expect_selector_path_success(policy::admit_complete_selector_host_path(same, Some(".chrono-harness/A")));
+}
+
+fn selector_invalid_path_echo(path: &str) -> (out: String)
+    ensures out@ == path@,
+{ path.to_owned() }
+
+fn selector_unused_path_formatter(_unused: &str) -> String
+    requires false,
+{ panic!() }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selector_path_error_render_keeps_full_text_and_skips_unused_formatter() {
+    let original = "../目录é\0\n尾部";
+    let rendered = policy::SelectorPathError::InvalidRelative(original).render(selector_invalid_path_echo);
+    expect_true(policy::matches_expected(rendered.as_str(), Some(original)));
+    let message = "完整错误é\0\n尾部";
+    let rendered = policy::SelectorPathError::Message(message).render(selector_unused_path_formatter);
+    expect_true(policy::matches_expected(rendered.as_str(), Some(message)));
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn selector_binding_requires_an_input_before_checking_the_three_text_fields() {
     let program = "/git/版本";

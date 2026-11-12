@@ -46,8 +46,34 @@ Python 实现暂缓，不把未迁移程序列为已证明。
 读取 v2 对象登记、核对身份和待退役目录；外部 IO 的成功与完整性不是这些布尔判断的
 证明结论。Rust 独立预期覆盖实际活跃、unknown、终态但消费者未释放、capability、
 失败、诊断、损坏登记与完整退役，并核四个生产者释放后外层目录实际消失。
-这些源码与 FILEMAP 影响边同时变更，原动作、线程和限制保留；本次交接未执行任何
-证明或行为检查，不能据根已登记宣称通过。全部编译、验证、IO、存储及 CI 成本未知。
+这些源码与 FILEMAP 影响边同时变更，原动作、线程和限制保留；证明与行为结果须以
+固定候选原报告为准，不能据根已登记宣称通过。全部编译、验证、IO、存储及 CI 成本未知。
+
+OID 复用缓存的绑定守卫由现有 `verified_status.rs` 的 `can_reuse_oid` 和
+`record_verified_oid` 定义，真实 `Reader` 的同名方法直接消费。
+无绑定时不调用查询或插入接口，返回原状态，查询结果固定为 false；有绑定时仅转交
+一次完整原键，并保留实际查询结果及返回的缓存状态。独立 Verus 预期使用有调用次数和
+原键记录的 fixture，核命中、未命中、无绑定、完整 Unicode／NUL／换行和空键；
+无绑定分支传入前提恒假的接口，检查它确实不访问缓存。这五组预期同时作为 Rust 测试运行。
+真实 immutable blob／tree、绑定与环境变化及无效 tree 文本的原行为测试继续保留；
+`verify_oid` 的原 OID 准入、Git 观察顺序、错误及返回合同不因此改变。
+
+本项逐项采用固定 Rust 1.95.0 的以下外部接口：
+
+| 外部接口 | 实际采用的合同 |
+| --- | --- |
+| `Option::is_some` | 真实绑定存在时返回 true，缺失时返回 false；不在适配层另行选择资格。 |
+| `RefCell::borrow`／`borrow_mut`、`Ref::deref`／`RefMut::deref_mut` | 在原借用条件有效时取得同一个完整集合的共享／独占借用；原借用冲突的 panic 继续传播。无绑定时这些接口均不调用。 |
+| `BTreeSet::<String>::contains::<str>` | 按完整文本查询同一个集合，不修改集合；不把前缀或规范化文本当作相同键。 |
+| `BTreeSet::<String>::insert`、`<&str as Into<String>>::into` 及 `<String as From<&str>>::from` | 由完整原文本构造键并插入原集合，保全其它键；重复键保持集合不变，原布尔返回值由此处真实调用方忽略。 |
+
+适配回调只转交这些实际接口，不新增仓内准入或状态分支，也没有仓内函数受信例外。
+本项沿用现有状态生产／独立根、固定工具、严格整 crate 参数及预算。
+FILEMAP 补齐 `facts_binding.rs` 到 runner 专属测试的显式边。新增判断及其独立预期
+分别由已有 program 根负责；适配文件未进入这些 Verus 根的编译输入，存量分类仍为未知，
+不借调用关系取得整文件证明资格。局部守卫不证明整个 Reader、RefCell／集合内部实现、
+其余缓存状态、Git／JSON／进程组合或全仓覆盖。完整源码／编译／调用绑定和其它存量迁移
+仍有各自义务；本候选实际验收须消费原报告。新增构建、证明、CI 和完整生命周期成本未测。
 
 registry snapshot 的实际状态类型与初始双 map 构造由
 `verified_status.rs::RegistrySnapshot<V>` 和 `registry_snapshot_initial` 拥有。
@@ -61,6 +87,28 @@ registry snapshot 的实际状态类型与初始双 map 构造由
 entry／target 获取、严格 JSON、selector 解析与 selection 的 JSON 投影仍待证明，
 不把整个 snapshot 起始组合或外围适配器列为已证明。沿用现有两项状态整 crate 根及真实
 消费者测试；完整构建、证明、运行、CI 与存储成本未测。
+
+registry selection 的对象投影由
+`verified_status.rs::normalize_registry_selection_object` 统一拥有。
+无对象时不调用字段接口；有对象时先以完整键 `sha256` 删除字段，再以完整键
+`schema` 写入 `chrono-registry-selection/v1`，结果关系绑定两次真实回调及其顺序。
+`facts.rs::registry_snapshot_start` 与 `facts_configs.rs::identity` 共用薄 JSON 适配器，
+不再各自判断对象和选择投影参数，也不增加集合复制或分配。
+
+本项逐项采用固定 lockfile 的 Serde JSON 1.0.151 外部接口：
+`Value::as_object_mut` 仅投影原对象可变借用，非对象返回 None；
+`Map::remove` 删除指定完整键，`Map::insert` 插入或替换指定完整键，二者保留其余字段；
+`Value::String` 构造原字符串值，固定 Rust 的 `From<&str> for String` 保留完整文本。
+两次回调只执行上述接口并返回同一对象借用；`Option::map` 只转交原 selection。
+仓内对象分支、参数选择及调用次序不在这些外部假设内。
+
+独立 Verus 预期同时作为 Rust 测试，覆盖无对象时零调用、严格删除后插入、完整字段与
+schema、空元数据、Unicode／NUL／换行保留及已匹配 schema 的情况。
+其 fixture 记录实际调用及完整参数，不冒充 Serde 对象内部模型；现役 snapshot、selector
+与 identity 消费测试继续验证真实 Rust 组合。两项状态根仍执行严格整 crate 证明，
+不新增依赖、工具、证明根、过滤或预算；实际通过须由候选证明与消费测试原结果确认。
+JSON 内部语义与完整组合证明、文件到编译及生产调用的完整覆盖和全仓覆盖门仍未完成。
+源码增加一个无分配的转发函数；完整构建、验证、CI 和存储成本未测。
 
 registry 的批量组装由 `verified_status.rs::registry_parse_batch` 定义。
 同源规格先核完整返回数量，再按请求顺序核路径、解析当前原字节并更新 bytes／values
@@ -117,6 +165,22 @@ checkout 的实际对象摘要读取循环由 `verified_status.rs::checkout_hash
 没有仓内函数受信例外。沿用现有两个状态证明根、FILEMAP、工具和预算；
 完整构建、证明、CI、运行及存储成本未测。此范围不证明摘要算法本身、外部读取器、
 其余文件系统适配或完整 checkout；全仓覆盖门与其余迁移继续保留义务。
+
+Git blob 的声明长度、摘要分派及完整摘要比较由现有状态根的
+`git_blob_matches` 定义。实际 `facts_binding.rs::BlobObject::matches` 直接消费此结果，
+用于批量 registry blob 和 immutable input 的原读取入口。长度不符立即返回 false，
+不调用摘要接口；长度相同时，只调用原 OID 字节数选中的接口：40 字节使用 SHA-1，
+其余宽度沿用原 SHA-256 分支。两者接收完整声明长度与同一原字节切片，
+并以完整摘要文本相等决定结果。OID 准入仍由原 metadata 读取方完成，本函数不增加准入分支。
+九组独立 Verus 预期同时作为 Rust 测试，核长度先决、两种算法、原二进制内容、
+空内容、完整摘要不符、Unicode／NUL／换行全文和原非 40 字节分支；
+不可调用接口用不成立的前置条件与实际 panic 核对未选分支零调用。
+逐项外部接口为固定 sha1／sha2 的 `Digest::new`／`update`／`finalize`，
+Rust 标准格式化的 `blob {length}\0` 头与小写十六进制结果，以及既有字符串／切片接口。
+薄回调只计算选中算法的原摘要，不维护准入或比较状态；长度错误时不构造头，成功分支仍只构造一次。
+沿用现有两个状态整 crate 根、FILEMAP、真实读取测试、固定工具和预算。
+摘要算法本身、metadata 解析、IO 及两个完整读取事务仍有各自的证明和验收义务；
+完整构建、证明、运行、CI 与存储成本未测，不将本项扩大为完整读取器或全仓证明。
 
 缺失工作树的政策来源选择由现有 `verified_lifecycle.rs` 维护：未迁移 import 必须先核封存导入原件，显式迁移后的 import 和 birth 才按最后目标绑定选择当前输入或固定 Git 输入。导入回执的完整 schema、操作、成功状态、协调者、报告路径和配置地址也由同源根逐字判断，真实恢复入口直接消费。独立 Verus 预期同时在 Rust 运行，覆盖迁移优先级、缺字段、未封存及全文差异。保留所有者提供实际封存、摘要与物理身份观察；JSON 投影、Git／文件读取、摘要算法和外围恢复组合仍是明确接口或未证明范围，不据此宣称完整生命周期已证明。沿用现有两项整 crate 根与行为检查，不新增工具或预算；完整验证和运行成本未测。
 Git 输入 guard 的对象形状、完整 schema、非空 ID 清单、文件输入数组、单个 ID／location
@@ -905,7 +969,7 @@ JSON、`Option` 的只读映射和固定 `Path` 接口属于明确外部假设�
 字段和重复摘要，再检查路径文本及重复路径。成功借出原路径；独立 Verus 预期核验首错和
 集合状态。外部接口为已固定的 serde_json 字段观察及标准库 `BTreeSet<&str>::insert`：
 插入完整文本，当且仅当先前不含该文本时返回 true。选择何时插入和如何处理结果由 Verus
-决定；平台分派、登记路径的第二轮遍历及外围读取仍有未证明部分。
+决定；平台分派和外围读取仍有未证明部分。
 
 配置行的第一轮完整遍历、首错停止、摘要／路径集合状态及按输入顺序借出全部目标路径，
 由同根 `collect_identity_paths` 证明。成功要求每行在其前缀集合下均合格；失败对应首个
@@ -918,6 +982,20 @@ JSON、`Option` 的只读映射和固定 `Path` 接口属于明确外部假设�
 坏行阻止后续插入、非相邻摘要重复，以及路径重复时仍保留该行的摘要；原 Rust 行为测试
 继续验证真实选择器。没有增加观察向量、JSON 复制或证明入口，运行时仍逐行读取并收集
 N 个路径引用；标准有序集合比较成本及完整构建、证明、CI、存储成本未测。
+
+v3 登记路径的第二轮完整遍历由同根 `validate_identity_registry_paths` 拥有。
+非 v3 直接返回；v3 按原索引检查必需文本、相对词法路径、宿主范围及已登记目标的全文成员关系。
+成功要求全部原行均合格；失败对应首个不合格行，且此前的完整前缀均有效，循环按剩余行数终止。
+`admit_complete_selector_host_path` 复用现有路径准入，再判 `.chrono-harness/` 范围和入口自身引用；
+实际 `host_path` 直接消费同一结果，保持相对路径、宿主范围、自身引用的错误优先级。
+动态非法路径保留完整原借用；`SelectorPathError::render` 只向原 Debug 格式化接口转交全文，
+固定消息直接复制，不调用未使用的路径渲染器。六组独立 Verus 预期同时执行普通 Rust 断言，
+核非 v3 跳过、空输入、完整成功及重复目标、首个缺失／非法行、全文大小写和各层错误优先级，
+以及 Unicode／NUL／换行的完整原路径和错误。独立首错预期证明原见证对应指定的最早行。
+薄 `SelectorRegistryRows` 适配器只调用固定 serde_json 原数组长度、原索引、`registry_path`
+字段及 `as_str`，不创建观察向量或复制 JSON，不加入仓内判断。标准外部格式化接口沿用下文合同。
+Git binding 的原整 crate 根直接编译现有 `verified_paths.rs`，扩展该次证明的源码范围；
+没有新增工具、证明操作、过滤或预算。外围 selector／IO 组合与全仓覆盖仍待完成，完整成本未测。
 
 `collect_registry_paths` 在同一 runner-status 根证明登记快照的完整路径库存。
 真实 `facts::registry_paths` 显式读取四个固定字段，将观察直接交给该函数；
@@ -1167,6 +1245,10 @@ pass／warn 为 0、fail 为 1、error 为 2。此处不另加非空或名称格
 两项判断证明返回值与规格充要相等；独立预期覆盖字段分别缺失、全部合法级别、相似／带后缀／
 大小写级别、任意非空代码／消息／种类、Unicode／NUL、重复及空字符串引用、精确／相似／绝对前缀、
 空后缀与摘要长度／大小写边界。
+
+Unicode 前缀的独立预期通过按字符序列长度递减的归纳证明 UTF-8 编码保留拼接，
+再复用固定 vstd 的 ASCII 编码定理取得 22 字节前缀。原 Unicode／NUL 样本和三个后置条件保留；
+不再一次展开整段 UTF-8 递归，不增加求解预算、外部假设、证明操作或运行时逻辑。
 
 复用原两项状态整 crate 操作、实际使用方及 FILEMAP 登记，不新增证明进程或依赖。
 固定 vstd 的 `<[u8]>::split_at` 是这里明确采用的外部标准库接口：索引在切片长度内，
@@ -1897,6 +1979,16 @@ runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` �
 维护直接消费；独立预期在既有 runner-tests 的 verified_release 根覆盖相等、超出、空容量
 与 u64 溢出边界，沿原 `verify.retention-release`／`-tests` 验证。
 
-本候选尚未执行这些证明或 Rust 测试。已声明根不能代替原进程成功结果；观察事实的
+同根的 `pending_retirements` 按逐项记录的终态观察选择仍需恢复的原件，保持完整 ID、
+顺序和重复；只有终态观察为 true 才移除。实际使用方为现役 retention 行为测试
+`several_retirements_count_their_shared_finalized_original_once`：每轮读取自身显式 ID 的
+保留记录，将原 `output_retired` 观察交给该函数，避免报告字节已删除而引用尚未解绑时
+提前停止。原 4 轮上限、预算、全部计数及原件保护断言保持，原失败报告继续保留。
+四组独立 Verus 预期同时作为 Rust 测试，核空／全部终态、顺序、字节删除后的未终态，
+以及完整 Unicode／NUL／换行 ID、空 ID 和重复观察。沿用原两个整 crate 根和未过滤
+行为入口。文件／JSON 读取、既有 `output` 字段观察与字符串克隆是逐项外部接口；
+本项证明选择与原输入的对应，不证明外部记录事务或整个测试驱动；完整成本未测。
+
+已声明根不能代替原进程成功结果；观察事实的
 采集、JSON、文件发布、目录身份、租约、跨进程恢复和整个 IO 组合仍未证明，不能将
 局部谓词称为完整事务证明。行为验收与平台／宿主／交付缺口继续保留。

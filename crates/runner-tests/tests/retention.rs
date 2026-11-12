@@ -5226,11 +5226,11 @@ fn several_retirements_count_their_shared_finalized_original_once() {
     for _ in 0..4 {
         // Deleted bytes can still have a disposing declaration whose
         // references need another bounded round before retirement completes.
-        let pending: Vec<_> = ids
+        let observed: Vec<_> = ids
             .iter()
-            .filter(|id| !output_retired(h.path(), id))
-            .cloned()
+            .map(|id| (id.clone(), output_retired(h.path(), id)))
             .collect();
+        let pending = chrono_harness::verified_release::pending_retirements(&observed);
         if pending.is_empty() {
             break;
         }
@@ -6055,6 +6055,7 @@ fn adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure() {
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,
+            publication: None,
         },
     )
     .unwrap();

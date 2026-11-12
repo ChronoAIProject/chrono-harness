@@ -707,7 +707,7 @@ impl Launch {
             })
         });
         serde_json::json!({
-            "consistency":"independent atomic reads before cleanup",
+            "consistency":"independent atomic reads",
             "slot":self.index,
             "generation":slot.generation.load(Ordering::Acquire),
             "state":slot.state.load(Ordering::Acquire),

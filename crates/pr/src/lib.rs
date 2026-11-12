@@ -320,6 +320,7 @@ impl Client {
             stdout: &paths[0],
             stderr: &paths[1],
             launch: &paths[2],
+            publication: Some(self.state.publication()),
         };
         let process = run_process_observed_retained_for(
             &self.root,

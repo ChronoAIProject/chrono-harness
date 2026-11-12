@@ -1007,8 +1007,9 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
             .unwrap();
         let (code, report, error) = invoke("active");
         assert_eq!(code, 0, "{report} {error}");
+        let active = state();
         for original in before["outputs"].as_array().unwrap() {
-            assert!(state()["outputs"].as_array().unwrap().contains(original));
+            assert!(active["outputs"].as_array().unwrap().contains(original));
         }
         inventory()
             .reference("collector-required-inputs", &[])

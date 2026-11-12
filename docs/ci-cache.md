@@ -254,7 +254,7 @@ provider 从 `chrono-cache plan --github-output` 取得输出键，保留计划�
 
 cache 专属测试也在自己的 target 编译生产 CLI，自己的计划不再执行 `build.cache`，`check.cache` 及其独用输入 `cache.producer` 随无使用方的恢复／保存路径退役。测试 target 仍走原内容核验、源码刷新和原未过滤检查；native 发布测试、bootstrap 和发行打包继续使用生产 cache 构建，完整成本收益未测。
 
-runner 专属测试直接在自己的 target 编译生产 CLI，不再恢复或保存 `check.runner`。仍执行 `build.runner` 的现有 CI 测试单元接手这项缓存的唯一保存权；其他实际使用方继续恢复它，测试 target 的缓存和原检查操作保留。完整缓存与构建成本收益未测。
+runner 及其他现役专属测试直接在各自 target 编译同一份生产 CLI；`check.runner` 缓存及其订阅已退役。当前构建、缓存与使用方关系由 [cache.json](../.chrono-harness/cache.json) 和 [CI 单元说明](ci-units.md)维护；测试 target 的缓存和原检查操作保留，detector 启动、正式生产构建和发布打包继续走各自登记。完整缓存与构建成本收益未测。
 
 明确的 `save_after_bootstrap` 子集可在原操作结束后，改用独立 bootstrap 步骤成功作为保存条件，使后续测试失败时仍保留可复用启动编译。未知、重复或不在可保存集合的子集项会让生成失败；取消时不保存。该子集是宿主声明，不证明后续每次构建成功。恢复的编译候选仍须经过原构建入口。
 
@@ -275,7 +275,7 @@ planner／provider 按字典序排列消费者精确缓存集，用 `cache_0_key
 
 `plan --plan-output` 的完整相对地址标识一次尝试；独立地址和没有输出地址的 Rust API 调用各自独立。
 原件目录先持久保存 intent，再解析环境和执行物；每个输入另保存 intent 和实际调用。
-现有 runner 持有同一个目录发布能力，保存实际启动身份和已取得的有界 stdout／stderr。
+现有 runner 从 `ProcessEvidence.publication` 取得同一个目录发布能力，派发前只预留一次有界 stdout／stderr 和启动记录容量，再在该目录保存实际启动身份和已取得的原字节；不另登记嵌套输出。
 返回后保存原进程回执，核启动身份、真实退出和 `owned_work_joined`，再解释 stdout 或文件路径。
 启动前的解析错误保留为未派发；进程接口只返回错误字符串时保留错误并保持任务终态 unknown。
 静默、文件存在和 PID 消失均不产生终态。目录发布或计划交接失败保留原件，不能据此重新探测。

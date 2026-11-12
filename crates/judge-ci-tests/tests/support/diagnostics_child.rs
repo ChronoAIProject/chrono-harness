@@ -4,6 +4,22 @@ mod git_model;
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
+fn monotonic_ns() -> u64 {
+    // Use the runner deadline's cross-process clock; Instant has no public epoch.
+    #[cfg(target_vendor = "apple")]
+    let clock = libc::CLOCK_UPTIME_RAW;
+    #[cfg(not(target_vendor = "apple"))]
+    let clock = libc::CLOCK_MONOTONIC;
+    let mut now: libc::timespec = unsafe { std::mem::zeroed() };
+    assert_eq!(unsafe { libc::clock_gettime(clock, &mut now) }, 0);
+    u64::try_from(now.tv_sec)
+        .unwrap()
+        .checked_mul(1_000_000_000)
+        .unwrap()
+        .checked_add(u64::try_from(now.tv_nsec).unwrap())
+        .unwrap()
+}
+
 fn fixture_operation(path: &str) -> ExitCode {
     let input = std::fs::read_to_string(path).unwrap();
     let case = input.trim_end_matches('\n');
@@ -178,7 +194,7 @@ fn main() -> ExitCode {
     if let Some(address) = args.get(1) {
         let mut socket = std::net::TcpStream::connect(address).unwrap();
         socket
-            .write_all(format!("ready:{}\n", std::process::id()).as_bytes())
+            .write_all(format!("ready:{}:{}\n", std::process::id(), monotonic_ns()).as_bytes())
             .unwrap();
         socket.read_exact(&mut [0]).unwrap();
     }
