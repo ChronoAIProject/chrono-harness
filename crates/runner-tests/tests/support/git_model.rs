@@ -1772,6 +1772,9 @@ mod runtime {
                             );
                         }
                     }
+                    let source_objects = common(&path).join("objects");
+                    let target_objects = common(root).join("objects");
+                    let mut imported = BTreeSet::<String>::new();
                     for current in retained {
                         let snapshot = tree(&other, &current)?.clone();
                         let tree_oid =
@@ -1780,11 +1783,13 @@ mod runtime {
                             .chain(std::iter::once(&tree_oid))
                             .chain(snapshot.values().map(|entry| &entry.oid))
                         {
-                            fs::copy(
-                                common(&path).join("objects").join(object),
-                                common(root).join("objects").join(object),
-                            )
-                            .map_err(|e| e.to_string())?;
+                            if imported.insert(object.clone()) {
+                                let target = target_objects.join(object);
+                                if !target.try_exists().map_err(|e| e.to_string())? {
+                                    fs::copy(source_objects.join(object), target)
+                                        .map_err(|e| e.to_string())?;
+                                }
+                            }
                         }
                         repo.trees.insert(tree_oid, snapshot.clone());
                         repo.commits.insert(current.clone(), snapshot);
