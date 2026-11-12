@@ -2668,6 +2668,82 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
     assert_eq!(maintain_fixture_to(h.path(), 0), 0);
 }
 #[test]
+fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs() {
+    if !isolated_capability_test(
+        "published_output_scope_keeps_child_reports_without_accumulating_their_inputs",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(8);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let publish = |name: &str| {
+        let path = tree(h.path(), name);
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        publication.complete(json!({"exit":0})).unwrap();
+        path
+    };
+    let groups: Vec<Vec<String>> = (0..3)
+        .map(|group| {
+            let paths = (0..3)
+                .map(|input| publish(&format!("input-{group}-{input}")))
+                .collect::<Vec<_>>();
+            inventory(h.path())
+                .reference_paths(&format!("domain-owner-{group}"), &paths)
+                .unwrap();
+            paths
+        })
+        .collect();
+    let unknown = publish("unknown-domain-input");
+    inventory(h.path())
+        .reference_paths("unfinished-domain-owner", &[unknown.clone()])
+        .unwrap();
+    let unrelated = publish("unrelated-expired");
+    let caller = retained_artifacts::retention::published_output_scope(h.path()).unwrap();
+    let mut reports = Vec::new();
+    for (group, paths) in groups.iter().enumerate() {
+        let _child = retained_artifacts::retention::read_scope(h.path()).unwrap();
+        for path in paths {
+            drop(retained_artifacts::retention::read_guard(h.path(), path).unwrap());
+        }
+        let path = tree(h.path(), &format!("child-report-{group}"));
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        inventory(h.path())
+            .dependencies_paths(&path, paths)
+            .unwrap();
+        publication.complete(json!({"exit":0})).unwrap();
+        inventory(h.path())
+            .reference_paths(&format!("domain-owner-{group}"), &[])
+            .unwrap();
+        reports.push(path);
+    }
+    // Each child has four actual capabilities, and the parent has three
+    // reports. Accumulating all nine child inputs would exceed the same cap.
+    assert_eq!(maintain_fixture_to(h.path(), 13), 13);
+    assert!(!h.path().join(unrelated).exists());
+    for path in groups.iter().flatten().chain(reports.iter()) {
+        assert!(h.path().join(path).is_dir());
+    }
+    drop(caller);
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+    assert!(h.path().join(&unknown).is_dir());
+    inventory(h.path())
+        .reference_paths("unfinished-domain-owner", &[])
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+}
+
+#[test]
 fn completed_child_original_transfers_to_parent_before_its_success_root_is_released() {
     if !isolated_capability_test(
         "completed_child_original_transfers_to_parent_before_its_success_root_is_released",
