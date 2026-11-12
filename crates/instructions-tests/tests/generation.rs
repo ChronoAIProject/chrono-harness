@@ -2131,6 +2131,13 @@ fn interrupted_backup_drift_is_preserved_and_blocks_recovery() {
 
 #[test]
 fn actual_state_publication_collisions_fail_and_preserve_pending_originals() {
+    // Recovery checks the child's last metadata capability after it returns.
+    // Run without unrelated fixture forks retaining that same capability.
+    if !isolated_capability::isolated_capability_test(
+        "actual_state_publication_collisions_fail_and_preserve_pending_originals",
+    ) {
+        return;
+    }
     for name in ["result.json", "commit.json", "unexpected"] {
         let host = Host::new();
         host.init().unwrap();
