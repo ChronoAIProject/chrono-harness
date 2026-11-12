@@ -724,6 +724,17 @@ mod behavior {
         };
         let (root, mut config) = fixture();
         let socket_directory = tempfile::tempdir_in("/tmp").unwrap();
+        // Reuse the CLI's bounded adopted log sink for actual phase observations.
+        fs::write(
+            root.path().join(".chrono-harness/logging.json"),
+            serde_json::to_vec(&json!({
+                "schema":"chrono-runtime-logging/v1", "level":"debug",
+                "directory":".chrono-harness/state/cache-stage-logs/",
+                "max_bytes":1048576, "max_files":2, "stderr":false
+            }))
+            .unwrap(),
+        )
+        .unwrap();
         let socket = socket_directory.path().join("ready.sock");
         // Keep the native socket address within sockaddr_un on macOS.
         let listener = UnixListener::bind(&socket).unwrap();
@@ -732,6 +743,8 @@ mod behavior {
         let args = plan_args(root.path(), output);
         let actual_root = root.path().to_owned();
         let notify_socket = socket.clone();
+        let began = std::time::Instant::now();
+        let mut stages = Vec::new();
         let owner = Owner(Some(std::thread::spawn(move || {
             let command = chrono_harness::CommandSpec {
                 program: env!("CARGO_BIN_EXE_chrono-cache-test-cli").into(),
@@ -764,6 +777,7 @@ mod behavior {
         if &ready != b"ready" {
             panic!("process completed before handshake: {:?}", owner.join());
         }
+        stages.push(("ready", began.elapsed()));
         let attempt = attempt_path(root.path(), output);
         let intent = value(&attempt.join("compiler/intent.json"));
         assert!(intent["task_identity"].is_null());
@@ -773,18 +787,45 @@ mod behavior {
         acquired(&attempt.join("compiler/stdout"), b"live stdout");
         acquired(&attempt.join("compiler/stderr"), b"live stderr");
         assert!(!attempt.join("compiler/process.json").exists());
+        stages.push(("originals acquired", began.elapsed()));
         while_live(root.path(), &mut config, output);
+        stages.push(("while_live returned", began.elapsed()));
         let inventory =
             chrono_harness::retained_artifacts::retention::Inventory::adopted(root.path())
                 .unwrap()
                 .unwrap();
-        inventory.maintain_at(u64::MAX).unwrap();
+        stages.push(("maintenance adopted", began.elapsed()));
+        let maintenance = inventory.maintain_at(u64::MAX).unwrap();
+        stages.push(("maintenance returned", began.elapsed()));
         assert!(attempt.join("compiler/stdout").is_file());
         let signalled =
             unsafe { libc::kill(launch["launcher_pid"].as_u64().unwrap() as _, libc::SIGKILL) };
         let signal_error = (signalled != 0).then(std::io::Error::last_os_error);
         let released = connection.write_all(b"x");
         let result = owner.join();
+        stages.push(("original joined", began.elapsed()));
+        eprintln!(
+            "live interruption stages (wall elapsed from original dispatch): {stages:?}; \
+             maintenance: {maintenance}; signal: {signal_error:?}; release: {released:?}; \
+             original exit: {}, signal: {:?}, failure: {:?}; stdout: {}; stderr: {}",
+            result.exit_code,
+            result.exit_signal,
+            result.failure,
+            String::from_utf8_lossy(&result.stdout_bytes),
+            String::from_utf8_lossy(&result.stderr_bytes),
+        );
+        let mut logs = fs::read_dir(root.path().join(".chrono-harness/state/cache-stage-logs"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
+        logs.sort();
+        for log in logs {
+            eprintln!(
+                "cache live phase log {}: {}",
+                log.display(),
+                String::from_utf8_lossy(&fs::read(&log).unwrap())
+            );
+        }
         assert_eq!(
             signalled, 0,
             "signal: {signal_error:?}; original exit: {}, signal: {:?}, failure: {:?}",
@@ -820,9 +861,17 @@ mod behavior {
             let original_config = config.clone();
             let count = root.join("independent-invocations");
             probe_config(root, config, json!(["count", count]));
+            let began = std::time::Instant::now();
             let independent = invoke(
                 root,
                 ".chrono-harness/state/cache/independent-live/plan.json",
+            );
+            eprintln!(
+                "independent plan wall elapsed: {:?}; status: {}; stdout: {}; stderr: {}",
+                began.elapsed(),
+                independent.status,
+                String::from_utf8_lossy(&independent.stdout),
+                String::from_utf8_lossy(&independent.stderr),
             );
             assert!(
                 independent.status.success(),
