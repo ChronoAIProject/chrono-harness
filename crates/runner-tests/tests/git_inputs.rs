@@ -2535,6 +2535,90 @@ fn immutable_input_rejects_invalid_metadata_and_preserves_acquisition_errors() {
 }
 
 #[test]
+fn git_mock_fetch_imports_missing_history_without_rewriting_existing_objects() {
+    if !git_fixture::isolated(
+        "git_mock_fetch_imports_missing_history_without_rewriting_existing_objects",
+    ) {
+        return;
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let remote = directory.path().join("remote");
+    let local = directory.path().join("local");
+    for root in [&remote, &local] {
+        fs::create_dir(root).unwrap();
+    }
+    let call = |root: &std::path::Path, args: &[&str]| {
+        Command::new(git_fixture::program())
+            .current_dir(root)
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let ok = |root: &std::path::Path, args: &[&str]| {
+        let output = call(root, args);
+        assert!(output.status.success(), "{args:?}: {output:?}");
+        assert!(output.stderr.is_empty(), "{args:?}: {output:?}");
+        String::from_utf8(output.stdout).unwrap().trim().to_owned()
+    };
+    for root in [&remote, &local] {
+        ok(root, &["init", "-q", "-b", "dev"]);
+    }
+    for name in ["payload", "same-payload"] {
+        fs::write(remote.join(name), b"shared immutable bytes\n").unwrap();
+    }
+    ok(&remote, &["add", "."]);
+    ok(&remote, &["commit", "-qm", "base"]);
+    let base = ok(&remote, &["rev-parse", "HEAD"]);
+    fs::write(remote.join("new-payload"), b"new bytes\n").unwrap();
+    ok(&remote, &["add", "."]);
+    ok(&remote, &["commit", "-qm", "head"]);
+    let head = ok(&remote, &["rev-parse", "HEAD"]);
+    ok(
+        &local,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
+    ok(&local, &["fetch", "--depth=1", "origin", "dev"]);
+    assert_eq!(ok(&local, &["rev-parse", "FETCH_HEAD"]), head);
+    assert!(!call(&local, &["cat-file", "-e", &base]).status.success());
+    let original_time = std::time::UNIX_EPOCH + std::time::Duration::from_secs(100);
+    let originals: Vec<_> = fs::read_dir(local.join(".git/objects"))
+        .unwrap()
+        .map(|entry| {
+            let path = entry.unwrap().path();
+            fs::File::options()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .set_times(fs::FileTimes::new().set_modified(original_time))
+                .unwrap();
+            let bytes = fs::read(&path).unwrap();
+            (path, bytes)
+        })
+        .collect();
+    ok(&local, &["fetch", "--unshallow", "origin", "dev"]);
+    for (path, bytes) in originals {
+        assert_eq!(fs::read(&path).unwrap(), bytes, "{}", path.display());
+        assert_eq!(
+            fs::metadata(&path).unwrap().modified().unwrap(),
+            original_time,
+            "fetch rewrote existing immutable object {}",
+            path.display()
+        );
+    }
+    ok(&local, &["cat-file", "-e", &base]);
+    assert!(!local.join(".git/shallow").exists());
+    assert_eq!(
+        ok(&local, &["show", "FETCH_HEAD:same-payload"]),
+        "shared immutable bytes"
+    );
+    assert_eq!(ok(&local, &["show", "FETCH_HEAD:new-payload"]), "new bytes");
+    let failed = call(&local, &["fetch", "origin", "missing-branch"]);
+    assert!(!failed.status.success(), "{failed:?}");
+    assert!(!failed.stderr.is_empty(), "{failed:?}");
+    assert_eq!(ok(&local, &["rev-parse", "FETCH_HEAD"]), head);
+}
+
+#[test]
 fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_git() {
     if !git_fixture::isolated(
         "selected_git_mock_models_revision_cas_and_linked_metadata_without_external_git",
