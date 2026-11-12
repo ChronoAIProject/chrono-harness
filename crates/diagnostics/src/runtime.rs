@@ -3,6 +3,7 @@ use crate::{
     error::{Failure, NativeIoError},
     logging::{self, Level, Logger},
     rolling::RollingFile,
+    verified_runtime,
 };
 use serde::Deserialize;
 use std::{
@@ -77,27 +78,48 @@ pub struct RuntimeSink<W> {
 
 impl<W: Write> Write for RuntimeSink<W> {
     fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-        let file = self.file.write_all(bytes);
-        let stderr = self
-            .stderr
-            .as_mut()
-            .map(|stderr| stderr.write_all(bytes).and_then(|()| stderr.flush()))
-            .unwrap_or(Ok(()));
-        match (file, stderr) {
-            (Ok(()), Ok(())) => Ok(bytes.len()),
-            (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
-            (Err(file), Err(stderr)) => Err(io::Error::other(
-                io_failure(file).with_related("stderr", io_failure(stderr)),
-            )),
-        }
+        let (_, _, result) = verified_runtime::write_mirrors(
+            &mut self.file,
+            self.stderr.as_mut(),
+            bytes.len(),
+            |file| {
+                let result = file.write_all(bytes);
+                (file, result)
+            },
+            |stderr| {
+                verified_runtime::write_and_flush(
+                    stderr,
+                    |stderr| {
+                        let result = stderr.write_all(bytes);
+                        (stderr, result)
+                    },
+                    |stderr| {
+                        let result = stderr.flush();
+                        (stderr, result)
+                    },
+                )
+            },
+            |file, stderr| {
+                io::Error::other(io_failure(file).with_related("stderr", io_failure(stderr)))
+            },
+        );
+        result
     }
 
     fn flush(&mut self) -> io::Result<()> {
-        self.file.flush()?;
-        if let Some(stderr) = &mut self.stderr {
-            stderr.flush()?;
-        }
-        Ok(())
+        let (_, _, result) = verified_runtime::flush_mirrors(
+            &mut self.file,
+            self.stderr.as_mut(),
+            |file| {
+                let result = file.flush();
+                (file, result)
+            },
+            |stderr| {
+                let result = stderr.flush();
+                (stderr, result)
+            },
+        );
+        result
     }
 }
 
