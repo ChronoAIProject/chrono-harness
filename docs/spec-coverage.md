@@ -6,6 +6,12 @@
 `ErrorNode` 构造、context、记录投影、接收链及 IO 分类仍待证明；
 不将整个 `error.rs` 声明为已证明，范围与成本见 [Verus 实施范围](verus.md)。
 
+`RollingFile` 的正容量／文件数范围、单条记录容量及严格轮转阈值直接消费同源
+`verified_rolling.rs`。数学整数长度和与实际不下溢减法比较等价，独立 Verus
+边界表同时普通运行；生产根、预期根与未过滤行为测试由同次 DELTA 核验。
+完整文件锁、目录／成员验证、删除／重命名及写入组合仍待证明，不能将整个
+`rolling.rs` 声明为已证明。接口及登记成本见 [Verus 实施范围](verus.md)。
+
 运行日志 `RuntimeSink` 的双输出写入与独立刷新直接消费同源
 `verified_runtime.rs`。文件失败仍尝试镜像、镜像写入成功才刷新、单错原值／双错
 组合及 flush 首错停止由该根维护；独立 Verus 结果表同时普通运行。
