@@ -773,7 +773,7 @@ mod promotion_tests {
         f.save();
         let loaded = Loaded::load(f.root()).unwrap();
         let config:delivery::Config=serde_json::from_value(json!({
-        "schema":"chrono-release-delivery/v1","publication":{"repository":"example/product","workflow_id":99,"workflow_path":".github/workflows/ci.yml","branch":"dev"},
+        "schema":"chrono-release-delivery/v1","publication":{"repository":"example/product","workflow_id":99,"workflow_path":".github/workflows/ci.yml","branch":"dev","stable_branch":"main"},
         "frontend":"fixture","packages":{"fixture":{"platform":"linux-x86_64","directory":"unused"}},"tools":{"git":"git","gh":"gh"},"curl":"/usr/bin/curl",
         "installation":{"publisher":"publish","directory":"publication/","shell":"/bin/sh"},"promotion":{"workflow_id":100,"workflow_config":"workflow.json"}
     })).unwrap();
