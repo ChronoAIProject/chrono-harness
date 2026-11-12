@@ -1382,6 +1382,12 @@ symlink，再核父项为目录、末项为文件；首次 NotFound 结束预检
 同为 Verus。此范围不证明文件系统原子性、整个外围适配文件或全仓覆盖，具体接口和
 验收范围见 [Verus 实施范围](docs/verus.md)。
 
+`Failure` 的实际 owned 字段初始化、原因设置和关联错误追加直接使用 diagnostics
+所有者的同源 Verus，保留完整节点、错误值、已有原因和关联顺序；独立边界预期
+和驱动同为 Verus。生产与预期整 crate 根及原真实消费者行为测试须共同验收。
+节点构造、context 维护、记录投影、接收链和 IO 分类仍有各自证明义务，
+不把这批状态操作扩大为整个 `error.rs` 已证明，见 [Verus](docs/verus.md)。
+
 运行日志 `RuntimeSink` 的双输出写入和独立刷新直接消费 diagnostics 所有者的同源
 Verus：文件写入失败后仍尝试已配置的 stderr，stderr 写入成功后才刷新；单错保留
 完整原错误，双错交给原错误所有者组合。独立 flush 仍在文件首错后停止。
