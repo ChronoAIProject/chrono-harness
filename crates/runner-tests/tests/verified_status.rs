@@ -125,15 +125,17 @@ fn oid_fixture_error(result: Result<String, String>, expected: &str)
 
 proof fn oid_fixture_rejects_nonhex_ascii_prefix(text: &str)
     requires text@.len() > 0, (text@[0] as u32) < 128,
-        !scope_text::oid_byte(text@[0] as u8),
+        !scope_text::oid_byte((text@[0] as u32) as u8),
     ensures !scope_text::oid(text.spec_bytes()),
 {
     let scalar = text@[0] as u32;
     assert(scalar < 128 ==> (scalar & 0x7fu32) == scalar) by(bit_vector);
-    assert(vstd::utf8::encode_scalar(text@[0] as u32) == seq![text@[0] as u8]);
-    assert(text.spec_bytes() =~= seq![text@[0] as u8]
+    assert(vstd::utf8::has_width_1_encoding(scalar));
+    assert(vstd::utf8::leading_byte_width_1(scalar) == scalar as u8);
+    assert(vstd::utf8::encode_scalar(scalar) == seq![scalar as u8]);
+    assert(text.spec_bytes() =~= seq![scalar as u8]
         + vstd::utf8::encode_utf8(text@.drop_first()));
-    assert(text.spec_bytes()[0] == text@[0] as u8);
+    assert(text.spec_bytes()[0] == scalar as u8);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
