@@ -312,7 +312,7 @@ fn recovery_decision_covers_outcomes_content_and_refresh_boundaries() {
         reveal_strlit("producer-manifest/v1"); reveal_strlit("matched");
         reveal_strlit("unusable"); reveal_strlit("unknown"); reveal_strlit("");
         assert("failure"@[0] != "success"@[0]);
-        assert("success"@[0] != "skipped"@[0]);
+        assert("success"@[1] != "skipped"@[1]);
         assert("exact"@.len() != "compatible"@.len());
         assert("matched"@[0] != "unusable"@[0]);
         assert("producer-manifest/v1"@.len() != "matched"@.len());
