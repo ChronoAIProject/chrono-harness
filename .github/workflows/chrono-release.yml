@@ -25,11 +25,17 @@ on:
       version:
         description: Explicit stable version matching the source plan
         type: string
+      preview_run:
+        description: Successful final preview release run ID required for stable
+        type: string
+      preview_attempt:
+        description: Original successful preview release attempt required for stable
+        type: string
 permissions:
   contents: read
 jobs:
   linux_build_runner:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -132,7 +138,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_instructions:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -228,7 +234,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -324,7 +330,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -420,7 +426,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_registration:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -516,7 +522,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_filemap:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -612,7 +618,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_routes:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -708,7 +714,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_projects:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -804,7 +810,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_cost:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -900,7 +906,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_mixed:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -996,7 +1002,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_judge_workflow:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1092,7 +1098,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_inputs:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1188,7 +1194,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_distribution:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1284,7 +1290,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_worktree:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1380,7 +1386,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_distribution_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1476,7 +1482,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_worktree_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_ci"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1580,7 +1586,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_runner_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1676,7 +1682,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_inputs_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1828,7 +1834,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_judge_registration"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -1925,7 +1931,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2021,7 +2027,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_registration_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_judge_registration"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2118,7 +2124,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_projects_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2218,7 +2224,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_workflow_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_inputs"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2329,7 +2335,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_instructions_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2425,7 +2431,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_filemap_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2525,7 +2531,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_routes_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2621,7 +2627,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_cost_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2720,7 +2726,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_judge_mixed_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_cost","linux_build_judge_mixed"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -2820,7 +2826,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_package:
-    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_runner","linux_build_instructions","linux_build_judge_ci","linux_build_ci","linux_build_judge_registration","linux_build_judge_filemap","linux_build_judge_routes","linux_build_judge_projects","linux_build_judge_cost","linux_build_judge_mixed","linux_build_judge_workflow","linux_build_inputs","linux_build_distribution","linux_build_worktree","linux_verify_distribution_tests","linux_verify_worktree_tests","linux_verify_identifiers_tests","linux_verify_runner_tests","linux_verify_inputs_tests","linux_verify_ci_tests","linux_verify_judge_ci_tests","linux_verify_judge_registration_tests","linux_verify_judge_projects_tests","linux_verify_judge_workflow_tests","linux_verify_instructions_tests","linux_verify_judge_filemap_tests","linux_verify_judge_routes_tests","linux_verify_judge_cost_tests","linux_verify_judge_mixed_tests","linux_verify_diagnostics_tests","linux_build_cache","linux_verify_cache_tests","linux_verify_host_bootstrap_native_tests","linux_verify_host_bootstrap_launcher_tests","linux_verify_pr_tests","linux_verify_host_release_native_tests","linux_build_pr"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -3077,7 +3083,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_runner:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3180,7 +3186,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_instructions:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3276,7 +3282,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3372,7 +3378,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_ci:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3468,7 +3474,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_registration:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3564,7 +3570,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_filemap:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3660,7 +3666,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_routes:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3756,7 +3762,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_projects:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3852,7 +3858,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_cost:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -3948,7 +3954,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_mixed:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4044,7 +4050,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_judge_workflow:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4140,7 +4146,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_inputs:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4236,7 +4242,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_distribution:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4332,7 +4338,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_worktree:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4428,7 +4434,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_distribution_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4524,7 +4530,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_worktree_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_ci"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4628,7 +4634,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_runner_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4724,7 +4730,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_inputs_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4876,7 +4882,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_judge_registration"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -4973,7 +4979,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_ci_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5069,7 +5075,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_registration_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_judge_registration"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5166,7 +5172,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_projects_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5266,7 +5272,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_workflow_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_inputs"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5377,7 +5383,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_instructions_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5473,7 +5479,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_filemap_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5573,7 +5579,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_routes_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5669,7 +5675,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_cost_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5768,7 +5774,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_judge_mixed_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_cost","macos_build_judge_mixed"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -5868,7 +5874,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_package:
-    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ always() && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_runner","macos_build_instructions","macos_build_judge_ci","macos_build_ci","macos_build_judge_registration","macos_build_judge_filemap","macos_build_judge_routes","macos_build_judge_projects","macos_build_judge_cost","macos_build_judge_mixed","macos_build_judge_workflow","macos_build_inputs","macos_build_distribution","macos_build_worktree","macos_verify_distribution_tests","macos_verify_worktree_tests","macos_verify_identifiers_tests","macos_verify_runner_tests","macos_verify_inputs_tests","macos_verify_ci_tests","macos_verify_judge_ci_tests","macos_verify_judge_registration_tests","macos_verify_judge_projects_tests","macos_verify_judge_workflow_tests","macos_verify_instructions_tests","macos_verify_judge_filemap_tests","macos_verify_judge_routes_tests","macos_verify_judge_cost_tests","macos_verify_judge_mixed_tests","macos_verify_diagnostics_tests","macos_build_cache","macos_verify_cache_tests","macos_verify_host_bootstrap_native_tests","macos_verify_host_bootstrap_launcher_tests","macos_verify_pr_tests","macos_verify_host_release_native_tests","macos_build_pr"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6125,7 +6131,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_diagnostics_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6221,7 +6227,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_diagnostics_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6317,7 +6323,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_cache:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6413,7 +6419,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_cache_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6509,7 +6515,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_cache:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6605,7 +6611,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_cache_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6701,7 +6707,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6750,7 +6756,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_bootstrap_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6799,7 +6805,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_bootstrap_launcher_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6848,7 +6854,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_bootstrap_launcher_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6897,7 +6903,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_pr_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -6946,7 +6952,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_pr_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -6995,7 +7001,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -7044,7 +7050,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_identifiers_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -7140,7 +7146,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_verify_host_release_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend","linux_build_cache"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -7237,7 +7243,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_verify_host_release_native_tests:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend","macos_build_cache"]
     runs-on: "macos-26"
     timeout-minutes: 45
@@ -7287,7 +7293,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   publish:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ always() && (inputs.channel == 'stable' || success()) && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     permissions:
       contents: write
       actions: read
@@ -7341,6 +7347,8 @@ jobs:
           CHRONO_RELEASE_CI_RUN_ID: ${{ github.event.workflow_run.id || inputs.verified_run }}
           CHRONO_RELEASE_CI_ATTEMPT: ${{ github.event.workflow_run.run_attempt || inputs.verified_attempt }}
           CHRONO_RELEASE_VERSION: ${{ inputs.version }}
+          CHRONO_RELEASE_PREVIEW_RUN: ${{ inputs.preview_run }}
+          CHRONO_RELEASE_PREVIEW_ATTEMPT: ${{ inputs.preview_attempt }}
           GH_TOKEN: ${{ github.token }}
         run: |
           '/usr/bin/env' 'CARGO_HOME=.chrono-harness/cache/bootstrap-owner-tooling/cargo' '/bin/bash' '.chrono-harness/release/consume.sh' '.' '.chrono-harness/cache/release-frontend' '.chrono-harness/cache/release-publication' '--deliver' '.chrono-harness/release/delivery.json'
@@ -7461,7 +7469,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_build_pr:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -7557,7 +7565,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_build_pr:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
     needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
