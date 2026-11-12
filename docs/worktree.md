@@ -527,17 +527,19 @@ FILEMAP 将其登记为宿主数据；不另建清理程序或后台扫描器。
 
 | 登记项 | 当前选择与用途 |
 | --- | --- |
-| 输入和使用方 | 模板、物理 Git main 的绝对路径、已安装的兼容所有者及其已提交政策；当前用户的 launchd 消费实例化后的 plist |
-| 正式维护入口 | 模板逐字调用 main 的 `.chrono-harness/bin/chrono-worktree maintain --host-root MAIN`；只处理其声明的登记和生产者 |
+| 输入和使用方 | 模板、物理 Git main 的绝对路径、明确选择的兼容程序绝对路径及已提交政策；当前用户的 launchd 消费实例化后的 plist |
+| 正式维护入口 | 模板调用所选 `chrono-worktree maintain --host-root MAIN`；只处理该协调者声明的登记和生产者 |
 | 触发和并发 | 登录／加载及每 3600 秒；launchd 不重叠启动同一任务，上一轮未完成时不另开副本。休眠或正在运行会推迟维护，不承诺 3600 秒内清完 |
 | 回收条件 | 继续使用各目标自己的年龄、产物时机和有限保留政策；活租约、未知使用方、源码、未保全提交及必要原件不因调度而释放 |
 | 输出和失败 | 原 stdout／stderr／退出码及逐项回执由现有生命周期报告保留；launchd 的退出码不是逐项清理结果。控制台流丢到 `/dev/null`，不增加无限增长的日志副本 |
 | 资源与成本 | 后台、低优先级 IO、nice 10；一轮的工作树遍历和实际回收成本仍由原维护入口承担，总成本未知。报告内部的单轮预算不等于整个 maintain 已有时间上限 |
 | 容量边界 | 这是持续回收触发，不是全库磁盘硬配额。`finish-dispose` 缓存仍在明确 finish 或实际检出处置时回收；持续活跃或未知的内容可能继续增长 |
 | 配置保管 | 实例 plist 位于 main 的 `.chrono-harness/state/`，由本宿主调度保管；当前用户 LaunchAgents 仅保存指向该文件的链接。任务停用并结束、链接移除后，实例即可删除；模板保留在 Git |
+| 程序保管 | 所选程序须来自已交付固定提交的成功源码 bootstrap，并通过适用检查；任务采用期间保留该安装位置、固定来源及必要构建原件。程序所在检出的 bin 仍受原 retain 政策保护，可重建编译缓存按原 finish 释放；停止任务后再交接程序保管 |
 
-安装前，确认 `maintenance_root` 是本仓实际 Git main，现役所有者和政策可用，原手工
-maintain 已收取结果。下面是唯一的本机登记方法；模板从已核实交付的固定提交读取，路径通过
+安装前，确认 `maintenance_root` 是本仓实际 Git main，`maintenance_program` 是已核实兼容该
+协调者的已安装程序，原手工 maintain 已收取结果。只选择同一所有权和政策协议的程序；此处
+登记调度不替换协调者的共享程序，也不迁移其输入或账本。下面是唯一的本机登记方法；模板从已核实交付的固定提交读取，路径通过
 `plutil` 的字符串参数写入，不能用未转义的文本替换拼 XML。操作只登记当前用户下本仓
 的原生任务，不需要提权。若同名任务、实例或链接已经存在，先核原件和运行身份，再按
 下面的停用流程处理，不能覆盖未知配置。
@@ -547,13 +549,15 @@ maintain 已收取结果。下面是唯一的本机登记方法；模板从已�
 set -euC
 maintenance_root=/absolute/path/to/git-main
 maintenance_source=FULL_DELIVERED_COMMIT_OID
+maintenance_program=/absolute/path/to/verified/tool/.chrono-harness/bin/chrono-worktree
 maintenance_uid=$(id -u)
 maintenance_plist="$maintenance_root/.chrono-harness/state/org.chrono-harness.maintenance.plist"
 maintenance_link="$HOME/Library/LaunchAgents/org.chrono-harness.maintenance.plist"
 test ! -e "$maintenance_plist" && test ! -L "$maintenance_plist"
 test ! -e "$maintenance_link" && test ! -L "$maintenance_link"
+test -f "$maintenance_program" && test -x "$maintenance_program" && test ! -L "$maintenance_program"
 git -C "$maintenance_root" show "$maintenance_source:.chrono-harness/maintenance.launchd.plist" > "$maintenance_plist"
-plutil -replace ProgramArguments.0 -string "$maintenance_root/.chrono-harness/bin/chrono-worktree" "$maintenance_plist"
+plutil -replace ProgramArguments.0 -string "$maintenance_program" "$maintenance_plist"
 plutil -replace ProgramArguments.3 -string "$maintenance_root" "$maintenance_plist"
 plutil -replace WorkingDirectory -string "$maintenance_root" "$maintenance_plist"
 plutil -lint "$maintenance_plist"
@@ -575,7 +579,7 @@ launchctl print "gui/$maintenance_uid/org.chrono-harness.maintenance"
 已结束后，执行 `launchctl bootout "gui/$maintenance_uid/org.chrono-harness.maintenance"`，
 核链接仍指向上述实例后移除链接和实例。再次安装前用同一 service target 执行
 `launchctl enable`。注销／重启后的自动加载依赖该用户正常登录及 main 的原路径和工具；
-移动或删除协调者前必须先完成这项交接。
+移动或删除协调者或所选程序前必须先完成这项交接。
 
 ### 本地状态与 AI 提醒
 
