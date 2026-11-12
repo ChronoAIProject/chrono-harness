@@ -28,7 +28,7 @@ fn actual_stability_selection_executes_shared_methods_exactly_once() {
     let h = stable_host("t");
     let (code, r) = h.run(|_| {});
     assert_eq!(code, 0, "{}", r["findings"]);
-    assert_eq!(r["impact"]["schema"], "chrono-filemap-impact/v3");
+    assert_eq!(r["impact"]["schema"], "chrono-filemap-impact/v5");
     assert_eq!(r["impact"]["tests"], json!(["test:t"]));
     assert_eq!(r["impact"]["workflow"]["integration_required"], true);
     assert_eq!(r["tests"]["tests"]["test:t"], "passed");
