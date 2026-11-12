@@ -4,6 +4,8 @@
 
 格式、准备状态、工作树和直接引用是否合法，仍由 registration 负责。它的不可变 `node_data()` 是完整格式节点清单的唯一来源。读到清单本身，不代表内容含义有效或输入已经齐全。
 
+影响计算和规则文档库接口直接使用每端 `Registrations` 已绑定的有效配置路径，不再接收未使用的额外 `config_path` 参数。固定提交的登记加载仍显式指定入口；平台选择和登记重定位由原负责方核对。
+
 编译依赖方向是 `judge-ci → judge-filemap → judge-mixed → judge-registration → runner`，需要 Git 事实或传输的项目也直接依赖 runner。filemap 的测试项目独立拥有清单、锁文件和构建目录，没有根 workspace 或通用登记项目。
 
 ## 按配置选择依赖边
