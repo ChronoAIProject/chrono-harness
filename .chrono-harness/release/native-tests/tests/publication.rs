@@ -11,6 +11,7 @@ fn config() -> Config {
         workflow_id: 99,
         workflow_path: ".github/workflows/ci.yml".into(),
         branch: "dev".into(),
+        stable_branch: "main".into(),
     }
 }
 fn identity() -> Identity {
@@ -36,6 +37,8 @@ fn assets() -> BTreeMap<String, Asset> {
     )])
 }
 struct Mock {
+    identity: Identity,
+    stable_branch: Value,
     ci: Value,
     release: Option<Value>,
     uploaded: Vec<Value>,
@@ -48,6 +51,8 @@ struct Mock {
 impl Mock {
     fn new() -> Self {
         Self {
+            identity: identity(),
+            stable_branch: Value::Null,
             ci: serde_json::from_str(include_str!("data/landing-ci.json")).unwrap(),
             release: None,
             uploaded: vec![],
@@ -60,7 +65,7 @@ impl Mock {
     }
     fn draft(&mut self) {
         self.release = Some(
-            json!({"id":7,"tag_name":identity().version,"target_commitish":identity().source_commit,"prerelease":true,"draft":true}),
+            json!({"id":7,"tag_name":self.identity.version,"target_commitish":self.identity.source_commit,"prerelease":self.identity.channel == Channel::Preview,"draft":true}),
         );
     }
     fn upload(&mut self) {
@@ -72,7 +77,7 @@ impl Mock {
         self.draft();
         self.upload();
         self.release.as_mut().unwrap()["draft"] = json!(false);
-        self.tag = Some(identity().source_commit);
+        self.tag = Some(self.identity.source_commit.clone());
     }
     fn mutated(&self) -> bool {
         self.calls.iter().any(|args| {
@@ -106,7 +111,7 @@ impl Commands for Mock {
                 [
                     "release",
                     "upload",
-                    &identity().version,
+                    &self.identity.version,
                     "/outputs/install.sh",
                     "--repo",
                     "example/product"
@@ -125,6 +130,15 @@ impl Commands for Mock {
         if path == "repos/example/product/actions/runs/1234/attempts/2" {
             assert_eq!(method, "GET");
             return reply(self.ci.clone());
+        }
+        if path == "repos/example/product/git/ref/heads/main" {
+            assert_eq!(method, "GET");
+            assert_eq!(args.len(), 4);
+            return if self.stable_branch.is_null() {
+                Ok(not_found())
+            } else {
+                reply(self.stable_branch.clone())
+            };
         }
         if path.contains("/git/ref/tags/") {
             return match &self.tag {
@@ -147,8 +161,11 @@ impl Commands for Mock {
             assert_eq!(args[4], "--input");
             let body = self.bodies.last().unwrap();
             assert_eq!(body["draft"], true);
-            assert_eq!(body["target_commitish"], identity().source_commit);
-            assert_eq!(body["prerelease"], true);
+            assert_eq!(body["target_commitish"], self.identity.source_commit);
+            assert_eq!(
+                body["prerelease"],
+                self.identity.channel == Channel::Preview
+            );
             self.draft();
             return reply(self.release.clone().unwrap());
         }
@@ -156,10 +173,10 @@ impl Commands for Mock {
             assert_eq!(self.uploaded.len(), 1);
             assert_eq!(
                 self.bodies.last().unwrap(),
-                &json!({"draft":false,"make_latest":"false"})
+                &json!({"draft":false,"make_latest":if self.identity.channel == Channel::Stable {"true"} else {"false"}})
             );
             self.release.as_mut().unwrap()["draft"] = json!(false);
-            self.tag = Some(identity().source_commit);
+            self.tag = Some(self.identity.source_commit.clone());
             return reply(self.release.clone().unwrap());
         }
         panic!("unexpected argv: {args:?}")
@@ -269,4 +286,77 @@ fn failed_or_incomplete_upload_never_publishes_the_draft() {
                 .all(|a| a.get(2).is_none_or(|m| m != "PATCH"))
         );
     }
+}
+
+fn stable_mock() -> Mock {
+    let mut mock = Mock::new();
+    mock.identity.channel = Channel::Stable;
+    mock.identity.version = "v1.2.3".into();
+    mock.stable_branch = json!({
+        "ref":"refs/heads/main",
+        "object":{"type":"commit","sha":mock.identity.source_commit}
+    });
+    mock
+}
+
+#[test]
+fn stable_publication_requires_the_fixed_source_on_main() {
+    let mut mock = stable_mock();
+    let identity = mock.identity.clone();
+    let result = publication::publish(&config(), &identity, &assets(), &mut mock).unwrap();
+    assert_eq!(result["release"]["prerelease"], false);
+    assert_eq!(result["release_branch"], mock.stable_branch);
+    assert_eq!(mock.bodies.last().unwrap()["make_latest"], "true");
+}
+
+#[test]
+fn stable_rejects_missing_different_or_invalid_main_before_mutating_a_release() {
+    for branch in [
+        Value::Null,
+        json!({"ref":"refs/heads/main","object":{"type":"commit","sha":"d".repeat(40)}}),
+        json!({"ref":"refs/heads/dev","object":{"type":"commit","sha":"a".repeat(40)}}),
+        json!({"ref":"refs/heads/main","object":{"type":"tag","sha":"a".repeat(40)}}),
+        json!({"ref":"refs/heads/main","object":{"type":"commit"}}),
+    ] {
+        let mut mock = stable_mock();
+        mock.stable_branch = branch;
+        let identity = mock.identity.clone();
+        let result = publication::publish(&config(), &identity, &assets(), &mut mock);
+        assert!(
+            result.is_err(),
+            "branch={:?}, result={result:?}",
+            mock.stable_branch
+        );
+        assert!(!mock.mutated(), "calls={:?}", mock.calls);
+    }
+}
+
+#[test]
+fn preview_publication_uses_dev_ci_without_requiring_main() {
+    let mut mock = Mock::new();
+    let result = publication::publish(&config(), &identity(), &assets(), &mut mock).unwrap();
+    assert_eq!(result["release"]["prerelease"], true);
+    assert!(
+        mock.calls
+            .iter()
+            .all(|args| !args.iter().any(|arg| arg.contains("/git/ref/heads/")))
+    );
+}
+
+#[test]
+fn stable_branch_declaration_is_required_distinct_and_literal() {
+    for branch in ["", "dev", "../main", "main?x=1"] {
+        let mut config = config();
+        config.stable_branch = branch.into();
+        let mut mock = stable_mock();
+        let identity = mock.identity.clone();
+        assert!(
+            publication::publish(&config, &identity, &assets(), &mut mock).is_err(),
+            "branch={branch:?}"
+        );
+        assert!(mock.calls.is_empty());
+    }
+    let mut declaration = serde_json::to_value(config()).unwrap();
+    declaration.as_object_mut().unwrap().remove("stable_branch");
+    assert!(serde_json::from_value::<Config>(declaration).is_err());
 }

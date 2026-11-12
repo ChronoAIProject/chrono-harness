@@ -162,6 +162,8 @@ Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，�
 
 v2 可选 `delivery` 明确登记 `workflow`、`branch` 和 `publisher`。它与直接 push 触发互斥。所有作业检出原完成事件的 `head_sha`；只有发布作业取得 `contents: write` 和 `actions: read`，并接收当前 token。其余作业维持只读。手动输入 `channel` 可为 build、preview 或 stable；公开渠道还须提供固定 `source`、`verified_run` 和 `verified_attempt`。stable 另需匹配源码计划的 `version`，以及最终测试版的 `preview_run`／`preview_attempt`，依上文晋升合同消费已验收原件。
 
+**发布程序与宿主政策同时修改：**宿主 `delivery.json` 的 `publication.branch` 选择测试版原 CI 分支 `dev`，必需字段 `publication.stable_branch` 选择正式版分支 `main`，两者须不同。正式版在任何 Release 写入前，经现有 GitHub 命令边界读取实际分支引用，核 `ref`、commit 类型及完整源码 OID，并在发布结果保留原 `release_branch`；缺失、不符或 API 失败均停止。测试版继续只核 dev 原 CI。晋升与正式版安装合同归[发布迭代](release-iteration.md#推进正式版分支)。验证增加 Rust 命令 mock 的成功、拒绝与测试版隔离回归，复用现有发布测试和 canonical 检查；每次正式发布增加一个只读 API 请求，完整验证与维护成本未测。
+
 GitHub 的执行工作流由派发的 `--ref` 决定，`source` 只决定各作业检出的源码。派发前核两个固定修订的发布源、needs／downloads 与构建配方是否匹配；手动正式发布统一用已核验的最终测试版标签作为 `--ref`，标签须解析到完整 source，新 run 的工作流 head 也须一致。不要移动标签。自动 `workflow_run` 使用默认分支的工作流，列表 head 与发行源码可能不同；仅看到 head 不同不能判失败，但实际执行图与候选合同不符时，不能宣称该运行验收了候选。
 
 GitHub 原生 frontend 在导出前读取 `GITHUB_REPOSITORY`、`GITHUB_WORKFLOW_REF` 和 `GITHUB_WORKFLOW_SHA`，核路径等于候选发布源的 `workflow_path`，再用现有全量 Git 检出比较两个固定提交的工作流 blob。提交不同但该文件字节相同可继续；文件不同、绑定缺失或 Git 读取失败则停止导出，业务单元无法取得 frontend。原进程、退出和两条输出流由现有发布执行器记录在 frontend artifact 的 `workflow.json` 及 `processes/`；通过时，`frontend.json.workflow` 保留工作流提交、候选提交、路径和共同 blob。GitHub 外的本地导出将该字段记为 null，不声称验证了远端执行图。此检查复用现有权限和 `fetch-depth: 0`，每平台最多两个固定 blob 读取；新增时间、IO 及整体成本尚未测量。
