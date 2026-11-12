@@ -67,7 +67,12 @@ fn promotion_requires_the_original_run_event_and_complete_workflow_head() {
     let missing = delivery::promotion_run(&[], &[], None, Some(&head));
     let short = delivery::promotion_run(&[], &[], Some("workflow_run"), Some(&[97u8]));
     let attempt = delivery::promotion_run(&[(Some(3),2)], &[], Some("workflow_run"), Some(&head));
-    expect_recipe(valid && manual && !wrong && !missing && !short && !attempt);
+    expect_recipe(valid);
+    expect_recipe(manual);
+    expect_recipe(!wrong);
+    expect_recipe(!missing);
+    expect_recipe(!short);
+    expect_recipe(!attempt);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
