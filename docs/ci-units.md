@@ -16,13 +16,13 @@ chrono-ci test-inventory --host-root HOST --config CONFIG
 
 本仓 workflow 专属测试项目明确登记三组，分别分配给 `judge-workflow`（核心）、`judge-workflow-units`（直接完整单元测试）、`judge-workflow-short`（完整短命令测试）。action 明确选择成员，清单保护核覆盖范围，不推断依赖。三组合计覆盖原两个测试二进制，保留 fixture、profile 和业务限制。发布仍使用不带过滤的 `actions.execute`／原 `test.judge-workflow-tests`，旧测试身份通过 `test_groups` 绑定独立的核心过滤 action。
 
-完整 action 和三个分组均显式采用 2 个 libtest 线程。每个用例还会启动自己的子进程，执行器的 cap=2 只限制操作数；明确线程数可避免 libtest 按宿主 CPU 数量继续扩大单个操作的并发。测试集合、分组过滤、依赖、资源声明、断言和业务时限沿用原登记。实际耗时与本地并发失败的恢复仍须通过候选标准检查和原生 CI 验证。
-
-该测试项目的 dev profile 去掉调试信息，保留调试断言和溢出检查。迁移样本会把实际辅助程序纳入固定 Git 快照；调试信息没有测试使用方，却会随 Git 原始输出进入请求和报告。由 Cargo 在产物生产处移除这部分内容，原有迁移、原件复用、坏证据拒绝、测试集合、超时和报告上限保持不变；本地与原生 CI 仍须分别核对实际执行。
+workflow、CI 和 inputs 专属测试项目的 dev profile 使用 `opt-level=1` 并去掉调试信息，保留调试断言和溢出检查。迁移样本会把实际辅助程序纳入固定 Git 快照；调试信息没有测试使用方，却会随 Git 原始输出进入请求和报告。由 Cargo 在产物生产处移除这部分内容，原有迁移、原件复用、坏证据拒绝、测试集合、线程、超时和报告上限保持不变；本地与原生 CI 仍须分别核对实际执行。CI／inputs 的采用来自实际 fixture 超时后的成本审计，超时根因和完整成本收益仍待核，不以构建设置本身宣称修复。
 
 各组保留构建前置，并通过登记的 `workflow.inventory` 操作运行 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
+
+完整 action 和三个分组均显式采用 2 个 libtest 线程。每个用例还会启动自己的子进程，执行器的 cap=2 只限制操作数；明确线程数可避免 libtest 按宿主 CPU 数量继续扩大单个操作的并发。测试集合、分组过滤、依赖、资源声明、断言和业务时限沿用原登记。实际耗时与本地并发失败的恢复仍须通过候选标准检查和原生 CI 验证。
 
 worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四项宿主入口集成测试：参与式检查、脱离父进程的 Rust 消费者、短检查、原生 Cargo 子进程。核心组排除同样四个名称。旧 Python bootstrap 组合及独立入口测试随实现退役；当前 bootstrap 委托与拒绝边界归 Rust bootstrap 专属测试。两组和发布用的未过滤 action 均显式采用 8 个 libtest 线程，限制单个测试进程内部的并发；宿主操作仍按 cap=2 调度。当前测试和期限保留。
 
