@@ -387,7 +387,30 @@ proof fn parent_fixture_step<M>(before: (u8, Vec<u8>), after: (u8, Vec<u8>), mod
     reveal(policy::parent_path_step);
     reveal_strlit("missing: é\0end");
     reveal_strlit("io: denied é\nend");
+    let (component, built, observation) = choose|component: u8, built: Vec<u8>, observation: Result<bool, String>|
+        parent_fixture_next.ensures((before.0,), (after.0, Some(component)))
+        && parent_fixture_append.ensures((before.1, component), built)
+        && metadata.ensures((built,), (after.1, observation))
+        && policy::parent_path_continues(observation, parent_fixture_missing);
+    assert(parent_fixture_observation(mode, built@, observation));
+    assert(after.1 == built);
+    if parent_fixture_kind(mode, built@.len()) == 3 {
+        let error = observation->Err_0;
+        assert(error@ == "io: denied é\nend"@);
+        assert(error@ != "missing: é\0end"@);
+        assert(parent_fixture_missing.ensures((&error,), true));
+        assert(false);
+    }
 }
+
+proof fn parent_fixture_prefix_at<M>(states: Seq<(u8, Vec<u8>)>, initial: (u8, Vec<u8>), metadata: M, index: int)
+    where M: Fn(Vec<u8>) -> (Vec<u8>, Result<bool, String>),
+    requires policy::parent_path_prefix::<u8, Vec<u8>, u8, String, _, _, M, _>(states, initial,
+        parent_fixture_next, parent_fixture_append, metadata, parent_fixture_missing),
+        0 <= index < states.len() - 1,
+    ensures policy::parent_path_step::<u8, Vec<u8>, u8, String, _, _, M, _>(
+        states[index], states[index + 1], parent_fixture_next, parent_fixture_append, metadata, parent_fixture_missing),
+{ }
 
 proof fn parent_fixture_result<M>(count: u8, mode: u8, root: Vec<u8>, metadata: M,
     out: Result<Vec<u8>, policy::ParentPathFailure<Vec<u8>, String>>)
@@ -409,19 +432,23 @@ proof fn parent_fixture_result<M>(count: u8, mode: u8, root: Vec<u8>, metadata: 
         && policy::parent_path_terminal(states.last(), following, built, observed,
             parent_fixture_next, parent_fixture_append, metadata, parent_fixture_missing, out);
     if states.len() > 1 {
+        parent_fixture_prefix_at(states, (count, root), metadata, 0);
         parent_fixture_step(states[0], states[1], mode, metadata);
         assert(states[1].1@ == parent_fixture_path(count, 1));
     }
     if states.len() > 2 {
+        parent_fixture_prefix_at(states, (count, root), metadata, 1);
         parent_fixture_step(states[1], states[2], mode, metadata);
         assert(states[2].1@ == parent_fixture_path(count, 2));
     }
     if states.len() > 3 {
+        parent_fixture_prefix_at(states, (count, root), metadata, 2);
         parent_fixture_step(states[2], states[3], mode, metadata);
         assert(states[3].0 == 0);
         assert(states[3].1@ == parent_fixture_path(count, 3));
     }
     if states.len() > 4 {
+        parent_fixture_prefix_at(states, (count, root), metadata, 3);
         parent_fixture_step(states[3], states[4], mode, metadata);
         assert(false);
     }
@@ -519,6 +546,10 @@ fn parent_walk_empty_never_observes_metadata() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn parent_walk_checks_final_component_and_continues_after_missing() {
+    assert(parent_fixture_path(3, 3) =~= seq![77u8, 0, 255, 3, 2, 1]);
+    assert(parent_fixture_path(1, 1) =~= seq![77u8, 0, 255, 1]);
+    assert(parent_fixture_path(3, 1) =~= seq![77u8, 0, 255, 3]);
+    assert(parent_fixture_path(3, 2) =~= seq![77u8, 0, 255, 3, 2]);
     expect_parent_success(parent_fixture_run(3, 0), &[77u8, 0, 255, 3, 2, 1]);
     expect_parent_success(parent_fixture_run(3, 1), &[77u8, 0, 255, 3, 2, 1]);
     expect_parent_success(parent_fixture_run(3, 6), &[77u8, 0, 255, 3, 2, 1]);
