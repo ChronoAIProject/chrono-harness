@@ -62,6 +62,7 @@ fn successful_restore_needs_a_nonempty_observed_key_and_exact_match_wins() {
     proof {
         reveal_strlit(""); reveal_strlit("key");
         broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("key") && vstd::string::is_ascii(""));
         assert("key".spec_bytes().len() == 3);
         assert("".spec_bytes().len() == 0);
     }
@@ -79,6 +80,10 @@ fn every_prefix_is_examined_but_missing_empty_case_and_longer_prefixes_do_not_ma
         reveal_strlit("cache/"); reveal_strlit("Cache/");
         reveal_strlit("cache/revision-extra"); reveal_strlit("cache/\0");
         broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("cache/revision")
+            && vstd::string::is_ascii("other/") && vstd::string::is_ascii("cache/")
+            && vstd::string::is_ascii("Cache/") && vstd::string::is_ascii("cache/revision-extra")
+            && vstd::string::is_ascii("cache/\0"));
         assert("cache/revision".spec_bytes()[0] != "Cache/".spec_bytes()[0]);
         assert("cache/revision".spec_bytes()[6] != "cache/\0".spec_bytes()[6]);
         assert("cache/revision".spec_bytes()[0] != "other/".spec_bytes()[0]);
