@@ -359,7 +359,7 @@ result 严格形式与检出中断恢复相同，只有实测缺失才用 `{"pre
 }
 ```
 
-源码登记须声明工作前缀和目标分支，retained_ref 必须是另一个目标分支。配置 remote 须解析出唯一 push URL，且与计划相等。两远端 ref 都在该 URL 实测，不读 remote-tracking ref。目标在本地／远端均须等于固定 retained commit，满足 ancestor 或 same-tree 保留。
+源码登记须声明工作前缀和目标分支，retained_ref 必须是另一个目标分支。配置 remote 须解析出唯一 push URL，且与计划相等。两远端 ref 都在该 URL 实测，不读 remote-tracking ref。本地核固定 retained commit 对象及 ancestor 或 same-tree 保留关系，不要求同名本地分支存在或前移；远端目标须等于该固定提交。
 
 对象须已在本地，此入口不猜或 fetch 缺历史，不推断落地、PR 状态或测试。push 只点名该 URL 和完整分支 ref，关闭跟随 tag 和 submodule push，要求 `--force-with-lease=REF:EXPECTED_OID`；分支已变时 Git lease 保留它。本地工作树／分支、其他远端 ref、Git 配置不作处置目标。
 
