@@ -257,6 +257,37 @@ fn cold_and_warm_builds_bind_the_same_proof_and_library_without_a_new_report() {
 }
 
 #[test]
+fn unrelated_cached_outputs_do_not_consume_the_binary_dependency_bound() {
+    let f = Fixture::new();
+    let deps = f.root.join("app/target/debug/deps");
+    for index in 0..4097 {
+        write(&deps.join(format!("unrelated-{index}.d")), b"unrelated");
+    }
+    f.plan(&f.records(false), 0, json!([]));
+    f.run().unwrap();
+    let original = fs::read(f.proof()).unwrap();
+    f.plan(&f.records(true), 0, json!([]));
+    f.run().unwrap();
+    assert_eq!(fs::read(f.proof()).unwrap(), original);
+    assert_eq!(fs::read_to_string(f.root.join("mock.calls")).unwrap(), "1");
+    assert_eq!(fs::read(deps.join("unrelated-4096.d")).unwrap(), b"unrelated");
+}
+
+#[test]
+fn selected_binary_dependency_candidates_keep_the_original_bound() {
+    let f = Fixture::new();
+    let deps = f.root.join("app/target/debug/deps");
+    fs::remove_file(deps.join("app-01.d")).unwrap();
+    for index in 0..4097 {
+        write(&deps.join(format!("app-{index:016x}.d")), b"candidate");
+    }
+    f.plan(&f.records(false), 0, json!([]));
+    let error = f.run().unwrap_err();
+    assert!(error.contains("compiler output inventory exceeds its registered bound"));
+    assert!(!f.proof().exists());
+}
+
+#[test]
 fn unrelated_operation_registration_does_not_invalidate_the_library_proof() {
     let f = Fixture::new();
     f.plan(&f.records(false), 0, json!([]));
