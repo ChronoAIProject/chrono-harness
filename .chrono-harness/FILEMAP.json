@@ -568,7 +568,7 @@
     {"path":"crates/runner-tests/tests/support/retention_state.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/distribution-tests/tests/support/transport.rs","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/fixtures/installer-ok.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
-    {"path":"crates/distribution-tests/tests/fixtures/unknown-asset.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
+    {"path":"crates/distribution-tests/tests/fixtures/unknown-asset.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":"crates/distribution-tests/tests/fixtures/installer-exit-23.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/fixtures/alpha-v1.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
     {"path":"crates/distribution-tests/tests/fixtures/beta-v1.sh","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"}]},
