@@ -151,8 +151,10 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
             ],
         );
         assert_eq!(code, 0, "{used} {error}");
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
     }
-    let entry = h.ledger()["entries"][0].clone();
+    let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
     assert!(
         entry["cache_attempts"].as_array().unwrap().len() > 1,
         "{entry}"
@@ -162,7 +164,7 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{finished} {error}");
-    let entry = h.ledger()["entries"][0].clone();
+    let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
     assert_eq!(entry["status"], "retained");
     assert_eq!(
         entry["cache_attempts"].as_array().unwrap().len(),
