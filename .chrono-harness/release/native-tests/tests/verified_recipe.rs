@@ -60,13 +60,21 @@ fn promotion_requires_the_original_run_event_and_complete_workflow_head() {
         assert("push"@.len() != "workflow_dispatch"@.len());
     }
     let head = [97u8; 40];
-    assert(head@[0] == 97);
-    let valid = delivery::promotion_run(&[(Some(2),2)], &[], Some("workflow_run"), Some(&head));
-    let manual = delivery::promotion_run(&[], &[], Some("workflow_dispatch"), Some(&head));
-    let wrong = delivery::promotion_run(&[], &[], Some("push"), Some(&head));
-    let missing = delivery::promotion_run(&[], &[], None, Some(&head));
+    let head_bytes: &[u8] = &head;
+    proof {
+        assert(head_bytes@ == head@);
+        assert(head_bytes@.len() == 40);
+        assert forall|i: int| 0 <= i < head_bytes@.len() implies head_bytes@[i] == 97 by {
+            assert(head@[i] == 97);
+        }
+        assert(head_bytes@[0] == 97);
+    }
+    let valid = delivery::promotion_run(&[(Some(2),2)], &[], Some("workflow_run"), Some(head_bytes));
+    let manual = delivery::promotion_run(&[], &[], Some("workflow_dispatch"), Some(head_bytes));
+    let wrong = delivery::promotion_run(&[], &[], Some("push"), Some(head_bytes));
+    let missing = delivery::promotion_run(&[], &[], None, Some(head_bytes));
     let short = delivery::promotion_run(&[], &[], Some("workflow_run"), Some(&[97u8]));
-    let attempt = delivery::promotion_run(&[(Some(3),2)], &[], Some("workflow_run"), Some(&head));
+    let attempt = delivery::promotion_run(&[(Some(3),2)], &[], Some("workflow_run"), Some(head_bytes));
     expect_recipe(valid);
     expect_recipe(manual);
     expect_recipe(!wrong);
