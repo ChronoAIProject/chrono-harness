@@ -1,12 +1,12 @@
 //! 快照导出的选择、逐阶段状态、首错及容量合同；IO 由真实接口逐项转交。
+use super::tree_rows;
+use super::{Tree, TreeEntry, TreePath, checkout_symbolic_link, identifiers};
+#[cfg(verus_keep_ghost)]
+use super::{tree_rows_ordered, tree_rows_view};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
-use super::{Tree, TreePath, TreeEntry, identifiers, checkout_symbolic_link};
-#[cfg(verus_keep_ghost)]
-use super::{tree_rows_ordered, tree_rows_view};
-use super::tree_rows;
 
 verus! {
 
@@ -652,4 +652,3 @@ pub fn snapshot<S, P, M, B, L, A, C, R, D, Y, W, G, O, F>(
 }
 
 }
-

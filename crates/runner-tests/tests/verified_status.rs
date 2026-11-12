@@ -10,8 +10,8 @@ use chrono_harness::verified_status as policy;
 use core::cmp::Ordering;
 #[cfg(verus_keep_ghost)]
 use policy::identifiers as scope_text;
-use policy::{Status, WireStatus};
 use policy::snapshot_export as export;
+use policy::{Status, WireStatus};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -116,6 +116,7 @@ fn export_fx_locate(state: ExportFixture, path: &String)
         export_fx_texts(out.0.paths@) == export_fx_texts(state.paths@).push(path@),
         out.0.paths@.len() == state.paths@.len() + 1,
         export_fx_texts(out.0.prefetched@) == export_fx_texts(state.prefetched@),
+        out.0.prefetched@.len() == state.prefetched@.len(),
         match out.1 {
             Err(error) => export_fx_failure(state, 1) && error@ == state.error@,
             Ok(actual) => !export_fx_failure(state, 1) && actual@ == path@,
@@ -795,7 +796,7 @@ proof fn export_rows_three(rows: Seq<(&policy::TreePath, &policy::TreeEntry)>,
 spec fn export_fixture_tree_keys(tree: Map<policy::TreePath, policy::TreeEntry>, middle_blob: bool,
     ka: policy::TreePath, km: policy::TreePath, kz: policy::TreePath) -> bool {
     tree.contains_key(ka) && tree.contains_key(km) && tree.contains_key(kz)
-        && ka@ == "a/é"@ && km@ == "m"@ && kz@ == "zfn snapshot_multiple_files_case(\n"@
+        && ka@ == "a/é"@ && km@ == "m"@ && kz@ == "z\0\n"@
         && tree.kv_pairs() == set![(ka, tree[ka]), (km, tree[km]), (kz, tree[kz])]
         && policy::tree_entry_fields(&tree[ka]) == ("100644"@, "a oid"@, "blob"@)
         && policy::tree_entry_fields(&tree[km]) == ("100644"@, "m oid"@,
@@ -810,13 +811,13 @@ fn export_fixture_tree(middle_blob: bool) -> (out: policy::Tree)
     proof {
         reveal(export_fixture_tree_keys);
         policy::tree_path_obeys_cmp();
-        reveal_strlit("a/é"); reveal_strlit("m"); reveal_strlit("zfn snapshot_multiple_files_case(\n");
-        assert("a/é"@[0] != "m"@[0]); assert("a/é"@[0] != "zfn snapshot_multiple_files_case(\n"@[0]);
-        assert("m"@[0] != "zfn snapshot_multiple_files_case(\n"@[0]);
+        reveal_strlit("a/é"); reveal_strlit("m"); reveal_strlit("z\0\n");
+        assert("a/é"@[0] != "m"@[0]); assert("a/é"@[0] != "z\0\n"@[0]);
+        assert("m"@[0] != "z\0\n"@[0]);
     }
     let mut tree = policy::Tree::new();
     // 故意逆序插入；真实 BTreeMap 决定导出的全文字节顺序。
-    let z = policy::TreePath::from_text("zfn snapshot_multiple_files_case(\n");
+    let z = policy::TreePath::from_text("z\0\n");
     let ghost kz = z;
     expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree, z, "100644", "z oid", "blob"));
     let m = policy::TreePath::from_text("m");
@@ -828,9 +829,255 @@ fn export_fixture_tree(middle_blob: bool) -> (out: policy::Tree)
     expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree, a, "100644", "a oid", "blob"));
     proof {
         reveal(export_fixture_tree_keys);
+        assert(tree@.contains_key(ka) && tree@.contains_key(km) && tree@.contains_key(kz));
+        assert(tree@.kv_pairs() =~= set![(ka, tree@[ka]), (km, tree@[km]), (kz, tree@[kz])]);
+        assert(policy::tree_entry_fields(&tree@[ka]) == ("100644"@, "a oid"@, "blob"@));
+        assert(policy::tree_entry_fields(&tree@[km]) == ("100644"@, "m oid"@,
+            if middle_blob { "blob"@ } else { "tree"@ }));
+        assert(policy::tree_entry_fields(&tree@[kz]) == ("100644"@, "z oid"@, "blob"@));
         assert(export_fixture_tree_keys(tree@, middle_blob, ka, km, kz));
     }
     tree
+}
+
+proof fn export_fixture_prefix_step<B, L, A, C, R, D, Y, W, G, O, F>(
+    rows: Seq<(&policy::TreePath, &policy::TreeEntry)>, states: Seq<(ExportFixture, u64)>,
+    source: ExportFixture, limit: u64, io: &export::SnapshotExportIo<B, L, A, C, R, D, Y, W, G, O, F>, i: int)
+    where B: Fn(ExportFixture, &Vec<String>) -> (ExportFixture, Result<(), String>),
+    L: Fn(ExportFixture, &String) -> (ExportFixture, Result<String, String>),
+    A: Fn(ExportFixture, &String) -> (ExportFixture, Option<String>),
+    C: Fn(ExportFixture, String) -> (ExportFixture, Result<(), String>),
+    R: Fn(ExportFixture, &String) -> (ExportFixture, Result<Vec<u8>, String>),
+    D: Fn(ExportFixture, Vec<u8>) -> (ExportFixture, Result<String, String>),
+    Y: Fn(ExportFixture, &String, String) -> (ExportFixture, Result<(), String>),
+    W: Fn(ExportFixture, &String, Vec<u8>) -> (ExportFixture, Result<(), String>),
+    G: Fn(ExportFixture, &String) -> (ExportFixture, Result<bool, String>),
+    O: Fn(ExportFixture, bool, bool) -> (ExportFixture, bool),
+    F: Fn(ExportFixture, &String, bool) -> (ExportFixture, Result<(), String>)
+    requires export::prefix(rows, states, source, limit, true, io), 0 <= i < states.len() - 1,
+    ensures export::file_result(states[i].0, &rows[i].0.text, &rows[i].1.kind,
+        &rows[i].1.mode, states[i].1, limit, true, io,
+        (states[i + 1].0, Ok::<u64, String>(states[i + 1].1))),
+{
+    hide(export::file_result);
+    reveal(export::prefix);
+}
+
+spec fn export_fx_regular_io<B, L, A, C, R, D, Y, W, G, O, F>(
+    io: &export::SnapshotExportIo<B, L, A, C, R, D, Y, W, G, O, F>) -> bool
+    where B: Fn(ExportFixture, &Vec<String>) -> (ExportFixture, Result<(), String>),
+    L: Fn(ExportFixture, &String) -> (ExportFixture, Result<String, String>),
+    A: Fn(ExportFixture, &String) -> (ExportFixture, Option<String>),
+    C: Fn(ExportFixture, String) -> (ExportFixture, Result<(), String>),
+    R: Fn(ExportFixture, &String) -> (ExportFixture, Result<Vec<u8>, String>),
+    D: Fn(ExportFixture, Vec<u8>) -> (ExportFixture, Result<String, String>),
+    Y: Fn(ExportFixture, &String, String) -> (ExportFixture, Result<(), String>),
+    W: Fn(ExportFixture, &String, Vec<u8>) -> (ExportFixture, Result<(), String>),
+    G: Fn(ExportFixture, &String) -> (ExportFixture, Result<bool, String>),
+    O: Fn(ExportFixture, bool, bool) -> (ExportFixture, bool),
+    F: Fn(ExportFixture, &String, bool) -> (ExportFixture, Result<(), String>)
+{ (forall|s: ExportFixture, path: &String, out: (ExportFixture, Result<String, String>)|
+        #[trigger] io.locate.ensures((s, path), out) ==> export_fx_locate.ensures((s, path), out))
+    && (forall|s: ExportFixture, path: &String, out: (ExportFixture, Option<String>)|
+        #[trigger] io.parent.ensures((s, path), out) ==> export_fx_parent.ensures((s, path), out))
+    && (forall|s: ExportFixture, path: String, out: (ExportFixture, Result<(), String>)|
+        #[trigger] io.create_parent.ensures((s, path), out) ==> export_fx_create.ensures((s, path), out))
+    && (forall|s: ExportFixture, path: &String, out: (ExportFixture, Result<Vec<u8>, String>)|
+        #[trigger] io.read.ensures((s, path), out) ==> export_fx_read.ensures((s, path), out))
+    && (forall|s: ExportFixture, path: &String, bytes: Vec<u8>, out: (ExportFixture, Result<(), String>)|
+        #[trigger] io.write.ensures((s, path, bytes), out) ==> export_fx_write.ensures((s, path, bytes), out))
+    && (forall|s: ExportFixture, path: &String, out: (ExportFixture, Result<bool, String>)|
+        #[trigger] io.metadata.ensures((s, path), out) ==> export_fx_metadata.ensures((s, path), out))
+    && (forall|s: ExportFixture, old: bool, readonly: bool, out: (ExportFixture, bool)|
+        #[trigger] io.readonly.ensures((s, old, readonly), out) ==> export_fx_readonly.ensures((s, old, readonly), out))
+    && (forall|s: ExportFixture, path: &String, readonly: bool, out: (ExportFixture, Result<(), String>)|
+        #[trigger] io.permissions.ensures((s, path, readonly), out) ==> export_fx_permissions.ensures((s, path, readonly), out)) }
+
+spec fn export_fx_next_length(state: ExportFixture) -> int {
+    if state.empty || (state.empty_first && state.paths@.len() == 0) { 0 } else { 4 }
+}
+
+spec fn export_fx_regular_effect(state: ExportFixture, relative: &String, previous: u64,
+    expected: u8, out: (ExportFixture, Result<u64, String>)) -> bool
+{
+    export_fx_fixed(out.0, state) && out.0.valid == state.valid
+        && out.0.current@ == relative@
+        && out.0.paths@.len() == state.paths@.len() + 1
+        && export_fx_texts(out.0.paths@) == export_fx_texts(state.paths@).push(relative@)
+        && out.0.prefetched@.len() == state.prefetched@.len()
+        && export_fx_texts(out.0.prefetched@) == export_fx_texts(state.prefetched@)
+        && out.0.trace@ =~= state.trace@ + (if expected == 0 { seq![1u8, 2, 3, 4, 7, 8, 9, 10] }
+            else if expected == 8 { seq![1u8, 2, 3, 4, 7, 8] } else { seq![1u8, 2, 3, 4] })
+        && match out.1 {
+            Ok(total) => expected == 0 && total == previous as int + export_fx_next_length(state),
+            Err(error) => expected != 0 && error@ == if expected == 12 {
+                "snapshot output byte capacity exceeded before writing"@
+            } else { state.error@ },
+        }
+}
+
+proof fn export_fixture_regular_step<B, L, A, C, R, D, Y, W, G, O, F>(
+    state: ExportFixture, relative: &String, kind: &String, mode: &String,
+    previous: u64, limit: u64, io: &export::SnapshotExportIo<B, L, A, C, R, D, Y, W, G, O, F>,
+    expected: u8, out: (ExportFixture, Result<u64, String>))
+    where B: Fn(ExportFixture, &Vec<String>) -> (ExportFixture, Result<(), String>),
+    L: Fn(ExportFixture, &String) -> (ExportFixture, Result<String, String>),
+    A: Fn(ExportFixture, &String) -> (ExportFixture, Option<String>),
+    C: Fn(ExportFixture, String) -> (ExportFixture, Result<(), String>),
+    R: Fn(ExportFixture, &String) -> (ExportFixture, Result<Vec<u8>, String>),
+    D: Fn(ExportFixture, Vec<u8>) -> (ExportFixture, Result<String, String>),
+    Y: Fn(ExportFixture, &String, String) -> (ExportFixture, Result<(), String>),
+    W: Fn(ExportFixture, &String, Vec<u8>) -> (ExportFixture, Result<(), String>),
+    G: Fn(ExportFixture, &String) -> (ExportFixture, Result<bool, String>),
+    O: Fn(ExportFixture, bool, bool) -> (ExportFixture, bool),
+    F: Fn(ExportFixture, &String, bool) -> (ExportFixture, Result<(), String>)
+    requires export_fx_regular_io(io), kind@ == "blob"@, mode@ == "100644"@, !state.symbolic,
+        state.failure == 0 || state.failure == 4 || state.failure == 8,
+        state.later == 0 || state.later == 8,
+        previous as int + export_fx_next_length(state) <= u64::MAX,
+        if expected == 0 {
+            previous as int + export_fx_next_length(state) <= limit
+                && (state.failure == 0 && state.later == 0
+                    || state.failure_file != 0 && state.failure_file != state.paths@.len() + 1)
+        } else if expected == 12 {
+            previous as int + export_fx_next_length(state) > limit
+                && state.failure == 0 && state.later == 0
+        } else {
+            (expected == 4 || expected == 8) && state.failure == expected
+                && state.later == (if expected == 4 { 8u8 } else { 0u8 })
+                && state.failure_file == state.paths@.len() + 1
+                && previous as int + export_fx_next_length(state) <= limit
+        },
+        export::file_result(state, relative, kind, mode, previous, limit, true, io, out),
+    ensures export_fx_regular_effect(state, relative, previous, expected, out),
+{
+    reveal(export_fx_regular_io); reveal(export_fx_regular_effect);
+    reveal(export_fx_next_length);
+    reveal(export_fx_fixed); reveal(export_fx_kept); reveal(export_fx_texts);
+    reveal(export_fx_empty); reveal(export_fx_failure); reveal(export_fx_bytes);
+    reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+    reveal(export::payload_result); reveal(export::regular_result); reveal(export::counted);
+    reveal_strlit("100644"); reveal_strlit("120000");
+    assert("100644"@[1] != "120000"@[1]);
+
+    let located = choose|located: (ExportFixture, Result<String, String>)|
+        io.locate.ensures((state, relative), located)
+            && match located.1 {
+                Err(error) => out == (located.0, Err::<u64, String>(error)),
+                Ok(path) => export::parent_result(located.0, &path, relative, mode,
+                    previous, limit, true, io, out),
+            };
+    assert(export_fx_locate.ensures((state, relative), located));
+    assert(export_fx_fixed(located.0, state));
+    assert(located.1 is Ok);
+    let path = located.1->Ok_0;
+    let parent = choose|parent: (ExportFixture, Option<String>)|
+        io.parent.ensures((located.0, &path), parent)
+            && match parent.1 {
+                None => out.0 == parent.0 && match out.1 {
+                    Err(error) => error@ == "snapshot parent"@, _ => false,
+                },
+                Some(directory) => exists|created: (ExportFixture, Result<(), String>)|
+                    io.create_parent.ensures((parent.0, directory), created)
+                        && match created.1 {
+                            Err(error) => out == (created.0, Err::<u64, String>(error)),
+                            Ok(()) => export::read_result(created.0, &path, relative, mode,
+                                previous, limit, true, io, out),
+                        },
+            };
+    assert(export_fx_parent.ensures((located.0, &path), parent));
+    assert(parent.1 is Some);
+    let directory = parent.1->Some_0;
+    let created = choose|created: (ExportFixture, Result<(), String>)|
+        io.create_parent.ensures((parent.0, directory), created) && match created.1 {
+            Err(error) => out == (created.0, Err::<u64, String>(error)),
+            Ok(()) => export::read_result(created.0, &path, relative, mode,
+                previous, limit, true, io, out),
+        };
+    assert(export_fx_create.ensures((parent.0, directory), created));
+    assert(created.1 is Ok);
+    let read = choose|read: (ExportFixture, Result<Vec<u8>, String>)|
+        io.read.ensures((created.0, relative), read) && match read.1 {
+            Err(error) => out == (read.0, Err::<u64, String>(error)),
+            Ok(bytes) => export::payload_result(read.0, &path, mode, bytes,
+                previous, limit, true, io, out),
+        };
+    assert(export_fx_read.ensures((created.0, relative), read));
+    if read.1 is Err {
+        assert(expected == 4);
+        assert(export_fx_fixed(out.0, state));
+        assert(out.0.valid == state.valid);
+        assert(out.0.current@ == relative@);
+        assert(out.0.paths@.len() == state.paths@.len() + 1);
+        assert(export_fx_texts(out.0.paths@) == export_fx_texts(state.paths@).push(relative@));
+        assert(out.0.prefetched@.len() == state.prefetched@.len());
+        assert(export_fx_texts(out.0.prefetched@) == export_fx_texts(state.prefetched@));
+        assert(out.0.trace@ =~= state.trace@ + seq![1u8, 2, 3, 4]);
+        assert(out.1 is Err && out.1->Err_0@ == state.error@);
+        assert(export_fx_regular_effect(state, relative, previous, expected, out));
+        return;
+    }
+    let bytes = read.1->Ok_0;
+    assert(bytes@.len() == export_fx_next_length(state));
+    if expected == 12 {
+        assert(export_fx_fixed(out.0, state));
+        assert(out.0.valid == state.valid);
+        assert(out.0.current@ == relative@);
+        assert(out.0.paths@.len() == state.paths@.len() + 1);
+        assert(export_fx_texts(out.0.paths@) == export_fx_texts(state.paths@).push(relative@));
+        assert(out.0.prefetched@.len() == state.prefetched@.len());
+        assert(export_fx_texts(out.0.prefetched@) == export_fx_texts(state.prefetched@));
+        assert(out.0.trace@ =~= state.trace@ + seq![1u8, 2, 3, 4]);
+        assert(out.1 is Err && out.1->Err_0@ == "snapshot output byte capacity exceeded before writing"@);
+        assert(export_fx_regular_effect(state, relative, previous, expected, out));
+        return;
+    }
+    let total = (previous as int + export_fx_next_length(state)) as u64;
+    let completed = choose|completed: (ExportFixture, Result<(), String>)|
+        export::counted(total, completed, out)
+            && export::regular_result(read.0, &path, bytes, io, completed);
+    let written = choose|written: (ExportFixture, Result<(), String>)|
+        io.write.ensures((read.0, &path, bytes), written) && match written.1 {
+            Err(_) => completed == written,
+            Ok(()) => exists|metadata: (ExportFixture, Result<bool, String>)|
+                io.metadata.ensures((written.0, &path), metadata) && match metadata.1 {
+                    Err(error) => completed == (metadata.0, Err::<(), String>(error)),
+                    Ok(permissions) => exists|changed: (ExportFixture, bool)|
+                        io.readonly.ensures((metadata.0, permissions, true), changed)
+                            && io.permissions.ensures((changed.0, &path, changed.1), completed),
+                },
+        };
+    assert(export_fx_write.ensures((read.0, &path, bytes), written));
+    assert(written.1 is Ok);
+    let metadata = choose|metadata: (ExportFixture, Result<bool, String>)|
+        io.metadata.ensures((written.0, &path), metadata) && match metadata.1 {
+            Err(error) => completed == (metadata.0, Err::<(), String>(error)),
+            Ok(permissions) => exists|changed: (ExportFixture, bool)|
+                io.readonly.ensures((metadata.0, permissions, true), changed)
+                    && io.permissions.ensures((changed.0, &path, changed.1), completed),
+        };
+    assert(export_fx_metadata.ensures((written.0, &path), metadata));
+    if metadata.1 is Err {
+        assert(export_fx_regular_effect(state, relative, previous, expected, out));
+        return;
+    }
+    let permissions = metadata.1->Ok_0;
+    let changed = choose|changed: (ExportFixture, bool)|
+        io.readonly.ensures((metadata.0, permissions, true), changed)
+            && io.permissions.ensures((changed.0, &path, changed.1), completed);
+    assert(export_fx_readonly.ensures((metadata.0, permissions, true), changed));
+    assert(export_fx_permissions.ensures((changed.0, &path, changed.1), completed));
+    assert(expected == 0);
+    assert(export_fx_fixed(out.0, state));
+        assert(out.0.valid == state.valid);
+        assert(out.0.current@ == relative@);
+        assert(out.0.paths@.len() == state.paths@.len() + 1);
+        assert(export_fx_texts(out.0.paths@) == export_fx_texts(state.paths@).push(relative@));
+        assert(out.0.prefetched@.len() == state.prefetched@.len());
+        assert(export_fx_texts(out.0.prefetched@) == export_fx_texts(state.prefetched@));
+    assert(out.0.trace@ =~= state.trace@ + seq![1u8, 2, 3, 4, 7, 8, 9, 10]);
+    assert(out.1 is Ok && out.1->Ok_0 == previous as int + export_fx_next_length(state));
+    assert(export_fx_regular_effect(state, relative, previous, expected, out));
 }
 
 fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64,
@@ -839,10 +1086,14 @@ fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64
         else { (failure == 0 || failure == 11)
             && ((empty_first && limit == 4) || (!empty_first && (limit == 7 || limit == 8))) },
 {
+    hide(export_fx_regular_io);
+    hide(scope_text::byte_lt);
+    hide(export::file_result); hide(export::parent_result); hide(export::read_result);
+    hide(export::payload_result); hide(export::regular_result);
+    hide(export::symbolic_result); hide(export::counted);
+    hide(vstd::utf8::encode_utf8);
     proof {
-        reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
-        reveal(export::payload_result); reveal(export::regular_result);
-        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_regular_effect); reveal(export_fx_next_length);
         reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
         reveal(export_fx_failure); reveal(export_fx_empty);
         reveal(export::rows_result); reveal(export::files_result); reveal(export::prefix);
@@ -869,6 +1120,7 @@ fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64
         symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
         readonly: export_fx_readonly, permissions: export_fx_permissions,
     };
+    proof { assert(export_fx_regular_io(&io)) by { reveal(export_fx_regular_io); } }
     let out = export::snapshot(state, &tree, true, limit, true, &io);
     proof {
         reveal(export_fixture_tree_keys);
@@ -913,34 +1165,57 @@ fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64
                                 states.last().1, limit, true, &io, (out.0, Err::<u64, String>(error))),
                     };
             assert(states[0] == (source, 0u64));
-            assert(states.len() >= 2);
-            assert(export::file_result(source, &rows[0].0.text, &rows[0].1.kind,
-                &rows[0].1.mode, 0, limit, true, &io,
-                (states[1].0, Ok::<u64, String>(states[1].1))));
+            assert(states.len() >= 2) by {
+                if states.len() == 1 {
+                    assert(out.1 is Err);
+                    export_fixture_regular_step(source, &rows[0].0.text, &rows[0].1.kind,
+                        &rows[0].1.mode, 0, limit, &io, 0, (out.0, Err::<u64, String>(out.1->Err_0)));
+                    assert(false);
+                }
+            }
+            export_fixture_prefix_step(rows, states, source, limit, &io, 0);
+            export_fixture_regular_step(source, &rows[0].0.text, &rows[0].1.kind,
+                        &rows[0].1.mode, 0, limit, &io, 0, (states[1].0, Ok::<u64, String>(states[1].1)));
             assert(states[1].0.valid);
             assert(states[1].0.trace@ =~= seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10]);
             assert(states[1].0.paths@.len() == 1);
             assert(export_fx_texts(states[1].0.paths@) =~= seq!["a/é"@]);
-            assert(states[1].1 == if empty_first { 0u64 } else { 4u64 });
+            assert(states[1].1 == (if empty_first { 0u64 } else { 4u64 }));
             if middle_blob {
                 if states.len() > 2 {
-                    assert(export::file_result(states[1].0, &rows[1].0.text, &rows[1].1.kind,
-                        &rows[1].1.mode, states[1].1, limit, true, &io,
-                        (states[2].0, Ok::<u64, String>(states[2].1))));
+                    export_fixture_prefix_step(rows, states, source, limit, &io, 1);
+                    export_fixture_regular_step(states[1].0, &rows[1].0.text, &rows[1].1.kind,
+                        &rows[1].1.mode, states[1].1, limit, &io, failure, (states[2].0, Ok::<u64, String>(states[2].1)));
                     assert(false);
                 }
                 assert(states.len() == 2);
                 assert(out.1 is Err);
+                export_fixture_regular_step(states[1].0, &rows[1].0.text, &rows[1].1.kind,
+                        &rows[1].1.mode, states[1].1, limit, &io, failure, (out.0, Err::<u64, String>(out.1->Err_0)));
             } else {
-                assert(states.len() >= 3);
-                assert(export::file_result(states[1].0, &rows[1].0.text, &rows[1].1.kind,
-                    &rows[1].1.mode, states[1].1, limit, true, &io,
-                    (states[2].0, Ok::<u64, String>(states[2].1))));
-                assert(states[2] == states[1]);
+                assert(states.len() >= 3) by { reveal(export::file_result); }
+                export_fixture_prefix_step(rows, states, source, limit, &io, 1);
+                assert(states[2] == states[1]) by { reveal(export::file_result); }
                 if states.len() == 4 {
-                    assert(export::file_result(states[2].0, &rows[2].0.text, &rows[2].1.kind,
-                        &rows[2].1.mode, states[2].1, limit, true, &io,
-                        (states[3].0, Ok::<u64, String>(states[3].1))));
+                    export_fixture_prefix_step(rows, states, source, limit, &io, 2);
+                    export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
+                        &rows[2].1.mode, states[2].1, limit, &io, if limit == 7 { 12 } else { 0 }, (states[3].0, Ok::<u64, String>(states[3].1)));
+                }
+                if limit == 7 {
+                    assert(states.len() == 3);
+                    assert(out.1 is Err);
+                    export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
+                        &rows[2].1.mode, states[2].1, limit, &io, 12, (out.0, Err::<u64, String>(out.1->Err_0)));
+                } else {
+                    assert(out.1 is Ok) by {
+                        if out.1 is Err {
+                            assert(states.len() == 3);
+                            export_fixture_regular_step(states[2].0, &rows[2].0.text, &rows[2].1.kind,
+                        &rows[2].1.mode, states[2].1, limit, &io, 0, (out.0, Err::<u64, String>(out.1->Err_0)));
+                            assert(false);
+                        }
+                    }
+                    assert(states.len() == 4);
                 }
             }
         }
@@ -3160,6 +3435,21 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
     }
 }
 
+proof fn tree_fixture_complete_member(tree: Map<policy::TreePath, policy::TreeEntry>,
+    rows: Seq<&str>, i: int, path: &str)
+    requires 0 <= i < rows.len(), policy::git_tree_prefix_map(tree, rows, rows.len() as int),
+        policy::git_tree_row_at(rows, i) == Ok::<policy::GitTreeRowBytes, policy::GitInventoryErrorView>((
+            path.spec_bytes(), "100644".spec_bytes(),
+            "0000000000000000000000000000000000000001".spec_bytes(), "blob".spec_bytes())),
+    ensures exists|key: policy::TreePath| tree.contains_key(key) && key@ == path@
+        && policy::tree_entry_fields(&tree[key]) == ("100644"@,
+            "0000000000000000000000000000000000000001"@, "blob"@),
+{
+    let key = choose|key: policy::TreePath| tree.contains_key(key)
+        && policy::git_tree_entry_matches(key, tree[key], (policy::git_tree_row_at(rows, i)->Ok_0));
+    tree_fixture_entry_fields(key, tree[key], path);
+}
+
 proof fn tree_fixture_literal_rows(a: &str, b: &str)
     requires a@ == "100644 blob 0000000000000000000000000000000000000001\ta"@,
         b@ == "100644 blob 0000000000000000000000000000000000000001\ta//./b/"@,
@@ -3201,10 +3491,7 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
                     tree@.contains_key(key) && key@ == (if i == 0 { "a//./b/"@ } else { "a"@ })
                         && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
                             "0000000000000000000000000000000000000001"@, "blob"@) by {
-                    let key = choose|key: policy::TreePath| tree@.contains_key(key)
-                        && policy::git_tree_entry_matches(key, tree@[key],
-                            (policy::git_tree_row_at(rows@, i)->Ok_0));
-                    tree_fixture_entry_fields(key, tree@[key], if i == 0 { "a//./b/" } else { "a" });
+                    tree_fixture_complete_member(tree@, rows@, i, if i == 0 { "a//./b/" } else { "a" });
                 }
             }
             proof {

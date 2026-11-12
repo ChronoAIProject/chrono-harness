@@ -414,35 +414,48 @@ impl Reader {
                     (reader, path.parent().map(Path::to_path_buf))
                 },
                 create_parent: |reader, parent| {
-                    (reader, fs::create_dir_all(parent).map_err(|error| error.to_string()))
+                    (
+                        reader,
+                        fs::create_dir_all(parent).map_err(|error| error.to_string()),
+                    )
                 },
                 read: |reader, path: &String| (reader, self.blob(root, oid, path)),
                 decode: |reader, bytes| (reader, utf8(bytes)),
                 symlink: |reader, path: &std::path::PathBuf, target: String| {
                     #[cfg(unix)]
-                    let observed = std::os::unix::fs::symlink(target, path)
-                        .map_err(|error| error.to_string());
+                    let observed =
+                        std::os::unix::fs::symlink(target, path).map_err(|error| error.to_string());
                     #[cfg(not(unix))]
                     let observed = Err("E_INPUT_UNSUPPORTED: symlink snapshot".to_owned());
                     (reader, observed)
                 },
                 write: |reader, path: &std::path::PathBuf, bytes: Vec<u8>| {
-                    (reader, fs::write(path, bytes).map_err(|error| error.to_string()))
+                    (
+                        reader,
+                        fs::write(path, bytes).map_err(|error| error.to_string()),
+                    )
                 },
                 metadata: |reader, path: &std::path::PathBuf| {
-                    (reader, fs::metadata(path).map(|metadata| metadata.permissions())
-                        .map_err(|error| error.to_string()))
+                    (
+                        reader,
+                        fs::metadata(path)
+                            .map(|metadata| metadata.permissions())
+                            .map_err(|error| error.to_string()),
+                    )
                 },
                 readonly: |reader, mut permissions: fs::Permissions, readonly| {
                     permissions.set_readonly(readonly);
                     (reader, permissions)
                 },
                 permissions: |reader, path: &std::path::PathBuf, permissions| {
-                    (reader, fs::set_permissions(path, permissions)
-                        .map_err(|error| error.to_string()))
+                    (
+                        reader,
+                        fs::set_permissions(path, permissions).map_err(|error| error.to_string()),
+                    )
                 },
             },
-        ).1
+        )
+        .1
     }
     pub fn registry_values(
         &self,
