@@ -429,6 +429,8 @@ fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impa
         ["test:t"]
     );
     assert!(impact.required_tests[0].candidate_present);
+    assert!(r["impact"]["required_tests"][0].get("base_cost").is_none());
+    assert!(r["impact"]["required_tests"][0].get("candidate_cost").is_none());
     assert_eq!(r["impact"]["tests"], json!(["test:t"]));
     assert_eq!(r["impact"]["retired_tests"], json!([]));
     assert_eq!(
