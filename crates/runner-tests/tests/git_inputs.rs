@@ -197,7 +197,7 @@ fn scoped_facts_observe_git_without_a_host_allowlist_and_recheck_its_bytes() {
         reader
             .git(&h.root, &["status"])
             .unwrap_err()
-            .contains("executable/input changed")
+            .contains("prelaunch executable digest mismatch")
     );
     assert_eq!(fs::read_to_string(h.root.join("trace")).unwrap(), trace);
 }
