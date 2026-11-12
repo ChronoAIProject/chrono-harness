@@ -515,6 +515,85 @@ fn expect_some_text(actual: &Option<String>, expected: &str)
     }
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_completion_keeps_empty_documents_and_absent_selection()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let bytes: std::collections::BTreeMap<String, Vec<u8>> = std::collections::BTreeMap::new();
+    let values: std::collections::BTreeMap<String, u64> = std::collections::BTreeMap::new();
+    let out = policy::registry_snapshot_complete(
+        "".to_owned(), "入口é\0\n尾部".to_owned(), None, Ok((bytes, values)),
+    );
+    match out {
+        Err(_) => { panic!(); },
+        Ok(snapshot) => {
+            expect_status_text(snapshot.entry_path.as_str(), "");
+            expect_status_text(snapshot.effective_path.as_str(), "入口é\0\n尾部");
+            expect_status_true(snapshot.bytes.len() == 0 && snapshot.values.len() == 0);
+            expect_status_true(snapshot.selection.is_none());
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_completion_keeps_complete_documents_and_identity()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let entry = "a/entry\0\n".to_owned();
+    let effective = "b/目标é\0\n".to_owned();
+    proof {
+        reveal_strlit("a/entry\0\n"); reveal_strlit("b/目标é\0\n");
+        assert(entry@.len() != effective@.len());
+        assert(entry != effective);
+    }
+    let mut bytes = std::collections::BTreeMap::new();
+    let mut values = std::collections::BTreeMap::new();
+    bytes.insert(entry.clone(), vec![0u8, 255, 10]);
+    bytes.insert(effective.clone(), vec![17u8, 0, 254]);
+    values.insert(entry.clone(), u64::MAX);
+    values.insert(effective.clone(), 0u64);
+    let out = policy::registry_snapshot_complete(
+        entry.clone(), effective.clone(), Some(71u64), Ok((bytes, values)),
+    );
+    match out {
+        Err(_) => { panic!(); },
+        Ok(snapshot) => {
+            expect_status_text(snapshot.entry_path.as_str(), entry.as_str());
+            expect_status_text(snapshot.effective_path.as_str(), effective.as_str());
+            expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
+            expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], u64::MAX);
+            expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, &[17u8, 0, 254], 0u64);
+            match snapshot.selection {
+                Some(value) => { expect_status_true(value == 71u64); },
+                None => { panic!(); },
+            }
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_completion_returns_the_full_original_error() {
+    let out = policy::registry_snapshot_complete::<u64>(
+        "入口".to_owned(), "目标".to_owned(), Some(u64::MAX),
+        Err("registry 失败é\0\n完整尾部".to_owned()),
+    );
+    match out {
+        Ok(_) => { panic!(); },
+        Err(error) => { expect_status_text(error.as_str(), "registry 失败é\0\n完整尾部"); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registry_snapshot_completion_keeps_empty_failure_distinct_from_success() {
+    let out = policy::registry_snapshot_complete::<u64>(
+        "".to_owned(), "".to_owned(), None, Err("".to_owned()),
+    );
+    match out {
+        Ok(_) => { panic!(); },
+        Err(error) => { expect_status_text(error.as_str(), ""); },
+    }
+}
+
 fn expect_order(actual: Ordering, expected: Ordering)
     requires actual == expected,
 {
@@ -5963,7 +6042,12 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
                 assert(bytes@[old]@ =~= seq![9u8]);
             }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
-            expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);
+            let old_original = [9u8];
+            proof {
+                assert(registry_sequence_bytes(bytes@)[old] == seq![9u8]);
+                assert(bytes@[old]@ =~= old_original@);
+            }
+            expect_registry_pair(&bytes, &values, &old, &old_original, u64::MAX);
             let original = [1u8, 0, 255];
             proof {
                 assert(registry_sequence_bytes(bytes@)[key] == seq![1u8, 0, 255]);
