@@ -6,6 +6,9 @@ publish = false
 autotests = false
 
 [dependencies]
+shlex = "=2.0.1"
+sha1 = "0.10"
+serde = { version = "1", features = ["derive"] }
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 serde_json = "1"
 chrono-harness = { path = "../runner" }
@@ -80,3 +83,21 @@ bench = false
 # Match the runner development profile for the shared inventory implementation.
 [profile.dev]
 opt-level = 1
+
+[[bin]]
+name = "chrono-test-git-model"
+path = "../runner-tests/tests/support/git_model.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-cargo-model"
+path = "../worktree-tests/tests/support/cargo_model.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-generated-command"
+path = "../ci-tests/tests/support/generated_command.rs"
+test = false
+bench = false

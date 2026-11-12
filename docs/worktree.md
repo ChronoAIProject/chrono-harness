@@ -616,7 +616,7 @@ Rust `RetainedArtifact` 接纳精确保留对象并发布 intent。采用 wrappe
 
 发布通过 `RetainedArtifact::registered_store` 解析生产者，与清理共用已提交 worktree 配置、cleanup 政策、登记和物理 Git main 协调者检查。声明查找只读政策，不取得维护准入、不初始化账本，因此活维护租约不阻止查找。最终 HEAD／配置／政策稳定检查仍适用，实际发布／处置各有原登记和所有权保护。
 
-默认 wrapper 将生产检出与命令 fixture 根分开传，所以 linked 生产者在 main 协调者声明目录下发布。`CHRONO_CI_TEST_RECEIPTS` 只能选该精确物理存储；未声明、重叠、不匹配、符号链接位置拒绝发布且保留。解析存储不释放消费者，也不授权删 main／分支。旧 linked 存储没有已采用转发路径，继续作未知证据保护。
+命令 fixture 使用自己的已提交 receipt owner 政策，生产检出与被测命令根分开传；linked 生产者仍在自己的 main 协调者声明目录发布。`CHRONO_CI_TEST_RECEIPTS` 与 judge-ci 诊断共用调用方证据目录语义：向该目录写原件引用及路径、摘要和长度，不通过私有 Git mock 对源码检出作生产者准入，也不复制原件到第二存储。引用写明实际 producer、store、artifact 和释放责任；独立 diagnostic 引用及其原 owner 保留到调用方完成调试／验收。底层物理 store 仍须精确匹配已提交声明，未声明、重叠、不匹配、符号链接位置继续拒绝。解析或导出不释放消费者，也不授权删 main／分支。旧 linked 存储没有已采用转发路径，继续作未知证据保护。
 
 本宿主只接纳两个复制的独立 Cargo 输出 `original-state/cargo/producer/target/`、`original-state/cargo/tests/target/`，生产者还要求精确源码产物声明。所选 expected-exit 断言消费原结果后发布 release；意外退出、发布不完整、活诊断引用都保留副本。
 
@@ -949,3 +949,5 @@ bootstrap fixture 保管者消费该声明，核真实生产路径、物理身�
 **产品／fixture 同改说明：**发布新增可选调用方消费者，本仓普通政策和零保留窗口不变。验证使用专属 runner／worktree Rust 及登记未过滤 bootstrap 测试。直接脏源码工程调用不是标准源码绑定验收。
 
 临时进程原件由实际生产者在 state 中发布；失败原件保留到调试／验收结束，再释放给已有生命周期所有者。各 action 沿用登记的执行限制和测试线程；完整构建／CI／存储成本未知。
+
+临时分配的 acquire／release 回执存入该对象已有的 `rolling-metadata`，与原意图、使用方状态和处置回执共用登记寿命。活跃、unknown 和未释放使用方继续保护；确认处置并到达元数据期限后，由原维护入口整体退役。Rust 回归核对回执归属、原字节保护及最后使用方释放后的实际退役，不以测试退出成功代替这些事实。产品实现与宿主测试登记同时变化，新增验证和存储成本未知；旧失败原件仍由调用方保管。

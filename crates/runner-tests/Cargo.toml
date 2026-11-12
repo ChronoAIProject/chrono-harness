@@ -10,6 +10,8 @@ name = "runtime_logging"
 path = "tests/runtime_logging.rs"
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+sha1 = "0.10"
 serde_json = "1"
 libc = "0.2"
 sha2 = "0.10"
@@ -121,3 +123,7 @@ name = "chrono-test-retention-child"
 path = "tests/support/retention_child.rs"
 test = false
 bench = false
+
+[[test]]
+name = "verified_fixture"
+path = "tests/verified_fixture.rs"

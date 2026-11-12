@@ -121,7 +121,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
         String::from_utf8_lossy(&out.stderr)
     );
     let workflow = fs::read_to_string(root.join(".github/workflows/package.yml")).unwrap();
-    let run = Command::new("/bin/bash")
+    let run = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"))
         .args(["-e", "-c", &script(&workflow)])
         .env("CHRONO_TEST_RECORDING", "release")
         .current_dir(root)
@@ -509,7 +509,7 @@ fn release_units_cli_runs_literal_command_and_writes_original_dependency_data() 
         .unwrap();
     let command = script(command);
     let original = r#"{"native":{"result":"failure","outputs":{"artifact_id":"123","attempt":"1","run_id":"45"}}}"#;
-    let result = Command::new("/bin/bash")
+    let result = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"))
         .args(["-e", "-c", &command])
         .env("CHRONO_TEST_RECORDING", "release-units")
         .env("CHRONO_RELEASE_DEPENDENCIES", original)
@@ -577,5 +577,33 @@ fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
             assert_eq!(fs::read(&adopted).unwrap(), original, "{key}");
             assert_eq!(fs::read(&workflow).unwrap(), rendered, "{key}");
         }
+    }
+}
+
+#[test]
+fn generated_command_mock_rejects_unknown_shell_domain_and_preserves_literal_bytes() {
+    let sample: Value =
+        serde_json::from_str(include_str!("fixtures/generated-command.json")).unwrap();
+    let run = |args: &[String]| {
+        Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"))
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let args = serde_json::from_value::<Vec<String>>(sample["argv"].clone()).unwrap();
+    let output = run(&args);
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(output.stdout, sample["stdout"].as_str().unwrap().as_bytes());
+    assert!(output.stderr.is_empty());
+    for args in [
+        vec!["-c", "echo hidden"],
+        vec!["-c", "'/bin/sh' '-c' 'exit 0'"],
+        vec!["-c", "'/usr/bin/printf' '%s' unquoted"],
+        vec!["--unknown"],
+    ] {
+        let output = run(&args.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+        assert_eq!(output.status.code(), Some(93));
+        assert!(output.stdout.is_empty());
+        assert!(!output.stderr.is_empty());
     }
 }

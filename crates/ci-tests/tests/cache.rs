@@ -365,7 +365,7 @@ fn gated_jobs_restore_before_bootstrap_and_save_without_replacing_the_check() {
         .lines()
         .next()
         .unwrap();
-    let seed_result = Command::new("/bin/bash")
+    let seed_result = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"))
         .args(["-e", "-c", seed])
         .output()
         .unwrap();

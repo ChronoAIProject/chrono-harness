@@ -1261,7 +1261,7 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
     )
     .unwrap();
     fs::write(dir.path().join("cli-case.json"), b"{}").unwrap();
-    let shell = "/bin/sh";
+    let shell = env!("CARGO_BIN_EXE_chrono-test-cli-child");
     let shell_hash = chrono_harness::sha256(&fs::read(shell).unwrap());
     let producer = env!("CARGO_BIN_EXE_chrono-test-prepared-producer");
     let judge = env!("CARGO_BIN_EXE_chrono-test-cli-child");
@@ -1282,7 +1282,7 @@ fn retained_reference_cli_registers_process_evidence_before_judge_spawn() {
         },
         "facts_git": {"tool": "git", "input": "git-bytes"},
         "tools": [
-            {"id": "git", "program": shell, "resolution": "PATH-once", "version_argv": ["-c", "printf git"], "expected_version": "git"},
+            {"id": "git", "program": shell, "resolution": "PATH-once", "version_argv": ["git-version"], "expected_version": "git"},
             {"id": "producer", "program": producer, "resolution": "PATH-once", "version_argv": ["version"], "expected_version": "prepared-producer 0.1.0"}
         ],
         "environment": {

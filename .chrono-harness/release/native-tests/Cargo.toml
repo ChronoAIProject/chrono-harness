@@ -22,6 +22,7 @@ name = "verified_recipe"
 path = "tests/verified_recipe.rs"
 
 [dependencies]
+sha1 = "0.10"
 chrono-host-bootstrap = { path = "../../ci/native" }
 chrono-harness = { path = "../../../crates/runner" }
 chrono-host-release = { path = "../native" }
@@ -81,6 +82,12 @@ bench = false
 [[bin]]
 name = "chrono-test-release-operation"
 path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-test-release-git"
+path = "../../../crates/runner-tests/tests/support/git_model.rs"
 test = false
 bench = false
 

@@ -41,8 +41,7 @@ pub fn install_executable(root: &Path, source: &Path, binary: &str, probe: Fixtu
     // A joined copy owns all writable descriptors before concurrent test
     // children can inherit them. Each host retains its own executable file.
     copied_fixture_input(root, source, &destination);
-    let copied = capture_native(root, Command::new("/bin/cp").arg(source).arg(&destination));
-    assert!(copied.status.success(), "fixture installation: {copied:?}");
+    fs::copy(source, &destination).unwrap();
     let digest = sha256(&fs::read(&destination).unwrap());
     let mut command = Command::new(&destination);
     command
@@ -181,7 +180,9 @@ impl Host {
         ]);
         v.get_mut(CONFIG).unwrap()["tools"] = json!([{"id":"fixture","program":tool,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}]);
         v.get_mut(CONFIG).unwrap()["protocol"]["stdout_limit_bytes"] = json!(67108864);
-        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":""},"inputs":[{"id":"execution-tool","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
+        // Full judges clear ambient environment. Preserve the private Git mock
+        // selected by this fixture's isolated child at their command boundary.
+        v.get_mut(CONFIG).unwrap()["environment"] = json!({"inherit":["DECLARED_EMPTY","DECLARED_ABSENT"],"values":{"EMPTY":"","PATH":std::env::var("PATH").unwrap()},"inputs":[{"id":"execution-tool","location":tool,"sha256":sha256(&fs::read(&tool).unwrap())},{"id":"data","location":external.path(),"sha256":sha256(b"bounded input\n")}]});
         v.get_mut(FM).unwrap()["schema_version"] = json!(2);
         v.get_mut(FM).unwrap()["execution_plans"] = json!({"test:t":{"operations":["prepare.p","execute.t"],"timeout_seconds":15,"output_limit_bytes":4096}});
         let pre =

@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_judge_workflow::branch;
@@ -17,6 +19,9 @@ fn fixture() -> (tempfile::TempDir, Vec<String>, Value) {
 }
 #[test]
 fn equality_is_allowed_but_either_strict_excess_is_stale() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, c, w) = fixture();
     let ctx = context(&c[3], &c[0]);
     let r = branch(d.path(), &c[4], &ctx, &w).unwrap();
@@ -39,6 +44,9 @@ fn equality_is_allowed_but_either_strict_excess_is_stale() {
 }
 #[test]
 fn context_times_and_names_are_explicit_not_wall_clock_or_git_dates() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, c, w) = fixture();
     let mut ctx = context(&c[0], &c[0]);
     ctx["branch_ref"] = json!("integration/topic");
@@ -78,6 +86,9 @@ fn context_times_and_names_are_explicit_not_wall_clock_or_git_dates() {
 
 #[test]
 fn shallow_boundary_at_fork_is_sufficient_but_later_cutoff_is_not() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, c, w) = fixture();
     let ctx = context(&c[3], &c[1]);
     std::fs::write(d.path().join(".git/shallow"), format!("{}\n", c[1])).unwrap();
@@ -94,6 +105,9 @@ fn shallow_boundary_at_fork_is_sufficient_but_later_cutoff_is_not() {
 }
 #[test]
 fn fork_must_be_common_and_history_must_be_available() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, c, w) = fixture();
     let mut ctx = context(&c[0], &c[1]);
     assert!(
@@ -116,6 +130,9 @@ fn fork_must_be_common_and_history_must_be_available() {
 }
 #[test]
 fn configured_prefixes_and_thresholds_replace_defaults() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, c, mut w) = fixture();
     w["feature_prefix"] = "task/".into();
     w["integration_prefix"] = "verify/".into();

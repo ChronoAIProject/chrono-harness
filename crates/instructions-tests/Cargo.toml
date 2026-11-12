@@ -10,6 +10,7 @@ chrono-instructions = { path = "../instructions", features = ["test-support"] }
 chrono-diagnostics = { path = "../diagnostics" }
 
 [dev-dependencies]
+libc = "0.2"
 verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 chrono-harness = { path = "../runner", features = ["retention-test"] }
 tempfile = "3"

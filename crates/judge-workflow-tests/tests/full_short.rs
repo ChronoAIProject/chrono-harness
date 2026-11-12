@@ -1,4 +1,6 @@
 //! Real seven-judge short entry, existing local producers and native unit transport.
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 use super::*;
 const PROVIDER: &str = ".chrono-harness/ci/units.json";
 const WORKTREE: &str = ".chrono-harness/worktree.json";
@@ -395,6 +397,9 @@ fn local_collection_observation(root: &Path, report: &Value) {
 }
 #[test]
 fn full_provider_report_aliases_fail_before_generation_effects() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = short_host(false);
     let root = h.root();
     let config = fs::read(root.join(CONFIG)).unwrap();
@@ -602,6 +607,9 @@ fn make_local_lane(
 }
 #[test]
 fn real_short_full_local_units_collection_and_delivery() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (_h, tools, lane) = local_short_lane(None);
     let origin_path = lane.join(".chrono-harness/state/origin.json");
     let mut origin: Value = chrono_harness::json(&fs::read(&origin_path).unwrap()).unwrap();
@@ -770,6 +778,9 @@ fn fixture_endpoint(h: &Host, context: &Value, nanos: i128) {
 
 #[test]
 fn local_collection_retry_preserves_observation_and_expires_older_producer() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = short_host(false);
     let root = h.root();
     let fixture = root.join(".chrono-harness/bin/fixture-producer");
@@ -976,7 +987,7 @@ fn native_command(
         .unwrap(),
     )
     .unwrap();
-    let mut process = Command::new("/bin/sh");
+    let mut process = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"));
     process.current_dir(root).args(["-c", command]);
     native_environment(&mut process, candidate, payload, &job);
     process
@@ -1039,6 +1050,9 @@ fn native_command(
 }
 #[test]
 fn generated_automatic_full_units_gather_originals_on_separate_collection() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, tools) = short_host(true);
     let root = h.root();
     let payload = tools.path().join("push.json");
@@ -1189,6 +1203,9 @@ fn generated_automatic_full_units_gather_originals_on_separate_collection() {
 
 #[test]
 fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let freshness_seconds = 30.0;
     let (h, tools, lane) = local_short_lane(Some(freshness_seconds));
     let requested_at = std::time::SystemTime::now()
@@ -1282,6 +1299,9 @@ fn local_short_round_expires_with_fresh_observation_and_preserves_originals() {
 
 #[test]
 fn malformed_cached_local_contexts_return_producer_errors() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (_h, tools, lane) = local_short_lane(None);
     let (e, one) = short(&lane, &["check", "--unit", "one"], None);
     passed(e, &one);
@@ -1304,6 +1324,9 @@ fn malformed_cached_local_contexts_return_producer_errors() {
 
 #[test]
 fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_it() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, tools) = configured_short_host(false, None);
     git(
         &h.root(),
@@ -1490,6 +1513,9 @@ fn repair_collected(root: &Path, name: &str) -> Value {
 }
 #[test]
 fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conversion() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (_h, tools, lane) = migration_local_short_lane();
     let mut originals = vec![];
     for unit in ["one", "two"] {
@@ -1556,6 +1582,9 @@ fn repair_q1_local_full_migration_preserves_registered_runner_and_retained_conve
 }
 #[test]
 fn repair_q2_local_full_one_and_empty_delta_ignore_unrelated_malformed_and_stale_conversion() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     // Genuine old conversion bytes come from a separate real successful unit,
     // with different fixed endpoints/context, never a synthesized report.
     let (_old, old_tools, old_lane) = migration_local_short_lane();

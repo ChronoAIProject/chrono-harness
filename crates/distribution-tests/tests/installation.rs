@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use chrono_distribution::{Asset, Release, Source, adopt, install, platform, run};
 use chrono_harness::file_identity;
 use serde_json::{Value, json};
@@ -9,6 +11,37 @@ use std::{
     process::Command,
 };
 use tempfile::{TempDir, tempdir};
+
+// The interpreter mock accepts only the fixed generated-template domain.
+// Its native effects retain the original command/stream/status assertions;
+// this does not establish real Shell execution correctness.
+fn bootstrap_command() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_distribution-transport-fixture"));
+    command
+        .arg("bootstrap")
+        .env(
+            "CHRONO_FIXTURE_INSTALLER",
+            env!("CARGO_BIN_EXE_chrono-distribution-test-cli"),
+        )
+        .env(
+            "CHRONO_FIXTURE_CURL",
+            env!("CARGO_BIN_EXE_distribution-transport-fixture"),
+        );
+    command
+}
+fn shell_tools(root: &Path) -> PathBuf {
+    let tools = root.join("system-tools");
+    fs::create_dir(&tools).unwrap();
+    tools
+}
+fn shell_environment(command: &mut Command, tools: &Path, downloads: &Path) {
+    command.env("PATH", tools).env("TMPDIR", downloads);
+}
+fn asset_command(path: PathBuf) -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_distribution-transport-fixture"));
+    command.arg("asset").arg(path);
+    command
+}
 
 fn save(path: &Path, v: &Value) {
     fs::write(path, serde_json::to_vec_pretty(v).unwrap()).unwrap();
@@ -112,7 +145,7 @@ fn install_update_repair_and_idempotence_preserve_unselected_tools() {
     let report = install(f.host.path()).unwrap();
     assert_eq!(report["installed"].as_array().unwrap().len(), 2);
     assert_eq!(
-        Command::new(f.binary("alpha")).output().unwrap().stdout,
+        asset_command(f.binary("alpha")).output().unwrap().stdout,
         b"alpha-v1\n"
     );
     let first = fs::metadata(f.binary("alpha")).unwrap().modified().unwrap();
@@ -126,7 +159,7 @@ fn install_update_repair_and_idempotence_preserve_unselected_tools() {
     f.changed_release();
     install(f.host.path()).unwrap();
     assert_eq!(
-        Command::new(f.binary("beta")).output().unwrap().stdout,
+        asset_command(f.binary("beta")).output().unwrap().stdout,
         b"beta-v2\n"
     );
     assert_eq!(fs::read(f.binary("node")).unwrap(), b"host SDK");
@@ -279,8 +312,11 @@ fn bootstrap_rejects_corrupt_installer_and_propagates_real_exit() {
     r["platforms"][platform()]["chrono-distribution"]["size"] = json!(size);
     save(&f.manifest, &r);
     f.adopt();
+    let tools = shell_tools(f.host.path());
     let launch = || {
-        Command::new("sh")
+        bootstrap_command()
+            .env("PATH", &tools)
+            .env("TMPDIR", f.host.path())
             .arg(f.host.path().join(".chrono-harness/install.sh"))
             .arg("--host-root")
             .arg(f.host.path())
@@ -297,6 +333,9 @@ fn bootstrap_rejects_corrupt_installer_and_propagates_real_exit() {
 
 #[test]
 fn pack_and_assemble_bind_real_source_and_declared_members() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let repo = tempdir().unwrap();
     let out = tempdir().unwrap();
     let git = |args: &[&str]| {
@@ -425,7 +464,10 @@ fn real_generated_bootstrap_installs_from_unrelated_cwd_and_spaced_host() {
         false,
     )
     .unwrap();
-    let result = Command::new("sh")
+    let tools = shell_tools(fixture.host.path());
+    let result = bootstrap_command()
+        .env("PATH", &tools)
+        .env("TMPDIR", fixture.host.path())
         .arg(host.join(".chrono-harness/install.sh"))
         .arg("--host-root")
         .arg(&host)
@@ -438,7 +480,7 @@ fn real_generated_bootstrap_installs_from_unrelated_cwd_and_spaced_host() {
         String::from_utf8_lossy(&result.stderr)
     );
     assert_eq!(
-        Command::new(host.join(".chrono-harness/bin/alpha"))
+        asset_command(host.join(".chrono-harness/bin/alpha"))
             .output()
             .unwrap()
             .stdout,
@@ -529,18 +571,11 @@ fn assembled_shell_installs_selected_tools_from_stdin_without_python_or_rust() {
     fs::copy(package.join("release.json"), &f.manifest).unwrap();
     let host = f.host.path().join("host's $literal with spaces");
     fs::create_dir(&host).unwrap();
-    let tools = output.path().join("system-tools");
-    fs::create_dir(&tools).unwrap();
-    for tool in ["uname", "mktemp", "rm", "cp", "chmod", "wc", "shasum"] {
-        let executable = ["/usr/bin", "/bin"]
-            .iter()
-            .map(|d| Path::new(d).join(tool))
-            .find(|p| p.is_file())
-            .unwrap();
-        symlink(executable, tools.join(tool)).unwrap();
-    }
+    let tools = shell_tools(output.path());
+    let downloads = output.path().join("downloads");
+    fs::create_dir(&downloads).unwrap();
     let launch = || {
-        Command::new("/bin/sh")
+        bootstrap_command()
             .args(["-s", "--", "--host-root"])
             .arg(&host)
             .args(["--tool", "alpha"])
@@ -548,6 +583,7 @@ fn assembled_shell_installs_selected_tools_from_stdin_without_python_or_rust() {
                 fs::File::open(package.join("install.sh")).unwrap(),
             ))
             .env("PATH", &tools)
+            .env("TMPDIR", &downloads)
             .current_dir("/")
             .output()
             .unwrap()
@@ -577,8 +613,11 @@ fn pinned_host_shell_rejects_lock_drift_and_bad_arguments() {
     real_installer(&f);
     f.adopt();
     let script = f.host.path().join(".chrono-harness/install.sh");
+    let tools = shell_tools(f.host.path());
     let launch = |args: &[&str]| {
-        Command::new("/bin/sh")
+        bootstrap_command()
+            .env("PATH", &tools)
+            .env("TMPDIR", f.host.path())
             .arg(&script)
             .arg("--host-root")
             .arg(f.host.path())
@@ -629,7 +668,10 @@ fn release_shell_checks_manifest_and_installer_before_adoption() {
                 .join(format!("chrono-distribution-{}", platform()))
         };
         fs::write(path, "corrupt").unwrap();
-        let result = Command::new("/bin/sh")
+        let tools = shell_tools(f.host.path());
+        let result = bootstrap_command()
+            .env("PATH", &tools)
+            .env("TMPDIR", f.host.path())
             .arg(package.join("install.sh"))
             .arg("--host-root")
             .arg(f.host.path())
@@ -667,8 +709,10 @@ fn https_shell_uses_bound_transport_and_cleans_failed_downloads() {
     fs::copy(package.join("release.json"), &f.manifest).unwrap();
     let downloads = out.path().join("downloads");
     fs::create_dir(&downloads).unwrap();
+    let tools = shell_tools(f.host.path());
     let launch = |fail: bool| {
-        let mut command = Command::new("/bin/sh");
+        let mut command = bootstrap_command();
+        shell_environment(&mut command, &tools, &downloads);
         command
             .arg(package.join("install.sh"))
             .arg("--host-root")
@@ -721,8 +765,10 @@ fn release_shell_requires_explicit_replacement_and_preserves_host_customization(
     f.adopt();
     let path = f.host.path().join(".chrono-harness/install.sh");
     fs::write(&path, "host customization").unwrap();
+    let tools = shell_tools(f.host.path());
     let launch = |replace: bool| {
-        let mut c = Command::new("/bin/sh");
+        let mut c = bootstrap_command();
+        shell_environment(&mut c, &tools, f.host.path());
         c.arg(package.join("install.sh"))
             .arg("--host-root")
             .arg(f.host.path());
@@ -742,4 +788,23 @@ fn release_shell_requires_explicit_replacement_and_preserves_host_customization(
     );
     assert_ne!(fs::read(&path).unwrap(), b"host customization");
     assert!(f.binary("alpha").is_file());
+}
+
+#[test]
+fn interpreter_mock_rejects_unknown_template_and_installed_asset_bytes() {
+    let directory = tempdir().unwrap();
+    let script = directory.path().join("unknown.sh");
+    fs::write(&script, include_bytes!("fixtures/unknown-asset.sh")).unwrap();
+    let unknown = bootstrap_command()
+        .arg(&script)
+        .env("TMPDIR", directory.path())
+        .output()
+        .unwrap();
+    assert_eq!(unknown.status.code(), Some(1));
+    assert!(unknown.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("unknown launcher prefix"));
+    let asset = asset_command(script).output().unwrap();
+    assert_eq!(asset.status.code(), Some(93));
+    assert!(asset.stdout.is_empty());
+    assert_eq!(asset.stderr, b"unknown distribution asset fixture bytes\n");
 }

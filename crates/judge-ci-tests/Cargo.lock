@@ -98,7 +98,9 @@ dependencies = [
  "chrono-harness",
  "chrono-judge-ci",
  "libc",
+ "serde",
  "serde_json",
+ "sha1",
  "tempfile",
  "tracing",
 ]

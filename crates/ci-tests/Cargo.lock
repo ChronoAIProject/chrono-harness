@@ -57,9 +57,13 @@ dependencies = [
  "chrono-ci",
  "chrono-harness",
  "chrono-judge-ci",
+ "chrono-judge-registration",
  "chrono-worktree",
+ "serde",
  "serde_json",
  "serde_yaml_ng",
+ "sha1",
+ "shlex",
  "tempfile",
  "verus_builtin_macros",
 ]

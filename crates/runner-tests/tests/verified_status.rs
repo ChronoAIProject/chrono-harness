@@ -24,6 +24,14 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn local_directory_release_respects_owner_and_descendant_lifetimes() {
+    expect_status_true(policy::release_local_directory(true, 10, 10));
+    expect_status_true(!policy::release_local_directory(true, 10, 11));
+    expect_status_true(!policy::release_local_directory(false, 10, 10));
+    expect_status_true(!policy::release_local_directory(false, 10, 11));
+}
+
 struct CheckoutFixture {
     trace: Vec<u8>,
     failure: u8,

@@ -120,6 +120,80 @@ fn status_passes_only_for_the_bound_head_and_required_success() {
     assert!(r["receipts"][0].get("environment").is_none());
 }
 
+#[test]
+fn adopted_runtime_logging_preserves_query_wait_and_api_failure_results() {
+    for (command, steps, exit, outcome, calls) in [
+        ("pr-status", vec![api(snapshot())], 0, "passed", 1),
+        (
+            "pr-watch",
+            vec![api(pending()), watch(1), api(snapshot())],
+            0,
+            "passed",
+            3,
+        ),
+        (
+            "pr-status",
+            vec![
+                json!({"prefix":["api","graphql"],"stderr":"fixture authentication failed\n","exit":1}),
+            ],
+            2,
+            "unknown",
+            1,
+        ),
+    ] {
+        let h = Host::new(steps);
+        fs::write(
+            h.root.path().join(".chrono-harness/logging.json"),
+            json!({
+                "schema":"chrono-runtime-logging/v1","level":"debug",
+                "directory":".chrono-harness/state/logs/","max_bytes":1048576,
+                "max_files":2,"stderr":false,
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let (code, result) = h.run(&[command, "--pr", "42", "--head-sha", HEAD]);
+        assert_eq!(code, exit, "{result}");
+        assert_eq!(result["outcome"], outcome);
+        assert_eq!(h.calls().len(), calls);
+        let mut events = Vec::new();
+        for entry in fs::read_dir(h.root.path().join(".chrono-harness/state/logs")).unwrap() {
+            let path = entry.unwrap().path();
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "jsonl")
+            {
+                let bytes = fs::read(path).unwrap();
+                assert!(bytes.len() <= 1048576);
+                let text = std::str::from_utf8(&bytes).unwrap();
+                assert!(!text.contains("fixture-secret-never-retain"));
+                events.extend(
+                    text.lines()
+                        .map(|line| serde_json::from_str::<Value>(line).unwrap()),
+                );
+            }
+        }
+        assert!(events.iter().all(|event| event["producer"] == "chrono-pr"));
+        assert!(events.iter().any(|event| event["event"] == "cli.started"));
+        assert!(
+            events
+                .iter()
+                .any(|event| event["event"] == "process.preparing")
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event["event"] == "process.completed")
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event["event"] == "cli.finished"
+                    && event["fields"]["exit_code"] == exit)
+        );
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn unavailable_child_exit_keeps_the_original_operation_unknown() {
@@ -1187,9 +1261,17 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
             "--host-root".into(),
             h.root.path().to_str().unwrap().into(),
         ],
-        env: [("GH_TOKEN".into(), "fixture-secret-never-retain".into())]
-            .into_iter()
-            .collect(),
+        env: [
+            ("GH_TOKEN".into(), "fixture-secret-never-retain".into()),
+            // Completion must join the original result even when its diagnostic
+            // representation exceeds a native notification socket's capacity.
+            (
+                "CHRONO_TEST_INTERRUPTION_INPUT".into(),
+                "x".repeat(64 * 1024),
+            ),
+        ]
+        .into_iter()
+        .collect(),
         timeout_seconds: 30,
         output_limit_bytes: 1048576,
     };
@@ -1206,15 +1288,14 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
                 &digest,
                 Duration::from_secs(30),
             );
-            // If launch fails before the fixture handshake, wake the same native
-            // channel with the original result rather than hanging the test.
+            // Wake the same native channel if launch fails before the fixture
+            // handshake. Keep the notification bounded: after a real handshake,
+            // this pending connection has no reader while the caller joins us.
+            // The original result is transferred only by that join.
             if let Ok(mut ready) = UnixStream::connect(root.join("ready.sock")) {
-                let bytes = serde_json::to_vec(
-                    &json!({"completed_before_handshake":format!("{result:?}")}),
-                )
-                .unwrap();
+                let bytes = br#"{"completed_before_handshake":true}"#;
                 let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
-                let _ = ready.write_all(&bytes);
+                let _ = ready.write_all(bytes);
             }
             result
         });
@@ -1224,10 +1305,12 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
         let mut bytes = vec![0; u32::from_be_bytes(length) as usize];
         ready.read_exact(&mut bytes).unwrap();
         let message: Value = serde_json::from_slice(&bytes).unwrap();
-        assert!(
-            message.get("completed_before_handshake").is_none(),
-            "{message}"
-        );
+        if message.get("completed_before_handshake").is_some() {
+            panic!(
+                "process completed before handshake: {:?}",
+                task.join().unwrap()
+            );
+        }
         let operation = message["operation"].as_str().unwrap().to_owned();
         let call: Value = serde_json::from_slice(
             &fs::read(root.join(&operation).join("call-1.intent.json")).unwrap(),

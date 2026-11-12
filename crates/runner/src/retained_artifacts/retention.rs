@@ -3317,6 +3317,11 @@ impl Publication {
         self.written_nodes.set(self.written_nodes.get() + 1);
         no_symlink_parents(&self.inventory.root, relative)
     }
+    /// Reserve bounded bytes for the existing process engine, under this exact
+    /// directory capability. Final sealing measures the bytes actually written.
+    pub fn reserve_external_file(&self, path: &Path, limit: u64) -> Result<(), String> {
+        self.write_destination(path, limit).map(|_| ())
+    }
     pub fn create_directory(&self, path: &Path) -> Result<(), String> {
         match fs::symlink_metadata(path) {
             Ok(m) if m.is_dir() => return Ok(()),
