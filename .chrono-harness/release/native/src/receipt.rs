@@ -524,17 +524,26 @@ pub fn verify_consumption(
 }
 
 impl Verified {
-    /// Git 身份逐回执核验；它不属于编译器指纹。
+    /// Git 和 rustup 身份逐回执核验；rustup 的编译器代理按实际编译器比较。
     pub fn compiler_fingerprint(&self) -> Option<Value> {
         let toolchain = self.receipt.get("toolchain")?;
         let content = |v: &Value| json!({"sha256":v["sha256"],"size":v["size"],"mode":v["mode"]});
-        let tools: BTreeMap<_, _> = ["rustup", "cargo", "rustc"]
-            .into_iter()
-            .map(|n| (n, content(&toolchain["tools"][n])))
-            .collect();
         let active: BTreeMap<_, _> = ["cargo", "rustc"]
             .into_iter()
             .map(|n| (n, content(&toolchain["active_compilers"][n])))
+            .collect();
+        let rustup = content(&toolchain["tools"]["rustup"]);
+        let tools: BTreeMap<_, _> = ["cargo", "rustc"]
+            .into_iter()
+            .map(|name| {
+                let observed = content(&toolchain["tools"][name]);
+                let compiler = if observed == rustup {
+                    active[name].clone()
+                } else {
+                    observed
+                };
+                (name, compiler)
+            })
             .collect();
         Some(
             json!({"versions":toolchain["versions"],"incremental":self.receipt["environment"]["CARGO_INCREMENTAL"],"tools":tools,"active_compilers":active}),
