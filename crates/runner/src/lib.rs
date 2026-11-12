@@ -1666,6 +1666,11 @@ fn run_process_inner_with_stdout(
             let cleanup = Failure::new(
                 "E_PROCESS_OWNERSHIP_CLEANUP",
                 "nested owner did not acknowledge joined completion",
+            )
+            .at("child_joined", status.is_some())
+            .at(
+                "ownership_after_cleanup",
+                child.ownership.monitor_observation(),
             );
             failure_detail = Some(match failure_detail.take() {
                 Some(original) => original.with_related("ownership_cleanup", cleanup),
