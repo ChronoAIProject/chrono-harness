@@ -14,6 +14,7 @@ bench = false
 [dependencies]
 shlex = "=2.0.1"
 sha1 = "0.10"
+sha2 = "0.10"
 chrono-judge-workflow = { path = "../judge-workflow" }
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-harness = { path = "../runner" }

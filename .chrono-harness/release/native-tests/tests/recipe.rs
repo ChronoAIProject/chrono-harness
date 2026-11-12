@@ -130,7 +130,7 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
             );
             let test_threads = match owner["id"].as_str().unwrap() {
                 "worktree-tests" => Some("--test-threads=8"),
-                "pr-tests" => Some("--test-threads=2"),
+                "judge-workflow-tests" | "pr-tests" => Some("--test-threads=2"),
                 _ => None,
             };
             let output_arguments = if let Some(test_threads) = test_threads {
