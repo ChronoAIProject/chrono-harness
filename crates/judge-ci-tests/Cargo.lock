@@ -97,6 +97,7 @@ version = "0.1.0"
 dependencies = [
  "chrono-diagnostics",
  "chrono-harness",
+ "chrono-identifiers",
  "chrono-judge-ci",
  "libc",
  "serde",
@@ -105,6 +106,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tracing",
+ "verus_builtin_macros",
 ]
 
 [[package]]
