@@ -90,7 +90,7 @@ pub open spec fn phase_result<S, E>(
 /// 按原顺序调用每个槽位；返回当前失败的完整状态和错误，不执行后续槽位。
 fn run_phase<S, E, F>(
     initial: S, first: usize, end: usize, operation: F,
-    Ghost(step): Ghost<spec_fn(S, usize, (S, Result<(), E>)) -> bool>,
+    #[cfg(verus_keep_ghost)] Ghost(step): Ghost<spec_fn(S, usize, (S, Result<(), E>)) -> bool>,
 ) -> (out: (S, Result<(), E>))
     where F: Fn(S, usize) -> (S, Result<(), E>),
     requires first <= end,
@@ -127,9 +127,9 @@ fn run_phase<S, E, F>(
                 assert(phase_result(initial, first, end, step, out));
                 return out;
             },
-            Ok(success) => {
-                assert(success == ());
-                assert(original == (after, Ok::<(), E>(success)));
+            Ok(_success) => {
+                assert(_success == ());
+                assert(original == (after, Ok::<(), E>(_success)));
             },
         }
         assert(original == (after, Ok::<(), E>(())));
@@ -182,8 +182,8 @@ fn check_slot<S, E, C>(state: S, index: usize, check: &C)
     let ghost original = observed;
     let ghost after = state;
     let out = match observed {
-        Ok(present) => {
-            assert((*check).ensures((initial, index), (after, Ok::<bool, E>(present))));
+        Ok(_present) => {
+            assert((*check).ensures((initial, index), (after, Ok::<bool, E>(_present))));
             let out = (state, Ok(()));
             assert(check_result(initial, index, *check, out));
             out
@@ -285,12 +285,16 @@ fn validate_members<S, E, C>(state: S, count: usize, check: &C)
     requires forall|state: S, index: usize| check.requires((state, index)),
     ensures checked_phase(state, count, *check, out),
 {
-    run_phase(state, 0, count,
-        |state: S, index: usize| -> (out: (S, Result<(), E>))
-            ensures check_result(state, index, *check, out),
-        { check_slot(state, index, check) },
+    let operation = |state: S, index: usize| -> (out: (S, Result<(), E>))
+        ensures check_result(state, index, *check, out),
+    { check_slot(state, index, check) };
+    #[cfg(verus_keep_ghost)]
+    let out = run_phase(state, 0, count, operation,
         Ghost(|state: S, index: usize, observed: (S, Result<(), E>)|
-            check_result(state, index, *check, observed)))
+            check_result(state, index, *check, observed)));
+    #[cfg(not(verus_keep_ghost))]
+    let out = run_phase(state, 0, count, operation);
+    out
 }
 
 pub open spec fn adoption_result<S, E, C, D>(
@@ -324,12 +328,20 @@ pub fn adopt_members<S, E, C, D>(state: S, count: usize, check: C, remove: D)
     let ghost original = observed;
     let out = match observed {
         Err(error) => (state, Err(error)),
-        Ok(()) => run_phase(state, count, MAX_FILES,
-            |state: S, index: usize| -> (out: (S, Result<(), E>))
-                ensures remove_result(state, index, check, remove, out),
-            { remove_member(state, index, &check, &remove) },
-            Ghost(|state: S, index: usize, result: (S, Result<(), E>)|
-                remove_result(state, index, check, remove, result))),
+        Ok(()) => {
+            let check_ref = &check;
+            let remove_ref = &remove;
+            let operation = |state: S, index: usize| -> (out: (S, Result<(), E>))
+                ensures remove_result(state, index, *check_ref, *remove_ref, out),
+            { remove_member(state, index, check_ref, remove_ref) };
+            #[cfg(verus_keep_ghost)]
+            let out = run_phase(state, count, MAX_FILES, operation,
+                Ghost(|state: S, index: usize, result: (S, Result<(), E>)|
+                    remove_result(state, index, check, remove, result)));
+            #[cfg(not(verus_keep_ghost))]
+            let out = run_phase(state, count, MAX_FILES, operation);
+            out
+        },
     };
     assert(checked_phase(initial, MAX_FILES, check, (after_check, original)));
     out
@@ -380,13 +392,21 @@ pub fn rotate_members<S, E, C, D, R>(state: S, count: usize, check: C, remove: D
             let ghost removed = observed;
             let out = match observed {
                 Err(error) => (state, Err(error)),
-                Ok(()) => run_phase(state, 0, count - 1,
-                    |state: S, offset: usize| -> (out: (S, Result<(), E>))
+                Ok(()) => {
+                    let check_ref = &check;
+                    let rename_ref = &rename;
+                    let operation = |state: S, offset: usize| -> (out: (S, Result<(), E>))
                         requires offset < count - 1,
-                        ensures move_result(state, (count - 1 - offset) as usize, check, rename, out),
-                    { move_member(state, count - 1 - offset, &check, &rename) },
-                    Ghost(|state: S, offset: usize, result: (S, Result<(), E>)|
-                        move_result(state, (count - 1 - offset) as usize, check, rename, result))),
+                        ensures move_result(state, (count - 1 - offset) as usize, *check_ref, *rename_ref, out),
+                    { move_member(state, count - 1 - offset, check_ref, rename_ref) };
+                    #[cfg(verus_keep_ghost)]
+                    let out = run_phase(state, 0, count - 1, operation,
+                        Ghost(|state: S, offset: usize, result: (S, Result<(), E>)|
+                            move_result(state, (count - 1 - offset) as usize, check, rename, result)));
+                    #[cfg(not(verus_keep_ghost))]
+                    let out = run_phase(state, 0, count - 1, operation);
+                    out
+                },
             };
             assert(remove_result(after_check, (count - 1) as usize, check, remove,
                 (after_remove, removed)));
