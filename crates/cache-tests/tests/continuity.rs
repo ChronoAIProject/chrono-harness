@@ -884,6 +884,88 @@ mod behavior {
     }
 
     #[test]
+    fn owned_process_evidence_reserves_each_original_once_before_dispatch() {
+        use chrono_harness::retained_artifacts::retention::Inventory;
+        for outside_launch in [false, true] {
+            let (root, _) = fixture();
+            let policy_path = root.path().join(".chrono-harness/retention.json");
+            let mut policy = value(&policy_path);
+            // One directory and exactly three originals fit. A second charge
+            // for either a stream or the launch must fail this boundary.
+            policy["max_manifest_nodes"] = json!(4);
+            for limits in policy["terminal_limits"]
+                .as_object_mut()
+                .unwrap()
+                .values_mut()
+            {
+                limits["max_count"] = json!(4);
+            }
+            fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+            let output = ".chrono-harness/state/cache-probes/owned-originals";
+            let state = Inventory::adopted(root.path()).unwrap().unwrap();
+            fs::create_dir_all(root.path().join(".chrono-harness/state/cache-probes")).unwrap();
+            let publication = state
+                .plan_rooted(
+                    "cache-probe-attempt",
+                    output,
+                    json!({"completion":"not-established"}),
+                    "fixture-original",
+                )
+                .unwrap();
+            publication.materialize().unwrap();
+            let directory = root.path().join(output);
+            let launch = if outside_launch {
+                root.path().join("outside-launch.json")
+            } else {
+                directory.join("launch.json")
+            };
+            let count = root.path().join("invocations");
+            let command = chrono_harness::CommandSpec {
+                program: env!("CARGO_BIN_EXE_chrono-cache-test-probe").into(),
+                args: vec!["count".into(), count.to_str().unwrap().into()],
+                env: Default::default(),
+                timeout_seconds: 5,
+                output_limit_bytes: 4096,
+            };
+            let result = chrono_harness::run_process_observed_retained(
+                root.path(),
+                &command,
+                &[],
+                &chrono_harness::file_identity(Path::new(&command.program))
+                    .unwrap()
+                    .0,
+                &chrono_harness::ProcessEvidence {
+                    stdout: &directory.join("stdout"),
+                    stderr: &directory.join("stderr"),
+                    launch: &launch,
+                    publication: Some(&publication),
+                },
+            );
+            if outside_launch {
+                let error = result.unwrap_err();
+                assert!(error.contains("outside exact output"), "{error}");
+                assert!(!count.exists());
+                assert!(!launch.exists());
+            } else {
+                let process = result.unwrap();
+                assert_eq!(process.exit_code, 0);
+                assert!(process.failure.is_none(), "{process:?}");
+                assert!(process.owned_work_joined);
+                assert_eq!(fs::read(&count).unwrap(), b"x");
+                assert_eq!(
+                    fs::read(directory.join("stdout")).unwrap(),
+                    b"stable compiler\n"
+                );
+                assert_eq!(fs::read(directory.join("stderr")).unwrap(), b"");
+                chrono_harness::validate_launch_evidence(&launch, &process).unwrap();
+                publication
+                    .complete_sealed(json!({"exit_code":process.exit_code}))
+                    .unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn owned_process_evidence_rejects_outside_files_before_dispatch() {
         use chrono_harness::retained_artifacts::retention::Inventory;
         let (root, _) = fixture();
@@ -908,7 +990,7 @@ mod behavior {
             output_limit_bytes: 4096,
         };
         let directory = root.path().join(output);
-        let error = chrono_harness::run_process_observed_retained_owned(
+        let error = chrono_harness::run_process_observed_retained(
             root.path(),
             &command,
             &[],
@@ -919,8 +1001,8 @@ mod behavior {
                 stdout: &root.path().join("outside"),
                 stderr: &directory.join("stderr"),
                 launch: &directory.join("launch.json"),
+                publication: Some(&publication),
             },
-            &publication,
         )
         .unwrap_err();
         assert!(error.contains("outside exact output"), "{error}");

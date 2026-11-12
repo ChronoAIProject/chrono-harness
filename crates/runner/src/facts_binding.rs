@@ -40,22 +40,25 @@ impl BlobObject {
     }
     fn matches(&self, bytes: &[u8]) -> bool {
         use sha2::Digest;
-        if bytes.len() != self.length {
-            return false;
-        }
-        let header = format!("blob {}\0", self.length);
-        let oid = if self.oid.len() == 40 {
-            let mut hash = sha1::Sha1::new();
-            hash.update(header.as_bytes());
-            hash.update(bytes);
-            format!("{:x}", hash.finalize())
-        } else {
-            let mut hash = sha2::Sha256::new();
-            hash.update(header.as_bytes());
-            hash.update(bytes);
-            format!("{:x}", hash.finalize())
-        };
-        oid == self.oid
+        crate::verified_status::git_blob_matches(
+            &self.oid,
+            self.length,
+            bytes,
+            |length, bytes| {
+                let header = format!("blob {length}\0");
+                let mut hash = sha1::Sha1::new();
+                hash.update(header.as_bytes());
+                hash.update(bytes);
+                format!("{:x}", hash.finalize())
+            },
+            |length, bytes| {
+                let header = format!("blob {length}\0");
+                let mut hash = sha2::Sha256::new();
+                hash.update(header.as_bytes());
+                hash.update(bytes);
+                format!("{:x}", hash.finalize())
+            },
+        )
     }
 }
 /// One successful registered blob and its original acquisition coordinates.
@@ -748,7 +751,16 @@ impl Reader {
         Ok(tree)
     }
     pub(crate) fn can_reuse_oid(&self, oid: &str) -> bool {
-        self.bound.is_some() && self.verified_oids.borrow().contains(oid)
+        crate::verified_status::can_reuse_oid(
+            self.bound.is_some(),
+            &self.verified_oids,
+            oid,
+            |cache, oid| {
+                let hit = cache.borrow().contains(oid);
+                (cache, hit)
+            },
+        )
+        .1
     }
     /// Resolved registry or snapshot paths in an already verified immutable
     /// commit retain framing, guards and original process receipts.
@@ -807,9 +819,15 @@ impl Reader {
     pub(crate) fn record_verified_oid(&self, oid: &str) {
         // Only verify_oid's existing successful commit/tree observations may
         // enable reuse. Never acquire another identity just to populate this set.
-        if self.bound.is_some() {
-            self.verified_oids.borrow_mut().insert(oid.into());
-        }
+        crate::verified_status::record_verified_oid(
+            self.bound.is_some(),
+            &self.verified_oids,
+            oid,
+            |cache, oid| {
+                cache.borrow_mut().insert(oid.into());
+                cache
+            },
+        );
     }
     fn invoke(
         &self,

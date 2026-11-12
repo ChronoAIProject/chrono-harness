@@ -3281,7 +3281,7 @@ impl Publication {
         *self.identity.borrow_mut() = attached;
         Ok(())
     }
-    fn write_destination(&self, path: &Path, length: u64) -> Result<PathBuf, String> {
+    pub(crate) fn write_destination(&self, path: &Path, length: u64) -> Result<PathBuf, String> {
         let total = self
             .written
             .get()

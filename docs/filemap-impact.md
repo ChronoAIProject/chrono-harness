@@ -140,6 +140,6 @@ CI 证据的 `selection_explanation` 范围为 `chrono-ci-check/v1-adapter`，�
 
 共享清单回归直接核对不同定义和安全的唯一解析。真实消费者回归覆盖 project／script 同 ID、不同 ID 成功、受影响与无关历史冲突、空变更、仅别名变化、两端记录目标、仅基线歧义，以及 SPEC 要求的协议字段，包含尚未获准移除的必需测试。
 
-先执行登记的 `verify.filemap-graph`、`verify.filemap-graph-tests`，完成整 crate 证明及编译。随后构建前置是登记的 `build.runner`、`build.judge-registration`、`build.judge-filemap`、`build.judge-routes`、`build.judge-projects`，之后运行 `cargo test --locked --manifest-path crates/judge-filemap-tests/Cargo.toml`。CI 绑定明确列出这些前置。测试使用本地合成提交，目标候选的生命周期仍由调用方负责。
+验证统一走[本地与 CI 共用的检查入口](../.chrono-harness/instructions/host-context.md#本地ci-检查)，按 DELTA 选择整 crate 证明、编译和未过滤测试；操作及必要前置由 [projects.json](../.chrono-harness/projects.json) 和[执行计划](execution.md)负责，本文不另复制配方。测试使用本地合成提交，目标候选的生命周期仍由调用方负责。
 
 impact v2 新增工作流选测，v1 不执行这些要求；消费者拒绝不支持的结果格式。Git 中 FILEMAP 登记仍为 schema 2，历史解码不变。共用 mixed 分类和固定对象读取在制定执行计划前完成，无效的已选含义输入会阻止后续操作。`workflow_selection`、`workflow_consumer` 通过真实进程验证这些要求。

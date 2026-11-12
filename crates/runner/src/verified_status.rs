@@ -34,6 +34,26 @@ pub fn release_local_directory(local: bool, owner_pid: u32, current_pid: u32) ->
     local && owner_pid == current_pid
 }
 
+/// 无绑定时不查询；有绑定时只向原缓存接口转交同一个完整键。
+pub fn can_reuse_oid<S, Q>(bound: bool, cache: S, oid: &str, contains: Q)
+    -> (out: (S, bool))
+    where Q: Fn(S, &str) -> (S, bool),
+    requires bound ==> contains.requires((cache, oid)),
+    ensures if bound { contains.ensures((cache, oid), out) } else { out == (cache, false) },
+{
+    if bound { contains(cache, oid) } else { (cache, false) }
+}
+
+/// 只有绑定读取器才登记已验证的原键；无绑定时保持原缓存状态。
+pub fn record_verified_oid<S, I>(bound: bool, cache: S, oid: &str, insert: I)
+    -> (out: S)
+    where I: Fn(S, &str) -> S,
+    requires bound ==> insert.requires((cache, oid)),
+    ensures if bound { insert.ensures((cache, oid), out) } else { out == cache },
+{
+    if bound { insert(cache, oid) } else { cache }
+}
+
 /// 一次固定读取的完整原字节、解析值及入口／有效路径；JSON 值由实际使用方提供。
 pub struct RegistrySnapshot<V> {
     pub bytes: BTreeMap<String, Vec<u8>>,
@@ -76,6 +96,63 @@ pub fn registry_snapshot_initial<V>(
     RegistrySnapshot { bytes, values, entry_path, effective_path, selection }
 }
 
+
+
+/// 保留非对象；对象先删除原字节摘要，再写入结构化 registry selection schema。
+pub fn normalize_registry_selection_object<M, R, I>(object: Option<M>, remove: R, insert: I)
+    -> (out: Option<M>)
+    where R: Fn(M, &str) -> M, I: Fn(M, &str, &str) -> M,
+    requires match object {
+        None => true,
+        Some(initial) =>
+            (forall|key: &str| key@ == "sha256"@ ==> remove.requires((initial, key)))
+            && (forall|key: &str, middle: M, field: &str, value: &str|
+                key@ == "sha256"@ && remove.ensures((initial, key), middle)
+                && field@ == "schema"@ && value@ == "chrono-registry-selection/v1"@
+                ==> insert.requires((middle, field, value))),
+    },
+    ensures match (object, out) {
+        (None, None) => true,
+        (Some(initial), Some(normalized)) =>
+            exists|middle: M, removed: &str, field: &str, value: &str|
+                removed@ == "sha256"@ && field@ == "schema"@
+                && value@ == "chrono-registry-selection/v1"@
+                && remove.ensures((initial, removed), middle)
+                && insert.ensures((middle, field, value), normalized),
+        _ => false,
+    },
+{
+    match object {
+        None => None,
+        Some(initial) => {
+            let removed = "sha256";
+            let field = "schema";
+            let value = "chrono-registry-selection/v1";
+            let middle = remove(initial, removed);
+            let normalized = insert(middle, field, value);
+            proof {
+                assert(object == Some(initial));
+                assert(remove.ensures((initial, removed), middle));
+                assert(insert.ensures((middle, field, value), normalized));
+                assert(exists|observed: M, key: &str, target: &str, schema: &str|
+                    key@ == "sha256"@ && target@ == "schema"@
+                    && schema@ == "chrono-registry-selection/v1"@
+                    && remove.ensures((initial, key), observed)
+                    && insert.ensures((observed, target, schema), normalized));
+            }
+            let result = Some(normalized);
+            proof {
+                assert(result->Some_0 == normalized);
+                assert(exists|observed: M, key: &str, target: &str, schema: &str|
+                    key@ == "sha256"@ && target@ == "schema"@
+                    && schema@ == "chrono-registry-selection/v1"@
+                    && remove.ensures((object->Some_0, key), observed)
+                    && insert.ensures((observed, target, schema), result->Some_0));
+            }
+            result
+        },
+    }
+}
 
 /// 标准 JSON 解码仅提供四个固定字段的原字符串观察。
 pub enum RegistryPathError<'a> {
@@ -3227,6 +3304,41 @@ pub fn checkout_entry_matches<P, F, B, E, L, M, FE, R, HL, O, FM, HF, C>(
     out
 }
 
+
+pub open spec fn git_blob_match_result<'a, A, B>(
+    oid: &str, size: usize, bytes: &'a [u8], sha1: A, sha256: B, matches: bool,
+) -> bool
+    where A: Fn(usize, &'a [u8]) -> String,
+          B: Fn(usize, &'a [u8]) -> String,
+{
+    if bytes.len() != size { !matches }
+    else if oid.spec_bytes().len() == 40 {
+        exists|digest: String| sha1.ensures((size, bytes), digest)
+            && matches == (digest@ == oid@)
+    } else {
+        exists|digest: String| sha256.ensures((size, bytes), digest)
+            && matches == (digest@ == oid@)
+    }
+}
+
+/// 声明长度先于哈希；只调用原 OID 字节宽度选中的接口，保留原参数及完整摘要比较。
+pub fn git_blob_matches<'a, A, B>(
+    oid: &str, size: usize, bytes: &'a [u8], sha1: A, sha256: B,
+) -> (matches: bool)
+    where A: Fn(usize, &'a [u8]) -> String,
+          B: Fn(usize, &'a [u8]) -> String,
+    requires if bytes.len() == size {
+        if oid.spec_bytes().len() == 40 { sha1.requires((size, bytes)) }
+        else { sha256.requires((size, bytes)) }
+    } else { true },
+    ensures git_blob_match_result(oid, size, bytes, sha1, sha256, matches),
+{
+    if bytes.len() != size { return false; }
+    let digest = if oid.as_bytes().len() == 40 { sha1(size, bytes) } else { sha256(size, bytes) };
+    let matches = identifiers::equal_text(digest.as_str(), oid);
+    assert(git_blob_match_result(oid, size, bytes, sha1, sha256, matches));
+    matches
+}
 
 pub enum CheckoutHashAlgorithm {
     Sha1,

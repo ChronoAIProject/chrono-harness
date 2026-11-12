@@ -32,6 +32,229 @@ fn local_directory_release_respects_owner_and_descendant_lifetimes() {
     expect_status_true(!policy::release_local_directory(false, 10, 11));
 }
 
+// 实际借用接口在仓外；此 fixture 独立记录查询／登记的原键和严格调用次数。
+struct OidReuseFixture {
+    calls: u8,
+    observed: String,
+    hit: bool,
+}
+
+fn oid_reuse_query(cache: OidReuseFixture, oid: &str)
+    -> (out: (OidReuseFixture, bool))
+    requires cache.calls == 0,
+    ensures out.0.calls == 1, out.0.observed@ == oid@,
+        out.0.hit == cache.hit, out.1 == cache.hit,
+{
+    let hit = cache.hit;
+    (OidReuseFixture { calls: 1, observed: oid.to_owned(), hit }, hit)
+}
+
+fn oid_reuse_record(cache: OidReuseFixture, oid: &str) -> (out: OidReuseFixture)
+    requires cache.calls == 0,
+    ensures out.calls == 1, out.observed@ == oid@, out.hit == cache.hit,
+{
+    OidReuseFixture { calls: 1, observed: oid.to_owned(), hit: cache.hit }
+}
+
+fn oid_reuse_never_query(_cache: OidReuseFixture, _oid: &str)
+    -> (OidReuseFixture, bool)
+    requires false,
+{ panic!() }
+
+fn oid_reuse_never_record(_cache: OidReuseFixture, _oid: &str) -> OidReuseFixture
+    requires false,
+{ panic!() }
+
+fn oid_reuse_bound_query_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: 0, observed: "prior".to_owned(), hit };
+    let out = policy::can_reuse_oid(true, cache, oid, oid_reuse_query);
+    expect_status_true(out.1 == hit);
+    expect_status_true(out.0.calls == 1);
+    expect_status_true(out.0.hit == hit);
+    expect_status_text(out.0.observed.as_str(), oid);
+}
+
+fn oid_reuse_unbound_query_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: u8::MAX,
+        observed: "unchanged: é\0original\n".to_owned(), hit };
+    let out = policy::can_reuse_oid(false, cache, oid, oid_reuse_never_query);
+    expect_status_true(!out.1);
+    expect_status_true(out.0.calls == u8::MAX);
+    expect_status_true(out.0.hit == hit);
+    expect_status_text(out.0.observed.as_str(), "unchanged: é\0original\n");
+}
+
+fn oid_reuse_bound_record_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: 0, observed: "prior".to_owned(), hit };
+    let out = policy::record_verified_oid(true, cache, oid, oid_reuse_record);
+    expect_status_true(out.calls == 1);
+    expect_status_true(out.hit == hit);
+    expect_status_text(out.observed.as_str(), oid);
+}
+
+fn oid_reuse_unbound_record_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: u8::MAX,
+        observed: "unchanged: é\0original\n".to_owned(), hit };
+    let out = policy::record_verified_oid(false, cache, oid, oid_reuse_never_record);
+    expect_status_true(out.calls == u8::MAX);
+    expect_status_true(out.hit == hit);
+    expect_status_text(out.observed.as_str(), "unchanged: é\0original\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_bound_hit_queries_the_original_key_once() {
+    oid_reuse_bound_query_contract("1111111111111111111111111111111111111111", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_bound_miss_preserves_the_external_result() {
+    oid_reuse_bound_query_contract("key: é\0original\n", false);
+    oid_reuse_bound_query_contract("", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_unbound_does_not_query_or_accept_a_hit() {
+    oid_reuse_unbound_query_contract("key: é\0original\n", true);
+    oid_reuse_unbound_query_contract("", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_bound_records_the_complete_original_key_once() {
+    oid_reuse_bound_record_contract("1111111111111111111111111111111111111111", true);
+    oid_reuse_bound_record_contract("key: é\0original\n", false);
+    oid_reuse_bound_record_contract("", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_unbound_does_not_borrow_or_change_the_cache() {
+    oid_reuse_unbound_record_contract("key: é\0original\n", true);
+    oid_reuse_unbound_record_contract("", false);
+}
+
+
+// 记录实际回调参数和严格次序；此 fixture 不冒充 Serde JSON 对象的内部模型。
+struct SelectionProjectionFixture {
+    phase: u8,
+    retained: String,
+    removed: String,
+    field: String,
+    value: String,
+}
+
+fn selection_projection_remove(state: SelectionProjectionFixture, key: &str)
+    -> (out: SelectionProjectionFixture)
+    requires state.phase == 0,
+    ensures out.phase == 1, out.retained == state.retained,
+        out.removed@ == key@, out.field == state.field, out.value == state.value,
+{
+    SelectionProjectionFixture {
+        phase: 1, retained: state.retained, removed: key.to_owned(),
+        field: state.field, value: state.value,
+    }
+}
+
+fn selection_projection_insert(state: SelectionProjectionFixture, key: &str, value: &str)
+    -> (out: SelectionProjectionFixture)
+    requires state.phase == 1,
+    ensures out.phase == 2, out.retained == state.retained,
+        out.removed == state.removed, out.field@ == key@, out.value@ == value@,
+{
+    SelectionProjectionFixture {
+        phase: 2, retained: state.retained, removed: state.removed,
+        field: key.to_owned(), value: value.to_owned(),
+    }
+}
+
+fn selection_projection_never_remove(state: SelectionProjectionFixture, key: &str)
+    -> (out: SelectionProjectionFixture)
+    requires false,
+    ensures false,
+{
+    panic!();
+}
+
+fn selection_projection_never_insert(state: SelectionProjectionFixture, key: &str, value: &str)
+    -> (out: SelectionProjectionFixture)
+    requires false,
+    ensures false,
+{
+    panic!();
+}
+
+fn selection_projection_fixture(state: SelectionProjectionFixture)
+    -> (out: SelectionProjectionFixture)
+    requires state.phase == 0,
+    ensures out.phase == 2, out.retained == state.retained,
+        out.removed@ == "sha256"@, out.field@ == "schema"@,
+        out.value@ == "chrono-registry-selection/v1"@,
+{
+    let result = policy::normalize_registry_selection_object(
+        Some(state), selection_projection_remove, selection_projection_insert,
+    );
+    match result {
+        None => { panic!(); },
+        Some(out) => {
+            proof {
+                let (middle, removed, field, value) = choose|
+                    middle: SelectionProjectionFixture, removed: &str, field: &str, value: &str|
+                    removed@ == "sha256"@ && field@ == "schema"@
+                    && value@ == "chrono-registry-selection/v1"@
+                    && selection_projection_remove.ensures((state, removed), middle)
+                    && selection_projection_insert.ensures((middle, field, value), out);
+            }
+            out
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_without_object_never_calls_either_interface() {
+    let out = policy::normalize_registry_selection_object(
+        None::<SelectionProjectionFixture>,
+        selection_projection_never_remove, selection_projection_never_insert,
+    );
+    expect_status_true(out.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_preserves_empty_metadata_and_exact_schema() {
+    let out = selection_projection_fixture(SelectionProjectionFixture {
+        phase: 0, retained: "".to_owned(), removed: "old digest".to_owned(),
+        field: "old field".to_owned(), value: "old schema".to_owned(),
+    });
+    expect_status_true(out.phase == 2);
+    expect_status_text(out.retained.as_str(), "");
+    expect_status_text(out.removed.as_str(), "sha256");
+    expect_status_text(out.field.as_str(), "schema");
+    expect_status_text(out.value.as_str(), "chrono-registry-selection/v1");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_preserves_unicode_nul_and_lf_metadata() {
+    let out = selection_projection_fixture(SelectionProjectionFixture {
+        phase: 0, retained: "原始/é\0\n完整尾部".to_owned(), removed: "摘要\0\n".to_owned(),
+        field: "schema\0suffix".to_owned(), value: "chrono-git-config-selection/v1".to_owned(),
+    });
+    expect_status_true(out.phase == 2);
+    expect_status_text(out.retained.as_str(), "原始/é\0\n完整尾部");
+    expect_status_text(out.removed.as_str(), "sha256");
+    expect_status_text(out.field.as_str(), "schema");
+    expect_status_text(out.value.as_str(), "chrono-registry-selection/v1");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selection_projection_already_matching_schema_still_performs_both_operations() {
+    let out = selection_projection_fixture(SelectionProjectionFixture {
+        phase: 0, retained: "retained".to_owned(), removed: "sha256".to_owned(),
+        field: "schema".to_owned(), value: "chrono-registry-selection/v1".to_owned(),
+    });
+    expect_status_true(out.phase == 2);
+    expect_status_text(out.retained.as_str(), "retained");
+    expect_status_text(out.removed.as_str(), "sha256");
+    expect_status_text(out.field.as_str(), "schema");
+    expect_status_text(out.value.as_str(), "chrono-registry-selection/v1");
+}
+
 // 这些分支在普通 Rust 测试中也执行；证明不能替代真实调用的断言。
 fn expect_status_true(actual: bool)
     requires actual,
@@ -696,6 +919,19 @@ fn evidence_identity_keeps_exact_prefix_and_nonempty_kind() {
     expect_status_true(!no_kind);
 }
 
+proof fn evidence_utf8_concat(prefix: Seq<char>, suffix: Seq<char>)
+    ensures vstd::utf8::encode_utf8(prefix + suffix)
+        == vstd::utf8::encode_utf8(prefix) + vstd::utf8::encode_utf8(suffix),
+    decreases prefix.len(),
+{
+    if prefix.len() > 0 {
+        evidence_utf8_concat(prefix.drop_first(), suffix);
+        assert((prefix + suffix).drop_first() =~= prefix.drop_first() + suffix);
+    } else {
+        assert(prefix + suffix =~= suffix);
+    }
+}
+
 proof fn unicode_evidence_prefix_encoding()
     ensures vstd::utf8::encode_utf8(".chrono-harness/state/"@).len() == 22,
         vstd::utf8::encode_utf8(".chrono-harness/state/中文\0"@).len() >= 22,
@@ -704,7 +940,14 @@ proof fn unicode_evidence_prefix_encoding()
 {
     reveal_strlit(".chrono-harness/state/");
     reveal_strlit(".chrono-harness/state/中文\0");
-    reveal_with_fuel(vstd::utf8::encode_utf8, 24);
+    let prefix = ".chrono-harness/state/"@;
+    let suffix = seq!['中', '文', '\0'];
+    assert(".chrono-harness/state/中文\0"@ =~= prefix + suffix);
+    assert(vstd::utf8::is_ascii_chars(prefix));
+    vstd::utf8::is_ascii_chars_encode_utf8(prefix);
+    evidence_utf8_concat(prefix, suffix);
+    assert((vstd::utf8::encode_utf8(prefix) + vstd::utf8::encode_utf8(suffix)).take(22)
+        =~= vstd::utf8::encode_utf8(prefix));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -3567,6 +3810,144 @@ fn expect_checkout_hash_count(out: Result<u64, String>, expected: u64)
     match out { Ok(value) => expect_status_true(value == expected), Err(_) => panic!() }
 }
 
+fn blob_match_original_input(size: usize, bytes: &[u8])
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+{
+    expect_status_true(size == 4);
+    expect_status_true(bytes.len() == 4);
+    expect_status_true(bytes[0] == 0);
+    expect_status_true(bytes[1] == 255);
+    expect_status_true(bytes[2] == 10);
+    expect_status_true(bytes[3] == 13);
+}
+
+fn blob_match_short_digest(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+    ensures out@ == "1111111111111111111111111111111111111111"@,
+{
+    blob_match_original_input(size, bytes);
+    checkout_dispatch_short_oid().to_owned()
+}
+
+fn blob_match_long_digest(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+    ensures out@ == "1111111111111111111111111111111111111111111111111111111111111111"@,
+{
+    blob_match_original_input(size, bytes);
+    checkout_dispatch_long_oid().to_owned()
+}
+
+fn blob_match_full_digest(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 4, bytes@ == seq![0u8, 255u8, 10u8, 13u8],
+    ensures out@ == "digest: é\0original\nend"@, out@[0] == 'd',
+{
+    blob_match_original_input(size, bytes);
+    proof { reveal_strlit("digest: é\0original\nend"); }
+    "digest: é\0original\nend".to_owned()
+}
+
+fn blob_match_empty_short(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 0, bytes@.len() == 0,
+    ensures out@ == "1111111111111111111111111111111111111111"@,
+{
+    expect_status_true(size == 0 && bytes.is_empty());
+    checkout_dispatch_short_oid().to_owned()
+}
+
+fn blob_match_empty_long(size: usize, bytes: &[u8]) -> (out: String)
+    requires size == 0, bytes@.len() == 0,
+    ensures out@ == "1111111111111111111111111111111111111111111111111111111111111111"@,
+{
+    expect_status_true(size == 0 && bytes.is_empty());
+    checkout_dispatch_long_oid().to_owned()
+}
+
+fn blob_match_never(_size: usize, _bytes: &[u8]) -> String
+    requires false,
+{ panic!() }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_rejects_every_wrong_length_before_hashing() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_short_oid(), 0, &bytes,
+        blob_match_never, blob_match_never));
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_long_oid(), 5, &bytes,
+        blob_match_never, blob_match_never));
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_long_oid(), usize::MAX, &bytes,
+        blob_match_never, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha1_keeps_original_length_bytes_and_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_short_oid(), 4, &bytes,
+        blob_match_short_digest, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha256_keeps_original_length_bytes_and_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_long_oid(), 4, &bytes,
+        blob_match_never, blob_match_long_digest));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha1_rejects_a_different_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_short_oid(), 4, &bytes,
+        blob_match_full_digest, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_sha256_rejects_a_different_complete_digest() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    expect_status_true(!policy::git_blob_matches(checkout_dispatch_long_oid(), 4, &bytes,
+        blob_match_never, blob_match_full_digest));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_empty_sha1_still_hashes_the_original_empty_body() {
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_short_oid(), 0, &[],
+        blob_match_empty_short, blob_match_never));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_empty_sha256_still_hashes_the_original_empty_body() {
+    expect_status_true(policy::git_blob_matches(checkout_dispatch_long_oid(), 0, &[],
+        blob_match_never, blob_match_empty_long));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_preserves_complete_unicode_nul_and_line_text() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    let exact = "digest: é\0original\nend";
+    let different = "digest: é\0original\nEnd";
+    proof {
+        reveal_strlit("digest: é\0original\nend");
+        reveal_strlit("digest: é\0original\nEnd");
+        assert(exact@[19] == 'e');
+        assert(different@[19] == 'E');
+        assert(exact@ != different@);
+    }
+    expect_status_true(policy::git_blob_matches(exact, 4, &bytes,
+        blob_match_full_digest, blob_match_full_digest));
+    expect_status_true(!policy::git_blob_matches(different, 4, &bytes,
+        blob_match_full_digest, blob_match_full_digest));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn blob_match_keeps_the_original_nonforty_byte_fallback() {
+    let bytes = [0u8, 255u8, 10u8, 13u8];
+    let oid = "1";
+    proof {
+        reveal_strlit("1");
+        assert(vstd::string::is_ascii(oid));
+        vstd::string::is_ascii_spec_bytes(oid);
+    }
+    expect_status_true(!policy::git_blob_matches(oid, 4, &bytes,
+        blob_match_never, blob_match_full_digest));
+}
+
 fn checkout_dispatch_success(size: u64, source: u8) -> (out: Result<String, String>)
     ensures if size == u64::MAX && source == 77 {
         out matches Ok(text) && text@ == "digest: é\0full\nend"@
@@ -3591,6 +3972,7 @@ fn checkout_dispatch_never(_size: u64, _source: u8) -> Result<String, String>
 
 fn checkout_dispatch_short_oid() -> (text: &'static str)
     ensures policy::identifiers::oid(text.spec_bytes()), text.spec_bytes().len() == 40,
+        text@ == "1111111111111111111111111111111111111111"@, text@[0] == '1',
 {
     let text = "1111111111111111111111111111111111111111";
     proof {
@@ -3604,6 +3986,8 @@ fn checkout_dispatch_short_oid() -> (text: &'static str)
 
 fn checkout_dispatch_long_oid() -> (text: &'static str)
     ensures policy::identifiers::oid(text.spec_bytes()), text.spec_bytes().len() == 64,
+        text@ == "1111111111111111111111111111111111111111111111111111111111111111"@,
+        text@[0] == '1',
 {
     let text = "1111111111111111111111111111111111111111111111111111111111111111";
     proof {
@@ -5352,6 +5736,8 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
             proof {
                 registry_sequence_bytes_facts(initial.1);
                 registry_sequence_bytes_facts(bytes@);
+                assert(registry_sequence_bytes(bytes@)[old] == seq![9u8]);
+                assert(bytes@[old]@ =~= seq![9u8]);
             }
             expect_status_true(bytes.len() == 2 && values.len() == 2);
             expect_registry_pair(&bytes, &values, &old, &[9u8], u64::MAX);

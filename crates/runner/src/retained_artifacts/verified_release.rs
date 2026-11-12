@@ -240,6 +240,38 @@ pub fn without(values: &[String], id: &str) -> (out: Vec<String>)
     out
 }
 
+pub open spec fn pending_retirement_values(records: Seq<(String, bool)>) -> Seq<String>
+    decreases records.len(),
+{
+    if records.len() == 0 { Seq::empty() }
+    else if records.last().1 { pending_retirement_values(records.drop_last()) }
+    else { pending_retirement_values(records.drop_last()).push(records.last().0) }
+}
+
+/// 只根据记录终态选择待恢复项；字节已删除不等于记录已退役。
+pub fn pending_retirements(records: &[(String, bool)]) -> (out: Vec<String>)
+    ensures out@ == pending_retirement_values(records@),
+{
+    let mut out = Vec::new();
+    let mut at = 0;
+    while at < records.len()
+        invariant at <= records.len(),
+            out@ == pending_retirement_values(records@.take(at as int)),
+        decreases records.len() - at,
+    {
+        if !records[at].1 { out.push(records[at].0.clone()); }
+        proof {
+            let next = records@.take(at as int + 1);
+            assert(next.drop_last() =~= records@.take(at as int));
+            assert(next.last() == records@[at as int]);
+            reveal_with_fuel(pending_retirement_values, 1);
+        }
+        at += 1;
+    }
+    assert(records@.take(at as int) =~= records@);
+    out
+}
+
 /// 发现阶段的排除和成员保全决策；实际租约及声明 IO 由调用方执行。
 pub struct GateDiscovery {
     pub object_excluded: bool,

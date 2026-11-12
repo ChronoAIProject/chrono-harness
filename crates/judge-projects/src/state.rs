@@ -235,6 +235,7 @@ impl Operation {
             stdout: &self.streams[0],
             stderr: &self.streams[1],
             launch: &self.streams[2],
+            publication: None,
         }
     }
 

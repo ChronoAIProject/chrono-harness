@@ -270,6 +270,7 @@ fn incomplete_execution(delayed_admission: bool) {
                         stdout: &stdout,
                         stderr: &stderr,
                         launch: &launch,
+                        publication: None,
                     },
                 );
                 // A missing real readiness is also finite: the joined engine
@@ -321,9 +322,24 @@ fn incomplete_execution(delayed_admission: bool) {
         assert_eq!(fs::read(&stdout).unwrap(), result.stdout_bytes);
         assert_eq!(fs::read(&stderr).unwrap(), result.stderr_bytes);
         assert!(readiness["read_error"].is_null(), "{readiness}");
+        let ready: Vec<u8> = serde_json::from_value(readiness["bytes"].clone()).unwrap();
+        let (_, ready_ns) = std::str::from_utf8(&ready)
+            .unwrap()
+            .strip_prefix("ready:")
+            .unwrap()
+            .trim_end_matches('\n')
+            .split_once(':')
+            .unwrap();
+        let ready_ns: u64 = ready_ns.parse().unwrap();
+        let deadline =
+            result.failure_record.as_ref().unwrap().error.context["terminal_deadline_ns"]
+                .as_u64()
+                .unwrap();
+        // Acquisition before spawn is outside the monitor's one-second budget.
+        // Compare the actual nested readiness to that monitor's original deadline.
         assert!(
-            readiness["observed_micros"].as_u64().unwrap() < 1_000_000,
-            "nested execution was not observed before the one-second interruption: {readiness}"
+            ready_ns < deadline,
+            "nested execution was not ready before the one-second interruption: {readiness}; deadline={deadline}"
         );
         let rows = records(&result.stderr_bytes);
         let launch = rows
@@ -362,10 +378,9 @@ fn incomplete_execution(delayed_admission: bool) {
             }
             Err(error) => assert!(error.is_eof(), "invalid execution output: {error}"),
         }
-        let ready: Vec<u8> = serde_json::from_value(readiness["bytes"].clone()).unwrap();
         assert_eq!(
             ready,
-            format!("ready:{}\n", launch["context"]["child_pid"]).as_bytes()
+            format!("ready:{}:{ready_ns}\n", launch["context"]["child_pid"]).as_bytes()
         );
         let identity = rows
             .iter()
@@ -635,6 +650,7 @@ fn execution_diagnostics_debug_process_preserves_context_and_originals() {
                     stdout: &stdout,
                     stderr: &stderr,
                     launch: &launch,
+                    publication: None,
                 },
             )
             .unwrap()
