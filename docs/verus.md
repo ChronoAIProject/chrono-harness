@@ -89,11 +89,33 @@ UTF-8 字节严格顺序，仅选择 kind 全文为 `blob` 的条目；启用原
 
 明确接口仍为原 Git 获取、标准 Path／父路径观察、目录与文件 IO、UTF-8 编解码、
 平台 symlink、metadata／Permissions 和错误文本；固定 Rust／vstd 的 String／Vec
-借用与完整克隆沿既有合同。`no_symlink_parents`、blob／预取内部的仓内判断仍有自己的
-迁移义务，不能因协调器转交其实际结果就列为已证明外部假设。
+借用与完整克隆沿既有合同。blob／预取内部的仓内判断仍有自己的迁移义务，不能因
+协调器转交其实际结果就列为已证明外部假设。
 FILEMAP 为新模块登记原两个证明根；facts 适配文件未参与这些根的编译，仍保持未知覆盖，
 不以转交调用授予整文件证明资格。源码／编译／生产调用的完整对应、全部路径与 Git 内部逻辑、完整输出事务及全仓
 覆盖门仍未完成。
+
+`no_symlink_parents_detailed` 的组件遍历直接消费 `verified_paths::no_symlink_path`。
+每个组件先追加到当前路径，再观察该路径的 symlink metadata；末项也检查，根本身
+不额外检查。非 symlink 和 NotFound 均继续；首个 symlink 返回同一完整路径，
+首个其他 IO 错误保留原错误，此后不读取下一组件、不追加路径、不调用 metadata。
+成功返回按原组件迭代器构造的完整路径。失败渲染的分支和原值移交也由同源 Verus
+负责，保留原 symlink 文本与 `E_PROCESS_PATH_READ` 原生错误构造。
+
+独立预期直接列出 0–3 个组件、七种观察策略的结果，覆盖空迭代器、末项 symlink、
+首项／中间拒绝、一次及连续 NotFound 后继续、首个原错误、完整字节路径和错误渲染；
+预期和驱动均为 Verus，并作为未过滤 Rust 测试执行。有限组件接口谓词归路径所有者，
+checkout 原谓词委托同一实现。FILEMAP 同步登记原路径及状态生产／预期根，既有
+Verus 版本、整 crate 参数、线程、动作和预算均保留。
+
+外部接口沿用固定 Rust 的 `Path::new`／`Path::components`、`Components::next`、
+`PathBuf::push`、`fs::symlink_metadata`、`Metadata::file_type`／`FileType::is_symlink`、
+`io::Error::kind` 与 `ErrorKind::NotFound` 的观察、Display／错误文本和 Result 转交。
+标准组件迭代器的有限性由接口合同声明，不由本仓机械精化；Verus 证明在这个明确
+前提下终止和逐阶段结果关系，不假设文件系统多次观察确定。仓内 `ProcessFailure`
+构造和其他 publication／IO 组合仍保留自己的证明义务，不授予整个 `lib.rs` 证明资格。
+实现保留流式组件迭代及原路径缓冲区，证明轨迹和 rank 均擦除，不增加组件 Vec、
+路径克隆、metadata 次数或进程；完整运行、编译、证明、CI 和存储成本未测。
 
 **产品与宿主登记同改：**复用现有工具、整 crate 参数、未过滤行为测试、线程和预算，
 没有新增运行时进程或 IO。复用已有有序树借用库存，额外暂存 E 个条目引用，空间为
