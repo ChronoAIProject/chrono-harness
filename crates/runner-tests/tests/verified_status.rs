@@ -108,8 +108,12 @@ spec fn oid_fixture_expected(
         match commit {
             Err(error) => (1, Err(error)),
             Ok(text) => if text != oid { (1, Err("OID is not a commit"@)) }
-                else { (if match tree { Ok(value) => scope_text::oid(vstd::utf8::encode_utf8(value)),
-                    Err(_) => false } { 3u8 } else { 2u8 }, tree) },
+                else { match tree {
+                    Err(error) => (2u8, Err(error)),
+                    Ok(value) => if scope_text::oid(vstd::utf8::encode_utf8(value)) {
+                        (3u8, Ok(value))
+                    } else { (2u8, Ok(value)) },
+                } },
         }
     }
 }
