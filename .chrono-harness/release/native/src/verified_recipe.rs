@@ -6,7 +6,7 @@ use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
 #[path = "../../../../crates/identifiers/src/lib.rs"]
-mod identifiers;
+pub(crate) mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_identifiers as identifiers;
 

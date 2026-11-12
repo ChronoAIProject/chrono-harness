@@ -68,6 +68,10 @@ fn promotion_requires_the_original_run_event_and_complete_workflow_head() {
             assert(head@[i] == 97);
         }
         assert(head_bytes@[0] == 97);
+        assert(exists|i: int| 0 <= i < head_bytes@.len() && head_bytes@[i] != 48);
+        assert(policy::identifiers::oid(head_bytes@));
+        assert(delivery::text_pair((Some("workflow_run"), "workflow_run")));
+        assert(delivery::text_pair((Some("workflow_dispatch"), "workflow_dispatch")));
     }
     let valid = delivery::promotion_run(&[(Some(2),2)], &[], Some("workflow_run"), Some(head_bytes));
     let manual = delivery::promotion_run(&[], &[], Some("workflow_dispatch"), Some(head_bytes));
