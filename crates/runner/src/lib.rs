@@ -336,25 +336,32 @@ pub(crate) fn no_symlink_parents_detailed(
     relative: &str,
 ) -> Result<PathBuf, ProcessFailure> {
     relative_path(relative)?;
-    let mut p = root.to_path_buf();
-    for c in Path::new(relative).components() {
-        p.push(c);
-        match fs::symlink_metadata(&p) {
-            Ok(m) if m.file_type().is_symlink() => {
-                return Err(format!("symlink path is not allowed: {}", p.display()).into());
-            }
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => {
-                return Err(ProcessFailure::native(
-                    "E_PROCESS_PATH_READ",
-                    e.to_string(),
-                    e,
-                ));
-            }
-        }
-    }
-    Ok(p)
+    verified_paths::no_symlink_path(
+        Path::new(relative).components(),
+        root.to_path_buf(),
+        |mut parts: std::path::Components<'_>| {
+            let part = parts.next();
+            (parts, part)
+        },
+        |mut path: PathBuf, part: std::path::Component<'_>| {
+            path.push(part);
+            path
+        },
+        |path: PathBuf| {
+            let observation =
+                fs::symlink_metadata(&path).map(|metadata| metadata.file_type().is_symlink());
+            (path, observation)
+        },
+        |error: &std::io::Error| error.kind() == std::io::ErrorKind::NotFound,
+    )
+    .map_err(|failure| {
+        failure.render(
+            |path: PathBuf| format!("symlink path is not allowed: {}", path.display()).into(),
+            |error: std::io::Error| {
+                ProcessFailure::native("E_PROCESS_PATH_READ", error.to_string(), error)
+            },
+        )
+    })
 }
 
 /// Validate and prepare one registered publication destination before any
