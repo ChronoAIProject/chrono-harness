@@ -83,3 +83,9 @@ name = "chrono-test-release-operation"
 path = "../../../crates/judge-projects-tests/tests/support/execution_child.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-test-release-frontend-tool"
+path = "tests/support/context.rs"
+test = false
+bench = false
