@@ -24,6 +24,237 @@ use vstd::vpanic as panic;
 
 verus! {
 
+struct OidVerificationFixture {
+    phase: u8,
+    expected: String,
+    commit: Result<String, String>,
+    tree: Result<String, String>,
+}
+
+spec fn oid_fixture_commit(state: OidVerificationFixture, _key: Seq<char>)
+    -> (OidVerificationFixture, Result<Seq<char>, Seq<char>>)
+{
+    (OidVerificationFixture { phase: 1, expected: state.expected,
+        commit: state.commit, tree: state.tree }, policy::oid_text_result(state.commit))
+}
+
+spec fn oid_fixture_tree(state: OidVerificationFixture, _key: Seq<char>)
+    -> (OidVerificationFixture, Result<Seq<char>, Seq<char>>)
+{
+    (OidVerificationFixture { phase: 2, expected: state.expected,
+        commit: state.commit, tree: state.tree }, policy::oid_text_result(state.tree))
+}
+
+spec fn oid_fixture_record(state: OidVerificationFixture, _key: Seq<char>)
+    -> OidVerificationFixture
+{
+    OidVerificationFixture { phase: 3, expected: state.expected,
+        commit: state.commit, tree: state.tree }
+}
+
+fn oid_fixture_read_commit(state: OidVerificationFixture, key: &str)
+    -> (out: (OidVerificationFixture, Result<String, String>))
+    requires state.phase == 0, state.expected@ == key@,
+    ensures policy::oid_read_result(out) == oid_fixture_commit(state, key@),
+{
+    expect_status_text(key, state.expected.as_str());
+    let observed = match &state.commit {
+        Ok(text) => Ok(text.clone()), Err(error) => Err(error.clone()),
+    };
+    (OidVerificationFixture { phase: 1, expected: state.expected,
+        commit: state.commit, tree: state.tree }, observed)
+}
+
+fn oid_fixture_read_tree(state: OidVerificationFixture, key: &str)
+    -> (out: (OidVerificationFixture, Result<String, String>))
+    requires state.phase == 1, state.expected@ == key@,
+    ensures policy::oid_read_result(out) == oid_fixture_tree(state, key@),
+{
+    expect_status_text(key, state.expected.as_str());
+    let observed = match &state.tree {
+        Ok(text) => Ok(text.clone()), Err(error) => Err(error.clone()),
+    };
+    (OidVerificationFixture { phase: 2, expected: state.expected,
+        commit: state.commit, tree: state.tree }, observed)
+}
+
+fn oid_fixture_record_key(state: OidVerificationFixture, key: &str)
+    -> (out: OidVerificationFixture)
+    requires state.phase == 2, state.expected@ == key@,
+    ensures out == oid_fixture_record(state, key@),
+{
+    expect_status_text(key, state.expected.as_str());
+    OidVerificationFixture { phase: 3, expected: state.expected,
+        commit: state.commit, tree: state.tree }
+}
+
+fn oid_fixture_run(oid: &str, commit: Result<String, String>, tree: Result<String, String>)
+    -> (out: (OidVerificationFixture, Result<String, String>))
+    ensures out.0.expected@ == oid@,
+        (out.0.phase, policy::oid_text_result(out.1))
+            == oid_fixture_expected(oid@, policy::oid_text_result(commit), policy::oid_text_result(tree)),
+{
+    let state = OidVerificationFixture { phase: 0, expected: oid.to_owned(), commit, tree };
+    policy::verify_oid(state, oid, oid_fixture_read_commit, oid_fixture_read_tree,
+        oid_fixture_record_key)
+}
+
+spec fn oid_fixture_expected(
+    oid: Seq<char>, commit: Result<Seq<char>, Seq<char>>, tree: Result<Seq<char>, Seq<char>>,
+) -> (u8, Result<Seq<char>, Seq<char>>) {
+    if !scope_text::oid(vstd::utf8::encode_utf8(oid)) {
+        (0, Err("expected full nonzero lowercase commit OID"@))
+    } else {
+        match commit {
+            Err(error) => (1, Err(error)),
+            Ok(text) => if text != oid { (1, Err("OID is not a commit"@)) }
+                else { match tree {
+                    Err(error) => (2u8, Err(error)),
+                    Ok(value) => if scope_text::oid(vstd::utf8::encode_utf8(value)) {
+                        (3u8, Ok(value))
+                    } else { (2u8, Ok(value)) },
+                } },
+        }
+    }
+}
+
+fn oid_fixture_error(result: Result<String, String>, expected: &str)
+    requires match result { Err(error) => error@ == expected@, Ok(_) => false },
+{
+    match result {
+        Ok(_) => { expect_status_true(false); },
+        Err(error) => { expect_status_text(error.as_str(), expected); },
+    }
+}
+
+proof fn oid_fixture_rejects_nonhex_ascii_prefix(text: &str)
+    requires text@.len() > 0, (text@[0] as u32) < 128,
+        !scope_text::oid_byte((text@[0] as u32) as u8),
+    ensures !scope_text::oid(text.spec_bytes()),
+{
+    let scalar = text@[0] as u32;
+    assert(scalar < 128 ==> (scalar & 0x7fu32) == scalar) by(bit_vector);
+    assert(vstd::utf8::has_width_1_encoding(scalar));
+    assert(vstd::utf8::leading_byte_width_1(scalar) == scalar as u8);
+    assert(vstd::utf8::encode_scalar(scalar) == seq![scalar as u8]);
+    assert(text.spec_bytes() =~= seq![scalar as u8]
+        + vstd::utf8::encode_utf8(text@.drop_first()));
+    assert(text.spec_bytes()[0] == scalar as u8);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_verification_rejects_invalid_input_before_any_observation() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("invalid: é\0key\n");
+        oid_fixture_rejects_nonhex_ascii_prefix("invalid: é\0key\n");
+    }
+    let out = oid_fixture_run("invalid: é\0key\n", Err("commit unavailable".to_owned()),
+        Err("tree unavailable".to_owned()));
+    expect_status_true(out.0.phase == 0);
+    expect_status_text(out.0.expected.as_str(), "invalid: é\0key\n");
+    oid_fixture_error(out.1, "expected full nonzero lowercase commit OID");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_verification_preserves_the_first_complete_commit_error() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+    }
+    let out = oid_fixture_run("1111111111111111111111111111111111111111",
+        Err("commit: é\0original\n".to_owned()), Err("tree must not run".to_owned()));
+    expect_status_true(out.0.phase == 1);
+    oid_fixture_error(out.1, "commit: é\0original\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_verification_rejects_a_different_complete_commit_before_tree_read() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        reveal_strlit("1111111111111111111111111111111111111111\0extra");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+    }
+    let out = oid_fixture_run("1111111111111111111111111111111111111111",
+        Ok("1111111111111111111111111111111111111111\0extra".to_owned()),
+        Err("tree must not run".to_owned()));
+    expect_status_true(out.0.phase == 1);
+    oid_fixture_error(out.1, "OID is not a commit");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_verification_preserves_the_complete_tree_error_without_recording() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+    }
+    let out = oid_fixture_run("1111111111111111111111111111111111111111",
+        Ok("1111111111111111111111111111111111111111".to_owned()),
+        Err("tree: é\0original\n".to_owned()));
+    expect_status_true(out.0.phase == 2);
+    oid_fixture_error(out.1, "tree: é\0original\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_verification_returns_malformed_tree_without_recording() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        reveal_strlit("not-a-tree: é\0original\n");
+        oid_fixture_rejects_nonhex_ascii_prefix("not-a-tree: é\0original\n");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+        assert(scope_text::oid("1111111111111111111111111111111111111111".spec_bytes()));
+        assert(!scope_text::oid("not-a-tree: é\0original\n".spec_bytes()));
+        assert(oid_fixture_expected("1111111111111111111111111111111111111111"@,
+            Ok("1111111111111111111111111111111111111111"@),
+            Ok("not-a-tree: é\0original\n"@)).0 == 2);
+    }
+    let out = oid_fixture_run("1111111111111111111111111111111111111111",
+        Ok("1111111111111111111111111111111111111111".to_owned()),
+        Ok("not-a-tree: é\0original\n".to_owned()));
+    expect_status_true(out.0.phase == 2);
+    match out.1 {
+        Ok(tree) => { expect_status_text(tree.as_str(), "not-a-tree: é\0original\n"); },
+        Err(_) => { expect_status_true(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_verification_records_the_original_key_after_both_successful_reads() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        reveal_strlit("2222222222222222222222222222222222222222222222222222222222222222");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        assert(vstd::string::is_ascii("2222222222222222222222222222222222222222222222222222222222222222"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        vstd::string::is_ascii_spec_bytes("2222222222222222222222222222222222222222222222222222222222222222");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+        assert("2222222222222222222222222222222222222222222222222222222222222222".spec_bytes()[0] == 50);
+    }
+    let out = oid_fixture_run("1111111111111111111111111111111111111111",
+        Ok("1111111111111111111111111111111111111111".to_owned()),
+        Ok("2222222222222222222222222222222222222222222222222222222222222222".to_owned()));
+    expect_status_true(out.0.phase == 3);
+    expect_status_text(out.0.expected.as_str(), "1111111111111111111111111111111111111111");
+    match out.1 {
+        Ok(tree) => { expect_status_text(tree.as_str(),
+            "2222222222222222222222222222222222222222222222222222222222222222"); },
+        Err(_) => { expect_status_true(false); },
+    }
+}
+
 // 实际借用接口在仓外；此 fixture 独立记录查询／登记的原键和严格调用次数。
 struct OidReuseFixture {
     calls: u8,
