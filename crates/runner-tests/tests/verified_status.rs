@@ -31,21 +31,21 @@ struct OidVerificationFixture {
     tree: Result<String, String>,
 }
 
-open spec fn oid_fixture_commit(state: OidVerificationFixture, _key: Seq<char>)
+spec fn oid_fixture_commit(state: OidVerificationFixture, _key: Seq<char>)
     -> (OidVerificationFixture, Result<Seq<char>, Seq<char>>)
 {
     (OidVerificationFixture { phase: 1, expected: state.expected,
         commit: state.commit, tree: state.tree }, policy::oid_text_result(state.commit))
 }
 
-open spec fn oid_fixture_tree(state: OidVerificationFixture, _key: Seq<char>)
+spec fn oid_fixture_tree(state: OidVerificationFixture, _key: Seq<char>)
     -> (OidVerificationFixture, Result<Seq<char>, Seq<char>>)
 {
     (OidVerificationFixture { phase: 2, expected: state.expected,
         commit: state.commit, tree: state.tree }, policy::oid_text_result(state.tree))
 }
 
-open spec fn oid_fixture_record(state: OidVerificationFixture, _key: Seq<char>)
+spec fn oid_fixture_record(state: OidVerificationFixture, _key: Seq<char>)
     -> OidVerificationFixture
 {
     OidVerificationFixture { phase: 3, expected: state.expected,
@@ -99,7 +99,7 @@ fn oid_fixture_run(oid: &str, commit: Result<String, String>, tree: Result<Strin
         oid_fixture_record_key)
 }
 
-open spec fn oid_fixture_expected(
+spec fn oid_fixture_expected(
     oid: Seq<char>, commit: Result<Seq<char>, Seq<char>>, tree: Result<Seq<char>, Seq<char>>,
 ) -> (u8, Result<Seq<char>, Seq<char>>) {
     if !scope_text::oid(vstd::utf8::encode_utf8(oid)) {
