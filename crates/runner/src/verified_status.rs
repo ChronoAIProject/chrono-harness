@@ -818,6 +818,196 @@ impl PartialEq for IndexFlag {
 }
 impl Eq for IndexFlag {}
 
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct Checkout {
+    pub head: String,
+    pub tracked: Vec<String>,
+    pub untracked: Vec<String>,
+    pub index_flags: Vec<IndexFlag>,
+}
+
+impl Clone for Checkout {
+    fn clone(&self) -> (out: Self)
+        ensures out == *self,
+    {
+        Self { head: self.head.clone(), tracked: self.tracked.clone(),
+            untracked: self.untracked.clone(), index_flags: self.index_flags.clone() }
+    }
+}
+
+pub open spec fn checkout_equal(a: &Checkout, b: &Checkout) -> bool {
+    a.head@ == b.head@ && a.tracked@ == b.tracked@
+        && a.untracked@ == b.untracked@ && a.index_flags@ == b.index_flags@
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for Checkout {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { checkout_equal(self, other) }
+}
+
+impl PartialEq for Checkout {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == checkout_equal(self, other),
+    {
+        identifiers::equal_text(self.head.as_str(), other.head.as_str())
+            && self.tracked == other.tracked && self.untracked == other.untracked
+            && self.index_flags == other.index_flags
+    }
+}
+impl Eq for Checkout {}
+
+pub open spec fn checkout_flags_result<S>(
+    head: String, tracked: Vec<String>, untracked: Vec<String>,
+    observed: (S, Result<Vec<IndexFlag>, String>), out: (S, Result<Checkout, String>),
+) -> bool {
+    out.0 == observed.0 && match observed.1 {
+        Err(error) => out.1 == Err::<Checkout, String>(error),
+        Ok(index_flags) => out.1 == Ok::<Checkout, String>(Checkout { head, tracked, untracked, index_flags }),
+    }
+}
+
+pub open spec fn checkout_untracked_result<S, F>(
+    head: String, tracked: Vec<String>, observed: (S, Result<Vec<String>, String>),
+    flags: F, out: (S, Result<Checkout, String>),
+) -> bool where F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
+    match observed.1 {
+        Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
+        Ok(untracked) => exists|last: (S, Result<Vec<IndexFlag>, String>)|
+            flags.ensures((observed.0,), last)
+                && checkout_flags_result(head, tracked, untracked, last, out),
+    }
+}
+
+pub open spec fn checkout_tracked_result<S, U, F>(
+    head: String, observed: (S, Result<Vec<String>, String>), untracked: U, flags: F,
+    out: (S, Result<Checkout, String>),
+) -> bool where U: Fn(S) -> (S, Result<Vec<String>, String>),
+    F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
+    match observed.1 {
+        Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
+        Ok(tracked) => exists|next: (S, Result<Vec<String>, String>)|
+            untracked.ensures((observed.0,), next)
+                && checkout_untracked_result(head, tracked, next, flags, out),
+    }
+}
+
+pub open spec fn checkout_head_result<S, T, U, F>(
+    observed: (S, Result<String, String>), tracked: T, untracked: U, flags: F,
+    out: (S, Result<Checkout, String>),
+) -> bool where T: Fn(S) -> (S, Result<Vec<String>, String>),
+    U: Fn(S) -> (S, Result<Vec<String>, String>), F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
+    match observed.1 {
+        Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
+        Ok(head) => exists|next: (S, Result<Vec<String>, String>)|
+            tracked.ensures((observed.0,), next)
+                && checkout_tracked_result(head, next, untracked, flags, out),
+    }
+}
+
+/// 按 head、tracked、untracked、index flags 的实际观察顺序组装同一个状态。
+/// 回调可以返回不同 IO 观察；首个错误保留完整原值，不启动之后的阶段。
+pub fn collect_checkout<S, H, T, U, F>(source: S, head: H, tracked: T, untracked: U, flags: F)
+    -> (out: (S, Result<Checkout, String>))
+    where H: Fn(S) -> (S, Result<String, String>),
+        T: Fn(S) -> (S, Result<Vec<String>, String>),
+        U: Fn(S) -> (S, Result<Vec<String>, String>),
+        F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>),
+    requires
+        forall|s: S| #[trigger] head.requires((s,)),
+        forall|s: S| #[trigger] tracked.requires((s,)),
+        forall|s: S| #[trigger] untracked.requires((s,)),
+        forall|s: S| #[trigger] flags.requires((s,)),
+    ensures exists|first: (S, Result<String, String>)| head.ensures((source,), first)
+        && checkout_head_result(first, tracked, untracked, flags, out),
+{
+    let first = head(source);
+    let ghost original_head = first;
+    let (state, head_result) = first;
+    let actual_head = match head_result {
+        Err(error) => { return (state, Err(error)); },
+        Ok(value) => value,
+    };
+    let second = tracked(state);
+    let ghost original_tracked = second;
+    let (state, tracked_result) = second;
+    let actual_tracked = match tracked_result {
+        Err(error) => { return (state, Err(error)); },
+        Ok(value) => value,
+    };
+    let third = untracked(state);
+    let ghost original_untracked = third;
+    let (state, untracked_result) = third;
+    let actual_untracked = match untracked_result {
+        Err(error) => { return (state, Err(error)); },
+        Ok(value) => value,
+    };
+    let fourth = flags(state);
+    let ghost original_flags = fourth;
+    let (state, flags_result) = fourth;
+    let index_flags = match flags_result {
+        Err(error) => { return (state, Err(error)); },
+        Ok(value) => value,
+    };
+    (state, Ok(Checkout { head: actual_head, tracked: actual_tracked,
+        untracked: actual_untracked, index_flags }))
+}
+
+pub open spec fn checkout_paths_merged(out: Seq<String>, first: Seq<String>, second: Seq<String>) -> bool {
+    (forall|path: Seq<char>| #[trigger] checkout_path_prefix(out, out.len() as int, path)
+        == checkout_path_prefix(first + second, (first.len() + second.len()) as int, path))
+        && (forall|i: int, j: int| 0 <= i < j < out.len()
+            ==> identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] out[i])@),
+                vstd::utf8::encode_utf8((#[trigger] out[j])@)))
+        && out.len() <= first.len() + second.len()
+}
+
+pub open spec fn checkout_ignored_result<S>(
+    first: Vec<String>, observed: (S, Result<Vec<String>, String>),
+    out: (S, Result<Vec<String>, String>),
+) -> bool {
+    out.0 == observed.0 && match observed.1 {
+        Err(error) => out.1 == Err::<Vec<String>, String>(error),
+        Ok(second) => match out.1 {
+            Err(_) => false,
+            Ok(paths) => checkout_paths_merged(paths@, first@, second@),
+        },
+    }
+}
+
+/// 普通 checkout 先读取未跟踪库存，再读取 ignored 库存，成功后复用原全文合并。
+pub fn collect_checkout_untracked<S, U, I>(source: S, untracked: U, ignored: I)
+    -> (out: (S, Result<Vec<String>, String>))
+    where U: Fn(S) -> (S, Result<Vec<String>, String>),
+        I: Fn(S) -> (S, Result<Vec<String>, String>),
+    requires
+        forall|s: S| #[trigger] untracked.requires((s,)),
+        forall|s: S| #[trigger] ignored.requires((s,)),
+    ensures exists|first: (S, Result<Vec<String>, String>)| untracked.ensures((source,), first)
+        && match first.1 {
+            Err(error) => out == (first.0, Err::<Vec<String>, String>(error)),
+            Ok(paths) => exists|second: (S, Result<Vec<String>, String>)|
+                ignored.ensures((first.0,), second) && checkout_ignored_result(paths, second, out),
+        },
+{
+    let first = untracked(source);
+    let ghost original_first = first;
+    let (state, first_result) = first;
+    let paths = match first_result {
+        Err(error) => { return (state, Err(error)); },
+        Ok(value) => value,
+    };
+    let second = ignored(state);
+    let ghost original_second = second;
+    let (state, second_result) = second;
+    let ignored_paths = match second_result {
+        Err(error) => { return (state, Err(error)); },
+        Ok(value) => value,
+    };
+    (state, Ok(normalize_checkout_paths(paths, ignored_paths)))
+}
+
 pub enum UnsupportedIndexFlag {
     AssumeUnchanged,
     SkipWorktree,
