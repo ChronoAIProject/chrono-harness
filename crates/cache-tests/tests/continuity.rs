@@ -987,12 +987,31 @@ mod behavior {
             fs::read(root.path().join(original)).unwrap(),
             original_bytes
         );
+        let mut originals = Vec::new();
+        for (producer, path) in [
+            (
+                "cache-probe-attempt",
+                attempt.strip_prefix(root.path()).unwrap().to_str().unwrap(),
+            ),
+            ("cache-plan", output),
+        ] {
+            let status = inventory.producer_status(producer, Some(path)).unwrap();
+            assert_eq!(status["records"].as_array().unwrap().len(), 1, "{status}");
+            originals.push(status["records"][0]["id"].as_str().unwrap().to_owned());
+        }
+        inventory.maintain_originals_at(&originals, 0).unwrap();
+        assert!(attempt.is_dir() && root.path().join(output).is_file());
         let mut rounds = Vec::new();
         // Two retained outputs, eleven declared physical nodes, and up to four
         // phase/edge transitions per output. The original 25 ms round budget stays
         // unchanged, including rounds that only advance bounded metadata work.
         for _ in 0..(11 + 4 * 2) {
-            let round = inventory.maintain_at(u64::MAX).unwrap();
+            if originals.is_empty() {
+                break;
+            }
+            let round = inventory
+                .maintain_originals_at(&originals, u64::MAX)
+                .unwrap();
             for error in round["accounting_errors"].as_array().unwrap() {
                 // Nonblocking maintenance may honestly preserve a busy local
                 // component. Corruption is not accepted, and the final physical
@@ -1009,6 +1028,13 @@ mod behavior {
                     "{round}"
                 );
             }
+            originals.retain(|id| {
+                !round["disposed"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|retired| retired["id"].as_str() == Some(id))
+            });
             rounds.push(round);
         }
         fs::write(
