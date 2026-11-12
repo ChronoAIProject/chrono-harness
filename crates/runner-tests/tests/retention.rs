@@ -6051,6 +6051,7 @@ fn adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure() {
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,
+            publication: None,
         },
     )
     .unwrap();
