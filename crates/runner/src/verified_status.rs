@@ -62,7 +62,7 @@ pub open spec fn oid_commit_relation<S, T, R>(
     match observed.1 {
         Err(_) => out == observed,
         Ok(text) => if text@ != oid@ {
-            oid_read_result(out) == (observed.0, Err("OID is not a commit"@))
+            oid_read_result(out) == (observed.0, Err::<Seq<char>, Seq<char>>("OID is not a commit"@))
         } else {
             exists|second: (S, Result<String, String>)|
                 read_tree.ensures((observed.0, oid), second)
@@ -77,7 +77,8 @@ pub open spec fn verify_oid_relation<S, C, T, R>(
 ) -> bool where C: Fn(S, &str) -> (S, Result<String, String>),
     T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S {
     if !identifiers::oid(vstd::utf8::encode_utf8(oid@)) {
-        oid_read_result(out) == (state, Err("expected full nonzero lowercase commit OID"@))
+        oid_read_result(out) == (state,
+            Err::<Seq<char>, Seq<char>>("expected full nonzero lowercase commit OID"@))
     } else {
         exists|first: (S, Result<String, String>)| read_commit.ensures((state, oid), first)
             && oid_commit_relation(oid, first, out, read_tree, record)
