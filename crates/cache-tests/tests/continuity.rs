@@ -712,9 +712,8 @@ mod behavior {
         assert_eq!(fs::read(path).unwrap(), expected);
     }
 
-    #[test]
     #[cfg(unix)]
-    fn live_originals_survive_launcher_interruption_without_redispatch() {
+    fn interrupted_live_attempt(while_live: impl FnOnce(&Path, &mut Value, &str)) {
         use std::{
             io::{Read, Write},
             os::unix::net::UnixListener,
@@ -770,46 +769,24 @@ mod behavior {
         acquired(&attempt.join("compiler/stdout"), b"live stdout");
         acquired(&attempt.join("compiler/stderr"), b"live stderr");
         assert!(!attempt.join("compiler/process.json").exists());
-        // A concurrent exact caller cannot dispatch; unrelated addresses still work.
-        let repeated = invoke(root.path(), output);
-        assert!(!repeated.status.success());
-        assert!(String::from_utf8_lossy(&repeated.stderr).contains("unknown"));
-        let original_config = config.clone();
-        let independent_count = root.path().join("independent-invocations");
-        probe_config(
-            root.path(),
-            &mut config,
-            json!(["count", independent_count]),
-        );
-        let independent = invoke(
-            root.path(),
-            ".chrono-harness/state/cache/independent-live/plan.json",
-        );
-        assert!(
-            independent.status.success(),
-            "{}",
-            String::from_utf8_lossy(&independent.stderr)
-        );
-        assert_eq!(fs::read(&independent_count).unwrap(), b"x");
-        fs::write(
-            root.path().join(".chrono-harness/cache.json"),
-            serde_json::to_vec(&original_config).unwrap(),
-        )
-        .unwrap();
+        while_live(root.path(), &mut config, output);
         let inventory =
             chrono_harness::retained_artifacts::retention::Inventory::adopted(root.path())
                 .unwrap()
                 .unwrap();
         inventory.maintain_at(u64::MAX).unwrap();
         assert!(attempt.join("compiler/stdout").is_file());
-        unsafe {
-            assert_eq!(
-                libc::kill(launch["launcher_pid"].as_u64().unwrap() as _, libc::SIGKILL),
-                0
-            );
-        }
-        connection.write_all(b"x").unwrap();
+        let signalled =
+            unsafe { libc::kill(launch["launcher_pid"].as_u64().unwrap() as _, libc::SIGKILL) };
+        let signal_error = (signalled != 0).then(std::io::Error::last_os_error);
+        let released = connection.write_all(b"x");
         let result = owner.join();
+        assert_eq!(
+            signalled, 0,
+            "signal: {signal_error:?}; original exit: {}, signal: {:?}, failure: {:?}",
+            result.exit_code, result.exit_signal, result.failure
+        );
+        released.unwrap();
         assert_eq!(result.exit_signal, Some(libc::SIGKILL));
         assert!(!attempt.join("result.json").exists());
         let after = invoke(root.path(), output);
@@ -820,6 +797,41 @@ mod behavior {
             fs::read(attempt.join("compiler/stdout")).unwrap(),
             b"live stdout"
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn live_originals_survive_launcher_interruption_without_redispatch() {
+        interrupted_live_attempt(|root, _, output| {
+            let repeated = invoke(root, output);
+            assert!(!repeated.status.success());
+            assert!(String::from_utf8_lossy(&repeated.stderr).contains("unknown"));
+        });
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn independent_address_makes_progress_while_original_is_live() {
+        interrupted_live_attempt(|root, config, _| {
+            let original_config = config.clone();
+            let count = root.join("independent-invocations");
+            probe_config(root, config, json!(["count", count]));
+            let independent = invoke(
+                root,
+                ".chrono-harness/state/cache/independent-live/plan.json",
+            );
+            assert!(
+                independent.status.success(),
+                "{}",
+                String::from_utf8_lossy(&independent.stderr)
+            );
+            assert_eq!(fs::read(&count).unwrap(), b"x");
+            fs::write(
+                root.join(".chrono-harness/cache.json"),
+                serde_json::to_vec(&original_config).unwrap(),
+            )
+            .unwrap();
+        });
     }
 
     fn mock_git(root: &Path) {
@@ -975,12 +987,31 @@ mod behavior {
             fs::read(root.path().join(original)).unwrap(),
             original_bytes
         );
+        let mut originals = Vec::new();
+        for (producer, path) in [
+            (
+                "cache-probe-attempt",
+                attempt.strip_prefix(root.path()).unwrap().to_str().unwrap(),
+            ),
+            ("cache-plan", output),
+        ] {
+            let status = inventory.producer_status(producer, Some(path)).unwrap();
+            assert_eq!(status["records"].as_array().unwrap().len(), 1, "{status}");
+            originals.push(status["records"][0]["id"].as_str().unwrap().to_owned());
+        }
+        inventory.maintain_originals_at(&originals, 0).unwrap();
+        assert!(attempt.is_dir() && root.path().join(output).is_file());
         let mut rounds = Vec::new();
         // Two retained outputs, eleven declared physical nodes, and up to four
         // phase/edge transitions per output. The original 25 ms round budget stays
         // unchanged, including rounds that only advance bounded metadata work.
         for _ in 0..(11 + 4 * 2) {
-            let round = inventory.maintain_at(u64::MAX).unwrap();
+            if originals.is_empty() {
+                break;
+            }
+            let round = inventory
+                .maintain_originals_at(&originals, u64::MAX)
+                .unwrap();
             for error in round["accounting_errors"].as_array().unwrap() {
                 // Nonblocking maintenance may honestly preserve a busy local
                 // component. Corruption is not accepted, and the final physical
@@ -997,6 +1028,13 @@ mod behavior {
                     "{round}"
                 );
             }
+            originals.retain(|id| {
+                !round["disposed"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|retired| retired["id"].as_str() == Some(id))
+            });
             rounds.push(round);
         }
         fs::write(

@@ -2210,10 +2210,19 @@ impl Inventory {
     /// A caller can name its actual remaining originals without re-enumerating
     /// unrelated diagnostic metadata. The same limits and dependency guards apply.
     pub fn maintain_originals(&self, originals: &[String]) -> Result<Value, String> {
+        self.maintain_originals_at(originals, now()?)
+    }
+    /// Use the caller's time observation, as in maintain_at, for the same
+    /// addressed maintenance without observing unrelated terminal quotas.
+    pub fn maintain_originals_at(
+        &self,
+        originals: &[String],
+        observed: u64,
+    ) -> Result<Value, String> {
         self.validate_originals(originals)?;
         self.round_metadata
             .set(Some(self.policy.max_metadata_bytes_per_round));
-        let result = self.maintain_round(now()?, Some(originals));
+        let result = self.maintain_round(observed, Some(originals));
         self.round_metadata.set(None);
         result
     }
