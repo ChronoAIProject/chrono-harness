@@ -89,6 +89,11 @@ fn api(
     )))
 }
 
+/// 显式原件读取复用发布者的原退出／JSON 判法，不允许写入或接受缺失。
+pub(crate) fn read_api(commands: &mut impl Commands, endpoint: String) -> Result<Value, String> {
+    api(commands, "GET", endpoint, None, false)?.ok_or_else(|| error("missing original API result"))
+}
+
 /// 安装消费者沿用发布 API 的缺失判法，只接受当前仓库、版本的两个 GET 查询。
 pub(crate) fn original_absence(
     process: &Value,
@@ -278,6 +283,29 @@ fn verify_tag(
         }
     }
     Err(error("release tag nesting exceeds supported bound"))
+}
+
+/// 对已公开版本只读复核；晋升不得续传或修补作为来源的测试版。
+pub(crate) fn verify_published(
+    config: &Config,
+    identity: &Identity,
+    assets: &BTreeMap<String, Asset>,
+    commands: &mut impl Commands,
+) -> Result<Value, String> {
+    let ci = verify_ci(config, identity, commands)?;
+    let release = read_api(
+        commands,
+        format!(
+            "repos/{}/releases/tags/{}",
+            config.repository, identity.version
+        ),
+    )?;
+    let id = release_header(&release, identity)?;
+    if release["draft"] != false || !remote_assets(config, id, assets, commands)?.is_empty() {
+        return Err(error("origin must remain a complete public release"));
+    }
+    verify_tag(config, identity, commands, false)?;
+    Ok(json!({"release":release,"verified_ci":ci,"assets":assets}))
 }
 
 pub fn publish(

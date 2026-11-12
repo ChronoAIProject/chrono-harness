@@ -140,9 +140,27 @@ Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，�
 
 ## 持续交付与恢复
 
-本批同时修改产品程序和宿主政策：`chrono-ci` 投影触发、固定检出和作业权限；Rust 发布程序负责版本、原件和 GitHub 状态；宿主的 [delivery.json](../.chrono-harness/release/delivery.json) 选择仓库、落地工作流 ID／路径／分支、平台包目录、frontend 和实际工具。新增一个发布作业，复用两平台 collector 与 Linux frontend；构建与测试原作业保持原命令和时限。新增 IO、作业和存储的总成本未知。
+### 正式版复用最终测试版
 
-v2 可选 `delivery` 明确登记 `workflow`、`branch` 和 `publisher`。它与直接 push 触发互斥。所有作业检出原完成事件的 `head_sha`；只有发布作业取得 `contents: write` 和 `actions: read`，并接收当前 token。其余作业维持只读。手动输入 `channel` 可为 build、preview 或 stable；公开渠道还须提供固定 `source`、`verified_run` 和 `verified_attempt`。stable 另需 `version`，且必须等于该源码中的正式计划版本。
+正式发布通过同一 `release.deliver` 入口晋升，显式提供 `preview_run` 和 `preview_attempt`。它们点名已经完成且成功的最终测试版发布运行；缺少、过期或损坏的原件阻止晋升，不自动回退为重建。正式版仍使用同一完整源码、原 dev CI、计划版本和固定测试版标签作为工作流 ref。
+
+`delivery.promotion_build_jobs` 逐项登记正式版不再重复执行的作业。本宿主选择原两平台的 76 个构建、验证和 collector 作业；测试版与 build 通道保留全部原操作、时限、下载和产物。正式版重新执行两平台 frontend、现有发布者和两平台安装，共 5 个作业。publisher 可在正式通道消费明确跳过的构建依赖，但仍核当前 Linux frontend 成功；跳过不是测试通过，也不生成替代构建回执。
+
+发布者通过固定 attempt API 核来源运行的仓库、工作流 ID／路径、事件和成功终态，再用原工作流 head 与候选的工作流 blob 核执行合同。原 publisher artifact 名来自当前登记和显式 run／attempt；按精确名称查询必须只有一个未过期工件；下载前后均核同一不可变 ID 及完整元数据，名称在期间被重建也须失败。平台 artifact ID 和实际生产 attempt 来自该原发布回执的 `dependencies`，仍逐项核原包的源码、测试版身份、collector、原始输出、工具字节及原平台跨度；不会把沿用的 attempt 1 改成完成运行的 attempt 2。
+
+原测试版的公开状态、完整资产、标签源码和原 dev CI 由发布者既有的只读判法复核；平台包成员须与该公开测试版相同。既有 distribution `assemble` 接受成对的 `--from-version`／`--version`，核输入的精确版本与原字节，在新的原子输出中生成正式清单和安装入口。输入清单、二进制与回执保持原样。正式版回执另记 `chrono-release-promotion/v1`，引用原 run、工作流观察、工件元数据和原回执；导入原件归入本次 publication artifact，沿用其有限保留政策。正式公开和两平台 HTTPS 安装继续执行原不可覆盖、原进程与安装字节合同。
+
+**程序与宿主政策同时变化：**新增显式晋升输入及正式作业选择，保留测试版全部构建和验证、正式版安装及公开身份合同。Rust 回归在外部命令边界 mock，核成功晋升、跨 attempt 选择、失败来源、工作流漂移、过期／错工件、下载失败、原件损坏、公开资产冲突和原 CI 不合格。它不能替代原生发布与四下游采用。新增下载、重复归档、维护和整体时间成本尚未测；与 v0.1.2 对照时分别报告实际执行作业、原生产耗时、传输量和运行跨度，不把并行耗时之和当 CPU 或计费时间。
+
+| 问题与负责处 | 生产者、输入和使用方 | 替代方案与验收 |
+| --- | --- | --- |
+| 测试版与正式版重复产生相同工具；原发布者负责晋升 | 成功原发布运行及其不可变工件，供正式发布维护者与四个下游使用 | 单凭源码 SHA 不够；保留原件身份并核新公开版与真实安装 |
+| 组包器要求同版本，无法产生正式清单；distribution 负责新的输出 | 原平台包与显式输入／输出版本，供现有 publisher 使用 | 不改写原包；行为回归核字节不变与失败时无输出 |
+| 原工作流仍会重复构建；chrono-ci 只投影明确登记 | 宿主 build job 列表与 channel，供 GitHub 执行 | 不按名称猜角色；测试版保留全部作业，正式运行核实际选择及原件 |
+
+本批同时修改产品程序和宿主政策：`chrono-ci` 投影触发、固定检出和作业权限；Rust 发布程序负责版本、原件和 GitHub 状态；宿主的 [delivery.json](../.chrono-harness/release/delivery.json) 选择仓库、落地工作流 ID／路径／分支、平台包目录、frontend 和实际工具。新增一个发布作业，复用两平台 collector 与 Linux frontend；测试版与 build 通道的构建及测试保持原命令和时限。新增 IO、作业和存储的总成本未知。
+
+v2 可选 `delivery` 明确登记 `workflow`、`branch` 和 `publisher`。它与直接 push 触发互斥。所有作业检出原完成事件的 `head_sha`；只有发布作业取得 `contents: write` 和 `actions: read`，并接收当前 token。其余作业维持只读。手动输入 `channel` 可为 build、preview 或 stable；公开渠道还须提供固定 `source`、`verified_run` 和 `verified_attempt`。stable 另需匹配源码计划的 `version`，以及最终测试版的 `preview_run`／`preview_attempt`，依上文晋升合同消费已验收原件。
 
 GitHub 的执行工作流由派发的 `--ref` 决定，`source` 只决定各作业检出的源码。派发前核两个固定修订的发布源、needs／downloads 与构建配方是否匹配；手动正式发布统一用已核验的最终测试版标签作为 `--ref`，标签须解析到完整 source，新 run 的工作流 head 也须一致。不要移动标签。自动 `workflow_run` 使用默认分支的工作流，列表 head 与发行源码可能不同；仅看到 head 不同不能判失败，但实际执行图与候选合同不符时，不能宣称该运行验收了候选。
 

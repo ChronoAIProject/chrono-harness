@@ -64,6 +64,60 @@ pub fn boolean_fields(fields: &[(Option<bool>, bool)]) -> (valid: bool)
     true
 }
 
+pub fn single_original(count: Option<u64>, rows: usize) -> (valid: bool)
+    ensures valid == (count == Some(1u64) && rows == 1),
+{
+    count == Some(1) && rows == 1
+}
+
+/// API 原字段直接输入；缺字段、过期或选中另一不可变工件均失败。
+pub fn promotion_artifact(id: Option<u64>, selected: Option<u64>, expired: Option<bool>, size: Option<u64>,
+    numbers: &[(Option<u64>, u64)], texts: &[(Option<&str>, &str)]) -> (valid: bool)
+    ensures valid == (positive_spec(id) && positive_spec(size) && expired == Some(false)
+        && (selected is None || id == selected)
+        && (forall|i: int| 0 <= i < numbers.len() ==> numbers@[i].0 == Some(numbers@[i].1))
+        && (forall|i: int| 0 <= i < texts.len() ==> text_pair(texts@[i]))),
+{
+    positive(id) && positive(size) && expired == Some(false)
+        && (selected.is_none() || id == selected) && number_fields(numbers) && text_fields(texts)
+}
+
+pub open spec fn positive_spec(value: Option<u64>) -> bool {
+    value is Some && value.unwrap() > 0
+}
+
+/// 只接受显式原运行支持的两个触发事件与完整工作流 head。
+pub fn promotion_run(numbers: &[(Option<u64>, u64)], texts: &[(Option<&str>, &str)], event: Option<&str>, head: Option<&[u8]>) -> (valid: bool)
+    ensures valid == (
+        (forall|i: int| 0 <= i < numbers.len() ==> numbers@[i].0 == Some(numbers@[i].1))
+        && (forall|i: int| 0 <= i < texts.len() ==> text_pair(texts@[i]))
+        && (text_pair((event,"workflow_run")) || text_pair((event,"workflow_dispatch")))
+        && (match head { Some(value) => identifiers::oid(value@), None => false })),
+{
+    number_fields(numbers) && text_fields(texts)
+        && (text_fields(&[(event,"workflow_run")]) || text_fields(&[(event,"workflow_dispatch")]))
+        && match head { Some(value) => identifiers::valid_oid(value), None => false }
+}
+
+/// 保留原生产时间窗；正式晋升不会重新计算或刷新原平台起点。
+pub fn original_spans(start: u64, finish: u64, platform: Option<u64>, span: Option<u64>, unit_seconds: u64, platform_seconds: u64) -> (valid: bool)
+    ensures valid == (match platform {
+        Some(p) => p > 0 && p <= start && start <= finish
+            && finish as int - start as int <= unit_seconds as int * 1000000000
+            && span == Some((finish - p) as u64)
+            && finish as int - p as int <= platform_seconds as int * 1000000000,
+        None => false,
+    }),
+{
+    match platform {
+        Some(p) => p > 0 && p <= start && start <= finish
+            && (finish - start) as u128 <= unit_seconds as u128 * 1000000000u128
+            && span == Some(finish - p)
+            && (finish - p) as u128 <= platform_seconds as u128 * 1000000000u128,
+        None => false,
+    }
+}
+
 /// 0=成功，1=允许缺失的原生 404，2=失败。失败不能因 absent 标志变成成功。
 pub fn api_outcome(exit: i32, status: Option<&str>, message: Option<&str>, absent: bool) -> (out: u8)
     ensures out == if exit == 0 { 0u8 }
