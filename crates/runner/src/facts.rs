@@ -310,27 +310,49 @@ impl Reader {
         crate::verified_status::parse_git_index_flag_rows(&observations)
     }
     pub fn checkout(&self, root: &Path, candidate: &str) -> Result<Checkout, String> {
-        let head = utf8(self.git(root, &["rev-parse", "HEAD"])?)?.trim().into();
-        let tracked = self.tracked_changes(root, candidate)?;
-        let untracked =
-            paths(self.git(root, &["ls-files", "--others", "--exclude-standard", "-z"])?)?;
-        let ignored = paths(self.git(
-            root,
-            &[
-                "ls-files",
-                "--others",
-                "--ignored",
-                "--exclude-standard",
-                "-z",
-            ],
-        )?)?;
-        let untracked = crate::verified_status::normalize_checkout_paths(untracked, ignored);
-        Ok(Checkout {
-            head,
-            tracked,
-            untracked,
-            index_flags: self.index_flags(root)?,
-        })
+        crate::verified_status::collect_checkout(
+            self,
+            |reader| {
+                let head = reader
+                    .git(root, &["rev-parse", "HEAD"])
+                    .and_then(utf8)
+                    .map(|text| text.trim().to_owned());
+                (reader, head)
+            },
+            |reader| (reader, reader.tracked_changes(root, candidate)),
+            |reader| {
+                crate::verified_status::collect_checkout_untracked(
+                    reader,
+                    |reader| {
+                        (
+                            reader,
+                            reader
+                                .git(root, &["ls-files", "--others", "--exclude-standard", "-z"])
+                                .and_then(paths),
+                        )
+                    },
+                    |reader| {
+                        (
+                            reader,
+                            reader
+                                .git(
+                                    root,
+                                    &[
+                                        "ls-files",
+                                        "--others",
+                                        "--ignored",
+                                        "--exclude-standard",
+                                        "-z",
+                                    ],
+                                )
+                                .and_then(paths),
+                        )
+                    },
+                )
+            },
+            |reader| (reader, reader.index_flags(root)),
+        )
+        .1
     }
     pub fn untracked_excluding(
         &self,
@@ -352,12 +374,20 @@ impl Reader {
         candidate: &str,
         artifacts: &[&str],
     ) -> Result<Checkout, String> {
-        Ok(Checkout {
-            head: utf8(self.git(root, &["rev-parse", "HEAD"])?)?.trim().into(),
-            tracked: self.tracked_changes(root, candidate)?,
-            untracked: self.untracked_excluding(root, artifacts)?,
-            index_flags: self.index_flags(root)?,
-        })
+        crate::verified_status::collect_checkout(
+            self,
+            |reader| {
+                let head = reader
+                    .git(root, &["rev-parse", "HEAD"])
+                    .and_then(utf8)
+                    .map(|text| text.trim().to_owned());
+                (reader, head)
+            },
+            |reader| (reader, reader.tracked_changes(root, candidate)),
+            |reader| (reader, reader.untracked_excluding(root, artifacts)),
+            |reader| (reader, reader.index_flags(root)),
+        )
+        .1
     }
     /// Preserve the exact source bytes while enforcing the output owner's reservation before writes.
     pub fn export_limited(
