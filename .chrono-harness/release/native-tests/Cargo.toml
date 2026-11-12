@@ -86,6 +86,6 @@ bench = false
 
 [[bin]]
 name = "chrono-test-release-frontend-tool"
-path = "tests/support/frontend_tool.rs"
+path = "tests/support/context.rs"
 test = false
 bench = false
