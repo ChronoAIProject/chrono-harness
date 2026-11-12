@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub const MAX_FILES: usize = 64;
+pub use crate::verified_rolling::MAX_FILES;
 
 pub struct RollingFile {
     directory: PathBuf,
@@ -29,7 +29,7 @@ impl RollingFile {
     /// `directory` is exclusively adopted for this program-owned log family.
     /// `max_files` includes the current file. Existing excess members are retired on open.
     pub fn open(directory: &Path, max_bytes: u64, max_files: usize) -> io::Result<Self> {
-        if max_bytes == 0 || !(1..=MAX_FILES).contains(&max_files) {
+        if !crate::verified_rolling::valid_bounds(max_bytes, max_files) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "log bounds must be positive; max_files must be at most 64",
@@ -125,7 +125,7 @@ impl Write for RollingFile {
         if bytes.is_empty() {
             return Ok(0);
         }
-        if bytes.len() as u64 > self.max_bytes {
+        if !crate::verified_rolling::record_fits(bytes.len() as u64, self.max_bytes) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
                 "log record exceeds max_bytes; record was not written",
@@ -138,7 +138,7 @@ impl Write for RollingFile {
         } else {
             0
         };
-        if length > self.max_bytes - bytes.len() as u64 {
+        if crate::verified_rolling::needs_rotation(length, self.max_bytes, bytes.len() as u64) {
             self.rotate()?;
         }
         // Reopen after acquiring the family lock so a different process's rotation cannot
