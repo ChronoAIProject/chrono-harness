@@ -1340,7 +1340,12 @@ fn retained_effective_environment_api_preserves_old_edges_and_rejects_unknown_fa
         chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), &[], &evidence).unwrap();
     assert!(findings.is_empty());
     assert_eq!(impact.tests, vec!["test:t"]);
-    assert!(impact.seed_causes.iter().any(|s| s.node == "environment:MODE"));
+    assert!(
+        impact
+            .seed_causes
+            .iter()
+            .any(|s| s.node == "environment:MODE")
+    );
     evidence["endpoints"]["candidate"]["environment"]["UNKNOWN"] = json!("unrepresented");
     evidence["identity"] = json!(chrono_harness::wire::digest(&evidence["endpoints"]).unwrap());
     assert!(
