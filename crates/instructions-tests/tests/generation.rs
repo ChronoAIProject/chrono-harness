@@ -1318,6 +1318,11 @@ fn failure_after_fresh_alias_publication_removes_all_new_material() {
 
 #[test]
 fn incomplete_fresh_alias_rollback_names_unrestored_link_and_allows_explicit_recovery() {
+    if !isolated_capability::isolated_capability_test(
+        "incomplete_fresh_alias_rollback_names_unrestored_link_and_allows_explicit_recovery",
+    ) {
+        return;
+    }
     let host = Host::new();
     let failure =
         test_support::init_with_failure(&host.root, &host.method, &host.context, 5, Some(4))
