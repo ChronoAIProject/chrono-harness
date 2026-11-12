@@ -61,13 +61,7 @@ pub(super) fn observe(root: &Path, path: &str) -> Result<Entry, String> {
 impl Manifest {
     /// Each step consumes one declared child after a finite directory snapshot.
     /// Snapshot names and positions survive interruption in owner metadata.
-    pub fn step(
-        &mut self,
-        root: &Path,
-        path: &str,
-        limit: usize,
-        _byte_limit: u64,
-    ) -> Result<(), String> {
+    pub fn step(&mut self, root: &Path, path: &str, limit: usize) -> Result<(), String> {
         if self.sealed {
             return Ok(());
         }

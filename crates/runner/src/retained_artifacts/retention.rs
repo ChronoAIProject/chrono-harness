@@ -1343,7 +1343,7 @@ impl Inventory {
             {
                 break;
             }
-            observed.step(&self.root, path, self.policy.max_manifest_nodes, byte_limit)?;
+            observed.step(&self.root, path, self.policy.max_manifest_nodes)?;
         }
         if !observed.sealed || observed.bytes > byte_limit {
             return Err(
@@ -2483,7 +2483,6 @@ impl Inventory {
                     &self.root,
                     &output.path,
                     self.policy.max_manifest_nodes,
-                    output.byte_limit.unwrap_or(self.policy.max_output_bytes),
                 ) {
                     accounting_errors.push(json!({"id":output.id,"reason":error}));
                     break;
@@ -2652,7 +2651,6 @@ impl Inventory {
                         &self.root,
                         &o.path,
                         self.policy.max_manifest_nodes,
-                        self.policy.max_output_bytes,
                     ) {
                         if o.tree && error.contains("capacity") {
                             l.outputs[i].overflow_disposal = true;
@@ -3545,7 +3543,6 @@ impl Publication {
                     &self.inventory.root,
                     &o.path,
                     self.inventory.policy.max_manifest_nodes,
-                    self.byte_limit,
                 ) {
                     accounting_error = Some(error);
                     break;
