@@ -4,7 +4,7 @@ mod support;
 use chrono_harness::{facts, sha256, wire};
 use chrono_judge_filemap::{IMPACT_SCHEMA, Impact};
 use serde_json::{Value, json};
-use std::{fs, path::Path, process::Command};
+use std::{collections::BTreeSet, fs, path::Path, process::Command};
 use support::*;
 struct Host {
     dir: tempfile::TempDir,
@@ -473,9 +473,14 @@ fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impa
             {"from":"project:p","kind":"test-execution","to":"test:t","origin":"both"}
         ])
     );
+    assert!(r["impact"].get("seeds").is_none());
     assert_eq!(
-        r["impact"]["seeds"],
-        json!([
+        impact
+            .seed_causes
+            .iter()
+            .map(|s| s.node.as_str())
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
             "file:.chrono-harness/judges.json",
             "file:src.bin",
             "judge:filemap",

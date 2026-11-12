@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use verified_graph::valid_types;
 
-pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v5";
+pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v6";
 /// Complete endpoint definitions; zero is absent, several are ambiguous.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
@@ -60,7 +60,6 @@ pub struct Impact {
     pub changes: Vec<Change>,
     pub nodes: BTreeMap<String, NodePair>,
     pub edges: Vec<UnionEdge>,
-    pub seeds: Vec<String>,
     pub seed_causes: Vec<Seed>,
     pub closure: Closure,
     pub tests: Vec<String>,
@@ -455,12 +454,6 @@ fn produce_environment(
             changes,
             nodes,
             edges,
-            seeds: seeds
-                .iter()
-                .map(|s| s.node.clone())
-                .collect::<BTreeSet<_>>()
-                .into_iter()
-                .collect(),
             seed_causes: seeds,
             closure,
             tests: required_tests
