@@ -1914,6 +1914,7 @@ fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
             output.exit_code,
             serde_json::from_str::<Value>(&output.stdout).unwrap(),
         );
+        assert_eq!(result.1["schema"], "chrono-pr-result/v2");
         if let Ok(mut ready) = UnixStream::connect(h.root.path().join("response.sock")) {
             let bytes = serde_json::to_vec(&json!({"completed_before_handshake":result})).unwrap();
             let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());
