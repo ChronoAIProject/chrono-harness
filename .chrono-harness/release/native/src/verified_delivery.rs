@@ -87,16 +87,16 @@ pub open spec fn positive_spec(value: Option<u64>) -> bool {
 }
 
 /// 只接受显式原运行支持的两个触发事件与完整工作流 head。
-pub fn promotion_run(numbers: &[(Option<u64>, u64)], texts: &[(Option<&str>, &str)], event: Option<&str>, head: Option<&str>) -> (valid: bool)
+pub fn promotion_run(numbers: &[(Option<u64>, u64)], texts: &[(Option<&str>, &str)], event: Option<&str>, head: Option<&[u8]>) -> (valid: bool)
     ensures valid == (
         (forall|i: int| 0 <= i < numbers.len() ==> numbers@[i].0 == Some(numbers@[i].1))
         && (forall|i: int| 0 <= i < texts.len() ==> text_pair(texts@[i]))
         && (text_pair((event,"workflow_run")) || text_pair((event,"workflow_dispatch")))
-        && (match head { Some(value) => identifiers::oid(value.spec_bytes()), None => false })),
+        && (match head { Some(value) => identifiers::oid(value@), None => false })),
 {
     number_fields(numbers) && text_fields(texts)
         && (text_fields(&[(event,"workflow_run")]) || text_fields(&[(event,"workflow_dispatch")]))
-        && match head { Some(value) => identifiers::valid_oid(value.as_bytes()), None => false }
+        && match head { Some(value) => identifiers::valid_oid(value), None => false }
 }
 
 /// 保留原生产时间窗；正式晋升不会重新计算或刷新原平台起点。

@@ -146,7 +146,7 @@ Linux 政策也声明公共依赖图实际引用的工具槽与环境变量，�
 
 `delivery.promotion_build_jobs` 逐项登记正式版不再重复执行的作业。本宿主选择原两平台的 76 个构建、验证和 collector 作业；测试版与 build 通道保留全部原操作、时限、下载和产物。正式版重新执行两平台 frontend、现有发布者和两平台安装，共 5 个作业。publisher 可在正式通道消费明确跳过的构建依赖，但仍核当前 Linux frontend 成功；跳过不是测试通过，也不生成替代构建回执。
 
-发布者通过固定 attempt API 核来源运行的仓库、工作流 ID／路径、事件和成功终态，再用原工作流 head 与候选的工作流 blob 核执行合同。原 publisher artifact 名来自当前登记和显式 run／attempt；按精确名称查询必须只有一个未过期工件。平台 artifact ID 和实际生产 attempt 来自该原发布回执的 `dependencies`，仍逐项核原包的源码、测试版身份、collector、原始输出、工具字节及原平台跨度；不会把沿用的 attempt 1 改成完成运行的 attempt 2。
+发布者通过固定 attempt API 核来源运行的仓库、工作流 ID／路径、事件和成功终态，再用原工作流 head 与候选的工作流 blob 核执行合同。原 publisher artifact 名来自当前登记和显式 run／attempt；按精确名称查询必须只有一个未过期工件；下载前后均核同一不可变 ID 及完整元数据，名称在期间被重建也须失败。平台 artifact ID 和实际生产 attempt 来自该原发布回执的 `dependencies`，仍逐项核原包的源码、测试版身份、collector、原始输出、工具字节及原平台跨度；不会把沿用的 attempt 1 改成完成运行的 attempt 2。
 
 原测试版的公开状态、完整资产、标签源码和原 dev CI 由发布者既有的只读判法复核；平台包成员须与该公开测试版相同。既有 distribution `assemble` 接受成对的 `--from-version`／`--version`，核输入的精确版本与原字节，在新的原子输出中生成正式清单和安装入口。输入清单、二进制与回执保持原样。正式版回执另记 `chrono-release-promotion/v1`，引用原 run、工作流观察、工件元数据和原回执；导入原件归入本次 publication artifact，沿用其有限保留政策。正式公开和两平台 HTTPS 安装继续执行原不可覆盖、原进程与安装字节合同。
 

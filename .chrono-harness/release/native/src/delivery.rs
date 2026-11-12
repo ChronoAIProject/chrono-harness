@@ -1002,7 +1002,7 @@ pub mod promotion {
                 (run["conclusion"].as_str(), "success"),
             ],
             run["event"].as_str(),
-            run["head_sha"].as_str(),
+            run["head_sha"].as_str().map(str::as_bytes),
         ) {
             return Err(error(
                 "original preview workflow attempt is not successful or has another identity",
@@ -1096,6 +1096,21 @@ pub mod promotion {
         // CLI 的退出不能代替下载结果；后续逐个核原回执、原流及包字节。
         if !destination.is_dir() {
             return Err(error("original artifact download produced no directory"));
+        }
+        let confirmed = publication::read_api(
+            commands,
+            format!("repos/{repository}/actions/runs/{id}/artifacts?name={name}&per_page=100"),
+        )?;
+        let fixed_id = artifact["id"].to_string();
+        let confirmed = select_artifact(
+            &confirmed,
+            name,
+            id,
+            run["head_sha"].as_str().unwrap(),
+            Some(&fixed_id),
+        )?;
+        if confirmed != artifact {
+            return Err(error("original artifact metadata changed during download"));
         }
         Ok(artifact)
     }

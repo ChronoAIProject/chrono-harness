@@ -658,6 +658,7 @@ mod promotion_tests {
         release: Value,
         assets: Vec<Value>,
         bad: &'static str,
+        metadata_reads: usize,
         calls: Vec<(String, Vec<String>)>,
     }
     impl Commands for Mock {
@@ -729,6 +730,7 @@ mod promotion_tests {
                 return reply(self.run.clone());
             }
             if path.contains("/artifacts?") {
+                self.metadata_reads += 1;
                 let name = if path.contains("name=publication-") {
                     "publication-20-2"
                 } else {
@@ -736,7 +738,7 @@ mod promotion_tests {
                     "package-20-1"
                 };
                 return reply(
-                    json!({"total_count":1,"artifacts":[{"id":if name.starts_with("publication") {32} else if self.bad=="artifact" {31} else {30},"name":name,"expired":self.bad=="expired","size_in_bytes":123,"workflow_run":{"id":20,"head_sha":"c".repeat(40)}}]}),
+                    json!({"total_count":1,"artifacts":[{"id":if name.starts_with("publication") {if self.bad=="replaced" && self.metadata_reads > 1 {33} else {32}} else if self.bad=="artifact" {31} else {30},"name":name,"expired":self.bad=="expired","size_in_bytes":123,"workflow_run":{"id":20,"head_sha":"c".repeat(40)}}]}),
                 );
             }
             if path.ends_with("/actions/runs/10/attempts/1") {
@@ -866,6 +868,7 @@ mod promotion_tests {
             release,
             assets: remote,
             bad: "none",
+            metadata_reads: 0,
             calls: vec![],
         };
         (f, loaded, config, environment, mock)
@@ -935,6 +938,7 @@ mod promotion_tests {
             "tag",
             "ci-source",
             "missing-input",
+            "replaced",
         ] {
             let (f, loaded, config, mut environment, mut mock) = setup();
             mock.bad = bad;

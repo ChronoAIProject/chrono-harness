@@ -55,16 +55,18 @@ fn promotion_does_not_refresh_the_original_platform_time_window() {
 fn promotion_requires_the_original_run_event_and_complete_workflow_head() {
     proof {
         reveal_strlit("workflow_run"); reveal_strlit("workflow_dispatch"); reveal_strlit("push");
-        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"); reveal_strlit("a");
+
         assert("push"@.len() != "workflow_run"@.len());
         assert("push"@.len() != "workflow_dispatch"@.len());
     }
-    let valid = delivery::promotion_run(&[(Some(2),2)], &[], Some("workflow_run"), Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-    let manual = delivery::promotion_run(&[], &[], Some("workflow_dispatch"), Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-    let wrong = delivery::promotion_run(&[], &[], Some("push"), Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-    let missing = delivery::promotion_run(&[], &[], None, Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
-    let short = delivery::promotion_run(&[], &[], Some("workflow_run"), Some("a"));
-    let attempt = delivery::promotion_run(&[(Some(3),2)], &[], Some("workflow_run"), Some("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"));
+    let head = [97u8; 40];
+    assert(head@[0] == 97);
+    let valid = delivery::promotion_run(&[(Some(2),2)], &[], Some("workflow_run"), Some(&head));
+    let manual = delivery::promotion_run(&[], &[], Some("workflow_dispatch"), Some(&head));
+    let wrong = delivery::promotion_run(&[], &[], Some("push"), Some(&head));
+    let missing = delivery::promotion_run(&[], &[], None, Some(&head));
+    let short = delivery::promotion_run(&[], &[], Some("workflow_run"), Some(&[97u8]));
+    let attempt = delivery::promotion_run(&[(Some(3),2)], &[], Some("workflow_run"), Some(&head));
     expect_recipe(valid && manual && !wrong && !missing && !short && !attempt);
 }
 
