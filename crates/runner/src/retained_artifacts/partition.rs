@@ -422,7 +422,7 @@ impl Inventory {
         Ok(errors)
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
-        let (leases, directories) = self.path_gates(paths, true, true)?;
+        let (leases, directories) = self.path_gates(paths, true, true, true)?;
         let targets = paths
             .iter()
             .map(|path| Ok((path.clone(), self.path_directory(path)?)))
@@ -776,6 +776,7 @@ impl Inventory {
         paths: &[String],
         wait: bool,
         read_ancestor_addresses: bool,
+        transfer: bool,
     ) -> Result<(Vec<DirectoryLease>, BTreeMap<String, PathBuf>), String> {
         let mut requests = BTreeMap::<String, bool>::new();
         for path in paths {
@@ -827,7 +828,14 @@ impl Inventory {
                 }
                 initial.stable()?;
             }
-            let lease = DirectoryLease::acquire_local(
+            // External removal belongs to another owner and may explicitly
+            // hand its capability to a native child. Metadata calls are local.
+            let acquire = if transfer {
+                DirectoryLease::acquire
+            } else {
+                DirectoryLease::acquire_local
+            };
+            let lease = acquire(
                 &directory,
                 exclusive,
                 wait.then(|| Duration::from_secs(5).saturating_sub(began.elapsed())),
@@ -903,7 +911,7 @@ impl Inventory {
         let discovery =
             verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
         let discover_under_lease = discovery.object_excluded;
-        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
+        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true, false)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
         if birth.is_some() && !occupied.is_empty() {
@@ -1065,7 +1073,8 @@ impl Inventory {
                 })
                 .map(|r| r.path.clone())
                 .collect();
-            let (additional, dirs) = self.path_gates(&target_paths, wait, !discover_under_lease)?;
+            let (additional, dirs) =
+                self.path_gates(&target_paths, wait, !discover_under_lease, false)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
         }
