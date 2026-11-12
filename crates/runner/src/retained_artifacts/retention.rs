@@ -741,7 +741,7 @@ impl Inventory {
         let key = format!("{kind}-{}", sha256(address.as_bytes()));
         let directory = no_symlink_parents(&self.directory, &format!("transaction-gates/{key}"))?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-        let gate = crate::ownership::DirectoryLease::acquire(
+        let gate = crate::ownership::DirectoryLease::acquire_local(
             &directory,
             true,
             Some(Duration::from_secs(5)),
@@ -2315,7 +2315,8 @@ impl Inventory {
     fn retire_transaction(&self, key: &str) -> Result<bool, String> {
         let directory = no_symlink_parents(&self.directory, &format!("transaction-gates/{key}"))?;
         fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
-        let Some(gate) = crate::ownership::DirectoryLease::acquire(&directory, true, None)? else {
+        let Some(gate) = crate::ownership::DirectoryLease::acquire_local(&directory, true, None)?
+        else {
             return Ok(false);
         };
         let Some(mut record) = self.transaction(key)? else {
