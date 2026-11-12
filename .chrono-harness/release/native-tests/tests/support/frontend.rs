@@ -83,21 +83,9 @@ impl Fixture {
             "registered bootstrap fixture\n",
         )
         .unwrap();
-        let git = |revision| {
-            String::from_utf8(
-                Command::new(&git_tool)
-                    .args(["rev-parse", revision])
-                    .current_dir(root)
-                    .output()
-                    .unwrap()
-                    .stdout,
-            )
-            .unwrap()
-            .trim()
-            .to_owned()
-        };
+        // context 中的小型 Git 替身负责这组固定源码观察，无需仓库建模。
         let source =
-            json!({"commit":git("HEAD"), "tree":git("HEAD^{tree}"), "dirty":false, "error":null});
+            json!({"commit":"a".repeat(40), "tree":"b".repeat(40), "dirty":false, "error":null});
         let mut registrations = serde_json::Map::new();
         for path in [
             ".chrono-harness/ci/bootstrap-release.json",
