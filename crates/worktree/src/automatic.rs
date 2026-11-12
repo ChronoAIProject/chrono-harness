@@ -569,10 +569,16 @@ struct ManagedProcessOriginals {
 }
 impl ManagedProcessOriginals {
     fn begin(report: &mut Value) -> Result<Self, String> {
-        let root = PathBuf::from(report["source_root"].as_str().ok_or("managed source root")?);
+        let root = PathBuf::from(
+            report["source_root"]
+                .as_str()
+                .ok_or("managed source root")?,
+        );
         let path = format!(
             "{}.process",
-            report["report_path"].as_str().ok_or("managed report path")?
+            report["report_path"]
+                .as_str()
+                .ok_or("managed report path")?
         );
         let directory = no_symlink_parents(&root, &path)?;
         let publication = chrono_harness::retained_artifacts::retention::create_adopted(
@@ -584,7 +590,11 @@ impl ManagedProcessOriginals {
         )?;
         report["managed_process_original"] = value!({"path":path,"joined":false});
         crate::recovery::bind_report_inputs(&root, report)?;
-        Ok(Self { root, directory, publication })
+        Ok(Self {
+            root,
+            directory,
+            publication,
+        })
     }
 
     fn run(
@@ -626,14 +636,24 @@ impl ManagedProcessOriginals {
         for field in ["stdout", "stderr", "stdout_bytes", "stderr_bytes"] {
             receipt.as_object_mut().unwrap().remove(field);
         }
+        receipt["schema"] = value!("chrono-worktree-managed-process-result/v1");
+        receipt["source_root"] = value!(&self.root);
         receipt["environment_representation"] = value!("sha256");
-        receipt["stdout_original"] = value!({"path":"stdout","sha256":process.stdout_sha256,"length":process.stdout_bytes.len()});
-        receipt["stderr_original"] = value!({"path":"stderr","sha256":process.stderr_sha256,"length":process.stderr_bytes.len()});
+        receipt["stdout_original"] = value!({"path":paths[0].strip_prefix(&self.root).map_err(|e| e.to_string())?,"sha256":process.stdout_sha256,"length":process.stdout_bytes.len()});
+        receipt["stderr_original"] = value!({"path":paths[1].strip_prefix(&self.root).map_err(|e| e.to_string())?,"sha256":process.stderr_sha256,"length":process.stderr_bytes.len()});
         self.record("result.json", &receipt)?;
         chrono_harness::validate_launch_evidence(&paths[2], &process)?;
         for (path, expected, length) in [
-            (&paths[0], &process.stdout_sha256, process.stdout_bytes.len()),
-            (&paths[1], &process.stderr_sha256, process.stderr_bytes.len()),
+            (
+                &paths[0],
+                &process.stdout_sha256,
+                process.stdout_bytes.len(),
+            ),
+            (
+                &paths[1],
+                &process.stderr_sha256,
+                process.stderr_bytes.len(),
+            ),
         ] {
             let (actual, actual_length) = chrono_harness::file_identity(path)?;
             if actual != *expected || actual_length != length as u64 {
@@ -641,8 +661,10 @@ impl ManagedProcessOriginals {
             }
         }
         if let Some(publication) = self.publication {
-            publication.complete(value!({"kind":"managed-process","owned_work_joined":process.owned_work_joined,
-                "exit_code":process.exit_code,"exit_signal":process.exit_signal}))?;
+            publication.complete(
+                value!({"kind":"managed-process","owned_work_joined":process.owned_work_joined,
+                "exit_code":process.exit_code,"exit_signal":process.exit_signal}),
+            )?;
         }
         report["managed_process_original"]["joined"] = value!(process.owned_work_joined);
         Ok(process)
@@ -2913,6 +2935,13 @@ impl Manager {
                 .push(value!(receipt));
             self.ledger.entries[i].uses.retain(|s| s != token);
             self.save()?;
+            // The exclusive original lease excludes every registered consumer.
+            // The recovery receipt owns the intent and process directory;
+            // releasing publication recovery makes no completion claim.
+            crate::recovery::release_managed_process_original(
+                &self.inputs.policy.coordinator_root,
+                &intent,
+            )?;
         }
         Ok(())
     }
@@ -4424,20 +4453,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                                 )?
                             };
                             drop(manager);
-                            let digest =
-                                chrono_harness::file_identity(Path::new(&command.program))?.0;
-                            let process = chrono_harness::prepared::process_identities(
-                                chrono_harness::run_process_observed(
-                                    target,
-                                    &command,
-                                    &[],
-                                    &digest,
-                                )?,
-                            );
-                            report["managed_process"] =
-                                chrono_harness::full::compact_process(&value!(&process))?;
-                            report["managed_process"]["environment_representation"] =
-                                value!("sha256");
+                            let process = ManagedProcessOriginals::begin(report)?
+                                .run(target, &command, report)?;
                             // This main checkout has no cache enrollment, but
                             // its caller still consumes the agent's pending work.
                             let observer = Manager::open(
@@ -4516,6 +4533,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                             producer.operations.iter().any(|name| name == use_operation)
                         })
                         .map(|producer| producer.id.clone());
+                    let originals = ManagedProcessOriginals::begin(report)?;
                     if e.ownership.is_some() {
                         _use_guard = Some(
                             manager
@@ -4535,7 +4553,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         }
                         owner.cache_pending = true;
                         let owner = owner.clone();
-                        manager.immutable(&format!("use-intent-{token}.json"), &value!({"schema":"chrono-worktree-managed-use-intent/v2","path":target,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,"operation":use_operation,"report_path":report["report_path"]}))?;
+                        manager.immutable(&format!("use-intent-{token}.json"), &value!({"schema":"chrono-worktree-managed-use-intent/v2","path":target,"attachment":e.attachment,"lease_path":owner.path,"lease_id":owner.id,"operation":use_operation,"report_path":report["report_path"],"managed_process_original":report["managed_process_original"]}))?;
                     }
                     manager.ledger.entries[i].uses.push(token.into());
                     manager.save()?;
@@ -4567,13 +4585,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         report["artifact_directory"] =
                             value!({"producer":artifact_producer,"path":artifact.path()});
                     }
-                    let digest = chrono_harness::file_identity(Path::new(&command.program))?.0;
-                    let process = chrono_harness::prepared::process_identities(
-                        chrono_harness::run_process_observed(target, &command, &[], &digest)?,
-                    );
-                    report["managed_process"] =
-                        chrono_harness::full::compact_process(&value!(&process))?;
-                    report["managed_process"]["environment_representation"] = value!("sha256");
+                    let process = originals.run(target, &command, report)?;
                     let artifact_error = if let Some(artifact) = &mut artifact {
                         match artifact.finish(process.failure.is_some() || process.exit_code != 0) {
                             Ok(handoff) => {
@@ -4604,7 +4616,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         true,
                     )?
                     .ok_or("cleanup policy disappeared during managed use")?;
-                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"report_path":report["report_path"],"process":report["managed_process"]}))?;
+                    let receipt=manager.immutable(&format!("use-{token}.json"),&value!({"schema":"chrono-worktree-managed-use-result/v1","path":target,"operation":use_operation,"report_path":report["report_path"],"process":report["managed_process"],"managed_process_original":report["managed_process_original"]}))?;
                     report["managed_use_receipt"] = value!(receipt);
                     crate::recovery::bind_report_inputs(&coordinator, report)?;
                     let i = manager

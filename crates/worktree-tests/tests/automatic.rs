@@ -2358,6 +2358,31 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     );
     assert_eq!(code, 0, "{used} {error}");
     let receipt = used["managed_use_receipt"].clone();
+    let originals = h
+        .root
+        .join(used["managed_process_original"]["path"].as_str().unwrap());
+    assert_eq!(used["managed_process_original"]["joined"], true);
+    let result = json(&fs::read(originals.join("result.json")).unwrap()).unwrap();
+    assert_eq!(result["owned_work_joined"], true);
+    assert_eq!(result["exit_code"], 0);
+    assert_eq!(result["cwd"], value!(target));
+    assert!(result.get("stdout_bytes").is_none());
+    assert_eq!(
+        fs::read(originals.join("stdout")).unwrap(),
+        b"ordinary-work"
+    );
+    assert_eq!(
+        result["stdout_original"]["sha256"],
+        sha256(b"ordinary-work")
+    );
+    assert_eq!(
+        retention_state::snapshot(&h.root)["roots"].get(format!(
+            "recovery:{}",
+            used["managed_process_original"]["path"].as_str().unwrap()
+        )),
+        None,
+        "joined report handoff must release its process publication recovery root"
+    );
     let raw_path = h.root.join(receipt["path"].as_str().unwrap());
     let raw = fs::read(&raw_path).unwrap();
     assert_eq!(
@@ -2368,6 +2393,7 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     let report_bytes = fs::read(&report_path).unwrap();
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
     inventory.maintain().unwrap();
+    assert!(originals.join("result.json").exists());
     assert_eq!(
         fs::read(&report_path).unwrap(),
         report_bytes,
@@ -2456,6 +2482,7 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
         .reference_paths("fixture-use-report", &[])
         .unwrap();
     maintain_original_until_absent(&inventory, &raw_path);
+    maintain_original_until_absent(&inventory, &originals);
     assert!(
         !raw_path.exists(),
         "successful report handoff must not create permanent roots"

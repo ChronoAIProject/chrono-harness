@@ -318,6 +318,11 @@ fn main() -> ExitCode {
             }
         }
         "parent" => {
+            // The runner publishes its launch original before delivering stdin
+            // EOF. This gives the interruption test a real dispatch handshake.
+            let mut input = Vec::new();
+            std::io::Read::read_to_end(&mut io::stdin(), &mut input).unwrap();
+            assert!(input.is_empty());
             // This ordinary native child inherits the actual open descriptors
             // and process group. Its parent intentionally returns first, as the
             // lifecycle test requires a surviving, independently released child.
