@@ -59,7 +59,7 @@ mod runtime {
         let mut framed = format!("{kind} {}\0", bytes.len()).into_bytes();
         framed.extend_from_slice(bytes);
         if width == 64 {
-            chrono_harness::sha256(&framed)
+            format!("{:x}", sha2::Sha256::digest(&framed))
         } else {
             format!("{:x}", Sha1::digest(&framed))
         }
@@ -1470,7 +1470,9 @@ mod runtime {
             command
                 .current_dir(root)
                 .args(["fixture-old", "fixture-new", "1"]);
-            chrono_harness::process_fds::forward_command(&mut command, &[])?;
+            // This external command mock has no local capability scopes. Its
+            // native hook inherits the already inheritable opaque descriptors
+            // and their environment binding, as an ordinary Git child does.
             let output = command.output().map_err(|e| e.to_string())?;
             use std::io::Write;
             io::stdout()

@@ -1234,9 +1234,8 @@
           "tool": "cargo",
           "argv": [
             "update",
-            "--offline",
             "--package",
-            "chrono-diagnostics",
+            "chrono-ci-tests",
             "--manifest-path",
             "crates/ci-tests/Cargo.toml"
           ]
