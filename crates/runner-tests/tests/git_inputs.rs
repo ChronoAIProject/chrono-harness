@@ -2573,7 +2573,10 @@ fn git_mock_fetch_imports_missing_history_without_rewriting_existing_objects() {
     ok(&remote, &["add", "."]);
     ok(&remote, &["commit", "-qm", "head"]);
     let head = ok(&remote, &["rev-parse", "HEAD"]);
-    ok(&local, &["remote", "add", "origin", remote.to_str().unwrap()]);
+    ok(
+        &local,
+        &["remote", "add", "origin", remote.to_str().unwrap()],
+    );
     ok(&local, &["fetch", "--depth=1", "origin", "dev"]);
     assert_eq!(ok(&local, &["rev-parse", "FETCH_HEAD"]), head);
     assert!(!call(&local, &["cat-file", "-e", &base]).status.success());
@@ -2608,10 +2611,7 @@ fn git_mock_fetch_imports_missing_history_without_rewriting_existing_objects() {
         ok(&local, &["show", "FETCH_HEAD:same-payload"]),
         "shared immutable bytes"
     );
-    assert_eq!(
-        ok(&local, &["show", "FETCH_HEAD:new-payload"]),
-        "new bytes"
-    );
+    assert_eq!(ok(&local, &["show", "FETCH_HEAD:new-payload"]), "new bytes");
     let failed = call(&local, &["fetch", "origin", "missing-branch"]);
     assert!(!failed.status.success(), "{failed:?}");
     assert!(!failed.stderr.is_empty(), "{failed:?}");
