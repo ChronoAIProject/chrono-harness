@@ -312,6 +312,36 @@ fn compiler_fingerprint_ignores_git_bytes_but_tracks_active_compilers() {
 }
 
 #[test]
+fn compiler_fingerprint_accepts_distinct_rustup_proxies_but_tracks_custom_launchers() {
+    let mut f = Fixture::new(true);
+    for name in ["rustup", "cargo", "rustc"] {
+        f.report["toolchain"]["tools"][name]["sha256"] = json!("7".repeat(64));
+        f.report["execution_tools"][name]["sha256"] = json!("7".repeat(64));
+    }
+    let first = f.read().unwrap().compiler_fingerprint().unwrap();
+    for name in ["rustup", "cargo", "rustc"] {
+        f.report["toolchain"]["tools"][name]["sha256"] = json!("8".repeat(64));
+        f.report["execution_tools"][name]["sha256"] = json!("8".repeat(64));
+    }
+    assert_eq!(f.read().unwrap().compiler_fingerprint().unwrap(), first);
+
+    for name in ["cargo", "rustc"] {
+        let original = f.report["toolchain"]["tools"][name].clone();
+        let active = f.report["toolchain"]["active_compilers"][name].clone();
+        for key in ["sha256", "size", "mode"] {
+            f.report["toolchain"]["tools"][name][key] = active[key].clone();
+            f.report["execution_tools"][name][key] = active[key].clone();
+        }
+        assert_eq!(f.read().unwrap().compiler_fingerprint().unwrap(), first);
+        f.report["toolchain"]["tools"][name]["sha256"] = json!("9".repeat(64));
+        f.report["execution_tools"][name]["sha256"] = json!("9".repeat(64));
+        assert_ne!(f.read().unwrap().compiler_fingerprint().unwrap(), first);
+        f.report["toolchain"]["tools"][name] = original.clone();
+        f.report["execution_tools"][name] = original;
+    }
+}
+
+#[test]
 fn validated_build_receipt_imports_exact_bytes_mode_and_producing_lineage() {
     use std::os::unix::fs::PermissionsExt;
     let mut f = Fixture::new(true);
