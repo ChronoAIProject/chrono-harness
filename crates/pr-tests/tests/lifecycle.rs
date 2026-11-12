@@ -226,7 +226,10 @@ fn unavailable_child_exit_keeps_the_original_operation_unknown() {
     assert_eq!(result["receipts"][0]["exit_code"], -1, "{result}");
     assert!(result["receipts"][0]["exit_signal"].is_null());
     assert!(result["receipts"][0]["failure"].is_string());
-    assert_eq!(result["receipts"][0]["owned_work_joined"], false, "{result}");
+    assert_eq!(
+        result["receipts"][0]["owned_work_joined"], false,
+        "{result}"
+    );
     assert_eq!(result["operation_state"], "unknown", "{result}");
     let path = result["operation"].as_str().unwrap();
     let saved = fs::read(h.root.path().join(path).join("result.json")).unwrap();
@@ -1047,6 +1050,109 @@ fn continuation_rejects_missing_changed_or_mismatched_originals_before_dispatch(
         assert!(result["error"].is_string(), "{case}: {result}");
         assert_eq!(h.calls().len(), 1, "{case} must reject before dispatch");
         assert!(h.root.path().join(previous).exists());
+    }
+}
+
+#[test]
+fn continuation_requires_joined_process_work_in_each_sealed_receipt_before_dispatch() {
+    for joined in [
+        Some(json!(true)),
+        Some(json!(false)),
+        None,
+        Some(json!("true")),
+    ] {
+        let h = Host::new(vec![api(snapshot()), api(snapshot())]);
+        let (code, mut prior) = h.status();
+        assert_eq!(code, 0, "{prior}");
+        let source = prior["operation"].as_str().unwrap().to_owned();
+        let path = ".chrono-harness/state/pr-operations/operation-completion-fixture";
+        let publication = Inventory::adopted(h.root.path())
+            .unwrap()
+            .unwrap()
+            .plan("pr-original", path, true, json!({"state":"intent"}))
+            .unwrap();
+        publication
+            .materialize_for_reference("fixture-completion-originals")
+            .unwrap();
+        // Publish the complete current contract through the real sealing owner.
+        // A digest failure must not stand in for the completion decision.
+        let write = |name: &str, bytes: &[u8]| {
+            publication
+                .write_file(&h.root.path().join(path).join(name), bytes)
+                .unwrap();
+        };
+        for (index, receipt) in prior["receipts"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .enumerate()
+        {
+            match &joined {
+                Some(value) => receipt["owned_work_joined"] = value.clone(),
+                None => {
+                    receipt.as_object_mut().unwrap().remove("owned_work_joined");
+                }
+            }
+            for field in ["stdout_original", "stderr_original", "launch_original"] {
+                let original = receipt[field]["path"].as_str().unwrap();
+                let member = original.strip_prefix(&format!("{source}/")).unwrap();
+                write(member, &fs::read(h.root.path().join(original)).unwrap());
+                receipt[field]["path"] = json!(format!("{path}/{member}"));
+            }
+            write(
+                &format!("call-{}.result.json", index + 1),
+                &serde_json::to_vec(receipt).unwrap(),
+            );
+        }
+        let mut intent: Value = serde_json::from_slice(
+            &fs::read(h.root.path().join(&source).join("intent.json")).unwrap(),
+        )
+        .unwrap();
+        intent["operation"] = json!(path);
+        write("intent.json", &serde_json::to_vec(&intent).unwrap());
+        write(
+            "config.json",
+            &fs::read(h.root.path().join(".chrono-harness/pr.json")).unwrap(),
+        );
+        write(
+            "object-state.json",
+            &serde_json::to_vec(&json!({
+                "schema":"chrono-pr-object-state/v1", "request":null,
+                "observed":null, "unresolved_create":false
+            }))
+            .unwrap(),
+        );
+        prior["operation"] = json!(path);
+        let original_result = serde_json::to_vec(&prior).unwrap();
+        write("result.json", &original_result);
+        publication.complete_sealed(json!({"exit":0})).unwrap();
+        let (code, result) = h.run(&[
+            "pr-status",
+            "--pr",
+            "42",
+            "--head-sha",
+            HEAD,
+            "--continue-operation",
+            path,
+        ]);
+        if joined == Some(json!(true)) {
+            assert_eq!(code, 0, "{result}");
+            assert_eq!(h.calls().len(), 2, "one current readback");
+        } else {
+            assert_eq!(code, 2, "joined={joined:?}: {result}");
+            assert!(
+                result["error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("continued process completion is not established"),
+                "{result}"
+            );
+            assert_eq!(h.calls().len(), 1, "reject before another remote call");
+        }
+        assert_eq!(
+            fs::read(h.root.path().join(path).join("result.json")).unwrap(),
+            original_result
+        );
     }
 }
 

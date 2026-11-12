@@ -43,6 +43,17 @@ fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
     fixture_remaining(root, rounds.last().unwrap())
 }
 fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
+    maintain_fixture_rounds_until(
+        root,
+        &format!("{expected} remaining fixture outputs"),
+        |round| fixture_remaining(root, round) == expected,
+    )
+}
+fn maintain_fixture_rounds_until(
+    root: &Path,
+    expected: &str,
+    mut complete: impl FnMut(&Value) -> bool,
+) -> Vec<Value> {
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
     for _ in 0..8 {
@@ -56,16 +67,13 @@ fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
                 <= policy["max_bytes_per_round"].as_u64().unwrap(),
             "{round}"
         );
-        let remaining = fixture_remaining(root, &round);
+        let completed = complete(&round);
         rounds.push(round);
-        if remaining == expected {
+        if completed {
             return rounds;
         }
     }
-    panic!(
-        "bounded fixture recovery did not reach {expected}; rounds: {rounds:?}; actual declarations: {}",
-        ledger(root)
-    );
+    panic!("bounded fixture recovery did not reach {expected}; rounds: {rounds:?}");
 }
 fn tree(root: &Path, name: &str) -> String {
     let path = format!(".chrono-harness/state/fixtures/{name}");
@@ -711,10 +719,13 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
             reserved - adopted,
             completed - reserved
         );
-        let round = maintenance(h.path());
+        let rounds =
+            maintain_fixture_rounds_until(h.path(), "independent physical disposal", |_| {
+                !h.path().join(&second_path).exists()
+            });
         assert!(
             !h.path().join(&second_path).exists(),
-            "independent disposal must progress: {round}"
+            "independent disposal must progress: {rounds:?}"
         );
         assert_eq!(
             fs::read(h.path().join(&first_path).join("body")).unwrap(),
@@ -2373,8 +2384,10 @@ fn per_relation_capacity_preserves_independent_outputs_and_recovers_pending_reco
     fs::write(&pending, b"interrupted record replacement").unwrap();
     second.complete(json!({"exit":7})).unwrap();
     assert!(!pending.exists());
-    let round = maintenance(h.path());
-    assert_eq!(round["related_output_capacity"], 1);
+    let rounds = maintain_fixture_rounds_to(h.path(), 1);
+    for round in &rounds {
+        assert_eq!(round["related_output_capacity"], 1);
+    }
     assert!(h.path().join(&first_path).exists());
     assert!(!h.path().join(&second_path).exists());
     drop(first);
@@ -4076,8 +4089,7 @@ fn explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound()
     .unwrap();
     assert!(ninth.is_dir());
     independent.complete(json!({"exit":9})).unwrap();
-    let round = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &round), 8);
+    assert_eq!(maintain_fixture_to(h.path(), 8), 8);
     assert!(!ninth.exists());
     for (n, p) in live.into_iter().enumerate() {
         p.complete(json!({"exit":n})).unwrap();
