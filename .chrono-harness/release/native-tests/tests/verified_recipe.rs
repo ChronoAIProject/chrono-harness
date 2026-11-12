@@ -73,8 +73,23 @@ fn promotion_requires_the_original_run_event_and_complete_workflow_head() {
         assert(delivery::text_pair((Some("workflow_run"), "workflow_run")));
         assert(delivery::text_pair((Some("workflow_dispatch"), "workflow_dispatch")));
     }
-    let valid = delivery::promotion_run(&[(Some(2),2)], &[], Some("workflow_run"), Some(head_bytes));
-    let manual = delivery::promotion_run(&[], &[], Some("workflow_dispatch"), Some(head_bytes));
+    let numbers = [(Some(2u64),2u64)];
+    let no_numbers: &[(Option<u64>, u64)] = &[];
+    let no_texts: &[(Option<&str>, &str)] = &[];
+    let raw_head = Some(head_bytes);
+    let valid = delivery::promotion_run(&numbers, no_texts, Some("workflow_run"), raw_head);
+    let manual = delivery::promotion_run(no_numbers, no_texts, Some("workflow_dispatch"), raw_head);
+    proof {
+        assert forall|i: int| 0 <= i < numbers.len() implies numbers@[i].0 == Some(numbers@[i].1) by {}
+        assert forall|i: int| 0 <= i < no_numbers.len() implies no_numbers@[i].0 == Some(no_numbers@[i].1) by {}
+        assert forall|i: int| 0 <= i < no_texts.len() implies delivery::text_pair(no_texts@[i]) by {}
+        assert(match raw_head { Some(value) => policy::identifiers::oid(value@), None => false });
+        assert(manual == (
+            (forall|i: int| 0 <= i < no_numbers.len() ==> no_numbers@[i].0 == Some(no_numbers@[i].1))
+            && (forall|i: int| 0 <= i < no_texts.len() ==> delivery::text_pair(no_texts@[i]))
+            && (delivery::text_pair((Some("workflow_dispatch"), "workflow_run")) || delivery::text_pair((Some("workflow_dispatch"), "workflow_dispatch")))
+            && (match raw_head { Some(value) => policy::identifiers::oid(value@), None => false })));
+    }
     let wrong = delivery::promotion_run(&[], &[], Some("push"), Some(head_bytes));
     let missing = delivery::promotion_run(&[], &[], None, Some(head_bytes));
     let short = delivery::promotion_run(&[], &[], Some("workflow_run"), Some(&[97u8]));
