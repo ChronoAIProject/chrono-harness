@@ -447,4 +447,269 @@ pub fn no_symlink_path<S, P, C, E, N, A, M, F>(
     }
 }
 
+/// 三个独立的标准 metadata 观察值；不假设它们互斥。
+pub struct PublicationMetadata {
+    pub symlink: bool,
+    pub directory: bool,
+    pub file: bool,
+}
+
+pub enum PublicationConflict {
+    Symlink,
+    Parent,
+    Destination,
+}
+
+pub open spec fn publication_conflict(metadata: PublicationMetadata, last: bool)
+    -> Option<PublicationConflict>
+{
+    if metadata.symlink { Some(PublicationConflict::Symlink) }
+    else if !last && !metadata.directory { Some(PublicationConflict::Parent) }
+    else if last && !metadata.file { Some(PublicationConflict::Destination) }
+    else { None }
+}
+
+pub fn classify_publication(metadata: PublicationMetadata, last: bool)
+    -> (out: Option<PublicationConflict>)
+    ensures out == publication_conflict(metadata, last),
+{
+    if metadata.symlink { Some(PublicationConflict::Symlink) }
+    else if !last && !metadata.directory { Some(PublicationConflict::Parent) }
+    else if last && !metadata.file { Some(PublicationConflict::Destination) }
+    else { None }
+}
+
+pub enum PublicationPathFailure<P, E, F> {
+    Symlink(P),
+    Parent(P),
+    Destination(P),
+    Native(E),
+    Followup(F),
+}
+
+impl<P, E, F> PublicationPathFailure<P, E, F> {
+    pub fn render<T, S, A, D, N, Z>(self, symlink: S, parent: A, destination: D, native: N, followup: Z)
+        -> (out: T)
+        where S: Fn(P) -> T, A: Fn(P) -> T, D: Fn(P) -> T, N: Fn(E) -> T, Z: Fn(F) -> T,
+        requires forall|path: P| symlink.requires((path,)),
+            forall|path: P| parent.requires((path,)),
+            forall|path: P| destination.requires((path,)),
+            forall|error: E| native.requires((error,)),
+            forall|error: F| followup.requires((error,)),
+        ensures match self {
+            Self::Symlink(path) => symlink.ensures((path,), out),
+            Self::Parent(path) => parent.ensures((path,), out),
+            Self::Destination(path) => destination.ensures((path,), out),
+            Self::Native(error) => native.ensures((error,), out),
+            Self::Followup(error) => followup.ensures((error,), out),
+        },
+    {
+        match self {
+            Self::Symlink(path) => symlink(path),
+            Self::Parent(path) => parent(path),
+            Self::Destination(path) => destination(path),
+            Self::Native(error) => native(error),
+            Self::Followup(error) => followup(error),
+        }
+    }
+}
+
+pub open spec fn publication_observation_result<P, E, F, N>(
+    observed: (P, Result<PublicationMetadata, E>), last: bool, missing: N,
+    next: bool, out: Result<(), PublicationPathFailure<P, E, F>>,
+) -> bool
+    where N: Fn(&E) -> bool,
+{
+    match observed.1 {
+        Ok(value) => match publication_conflict(value, last) {
+            Some(PublicationConflict::Symlink) =>
+                out == Err::<(), PublicationPathFailure<P, E, F>>(PublicationPathFailure::Symlink(observed.0)),
+            Some(PublicationConflict::Parent) =>
+                out == Err::<(), PublicationPathFailure<P, E, F>>(PublicationPathFailure::Parent(observed.0)),
+            Some(PublicationConflict::Destination) =>
+                out == Err::<(), PublicationPathFailure<P, E, F>>(PublicationPathFailure::Destination(observed.0)),
+            None => next,
+        },
+        Err(error) => (missing.ensures((&error,), true) && out.is_ok())
+            || (missing.ensures((&error,), false)
+                && out == Err::<(), PublicationPathFailure<P, E, F>>(PublicationPathFailure::Native(error))),
+    }
+}
+
+/// 有限组件的实际观察关系。缺失立即结束预检，不假设重复 IO 的结果相同。
+pub open spec fn publication_preflight_result<C: Copy, P, E, F, A, M, N>(
+    parts: Seq<C>, index: int, path: P, append: A, metadata: M, missing: N,
+    out: Result<(), PublicationPathFailure<P, E, F>>,
+) -> bool
+    where A: Fn(P, C) -> P, M: Fn(P) -> (P, Result<PublicationMetadata, E>), N: Fn(&E) -> bool,
+    decreases parts.len() - index,
+{
+    if index < 0 || index >= parts.len() { out.is_ok() }
+    else {
+        exists|built: P, observed: (P, Result<PublicationMetadata, E>)|
+            append.ensures((path, parts[index]), built)
+            && metadata.ensures((built,), observed)
+            && publication_observation_result(observed, index + 1 == parts.len(), missing,
+                publication_preflight_result(parts, index + 1, observed.0, append, metadata, missing, out), out)
+    }
+}
+
+pub fn publication_preflight<C: Copy, P, E, F, A, M, N>(
+    parts: &[C], initial: P, append: A, metadata: M, missing: N,
+) -> (out: Result<(), PublicationPathFailure<P, E, F>>)
+    where A: Fn(P, C) -> P, M: Fn(P) -> (P, Result<PublicationMetadata, E>), N: Fn(&E) -> bool,
+    requires forall|path: P, part: C| append.requires((path, part)),
+        forall|path: P| metadata.requires((path,)),
+        forall|error: &E| missing.requires((error,)),
+    ensures publication_preflight_result(parts@, 0, initial, append, metadata, missing, out),
+{
+    let mut i = 0;
+    let mut path = initial;
+    while i < parts.len()
+        invariant i <= parts.len(),
+            forall|path: P, part: C| append.requires((path, part)),
+            forall|path: P| metadata.requires((path,)),
+            forall|error: &E| missing.requires((error,)),
+            forall|out: Result<(), PublicationPathFailure<P, E, F>>|
+                #[trigger] publication_preflight_result(parts@, i as int, path, append, metadata, missing, out)
+                ==> publication_preflight_result(parts@, 0, initial, append, metadata, missing, out),
+        decreases parts.len() - i,
+    {
+        let ghost before = path;
+        let built = append(path, parts[i]);
+        let ghost original_built = built;
+        let observed = metadata(built);
+        let ghost original_observed = observed;
+        let (after, result) = observed;
+        path = after;
+        reveal_with_fuel(publication_preflight_result, 2);
+        match result {
+            Ok(value) => {
+                match classify_publication(value, i == parts.len() - 1) {
+                    Some(PublicationConflict::Symlink) => {
+                        let out = Err(PublicationPathFailure::Symlink(path));
+                        assert(publication_preflight_result(parts@, i as int, before, append, metadata, missing, out));
+                        return out;
+                    },
+                    Some(PublicationConflict::Parent) => {
+                        let out = Err(PublicationPathFailure::Parent(path));
+                        assert(publication_preflight_result(parts@, i as int, before, append, metadata, missing, out));
+                        return out;
+                    },
+                    Some(PublicationConflict::Destination) => {
+                        let out = Err(PublicationPathFailure::Destination(path));
+                        assert(publication_preflight_result(parts@, i as int, before, append, metadata, missing, out));
+                        return out;
+                    },
+                    None => {
+                        assert forall|out: Result<(), PublicationPathFailure<P, E, F>>|
+                            #[trigger] publication_preflight_result(parts@, i as int + 1, path, append, metadata, missing, out)
+                            implies publication_preflight_result(parts@, 0, initial, append, metadata, missing, out) by {
+                            assert(publication_preflight_result(parts@, i as int, before, append, metadata, missing, out));
+                        }
+                    },
+                }
+            },
+            Err(error) => {
+                let out = if missing(&error) { Ok(()) }
+                    else { Err(PublicationPathFailure::Native(error)) };
+                assert(publication_preflight_result(parts@, i as int, before, append, metadata, missing, out));
+                return out;
+            },
+        }
+        i += 1;
+    }
+    assert(publication_preflight_result::<C, P, E, F, A, M, N>(parts@, i as int, path, append, metadata, missing, Ok(())));
+    Ok(())
+}
+
+pub open spec fn publication_prepared<'a, P, E, F, Q, T, R, D, Z>(
+    target: &'a T, parent: R, create: D, finish: Z, out: Result<P, PublicationPathFailure<P, E, F>>,
+) -> bool
+    where R: Fn(&'a T) -> Option<Q>, D: Fn(Q) -> Result<(), E>, Z: Fn() -> Result<P, F>,
+{
+    exists|observed: Option<Q>| parent.ensures((target,), observed) && match observed {
+        None => exists|result: Result<P, F>| finish.ensures((), result) && match result {
+            Ok(path) => out == Ok::<P, PublicationPathFailure<P, E, F>>(path),
+            Err(error) => out == Err::<P, PublicationPathFailure<P, E, F>>(PublicationPathFailure::Followup(error)),
+        },
+        Some(path) => exists|created: Result<(), E>| create.ensures((path,), created) && match created {
+            Err(error) => out == Err::<P, PublicationPathFailure<P, E, F>>(PublicationPathFailure::Native(error)),
+            Ok(()) => exists|result: Result<P, F>| finish.ensures((), result) && match result {
+                Ok(path) => out == Ok::<P, PublicationPathFailure<P, E, F>>(path),
+                Err(error) => out == Err::<P, PublicationPathFailure<P, E, F>>(PublicationPathFailure::Followup(error)),
+            },
+        },
+    }
+}
+
+/// 预检先行；仅预检成功才观察 parent、创建目录并执行最终逐组件检查。
+pub fn prepare_publication<'a, C: Copy, P, E, F, Q, T, A, M, N, R, D, Z>(
+    parts: &[C], initial: P, target: &'a T, append: A, metadata: M, missing: N,
+    parent: R, create: D, finish: Z,
+) -> (out: Result<P, PublicationPathFailure<P, E, F>>)
+    where A: Fn(P, C) -> P, M: Fn(P) -> (P, Result<PublicationMetadata, E>), N: Fn(&E) -> bool,
+          R: Fn(&'a T) -> Option<Q>, D: Fn(Q) -> Result<(), E>, Z: Fn() -> Result<P, F>,
+    requires forall|path: P, part: C| append.requires((path, part)),
+        forall|path: P| metadata.requires((path,)),
+        forall|error: &E| missing.requires((error,)),
+        parent.requires((target,)), forall|path: Q| create.requires((path,)), finish.requires(()),
+    ensures (exists|error: PublicationPathFailure<P, E, F>|
+            publication_preflight_result(parts@, 0, initial, append, metadata, missing, Err(error))
+            && out == Err::<P, PublicationPathFailure<P, E, F>>(error))
+        || (publication_preflight_result::<C, P, E, F, A, M, N>(parts@, 0, initial, append, metadata, missing, Ok(()))
+            && publication_prepared(target, parent, create, finish, out)),
+{
+    let checked = publication_preflight::<C, P, E, F, A, M, N>(parts, initial, append, metadata, missing);
+    let ghost original_checked = checked;
+    assert(publication_preflight_result(parts@, 0, initial, append, metadata, missing, original_checked));
+    match checked {
+        Err(error) => return Err(error),
+        Ok(_success) => {
+            assert(_success == ());
+            assert(original_checked == Ok::<(), PublicationPathFailure<P, E, F>>(_success));
+        },
+    }
+    assert(publication_preflight_result::<C, P, E, F, A, M, N>(
+        parts@, 0, initial, append, metadata, missing, Ok(())));
+    let observed = parent(target);
+    let ghost original_parent = observed;
+    if let Some(path) = observed {
+        let ghost original_path = path;
+        assert(original_parent == Some(original_path));
+        let created = create(path);
+        let ghost original_created = created;
+        assert(create.ensures((original_path,), original_created));
+        match created {
+            Err(error) => {
+                let out = Err(PublicationPathFailure::Native(error));
+                assert(parent.ensures((target,), original_parent));
+                assert(create.ensures((original_parent->Some_0,), Err(error)));
+                assert(publication_prepared(target, parent, create, finish, out));
+                return out;
+            },
+            Ok(_success) => {
+                assert(_success == ());
+                assert(original_created == Ok::<(), E>(_success));
+            },
+        }
+        assert(create.ensures((original_path,), Ok::<(), E>(())));
+    }
+    let result = finish();
+    let ghost original_result = result;
+    let out = match result {
+        Ok(path) => Ok(path),
+        Err(error) => Err(PublicationPathFailure::Followup(error)),
+    };
+    assert(parent.ensures((target,), original_parent));
+    assert(finish.ensures((), original_result));
+    proof {
+        if let Some(path) = original_parent {
+            assert(create.ensures((path,), Ok::<(), E>(())));
+        }
+    }
+    assert(publication_prepared(target, parent, create, finish, out));
+    out
+}
+
 }
