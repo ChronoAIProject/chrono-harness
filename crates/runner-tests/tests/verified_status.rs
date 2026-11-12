@@ -11,6 +11,7 @@ use core::cmp::Ordering;
 #[cfg(verus_keep_ghost)]
 use policy::identifiers as scope_text;
 use policy::{Status, WireStatus};
+use policy::snapshot_export as export;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -23,6 +24,969 @@ use vstd::string::StringSliceAdditionalSpecFns;
 use vstd::vpanic as panic;
 
 verus! {
+
+struct ExportFixture {
+    trace: Vec<u8>,
+    valid: bool,
+    failure: u8,
+    later: u8,
+    failure_file: usize,
+    error: String,
+    empty: bool,
+    empty_first: bool,
+    symbolic: bool,
+    current: String,
+    paths: Vec<String>,
+    prefetched: Vec<String>,
+}
+
+spec fn export_fx_texts(values: Seq<String>) -> Seq<Seq<char>> {
+    values.map(|i: int, value: String| value@)
+}
+
+spec fn export_fx_fixed(after: ExportFixture, before: ExportFixture) -> bool {
+    after.failure == before.failure && after.later == before.later
+        && after.failure_file == before.failure_file && after.empty_first == before.empty_first
+        && after.error@ == before.error@ && after.empty == before.empty
+        && after.symbolic == before.symbolic
+}
+
+spec fn export_fx_kept(after: ExportFixture, before: ExportFixture) -> bool {
+    export_fx_fixed(after, before) && after.current@ == before.current@
+        && after.paths@.len() == before.paths@.len()
+        && after.prefetched@.len() == before.prefetched@.len()
+        && export_fx_texts(after.paths@) == export_fx_texts(before.paths@)
+        && export_fx_texts(after.prefetched@) == export_fx_texts(before.prefetched@)
+}
+
+spec fn export_fx_bytes(empty: bool, symbolic: bool) -> Seq<u8> {
+    if empty { seq![] } else if symbolic { seq![116u8, 97, 114, 103, 101, 116, 0, 10] }
+    else { seq![0u8, 255, 10, 0] }
+}
+
+spec fn export_fx_failure(state: ExportFixture, phase: u8) -> bool {
+    (state.failure == phase || state.later == phase)
+        && (state.failure_file == 0 || state.paths@.len() == state.failure_file)
+}
+
+spec fn export_fx_empty(state: ExportFixture) -> bool {
+    state.empty || (state.empty_first && state.paths@.len() == 1)
+}
+
+fn export_fx_is_empty(state: &ExportFixture) -> (out: bool)
+    ensures out == export_fx_empty(*state),
+{ state.empty || (state.empty_first && state.paths.len() == 1) }
+
+fn export_fx_payload(empty: bool, symbolic: bool) -> (out: Vec<u8>)
+    ensures out@ == export_fx_bytes(empty, symbolic),
+{
+    if empty { Vec::new() } else if symbolic { vec![116u8, 97, 114, 103, 101, 116, 0, 10] }
+    else { vec![0u8, 255, 10, 0] }
+}
+
+fn export_fx_initial(failure: u8, later: u8, error: &str, empty: bool, symbolic: bool)
+    -> (out: ExportFixture)
+    ensures out.trace@ == Seq::<u8>::empty(), out.valid, out.failure == failure,
+        out.later == later, out.error@ == error@, out.empty == empty, out.symbolic == symbolic,
+        out.failure_file == 0, !out.empty_first,
+        out.paths@.len() == 0, out.prefetched@.len() == 0, out.current@ == ""@,
+{
+    ExportFixture { trace: Vec::new(), valid: true, failure, later, error: error.to_owned(),
+        failure_file: 0, empty, empty_first: false, symbolic,
+        current: "".to_owned(), paths: Vec::new(), prefetched: Vec::new() }
+}
+
+fn export_fx_step(mut state: ExportFixture, phase: u8, valid: bool)
+    -> (out: (ExportFixture, bool))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(phase),
+        out.0.valid == (state.valid && valid),
+        out.1 == export_fx_failure(state, phase),
+{
+    let failed = (state.failure == phase || state.later == phase)
+        && (state.failure_file == 0 || state.paths.len() == state.failure_file);
+    state.valid = state.valid && valid;
+    state.trace.push(phase);
+    (state, failed)
+}
+
+fn export_fx_locate(state: ExportFixture, path: &String)
+    -> (out: (ExportFixture, Result<String, String>))
+    ensures export_fx_fixed(out.0, state), out.0.valid == state.valid,
+        out.0.trace@ == state.trace@.push(1u8), out.0.current@ == path@,
+        export_fx_texts(out.0.paths@) == export_fx_texts(state.paths@).push(path@),
+        out.0.paths@.len() == state.paths@.len() + 1,
+        export_fx_texts(out.0.prefetched@) == export_fx_texts(state.prefetched@),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 1) && error@ == state.error@,
+            Ok(actual) => !export_fx_failure(state, 1) && actual@ == path@,
+        },
+{
+    let (mut state, failed) = export_fx_step(state, 1, true);
+    state.current = path.clone();
+    state.paths.push(path.clone());
+    let result = if failed { Err(state.error.clone()) } else { Ok(path.clone()) };
+    (state, result)
+}
+
+fn export_fx_parent(state: ExportFixture, path: &String)
+    -> (out: (ExportFixture, Option<String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(2u8),
+        out.0.valid == (state.valid && path@ == state.current@),
+        match out.1 {
+            None => export_fx_failure(state, 2),
+            Some(actual) => !export_fx_failure(state, 2) && actual@ == path@,
+        },
+{
+    let valid = scope_text::equal_text(path.as_str(), state.current.as_str());
+    let (state, failed) = export_fx_step(state, 2, valid);
+    (state, if failed { None } else { Some(path.clone()) })
+}
+
+fn export_fx_create(state: ExportFixture, path: String)
+    -> (out: (ExportFixture, Result<(), String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(3u8),
+        out.0.valid == (state.valid && (path@ == state.current@)),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 3) && error@ == state.error@,
+            Ok(()) => !export_fx_failure(state, 3),
+        },
+{
+    let valid = scope_text::equal_text(path.as_str(), state.current.as_str());
+    let (state, failed) = export_fx_step(state, 3, valid);
+    let result = if failed { Err(state.error.clone()) } else { Ok(()) };
+    (state, result)
+}
+
+fn export_fx_write(state: ExportFixture, path: &String, bytes: Vec<u8>)
+    -> (out: (ExportFixture, Result<(), String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(7u8),
+        out.0.valid == (state.valid && (path@ == state.current@ && bytes@ == export_fx_bytes(export_fx_empty(state), state.symbolic) && !state.symbolic)),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 7) && error@ == state.error@,
+            Ok(()) => !export_fx_failure(state, 7),
+        },
+{
+    let valid = scope_text::equal_text(path.as_str(), state.current.as_str())
+        && scope_text::equal_bytes(bytes.as_slice(), export_fx_payload(export_fx_is_empty(&state), state.symbolic).as_slice())
+        && !state.symbolic;
+    let (state, failed) = export_fx_step(state, 7, valid);
+    let result = if failed { Err(state.error.clone()) } else { Ok(()) };
+    (state, result)
+}
+
+fn export_fx_link(state: ExportFixture, path: &String, text: String)
+    -> (out: (ExportFixture, Result<(), String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(6u8),
+        out.0.valid == (state.valid && (path@ == state.current@ && state.symbolic
+            && text@ == (if export_fx_empty(state) { ""@ } else { "target\0\n"@ }))),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 6) && error@ == state.error@,
+            Ok(()) => !export_fx_failure(state, 6),
+        },
+{
+    let valid = scope_text::equal_text(path.as_str(), state.current.as_str()) && state.symbolic
+        && scope_text::equal_text(text.as_str(), if export_fx_is_empty(&state) { "" } else { "target\0\n" });
+    let (state, failed) = export_fx_step(state, 6, valid);
+    let result = if failed { Err(state.error.clone()) } else { Ok(()) };
+    (state, result)
+}
+
+fn export_fx_permissions(state: ExportFixture, path: &String, readonly: bool)
+    -> (out: (ExportFixture, Result<(), String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(10u8),
+        out.0.valid == (state.valid && (path@ == state.current@ && readonly)),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 10) && error@ == state.error@,
+            Ok(()) => !export_fx_failure(state, 10),
+        },
+{
+    let valid = scope_text::equal_text(path.as_str(), state.current.as_str()) && readonly;
+    let (state, failed) = export_fx_step(state, 10, valid);
+    let result = if failed { Err(state.error.clone()) } else { Ok(()) };
+    (state, result)
+}
+
+fn export_fx_read(state: ExportFixture, path: &String)
+    -> (out: (ExportFixture, Result<Vec<u8>, String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(4u8),
+        out.0.valid == (state.valid && path@ == state.current@),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 4) && error@ == state.error@,
+            Ok(bytes) => !export_fx_failure(state, 4)
+                && bytes@ == export_fx_bytes(export_fx_empty(state), state.symbolic),
+        },
+{
+    let valid = scope_text::equal_text(path.as_str(), state.current.as_str());
+    let (state, failed) = export_fx_step(state, 4, valid);
+    let result = if failed { Err(state.error.clone()) }
+        else { Ok(export_fx_payload(export_fx_is_empty(&state), state.symbolic)) };
+    (state, result)
+}
+
+fn export_fx_decode(state: ExportFixture, bytes: Vec<u8>)
+    -> (out: (ExportFixture, Result<String, String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(5u8),
+        out.0.valid == (state.valid && state.symbolic && bytes@ == export_fx_bytes(export_fx_empty(state), state.symbolic)),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 5) && error@ == state.error@,
+            Ok(text) => !export_fx_failure(state, 5)
+                && text@ == (if export_fx_empty(state) { ""@ } else { "target\0\n"@ }),
+        },
+{
+    let valid = state.symbolic && scope_text::equal_bytes(bytes.as_slice(),
+        export_fx_payload(export_fx_is_empty(&state), state.symbolic).as_slice());
+    let (state, failed) = export_fx_step(state, 5, valid);
+    let result = if failed { Err(state.error.clone()) }
+        else { Ok(if export_fx_is_empty(&state) { "".to_owned() } else { "target\0\n".to_owned() }) };
+    (state, result)
+}
+
+fn export_fx_metadata(state: ExportFixture, path: &String)
+    -> (out: (ExportFixture, Result<bool, String>))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(8u8),
+        out.0.valid == (state.valid && path@ == state.current@),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 8) && error@ == state.error@,
+            Ok(readonly) => !export_fx_failure(state, 8) && !readonly,
+        },
+{
+    let valid = scope_text::equal_text(path.as_str(), state.current.as_str());
+    let (state, failed) = export_fx_step(state, 8, valid);
+    let result = if failed { Err(state.error.clone()) } else { Ok(false) };
+    (state, result)
+}
+
+fn export_fx_readonly(state: ExportFixture, old: bool, readonly: bool)
+    -> (out: (ExportFixture, bool))
+    ensures export_fx_kept(out.0, state), out.0.trace@ == state.trace@.push(9u8),
+        out.0.valid == (state.valid && !old && readonly), out.1 == readonly,
+{
+    let (state, _) = export_fx_step(state, 9, !old && readonly);
+    (state, readonly)
+}
+
+fn export_fx_prefetch(state: ExportFixture, paths: &Vec<String>)
+    -> (out: (ExportFixture, Result<(), String>))
+    ensures export_fx_fixed(out.0, state), out.0.trace@ == state.trace@.push(11u8),
+        out.0.valid == state.valid, out.0.current@ == state.current@,
+        export_fx_texts(out.0.paths@) == export_fx_texts(state.paths@),
+        out.0.paths@.len() == state.paths@.len(),
+        export_fx_texts(out.0.prefetched@) == export_fx_texts(paths@),
+        out.0.prefetched@.len() == paths@.len(),
+        match out.1 {
+            Err(error) => export_fx_failure(state, 11) && error@ == state.error@,
+            Ok(()) => !export_fx_failure(state, 11),
+        },
+{
+    let (mut state, failed) = export_fx_step(state, 11, true);
+    state.prefetched = paths.clone();
+    let result = if failed { Err(state.error.clone()) } else { Ok(()) };
+    (state, result)
+}
+
+fn export_expect_total(state: &ExportFixture, result: &Result<u64, String>,
+    trace: &[u8], error: Option<&str>, total: u64)
+    requires state.valid, state.trace@ =~= trace@,
+        match (result, error) {
+            (Ok(actual), None) => *actual == total,
+            (Err(actual), Some(expected)) => actual@ == expected@,
+            _ => false,
+        },
+{
+    expect_status_true(state.valid);
+    expect_status_true(scope_text::equal_bytes(state.trace.as_slice(), trace));
+    match (result, error) {
+        (Ok(actual), None) => { expect_status_true(*actual == total); },
+        (Err(actual), Some(expected)) => {
+            expect_status_true(scope_text::equal_text(actual.as_str(), expected));
+        },
+        _ => { panic!("unexpected snapshot result"); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_bytes_zero_exact_limit_and_overflow_priority() {
+    match export::byte_total(0, 0, 0) { Ok(value) => expect_status_true(value == 0), Err(_) => panic!("zero") }
+    match export::byte_total(3, 4, 7) { Ok(value) => expect_status_true(value == 7), Err(_) => panic!("exact") }
+    match export::byte_total(u64::MAX, 0, u64::MAX) {
+        Ok(value) => expect_status_true(value == u64::MAX), Err(_) => panic!("maximum"),
+    }
+    match export::byte_total(3, 4, 6) {
+        Err(error) => expect_status_true(scope_text::equal_text(error.as_str(),
+            "snapshot output byte capacity exceeded before writing")),
+        Ok(_) => panic!("capacity"),
+    }
+    match export::byte_total(u64::MAX, 1, 0) {
+        Err(error) => expect_status_true(scope_text::equal_text(error.as_str(), "snapshot byte accounting overflow")),
+        Ok(_) => panic!("overflow"),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_file_preserves_binary_bytes_full_path_and_readonly_order() {
+    proof {
+        reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+    }
+    let path = "path café\0\n".to_owned();
+    let kind = "blob".to_owned();
+    let mode = "100755".to_owned();
+    proof {
+        reveal_strlit("100755"); reveal_strlit("120000");
+        assert(mode@[1] != "120000"@[1]);
+    }
+    let state = export_fx_initial(0, 0, "", false, false);
+    let ghost initial = state;
+    let io = export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    };
+    let out = export::file(state, &path, &kind, &mode, 4, 8, true, &io);
+    proof {
+        assert(export::file_result(initial, &path, &kind, &mode, 4, 8, true, &io, out));
+    }
+    export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 7, 8, 9, 10], None, 8);
+    proof {
+        assert(export_fx_texts(initial.paths@) =~= Seq::<Seq<char>>::empty());
+        assert(export_fx_texts(out.0.paths@) =~= seq![path@]);
+        assert(export_fx_texts(out.0.paths@).len() == out.0.paths@.len());
+        assert(export_fx_texts(out.0.paths@)[0] == out.0.paths@[0]@);
+    }
+    expect_status_true(out.0.paths.len() == 1);
+    expect_status_true(scope_text::equal_text(out.0.paths[0].as_str(), path.as_str()));
+}
+
+fn snapshot_regular_first_error(phase: u8, error: &str)
+    requires phase == 1 || phase == 2 || phase == 3 || phase == 4
+        || phase == 7 || phase == 8 || phase == 10,
+{
+    proof {
+        reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+    }
+    let path = "path café\0\n".to_owned();
+    let kind = "blob".to_owned();
+    let mode = "100644".to_owned();
+    proof {
+        reveal_strlit("100644"); reveal_strlit("120000");
+        assert(mode@[1] != "120000"@[1]);
+    }
+    let state = export_fx_initial(phase, 10, error, false, false);
+    let ghost initial = state;
+    let io = export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    };
+    let out = export::file(state, &path, &kind, &mode, 0, 4, true, &io);
+    proof {
+        assert(export::file_result(initial, &path, &kind, &mode, 0, 4, true, &io, out));
+    }
+    match phase {
+        1 => export_expect_total(&out.0, &out.1, &[1u8], Some(error), 0),
+        2 => export_expect_total(&out.0, &out.1, &[1u8, 2], Some("snapshot parent"), 0),
+        3 => export_expect_total(&out.0, &out.1, &[1u8, 2, 3], Some(error), 0),
+        4 => export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4], Some(error), 0),
+        7 => export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 7], Some(error), 0),
+        8 => export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 7, 8], Some(error), 0),
+        _ => export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 7, 8, 9, 10], Some(error), 0),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_each_regular_error_stops_and_keeps_empty_or_full_original_error() {
+    snapshot_regular_first_error(1, "");
+    snapshot_regular_first_error(2, "ignored original");
+    snapshot_regular_first_error(3, "目录 é\0原错\n");
+    snapshot_regular_first_error(4, "读取 é\0原错\n");
+    snapshot_regular_first_error(7, "写入 é\0原错\n");
+    snapshot_regular_first_error(8, "metadata é\0原错\n");
+    snapshot_regular_first_error(10, "permissions é\0原错\n");
+}
+
+fn snapshot_regular_capacity(empty: bool, previous: u64, limit: u64)
+    requires empty ==> previous == 0 && limit == 0,
+        !empty ==> ((previous == 0 && limit == 0) || (previous == 7 && limit == 10)
+            || (previous == u64::MAX && limit == 0)),
+{
+    proof {
+        reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+    }
+    let path = "容量/é".to_owned();
+    let kind = "blob".to_owned();
+    let mode = "100644".to_owned();
+    proof {
+        reveal_strlit("100644"); reveal_strlit("120000");
+        assert(mode@[1] != "120000"@[1]);
+    }
+    let state = export_fx_initial(0, 0, "", empty, false);
+    let ghost initial = state;
+    let io = export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    };
+    let out = export::file(state, &path, &kind, &mode, previous, limit, true, &io);
+    proof {
+        assert(export::file_result(initial, &path, &kind, &mode, previous, limit, true, &io, out));
+    }
+    if empty {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 7, 8, 9, 10], None, 0);
+    } else if previous == u64::MAX {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4],
+            Some("snapshot byte accounting overflow"), 0);
+    } else {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4],
+            Some("snapshot output byte capacity exceeded before writing"), 0);
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_capacity_is_checked_after_reading_and_before_any_write() {
+    snapshot_regular_capacity(true, 0, 0);
+    snapshot_regular_capacity(false, 0, 0);
+    snapshot_regular_capacity(false, 7, 10);
+    snapshot_regular_capacity(false, u64::MAX, 0);
+}
+
+fn snapshot_symbolic_case(phase: u8, supported: bool)
+    requires phase == 0 || phase == 5 || phase == 6,
+{
+    proof {
+        reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+    }
+    let path = "alias café\0\n".to_owned();
+    let kind = "blob".to_owned();
+    let mode = "120000".to_owned();
+    let out = export::file(export_fx_initial(phase, if phase == 5 { 6 } else { 0 },
+        "symlink é\0原错\n", false, true), &path, &kind, &mode, 0, 8, supported, &export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    });
+    if !supported {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4],
+            Some("E_INPUT_UNSUPPORTED: symlink snapshot"), 0);
+    } else if phase == 5 {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 5], Some("symlink é\0原错\n"), 0);
+    } else if phase == 6 {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 5, 6], Some("symlink é\0原错\n"), 0);
+    } else {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 5, 6], None, 8);
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_symbolic_platform_decode_and_link_keep_original_precedence() {
+    snapshot_symbolic_case(0, true);
+    snapshot_symbolic_case(5, true);
+    snapshot_symbolic_case(6, true);
+    snapshot_symbolic_case(5, false);
+}
+
+fn snapshot_kind_or_mode(kind: &str, mode: &str)
+    requires kind@ != "blob"@ || mode@ != "120000"@,
+{
+    proof {
+        reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+    }
+    let path = "full café\0\n".to_owned();
+    let kind = kind.to_owned();
+    let mode = mode.to_owned();
+    let state = export_fx_initial(0, 0, "", false, false);
+    let ghost initial = state;
+    let io = export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    };
+    let out = export::file(state, &path, &kind, &mode, 0, 4, true, &io);
+    proof {
+        assert(export::file_result(initial, &path, &kind, &mode, 0, 4, true, &io, out));
+        if kind@ != "blob"@ {
+            assert(out == (initial, Ok::<u64, String>(0)));
+            assert(out.0.trace@ == Seq::<u8>::empty());
+        }
+    }
+    if scope_text::equal_text(kind.as_str(), "blob") {
+        export_expect_total(&out.0, &out.1, &[1u8, 2, 3, 4, 7, 8, 9, 10], None, 4);
+    } else { export_expect_total(&out.0, &out.1, &[], None, 0); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_kind_and_mode_compare_complete_text() {
+    proof {
+        reveal_strlit("blob"); reveal_strlit("blob\0"); reveal_strlit("Blob"); reveal_strlit("blob-extra");
+        reveal_strlit("120000"); reveal_strlit("120000\0"); reveal_strlit("120000-extra");
+        assert("blob"@.len() != "blob\0"@.len());
+        assert("blob"@[0] != "Blob"@[0]);
+        assert("blob"@.len() != "blob-extra"@.len());
+        assert("120000"@.len() != "120000\0"@.len());
+        assert("120000"@.len() != "120000-extra"@.len());
+    }
+    snapshot_kind_or_mode("blob\0", "120000");
+    snapshot_kind_or_mode("Blob", "120000");
+    snapshot_kind_or_mode("blob-extra", "120000");
+    snapshot_kind_or_mode("blob", "120000\0");
+    snapshot_kind_or_mode("blob", "120000-extra");
+}
+
+
+fn export_expect_snapshot(state: &ExportFixture, result: &Result<(), String>,
+    trace: &[u8], error: Option<&str>)
+    requires state.valid, state.trace@ =~= trace@,
+        match (result, error) {
+            (Ok(()), None) => true,
+            (Err(actual), Some(expected)) => actual@ == expected@,
+            _ => false,
+        },
+{
+    expect_status_true(state.valid);
+    expect_status_true(scope_text::equal_bytes(state.trace.as_slice(), trace));
+    match (result, error) {
+        (Ok(()), None) => {},
+        (Err(actual), Some(expected)) => {
+            expect_status_text(actual.as_str(), expected);
+        },
+        _ => { panic!("unexpected snapshot result"); },
+    }
+}
+
+fn export_expect_paths(actual: &Vec<String>, expected: &[&str])
+    requires actual@.len() == expected@.len(),
+        forall|i: int| 0 <= i < actual@.len() ==> actual@[i]@ == expected@[i]@,
+{
+    expect_status_true(actual.len() == expected.len());
+    let mut i = 0;
+    while i < actual.len()
+        invariant 0 <= i <= actual.len(), actual.len() == expected.len(),
+            forall|j: int| 0 <= j < actual@.len() ==> actual@[j]@ == expected@[j]@,
+        decreases actual.len() - i,
+    {
+        expect_status_text(actual[i].as_str(), expected[i]);
+        i += 1;
+    }
+}
+
+proof fn export_rows_count(rows: Seq<(&policy::TreePath, &policy::TreeEntry)>)
+    requires policy::tree_rows_ordered(rows),
+    ensures policy::tree_rows_view(rows).no_duplicates(),
+        rows.len() == policy::tree_rows_view(rows).to_set().len(),
+{
+    assert forall|i: int, j: int| 0 <= i < j < rows.len()
+        implies policy::tree_rows_view(rows)[i] != policy::tree_rows_view(rows)[j] by {
+        scope_text::byte_lt_strict(rows[i].0.bytes(), rows[j].0.bytes());
+    }
+    policy::tree_rows_view(rows).unique_seq_to_set();
+}
+
+fn snapshot_empty_tree_case(reusable: bool, failed: bool)
+{
+    proof { reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+        reveal(export::rows_result); reveal(export::files_result); reveal(export::prefix);
+        reveal_with_fuel(export::blob_paths, 4); }
+    let tree = policy::Tree::new();
+    let state = export_fx_initial(if failed { 11 } else { 0 }, 0, "预取 é\0原错\n", false, false);
+    let ghost initial = state;
+    let io = export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    };
+    let out = export::snapshot(state, &tree, reusable, 0, false, &io);
+    proof {
+        let rows = choose|rows: Seq<(&policy::TreePath, &policy::TreeEntry)>|
+            policy::tree_rows_view(rows).to_set() == tree@.kv_pairs()
+                && policy::tree_rows_ordered(rows)
+                && export::rows_result(rows, initial, reusable, 0, false, &io, out);
+        export_rows_count(rows);
+        assert(tree@.kv_pairs() =~= Set::empty());
+        assert(rows.len() == 0);
+        assert(export::blob_paths(rows, 0) =~= Seq::<Seq<char>>::empty());
+        assert(export_fx_texts(initial.paths@) =~= Seq::<Seq<char>>::empty());
+        assert(export_fx_texts(initial.prefetched@) =~= Seq::<Seq<char>>::empty());
+        assert(export_fx_texts(out.0.paths@) =~= Seq::<Seq<char>>::empty());
+        assert(export_fx_texts(out.0.prefetched@) =~= Seq::<Seq<char>>::empty());
+    }
+    if reusable {
+        export_expect_snapshot(&out.0, &out.1, &[11u8],
+            if failed { Some("预取 é\0原错\n") } else { None });
+    } else {
+        export_expect_snapshot(&out.0, &out.1, &[], None);
+    }
+    export_expect_paths(&out.0.paths, &[]);
+    export_expect_paths(&out.0.prefetched, &[]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_empty_tree_preserves_optional_empty_prefetch_and_first_error() {
+    snapshot_empty_tree_case(false, false);
+    snapshot_empty_tree_case(false, true);
+    snapshot_empty_tree_case(true, false);
+    snapshot_empty_tree_case(true, true);
+}
+
+fn snapshot_non_blob_tree_case(kind: &str, reusable: bool)
+    requires kind@ != "blob"@,
+{
+    proof { reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+        reveal(export::rows_result); reveal(export::files_result); reveal(export::prefix);
+        reveal_with_fuel(export::blob_paths, 4); policy::tree_path_obeys_cmp(); }
+    let mut tree = policy::Tree::new();
+    let key = policy::TreePath::from_text("not blob é\0\n");
+    let ghost expected_key = key;
+    expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree, key, "120000", "oid", kind));
+    let state = export_fx_initial(0, 0, "", false, false);
+    let ghost initial = state;
+    let io = export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    };
+    let out = export::snapshot(state, &tree, reusable, 0, false, &io);
+    proof {
+        let rows = choose|rows: Seq<(&policy::TreePath, &policy::TreeEntry)>|
+            policy::tree_rows_view(rows).to_set() == tree@.kv_pairs()
+                && policy::tree_rows_ordered(rows)
+                && export::rows_result(rows, initial, reusable, 0, false, &io, out);
+        export_rows_count(rows);
+        assert(tree@.kv_pairs() =~= set![(expected_key, tree@[expected_key])]);
+        assert(rows.len() == 1);
+        assert(policy::tree_rows_view(rows).to_set().contains(policy::tree_rows_view(rows)[0]));
+        assert(*rows[0].0 == expected_key && *rows[0].1 == tree@[expected_key]);
+        assert(export::blob_paths(rows, 1) =~= Seq::<Seq<char>>::empty());
+        let source = if reusable {
+            let (paths, prefetched) = choose|paths: Vec<String>, prefetched: (ExportFixture, Result<(), String>)|
+                paths@.map(|i: int, path: String| path@) == export::blob_paths(rows, rows.len() as int)
+                    && io.prefetch.ensures((initial, &paths), prefetched)
+                    && match prefetched.1 {
+                        Err(_) => out == prefetched,
+                        Ok(()) => export::files_result(rows, prefetched.0, 0, false, &io, out),
+                    };
+            assert(paths@.len() == 0);
+            assert(prefetched.1 is Ok);
+            prefetched.0
+        } else { initial };
+        let states = choose|states: Seq<(ExportFixture, u64)>|
+            export::prefix(rows, states, source, 0, false, &io)
+                && match out.1 {
+                    Ok(()) => states.len() == rows.len() + 1 && out.0 == states.last().0,
+                    Err(error) => states.len() <= rows.len()
+                        && export::file_result(states.last().0, &rows[states.len() - 1].0.text,
+                            &rows[states.len() - 1].1.kind, &rows[states.len() - 1].1.mode,
+                            states.last().1, 0, false, &io, (out.0, Err::<u64, String>(error))),
+                };
+        assert(states[0] == (source, 0u64));
+        assert(out.1 is Ok);
+        assert(states.len() == 2);
+        assert(export::file_result(states[0].0, &rows[0].0.text, &rows[0].1.kind,
+            &rows[0].1.mode, states[0].1, 0, false, &io,
+            (states[1].0, Ok::<u64, String>(states[1].1))));
+        assert(out.0 == source);
+    }
+    if reusable { export_expect_snapshot(&out.0, &out.1, &[11u8], None); }
+    else { export_expect_snapshot(&out.0, &out.1, &[], None); }
+    export_expect_paths(&out.0.paths, &[]);
+    export_expect_paths(&out.0.prefetched, &[]);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_non_blob_rows_never_reach_file_io_or_prefetch_list() {
+    proof {
+        reveal_strlit("blob"); reveal_strlit("blob\0"); reveal_strlit("Blob"); reveal_strlit("blob-extra");
+        assert("blob"@.len() != "blob\0"@.len()); assert("blob"@[0] != "Blob"@[0]);
+        assert("blob"@.len() != "blob-extra"@.len());
+    }
+    snapshot_non_blob_tree_case("blob\0", false);
+    snapshot_non_blob_tree_case("Blob", true);
+    snapshot_non_blob_tree_case("blob-extra", true);
+}
+
+
+proof fn export_fixture_path_order(a: &str, b: &str)
+    requires a@.len() > 0, b@.len() > 0,
+        (a@[0] as u32) < 128, (b@[0] as u32) < 128,
+        (a@[0] as u32) < (b@[0] as u32),
+    ensures scope_text::byte_lt(a.spec_bytes(), b.spec_bytes()),
+{
+    reveal_with_fuel(vstd::utf8::encode_utf8, 1);
+    vstd::utf8::char_is_scalar(a@[0]);
+    vstd::utf8::char_is_scalar(b@[0]);
+    let x = a@[0] as u32;
+    let y = b@[0] as u32;
+    assert((x & 0x7f) as u8 == x as u8) by (bit_vector) requires x < 128u32;
+    assert((y & 0x7f) as u8 == y as u8) by (bit_vector) requires y < 128u32;
+    assert(vstd::utf8::encode_scalar(x) =~= seq![x as u8]);
+    assert(vstd::utf8::encode_scalar(y) =~= seq![y as u8]);
+    assert(a.spec_bytes() == vstd::utf8::encode_utf8(a@));
+    assert(b.spec_bytes() == vstd::utf8::encode_utf8(b@));
+    assert(a.spec_bytes()[0] == x as u8);
+    assert(b.spec_bytes()[0] == y as u8);
+    assert(scope_text::byte_prefix(a.spec_bytes(), b.spec_bytes(), 0));
+}
+
+proof fn export_rows_three(rows: Seq<(&policy::TreePath, &policy::TreeEntry)>,
+    a: (policy::TreePath, policy::TreeEntry), b: (policy::TreePath, policy::TreeEntry),
+    c: (policy::TreePath, policy::TreeEntry))
+    requires policy::tree_rows_ordered(rows),
+        policy::tree_rows_view(rows).to_set() == set![a, b, c],
+        scope_text::byte_lt(a.0.bytes(), b.0.bytes()),
+        scope_text::byte_lt(b.0.bytes(), c.0.bytes()),
+    ensures rows.len() == 3, policy::tree_rows_view(rows) == seq![a, b, c],
+{
+    scope_text::byte_lt_transitive(a.0.bytes(), b.0.bytes(), c.0.bytes());
+    scope_text::byte_lt_strict(a.0.bytes(), b.0.bytes());
+    scope_text::byte_lt_strict(a.0.bytes(), c.0.bytes());
+    scope_text::byte_lt_strict(b.0.bytes(), c.0.bytes());
+    scope_text::byte_lt_asymmetric(a.0.bytes(), b.0.bytes());
+    scope_text::byte_lt_asymmetric(a.0.bytes(), c.0.bytes());
+    scope_text::byte_lt_asymmetric(b.0.bytes(), c.0.bytes());
+    let expected = seq![a, b, c];
+    assert(expected.no_duplicates());
+    expected.unique_seq_to_set();
+    export_rows_count(rows);
+    assert(rows.len() == 3);
+    let values = policy::tree_rows_view(rows);
+    assert(values.to_set().contains(values[0]));
+    assert(values.to_set().contains(values[1]));
+    assert(values.to_set().contains(values[2]));
+    assert(values[0] != values[1] && values[0] != values[2] && values[1] != values[2]);
+    assert(scope_text::byte_lt(rows[0].0.bytes(), rows[1].0.bytes()));
+    assert(scope_text::byte_lt(rows[0].0.bytes(), rows[2].0.bytes()));
+    assert(scope_text::byte_lt(rows[1].0.bytes(), rows[2].0.bytes()));
+    assert(values[0] == a && values[1] == b && values[2] == c);
+    assert(values =~= expected);
+}
+
+spec fn export_fixture_tree_keys(tree: Map<policy::TreePath, policy::TreeEntry>, middle_blob: bool,
+    ka: policy::TreePath, km: policy::TreePath, kz: policy::TreePath) -> bool {
+    tree.contains_key(ka) && tree.contains_key(km) && tree.contains_key(kz)
+        && ka@ == "a/é"@ && km@ == "m"@ && kz@ == "zfn snapshot_multiple_files_case(\n"@
+        && tree.kv_pairs() == set![(ka, tree[ka]), (km, tree[km]), (kz, tree[kz])]
+        && policy::tree_entry_fields(&tree[ka]) == ("100644"@, "a oid"@, "blob"@)
+        && policy::tree_entry_fields(&tree[km]) == ("100644"@, "m oid"@,
+            if middle_blob { "blob"@ } else { "tree"@ })
+        && policy::tree_entry_fields(&tree[kz]) == ("100644"@, "z oid"@, "blob"@)
+}
+
+fn export_fixture_tree(middle_blob: bool) -> (out: policy::Tree)
+    ensures exists|ka: policy::TreePath, km: policy::TreePath, kz: policy::TreePath|
+        export_fixture_tree_keys(out@, middle_blob, ka, km, kz),
+{
+    proof {
+        reveal(export_fixture_tree_keys);
+        policy::tree_path_obeys_cmp();
+        reveal_strlit("a/é"); reveal_strlit("m"); reveal_strlit("zfn snapshot_multiple_files_case(\n");
+        assert("a/é"@[0] != "m"@[0]); assert("a/é"@[0] != "zfn snapshot_multiple_files_case(\n"@[0]);
+        assert("m"@[0] != "zfn snapshot_multiple_files_case(\n"@[0]);
+    }
+    let mut tree = policy::Tree::new();
+    // 故意逆序插入；真实 BTreeMap 决定导出的全文字节顺序。
+    let z = policy::TreePath::from_text("zfn snapshot_multiple_files_case(\n");
+    let ghost kz = z;
+    expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree, z, "100644", "z oid", "blob"));
+    let m = policy::TreePath::from_text("m");
+    let ghost km = m;
+    expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree, m, "100644", "m oid",
+        if middle_blob { "blob" } else { "tree" }));
+    let a = policy::TreePath::from_text("a/é");
+    let ghost ka = a;
+    expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree, a, "100644", "a oid", "blob"));
+    proof {
+        reveal(export_fixture_tree_keys);
+        assert(export_fixture_tree_keys(tree@, middle_blob, ka, km, kz));
+    }
+    tree
+}
+
+fn snapshot_multiple_files_case(middle_blob: bool, empty_first: bool, limit: u64,
+    failure: u8, error: &str)
+    requires if middle_blob { !empty_first && limit == 12 && (failure == 4 || failure == 8) }
+        else { (failure == 0 || failure == 11)
+            && ((empty_first && limit == 4) || (!empty_first && (limit == 7 || limit == 8))) },
+{
+    proof {
+        reveal(export::file_result); reveal(export::parent_result); reveal(export::read_result);
+        reveal(export::payload_result); reveal(export::regular_result);
+        reveal(export::symbolic_result); reveal(export::counted);
+        reveal(export_fx_kept); reveal(export_fx_fixed); reveal(export_fx_bytes); reveal(export_fx_texts);
+        reveal(export_fx_failure); reveal(export_fx_empty);
+        reveal(export::rows_result); reveal(export::files_result); reveal(export::prefix);
+        reveal_with_fuel(export::blob_paths, 4);
+        policy::tree_path_obeys_cmp();
+        reveal_strlit("a/é"); reveal_strlit("m"); reveal_strlit("z\0\n");
+        reveal(export_fixture_tree_keys);
+        reveal_strlit("100644"); reveal_strlit("120000"); reveal_strlit("blob"); reveal_strlit("tree");
+        assert("100644"@[1] != "120000"@[1]);
+        assert("blob"@[0] != "tree"@[0]);
+        export_fixture_path_order("a/é", "m");
+        export_fixture_path_order("m", "z\0\n");
+    }
+    let tree = export_fixture_tree(middle_blob);
+    let ghost (ka, km, kz) = choose|ka: policy::TreePath, km: policy::TreePath, kz: policy::TreePath|
+        export_fixture_tree_keys(tree@, middle_blob, ka, km, kz);
+    let mut state = export_fx_initial(failure, if failure == 4 { 8 } else { 0 }, error, false, false);
+    state.empty_first = empty_first;
+    if middle_blob { state.failure_file = 2; }
+    let ghost initial = state;
+    let io = export::SnapshotExportIo {
+        prefetch: export_fx_prefetch, locate: export_fx_locate, parent: export_fx_parent,
+        create_parent: export_fx_create, read: export_fx_read, decode: export_fx_decode,
+        symlink: export_fx_link, write: export_fx_write, metadata: export_fx_metadata,
+        readonly: export_fx_readonly, permissions: export_fx_permissions,
+    };
+    let out = export::snapshot(state, &tree, true, limit, true, &io);
+    proof {
+        reveal(export_fixture_tree_keys);
+        let rows = choose|rows: Seq<(&policy::TreePath, &policy::TreeEntry)>|
+            policy::tree_rows_view(rows).to_set() == tree@.kv_pairs()
+                && policy::tree_rows_ordered(rows)
+                && export::rows_result(rows, initial, true, limit, true, &io, out);
+        let ra = (ka, tree@[ka]);
+        let rm = (km, tree@[km]);
+        let rz = (kz, tree@[kz]);
+        assert(tree@.kv_pairs() =~= set![ra, rm, rz]);
+        assert(ka.bytes() == "a/é".spec_bytes());
+        assert(km.bytes() == "m".spec_bytes());
+        assert(kz.bytes() == "z\0\n".spec_bytes());
+        export_rows_three(rows, ra, rm, rz);
+        assert(*rows[0].0 == ka && *rows[0].1 == tree@[ka]);
+        assert(*rows[1].0 == km && *rows[1].1 == tree@[km]);
+        assert(*rows[2].0 == kz && *rows[2].1 == tree@[kz]);
+        assert(rows[0].1.kind@ == "blob"@);
+        assert(rows[1].1.kind@ == if middle_blob { "blob"@ } else { "tree"@ });
+        assert(rows[2].1.kind@ == "blob"@);
+        assert(export::blob_paths(rows, 3) =~= if middle_blob {
+            seq!["a/é"@, "m"@, "z\0\n"@]
+        } else { seq!["a/é"@, "z\0\n"@] });
+        let (paths, prefetched) = choose|paths: Vec<String>, prefetched: (ExportFixture, Result<(), String>)|
+            paths@.map(|i: int, path: String| path@) == export::blob_paths(rows, 3)
+                && io.prefetch.ensures((initial, &paths), prefetched)
+                && match prefetched.1 {
+                    Err(_) => out == prefetched,
+                    Ok(()) => export::files_result(rows, prefetched.0, limit, true, &io, out),
+                };
+        if failure != 11 {
+            assert(prefetched.1 is Ok);
+            let source = prefetched.0;
+            let states = choose|states: Seq<(ExportFixture, u64)>|
+                export::prefix(rows, states, source, limit, true, &io)
+                    && match out.1 {
+                        Ok(()) => states.len() == 4 && out.0 == states.last().0,
+                        Err(error) => states.len() <= 3
+                            && export::file_result(states.last().0, &rows[states.len() - 1].0.text,
+                                &rows[states.len() - 1].1.kind, &rows[states.len() - 1].1.mode,
+                                states.last().1, limit, true, &io, (out.0, Err::<u64, String>(error))),
+                    };
+            assert(states[0] == (source, 0u64));
+            assert(states.len() >= 2);
+            assert(export::file_result(source, &rows[0].0.text, &rows[0].1.kind,
+                &rows[0].1.mode, 0, limit, true, &io,
+                (states[1].0, Ok::<u64, String>(states[1].1))));
+            assert(states[1].0.valid);
+            assert(states[1].0.trace@ =~= seq![11u8, 1, 2, 3, 4, 7, 8, 9, 10]);
+            assert(states[1].0.paths@.len() == 1);
+            assert(export_fx_texts(states[1].0.paths@) =~= seq!["a/é"@]);
+            assert(states[1].1 == if empty_first { 0u64 } else { 4u64 });
+            if middle_blob {
+                if states.len() > 2 {
+                    assert(export::file_result(states[1].0, &rows[1].0.text, &rows[1].1.kind,
+                        &rows[1].1.mode, states[1].1, limit, true, &io,
+                        (states[2].0, Ok::<u64, String>(states[2].1))));
+                    assert(false);
+                }
+                assert(states.len() == 2);
+                assert(out.1 is Err);
+            } else {
+                assert(states.len() >= 3);
+                assert(export::file_result(states[1].0, &rows[1].0.text, &rows[1].1.kind,
+                    &rows[1].1.mode, states[1].1, limit, true, &io,
+                    (states[2].0, Ok::<u64, String>(states[2].1))));
+                assert(states[2] == states[1]);
+                if states.len() == 4 {
+                    assert(export::file_result(states[2].0, &rows[2].0.text, &rows[2].1.kind,
+                        &rows[2].1.mode, states[2].1, limit, true, &io,
+                        (states[3].0, Ok::<u64, String>(states[3].1))));
+                }
+            }
+        }
+        assert(export_fx_texts(out.0.prefetched@) =~= export::blob_paths(rows, 3));
+    }
+    if middle_blob {
+        if failure == 4 {
+            export_expect_snapshot(&out.0, &out.1,
+                &[11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4], Some(error));
+        } else {
+            export_expect_snapshot(&out.0, &out.1,
+                &[11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4, 7, 8], Some(error));
+        }
+        export_expect_paths(&out.0.paths, &["a/é", "m"]);
+        export_expect_paths(&out.0.prefetched, &["a/é", "m", "z\0\n"]);
+    } else {
+        if failure == 11 {
+            export_expect_snapshot(&out.0, &out.1, &[11u8], Some(error));
+            export_expect_paths(&out.0.paths, &[]);
+        } else if limit == 7 {
+            export_expect_snapshot(&out.0, &out.1,
+                &[11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4],
+                Some("snapshot output byte capacity exceeded before writing"));
+            export_expect_paths(&out.0.paths, &["a/é", "z\0\n"]);
+        } else {
+            export_expect_snapshot(&out.0, &out.1,
+                &[11u8, 1, 2, 3, 4, 7, 8, 9, 10, 1, 2, 3, 4, 7, 8, 9, 10], None);
+            export_expect_paths(&out.0.paths, &["a/é", "z\0\n"]);
+        }
+        export_expect_paths(&out.0.prefetched, &["a/é", "z\0\n"]);
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_multiple_files_preserve_real_tree_order_distinct_bytes_and_exact_capacity() {
+    snapshot_multiple_files_case(false, false, 8, 0, "");
+    snapshot_multiple_files_case(false, true, 4, 0, "");
+    snapshot_multiple_files_case(false, false, 7, 0, "");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_prefetch_failure_and_later_file_failure_preserve_only_the_real_prefix() {
+    snapshot_multiple_files_case(false, false, 8, 11, "");
+    snapshot_multiple_files_case(true, false, 12, 4, "后项读取 é\0原错\n");
+    snapshot_multiple_files_case(true, false, 12, 8, "后项metadata é\0原错\n");
+}
 
 struct CheckoutFixture {
     trace: Vec<u8>,
@@ -1967,6 +2931,23 @@ proof fn tree_fixture_row(raw: &str, path: &str)
     assert(scope_text::oid(oid.spec_bytes()));
 }
 
+proof fn tree_fixture_entry_fields(key: policy::TreePath, entry: policy::TreeEntry, path: &str)
+    requires policy::git_tree_entry_matches(key, entry, (path.spec_bytes(),
+        "100644".spec_bytes(), "0000000000000000000000000000000000000001".spec_bytes(),
+        "blob".spec_bytes())),
+    ensures key@ == path@, policy::tree_entry_fields(&entry) == ("100644"@,
+        "0000000000000000000000000000000000000001"@, "blob"@),
+{
+    vstd::utf8::encode_utf8_decode_utf8(key@);
+    vstd::utf8::encode_utf8_decode_utf8(path@);
+    vstd::utf8::encode_utf8_decode_utf8(entry.mode@);
+    vstd::utf8::encode_utf8_decode_utf8(entry.oid@);
+    vstd::utf8::encode_utf8_decode_utf8(entry.kind@);
+    vstd::utf8::encode_utf8_decode_utf8("100644"@);
+    vstd::utf8::encode_utf8_decode_utf8("0000000000000000000000000000000000000001"@);
+    vstd::utf8::encode_utf8_decode_utf8("blob"@);
+}
+
 fn expect_tree_parse_error(rows: &[&str], first: usize, expected: &str)
     requires first < rows.len(), policy::git_tree_prefix_valid(rows@, first as int),
         policy::git_tree_error_at(rows@, first as int, policy::GitInventoryErrorView::Message(expected@)),
@@ -2179,11 +3160,16 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
     }
 }
 
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
-    let a = "100644 blob 0000000000000000000000000000000000000001\ta";
-    let b = "100644 blob 0000000000000000000000000000000000000001\ta//./b/";
-    proof {
+proof fn tree_fixture_literal_rows(a: &str, b: &str)
+    requires a@ == "100644 blob 0000000000000000000000000000000000000001\ta"@,
+        b@ == "100644 blob 0000000000000000000000000000000000000001\ta//./b/"@,
+    ensures policy::git_tree_row_spec(a.spec_bytes()) == Ok::<policy::GitTreeRowBytes, policy::GitInventoryErrorView>(("a".spec_bytes(),
+            "100644".spec_bytes(), "0000000000000000000000000000000000000001".spec_bytes(), "blob".spec_bytes())),
+        policy::git_tree_row_spec(b.spec_bytes()) == Ok::<policy::GitTreeRowBytes, policy::GitInventoryErrorView>(("a//./b/".spec_bytes(),
+            "100644".spec_bytes(), "0000000000000000000000000000000000000001".spec_bytes(), "blob".spec_bytes())),
+        "a".spec_bytes() != "a//./b/".spec_bytes(),
+{
+
         policy::tree_path_obeys_cmp();
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\t");
         reveal_strlit("100644 blob 0000000000000000000000000000000000000001\ta");
@@ -2197,7 +3183,14 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
         tree_fixture_row(a, "a"); tree_fixture_row(b, "a//./b/");
         assert(policy::paths::relative_path("a".spec_bytes()));
         assert(policy::paths::relative_path("a//./b/".spec_bytes()));
-    }
+    assert("a".spec_bytes().len() != "a//./b/".spec_bytes().len());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
+    let a = "100644 blob 0000000000000000000000000000000000000001\ta";
+    let b = "100644 blob 0000000000000000000000000000000000000001\ta//./b/";
+    proof { policy::tree_path_obeys_cmp(); tree_fixture_literal_rows(a, b); }
     let rows = [b, a];
     match policy::parse_git_tree_rows(&rows) {
         Ok(tree) => {
@@ -2211,15 +3204,7 @@ fn tree_parser_returns_complete_map_and_preserves_literal_paths() {
                     let key = choose|key: policy::TreePath| tree@.contains_key(key)
                         && policy::git_tree_entry_matches(key, tree@[key],
                             (policy::git_tree_row_at(rows@, i)->Ok_0));
-                    vstd::utf8::encode_utf8_decode_utf8(key@);
-                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].mode@);
-                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].oid@);
-                    vstd::utf8::encode_utf8_decode_utf8(tree@[key].kind@);
-                    vstd::utf8::encode_utf8_decode_utf8("a//./b/"@);
-                    vstd::utf8::encode_utf8_decode_utf8("a"@);
-                    vstd::utf8::encode_utf8_decode_utf8("100644"@);
-                    vstd::utf8::encode_utf8_decode_utf8("0000000000000000000000000000000000000001"@);
-                    vstd::utf8::encode_utf8_decode_utf8("blob"@);
+                    tree_fixture_entry_fields(key, tree@[key], if i == 0 { "a//./b/" } else { "a" });
                 }
             }
             proof {
