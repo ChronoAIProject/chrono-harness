@@ -7,6 +7,9 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 
+#[path = "verified_content.rs"]
+pub mod content_preflight;
+
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
 mod identifiers;
