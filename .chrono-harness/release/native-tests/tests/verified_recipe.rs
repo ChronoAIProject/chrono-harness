@@ -79,7 +79,11 @@ fn promotion_requires_the_original_run_event_and_complete_workflow_head() {
     let valid = delivery::promotion_run(&numbers, no_texts, Some("workflow_run"), raw_head);
     let manual = delivery::promotion_run(no_numbers, no_texts, Some("workflow_dispatch"), raw_head);
     proof {
+        // 显式实例化固定切片与 Option 输入；预期结果仍在下方独立断言。
         assert forall|i: int| 0 <= i < numbers.len() implies numbers@[i].0 == Some(numbers@[i].1) by {}
+        assert forall|i: int| 0 <= i < no_numbers.len() implies no_numbers@[i].0 == Some(no_numbers@[i].1) by {}
+        assert forall|i: int| 0 <= i < no_texts.len() implies delivery::text_pair(no_texts@[i]) by {}
+        assert(match raw_head { Some(value) => policy::identifiers::oid(value@), None => false });
     }
     let wrong = delivery::promotion_run(&[], &[], Some("push"), Some(head_bytes));
     let missing = delivery::promotion_run(&[], &[], None, Some(head_bytes));
