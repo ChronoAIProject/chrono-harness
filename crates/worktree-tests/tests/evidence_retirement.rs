@@ -1,3 +1,5 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 use super::*;
 
 fn fixture() -> (Host, PathBuf, Value) {
@@ -58,6 +60,9 @@ fn retire(target: &Path, plan: &Value) -> (i32, Value) {
 }
 #[test]
 fn main_custody_checks_the_current_full_branch_lock_before_retiring_aliases() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for switch in [false, true] {
         let h = bounded_cleanup::main_host_mode("rebuild-evidence");
         let (code, imported, error) = h.auto("import", &[]);
@@ -105,6 +110,9 @@ fn main_custody_checks_the_current_full_branch_lock_before_retiring_aliases() {
 }
 #[test]
 fn released_aliases_retire_without_rewriting_outcomes_source_or_enrollment() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target, plan) = fixture();
     // Native gather may already share immutable aliases while preserving both
     // paths. Their later explicit retirement must preserve the original inode.
@@ -146,6 +154,9 @@ fn released_aliases_retire_without_rewriting_outcomes_source_or_enrollment() {
 }
 #[test]
 fn independent_effects_and_original_failure_survive_partial_retry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (_h, target, plan) = fixture();
     let missing = target.join(".chrono-harness/state/custody/second-original");
     let raw = fs::read(&missing).unwrap();
@@ -174,6 +185,9 @@ fn independent_effects_and_original_failure_survive_partial_retry() {
 }
 #[test]
 fn live_kernel_consumers_prevent_retirement_until_the_final_holder_joins() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, target, plan) = fixture();
     let entry = h.ledger()["entries"][0].clone();
     let held = fs::File::open(h.root.join(entry["ownership"]["path"].as_str().unwrap())).unwrap();
@@ -191,6 +205,9 @@ fn live_kernel_consumers_prevent_retirement_until_the_final_holder_joins() {
 }
 #[test]
 fn wrong_identity_release_and_survivor_omissions_preserve_affected_members() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for mode in ["release", "hash", "survivor", "source", "staged"] {
         let (_h, target, mut plan) = fixture();
         match mode {

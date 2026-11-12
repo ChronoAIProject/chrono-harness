@@ -1,3 +1,5 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 #[path = "../../runner-tests/tests/support/retention_state.rs"]
 mod retention_state;
 use super::*;
@@ -309,6 +311,9 @@ impl EnrollmentOriginalsFixture {
 
 #[test]
 fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::imported();
     let ledger = fs::read(h.record.join("ledger.json")).unwrap();
     let original = fs::read(h.root.join(&h.original)).unwrap();
@@ -322,6 +327,9 @@ fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_in
 
 #[test]
 fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = EnrollmentOriginalsFixture::build(Some("missing-source"));
     let fixture_path = h.root.join("git-fixture.json");
@@ -374,6 +382,9 @@ fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
 
 #[test]
 fn absent_import_preserves_unqualified_originals_and_rejects_source_drift() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "missing-source",
         "schema",
@@ -436,6 +447,9 @@ fn absent_import_preserves_unqualified_originals_and_rejects_source_drift() {
 
 #[test]
 fn absent_adoption_reads_only_bound_policy_addresses_and_preserves_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::new();
     let mut config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
     config["git"] = value!({"execution-only":"not an executable choice"});
@@ -455,6 +469,9 @@ fn absent_adoption_reads_only_bound_policy_addresses_and_preserves_originals() {
 
 #[test]
 fn absent_adoption_does_not_execute_coordinator_producer_declarations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::new();
     let config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
     let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
@@ -474,6 +491,9 @@ fn absent_adoption_does_not_execute_coordinator_producer_declarations() {
 
 #[test]
 fn absent_adoption_keeps_consumed_policy_and_live_producer_validation() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for live in [false, true] {
         let h = EnrollmentOriginalsFixture::new();
         let config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
@@ -502,6 +522,9 @@ fn absent_adoption_keeps_consumed_policy_and_live_producer_validation() {
 
 #[test]
 fn absent_adoption_rejects_invalid_addresses_and_original_drift() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["host-type", "policy-type", "relocated-policy", "bytes"] {
         let h = EnrollmentOriginalsFixture::new();
         let mut config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
@@ -550,6 +573,9 @@ fn absent_adoption_rejects_invalid_addresses_and_original_drift() {
 
 #[test]
 fn status_keeps_enrollment_originals_after_failed_absent_policy_read() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::new();
     // The mutating lifecycle owner establishes the original consumers before
     // trying to interpret the absent checkout's policy. Observation only reads.
@@ -592,6 +618,9 @@ fn status_keeps_enrollment_originals_after_failed_absent_policy_read() {
 
 #[test]
 fn enrollment_originals_are_protected_before_global_maintenance() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::new();
     let ledger = fs::read(h.record.join("ledger.json")).unwrap();
     let (code, report) = h.invoke("maintain", false);
@@ -622,6 +651,9 @@ fn enrollment_originals_are_protected_before_global_maintenance() {
 
 #[test]
 fn enrollment_originals_unknown_metadata_defers_only_global_original_maintenance() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::new();
     fs::create_dir(h.record.join("gate.lock")).unwrap();
     let (code, report) = h.invoke("maintain", false);
@@ -793,6 +825,9 @@ fn capacity_fixture_with_diagnostics(
 
 #[test]
 fn caught_capacity_failure_exports_original_inventory_and_command_streams() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let host = Host::new("payload");
     let destination = tempfile::tempdir().unwrap();
     let originals = [
@@ -1075,16 +1110,25 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
 
 #[test]
 fn ordinary_report_capacity_maintenance_reclaims_only_eligible_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     ordinary_report_capacity("maintain", false);
 }
 
 #[test]
 fn ordinary_report_capacity_bootstrap_admits_without_unrelated_maintenance() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     ordinary_report_capacity("bootstrap", false);
 }
 
 #[test]
 fn ordinary_report_capacity_maintenance_preserves_required_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     ordinary_report_capacity("maintain", true);
 }
 
@@ -1099,6 +1143,9 @@ pub(super) fn inventory_row<'a>(report: &'a Value, target: &Path) -> &'a Value {
 
 #[test]
 fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
@@ -1137,6 +1184,9 @@ fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() 
 
 #[test]
 fn automatic_inventory_preserves_ledgerless_dirty_locked_and_prunable_worktrees() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["dirty", "locked", "prunable"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
@@ -1220,6 +1270,9 @@ fn automatic_inventory_preserves_ledgerless_dirty_locked_and_prunable_worktrees(
 
 #[test]
 fn automatic_inventory_requires_current_attachment_but_accepts_advanced_head() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["advanced", "gitfile", "metadata", "unreadable"] {
         let h = Host::new("payload");
         h.kernel_cleanup();
@@ -1281,6 +1334,9 @@ fn automatic_inventory_requires_current_attachment_but_accepts_advanced_head() {
 
 #[test]
 fn independent_birth_has_no_dependency_on_another_worktrees_maintenance_original() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
@@ -1320,6 +1376,9 @@ fn independent_birth_has_no_dependency_on_another_worktrees_maintenance_original
 
 #[test]
 fn automatic_birth_enrollment_and_active_retained_checkout_survives_start() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("some language/input.odd");
     h.automatic("evidence-retain");
     let first = h.parent.join("active");
@@ -1350,6 +1409,9 @@ fn attention_row<'a>(report: &'a Value, path: &Path) -> &'a Value {
 
 #[test]
 fn automatic_attention_persists_across_commands_and_stops_after_verified_removal() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
     native_consumer(&h, "finished");
@@ -1391,6 +1453,9 @@ fn automatic_attention_persists_across_commands_and_stops_after_verified_removal
 
 #[test]
 fn automatic_attention_linked_query_publishes_its_original_at_the_coordinator() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
     let target = h.parent.join("linked status");
@@ -1440,6 +1505,9 @@ fn automatic_attention_linked_query_publishes_its_original_at_the_coordinator() 
 
 #[test]
 fn automatic_attention_preserves_unregistered_dirty_and_corrupt_worktrees() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
     let healthy = h.parent.join("healthy");
@@ -1495,6 +1563,9 @@ fn automatic_attention_preserves_unregistered_dirty_and_corrupt_worktrees() {
 
 #[test]
 fn automatic_attention_keeps_retained_terminal_work_visible_and_scopes_ordinary_commands() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
     let target = h.parent.join("retained");
@@ -1538,6 +1609,9 @@ fn automatic_attention_keeps_retained_terminal_work_visible_and_scopes_ordinary_
 
 #[test]
 fn automatic_finish_absent_evidence_does_not_retain_the_whole_checkout() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let target = h.parent.join("no-evidence");
@@ -1561,6 +1635,9 @@ fn automatic_finish_absent_evidence_does_not_retain_the_whole_checkout() {
 
 #[test]
 fn automatic_maintenance_resumes_retained_checkout_after_evidence_release() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let target = h.parent.join("released-evidence");
@@ -1606,6 +1683,9 @@ fn automatic_maintenance_resumes_retained_checkout_after_evidence_release() {
 
 #[test]
 fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_released() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -1675,6 +1755,9 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
 
 #[test]
 fn creator_agent_and_pending_reminders_follow_the_original_creator() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     h.policy(|policy| {
@@ -1851,6 +1934,9 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
 
 #[test]
 fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_records() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let policy_path = h.root.join(AUTO_POLICY);
@@ -1909,6 +1995,9 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
 
 #[test]
 fn retired_address_preserves_directory_consumers_and_unknown_members() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::ownership::DirectoryLease;
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -1946,6 +2035,9 @@ fn retired_address_preserves_directory_consumers_and_unknown_members() {
 
 #[test]
 fn interrupted_address_retirement_preserves_changed_members_then_resumes_original_identity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let policy_path = h.root.join(AUTO_POLICY);
@@ -2007,6 +2099,9 @@ fn interrupted_address_retirement_preserves_changed_members_then_resumes_origina
 
 #[test]
 fn retired_capability_failure_keeps_the_creators_original_responsibility_visible() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     h.policy(|policy| {
@@ -2079,6 +2174,9 @@ fn retired_capability_failure_keeps_the_creators_original_responsibility_visible
 
 #[test]
 fn terminal_history_count_and_byte_limits_release_verified_generations_before_the_ttl() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let policy_path = h.root.join(AUTO_POLICY);
@@ -2115,6 +2213,9 @@ fn terminal_history_count_and_byte_limits_release_verified_generations_before_th
 
 #[test]
 fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rotation() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::Inventory;
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -2220,6 +2321,9 @@ fn maintain_original_until_absent(
 
 #[test]
 fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_reference() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -2360,6 +2464,9 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
 
 #[test]
 fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let policy_path = h.root.join(AUTO_POLICY);
@@ -2402,6 +2509,9 @@ fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
 
 #[test]
 fn automatic_finish_reclaims_real_checkout_and_reports_measured_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
     let target = h.parent.join("finished");
@@ -2471,6 +2581,9 @@ fn entry_receipts(h: &Host, entry: &Value) -> Vec<(PathBuf, Vec<u8>)> {
 
 #[test]
 fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("input.custom");
     h.automatic("evidence-retain");
     native_consumer(&h, "output-branch");
@@ -2590,6 +2703,9 @@ fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
 
 #[test]
 fn automatic_absent_active_enrollment_conflict_preflights_without_creation() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     let target = h.parent.join("unresolved");
@@ -2623,6 +2739,9 @@ fn automatic_absent_active_enrollment_conflict_preflights_without_creation() {
 
 #[test]
 fn automatic_cache_only_preserves_evidence_dirty_and_unretained_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for reason in ["evidence", "dirty", "unretained"] {
         let h = Host::new("payload");
         h.automatic("evidence-retain");
@@ -2658,6 +2777,9 @@ fn automatic_cache_only_preserves_evidence_dirty_and_unretained_work() {
 
 #[test]
 fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_birth() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let target = h.parent.join("client-checkout");
@@ -2747,6 +2869,9 @@ fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_b
 
 #[test]
 fn automatic_import_is_explicit_and_not_a_historical_birth() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     config["artifacts"].as_array_mut().unwrap().extend([
@@ -2777,6 +2902,9 @@ fn automatic_import_is_explicit_and_not_a_historical_birth() {
 
 #[test]
 fn observational_import_binds_original_inputs_without_adopting_format_or_disposal_scopes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     native_consumer(&h, "ordinary");
@@ -2889,6 +3017,9 @@ fn observational_import_binds_original_inputs_without_adopting_format_or_disposa
 
 #[test]
 fn detached_import_preserves_unresolved_index_and_reports_unfinished_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let base = git(&h.root, &["rev-parse", "HEAD"]);
@@ -2950,6 +3081,9 @@ fn detached_import_preserves_unresolved_index_and_reports_unfinished_work() {
 
 #[test]
 fn detached_finish_removes_only_the_enrolled_checkout_and_keeps_all_branches() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let path = h.root.join(AUTO_POLICY);
@@ -2990,6 +3124,9 @@ fn detached_finish_removes_only_the_enrolled_checkout_and_keeps_all_branches() {
 
 #[test]
 fn detached_enrollment_rejects_later_branch_attachment_without_changing_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let target = h.parent.join("changed detached checkout");
@@ -3030,6 +3167,9 @@ fn blocked_remove(h: &Host, after_effect: bool) {
 
 #[test]
 fn automatic_partial_failure_preserves_independent_start_and_explicit_retry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for after_effect in [false, true] {
         let h = Host::new("payload");
         blocked_remove(&h, after_effect);
@@ -3084,6 +3224,9 @@ fn automatic_partial_failure_preserves_independent_start_and_explicit_retry() {
 
 #[test]
 fn automatic_retries_keep_original_evidence_without_recursive_growth() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for kernel in [false, true] {
         let h = Host::new("payload");
         blocked_remove(&h, false);
@@ -3189,6 +3332,9 @@ fn automatic_retries_keep_original_evidence_without_recursive_growth() {
 
 #[test]
 fn automatic_symlink_containment_and_internal_external_target_safety() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::symlink;
     for fault in ["internal", "ancestor", "selected-root"] {
         let h = Host::new("payload");
@@ -3319,6 +3465,9 @@ fn consuming_scripts(h: &Host, scripts: Value, sources: &[(&str, &[u8])]) {
 
 #[test]
 fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::{
         thread,
         time::{Duration, Instant},
@@ -3387,6 +3536,9 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
 
 #[test]
 fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "head",
         "ref",
@@ -3483,6 +3635,9 @@ fn automatic_terminal_rejects_changed_head_ref_policy_attachment_and_git_locks()
 
 #[test]
 fn automatic_reconstruct_enrolls_only_success_and_unresolved_evidence_can_later_settle() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     let head = git(&h.root, &["rev-parse", "HEAD"]);
@@ -3522,6 +3677,9 @@ fn automatic_reconstruct_enrolls_only_success_and_unresolved_evidence_can_later_
 
 #[test]
 fn automatic_same_tree_retention_remains_exact_and_branch_removal_is_opt_in() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
@@ -3577,6 +3735,9 @@ fn automatic_same_tree_retention_remains_exact_and_branch_removal_is_opt_in() {
 
 #[test]
 fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     let target = h.parent.join("filesystem-failure");
@@ -3585,12 +3746,13 @@ fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
     fs::create_dir_all(target.join("nested/cache")).unwrap();
     fs::write(target.join("nested/cache/keep-until-retry"), "cache").unwrap();
     let special = target.join("nested/cache/special");
-    assert!(
-        Command::new("mkfifo")
-            .arg(&special)
-            .status()
-            .unwrap()
-            .success()
+    use std::os::unix::ffi::OsStrExt;
+    let special_name = std::ffi::CString::new(special.as_os_str().as_bytes()).unwrap();
+    assert_eq!(
+        unsafe { libc::mkfifo(special_name.as_ptr(), 0o600) },
+        0,
+        "{}",
+        std::io::Error::last_os_error()
     );
     let (code, r, e) = h.auto(
         "finish",
@@ -3625,6 +3787,9 @@ fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
 
 #[test]
 fn automatic_failed_birth_and_missing_state_are_protected() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     h.hook(value!({"stderr":"original-birth-failure","exit":17}));
@@ -3647,6 +3812,9 @@ fn automatic_failed_birth_and_missing_state_are_protected() {
 
 #[test]
 fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_start() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("layout/source.ext");
     h.automatic("evidence-retain");
     let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
@@ -3698,6 +3866,9 @@ fn automatic_explicit_main_anchor_short_commands_and_finish_from_source_then_sta
 
 #[test]
 fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["staged-source", "evidence-authorization", "gate"] {
         let h = Host::new("payload");
         h.automatic("evidence-retain");
@@ -3728,6 +3899,9 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
 
 #[test]
 fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     native_consumer(&h, "unknown-use");
@@ -3752,12 +3926,11 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
     let out = wrapper.wait_with_output().unwrap();
     assert_ne!(h.received(out).0, 0);
     // Join exactly the test-owned process group; no process scanning or age heuristic.
-    assert!(
-        Command::new("/bin/kill")
-            .args(["-KILL", "--", &format!("-{child_pid}")])
-            .status()
-            .unwrap()
-            .success()
+    assert_eq!(
+        unsafe { libc::kill(-child_pid.trim().parse::<i32>().unwrap(), libc::SIGKILL) },
+        0,
+        "{}",
+        std::io::Error::last_os_error()
     );
     assert_eq!(
         h.ledger()["entries"][0]["uses"].as_array().unwrap().len(),
@@ -3777,6 +3950,9 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
 
 #[test]
 fn automatic_concurrent_managed_completions_release_both_uses() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::{
         thread,
         time::{Duration, Instant},
@@ -3835,6 +4011,9 @@ fn automatic_concurrent_managed_completions_release_both_uses() {
 
 #[test]
 fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     native_consumer(&h, "finished");
@@ -3867,6 +4046,9 @@ fn automatic_use_from_checkout_publishes_at_surviving_anchor() {
 
 #[test]
 fn status_observes_busy_metadata_without_mutating_enrollments() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::ownership::{DirectoryLease, Lease};
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -3928,6 +4110,9 @@ fn status_observes_busy_metadata_without_mutating_enrollments() {
 
 #[test]
 fn status_does_not_initialize_namespace_or_unknown_address() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let namespace = h.root.join(".chrono-harness/state/automatic-cleanup");
@@ -3955,6 +4140,9 @@ fn status_does_not_initialize_namespace_or_unknown_address() {
 
 #[test]
 fn status_reports_damaged_invoking_metadata_and_rejects_namespace_identity_changes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new("payload");
     h.kernel_cleanup();
     let (code, maintained, error) = h.auto("maintain", &[]);

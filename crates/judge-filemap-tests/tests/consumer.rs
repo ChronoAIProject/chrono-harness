@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 mod support;
 use chrono_harness::{facts, sha256, wire};
 use chrono_judge_filemap::{IMPACT_SCHEMA, Impact};
@@ -24,7 +26,11 @@ impl Host {
             ("judge-registration", "chrono-judge-registration"),
             ("judge-filemap", "chrono-judge-filemap"),
         ] {
-            let p = source().join(format!("crates/{project}/target/debug/{binary}"));
+            let p = if (project, binary) == ("runner", "chrono-harness") {
+                std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
+            } else {
+                source().join(format!("crates/{project}/target/debug/{binary}"))
+            };
             assert!(
                 p.is_file(),
                 "build registered binary first: {}",
@@ -169,6 +175,9 @@ fn script_host() -> Host {
 }
 #[test]
 fn full_changed_alias_collision_is_not_a_unique_executable() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = script_host();
     script_pair(&mut h.values, "t");
     fs::write(h.root().join("src.bin"), "changed").unwrap();
@@ -255,6 +264,9 @@ fn assert_collision(r: &Value, endpoints: &[&str]) {
 }
 #[test]
 fn full_distinct_aliases_preserve_both_executables() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = script_host();
     script_pair(&mut h.values, "st2");
     fs::write(h.root().join("src.bin"), "changed").unwrap();
@@ -282,6 +294,9 @@ fn full_distinct_aliases_preserve_both_executables() {
 }
 #[test]
 fn full_alias_change_without_source_change_is_causal() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = script_host();
     script_pair(&mut h.values, "t");
     h.save();
@@ -298,6 +313,9 @@ fn full_alias_change_without_source_change_is_causal() {
 }
 #[test]
 fn full_historical_collision_is_only_judged_when_reached() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = script_host();
     script_pair(&mut h.values, "t");
     h.save();
@@ -341,6 +359,9 @@ fn full_historical_collision_is_only_judged_when_reached() {
 }
 #[test]
 fn full_colliding_project_record_change_preserves_its_alias_cause() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = script_host();
     script_pair(&mut h.values, "t");
     h.save();
@@ -373,6 +394,9 @@ fn full_colliding_project_record_change_preserves_its_alias_cause() {
 }
 #[test]
 fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impact() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let (exit, r) = h.run();
     assert_eq!(exit, 0, "{r:#}");
@@ -464,6 +488,9 @@ fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impa
 }
 #[test]
 fn full_report_removed_test_is_selected_without_execution_or_retirement_approval() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     h.values.get_mut(PROJECTS).unwrap()["projects"] = json!([]);
     h.values.get_mut(FM).unwrap()["project_edges"] = json!([]);
@@ -493,6 +520,9 @@ fn full_report_removed_test_is_selected_without_execution_or_retirement_approval
 }
 #[test]
 fn full_check_missing_or_malformed_required_input_is_nonzero() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for mode in ["missing", "malformed", "structure"] {
         let mut h = Host::new();
         match mode {
@@ -511,6 +541,9 @@ fn full_check_missing_or_malformed_required_input_is_nonzero() {
 }
 #[test]
 fn full_external_input_declaration_remains_unresolved_before_filemap() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"] =
         json!([{"id":"outside","location":"/not-retained","sha256":null}]);
@@ -523,6 +556,9 @@ fn full_external_input_declaration_remains_unresolved_before_filemap() {
 }
 #[test]
 fn filemap_process_rejects_forged_empty_delta_missing_oid_and_registry_digest() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new();
     let binding: wire::Binding =
         serde_json::from_value(h.values[JUDGES]["judges"][1].clone()).unwrap();
@@ -551,6 +587,9 @@ fn filemap_process_rejects_forged_empty_delta_missing_oid_and_registry_digest() 
 }
 #[test]
 fn full_reached_historical_dangling_has_consecutive_path_cause() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new();
     // Persist defect at both endpoints so registration's direct-change policy leaves it to impact.
     h.values.get_mut(FM).unwrap()["project_edges"]

@@ -34,7 +34,14 @@ impl Fixture {
             .prefix("source-")
             .tempdir_in(case.path())
             .unwrap();
-        host.config["tools"]["probe"] = json!("/bin/echo");
+        let tools = case.path().join("tools");
+        fs::create_dir(&tools).unwrap();
+        let git_tool = tools.join("git");
+        fs::copy(env!("CARGO_BIN_EXE_chrono-test-release-git"), &git_tool).unwrap();
+        host.config["tools"]["git"] = json!(git_tool);
+        let probe = tools.join("probe");
+        fs::copy(env!("CARGO_BIN_EXE_chrono-test-release-tool"), &probe).unwrap();
+        host.config["tools"]["probe"] = json!(probe);
         host.save();
         let root = host.root();
         fs::write(
@@ -57,7 +64,7 @@ impl Fixture {
         };
         let profile = json!({"schema":"chrono-bootstrap/v1", "projects":".chrono-harness/bootstrap-projects.json", "rust_toolchain":"1.95.0", "tools":{},
             "operations":["build.frontend"], "install":[{"source":"out/frontend", "destination":".chrono-harness/bin/chrono-host-release"}],
-            "participation":{"coordinator_root":"git-main-worktree", "program":".chrono-harness/bin/chrono-worktree", "git":"/usr/bin/git", "config":".chrono-harness/worktree.json"},
+            "participation":{"coordinator_root":"git-main-worktree", "program":".chrono-harness/bin/chrono-worktree", "git":git_tool, "config":".chrono-harness/worktree.json"},
             "entrypoint":{"tool":"bash", "script":".chrono-harness/ci/entry.sh"}, "require_tool_bindings":true,
             "tool_bindings_registry":".chrono-harness/ci/registry.json", "report_path":".chrono-harness/state/frontend-bootstrap.json"});
         recipe::write(root, ".chrono-harness/ci/bootstrap-release.json", &profile);
@@ -93,7 +100,7 @@ impl Fixture {
             ],
         ] {
             assert!(
-                Command::new("/usr/bin/git")
+                Command::new(&git_tool)
                     .args(args)
                     .current_dir(root)
                     .status()
@@ -103,7 +110,7 @@ impl Fixture {
         }
         let git = |revision| {
             String::from_utf8(
-                Command::new("/usr/bin/git")
+                Command::new(&git_tool)
                     .args(["rev-parse", revision])
                     .current_dir(root)
                     .output()
@@ -179,6 +186,11 @@ impl Fixture {
     }
 
     pub fn capture(&self, mut command: Command) -> std::process::Output {
+        let mut paths = vec![self.case.path().join("tools")];
+        paths.extend(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        ));
+        command.env("PATH", std::env::join_paths(paths).unwrap());
         chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
         let output = command.output().unwrap();
         let index = self.calls.get();
@@ -235,8 +247,9 @@ impl Fixture {
     }
 
     pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
-        let mut command = context::command("/bin/bash");
+        let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
         command
+            .arg("--consume-launcher")
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
             .arg(self.host.root())
             .arg(directory)

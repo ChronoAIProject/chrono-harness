@@ -1427,7 +1427,50 @@ fn all_publication_entries_record_success_failure_and_noop_without_rewriting_tar
 }
 
 #[test]
+fn publication_finishes_sealing_before_reporting_init_generate_and_noop_success() {
+    let host = Host::new();
+    for init in [true, false, false] {
+        if !init {
+            host.write(METHOD, "body after init");
+        }
+        let changed = test_support::operation_with_sealing_round_budget(&host.root, init, 1)
+            .unwrap_or_else(|error| panic!("init={init}: {error}"));
+        if init {
+            assert!(!changed.is_empty());
+        }
+        let state = chrono_instructions::status(&host.root, None).unwrap();
+        for record in state["records"].as_array().unwrap() {
+            assert_eq!(record["phase"], "released", "{record}");
+            assert_eq!(record["sealed"], true, "{record}");
+        }
+        let inventory =
+            chrono_harness::retained_artifacts::retention::Inventory::with_standalone_policy(
+                &host.root,
+                include_bytes!("../../../assets/instructions/standalone-retention.json"),
+            )
+            .unwrap();
+        assert!(
+            inventory
+                .rooted_original(
+                    "instructions-operation",
+                    "instructions-publication-recovery"
+                )
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert!(generate(&host.root).unwrap().is_empty());
+}
+
+#[test]
 fn finalization_failure_is_real_and_the_same_attempt_is_recoverable() {
+    // Recovery observes immediate last-close metadata ownership. Run this
+    // host without unrelated libtest forks inheriting its open capabilities.
+    if !isolated_capability::isolated_capability_test(
+        "finalization_failure_is_real_and_the_same_attempt_is_recoverable",
+    ) {
+        return;
+    }
     for point in [
         "cleanup",
         "before-result",
@@ -1660,6 +1703,89 @@ fn same_host_excludes_a_second_process_while_an_independent_host_progresses() {
     assert_alias(&second);
     paused.finish();
     assert_alias(&first);
+}
+
+#[test]
+fn completed_synchronous_operation_releases_lock_while_unrelated_fork_retains_descriptors() {
+    use std::io::Read;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::net::UnixStream;
+    let host = Host::new();
+    host.init().unwrap();
+    let lease = chrono_harness::ownership::DirectoryLease::acquire_local(
+        &host
+            .root
+            .join(".chrono-harness/state/instructions-operations"),
+        true,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let (read, write) = UnixStream::pair().unwrap();
+    let child = unsafe { libc::fork() };
+    assert!(child >= 0);
+    if child == 0 {
+        // This unrelated pre-exec fork retains the open descriptions. It only
+        // uses async-signal-safe syscalls, and EOF is its native completion gate.
+        unsafe {
+            libc::close(write.as_raw_fd());
+            if libc::write(read.as_raw_fd(), b"r".as_ptr().cast(), 1) != 1 {
+                libc::_exit(90);
+            }
+            let mut byte = 0u8;
+            loop {
+                let result = libc::read(read.as_raw_fd(), (&mut byte as *mut u8).cast(), 1);
+                if result == 0 {
+                    break;
+                }
+                #[cfg(target_os = "macos")]
+                let interrupted = *libc::__error() == libc::EINTR;
+                #[cfg(target_os = "linux")]
+                let interrupted = *libc::__errno_location() == libc::EINTR;
+                if result < 0 && interrupted {
+                    continue;
+                }
+                libc::_exit(91);
+            }
+            libc::_exit(0);
+        }
+    }
+    struct JoinedFork {
+        write: Option<UnixStream>,
+        child: libc::pid_t,
+    }
+    impl Drop for JoinedFork {
+        fn drop(&mut self) {
+            drop(self.write.take());
+            let mut status = 0;
+            assert_eq!(
+                unsafe { libc::waitpid(self.child, &mut status, 0) },
+                self.child
+            );
+            assert_eq!(status, 0);
+        }
+    }
+    let mut joined = JoinedFork {
+        write: Some(write),
+        child,
+    };
+    let mut ready = [0];
+    joined
+        .write
+        .as_mut()
+        .unwrap()
+        .read_exact(&mut ready)
+        .unwrap();
+    assert_eq!(ready, *b"r");
+    let busy = cli_init(&host, None, None);
+    assert_eq!(busy.exit_code, 1, "{busy:?}");
+    assert!(busy.stderr.contains("busy"));
+    drop(lease);
+    // The inherited descriptor remains live. The real next caller must succeed
+    // immediately without a retry, sleep or weakened same-host exclusion.
+    let result = cli_init(&host, None, None);
+    assert_eq!(result.exit_code, 0, "{result:?}");
+    assert_alias(&host);
 }
 
 #[test]

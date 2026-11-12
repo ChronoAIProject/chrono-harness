@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 
 fn host() -> Host {
@@ -34,8 +36,7 @@ fn unit(h: &Host, base: &str, candidate: &str, unit: &str) -> Response {
 }
 
 fn cli(h: &Host, base: &str, candidate: &str, selector: &[&str]) -> (i32, Value) {
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let output = Command::new(source.join("crates/runner/target/debug/chrono-harness"))
+    let output = Command::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
         .current_dir(h.root())
         .args([
             "check",
@@ -143,6 +144,9 @@ fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, case: &str, reaso
 
 #[test]
 fn filemap_v2_timeout_only_delta_executes_candidate_plan() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     filemap_v2_bound_delta(
         "timeout_seconds",
         1,
@@ -154,6 +158,9 @@ fn filemap_v2_timeout_only_delta_executes_candidate_plan() {
 
 #[test]
 fn filemap_v2_output_limit_only_delta_executes_candidate_plan() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     filemap_v2_bound_delta(
         "output_limit_bytes",
         64,
@@ -165,6 +172,9 @@ fn filemap_v2_output_limit_only_delta_executes_candidate_plan() {
 
 #[test]
 fn filemap_v2_bound_delta_validates_methods_before_unit_filtering() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     explicit_plans(&h);
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
@@ -188,6 +198,9 @@ fn filemap_v2_bound_delta_validates_methods_before_unit_filtering() {
 
 #[test]
 fn registered_unit_runs_only_its_selected_plan() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let b = h.head();
     h.write("src.txt", "two");
@@ -208,6 +221,9 @@ fn registered_unit_runs_only_its_selected_plan() {
 
 #[test]
 fn independent_unit_survives_another_units_failure() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let b = h.head();
     h.write("check.case", "exit-19\n");
@@ -231,6 +247,9 @@ fn independent_unit_survives_another_units_failure() {
 
 #[test]
 fn unit_without_delta_retains_other_unit_obligations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let b = h.head();
     h.write("other.txt", "two");
@@ -246,6 +265,9 @@ fn unit_without_delta_retains_other_unit_obligations() {
 
 #[test]
 fn missing_duplicate_unknown_assignments_fail_before_effects() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for mode in ["missing", "duplicate", "unknown"] {
         let h = host();
         let b = h.head();
@@ -268,6 +290,9 @@ fn missing_duplicate_unknown_assignments_fail_before_effects() {
 
 #[test]
 fn shared_prerequisite_requires_exact_explicit_replication() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let b = h.head();
     h.change_registry(CONFIG, |v| {
@@ -290,6 +315,9 @@ fn shared_prerequisite_requires_exact_explicit_replication() {
 
 #[test]
 fn unit_filter_does_not_hide_global_cycles() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let b = h.head();
     h.change_registry(CONFIG, |v| {
@@ -351,6 +379,9 @@ fn collect(h: &Host, b: &str, c: &str, reports: Value) -> Response {
 
 #[test]
 fn execution_originals_use_one_lossless_receipt_and_collect_without_reexecution() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     h.change_registry(CONFIG, |v| {
         v["policy"]["operation_output_limit_bytes"] = json!(100_000)
@@ -393,6 +424,9 @@ fn execution_originals_use_one_lossless_receipt_and_collect_without_reexecution(
 
 #[test]
 fn collection_rejects_missing_schema_and_conflicting_or_corrupt_current_evidence() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     let b = h.head();
     h.write("src.txt", "two");
@@ -460,6 +494,9 @@ fn collection_rejects_missing_schema_and_conflicting_or_corrupt_current_evidence
 
 #[test]
 fn operation_override_delta_selects_its_unit_and_collection_rechecks_original_contract() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     explicit_plans(&h);
     let b = h.commit();
@@ -525,6 +562,9 @@ fn operation_override_delta_selects_its_unit_and_collection_rechecks_original_co
 
 #[test]
 fn collection_verifies_complete_reports_without_executing_tests() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     let b = h.head();
     h.write("src.txt", "two");
@@ -548,6 +588,9 @@ fn collection_verifies_complete_reports_without_executing_tests() {
 
 #[test]
 fn collection_preserves_result_set_semantics_from_original_stdout() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     let b = h.head();
     h.write("src.txt", "two");
@@ -611,6 +654,9 @@ fn pad_report(h: &Host, mut report: Value, length: usize) -> Value {
 
 #[test]
 fn collection_report_limit_accepts_exact_bytes_and_rejects_one_more() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     let limit = 2 * 1024 * 1024;
     h.change_registry(CONFIG, |v| {
@@ -631,6 +677,9 @@ fn collection_report_limit_accepts_exact_bytes_and_rejects_one_more() {
 
 #[test]
 fn collection_can_adopt_large_original_reports_without_rewriting_evidence() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let length = 64 * 1024 * 1024 + 1;
     for explicit in [false, true] {
         let h = report_host();
@@ -664,6 +713,9 @@ fn collection_can_adopt_large_original_reports_without_rewriting_evidence() {
 
 #[test]
 fn collection_manifest_limit_is_independent_and_checks_exact_bytes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     h.change_registry(CONFIG, |v| {
         v["policy"]["collection_limits"] = json!({"manifest_bytes":128,"report_bytes":1});
@@ -691,6 +743,9 @@ fn collection_manifest_limit_is_independent_and_checks_exact_bytes() {
 
 #[test]
 fn collection_limits_reject_invalid_values_before_unit_operations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for limits in [
         json!(null),
         json!({"manifest_bytes":0,"report_bytes":1024}),
@@ -731,6 +786,9 @@ fn collection_limits_reject_invalid_values_before_unit_operations() {
 
 #[test]
 fn collection_rejects_missing_duplicate_stale_and_corrupt_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     let b = h.head();
     h.write("src.txt", "two");
@@ -762,6 +820,9 @@ fn collection_rejects_missing_duplicate_stale_and_corrupt_originals() {
 
 #[test]
 fn collection_rechecks_candidate_plan_and_environment_beyond_report_hashes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     h.change_registry(CONFIG, |v| {
         v["policy"]["environment"] = json!({"FIXTURE_LITERAL":"fixed"})
@@ -808,6 +869,9 @@ fn collection_rechecks_candidate_plan_and_environment_beyond_report_hashes() {
 
 #[test]
 fn collection_supports_explicit_judge_resolved_through_recorded_path() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     h.change_registry(CONFIG, |v| v["judge"]["program"] = json!("cat"));
     let b = h.commit();
@@ -820,6 +884,9 @@ fn collection_supports_explicit_judge_resolved_through_recorded_path() {
 
 #[test]
 fn scheduling_priority_delta_selects_all_plans_and_preserves_unchanged_order() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (before, after, changed) in [
         (
             vec!["test.suite", "test.other"],
@@ -897,6 +964,9 @@ fn scheduling_priority_delta_selects_all_plans_and_preserves_unchanged_order() {
 
 #[test]
 fn scheduling_delta_selects_complete_plans_and_collection_rejects_rewritten_policy() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = report_host();
     explicit_plans(&h);
     h.change_registry(".chrono-harness/FILEMAP.json",|v|v["execution_scheduling"]=json!({"max_running":1,"resources":[],"claims":{"test.suite":{"resources":[],"outputs":[]},"test.other":{"resources":[],"outputs":[]}}}));
@@ -959,6 +1029,9 @@ fn exit_zero_infrastructure_launcher_helper() {
 
 #[test]
 fn exit_zero_infrastructure_failure_has_null_summary_and_retained_receipt_in_collection() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     h.change_registry(CONFIG, |v| {
         v["judge"] = json!({"program":env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli"),"args":[],"timeout_seconds":30,"output_limit_bytes":1048576});

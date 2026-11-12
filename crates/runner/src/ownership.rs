@@ -21,14 +21,34 @@ pub struct DirectoryLease {
     file: File,
     path: PathBuf,
     id: String,
+    local: bool,
+    owner_pid: u32,
     #[cfg(unix)]
-    _scope: crate::process_fds::Scope,
+    _scope: Option<crate::process_fds::Scope>,
 }
 impl DirectoryLease {
     pub fn acquire(
         path: &Path,
         exclusive: bool,
         wait: Option<Duration>,
+    ) -> Result<Option<Self>, String> {
+        Self::acquire_for(path, exclusive, wait, false)
+    }
+    /// Synchronous metadata operations have no descendant owner. Explicitly
+    /// release their lock on return, including when an unrelated fork still
+    /// holds an incidental copy of this open description before exec.
+    pub fn acquire_local(
+        path: &Path,
+        exclusive: bool,
+        wait: Option<Duration>,
+    ) -> Result<Option<Self>, String> {
+        Self::acquire_for(path, exclusive, wait, true)
+    }
+    fn acquire_for(
+        path: &Path,
+        exclusive: bool,
+        wait: Option<Duration>,
+        local: bool,
     ) -> Result<Option<Self>, String> {
         #[cfg(not(unix))]
         {
@@ -81,11 +101,17 @@ impl DirectoryLease {
                     Some(_) => std::thread::sleep(Duration::from_millis(10)),
                 }
             }
-            let scope = crate::process_fds::Scope::new(&[file.as_fd()])?;
+            let scope = if local {
+                None
+            } else {
+                Some(crate::process_fds::Scope::new(&[file.as_fd()])?)
+            };
             let result = Self {
                 file,
                 path: path.into(),
                 id,
+                local,
+                owner_pid: std::process::id(),
                 _scope: scope,
             };
             result.stable()?;
@@ -106,6 +132,20 @@ impl DirectoryLease {
         }
         self.file.metadata().map_err(|e| e.to_string())?;
         Ok(())
+    }
+}
+impl Drop for DirectoryLease {
+    fn drop(&mut self) {
+        #[cfg(unix)]
+        if crate::verified_status::release_local_directory(
+            self.local,
+            self.owner_pid,
+            std::process::id(),
+        ) {
+            use std::os::fd::AsRawFd;
+            // A forked copy must never unlock its parent's live operation.
+            unsafe { libc::flock(self.file.as_raw_fd(), libc::LOCK_UN) };
+        }
     }
 }
 pub fn identity(path: &Path) -> Result<String, String> {
@@ -258,5 +298,6 @@ impl Lease {
         Ok(())
     }
 }
-// Closing the final descriptor releases ownership. Never LOCK_UN: descendants
-// share the same open description and must retain protection after this owner dies.
+// Transferred leases release ownership at final close. Never LOCK_UN those:
+// descendants retain protection after the original owner dies. Local directory
+// operations above explicitly have no descendant owner.

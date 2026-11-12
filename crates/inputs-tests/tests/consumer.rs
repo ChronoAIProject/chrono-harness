@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 #[path = "../../judge-projects-tests/tests/support/host.rs"]
 mod host;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
@@ -82,6 +84,7 @@ fn native_v3(h: &mut Host) {
         "input:execution-tool",
         "input:data",
         "environment:FACTS_GIT",
+        "environment:PATH",
         "environment:DECLARED_EMPTY",
         "environment:DECLARED_ABSENT",
         "environment:EMPTY"
@@ -212,6 +215,9 @@ fn check(h: &Host, pair: &Value) -> (i32, Value) {
 }
 #[test]
 fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_bytes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = fixture();
     let pair = snapshots(&h);
     assert!(
@@ -249,6 +255,9 @@ fn produced_snapshots_drive_actual_seven_judge_execution_without_inline_input_by
 
 #[test]
 fn malformed_misbound_missing_and_changed_retained_inputs_fail_before_execution() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = fixture();
     let pair = snapshots(&h);
     let reject = |v: &Value, expected: &str| {
@@ -303,6 +312,9 @@ fn malformed_misbound_missing_and_changed_retained_inputs_fail_before_execution(
 
 #[test]
 fn input_larger_than_judge_json_bound_remains_a_small_request_and_is_actually_validated() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = fixture();
     // Independent SHA-256 oracle: Python hashlib over 65 successive 1 MiB zero blocks.
     let digest = "25631f11bd18756ec0029380ec886af0c8824dc6b2706bbdb1d9451c7cf45f42";
@@ -399,6 +411,9 @@ fn capture(h: &Host, name: &str) -> Value {
 }
 #[test]
 fn absence_to_empty_and_back_selects_only_explicit_input_consumers_including_old_edges() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for absent in [true, false] {
         let mut h = fixture();
         v2(&mut h);
@@ -430,6 +445,9 @@ fn absence_to_empty_and_back_selects_only_explicit_input_consumers_including_old
 }
 #[test]
 fn unchanged_absence_and_disconnected_changes_do_not_select_tests() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for disconnected in [false, true] {
         let mut h = fixture();
         v2(&mut h);
@@ -458,6 +476,9 @@ fn unchanged_absence_and_disconnected_changes_do_not_select_tests() {
 }
 #[test]
 fn retained_absence_mismatch_missing_snapshot_and_v1_downgrade_fail_before_operations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = fixture();
     v2(&mut h);
     data_state(&mut h, true);
@@ -516,6 +537,9 @@ fn retained_absence_mismatch_missing_snapshot_and_v1_downgrade_fail_before_opera
 }
 #[test]
 fn operation_creating_an_absent_input_fails_post_execution_validation() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = fixture();
     v2(&mut h);
     data_state(&mut h, true);
@@ -548,6 +572,9 @@ fn operation_creating_an_absent_input_fails_post_execution_validation() {
 
 #[test]
 fn legacy_null_and_unversioned_retained_absence_never_authorize_missing_input() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = fixture();
     h.values.get_mut(CONFIG).unwrap()["environment"]["inputs"]
         .as_array_mut()
@@ -575,6 +602,9 @@ fn legacy_null_and_unversioned_retained_absence_never_authorize_missing_input() 
 
 #[test]
 fn config_presence_upgrade_requires_registered_migration_evidence() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = fixture();
     h.base = h.candidate.clone();
     let a = capture(&h, "before");
@@ -778,6 +808,9 @@ fn conversion(report: &Value) -> &Value {
 
 #[test]
 fn explicit_version_migration_executes_candidate_decoder_and_preserves_v1_snapshot() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, before) = migration_fixture();
     let (exit, r) = migration_check(&h, &before);
     assert_eq!(exit, 0, "{}", r["findings"]);
@@ -813,6 +846,9 @@ fn explicit_version_migration_executes_candidate_decoder_and_preserves_v1_snapsh
 
 #[test]
 fn version_migration_rejects_ambiguous_incomplete_and_unmatched_selectors() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, before) = migration_fixture();
     let profile = h.values[WORKFLOW]["historical_profiles"][0].clone();
     let mut duplicate = profile.clone();
@@ -874,6 +910,9 @@ fn version_migration_rejects_ambiguous_incomplete_and_unmatched_selectors() {
 
 #[test]
 fn version_migration_cannot_rewrite_historical_input_semantics() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, before) = migration_fixture();
     decoder_mode(&mut h, "decoder", "rewrite-direct");
     h.save();
@@ -890,6 +929,9 @@ fn version_migration_cannot_rewrite_historical_input_semantics() {
 
 #[test]
 fn version_migration_requires_its_actual_compatibility_test_and_each_changed_version() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, before) = migration_fixture();
     let migrations = h.values[WORKFLOW]["migrations"].clone();
     h.values.get_mut(WORKFLOW).unwrap()["migrations"][0]["script"] = json!("p");
@@ -933,6 +975,9 @@ fn version_migration_requires_its_actual_compatibility_test_and_each_changed_ver
 
 #[test]
 fn selected_produced_pairs_preserve_endpoint_targets_old_edges_and_docs_locality() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (base_target, candidate_target) in [
         (CONFIG, NEW_TARGET),
         (OLD_TARGET, CONFIG),
@@ -1071,6 +1116,9 @@ fn selected_produced_pairs_preserve_endpoint_targets_old_edges_and_docs_locality
 
 #[test]
 fn selected_produced_pair_rejects_missing_and_substituted_endpoint_binding() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = fixture();
     native_v3(&mut h);
     select_config(&mut h, OLD_TARGET);
@@ -1126,6 +1174,9 @@ fn registration_view(report: &Value) -> &Value {
 
 #[test]
 fn selected_migration_executes_v3_decoder_compatibility_and_downstream_view() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (h, before) = migration_fixture_mode(true);
     assert_eq!(before["schema"], "chrono-input-snapshot/v3");
     capture(&h, "after");
@@ -1251,6 +1302,9 @@ fn selected_migration_executes_v3_decoder_compatibility_and_downstream_view() {
 
 #[test]
 fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, before) = migration_fixture_mode(true);
     let workflow = h.values[WORKFLOW].clone();
     h.values.get_mut(WORKFLOW).unwrap()["historical_profiles"] = json!([]);
@@ -1282,6 +1336,9 @@ fn selected_migration_requires_actual_conversion_and_passing_compatibility() {
 
 #[test]
 fn selected_decoder_cannot_rewrite_original_effective_config() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (mut h, before) = migration_fixture_mode(true);
     decoder_mode(&mut h, "decoder", "rewrite-selected");
     h.save();

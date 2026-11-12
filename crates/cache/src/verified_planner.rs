@@ -11,6 +11,18 @@ mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
 
+#[cfg(verus_keep_ghost)]
+#[path = "attempt.rs"]
+mod attempt;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::attempt::{
+    accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
+};
+#[cfg(verus_keep_ghost)]
+pub use attempt::{
+    accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
+};
+
 verus! {
 
 pub fn producer_can_seal(save_on_failure: bool, outcome: Option<&str>) -> (allowed: bool)

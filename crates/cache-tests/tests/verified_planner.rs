@@ -12,6 +12,10 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
+#[cfg(verus_keep_ghost)]
+#[path = "continuity.rs"]
+mod continuity;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]

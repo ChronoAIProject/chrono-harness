@@ -129,14 +129,7 @@ pub fn registry_values(
     Reader::legacy().registry_values(root, oid, path)
 }
 /// Original bytes and parsed values from one registry read, without a global cache.
-pub struct RegistrySnapshot {
-    pub bytes: BTreeMap<String, Vec<u8>>,
-    pub values: BTreeMap<String, Value>,
-    /// The caller's stable entry and the direct endpoint used for policy.
-    pub entry_path: String,
-    pub effective_path: String,
-    pub selection: Option<Value>,
-}
+pub type RegistrySnapshot = crate::verified_status::RegistrySnapshot<Value>;
 pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
     Reader::legacy().registry_snapshot(root, oid, path)
 }
@@ -149,22 +142,34 @@ pub fn registry_snapshot_with(
 ) -> Result<RegistrySnapshot, String> {
     registry_snapshot_with_target(path, None, read)
 }
-fn registry_snapshot_with_target(
+fn registry_snapshot_with_target<F>(
     path: &str,
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
-    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<RegistrySnapshot, String> {
+    mut read: F,
+) -> Result<RegistrySnapshot, String>
+where
+    F: FnMut(&str) -> Result<Vec<u8>, String>,
+{
     let (mut snapshot, paths) = registry_snapshot_start(path, target, &mut read)?;
-    for path in crate::verified_status::pending_registry_paths(
+    let pending = crate::verified_status::pending_registry_paths(
         paths,
         &snapshot.entry_path,
         &snapshot.effective_path,
-    ) {
-        let original = read(&path)?;
-        let value = json(&original)?;
-        snapshot.bytes.insert(path.clone(), original);
-        snapshot.values.insert(path, value);
-    }
+    );
+    let (_, result) = crate::verified_status::registry_read_sequence(
+        pending,
+        &mut read,
+        snapshot.bytes,
+        snapshot.values,
+        |reader: &mut F, path: &str| {
+            let result = reader(path);
+            (reader, result)
+        },
+        json,
+    );
+    let (bytes, values) = result?;
+    snapshot.bytes = bytes;
+    snapshot.values = values;
     Ok(snapshot)
 }
 /// Resolve the entry and selector before acquiring their explicit registry list.
@@ -190,13 +195,15 @@ fn registry_snapshot_with_batches_target(
         &snapshot.effective_path,
     );
     let originals = read(&pending)?;
-    crate::verified_status::registry_acquisition_count(pending.len(), originals.len())?;
-    for (expected, (path, original)) in pending.iter().zip(originals) {
-        crate::verified_status::registry_acquisition_path(expected, &path)?;
-        let value = json(&original)?;
-        snapshot.bytes.insert(path.clone(), original);
-        snapshot.values.insert(path, value);
-    }
+    let (bytes, values) = crate::verified_status::registry_parse_batch(
+        &pending,
+        originals,
+        snapshot.bytes,
+        snapshot.values,
+        json,
+    )?;
+    snapshot.bytes = bytes;
+    snapshot.values = values;
     Ok(snapshot)
 }
 fn registry_snapshot_start(
@@ -209,26 +216,23 @@ fn registry_snapshot_start(
         crate::facts_configs::resolve_target(path, original.clone(), target, &mut read)?;
     let config = json(&original)?;
     let paths = registry_paths(&effective_config, &effective_path)?;
-    let mut snapshot = RegistrySnapshot {
-        bytes: BTreeMap::from([(path.into(), original)]),
-        values: BTreeMap::from([(path.into(), config)]),
-        entry_path: path.into(),
-        effective_path: effective_path.clone(),
-        selection: selection.map(|s| {
-            let mut observation = s.observation;
-            if let Some(object) = observation.as_object_mut() {
-                object.remove("sha256");
-                object.insert("schema".into(), value!("chrono-registry-selection/v1"));
-            }
-            observation
-        }),
-    };
-    if effective_path != path {
-        snapshot
-            .bytes
-            .insert(effective_path.clone(), effective_bytes.clone());
-        snapshot.values.insert(effective_path, effective_config);
-    }
+    let selection = selection.map(|s| {
+        let mut observation = s.observation;
+        if let Some(object) = observation.as_object_mut() {
+            object.remove("sha256");
+            object.insert("schema".into(), value!("chrono-registry-selection/v1"));
+        }
+        observation
+    });
+    let snapshot = crate::verified_status::registry_snapshot_initial(
+        path.into(),
+        original,
+        config,
+        effective_path,
+        effective_bytes,
+        effective_config,
+        selection,
+    );
     Ok((snapshot, paths))
 }
 pub fn registry_digest(

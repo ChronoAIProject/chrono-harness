@@ -1,7 +1,11 @@
+#[path = "../../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod fixture_coordinator;
+pub use fixture_coordinator::isolated_git;
 use std::path::{Path, PathBuf};
 
 pub fn fixture_binary(project: &str, binary: &str) -> PathBuf {
     match (project, binary) {
+        ("runner", "chrono-harness") => env!("CARGO_BIN_EXE_chrono-harness-test-cli").into(),
         ("ci", "chrono-ci") => env!("CARGO_BIN_EXE_chrono-ci-test-cli").into(),
         ("worktree", "chrono-worktree") => env!("CARGO_BIN_EXE_chrono-worktree-test-cli").into(),
         ("judge-ci", "chrono-judge-ci") => env!("CARGO_BIN_EXE_chrono-judge-ci-test-cli").into(),
@@ -11,11 +15,7 @@ pub fn fixture_binary(project: &str, binary: &str) -> PathBuf {
 }
 
 pub fn fixture_git() -> PathBuf {
-    if let Some(program) = std::env::var_os("CHRONO_CI_FIXTURE_GIT") {
-        return program.into();
-    }
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    chrono_harness::resolve_program(&source, "git", None).expect("Git fixture tool on PATH")
+    env!("CARGO_BIN_EXE_chrono-test-git-model").into()
 }
 
 /// Produce the fixed workflow merge object without changing the fixture checkout.
@@ -90,7 +90,7 @@ pub fn write_event_facts(root: &Path) {
 pub fn temporary_host(prefix: &str) -> FixtureDirectory {
     FixtureDirectory::Retained(
         chrono_worktree::TemporaryHost::registered_allocate(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            fixture_coordinator::root(),
             ".chrono-harness/worktree.json",
             "ci-test-host",
             prefix,
@@ -102,7 +102,7 @@ fn temporary_store() -> &'static (PathBuf, Vec<String>) {
     static STORE: std::sync::OnceLock<(PathBuf, Vec<String>)> = std::sync::OnceLock::new();
     STORE.get_or_init(|| {
         chrono_worktree::TemporaryHost::registered_store(
-            &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            fixture_coordinator::root(),
             ".chrono-harness/worktree.json",
             "ci-test-host",
         )

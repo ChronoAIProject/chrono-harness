@@ -1,4 +1,6 @@
 //! Native fixture for the selected CI judge and its real operation process.
+#[path = "../../../runner-tests/tests/support/git_model.rs"]
+mod git_model;
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
@@ -67,13 +69,12 @@ fn fixture_operation(path: &str) -> ExitCode {
         }
         "index-assume-unchanged" | "index-skip-worktree" => {
             let flag = format!("--{}", case.strip_prefix("index-").unwrap());
-            assert!(
-                std::process::Command::new("git")
-                    .args(["update-index", &flag, "src.txt"])
-                    .status()
-                    .unwrap()
-                    .success()
-            );
+            git_model::run(
+                std::env::current_dir().unwrap(),
+                &["update-index".into(), flag, "src.txt".into()],
+                &[],
+            )
+            .unwrap();
             std::fs::write("src.txt", b"hidden").unwrap();
         }
         #[cfg(unix)]

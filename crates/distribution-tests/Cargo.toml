@@ -6,12 +6,14 @@ publish = false
 autotests = false
 
 [dependencies]
+shlex = "=2.0.1"
+tempfile = "3"
+serde = { version = "1", features = ["derive"] }
+sha1 = "0.10"
+serde_json = "1"
 chrono-distribution = { path = "../distribution" }
 chrono-harness = { path = "../runner" }
 
-[dev-dependencies]
-serde_json = "1"
-tempfile = "3"
 
 [[bin]]
 name = "chrono-distribution-test-cli"
@@ -31,3 +33,9 @@ bench = false
 
 [profile.dev.package.sha2]
 opt-level = 3
+
+[[bin]]
+name = "chrono-test-git-model"
+path = "../runner-tests/tests/support/git_model.rs"
+test = false
+bench = false

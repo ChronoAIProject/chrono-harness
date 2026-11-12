@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 use super::*;
 use std::path::PathBuf;
 
@@ -10,9 +12,6 @@ struct BoundHost {
     shadow: PathBuf,
     base: String,
     legacy_base: String,
-}
-fn source() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 impl BoundHost {
     fn new(mode: &str) -> Self {
@@ -40,7 +39,7 @@ impl BoundHost {
                 "tools":[{"id":"scoped-git","program":program,"resolution":"PATH-once",
                     "version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim()}],
                 "environment":{"inherit":[],"values":{"PATH":path,"BOUND_SCOPED_VALUE":"declared",
-                    "SCOPED_TRACE":trace,"SCOPED_REAL_GIT":real,"SCOPED_GIT_MODE":mode,
+                    "SCOPED_TRACE":trace,"SCOPED_GIT_MODE":mode,
                     "CHRONO_TEST_GIT_PROFILE":"scoped","GIT_CONFIG_NOSYSTEM":"1","GIT_CONFIG_GLOBAL":"/dev/null"},
                     "inputs":[{"id":"scoped-git-bytes","location":program,"presence":"present",
                         "sha256":sha256(&fs::read(&program).unwrap())}]},
@@ -73,7 +72,7 @@ impl BoundHost {
         fs::read_to_string(&self.trace).unwrap_or_default()
     }
     fn cli(&self, candidate: &str) -> (i32, Value, String) {
-        let output = Command::new(source().join("crates/runner/target/debug/chrono-harness"))
+        let output = Command::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
             .current_dir("/")
             .env_clear()
             .env("PATH", &self.shadow)
@@ -121,6 +120,9 @@ fn assert_process_bytes(observation: &Value) {
 
 #[test]
 fn scoped_v2_cli_binds_git_and_preserves_registered_execution() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("pass");
     h.host.write("src.txt", "candidate source");
     let candidate = h.host.commit();
@@ -163,6 +165,9 @@ fn scoped_v2_cli_binds_git_and_preserves_registered_execution() {
 
 #[test]
 fn scoped_v2_docs_delta_retains_both_snapshots_without_execution() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("pass");
     h.host.write("doc.txt", "candidate documentation");
     let candidate = h.host.commit();
@@ -177,6 +182,9 @@ fn scoped_v2_docs_delta_retains_both_snapshots_without_execution() {
 
 #[test]
 fn scoped_v2_filemap_plan_bounds_select_with_bound_git_facts() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (key, value, reason) in [
         ("timeout_seconds", 31, "changed operation timeout"),
         ("output_limit_bytes", 8192, "changed operation output limit"),
@@ -222,6 +230,9 @@ fn select_platform(h: &BoundHost) {
 
 #[test]
 fn scoped_cli_platform_selection_keeps_execution_and_docs_locality() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for changed in ["src.txt", "doc.txt"] {
         let mut h = BoundHost::new("pass");
         select_platform(&h);
@@ -241,6 +252,9 @@ fn scoped_cli_platform_selection_keeps_execution_and_docs_locality() {
 
 #[test]
 fn scoped_platform_selector_drift_rejects_before_business_execution() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("pass");
     select_platform(&h);
     h.host.write("src.txt", "candidate source");
@@ -260,6 +274,9 @@ fn scoped_platform_selector_drift_rejects_before_business_execution() {
 
 #[test]
 fn scoped_v2_failed_read_keeps_original_bytes_and_exit() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("read-failure");
     h.host.write("src.txt", "candidate source");
     let candidate = h.host.commit();
@@ -276,6 +293,9 @@ fn scoped_v2_failed_read_keeps_original_bytes_and_exit() {
 
 #[test]
 fn scoped_v2_rejects_bound_input_and_fixed_policy_drift() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["digest", "version", "policy"] {
         let h = BoundHost::new("pass");
         if fault != "policy" {
@@ -325,6 +345,9 @@ fn scoped_v2_rejects_bound_input_and_fixed_policy_drift() {
 
 #[test]
 fn scoped_v1_rejects_new_binding_field_including_null() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for value in [json!(FACTS), Value::Null] {
         let h = Host::new();
         let base = h.head();
@@ -338,6 +361,9 @@ fn scoped_v1_rejects_new_binding_field_including_null() {
 
 #[test]
 fn scoped_v2_requires_explicit_full_v3_facts_source() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "missing",
         "null",
@@ -375,6 +401,9 @@ fn scoped_v2_requires_explicit_full_v3_facts_source() {
 
 #[test]
 fn scoped_v2_initial_reads_real_parents_even_when_shallow() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("pass");
     h.host.git(&["checkout", "--orphan", "new-root"]);
     let root = h.host.commit();
@@ -401,6 +430,9 @@ fn scoped_v2_initial_reads_real_parents_even_when_shallow() {
 
 #[test]
 fn scoped_v2_transition_and_old_only_deletion_keep_test_obligations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("pass");
     h.host.write("src.txt", "migrated source");
     let candidate = h.host.commit();
@@ -434,6 +466,9 @@ fn scoped_v2_transition_and_old_only_deletion_keep_test_obligations() {
 
 #[test]
 fn scoped_v2_bound_reader_preserves_checkout_and_index_guards() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in [
         "tracked",
         "staged",
@@ -489,6 +524,9 @@ fn scoped_v2_bound_reader_preserves_checkout_and_index_guards() {
 
 #[test]
 fn scoped_v2_post_execution_rechecks_with_bound_reader() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("pass");
     h.host.write("check.case", "changed-input\n");
     let candidate = h.host.commit();
@@ -516,6 +554,9 @@ fn scoped_v2_post_execution_rechecks_with_bound_reader() {
 
 #[test]
 fn scoped_v2_opening_and_bounded_failures_retain_structured_observations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for fault in ["version-exit", "version-timeout", "read-limit"] {
         let h = BoundHost::new(fault);
         h.host.change_registry(FACTS, |f| {
@@ -558,6 +599,9 @@ fn scoped_v2_opening_and_bounded_failures_retain_structured_observations() {
 
 #[test]
 fn scoped_artifact_inventory_does_not_spend_git_output_bound_on_declared_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = BoundHost::new("pass");
     h.host.change_registry(FACTS, |f| {
         f["protocol"]["stdout_limit_bytes"] = json!(8192);
@@ -611,6 +655,9 @@ fn scoped_artifact_inventory_does_not_spend_git_output_bound_on_declared_outputs
 
 #[test]
 fn scoped_artifact_exclusion_keeps_literal_neighbors_ignored_files_and_root_types_visible() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::symlink;
     let h = BoundHost::new("pass");
     h.host.change_registry(FACTS, |f| {

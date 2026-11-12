@@ -1425,13 +1425,9 @@ impl Inventory {
                 {
                     return Err("consumer target unavailable/disposing".into());
                 }
-                if record.roles.insert(role.role.clone()) {
-                    self.persist_change(
-                        &self.object_directory(id)?.join("record.json"),
-                        record,
-                        &mut persisted,
-                    )?;
-                }
+                // The object pass below saves this backreference together with
+                // the output, before publishing the role's authoritative ids.
+                record.roles.insert(role.role.clone());
             }
         }
         for (id, record) in objects.iter_mut() {

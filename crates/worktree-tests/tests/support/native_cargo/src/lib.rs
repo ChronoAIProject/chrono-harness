@@ -1,5 +1,9 @@
 #[test]
 fn native_holder() {
+    hold();
+}
+
+pub fn hold() {
     if let Some(root) = std::env::var_os("CHRONO_TEMPORARY_CARGO_ROOT") {
         let status =
             std::process::Command::new(std::env::var_os("CHRONO_TEMPORARY_HELPER").unwrap())

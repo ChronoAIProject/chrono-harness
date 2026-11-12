@@ -352,7 +352,6 @@
       "kind": "verify",
       "operation": "test.inputs-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -369,7 +368,6 @@
       "kind": "verify",
       "operation": "test.ci-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
@@ -379,9 +377,7 @@
       "id": "verify_judge_ci_tests",
       "kind": "verify",
       "operation": "test.judge-ci-tests",
-      "needs": [
-        "build_runner"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_ci_tests",
       "rust_toolchain": true
     },
@@ -390,7 +386,6 @@
       "kind": "verify",
       "operation": "test.judge-registration-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration"
       ],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_registration_tests",
@@ -401,7 +396,6 @@
       "kind": "verify",
       "operation": "test.judge-projects-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -415,7 +409,6 @@
       "kind": "verify",
       "operation": "test.judge-workflow-tests",
       "needs": [
-        "build_runner",
         "build_ci",
         "build_judge_registration",
         "build_judge_filemap",
@@ -443,7 +436,6 @@
       "kind": "verify",
       "operation": "test.judge-filemap-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_routes",
@@ -467,7 +459,6 @@
       "kind": "verify",
       "operation": "test.judge-cost-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_cost"
@@ -480,7 +471,6 @@
       "kind": "verify",
       "operation": "test.judge-mixed-tests",
       "needs": [
-        "build_runner",
         "build_judge_registration",
         "build_judge_filemap",
         "build_judge_cost",
@@ -782,9 +772,8 @@
       "release_assets": []
     },
     "verify_inputs_tests": {
-      "need": "inputs 专属测试由 Cargo 从唯一生产 main.rs 编译测试 CLI，执行快照采集与配对；consumer.rs 仍运行生产 runner 及 registration、filemap、routes、projects、cost、mixed、workflow 七个判官，核对保留输入和完整检查证据。",
+      "need": "inputs 专属测试由 Cargo 从唯一生产 main.rs 编译 inputs 与 runner 测试 CLI，执行快照、配对及保留输入检查；consumer.rs 仍运行 registration、filemap、routes、projects、cost、mixed、workflow 七个发布判官，核对完整检查证据。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-routes",
@@ -795,29 +784,24 @@
       ]
     },
     "verify_ci_tests": {
-      "need": "ci-tests 由 Cargo 从唯一生产 main.rs 编译 ci、worktree 和 judge-ci 测试 CLI。真实宿主测试仍消费 runner 和 registration 发布 CLI，核生成检查、固定 Git 输入与原回执。",
+      "need": "ci-tests 由 Cargo 从唯一生产 main.rs 编译 runner、ci、worktree 和 judge-ci 测试 CLI；真实宿主仍消费 registration 发布 CLI，核生成检查、固定 Git 输入与原回执。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration"
       ]
     },
     "verify_judge_ci_tests": {
-      "need": "judge-ci-tests 由 Cargo 从唯一生产 main.rs 编译 chrono-judge-ci-test-cli；真实 runner 消费该 CLI，核对分单元执行、汇总原件和固定 Git facts。",
-      "release_assets": [
-        "chrono-harness"
-      ]
+      "need": "judge-ci-tests 由 Cargo 从唯一生产 main.rs 编译 runner 和 judge-ci 测试 CLI，核对分单元执行、汇总原件和固定 Git facts，不消费发布资产。",
+      "release_assets": []
     },
     "verify_judge_registration_tests": {
-      "need": "crates/judge-registration-tests/tests/registration_contract.rs runs runner with registration and checks admission failures and passed registration evidence for the declared host inputs.",
+      "need": "registration 专属测试从唯一生产 main.rs 编译 runner 测试 CLI，仍调用 registration 发布 CLI，核宿主输入的准入失败和成功证据。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration"
       ]
     },
     "verify_judge_projects_tests": {
-      "need": "projects 测试通过 runner 调用 registration、filemap、routes 和 projects 发布 CLI，执行登记的项目／脚本测试；scoped runner 使用测试项目从唯一生产 main.rs 编译的 judge-ci CLI，并核实际操作回执。",
+      "need": "projects 专属测试从唯一生产 main.rs 编译 runner 与 judge-ci 测试 CLI，仍调用 registration、filemap、routes 和 projects 发布 CLI，核登记项目／脚本执行与实际操作回执。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-routes",
@@ -825,9 +809,8 @@
       ]
     },
     "verify_judge_workflow_tests": {
-      "need": "judge-workflow-tests 调用 runner、其余 full 判官、chrono-ci 与 inputs 发布 CLI，核治理、固定上下文、快照及汇总；workflow 与 worktree CLI 由测试项目从各自唯一生产 main.rs 编译，不消费对应发布资产。",
+      "need": "workflow 专属测试从唯一生产 main.rs 编译 runner、workflow 与 worktree 测试 CLI，仍调用其余 full 判官、chrono-ci 与 inputs 发布 CLI，核治理、固定上下文、快照及汇总。",
       "release_assets": [
-        "chrono-harness",
         "chrono-ci",
         "chrono-judge-registration",
         "chrono-judge-filemap",
@@ -839,9 +822,8 @@
       ]
     },
     "verify_judge_filemap_tests": {
-      "need": "crates/judge-filemap-tests/tests/consumer.rs runs runner with registration and filemap for impact decisions. workflow_consumer.rs reuses the project host and also runs routes and projects to check stability selection, shared operation deduplication and actual declared script execution.",
+      "need": "filemap 专属测试从唯一生产 main.rs 编译 runner 测试 CLI，仍调用 registration、filemap、routes 和 projects 发布 CLI，核影响决策、稳定性选择、共享操作去重及登记脚本执行。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-routes",
@@ -849,18 +831,16 @@
       ]
     },
     "verify_judge_cost_tests": {
-      "need": "crates/judge-cost-tests/tests/support/host.rs runs runner with registration, filemap and cost; consumer assertions read declared impact costs, source identities and unknown coordinates from real reports.",
+      "need": "cost 专属测试由 Cargo 从唯一生产 main.rs 编译 runner 测试 CLI；共享 Host 继续运行 registration、filemap 和 cost 发布 CLI，断言实际影响成本、来源身份、未知维度和失败传播。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-cost"
       ]
     },
     "verify_judge_mixed_tests": {
-      "need": "crates/judge-mixed-tests/tests/consumer.rs adds mixed to the cost host’s runner, registration, filemap and cost chain; assertions inspect mixed-surface warnings and failure propagation, including the Rust broken-cost fixture’s actual cost invocation.",
+      "need": "mixed 专属测试由 Cargo 从唯一生产 main.rs 编译 runner 测试 CLI，复用 cost Host 并运行 registration、filemap、cost 和 mixed 发布 CLI；保留混合修改警告、绑定和失败传播断言，Rust 过期成本样本仍实际调用 cost。",
       "release_assets": [
-        "chrono-harness",
         "chrono-judge-registration",
         "chrono-judge-filemap",
         "chrono-judge-cost",

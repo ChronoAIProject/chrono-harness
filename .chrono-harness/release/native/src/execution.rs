@@ -233,7 +233,7 @@ impl<'a> Execution<'a> {
         .checked_sub(self.started.elapsed())
         .filter(|remaining| !remaining.is_zero())
         .ok_or_else(|| error("registered release unit span exhausted"))?;
-        let environment = self
+        let mut environment = self
             .environment
             .iter()
             .filter(|(key, _)| {
@@ -251,6 +251,21 @@ impl<'a> Execution<'a> {
                 ))
             })
             .collect::<Result<BTreeMap<_, _>, String>>()?;
+        if phase == "package" {
+            let git = self
+                .tools
+                .get("git")
+                .ok_or_else(|| error("registered release Git tool is missing"))?;
+            let parent = git
+                .parent()
+                .ok_or_else(|| error("registered release Git tool has no parent"))?;
+            let mut paths = vec![parent.to_owned()];
+            if let Some(existing) = self.environment.get(std::ffi::OsStr::new("PATH")) {
+                paths.extend(std::env::split_paths(existing));
+            }
+            let path = std::env::join_paths(paths).map_err(error)?;
+            environment.insert("PATH".into(), path.to_string_lossy().into_owned());
+        }
         let command = chrono_harness::CommandSpec {
             program: program.clone(),
             args: args.to_vec(),

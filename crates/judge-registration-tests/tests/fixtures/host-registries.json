@@ -1,0 +1,2602 @@
+{
+  "config": {
+    "schema_version": 1,
+    "status": "proposed",
+    "enforcement": "not-implemented",
+    "runner": {
+      "path": ".chrono-harness/bin/chrono-harness",
+      "version": "0.1.0",
+      "sha256": null
+    },
+    "registries": {
+      "judges": ".chrono-harness/judges.json",
+      "projects": ".chrono-harness/projects.json",
+      "filemap": ".chrono-harness/FILEMAP.json",
+      "workflow": ".chrono-harness/workflow.json"
+    },
+    "canonical_check": {
+      "operation": "validate.delta",
+      "argv": [
+        ".chrono-harness/bin/chrono-harness",
+        "check",
+        "--config",
+        ".chrono-harness/config.json",
+        "--base",
+        "{base}",
+        "--candidate",
+        "{candidate}",
+        "--context",
+        ".chrono-harness/state/context.json"
+      ]
+    },
+    "tools": [
+      {
+        "id": "cargo",
+        "program": "cargo",
+        "resolution": "PATH-once",
+        "version_argv": [
+          "--version"
+        ],
+        "expected_version": null
+      }
+    ],
+    "protocol": {
+      "id": "chrono-judge/v1",
+      "timeout_seconds": 120,
+      "stdout_limit_bytes": 1048576,
+      "encoding": "UTF-8"
+    },
+    "semantic_fields": [
+      {
+        "path": ".chrono-harness/projects.json",
+        "pointers": [
+          "/projects/*/actions",
+          "/scripts/*/actions"
+        ],
+        "on": "add-modify-delete"
+      },
+      {
+        "path": ".chrono-harness/FILEMAP.json",
+        "pointers": [
+          "/files/*/surface"
+        ],
+        "on": "modify-delete-existing"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": ".chrono-harness/bin/",
+        "owner": "repository",
+        "kind": "generated-executables",
+        "tracked": false
+      },
+      {
+        "path": ".chrono-harness/state/",
+        "owner": "repository",
+        "kind": "execution-evidence",
+        "tracked": false
+      },
+      {
+        "path": "crates/runner/target/",
+        "owner": "runner",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/runner-tests/target/",
+        "owner": "runner-tests",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/instructions/target/",
+        "owner": "instructions",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/instructions-tests/target/",
+        "owner": "instructions-tests",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/judge-ci/target/",
+        "owner": "judge-ci",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/judge-ci-tests/target/",
+        "owner": "judge-ci-tests",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/ci/target/",
+        "owner": "ci",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/ci-tests/target/",
+        "owner": "ci-tests",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/judge-registration/target/",
+        "owner": "judge-registration",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/judge-registration-tests/target/",
+        "owner": "judge-registration-tests",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/judge-filemap/target/",
+        "owner": "judge-filemap",
+        "kind": "cargo-output",
+        "tracked": false
+      },
+      {
+        "path": "crates/judge-filemap-tests/target/",
+        "owner": "judge-filemap-tests",
+        "kind": "cargo-output",
+        "tracked": false
+      }
+    ],
+    "environment": {
+      "inherit": [
+        "PATH",
+        "HOME",
+        "CARGO_HOME",
+        "RUSTUP_HOME",
+        "TMPDIR",
+        "SDKROOT"
+      ],
+      "values": {
+        "CARGO_TERM_COLOR": "never"
+      },
+      "inputs": []
+    },
+    "input_closure": {
+      "status": "incomplete",
+      "unresolved": [
+        "Actual cargo/rustc, compiler backend, linker, target libraries and SDK identities are not registered.",
+        "Effective HOME/CARGO_HOME, rust-toolchain and other consumed configuration files are not enumerated.",
+        "Complete direct/indirect, fixture, environment and external inputs and their explicit dependency edges need evidence.",
+        "Verdict-relevant randomness, time, external responses, timeout/resource conditions and deterministic evaluation are not established."
+      ]
+    }
+  },
+  "judges": {
+    "schema_version": 1,
+    "status": "proposed",
+    "judges": [
+      {
+        "id": "registration",
+        "executable": ".chrono-harness/bin/chrono-judge-registration",
+        "sha256": null,
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "filemap",
+        "executable": ".chrono-harness/bin/chrono-judge-filemap",
+        "sha256": null,
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "projects",
+        "executable": ".chrono-harness/bin/chrono-judge-projects",
+        "sha256": null,
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap",
+          "routes"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "routes",
+        "executable": ".chrono-harness/bin/chrono-judge-routes",
+        "sha256": null,
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "cost",
+        "executable": ".chrono-harness/bin/chrono-judge-cost",
+        "sha256": null,
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "mixed",
+        "executable": ".chrono-harness/bin/chrono-judge-mixed",
+        "sha256": null,
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "workflow",
+        "executable": ".chrono-harness/bin/chrono-judge-workflow",
+        "sha256": null,
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap",
+          "projects",
+          "mixed",
+          "cost"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      }
+    ],
+    "migration_validator": "workflow"
+  },
+  "projects": {
+    "schema_version": 1,
+    "status": "proposed",
+    "owners": [
+      "repository",
+      "runner",
+      "runner-tests",
+      "instructions",
+      "instructions-tests",
+      "judge-ci",
+      "judge-ci-tests",
+      "ci",
+      "ci-tests",
+      "ci-verify",
+      "judge-registration",
+      "judge-registration-tests",
+      "judge-filemap",
+      "judge-filemap-tests"
+    ],
+    "projects": [
+      {
+        "id": "runner",
+        "kind": "production",
+        "manifest": "crates/runner/Cargo.toml",
+        "lockfile": "crates/runner/Cargo.lock",
+        "root": "crates/runner",
+        "test_project": "runner-tests",
+        "actions": {
+          "build": {
+            "operation": "build.runner",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--locked",
+              "--manifest-path",
+              "crates/runner/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.runner",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--locked",
+              "--manifest-path",
+              "crates/runner/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.runner",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/runner/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "runner-tests",
+        "kind": "test",
+        "manifest": "crates/runner-tests/Cargo.toml",
+        "lockfile": "crates/runner-tests/Cargo.lock",
+        "root": "crates/runner-tests",
+        "tests_for": "runner",
+        "actions": {
+          "build": {
+            "operation": "build.runner-tests",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/runner-tests/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.runner-tests",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/runner-tests/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.runner-tests",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/runner-tests/Cargo.toml"
+            ]
+          },
+          "execute": {
+            "operation": "test.runner-tests",
+            "tool": "cargo",
+            "argv": [
+              "test",
+              "--locked",
+              "--manifest-path",
+              "crates/runner-tests/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "instructions",
+        "kind": "production",
+        "manifest": "crates/instructions/Cargo.toml",
+        "lockfile": "crates/instructions/Cargo.lock",
+        "root": "crates/instructions",
+        "test_project": "instructions-tests",
+        "actions": {
+          "build": {
+            "operation": "build.instructions",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--locked",
+              "--manifest-path",
+              "crates/instructions/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.instructions",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--locked",
+              "--manifest-path",
+              "crates/instructions/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.instructions",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/instructions/Cargo.toml"
+            ]
+          },
+          "init": {
+            "operation": "instructions.init",
+            "tool": "cargo",
+            "argv": [
+              "run",
+              "--locked",
+              "--manifest-path",
+              "crates/instructions/Cargo.toml",
+              "--bin",
+              "chrono-instructions",
+              "--",
+              "init",
+              "--host-root",
+              "."
+            ]
+          },
+          "generate": {
+            "operation": "instructions.generate",
+            "tool": "cargo",
+            "argv": [
+              "run",
+              "--locked",
+              "--manifest-path",
+              "crates/instructions/Cargo.toml",
+              "--bin",
+              "chrono-instructions",
+              "--",
+              "generate",
+              "--host-root",
+              "."
+            ]
+          }
+        }
+      },
+      {
+        "id": "instructions-tests",
+        "kind": "test",
+        "manifest": "crates/instructions-tests/Cargo.toml",
+        "lockfile": "crates/instructions-tests/Cargo.lock",
+        "root": "crates/instructions-tests",
+        "tests_for": "instructions",
+        "actions": {
+          "build": {
+            "operation": "build.instructions-tests",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/instructions-tests/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.instructions-tests",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/instructions-tests/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.instructions-tests",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/instructions-tests/Cargo.toml"
+            ]
+          },
+          "execute": {
+            "operation": "test.instructions-tests",
+            "tool": "cargo",
+            "argv": [
+              "test",
+              "--locked",
+              "--manifest-path",
+              "crates/instructions-tests/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "judge-ci",
+        "kind": "production",
+        "manifest": "crates/judge-ci/Cargo.toml",
+        "lockfile": "crates/judge-ci/Cargo.lock",
+        "root": "crates/judge-ci",
+        "test_project": "judge-ci-tests",
+        "actions": {
+          "build": {
+            "operation": "build.judge-ci",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-ci/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.judge-ci",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-ci/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.judge-ci",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/judge-ci/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "judge-ci-tests",
+        "kind": "test",
+        "manifest": "crates/judge-ci-tests/Cargo.toml",
+        "lockfile": "crates/judge-ci-tests/Cargo.lock",
+        "root": "crates/judge-ci-tests",
+        "tests_for": "judge-ci",
+        "actions": {
+          "build": {
+            "operation": "build.judge-ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-ci-tests/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.judge-ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-ci-tests/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.judge-ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/judge-ci-tests/Cargo.toml"
+            ]
+          },
+          "execute": {
+            "operation": "test.judge-ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "test",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-ci-tests/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "ci",
+        "kind": "production",
+        "manifest": "crates/ci/Cargo.toml",
+        "lockfile": "crates/ci/Cargo.lock",
+        "root": "crates/ci",
+        "test_project": "ci-tests",
+        "actions": {
+          "build": {
+            "operation": "build.ci",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--locked",
+              "--manifest-path",
+              "crates/ci/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.ci",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--locked",
+              "--manifest-path",
+              "crates/ci/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.ci",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/ci/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "ci-tests",
+        "kind": "test",
+        "manifest": "crates/ci-tests/Cargo.toml",
+        "lockfile": "crates/ci-tests/Cargo.lock",
+        "root": "crates/ci-tests",
+        "tests_for": "ci",
+        "actions": {
+          "build": {
+            "operation": "build.ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/ci-tests/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/ci-tests/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/ci-tests/Cargo.toml"
+            ]
+          },
+          "execute": {
+            "operation": "test.ci-tests",
+            "tool": "cargo",
+            "argv": [
+              "test",
+              "--locked",
+              "--manifest-path",
+              "crates/ci-tests/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "judge-registration",
+        "kind": "production",
+        "manifest": "crates/judge-registration/Cargo.toml",
+        "lockfile": "crates/judge-registration/Cargo.lock",
+        "root": "crates/judge-registration",
+        "test_project": "judge-registration-tests",
+        "actions": {
+          "build": {
+            "operation": "build.judge-registration",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-registration/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.judge-registration",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-registration/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.judge-registration",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/judge-registration/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "judge-registration-tests",
+        "kind": "test",
+        "manifest": "crates/judge-registration-tests/Cargo.toml",
+        "lockfile": "crates/judge-registration-tests/Cargo.lock",
+        "root": "crates/judge-registration-tests",
+        "tests_for": "judge-registration",
+        "actions": {
+          "build": {
+            "operation": "build.judge-registration-tests",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-registration-tests/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.judge-registration-tests",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-registration-tests/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.judge-registration-tests",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/judge-registration-tests/Cargo.toml"
+            ]
+          },
+          "execute": {
+            "operation": "test.judge-registration-tests",
+            "tool": "cargo",
+            "argv": [
+              "test",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-registration-tests/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "judge-filemap",
+        "kind": "production",
+        "manifest": "crates/judge-filemap/Cargo.toml",
+        "lockfile": "crates/judge-filemap/Cargo.lock",
+        "root": "crates/judge-filemap",
+        "test_project": "judge-filemap-tests",
+        "actions": {
+          "build": {
+            "operation": "build.judge-filemap",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-filemap/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.judge-filemap",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-filemap/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.judge-filemap",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/judge-filemap/Cargo.toml"
+            ]
+          }
+        }
+      },
+      {
+        "id": "judge-filemap-tests",
+        "kind": "test",
+        "manifest": "crates/judge-filemap-tests/Cargo.toml",
+        "lockfile": "crates/judge-filemap-tests/Cargo.lock",
+        "root": "crates/judge-filemap-tests",
+        "tests_for": "judge-filemap",
+        "actions": {
+          "build": {
+            "operation": "build.judge-filemap-tests",
+            "tool": "cargo",
+            "argv": [
+              "build",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-filemap-tests/Cargo.toml"
+            ]
+          },
+          "check": {
+            "operation": "check.judge-filemap-tests",
+            "tool": "cargo",
+            "argv": [
+              "check",
+              "--tests",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-filemap-tests/Cargo.toml"
+            ]
+          },
+          "format_check": {
+            "operation": "fmt.judge-filemap-tests",
+            "tool": "cargo",
+            "argv": [
+              "fmt",
+              "--check",
+              "--manifest-path",
+              "crates/judge-filemap-tests/Cargo.toml"
+            ]
+          },
+          "execute": {
+            "operation": "test.judge-filemap-tests",
+            "tool": "cargo",
+            "argv": [
+              "test",
+              "--locked",
+              "--manifest-path",
+              "crates/judge-filemap-tests/Cargo.toml"
+            ]
+          }
+        }
+      }
+    ],
+    "scripts": [
+      {
+        "id": "ci-verify",
+        "kind": "test",
+        "actions": {
+          "execute": {
+            "operation": "ci.verify",
+            "tool": "chrono-ci",
+            "argv": [
+              "verify",
+              "--host-root",
+              ".",
+              "--config",
+              ".chrono-harness/ci/github.json"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "FILEMAP": {
+    "schema_version": 1,
+    "status": "proposed",
+    "cost_models": {
+      "unmeasured": {
+        "cpu_ms": null,
+        "wall_ms": null,
+        "peak_rss_bytes": null,
+        "io_bytes": null,
+        "basis": "unknown; not measured"
+      }
+    },
+    "files": [
+      {
+        "path": ".gitignore",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "README.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "SPEC.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/config.json",
+        "owner": "repository",
+        "surface": "judge-policy",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:mixed"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:workflow"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/judges.json",
+        "owner": "repository",
+        "surface": "judge-policy",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:mixed"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:workflow"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/projects.json",
+        "owner": "repository",
+        "surface": "membership",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:projects"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:routes"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/FILEMAP.json",
+        "owner": "repository",
+        "surface": "membership",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/workflow.json",
+        "owner": "repository",
+        "surface": "judge-policy",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:mixed"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:workflow"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner/Cargo.toml",
+        "owner": "runner",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:runner"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner/Cargo.lock",
+        "owner": "runner",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:runner"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner/src/lib.rs",
+        "owner": "runner",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:runner"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner/src/main.rs",
+        "owner": "runner",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:runner"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner-tests/Cargo.toml",
+        "owner": "runner-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:runner-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner-tests/Cargo.lock",
+        "owner": "runner-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:runner-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner-tests/tests/cli_contract.rs",
+        "owner": "runner-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:runner-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "AGENTS.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "runtime-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ],
+        "symlink": "CLAUDE.md"
+      },
+      {
+        "path": "CLAUDE.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "runtime-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ],
+        "projection": {
+          "sources": [
+            ".chrono-harness/instructions/manifest.json",
+            ".chrono-harness/instructions/catalog.json"
+          ],
+          "producer": "project:instructions",
+          "scope": "managed-block"
+        }
+      },
+      {
+        "path": "docs/instructions.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "docs/methodology-extraction.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions/Cargo.toml",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions/Cargo.lock",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions-tests/Cargo.toml",
+        "owner": "instructions-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:instructions-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions-tests/Cargo.lock",
+        "owner": "instructions-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:instructions-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions/src/lib.rs",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions/src/main.rs",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions/src/transaction.rs",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions-tests/tests/generation.rs",
+        "owner": "instructions-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:instructions-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/instructions/host-context.md",
+        "owner": "repository",
+        "surface": "instruction-policy",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "runtime-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/instructions/manifest.json",
+        "owner": "repository",
+        "surface": "membership",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "runtime-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions/src/catalog.rs",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/instructions-tests/tests/atomic.rs",
+        "owner": "instructions-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:instructions-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "assets/instructions/catalog.json",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:instructions-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "assets/instructions/default-manifest.json",
+        "owner": "instructions",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:instructions-tests"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/instructions/catalog.json",
+        "owner": "repository",
+        "surface": "instruction-policy",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "runtime-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "docs/generated/general-methods.en.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "runtime-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ],
+        "projection": {
+          "sources": [
+            ".chrono-harness/instructions/manifest.json",
+            ".chrono-harness/instructions/catalog.json"
+          ],
+          "producer": "project:instructions",
+          "scope": "whole-file"
+        }
+      },
+      {
+        "path": "skills/diagnose-recurring-failures/SKILL.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "runtime-input",
+            "to": "project:instructions"
+          },
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ],
+        "projection": {
+          "sources": [
+            ".chrono-harness/instructions/manifest.json",
+            ".chrono-harness/instructions/catalog.json"
+          ],
+          "producer": "project:instructions",
+          "scope": "whole-file"
+        }
+      },
+      {
+        "path": "docs/methodology-clause-map.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "docs/licenses/methodology-attribution.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "docs/licenses/trureturing-Apache-2.0.txt",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-ci/Cargo.toml",
+        "owner": "judge-ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-ci/Cargo.lock",
+        "owner": "judge-ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-ci/src/lib.rs",
+        "owner": "judge-ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-ci/src/main.rs",
+        "owner": "judge-ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-ci-tests/Cargo.toml",
+        "owner": "judge-ci-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-ci-tests/Cargo.lock",
+        "owner": "judge-ci-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-ci-tests/tests/behavior.rs",
+        "owner": "judge-ci-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/ci/Cargo.toml",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/ci/Cargo.lock",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/ci/src/lib.rs",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/ci/src/main.rs",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:ci"
+          }
+        ]
+      },
+      {
+        "path": "crates/ci-tests/Cargo.toml",
+        "owner": "ci-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/ci-tests/Cargo.lock",
+        "owner": "ci-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/ci-tests/tests/behavior.rs",
+        "owner": "ci-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/ci/check.json",
+        "owner": "repository",
+        "surface": "judge-policy",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:runner-tests"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-ci-tests"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:ci-verify"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/ci/github.json",
+        "owner": "repository",
+        "surface": "membership",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-verify"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/ci/bootstrap.json",
+        "owner": "repository",
+        "surface": "membership",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-verify"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/ci/bootstrap.py",
+        "owner": "repository",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-verify"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": ".github/workflows/chrono-ci.yml",
+        "owner": "repository",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-verify"
+          },
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ],
+        "projection": {
+          "sources": [
+            ".chrono-harness/ci/github.json"
+          ],
+          "producer": "project:ci",
+          "scope": "whole-file"
+        }
+      },
+      {
+        "path": "docs/ci.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": []
+      },
+      {
+        "path": "examples/ci-host/check.py",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/README.md",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/.gitignore",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/message.txt",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/.chrono-harness/FILEMAP.json",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/.chrono-harness/projects.json",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/.chrono-harness/ci/check.json",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/.chrono-harness/ci/install.py",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "examples/ci-host/.chrono-harness/ci/github.json",
+        "owner": "ci",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:ci-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner/src/wire.rs",
+        "owner": "runner",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:runner"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner/src/facts.rs",
+        "owner": "runner",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:runner"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner/src/full.rs",
+        "owner": "runner",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:runner"
+          }
+        ]
+      },
+      {
+        "path": "crates/runner-tests/tests/protocol_v1.rs",
+        "owner": "runner-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:runner-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration/Cargo.toml",
+        "owner": "judge-registration",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-registration"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration/Cargo.lock",
+        "owner": "judge-registration",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-registration"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration/src/lib.rs",
+        "owner": "judge-registration",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-registration"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration/src/schema.rs",
+        "owner": "judge-registration",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-registration"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration/src/main.rs",
+        "owner": "judge-registration",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-registration"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration-tests/Cargo.toml",
+        "owner": "judge-registration-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration-tests/Cargo.lock",
+        "owner": "judge-registration-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration-tests/tests/registration_contract.rs",
+        "owner": "judge-registration-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-registration-tests"
+          }
+        ]
+      },
+      {
+        "path": "docs/spec-coverage.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-registration/src/registrations.rs",
+        "owner": "judge-registration",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-registration"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap/Cargo.toml",
+        "owner": "judge-filemap",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap/Cargo.lock",
+        "owner": "judge-filemap",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap/src/lib.rs",
+        "owner": "judge-filemap",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap/src/main.rs",
+        "owner": "judge-filemap",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap/src/graph.rs",
+        "owner": "judge-filemap",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap/src/records.rs",
+        "owner": "judge-filemap",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-filemap"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap-tests/Cargo.toml",
+        "owner": "judge-filemap-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-filemap-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap-tests/Cargo.lock",
+        "owner": "judge-filemap-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "build-input",
+            "to": "project:judge-filemap-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap-tests/tests/impact.rs",
+        "owner": "judge-filemap-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-filemap-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap-tests/tests/consumer.rs",
+        "owner": "judge-filemap-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-filemap-tests"
+          }
+        ]
+      },
+      {
+        "path": "crates/judge-filemap-tests/tests/support/mod.rs",
+        "owner": "judge-filemap-tests",
+        "surface": "test",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "compile",
+            "to": "project:judge-filemap-tests"
+          }
+        ]
+      },
+      {
+        "path": "docs/filemap-impact.md",
+        "owner": "repository",
+        "surface": "documentation",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "judge-trigger",
+            "to": "judge:filemap"
+          }
+        ]
+      }
+    ],
+    "project_edges": [
+      {
+        "from": "project:runner",
+        "kind": "compile",
+        "to": "project:runner-tests"
+      },
+      {
+        "from": "project:runner",
+        "kind": "test-execution",
+        "to": "test:runner-tests"
+      },
+      {
+        "from": "project:runner-tests",
+        "kind": "test-execution",
+        "to": "test:runner-tests"
+      },
+      {
+        "from": "project:instructions",
+        "kind": "compile",
+        "to": "project:instructions-tests"
+      },
+      {
+        "from": "project:instructions",
+        "kind": "test-execution",
+        "to": "test:instructions-tests"
+      },
+      {
+        "from": "project:instructions-tests",
+        "kind": "test-execution",
+        "to": "test:instructions-tests"
+      },
+      {
+        "from": "project:judge-ci",
+        "kind": "compile",
+        "to": "project:judge-ci-tests"
+      },
+      {
+        "from": "project:judge-ci",
+        "kind": "test-execution",
+        "to": "test:judge-ci-tests"
+      },
+      {
+        "from": "project:judge-ci-tests",
+        "kind": "test-execution",
+        "to": "test:judge-ci-tests"
+      },
+      {
+        "from": "project:runner",
+        "kind": "compile",
+        "to": "project:judge-ci"
+      },
+      {
+        "from": "project:ci",
+        "kind": "compile",
+        "to": "project:ci-tests"
+      },
+      {
+        "from": "project:ci",
+        "kind": "test-execution",
+        "to": "test:ci-tests"
+      },
+      {
+        "from": "project:ci-tests",
+        "kind": "test-execution",
+        "to": "test:ci-tests"
+      },
+      {
+        "from": "project:runner",
+        "kind": "compile",
+        "to": "project:ci"
+      },
+      {
+        "from": "project:ci",
+        "kind": "test-execution",
+        "to": "test:ci-verify"
+      },
+      {
+        "from": "project:judge-ci",
+        "kind": "test-execution",
+        "to": "test:ci-tests"
+      },
+      {
+        "from": "project:runner",
+        "kind": "compile",
+        "to": "project:judge-registration"
+      },
+      {
+        "from": "project:judge-registration",
+        "kind": "compile",
+        "to": "project:judge-registration-tests"
+      },
+      {
+        "from": "project:runner",
+        "kind": "compile",
+        "to": "project:judge-registration-tests"
+      },
+      {
+        "from": "project:judge-registration",
+        "kind": "test-execution",
+        "to": "test:judge-registration-tests"
+      },
+      {
+        "from": "project:judge-registration-tests",
+        "kind": "test-execution",
+        "to": "test:judge-registration-tests"
+      },
+      {
+        "from": "project:judge-registration",
+        "kind": "compile",
+        "to": "project:judge-filemap"
+      },
+      {
+        "from": "project:runner",
+        "kind": "compile",
+        "to": "project:judge-filemap"
+      },
+      {
+        "from": "project:judge-filemap",
+        "kind": "compile",
+        "to": "project:judge-ci"
+      },
+      {
+        "from": "project:judge-filemap",
+        "kind": "compile",
+        "to": "project:judge-filemap-tests"
+      },
+      {
+        "from": "project:judge-registration",
+        "kind": "compile",
+        "to": "project:judge-filemap-tests"
+      },
+      {
+        "from": "project:runner",
+        "kind": "compile",
+        "to": "project:judge-filemap-tests"
+      },
+      {
+        "from": "project:judge-filemap",
+        "kind": "test-execution",
+        "to": "test:judge-filemap-tests"
+      },
+      {
+        "from": "project:judge-filemap-tests",
+        "kind": "test-execution",
+        "to": "test:judge-filemap-tests"
+      },
+      {
+        "from": "project:runner",
+        "kind": "runtime-input",
+        "to": "project:judge-filemap-tests"
+      },
+      {
+        "from": "project:judge-registration",
+        "kind": "runtime-input",
+        "to": "project:judge-filemap-tests"
+      },
+      {
+        "from": "project:judge-filemap",
+        "kind": "runtime-input",
+        "to": "project:judge-filemap-tests"
+      }
+    ],
+    "test_costs": [
+      {
+        "test": "runner-tests",
+        "cost": "unmeasured"
+      },
+      {
+        "test": "instructions-tests",
+        "cost": "unmeasured"
+      },
+      {
+        "test": "judge-ci-tests",
+        "cost": "unmeasured"
+      },
+      {
+        "test": "ci-tests",
+        "cost": "unmeasured"
+      },
+      {
+        "test": "ci-verify",
+        "cost": "unmeasured"
+      },
+      {
+        "test": "judge-registration-tests",
+        "cost": "unmeasured"
+      },
+      {
+        "test": "judge-filemap-tests",
+        "cost": "unmeasured"
+      }
+    ]
+  },
+  "workflow": {
+    "schema_version": 1,
+    "status": "proposed",
+    "target_branch": "dev",
+    "feature_prefix": "feature/",
+    "integration_prefix": "integration/",
+    "staleness": {
+      "max_behind_commits": 3,
+      "max_age_hours": 24,
+      "combine": "any-exceeded"
+    },
+    "stability": [
+      {
+        "id": "runner-engine",
+        "paths": [
+          "crates/runner/src/lib.rs",
+          "crates/runner/src/main.rs",
+          "crates/runner/Cargo.toml",
+          "crates/runner/Cargo.lock",
+          "crates/runner/src/wire.rs",
+          "crates/runner/src/facts.rs",
+          "crates/runner/src/full.rs"
+        ],
+        "tests": [
+          "runner-tests"
+        ],
+        "reason": "CLI/protocol and future judge engine evolution"
+      },
+      {
+        "id": "instructions-generator",
+        "paths": [
+          "crates/instructions/src/lib.rs",
+          "crates/instructions/src/catalog.rs",
+          "crates/instructions/src/main.rs",
+          "crates/instructions/src/transaction.rs",
+          "crates/instructions/Cargo.toml",
+          "crates/instructions/Cargo.lock",
+          "assets/instructions/catalog.json",
+          "assets/instructions/default-manifest.json"
+        ],
+        "tests": [
+          "instructions-tests"
+        ],
+        "reason": "Explicit rule composition, translations, output ownership, preservation, migration and publication; embedded portable defaults"
+      },
+      {
+        "id": "registration-judge",
+        "paths": [
+          "crates/judge-registration/src/lib.rs",
+          "crates/judge-registration/src/schema.rs",
+          "crates/judge-registration/src/main.rs",
+          "crates/judge-registration/Cargo.toml",
+          "crates/judge-registration/Cargo.lock",
+          "crates/judge-registration/src/registrations.rs"
+        ],
+        "tests": [
+          "judge-registration-tests"
+        ],
+        "reason": "Registration schema, snapshot and reference policy"
+      },
+      {
+        "id": "filemap-impact",
+        "paths": [
+          "crates/judge-filemap/Cargo.toml",
+          "crates/judge-filemap/Cargo.lock",
+          "crates/judge-filemap/src/lib.rs",
+          "crates/judge-filemap/src/main.rs",
+          "crates/judge-filemap/src/graph.rs",
+          "crates/judge-filemap/src/records.rs"
+        ],
+        "tests": [
+          "judge-filemap-tests",
+          "judge-ci-tests"
+        ],
+        "reason": "Full declaration impact and shared operational CI closure selection"
+      }
+    ],
+    "semantic_changes_require_integration": true,
+    "mixed_change": {
+      "level": "warning",
+      "code": "W_MIXED_JUDGE_PRODUCT",
+      "requires_acknowledgement": false
+    },
+    "integration": {
+      "tests": [
+        "runner-tests",
+        "instructions-tests",
+        "judge-registration-tests",
+        "judge-filemap-tests"
+      ],
+      "bind": [
+        "base",
+        "candidate_tree",
+        "registry_digest",
+        "executables",
+        "tools",
+        "environment",
+        "effective_inputs",
+        "required_tests",
+        "results_digest"
+      ],
+      "evidence": ".chrono-harness/state/integration.json"
+    },
+    "retirements": [],
+    "migrations": []
+  }
+}

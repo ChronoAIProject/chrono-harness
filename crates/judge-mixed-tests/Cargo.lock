@@ -114,7 +114,9 @@ dependencies = [
  "chrono-judge-filemap",
  "chrono-judge-mixed",
  "chrono-judge-registration",
+ "serde",
  "serde_json",
+ "sha1",
  "tempfile",
 ]
 

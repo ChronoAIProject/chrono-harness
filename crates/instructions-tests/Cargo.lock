@@ -94,6 +94,7 @@ dependencies = [
  "chrono-diagnostics",
  "chrono-harness",
  "chrono-instructions",
+ "libc",
  "serde_json",
  "tempfile",
  "verus_builtin_macros",

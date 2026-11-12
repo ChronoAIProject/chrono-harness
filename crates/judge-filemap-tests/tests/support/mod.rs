@@ -121,7 +121,7 @@ pub fn delta(path: &str) -> Delta {
     }
 }
 pub fn git(root: &Path, args: &[&str]) -> String {
-    let mut command = Command::new("git");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-git-model"));
     command
         .arg("-C")
         .arg(root)

@@ -126,9 +126,14 @@ fn real_binding(path: &PathBuf) -> Value {
 fn actual_rustup_tools_keep_identity_relocation_and_inherited_compiler_constraints() {
     let directory = tempfile::tempdir().unwrap();
     let root = fs::canonicalize(directory.path()).unwrap();
-    let rustup =
-        chrono_harness::resolve_program(&root, "rustup", std::env::var("PATH").ok().as_deref())
-            .unwrap();
+    for name in ["rustup", "cargo", "rustc"] {
+        fs::copy(
+            env!("CARGO_BIN_EXE_chrono-test-bootstrap-tool"),
+            root.join(name),
+        )
+        .unwrap();
+    }
+    let rustup = root.join("rustup");
     let cargo = selected(&rustup, "cargo");
     let rustc = selected(&rustup, "rustc");
     let mut config = direct();

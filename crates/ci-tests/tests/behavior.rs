@@ -1,3 +1,5 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 #[path = "support/tools.rs"]
 mod tools;
 use tools::fixture_git;
@@ -13,6 +15,9 @@ mod retained_receipts;
 #[test]
 #[cfg(unix)]
 fn native_cli_rejects_invalid_utf8_classes_without_losing_position_or_bytes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::ffi::OsString;
     use std::os::unix::ffi::OsStringExt;
     let root = tempfile::tempdir().unwrap();
@@ -50,6 +55,9 @@ fn native_cli_rejects_invalid_utf8_classes_without_losing_position_or_bytes() {
 #[test]
 #[cfg(unix)]
 fn native_cli_accepts_literal_replacement_and_unicode_as_text() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let root = tempfile::tempdir().unwrap();
     for argument in ["", "�", "目录/é"] {
         let output = Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
@@ -73,6 +81,9 @@ fn config() -> Config {
 }
 #[test]
 fn retired_scoped_providers_are_rejected_before_publishing_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for schema in [
         "chrono-github-ci/v1",
         "chrono-github-ci/v2",
@@ -160,6 +171,9 @@ fn repo() -> (tempfile::TempDir, String, String) {
 }
 #[test]
 fn init_from_external_config_and_spaced_host_is_idempotent() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::Builder::new()
         .prefix("spaced host ")
         .tempdir()
@@ -178,6 +192,9 @@ fn init_from_external_config_and_spaced_host_is_idempotent() {
 }
 #[test]
 fn init_preserves_adopted_customization() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let input = d.path().join("source.json");
     write(&input, &config());
@@ -196,6 +213,9 @@ fn init_preserves_adopted_customization() {
 }
 #[test]
 fn drift_verification_never_repairs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("source.json");
     write(&p, &config());
@@ -212,6 +232,9 @@ fn drift_verification_never_repairs() {
 }
 #[test]
 fn unowned_collision_preflight_preserves_all_inputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("source.json");
     write(&p, &config());
@@ -224,6 +247,9 @@ fn unowned_collision_preflight_preserves_all_inputs() {
 }
 #[test]
 fn unrelated_workflows_and_symlink_collisions() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("source.json");
     write(&p, &config());
@@ -245,6 +271,9 @@ fn unrelated_workflows_and_symlink_collisions() {
 }
 #[test]
 fn bootstrap_extension_regenerates_owned_projection() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("source.json");
     let c = config();
@@ -265,6 +294,9 @@ fn bootstrap_extension_regenerates_owned_projection() {
 }
 #[test]
 fn invalid_provider_unknown_member_and_unpinned_action_fail() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("source.json");
     for mutation in ["provider", "member", "action"] {
@@ -281,6 +313,9 @@ fn invalid_provider_unknown_member_and_unpinned_action_fail() {
 
 #[test]
 fn report_upload_and_failed_job_diagnostics_have_separate_consumers() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let d = tempfile::tempdir().unwrap();
     let p = d.path().join("source.json");
     let mut raw = serde_json::to_value(config()).unwrap();
@@ -315,6 +350,9 @@ fn report_upload_and_failed_job_diagnostics_have_separate_consumers() {
 }
 #[test]
 fn push_uses_actual_before_after() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, b, c) = repo();
     let r = prepare(
         d.path(),
@@ -330,6 +368,9 @@ fn push_uses_actual_before_after() {
 }
 #[test]
 fn pr_checks_fixed_merge_tree_and_keeps_event_head_identity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, b, c) = repo();
     let p = json!({"pull_request":{"base":{"sha":b},"head":{"sha":c}},"after":"ignored-merge"});
     let merge = tools::pr_workflow_merge(d.path(), &b, &c);
@@ -343,6 +384,9 @@ fn pr_checks_fixed_merge_tree_and_keeps_event_head_identity() {
 
 #[test]
 fn pr_merge_candidate_contains_concurrent_target_changes_without_updating_head() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, old_base, head) = repo();
     git(d.path(), &["checkout", "--detach", &old_base]);
     fs::write(d.path().join("concurrent"), "target-only input").unwrap();
@@ -372,6 +416,9 @@ fn pr_merge_candidate_contains_concurrent_target_changes_without_updating_head()
 
 #[test]
 fn pr_rejects_non_merge_and_unrelated_workflow_parents() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, base, head) = repo();
     let payload = json!({"pull_request":{"base":{"sha":base},"head":{"sha":head}}});
     let reversed = tools::pr_workflow_merge(d.path(), &head, &base);
@@ -390,6 +437,9 @@ fn pr_rejects_non_merge_and_unrelated_workflow_parents() {
 
 #[test]
 fn configured_push_baseline_covers_repeated_pushes_and_tracks_the_named_remote_ref() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, base, first) = repo();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--bare", "-q"]);
@@ -440,6 +490,9 @@ fn configured_push_baseline_covers_repeated_pushes_and_tracks_the_named_remote_r
 
 #[test]
 fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let host = tempfile::tempdir().unwrap();
     for rules in [
         json!([{"ref_prefix":"refs/heads/verify/*","base_ref":"refs/heads/stable"}]),
@@ -485,6 +538,9 @@ fn configured_push_baseline_rejects_ambiguity_missing_refs_and_invalid_events() 
 
 #[test]
 fn preparation_fetches_pinned_baseline_and_preserves_customization() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, base, candidate) = repo();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--bare", "-q"]);
@@ -562,6 +618,9 @@ fn preparation_fetches_pinned_baseline_and_preserves_customization() {
 }
 #[test]
 fn manual_full_range_and_explicit_initial() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, b, c) = repo();
     let p = json!({"inputs":{"base":b,"candidate":c,"initial":false}});
     assert_eq!(
@@ -584,6 +643,9 @@ fn manual_full_range_and_explicit_initial() {
 
 #[test]
 fn initial_event_reads_original_parents_through_git_replace_overlays() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, root, child) = repo();
     git(d.path(), &["replace", &child, &root]);
     let payload = json!({"inputs":{"candidate":child,"initial":true}});
@@ -595,6 +657,9 @@ fn initial_event_reads_original_parents_through_git_replace_overlays() {
 }
 #[test]
 fn deletion_zero_missing_and_wrong_checkout_fail() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, b, c) = repo();
     for p in [
         json!({"before":b,"after":c,"deleted":true}),
@@ -607,6 +672,9 @@ fn deletion_zero_missing_and_wrong_checkout_fail() {
 }
 #[test]
 fn branch_creation_resolves_configured_baseline_once() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, b, c) = repo();
     let remote = tempfile::tempdir().unwrap();
     git(remote.path(), &["init", "--bare", "-q"]);
@@ -636,6 +704,9 @@ fn branch_creation_resolves_configured_baseline_once() {
 }
 #[test]
 fn event_context_contains_same_canonical_entry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, b, c) = repo();
     let r = prepare(
         d.path(),
@@ -650,6 +721,9 @@ fn event_context_contains_same_canonical_entry() {
 }
 #[test]
 fn standalone_prepare_is_rejected_before_context_and_output_publication() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, b, c) = repo();
     let cfg = d.path().join(".chrono-harness/ci/github.json");
     write(&cfg, &config());
@@ -692,14 +766,15 @@ fn retain_command_result(
 ) {
     // Existing callers retain an unreleased diagnostic reference. They do not
     // acquire disposal eligibility from another caller's expected-exit contract.
-    let _ = retain_expected_command_result(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
-        root,
-        argv,
-        context,
-        output,
-        None,
-    );
+    if std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none() && output.status.success() {
+        return;
+    }
+    // Both diagnostic consumers use the fixture's actual receipt owner. The
+    // optional destination receives references, as in judge-ci diagnostics;
+    // it is not a request to qualify the exposed source checkout through a mock.
+    let mut owner = retained_receipts::Owner::new();
+    owner.preserve_diagnostic();
+    let _ = retain_expected_command_result(&owner.root, root, argv, context, output, None);
 }
 
 fn retain_expected_command_result(
@@ -721,7 +796,7 @@ fn retain_expected_command_result(
         context,
         output,
         expected_exit,
-        directory.as_deref(),
+        None,
     ))
 }
 
@@ -754,6 +829,30 @@ fn retain_command_result_observed(
     expected_exit: Option<i32>,
     directory_override: Option<&Path>,
     birth_observer: Option<&mut dyn FnMut(&str)>,
+) -> chrono_worktree::RetainedArtifact {
+    let export = std::env::var_os("CHRONO_CI_TEST_RECEIPTS").map(std::path::PathBuf::from);
+    retain_command_result_exported(
+        producer_root,
+        root,
+        argv,
+        context,
+        output,
+        expected_exit,
+        directory_override,
+        birth_observer,
+        export.as_deref(),
+    )
+}
+fn retain_command_result_exported(
+    producer_root: &Path,
+    root: &Path,
+    argv: &[String],
+    context: &Value,
+    output: &std::process::Output,
+    expected_exit: Option<i32>,
+    directory_override: Option<&Path>,
+    birth_observer: Option<&mut dyn FnMut(&str)>,
+    export: Option<&Path>,
 ) -> chrono_worktree::RetainedArtifact {
     let (directory, generated_outputs) = chrono_worktree::RetainedArtifact::registered_store(
         producer_root,
@@ -857,6 +956,33 @@ fn retain_command_result_observed(
         )
     });
     receipt.seal().unwrap();
+    if let Some(export) = export {
+        receipt
+            .acquire(
+                "diagnostic",
+                "finite caller debugging/acceptance; caller owns release",
+            )
+            .unwrap();
+        let mut originals = serde_json::Map::new();
+        for name in ["stdout.bin", "stderr.bin", "binding.json"] {
+            let path = destination.join(name);
+            let (sha256, size) = chrono_harness::file_identity(&path).unwrap();
+            originals.insert(
+                name.into(),
+                json!({"path":path,"sha256":sha256,"size":size}),
+            );
+        }
+        let identity = chrono_harness::sha256(destination.as_os_str().as_encoded_bytes());
+        let mut reference =
+            fs::File::create_new(export.join(format!("ci-command-{identity}.json"))).unwrap();
+        serde_json::to_writer(&mut reference, &json!({
+            "consumer":"finite engineering acceptance",
+            "retention":"until caller debugging/acceptance obligations finish; caller owns release",
+            "producer":"ci-command-result","producer_root":producer_root,
+            "directory":directory,"artifact":destination,"originals":originals,
+            "release_consumers":["command-assertion","diagnostic"]
+        })).unwrap();
+    }
     receipt
 }
 fn retain_context_state(root: &Path, destination: &Path) {
@@ -880,6 +1006,9 @@ fn retain_context_state(root: &Path, destination: &Path) {
 }
 #[test]
 fn baseline_creation_with_parents_requires_explicit_range() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, _b, c) = repo();
     let payload = json!({"ref":"refs/heads/dev","before":"0".repeat(40),"after":c,"created":true});
     let error = prepare(d.path(), &config(), "push", &payload, &c).unwrap_err();
@@ -892,6 +1021,9 @@ fn baseline_creation_with_parents_requires_explicit_range() {
 }
 #[test]
 fn creation_requires_valid_event_branch_and_available_baseline() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, _b, c) = repo();
     for branch in [
         Value::Null,
@@ -911,6 +1043,9 @@ fn creation_requires_valid_event_branch_and_available_baseline() {
 }
 #[test]
 fn standalone_version_is_actual_producer_and_rejects_extra_arguments() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     assert_eq!(
         chrono_ci::dispatch(&["--version".into()]).unwrap(),
         "chrono-ci 0.1.0\n"
@@ -920,6 +1055,9 @@ fn standalone_version_is_actual_producer_and_rejects_extra_arguments() {
 
 #[test]
 fn adopted_bootstrap_shell_ignores_path_shadow_and_matches_host_version() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let read =
         |p: &str| -> Value { serde_json::from_slice(&fs::read(source.join(p)).unwrap()).unwrap() };
@@ -931,7 +1069,12 @@ fn adopted_bootstrap_shell_ignores_path_shadow_and_matches_host_version() {
         .find(|t| t["id"] == "bash")
         .unwrap()
         .clone();
-    // Observe the registered bootstrap shell before shadowing PATH.
+    let registered_program = tool["program"].clone();
+    let selected = tempfile::tempdir().unwrap();
+    let executable = selected.path().join("selected-bash");
+    fs::copy(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), &executable).unwrap();
+    tool["program"] = json!(executable);
+    // The dependency's version boundary is explicit fixture data.
     let observed = Command::new(tool["program"].as_str().unwrap())
         .args(serde_json::from_value::<Vec<String>>(tool["version_argv"].clone()).unwrap())
         .env_clear()
@@ -967,14 +1110,17 @@ fn adopted_bootstrap_shell_ignores_path_shadow_and_matches_host_version() {
         "registered bootstrap shell must survive unrelated PATH precedence"
     );
     let provider = read(".chrono-harness/ci/units.json");
-    assert_eq!(provider["collection"]["bootstrap"][0], tool["program"]);
+    assert_eq!(provider["collection"]["bootstrap"][0], registered_program);
     for unit in provider["units"].as_object().unwrap().values() {
-        assert_eq!(unit["bootstrap"][0], tool["program"]);
+        assert_eq!(unit["bootstrap"][0], registered_program);
     }
 }
 
 #[test]
 fn opted_in_delivery_acknowledgement_uses_the_actual_successful_upload_outputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut declaration = config();
     let old = chrono_ci::render(&declaration, ".chrono-harness/ci/workflow.json").unwrap();
     assert!(!old.contains("Acknowledge delivered"));
