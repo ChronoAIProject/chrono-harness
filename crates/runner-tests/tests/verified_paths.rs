@@ -580,4 +580,356 @@ fn parent_failure_renderer_preserves_complete_value_and_selects_one_branch() {
     expect_parent_bytes(bytes.as_slice(), &[0u8, 10, 255, 99]);
 }
 
+// 0–3：directory+file／directory／file／neither；4–7：四种 symlink 组合；8：missing；9：native。
+// 这是独立的有限观察表，不从生产分类谓词生成预期。
+pub open spec fn publication_expected(count: u8, first: u8, second: u8) -> Result<(), (u8, u8)> {
+    match (count, first, second) {
+        (0, _, _) => Ok(()),
+        (1, 0, _) | (1, 2, _) | (1, 8, _) => Ok(()),
+        (1, 1, _) | (1, 3, _) => Err((3, 1)),
+        (1, 4 | 5 | 6 | 7, _) => Err((1, 1)),
+        (1, 9, _) => Err((4, 61)),
+        (2, 2, _) | (2, 3, _) => Err((2, 1)),
+        (2, 4 | 5 | 6 | 7, _) => Err((1, 1)),
+        (2, 8, _) => Ok(()),
+        (2, 9, _) => Err((4, 61)),
+        (2, 0, 0) | (2, 0, 2) | (2, 0, 8)
+            | (2, 1, 0) | (2, 1, 2) | (2, 1, 8) => Ok(()),
+        (2, 0, 1) | (2, 0, 3) | (2, 1, 1) | (2, 1, 3) => Err((3, 2)),
+        (2, 0 | 1, 4 | 5 | 6 | 7) => Err((1, 2)),
+        (2, 0, 9) | (2, 1, 9) => Err((4, 62)),
+        _ => Err((5, 0)),
+    }
+}
+
+fn publication_expected_value(count: u8, first: u8, second: u8) -> (out: Result<(), (u8, u8)>)
+    ensures out == publication_expected(count, first, second),
+{
+    match (count, first, second) {
+        (0, _, _) => Ok(()),
+        (1, 0, _) | (1, 2, _) | (1, 8, _) => Ok(()),
+        (1, 1, _) | (1, 3, _) => Err((3, 1)),
+        (1, 4 | 5 | 6 | 7, _) => Err((1, 1)),
+        (1, 9, _) => Err((4, 61)),
+        (2, 2, _) | (2, 3, _) => Err((2, 1)),
+        (2, 4 | 5 | 6 | 7, _) => Err((1, 1)),
+        (2, 8, _) => Ok(()),
+        (2, 9, _) => Err((4, 61)),
+        (2, 0, 0) | (2, 0, 2) | (2, 0, 8)
+            | (2, 1, 0) | (2, 1, 2) | (2, 1, 8) => Ok(()),
+        (2, 0, 1) | (2, 0, 3) | (2, 1, 1) | (2, 1, 3) => Err((3, 2)),
+        (2, 0 | 1, 4 | 5 | 6 | 7) => Err((1, 2)),
+        (2, 0, 9) | (2, 1, 9) => Err((4, 62)),
+        _ => Err((5, 0)),
+    }
+}
+
+pub open spec fn publication_observed(mode: u8, path: u8, out: Result<policy::PublicationMetadata, u8>) -> bool {
+    match out {
+        Ok(value) => mode < 8 && value.symlink == (mode >= 4)
+            && value.directory == (mode == 0 || mode == 1 || mode == 5 || mode == 7)
+            && value.file == (mode == 0 || mode == 2 || mode == 6 || mode == 7),
+        Err(error) => (mode == 8 && error == 1)
+            || (mode == 9 && error == if path == 1 { 61u8 } else { 62u8 }),
+    }
+}
+
+fn publication_observation(mode: u8, path: u8) -> (out: Result<policy::PublicationMetadata, u8>)
+    requires mode <= 9,
+    ensures publication_observed(mode, path, out),
+{
+    if mode == 8 { Err(1) }
+    else if mode == 9 { Err(if path == 1 { 61 } else { 62 }) }
+    else { Ok(policy::PublicationMetadata {
+        symlink: mode >= 4, directory: mode == 0 || mode == 1 || mode == 5 || mode == 7,
+        file: mode == 0 || mode == 2 || mode == 6 || mode == 7,
+    }) }
+}
+
+fn publication_append(_path: u8, component: u8) -> (out: u8)
+    ensures out == component,
+{ component }
+
+fn publication_missing(error: &u8) -> (out: bool)
+    ensures out == (*error == 1),
+{ *error == 1 }
+
+pub open spec fn publication_failure_code(error: policy::PublicationPathFailure<u8, u8, u8>) -> (u8, u8) {
+    match error {
+        policy::PublicationPathFailure::Symlink(path) => (1, path),
+        policy::PublicationPathFailure::Parent(path) => (2, path),
+        policy::PublicationPathFailure::Destination(path) => (3, path),
+        policy::PublicationPathFailure::Native(error) => (4, error),
+        policy::PublicationPathFailure::Followup(error) => (5, error),
+    }
+}
+
+fn publication_code<T>(out: Result<T, policy::PublicationPathFailure<u8, u8, u8>>)
+    -> (result: Result<T, (u8, u8)>)
+    ensures result == match out { Ok(value) => Ok(value), Err(error) => Err(publication_failure_code(error)) },
+{
+    match out {
+        Ok(value) => Ok(value),
+        Err(error) => Err(error.render(
+            |path: u8| -> (out: (u8, u8)) ensures out == (1u8, path), { (1, path) },
+            |path: u8| -> (out: (u8, u8)) ensures out == (2u8, path), { (2, path) },
+            |path: u8| -> (out: (u8, u8)) ensures out == (3u8, path), { (3, path) },
+            |error: u8| -> (out: (u8, u8)) ensures out == (4u8, error), { (4, error) },
+            |error: u8| -> (out: (u8, u8)) ensures out == (5u8, error), { (5, error) })),
+    }
+}
+
+proof fn publication_fixture_result<A, M, N>(count: u8, first: u8, second: u8, parts: Seq<u8>, append: A, metadata: M, missing: N,
+    out: Result<(), policy::PublicationPathFailure<u8, u8, u8>>)
+    where A: Fn(u8, u8) -> u8, M: Fn(u8) -> (u8, Result<policy::PublicationMetadata, u8>), N: Fn(&u8) -> bool,
+    requires count <= 2, first <= 9, second <= 9,
+        parts == seq![1u8, 2].take(count as int),
+        forall|path: u8, component: u8, built: u8| #[trigger] append.ensures((path, component), built) ==> built == component,
+        forall|error: &u8, matched: bool| #[trigger] missing.ensures((error,), matched) ==> matched == (*error == 1),
+        forall|path: u8, observed: (u8, Result<policy::PublicationMetadata, u8>)|
+            #[trigger] metadata.ensures((path,), observed) ==> observed.0 == path
+                && publication_observed(if path == 1 { first } else { second }, path, observed.1),
+        policy::publication_preflight_result(parts, 0, 0u8, append, metadata, missing, out),
+    ensures match out { Ok(()) => Ok::<(), (u8, u8)>(()), Err(error) => Err::<(), (u8, u8)>(publication_failure_code(error)) }
+        == publication_expected(count, first, second),
+{
+    assert(parts.len() == count as int);
+    reveal_with_fuel(policy::publication_preflight_result, 4);
+    if count > 0 {
+        assert(parts[0] == 1u8);
+        let (built, observed) = choose|built: u8, observed: (u8, Result<policy::PublicationMetadata, u8>)|
+            append.ensures((0u8, parts[0]), built)
+            && metadata.ensures((built,), observed)
+            && policy::publication_observation_result(observed, 1 == parts.len(), missing,
+                policy::publication_preflight_result(parts, 1, observed.0, append, metadata, missing, out), out);
+        assert(built == 1 && observed.0 == 1);
+        assert(publication_observed(first, 1, observed.1));
+        if count == 2 && (first == 0 || first == 1) {
+            assert(parts[1] == 2u8);
+            assert(policy::publication_preflight_result(parts, 1, 1u8, append, metadata, missing, out));
+            let (built, observed) = choose|built: u8, observed: (u8, Result<policy::PublicationMetadata, u8>)|
+                append.ensures((1u8, parts[1]), built)
+                && metadata.ensures((built,), observed)
+                && policy::publication_observation_result(observed, true, missing,
+                    policy::publication_preflight_result(parts, 2, observed.0, append, metadata, missing, out), out);
+            assert(built == 2 && observed.0 == 2);
+            assert(publication_observed(second, 2, observed.1));
+        }
+    }
+}
+
+fn publication_fixture(count: u8, first: u8, second: u8) -> (out: Result<(), (u8, u8)>)
+    requires count <= 2, first <= 9, second <= 9,
+    ensures out == publication_expected(count, first, second),
+{
+    let mut parts = Vec::new();
+    if count > 0 { parts.push(1u8); }
+    if count > 1 { parts.push(2u8); }
+    assert(parts@ == seq![1u8, 2].take(count as int));
+    let metadata = |path: u8| -> (out: (u8, Result<policy::PublicationMetadata, u8>))
+        ensures out.0 == path,
+            publication_observed(if path == 1 { first } else { second }, path, out.1),
+    { (path, publication_observation(if path == 1 { first } else { second }, path)) };
+    let result = policy::publication_preflight(parts.as_slice(), 0u8, publication_append, metadata, publication_missing);
+    proof { publication_fixture_result(count, first, second, parts@, publication_append, metadata, publication_missing, result); }
+    publication_code(result)
+}
+
+fn expect_publication_result(actual: Result<(), (u8, u8)>, expected: Result<(), (u8, u8)>)
+    requires actual == expected,
+{
+    match (actual, expected) {
+        (Ok(()), Ok(())) => {},
+        (Err(actual), Err(expected)) => {
+            expect_path_true(actual.0 == expected.0);
+            expect_path_true(actual.1 == expected.1);
+        },
+        _ => panic!(),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_preflight_obeys_independent_first_error_and_missing_table() {
+    let mut count = 0u8;
+    while count < 3
+        invariant count <= 3,
+        decreases 3 - count,
+    {
+        let mut first = 0u8;
+        while first < 10
+            invariant first <= 10, count < 3,
+            decreases 10 - first,
+        {
+            let mut second = 0u8;
+            while second < 10
+                invariant second <= 10, first < 10, count < 3,
+                decreases 10 - second,
+            {
+                expect_publication_result(publication_fixture(count, first, second),
+                    publication_expected_value(count, first, second));
+                second += 1;
+            }
+            first += 1;
+        }
+        count += 1;
+    }
+}
+
+pub open spec fn publication_completed_expected(count: u8, first: u8, second: u8,
+    has_parent: bool, create_error: bool, finish_error: bool) -> Result<u8, (u8, u8)>
+{
+    match publication_expected(count, first, second) {
+        Err(error) => Err(error),
+        Ok(()) => if has_parent && create_error { Err((4, 71)) }
+            else if finish_error { Err((5, 81)) }
+            else { Ok(91) },
+    }
+}
+
+fn publication_completed_expected_value(count: u8, first: u8, second: u8,
+    has_parent: bool, create_error: bool, finish_error: bool) -> (out: Result<u8, (u8, u8)>)
+    ensures out == publication_completed_expected(count, first, second, has_parent, create_error, finish_error),
+{
+    match publication_expected_value(count, first, second) {
+        Err(error) => Err(error),
+        Ok(()) => if has_parent && create_error { Err((4, 71)) }
+            else if finish_error { Err((5, 81)) }
+            else { Ok(91) },
+    }
+}
+
+proof fn publication_completion_result<'a, R, D, Z>(target: &'a u8, parent: R, create: D, finish: Z,
+    has_parent: bool, create_error: bool, finish_error: bool,
+    out: Result<u8, policy::PublicationPathFailure<u8, u8, u8>>)
+    where R: Fn(&'a u8) -> Option<u8>, D: Fn(u8) -> Result<(), u8>, Z: Fn() -> Result<u8, u8>,
+    requires forall|observed: Option<u8>| #[trigger] parent.ensures((target,), observed)
+            ==> observed == if has_parent { Some(*target) } else { None },
+        forall|path: u8, observed: Result<(), u8>| #[trigger] create.ensures((path,), observed)
+            ==> observed == if create_error { Err::<(), u8>(71) } else { Ok::<(), u8>(()) },
+        forall|observed: Result<u8, u8>| #[trigger] finish.ensures((), observed)
+            ==> observed == if finish_error { Err::<u8, u8>(81) } else { Ok::<u8, u8>(91) },
+        policy::publication_prepared(target, parent, create, finish, out),
+    ensures match out { Ok(value) => Ok(value), Err(error) => Err(publication_failure_code(error)) }
+        == if has_parent && create_error { Err::<u8, (u8, u8)>((4, 71)) }
+            else if finish_error { Err::<u8, (u8, u8)>((5, 81)) }
+            else { Ok::<u8, (u8, u8)>(91) },
+{
+    reveal(policy::publication_prepared);
+}
+
+fn publication_completed_fixture(count: u8, first: u8, second: u8,
+    has_parent: bool, create_error: bool, finish_error: bool) -> (out: Result<u8, (u8, u8)>)
+    requires count <= 2, first <= 9, second <= 9,
+    ensures out == publication_completed_expected(count, first, second, has_parent, create_error, finish_error),
+{
+    let mut parts = Vec::new();
+    if count > 0 { parts.push(1u8); }
+    if count > 1 { parts.push(2u8); }
+    assert(parts@ == seq![1u8, 2].take(count as int));
+    let metadata = |path: u8| -> (out: (u8, Result<policy::PublicationMetadata, u8>))
+        ensures out.0 == path,
+            publication_observed(if path == 1 { first } else { second }, path, out.1),
+    { (path, publication_observation(if path == 1 { first } else { second }, path)) };
+    let parent = |target: &u8| -> (out: Option<u8>)
+        ensures out == if has_parent { Some(*target) } else { None },
+    { if has_parent { Some(*target) } else { None } };
+    let create = |_path: u8| -> (out: Result<(), u8>)
+        ensures out == if create_error { Err::<(), u8>(71) } else { Ok::<(), u8>(()) },
+    { if create_error { Err(71) } else { Ok(()) } };
+    let finish = || -> (out: Result<u8, u8>)
+        ensures out == if finish_error { Err::<u8, u8>(81) } else { Ok::<u8, u8>(91) },
+    { if finish_error { Err(81) } else { Ok(91) } };
+    let target = 99u8;
+    let result = policy::prepare_publication(parts.as_slice(), 0u8, &target,
+        publication_append, metadata, publication_missing, parent, create, finish);
+    proof {
+        if exists|error: policy::PublicationPathFailure<u8, u8, u8>|
+            policy::publication_preflight_result(parts@, 0, 0u8, publication_append, metadata, publication_missing, Err(error))
+            && result == Err::<u8, policy::PublicationPathFailure<u8, u8, u8>>(error)
+        {
+            let error = choose|error: policy::PublicationPathFailure<u8, u8, u8>|
+                policy::publication_preflight_result(parts@, 0, 0u8, publication_append, metadata, publication_missing, Err(error))
+                && result == Err::<u8, policy::PublicationPathFailure<u8, u8, u8>>(error);
+            publication_fixture_result(count, first, second, parts@, publication_append, metadata, publication_missing, Err(error));
+        } else {
+            publication_fixture_result(count, first, second, parts@, publication_append, metadata, publication_missing,
+                Ok::<(), policy::PublicationPathFailure<u8, u8, u8>>(()));
+            publication_completion_result(&target, parent, create, finish, has_parent, create_error, finish_error, result);
+        }
+    }
+    publication_code(result)
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_combination_preserves_preflight_create_and_finish_priority() {
+    let mut count = 0u8;
+    while count < 3
+        invariant count <= 3,
+        decreases 3 - count,
+    {
+        let mut first = 0u8;
+        while first < 10
+            invariant first <= 10, count < 3,
+            decreases 10 - first,
+        {
+            let mut second = 0u8;
+            while second < 10
+                invariant second <= 10, first < 10, count < 3,
+                decreases 10 - second,
+            {
+                let mut phases = 0u8;
+                while phases < 8
+                    invariant phases <= 8, second < 10, first < 10, count < 3,
+                    decreases 8 - phases,
+                {
+                    let has_parent = phases >= 4;
+                    let create_error = phases % 4 >= 2;
+                    let finish_error = phases % 2 == 1;
+                    let actual = publication_completed_fixture(count, first, second, has_parent, create_error, finish_error);
+                    let expected = publication_completed_expected_value(count, first, second, has_parent, create_error, finish_error);
+                    match (actual, expected) {
+                        (Ok(actual), Ok(expected)) => expect_path_true(actual == expected),
+                        (Err(actual), Err(expected)) => {
+                            expect_path_true(actual.0 == expected.0);
+                            expect_path_true(actual.1 == expected.1);
+                        },
+                        _ => panic!(),
+                    }
+                    phases += 1;
+                }
+                second += 1;
+            }
+            first += 1;
+        }
+        count += 1;
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_failure_render_preserves_complete_path_and_both_error_payloads() {
+    let mut variant = 0u8;
+    while variant < 5
+        invariant variant <= 5,
+        decreases 5 - variant,
+    {
+        let original = vec![0u8, 10, 255, 47, variant];
+        let error: policy::PublicationPathFailure<Vec<u8>, Vec<u8>, Vec<u8>> = match variant {
+            0 => policy::PublicationPathFailure::Symlink(original),
+            1 => policy::PublicationPathFailure::Parent(original),
+            2 => policy::PublicationPathFailure::Destination(original),
+            3 => policy::PublicationPathFailure::Native(original),
+            _ => policy::PublicationPathFailure::Followup(original),
+        };
+        let (kind, bytes) = error.render(
+            |value: Vec<u8>| -> (out: (u8, Vec<u8>)) ensures out == (0u8, value), { (0, value) },
+            |value: Vec<u8>| -> (out: (u8, Vec<u8>)) ensures out == (1u8, value), { (1, value) },
+            |value: Vec<u8>| -> (out: (u8, Vec<u8>)) ensures out == (2u8, value), { (2, value) },
+            |value: Vec<u8>| -> (out: (u8, Vec<u8>)) ensures out == (3u8, value), { (3, value) },
+            |value: Vec<u8>| -> (out: (u8, Vec<u8>)) ensures out == (4u8, value), { (4, value) });
+        expect_path_true(kind == variant);
+        expect_parent_bytes(bytes.as_slice(), &[0u8, 10, 255, 47, variant]);
+        variant += 1;
+    }
+}
+
 }
