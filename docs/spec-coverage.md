@@ -1,5 +1,11 @@
 # SPEC 当前覆盖情况
 
+`Failure` 的初始化、原因设置及关联错误追加接入 `verified_error.rs`，
+完整节点、动态错误和有序关联值直接搬入、取回同一所有者；独立 Verus 预期同时
+普通运行。两项严格整 crate 证明和原真实错误链／双输出测试须同次 DELTA 验收。
+`ErrorNode` 构造、context、记录投影、接收链及 IO 分类仍待证明；
+不将整个 `error.rs` 声明为已证明，范围与成本见 [Verus 实施范围](verus.md)。
+
 `RollingFile` 的正容量／文件数范围、单条记录容量及严格轮转阈值直接消费同源
 `verified_rolling.rs`。数学整数长度和与实际不下溢减法比较等价，独立 Verus
 边界表同时普通运行；生产根、预期根与未过滤行为测试由同次 DELTA 核验。
