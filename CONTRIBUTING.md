@@ -15,11 +15,12 @@
 
 ## 分支与引用
 
-目标和前缀的权威来源是 [workflow.json](.chrono-harness/workflow.json)。日常分支如下：
+开发目标和前缀由 [workflow.json](.chrono-harness/workflow.json) 负责，正式版分支由 [delivery.json](.chrono-harness/release/delivery.json) 的 `publication.stable_branch` 负责。分支用途如下：
 
 | 分支 | 用途 | 命名示例 |
 | --- | --- | --- |
 | `dev` | 默认集成与交付目标，变更通过 PR 合入 | `dev` |
+| `main` | 正式版源码快照；验收完成后按[正式版晋升入口](docs/release-iteration.md#推进正式版分支)快进到固定候选 | `main` |
 | `feature/<task>-<YYYYMMDD>` | 单项开发、修复、文档或测试工作 | `feature/fix-cache-restore-20261109` |
 | `integration/<task>-<YYYYMMDD>` | 规则、稳定性或多项依赖的集成验证 | `integration/git-github-conventions-20261109` |
 
