@@ -9,6 +9,20 @@ mod input_coverage;
 
 const CONFIG: &str = ".chrono-harness/config.json";
 
+fn retained_input(root: &Path, path: &Path) -> Value {
+    let bytes = match fs::read(path) {
+        Ok(bytes) => bytes,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return json!({"absent":true}),
+        Err(e) => panic!("snapshot input: {e}"),
+    };
+    // Preserve the complete original without expanding an executable into JSON
+    // values. Bounded inline/blob equivalence is covered by registration_contract.
+    let digest = sha256(&bytes);
+    let blob = format!(".chrono-harness/state/fixture-{digest}");
+    fs::write(root.join(&blob), &bytes).unwrap();
+    json!({"blob":blob,"sha256":digest,"length":bytes.len()})
+}
+
 fn error_processes(error: &str) -> Vec<Value> {
     let observed: Value =
         serde_json::from_str(error.trim().strip_prefix("E_CHECK: E_GIT_FACTS: ").unwrap()).unwrap();
@@ -107,10 +121,11 @@ impl BoundHost {
         let mut context = h.context();
         let config: Value =
             serde_json::from_slice(&fs::read(h.root().join(CONFIG)).unwrap()).unwrap();
+        let program = retained_input(h.root(), &self.program);
         let snapshot = |oid: &str| {
             json!({"schema":"chrono-input-snapshot/v2","commit":oid,
             "config_path":CONFIG,"config_digest":chrono_harness::wire::digest(&config).unwrap(),
-            "environment":{},"files":{"facts-git-bytes":{"bytes":fs::read(&self.program).unwrap()}}})
+            "environment":{},"files":{"facts-git-bytes":program}})
         };
         write(
             h.root(),
@@ -162,11 +177,10 @@ fn run_with_endpoint_inputs(h: &BoundHost) -> (i32, Value) {
             serde_json::from_slice(&facts::blob(h.host.root(), oid, CONFIG).unwrap()).unwrap();
         let mut files = serde_json::Map::new();
         for input in config["environment"]["inputs"].as_array().unwrap() {
-            let observed = match fs::read(h.host.root().join(input["location"].as_str().unwrap())) {
-                Ok(bytes) => json!({"bytes":bytes}),
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => json!({"absent":true}),
-                Err(e) => panic!("snapshot input: {e}"),
-            };
+            let observed = retained_input(
+                h.host.root(),
+                &h.host.root().join(input["location"].as_str().unwrap()),
+            );
             files.insert(input["id"].as_str().unwrap().to_owned(), observed);
         }
         json!({"schema":"chrono-input-snapshot/v2","commit":oid,"config_path":CONFIG,
