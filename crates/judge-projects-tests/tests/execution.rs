@@ -289,10 +289,26 @@ fn completed_operations_have_independent_durable_originals() {
         assert_eq!(reference["sha256"], chrono_harness::sha256(&bytes));
         let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(saved["operation"], name);
-        let process = chrono_harness::full::expand_process(&saved["receipt"]["process"]).unwrap();
-        assert_eq!(process["exit_code"], code);
-        assert_eq!(process["stdout_bytes"], json!(output));
-        assert_eq!(process["stderr_bytes"], json!(error));
+        let retained = &saved["receipt"]["process"];
+        for stream in ["stdout", "stderr", "launch"] {
+            let path = retained[format!("{stream}_original")]["path"]
+                .as_str()
+                .unwrap();
+            assert_eq!(
+                std::path::Path::new(path).parent(),
+                std::path::Path::new(reference["path"].as_str().unwrap()).parent()
+            );
+            assert!(retained.get(stream).is_none());
+            assert!(retained.get(format!("{stream}_bytes")).is_none());
+            assert!(retained.get(format!("{stream}_zlib_hex")).is_none());
+        }
+        let process = chrono_harness::scoped_report::restore_process(retained, |original| {
+            chrono_harness::prepared::read_original(directory.path(), original, None)
+        })
+        .unwrap();
+        assert_eq!(process.exit_code, code);
+        assert_eq!(process.stdout_bytes, output);
+        assert_eq!(process.stderr_bytes, error);
     }
     // Reusing the same operation identity cannot dispatch a second attempt.
     assert!(execute(&plan).is_err());
@@ -380,8 +396,16 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
             .join(".chrono-harness/state/projects-run.operation-0/result.json");
         let mut saved: serde_json::Value =
             serde_json::from_slice(&std::fs::read(original).unwrap()).unwrap();
-        saved["receipt"]["process"] =
-            chrono_harness::full::expand_process(&saved["receipt"]["process"]).unwrap();
+        saved["receipt"]["process"] = serde_json::to_value(
+            chrono_harness::scoped_report::restore_process(
+                &saved["receipt"]["process"],
+                |original| {
+                    chrono_harness::prepared::read_original(directory.path(), original, None)
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let receipt: chrono_judge_routes::Receipt =
             serde_json::from_value(saved["receipt"].clone()).unwrap();
         chrono_judge_routes::compare(&plan, &plan.operations[0], Some(&receipt)).unwrap();
@@ -390,21 +414,13 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         let partial = directory
             .path()
             .join(".chrono-harness/state/projects-run.operation-1");
-        let launch: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(format!("{}.launch.json", partial.display())).unwrap(),
-        )
-        .unwrap();
+        let launch: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(partial.join("launch.json")).unwrap()).unwrap();
         assert!(!partial.join("result.json").exists());
         // A child's socket arrival only orders its pipe writes. This handshake
         // instead holds the producer after both original readers have joined.
-        assert_eq!(
-            std::fs::read(format!("{}.stdout", partial.display())).unwrap(),
-            [254, 1]
-        );
-        assert_eq!(
-            std::fs::read(format!("{}.stderr", partial.display())).unwrap(),
-            [253]
-        );
+        assert_eq!(std::fs::read(partial.join("stdout")).unwrap(), [254, 1]);
+        assert_eq!(std::fs::read(partial.join("stderr")).unwrap(), [253]);
         let launcher = i32::try_from(launch["launcher_pid"].as_u64().unwrap()).unwrap();
         // An enclosing timeout cooperatively cancels nested operations, allowing
         // this producer to publish their terminal results. Interrupt the actual
@@ -429,19 +445,11 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         !partial.join("result.json").exists(),
         "no native result was returned to this producer"
     );
-    let launch: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(format!("{}.launch.json", partial.display())).unwrap(),
-    )
-    .unwrap();
+    let launch: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(partial.join("launch.json")).unwrap()).unwrap();
     assert!(launch["child_pid"].as_u64().unwrap() > 0);
-    assert_eq!(
-        std::fs::read(format!("{}.stdout", partial.display())).unwrap(),
-        [254, 1]
-    );
-    assert_eq!(
-        std::fs::read(format!("{}.stderr", partial.display())).unwrap(),
-        [253]
-    );
+    assert_eq!(std::fs::read(partial.join("stdout")).unwrap(), [254, 1]);
+    assert_eq!(std::fs::read(partial.join("stderr")).unwrap(), [253]);
     assert!(
         execute(&plan).is_err(),
         "unknown execution cannot dispatch the same work again"

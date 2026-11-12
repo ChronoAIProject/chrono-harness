@@ -80,23 +80,4 @@ pub fn validate_original(
     }
 }
 
-pub struct ReleasePlan {
-    pub settle_inputs: bool,
-    pub release_dependencies: bool,
-    pub release_recovery: bool,
-}
-
-/// 输入须先交接，已知终态才可解除依赖与恢复保护；未知终态继续保护。
-pub fn release_plan(known: bool, input_count: usize) -> (plan: ReleasePlan)
-    ensures plan.settle_inputs == (input_count > 0),
-        plan.release_dependencies == (known && input_count > 0),
-        plan.release_recovery == known,
-{
-    ReleasePlan {
-        settle_inputs: input_count > 0,
-        release_dependencies: known && input_count > 0,
-        release_recovery: known,
-    }
-}
-
 }
