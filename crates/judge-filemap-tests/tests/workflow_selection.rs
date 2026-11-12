@@ -104,8 +104,9 @@ fn removed_stability_and_suite_requirements_keep_base_edges_and_costs() {
     let (r, f) = report(&a, &b, &[WORKFLOW]);
     assert!(f.is_empty(), "{f:?}");
     assert_eq!(r["retired_tests"], json!(["test:t"]));
-    assert_eq!(r["required_tests"][0]["base_cost"]["reference"], "unknown");
-    assert!(r["required_tests"][0]["candidate_cost"].is_null());
+    let cost = &r["records"]["/records/filemap/test_costs/t"];
+    assert_eq!(cost["base"]["value"]["cost"], "unknown");
+    assert!(cost["candidate"].is_null());
     assert!(
         r["edges"]
             .as_array()

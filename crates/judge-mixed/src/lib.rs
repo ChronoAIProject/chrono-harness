@@ -228,7 +228,7 @@ fn documents(
 fn evaluate(req: &Request, reader: &facts::Reader) -> Result<(Value, String), String> {
     req.validate()?;
     let (base, candidate, _) = chrono_judge_registration::views_with_reader(req, reader)?;
-    if req.impact["schema"] != "chrono-filemap-impact/v3" {
+    if req.impact["schema"] != "chrono-filemap-impact/v5" {
         return Err("E_IMPACT: unsupported schema".into());
     }
     let delta: Vec<Delta> = serde_json::from_value(req.impact["delta"].clone())

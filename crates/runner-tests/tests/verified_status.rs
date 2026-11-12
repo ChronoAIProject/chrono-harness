@@ -32,6 +32,301 @@ fn local_directory_release_respects_owner_and_descendant_lifetimes() {
     expect_status_true(!policy::release_local_directory(false, 10, 11));
 }
 
+struct CheckoutFixture {
+    trace: Vec<u8>,
+    failure: u8,
+    error: String,
+}
+
+fn checkout_fixture_step(mut state: CheckoutFixture, phase: u8) -> (out: (CheckoutFixture, bool))
+    ensures out.0.trace@ == state.trace@.push(phase),
+        out.0.failure == state.failure, out.0.error@ == state.error@,
+        out.1 == (state.failure == phase),
+{
+    let failed = state.failure == phase;
+    state.trace.push(phase);
+    (state, failed)
+}
+
+fn checkout_fixture_head(state: CheckoutFixture) -> (out: (CheckoutFixture, Result<String, String>))
+    ensures out.0.trace@ == state.trace@.push(1u8),
+        out.0.failure == state.failure, out.0.error@ == state.error@,
+        policy::oid_text_result(out.1) == if state.failure == 1 { Err(state.error@) }
+            else { Ok("HEAD café\0\n"@) },
+{
+    let (state, failed) = checkout_fixture_step(state, 1);
+    let observed = if failed { Err(state.error.clone()) } else { Ok("HEAD café\0\n".to_owned()) };
+    (state, observed)
+}
+
+fn checkout_fixture_tracked(state: CheckoutFixture) -> (out: (CheckoutFixture, Result<Vec<String>, String>))
+    ensures out.0.trace@ == state.trace@.push(2u8),
+        out.0.failure == state.failure, out.0.error@ == state.error@,
+        match out.1 {
+            Err(error) => state.failure == 2 && error@ == state.error@,
+            Ok(rows) => state.failure != 2 && rows.len() == 2
+                && rows[0]@ == "tracked café\0\n"@ && rows[1]@ == "A"@,
+        },
+{
+    let (state, failed) = checkout_fixture_step(state, 2);
+    let observed = if failed { Err(state.error.clone()) }
+        else { Ok(vec!["tracked café\0\n".to_owned(), "A".to_owned()]) };
+    (state, observed)
+}
+
+fn checkout_fixture_untracked(state: CheckoutFixture) -> (out: (CheckoutFixture, Result<Vec<String>, String>))
+    ensures out.0.trace@ == state.trace@.push(3u8),
+        out.0.failure == state.failure, out.0.error@ == state.error@,
+        match out.1 {
+            Err(error) => state.failure == 3 && error@ == state.error@,
+            Ok(rows) => state.failure != 3 && rows.len() == 3
+                && rows[0]@ == "z"@ && rows[1]@ == "A"@ && rows[2]@ == "z"@,
+        },
+{
+    let (state, failed) = checkout_fixture_step(state, 3);
+    let observed = if failed { Err(state.error.clone()) }
+        else { Ok(vec!["z".to_owned(), "A".to_owned(), "z".to_owned()]) };
+    (state, observed)
+}
+
+fn checkout_fixture_ignored(state: CheckoutFixture) -> (out: (CheckoutFixture, Result<Vec<String>, String>))
+    ensures out.0.trace@ == state.trace@.push(5u8),
+        out.0.failure == state.failure, out.0.error@ == state.error@,
+        match out.1 {
+            Err(error) => state.failure == 5 && error@ == state.error@,
+            Ok(rows) => state.failure != 5 && rows.len() == 3
+                && rows[0]@ == "A"@ && rows[1]@ == "é"@ && rows[2]@ == ""@,
+        },
+{
+    let (state, failed) = checkout_fixture_step(state, 5);
+    let observed = if failed { Err(state.error.clone()) }
+        else { Ok(vec!["A".to_owned(), "é".to_owned(), "".to_owned()]) };
+    (state, observed)
+}
+
+fn checkout_fixture_flags(state: CheckoutFixture) -> (out: (CheckoutFixture, Result<Vec<policy::IndexFlag>, String>))
+    ensures out.0.trace@ == state.trace@.push(4u8),
+        out.0.failure == state.failure, out.0.error@ == state.error@,
+        match out.1 {
+            Err(error) => state.failure == 4 && error@ == state.error@,
+            Ok(rows) => state.failure != 4 && rows.len() == 1
+                && rows[0].path@ == "flags café\0\n"@ && rows[0].tag@ == "S\0\n"@,
+        },
+{
+    let (state, failed) = checkout_fixture_step(state, 4);
+    let observed = if failed { Err(state.error.clone()) }
+        else { Ok(vec![policy::IndexFlag { path: "flags café\0\n".to_owned(), tag: "S\0\n".to_owned() }]) };
+    (state, observed)
+}
+
+fn checkout_fixture_initial(failure: u8, error: &str) -> (out: CheckoutFixture)
+    ensures out.trace@ == Seq::<u8>::empty(), out.failure == failure, out.error@ == error@,
+{
+    CheckoutFixture { trace: Vec::new(), failure, error: error.to_owned() }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_collection_preserves_all_observed_values_and_exact_stage_order() {
+    let (state, result) = policy::collect_checkout(checkout_fixture_initial(0, "unused"),
+        checkout_fixture_head, checkout_fixture_tracked, checkout_fixture_untracked, checkout_fixture_flags);
+    expect_status_true(state.trace.len() == 4);
+    expect_status_true(state.trace[0] == 1 && state.trace[1] == 2
+        && state.trace[2] == 3 && state.trace[3] == 4);
+    match result {
+        Err(_) => { expect_status_true(false); },
+        Ok(checkout) => {
+            expect_status_text(checkout.head.as_str(), "HEAD café\0\n");
+            expect_status_true(checkout.r#tracked.len() == 2 && checkout.untracked.len() == 3);
+            expect_status_text(checkout.r#tracked[0].as_str(), "tracked café\0\n");
+            expect_status_text(checkout.r#tracked[1].as_str(), "A");
+            expect_status_text(checkout.untracked[0].as_str(), "z");
+            expect_status_text(checkout.untracked[1].as_str(), "A");
+            expect_status_text(checkout.untracked[2].as_str(), "z");
+            expect_status_true(checkout.index_flags.len() == 1);
+            expect_status_text(checkout.index_flags[0].path.as_str(), "flags café\0\n");
+            expect_status_text(checkout.index_flags[0].tag.as_str(), "S\0\n");
+            let cloned = checkout.clone();
+            expect_status_true(cloned.eq(&checkout));
+        },
+    }
+}
+
+fn checkout_fixture_rejects_at_original_phase(failure: u8, error: &str)
+    requires 1 <= failure <= 4,
+{
+    let (state, result) = policy::collect_checkout(checkout_fixture_initial(failure, error),
+        checkout_fixture_head, checkout_fixture_tracked, checkout_fixture_untracked, checkout_fixture_flags);
+    expect_status_true(state.trace.len() == failure as usize);
+    expect_status_true(state.trace[0] == 1);
+    if failure >= 2 { expect_status_true(state.trace[1] == 2); }
+    if failure >= 3 { expect_status_true(state.trace[2] == 3); }
+    if failure >= 4 { expect_status_true(state.trace[3] == 4); }
+    match result {
+        Ok(_) => { expect_status_true(false); },
+        Err(actual) => { expect_status_text(actual.as_str(), error); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_collection_stops_at_each_first_error_and_preserves_complete_errors() {
+    checkout_fixture_rejects_at_original_phase(1, "");
+    checkout_fixture_rejects_at_original_phase(2, "tracked café\0\n");
+    checkout_fixture_rejects_at_original_phase(3, "untracked café\0\n");
+    checkout_fixture_rejects_at_original_phase(4, "flags café\0\n");
+}
+
+fn checkout_fixture_both_inventories(state: CheckoutFixture)
+    -> (out: (CheckoutFixture, Result<Vec<String>, String>))
+    ensures out.0.trace@ == if state.failure == 3 { state.trace@.push(3u8) }
+            else { state.trace@.push(3u8).push(5u8) },
+        out.0.failure == state.failure, out.0.error@ == state.error@,
+        match out.1 {
+            Err(error) => (state.failure == 3 || state.failure == 5) && error@ == state.error@,
+            Ok(_) => state.failure != 3 && state.failure != 5,
+        },
+{
+    policy::collect_checkout_untracked(state, checkout_fixture_untracked, checkout_fixture_ignored)
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_ignored_failure_stops_before_index_flags() {
+    let (state, result) = policy::collect_checkout(checkout_fixture_initial(5, "ignored café\0\n"),
+        checkout_fixture_head, checkout_fixture_tracked,
+        checkout_fixture_both_inventories, checkout_fixture_flags);
+    expect_status_true(state.trace.len() == 4);
+    expect_status_true(state.trace[0] == 1 && state.trace[1] == 2
+        && state.trace[2] == 3 && state.trace[3] == 5);
+    match result {
+        Ok(_) => { expect_status_true(false); },
+        Err(error) => { expect_status_text(error.as_str(), "ignored café\0\n"); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_untracked_failure_does_not_read_ignored_inventory() {
+    let (state, result) = policy::collect_checkout_untracked(checkout_fixture_initial(3, ""),
+        checkout_fixture_untracked, checkout_fixture_ignored);
+    expect_status_true(state.trace.len() == 1 && state.trace[0] == 3);
+    match result {
+        Ok(_) => { expect_status_true(false); },
+        Err(error) => { expect_status_text(error.as_str(), ""); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_success_reads_both_inventories_before_merging() {
+    let input = checkout_fixture_initial(0, "unused");
+    let ghost initial = input;
+    let (state, result) = policy::collect_checkout_untracked(input,
+        checkout_fixture_untracked, checkout_fixture_ignored);
+    expect_status_true(state.trace.len() == 2 && state.trace[0] == 3 && state.trace[1] == 5);
+    match result {
+        Err(_) => { expect_status_true(false); },
+        Ok(paths) => {
+            proof {
+                let first = choose|first: (CheckoutFixture, Result<Vec<String>, String>)|
+                    checkout_fixture_untracked.ensures((initial,), first)
+                        && policy::checkout_inventory_result(first, checkout_fixture_ignored, (state, Ok::<Vec<String>, String>(paths)));
+                assert(first.1.is_ok());
+                let normal = first.1->Ok_0;
+                let second = choose|second: (CheckoutFixture, Result<Vec<String>, String>)|
+                    checkout_fixture_ignored.ensures((first.0,), second)
+                        && policy::checkout_ignored_result(normal, second, (state, Ok::<Vec<String>, String>(paths)));
+                assert(second.1.is_ok());
+                let ignored = second.1->Ok_0;
+                assert(policy::checkout_paths_merged(paths@, normal@, ignored@));
+                let all = normal@ + ignored@;
+                assert(all.len() == 6 && all[5]@ == ""@ && all[4]@ == "é"@
+                    && all[1]@ == "A"@ && all[0]@ == "z"@);
+                assert(policy::checkout_path_prefix(normal@ + ignored@, 6, ""@));
+                assert(policy::checkout_path_prefix(normal@ + ignored@, 6, "é"@));
+                assert(policy::checkout_path_prefix(normal@ + ignored@, 6, "A"@));
+                assert(policy::checkout_path_prefix(normal@ + ignored@, 6, "z"@));
+            }
+            assert(policy::checkout_path_prefix(paths@, paths.len() as int, ""@));
+            assert(policy::checkout_path_prefix(paths@, paths.len() as int, "é"@));
+            assert(policy::checkout_path_prefix(paths@, paths.len() as int, "A"@));
+            assert(policy::checkout_path_prefix(paths@, paths.len() as int, "z"@));
+            expect_status_true(0 < paths.len() && paths.len() <= 6);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_value_equality_includes_every_field() {
+    proof {
+        reveal(policy::checkout_equal);
+        reveal(policy::checkout_texts_equal);
+        reveal_strlit("same"); reveal_strlit("different");
+        reveal_strlit("tracked"); reveal_strlit("tracked extra");
+        reveal_strlit("untracked"); reveal_strlit("untracked extra");
+        reveal_strlit("p"); reveal_strlit("p extra");
+        reveal_strlit("H"); reveal_strlit("H extra");
+        reveal_strlit("A"); reveal_strlit("a");
+        assert("tracked"@.len() == 7 && "tracked extra"@.len() == 13);
+        assert("untracked"@.len() == 9 && "untracked extra"@.len() == 15);
+        assert("p"@.len() == 1 && "p extra"@.len() == 7);
+        assert("H"@.len() == 1 && "H extra"@.len() == 7);
+    }
+    let original = policy::Checkout { head: "same".to_owned(),
+        r#tracked: vec!["tracked".to_owned()], untracked: vec!["untracked".to_owned()],
+        index_flags: vec![policy::IndexFlag { path: "p".to_owned(), tag: "H".to_owned() }] };
+    let mut head = original.clone();
+    head.head = "different".to_owned();
+    assert(head.head@ == "different"@ && original.head@ == "same"@);
+    assert(head.head@ != original.head@);
+    assert(!policy::checkout_equal(&head, &original));
+    expect_status_true(head.ne(&original));
+    let mut tracked_state = original.clone();
+    tracked_state.r#tracked = vec!["tracked extra".to_owned()];
+    assert(tracked_state.r#tracked@[0]@ == "tracked extra"@);
+    assert(original.r#tracked@[0]@ == "tracked"@);
+    assert(tracked_state.r#tracked@[0]@ != original.r#tracked@[0]@);
+    assert(!policy::checkout_texts_equal(tracked_state.r#tracked@, original.r#tracked@));
+    assert(!policy::checkout_equal(&tracked_state, &original));
+    expect_status_true(tracked_state.ne(&original));
+    let mut untracked = original.clone();
+    untracked.untracked = vec!["untracked extra".to_owned()];
+    assert(untracked.untracked@[0]@ == "untracked extra"@);
+    assert(original.untracked@[0]@ == "untracked"@);
+    assert(untracked.untracked@[0]@ != original.untracked@[0]@);
+    assert(!policy::checkout_texts_equal(untracked.untracked@, original.untracked@));
+    assert(!policy::checkout_equal(&untracked, &original));
+    expect_status_true(untracked.ne(&original));
+    let mut path = original.clone();
+    path.index_flags = vec![policy::IndexFlag { path: "p extra".to_owned(), tag: "H".to_owned() }];
+    assert(!policy::index_flags_equal(&path.index_flags[0], &original.index_flags[0]));
+    assert(!policy::checkout_equal(&path, &original));
+    expect_status_true(path.ne(&original));
+    let mut tag = original.clone();
+    tag.index_flags = vec![policy::IndexFlag { path: "p".to_owned(), tag: "H extra".to_owned() }];
+    assert(!policy::index_flags_equal(&tag.index_flags[0], &original.index_flags[0]));
+    assert(!policy::checkout_equal(&tag, &original));
+    expect_status_true(tag.ne(&original));
+
+    let empty = policy::Checkout { head: "".to_owned(), r#tracked: Vec::new(),
+        untracked: Vec::new(), index_flags: Vec::new() };
+    expect_status_true(empty.clone().eq(&empty));
+    let mut extra = empty.clone();
+    extra.r#tracked = vec!["".to_owned()];
+    expect_status_true(extra.ne(&empty));
+    let mut missing = original.clone();
+    missing.untracked = Vec::new();
+    expect_status_true(missing.ne(&original));
+    let mut missing_flag = original.clone();
+    missing_flag.index_flags = Vec::new();
+    expect_status_true(missing_flag.ne(&original));
+    let mut ordered = original.clone();
+    ordered.r#tracked = vec!["A".to_owned(), "a".to_owned()];
+    let mut reversed = ordered.clone();
+    reversed.r#tracked = vec!["a".to_owned(), "A".to_owned()];
+    assert("A"@[0] != "a"@[0]);
+    assert(reversed.r#tracked@[0]@ == "a"@ && ordered.r#tracked@[0]@ == "A"@);
+    assert(!policy::checkout_texts_equal(reversed.r#tracked@, ordered.r#tracked@));
+    assert(!policy::checkout_equal(&reversed, &ordered));
+    expect_status_true(reversed.ne(&ordered));
+}
+
 struct OidVerificationFixture {
     phase: u8,
     expected: String,

@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use verified_graph::valid_types;
 
-pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v3";
+pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v5";
 /// Complete endpoint definitions; zero is absent, several are ambiguous.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
@@ -38,15 +38,11 @@ pub struct NodeAmbiguity {
 pub struct RequiredTest {
     pub node: String,
     pub candidate_present: bool,
-    pub candidate_ambiguous: bool,
     pub execution_edges: Vec<Edge>,
-    pub base_cost: Option<Value>,
-    pub candidate_cost: Option<Value>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JudgeSelection {
     pub node: String,
-    pub every_delta: bool,
     pub triggers: Vec<Edge>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -95,11 +91,6 @@ pub fn edges(r: &Registrations) -> BTreeSet<Edge> {
         add(e["from"].as_str().unwrap(), e);
     }
     out
-}
-fn cost(r: &Registrations, test: &str) -> Option<Value> {
-    r.filemap()["test_costs"].as_array().unwrap().iter().find(|c| c["test"].as_str() == test.strip_prefix("test:")).map(|c| {
-        json!({"reference": c["cost"], "value": r.filemap()["cost_models"].get(c["cost"].as_str().unwrap())})
-    })
 }
 /// Pure declaration-level impact. External input records are compared, not retained input bytes.
 /// Callers must supply factual, complete DELTA; the judge entrypoint binds it to fixed Git objects.
@@ -436,15 +427,12 @@ fn produce_environment(
         .into_iter()
         .map(|node| RequiredTest {
             candidate_present: bn.get(&node).is_some_and(|n| n.kind == NodeKind::Test),
-            candidate_ambiguous: bn.get(&node).is_some_and(|n| n.definitions.len() > 1),
             execution_edges: closure
                 .traversed
                 .iter()
                 .filter(|e| e.edge.kind == EdgeKind::TestExecution && e.edge.to == node)
                 .map(|e| e.edge.clone())
                 .collect(),
-            base_cost: cost(base, &node),
-            candidate_cost: cost(candidate, &node),
             node,
         })
         .collect();
@@ -455,7 +443,6 @@ fn produce_environment(
         .map(|j| {
             let node = format!("judge:{}", j["id"].as_str().unwrap());
             JudgeSelection {
-                every_delta: j["selector"] == "every-delta",
                 triggers: closure
                     .traversed
                     .iter()
