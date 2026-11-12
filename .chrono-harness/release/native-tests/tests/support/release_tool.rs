@@ -12,6 +12,93 @@ use std::{
 
 fn run() -> Result<u8, String> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
+    let executable = std::env::current_exe().map_err(|e| e.to_string())?;
+    let name = executable
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or("missing tool fixture name")?;
+    // frontend 专属边界：不调用真实 Git、tar、mv 或业务探针。
+    match name {
+        "git" => {
+            let args = args
+                .strip_prefix(&["--no-optional-locks".into(), "--no-replace-objects".into()])
+                .unwrap_or(&args);
+            let args = args.iter().map(String::as_str).collect::<Vec<_>>();
+            match args.as_slice() {
+                ["rev-parse", "--show-toplevel", "--verify", "HEAD"] => {
+                    println!(
+                        "{}\n{}",
+                        std::env::current_dir()
+                            .map_err(|e| e.to_string())?
+                            .display(),
+                        "a".repeat(40)
+                    );
+                }
+                ["rev-parse", "--verify", "HEAD" | "HEAD^{tree}"]
+                | ["rev-parse", "HEAD" | "HEAD^{tree}"]
+                | [
+                    "rev-parse",
+                    "--verify",
+                    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa^{tree}",
+                ] => {
+                    println!(
+                        "{}",
+                        if args.last().unwrap().ends_with("^{tree}") {
+                            "b"
+                        } else {
+                            "a"
+                        }
+                        .repeat(40)
+                    );
+                }
+                ["status", "--porcelain", "--untracked-files=normal"]
+                | [
+                    "status",
+                    "--porcelain=v1",
+                    "--untracked-files=normal",
+                    "--ignore-submodules=none",
+                ] => {}
+                _ => return Err(format!("unexpected frontend Git invocation: {args:?}")),
+            }
+            return Ok(0);
+        }
+        "tar" => {
+            let [flag, archive, cd, directory, member] = args.as_slice() else {
+                return Err(format!("unexpected frontend tar invocation: {args:?}"));
+            };
+            if flag != "-xpf"
+                || cd != "-C"
+                || member != "executable"
+                || Path::new(archive) != Path::new(directory).join("executable.tar")
+            {
+                return Err(format!("changed frontend tar invocation: {args:?}"));
+            }
+            let mut archive =
+                tar::Archive::new(fs::File::open(archive).map_err(|e| e.to_string())?);
+            archive.unpack(directory).map_err(|e| e.to_string())?;
+            return Ok(0);
+        }
+        "mv" => {
+            let [source, destination] = args.as_slice() else {
+                return Err(format!("unexpected frontend mv invocation: {args:?}"));
+            };
+            if Path::new(source).file_name() != Some("executable".as_ref())
+                || Path::new(destination) != Path::new(source).with_file_name("chrono-host-release")
+            {
+                return Err(format!("changed frontend mv invocation: {args:?}"));
+            }
+            fs::rename(source, destination).map_err(|e| e.to_string())?;
+            return Ok(0);
+        }
+        "probe"
+            if args == ["verify none", "space value", "$literal", "λ"]
+                && !Path::new(".chrono-harness/release/tool-fixture.json").exists() =>
+        {
+            println!("original literal verifier passed");
+            return Ok(0);
+        }
+        _ => {}
+    }
     if args == ["--fixture-parent-context"] || args == ["--fixture-parent-context", "explicit"] {
         let mut child = context::command(std::env::current_exe().map_err(|e| e.to_string())?);
         child.arg("--fixture-observe-context");
