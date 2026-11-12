@@ -887,7 +887,7 @@ impl Inventory {
     ) -> Result<Gate, String> {
         self.addressed_gate_scope(ids, paths, roles, birth, maintenance, wait, false)
     }
-    fn addressed_gate_scope(
+    pub(super) fn addressed_gate_scope(
         &self,
         ids: &[String],
         paths: &[String],

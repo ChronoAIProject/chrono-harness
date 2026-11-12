@@ -119,6 +119,70 @@ fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
     assert!(target.join(".chrono-harness/state/evidence").is_file());
 }
 
+#[test]
+fn linked_terminal_handoff_rotates_completed_cache_generations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    super::automatic::native_consumer(&h, "rebuild-evidence");
+    let path = h.root.join(".chrono-harness/cleanup.json");
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["cache_history"] = value!({
+        "keep_seconds":86400,"max_entries":1,"max_bytes":1048576
+    });
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("retained-cache-history");
+    assert_eq!(
+        h.invoke("integration", "retained-cache-history", &target).0,
+        0
+    );
+    for _ in 0..3 {
+        let (code, used, error) = h.auto(
+            "use",
+            &[
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        );
+        assert_eq!(code, 0, "{used} {error}");
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
+    }
+    let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
+    assert!(
+        entry["cache_attempts"].as_array().unwrap().len() > 1,
+        "{entry}"
+    );
+    let (code, finished, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--artifacts-only"],
+    );
+    assert_eq!(code, 0, "{finished} {error}");
+    let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
+    assert_eq!(entry["status"], "retained");
+    assert_eq!(
+        entry["cache_attempts"].as_array().unwrap().len(),
+        1,
+        "{finished}"
+    );
+    assert!(
+        finished["cache_history_rotation"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|rotation| rotation["path"] == value!(target)
+                && rotation["removed_records"].as_u64().unwrap() > 0)
+    );
+    assert!(target.join("payload").is_file());
+    assert!(target.join(".chrono-harness/state/evidence").is_file());
+}
+
 fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
     let h = main_host();
     adopt_lifecycle_retention(&h);

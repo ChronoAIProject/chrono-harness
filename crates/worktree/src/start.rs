@@ -784,7 +784,14 @@ pub(crate) fn with_report_for_consumer<T>(
     // The publication capability and durable recovery root protect this output.
     // This caller retains only its actual inputs and child-produced originals
     // through their handoff to the completed report.
-    let _read_scope = chrono_harness::retained_artifacts::retention::read_scope(root)?;
+    let _read_scope = if operation == "maintain" {
+        // Enrollment consumers protect existing originals before this command
+        // permits cross-object retention. Keep child reports for our handoff,
+        // without also retaining every child's independently owned inputs.
+        chrono_harness::retained_artifacts::retention::published_output_scope(root)?
+    } else {
+        chrono_harness::retained_artifacts::retention::read_scope(root)?
+    };
     let mut output = fs::OpenOptions::new()
         .write(true)
         .open(&output_path)

@@ -6,7 +6,7 @@
     <string>org.chrono-harness.maintenance</string>
     <key>ProgramArguments</key>
     <array>
-        <string>@COORDINATOR@/.chrono-harness/bin/chrono-worktree</string>
+        <string>@PROGRAM@</string>
         <string>maintain</string>
         <string>--host-root</string>
         <string>@COORDINATOR@</string>
