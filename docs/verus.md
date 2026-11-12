@@ -673,6 +673,26 @@ UTF-8 字节前缀可判兼容命中。失败／取消、跳过和未知结果�
 JSON 投影、原生结果真实性、删除／时间调整及完整恢复事务仍未证明，不能将该局部根当作
 整个 `recovery.rs` 已覆盖。投影为每个声明前缀保留一个可选借用，新增分配及完整验证成本未测。
 
+本批把恢复动作的仓内准入集中到同一根的 `recovery_action_spec`／`recovery_action`，
+并由 `content_verification_applies` 判断何时必须读取生产者清单。`recovery.rs` 只把 JSON
+结果投影为已登记的布尔／文本观察，再消费这些结果；动作表如下：
+
+| 输入 | Verus 动作 |
+| --- | --- |
+| `failure` | `Discard` |
+| `success` 且启用未确认恢复，输出形状错误 | `MalformedOutputs` |
+| `success` 且启用未确认恢复，`miss-or-unavailable`／`incompatible` | `Discard` |
+| `success`（其它情况） | 继续内容核验或 `Keep` |
+| `skipped` | `Keep` |
+| 缺失、取消或未知 outcome | `UnknownOutcome` |
+| `producer-manifest/v1` 且 `exact`／`compatible`，内容不是 `matched` | `Discard` |
+| `compatible` 且启用 `refresh_sources` | `Refresh` |
+| 其它已接受情况 | `Keep` |
+
+因此，内容清单读取、JSON 解码、artifact 删除、源码时间刷新、原生结果真实性和完整恢复
+事务仍是明确登记的接口或未证明外围；这些动作的局部证明不等于整个 `recovery.rs` 已覆盖。
+本批沿用 `verify.cache-planner`／`verify.cache-planner-tests`，不新增工具或预算。
+
 独立根核匹配、四个缺失位置、大小写、前缀、NUL、换行及完整中文文本；真实 CLI 回归另核拒绝发生在发布前并保留输入计划。两项 planner 整 crate 证明归 cache 测试计划；共用结果判断的证明归 runner 所有者。
 
 普通 Cargo 测试调用 cache 的实际公开模块，对格式与 planner 身份执行同一预期的失败分支；

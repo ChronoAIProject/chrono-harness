@@ -271,6 +271,105 @@ fn only_adopted_compatible_restores_refresh_inputs() {
     expect_cache_true(!policy::refresh_sources(true, ""));
 }
 
+fn recovery_action_tag(
+    outcome: Option<&str>, reason: &str, unconfirmed: bool,
+    outputs_is_null_or_object: bool, matched_key_is_null_or_string: bool,
+    content_method: Option<&str>, content_status: Option<&str>, refresh_enabled: bool,
+    expected: u8,
+)
+    requires match policy::recovery_action_spec(
+        outcome, reason, unconfirmed, outputs_is_null_or_object,
+        matched_key_is_null_or_string, content_method, content_status, refresh_enabled,
+    ) {
+        Ok(policy::RecoveryAction::Keep) => expected == 0,
+        Ok(policy::RecoveryAction::Discard) => expected == 1,
+        Ok(policy::RecoveryAction::Refresh) => expected == 2,
+        Err(policy::RecoveryDecisionError::UnknownOutcome) => expected == 3,
+        Err(policy::RecoveryDecisionError::MalformedOutputs) => expected == 4,
+    },
+{
+    let actual = policy::recovery_action(
+        outcome, reason, unconfirmed, outputs_is_null_or_object,
+        matched_key_is_null_or_string, content_method, content_status, refresh_enabled,
+    );
+    let actual_tag = match actual {
+        Ok(policy::RecoveryAction::Keep) => 0,
+        Ok(policy::RecoveryAction::Discard) => 1,
+        Ok(policy::RecoveryAction::Refresh) => 2,
+        Err(policy::RecoveryDecisionError::UnknownOutcome) => 3,
+        Err(policy::RecoveryDecisionError::MalformedOutputs) => 4,
+    };
+    assert(actual_tag == expected);
+    expect_cache_true(actual_tag == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_decision_covers_outcomes_content_and_refresh_boundaries() {
+    proof {
+        reveal_strlit("failure"); reveal_strlit("success"); reveal_strlit("skipped");
+        reveal_strlit("miss-or-unavailable"); reveal_strlit("incompatible");
+        reveal_strlit("exact"); reveal_strlit("compatible");
+        reveal_strlit("producer-manifest/v1"); reveal_strlit("matched");
+        reveal_strlit("unusable"); reveal_strlit("unknown"); reveal_strlit("");
+        assert("failure"@[0] != "success"@[0]);
+        assert("success"@[1] != "skipped"@[1]);
+        assert("exact"@.len() != "compatible"@.len());
+        assert("matched"@[0] != "unusable"@[0]);
+        assert("producer-manifest/v1"@.len() != "matched"@.len());
+        assert("unknown"@[0] != "success"@[0]);
+    }
+    // A failed provider always discards, regardless of optional content metadata.
+    recovery_action_tag(
+        Some("failure"), "error", false, true, true,
+        Some("producer-manifest/v1"), Some("matched"), true, 1,
+    );
+    // An opted-in unconfirmed restore rejects malformed output shape first.
+    recovery_action_tag(
+        Some("success"), "exact", true, false, true,
+        None, None, false, 4,
+    );
+    // Misses and incompatible keys discard before content verification.
+    recovery_action_tag(
+        Some("success"), "miss-or-unavailable", true, true, true,
+        None, None, false, 1,
+    );
+    recovery_action_tag(
+        Some("success"), "incompatible", true, true, true,
+        None, None, false, 1,
+    );
+    // Exact content verification keeps a matched producer manifest and discards an unusable one.
+    recovery_action_tag(
+        Some("success"), "exact", false, true, true,
+        Some("producer-manifest/v1"), Some("matched"), false, 0,
+    );
+    recovery_action_tag(
+        Some("success"), "exact", false, true, true,
+        Some("producer-manifest/v1"), Some("unusable"), false, 1,
+    );
+    // Compatible restores refresh only when the policy enables source refresh.
+    recovery_action_tag(
+        Some("success"), "compatible", false, true, true,
+        None, None, false, 0,
+    );
+    recovery_action_tag(
+        Some("success"), "compatible", false, true, true,
+        None, None, true, 2,
+    );
+    // Skipped is retained; missing and unknown outcomes are rejected.
+    recovery_action_tag(
+        Some("skipped"), "not-attempted", false, true, true,
+        None, None, false, 0,
+    );
+    recovery_action_tag(
+        None, "unavailable", false, true, true,
+        None, None, false, 3,
+    );
+    recovery_action_tag(
+        Some("unknown"), "unavailable", false, true, true,
+        None, None, false, 3,
+    );
+}
+
 // 同一预期也在普通 Cargo 中实际执行。
 fn expect_cache_true(actual: bool)
     requires actual,
