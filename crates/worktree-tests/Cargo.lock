@@ -175,6 +175,7 @@ version = "0.1.0"
 dependencies = [
  "chrono-harness",
  "chrono-host-bootstrap",
+ "chrono-identifiers",
  "chrono-judge-registration",
  "chrono-worktree",
  "libc",
@@ -184,6 +185,7 @@ dependencies = [
  "sha2",
  "shlex",
  "tempfile",
+ "verus_builtin_macros",
 ]
 
 [[package]]

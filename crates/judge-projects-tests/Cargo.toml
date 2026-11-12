@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+chrono-identifiers = { path = "../identifiers" }
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 sha1 = "0.10"
 sha2 = "0.10"
 chrono-diagnostics = { path = "../diagnostics" }
