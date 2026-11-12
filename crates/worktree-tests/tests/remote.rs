@@ -88,6 +88,55 @@ fn remote_cleanup_preserves_local_work_and_uses_one_explicit_push_destination() 
 }
 
 #[test]
+fn remote_cleanup_preserves_stale_or_absent_local_targets() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for retention in ["ancestor", "same-tree"] {
+        for absent in [false, true] {
+            let h = Host::new("payload");
+            let mut plan = h.remote_plan("feature/finished");
+            let head = plan["head"].as_str().unwrap();
+            let tree = git(&h.root, &["rev-parse", "HEAD^{tree}"]);
+            let retained = git(
+                &h.root,
+                &[
+                    "-c",
+                    "user.name=fixture",
+                    "-c",
+                    "user.email=fixture@example.invalid",
+                    "commit-tree",
+                    &tree,
+                    "-p",
+                    head,
+                    "-m",
+                    "retained target",
+                ],
+            );
+            assert_ne!(retained, head);
+            git(
+                &h.root,
+                &["push", "-q", "warehouse", &format!("{retained}:refs/heads/dev")],
+            );
+            git(&h.root, &["checkout", "--detach", "-q", head]);
+            if absent {
+                git(&h.root, &["update-ref", "-d", "refs/heads/dev"]);
+            }
+            let local = git(&h.root, &["for-each-ref", "refs/heads/dev"]);
+            plan["retained_commit"] = value!(retained);
+            plan["retention"] = value!(retention);
+            let (code, report, error) = h.maintain("cleanup-remote", plan.clone());
+            assert_eq!(code, 0, "{retention} absent={absent}: {report} {error}");
+            assert_eq!(report["remote_branch_removal"], "verified-absent");
+            assert!(h.remote_refs("feature/finished").is_empty());
+            assert_eq!(git(&h.remote, &["rev-parse", "refs/heads/dev"]), retained);
+            assert_eq!(git(&h.root, &["for-each-ref", "refs/heads/dev"]), local);
+            assert_eq!(git(&h.root, &["rev-parse", "HEAD"]), plan["head"]);
+        }
+    }
+}
+
+#[test]
 fn remote_cleanup_checks_squash_retention_and_explicit_absence_retry() {
     if !chrono_git_boundary::isolated_git() {
         return;
