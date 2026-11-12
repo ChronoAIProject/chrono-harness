@@ -128,6 +128,8 @@ proof fn oid_fixture_rejects_nonhex_ascii_prefix(text: &str)
         !scope_text::oid_byte(text@[0] as u8),
     ensures !scope_text::oid(text.spec_bytes()),
 {
+    let scalar = text@[0] as u32;
+    assert(scalar < 128 ==> (scalar & 0x7fu32) == scalar) by(bit_vector);
     assert(vstd::utf8::encode_scalar(text@[0] as u32) == seq![text@[0] as u8]);
     assert(text.spec_bytes() =~= seq![text@[0] as u8]
         + vstd::utf8::encode_utf8(text@.drop_first()));
