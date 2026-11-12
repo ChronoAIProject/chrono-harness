@@ -24,6 +24,105 @@ use vstd::vpanic as panic;
 
 verus! {
 
+// 实际借用接口在仓外；此 fixture 独立记录查询／登记的原键和严格调用次数。
+struct OidReuseFixture {
+    calls: u8,
+    observed: String,
+    hit: bool,
+}
+
+fn oid_reuse_query(cache: OidReuseFixture, oid: &str)
+    -> (out: (OidReuseFixture, bool))
+    requires cache.calls == 0,
+    ensures out.0.calls == 1, out.0.observed@ == oid@,
+        out.0.hit == cache.hit, out.1 == cache.hit,
+{
+    let hit = cache.hit;
+    (OidReuseFixture { calls: 1, observed: oid.to_owned(), hit }, hit)
+}
+
+fn oid_reuse_record(cache: OidReuseFixture, oid: &str) -> (out: OidReuseFixture)
+    requires cache.calls == 0,
+    ensures out.calls == 1, out.observed@ == oid@, out.hit == cache.hit,
+{
+    OidReuseFixture { calls: 1, observed: oid.to_owned(), hit: cache.hit }
+}
+
+fn oid_reuse_never_query(_cache: OidReuseFixture, _oid: &str)
+    -> (OidReuseFixture, bool)
+    requires false,
+{ panic!() }
+
+fn oid_reuse_never_record(_cache: OidReuseFixture, _oid: &str) -> OidReuseFixture
+    requires false,
+{ panic!() }
+
+fn oid_reuse_bound_query_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: 0, observed: "prior".to_owned(), hit };
+    let out = policy::can_reuse_oid(true, cache, oid, oid_reuse_query);
+    expect_status_true(out.1 == hit);
+    expect_status_true(out.0.calls == 1);
+    expect_status_true(out.0.hit == hit);
+    expect_status_text(out.0.observed.as_str(), oid);
+}
+
+fn oid_reuse_unbound_query_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: u8::MAX,
+        observed: "unchanged: é\0original\n".to_owned(), hit };
+    let out = policy::can_reuse_oid(false, cache, oid, oid_reuse_never_query);
+    expect_status_true(!out.1);
+    expect_status_true(out.0.calls == u8::MAX);
+    expect_status_true(out.0.hit == hit);
+    expect_status_text(out.0.observed.as_str(), "unchanged: é\0original\n");
+}
+
+fn oid_reuse_bound_record_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: 0, observed: "prior".to_owned(), hit };
+    let out = policy::record_verified_oid(true, cache, oid, oid_reuse_record);
+    expect_status_true(out.calls == 1);
+    expect_status_true(out.hit == hit);
+    expect_status_text(out.observed.as_str(), oid);
+}
+
+fn oid_reuse_unbound_record_contract(oid: &str, hit: bool) {
+    let cache = OidReuseFixture { calls: u8::MAX,
+        observed: "unchanged: é\0original\n".to_owned(), hit };
+    let out = policy::record_verified_oid(false, cache, oid, oid_reuse_never_record);
+    expect_status_true(out.calls == u8::MAX);
+    expect_status_true(out.hit == hit);
+    expect_status_text(out.observed.as_str(), "unchanged: é\0original\n");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_bound_hit_queries_the_original_key_once() {
+    oid_reuse_bound_query_contract("1111111111111111111111111111111111111111", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_bound_miss_preserves_the_external_result() {
+    oid_reuse_bound_query_contract("key: é\0original\n", false);
+    oid_reuse_bound_query_contract("", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_unbound_does_not_query_or_accept_a_hit() {
+    oid_reuse_unbound_query_contract("key: é\0original\n", true);
+    oid_reuse_unbound_query_contract("", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_bound_records_the_complete_original_key_once() {
+    oid_reuse_bound_record_contract("1111111111111111111111111111111111111111", true);
+    oid_reuse_bound_record_contract("key: é\0original\n", false);
+    oid_reuse_bound_record_contract("", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn oid_reuse_unbound_does_not_borrow_or_change_the_cache() {
+    oid_reuse_unbound_record_contract("key: é\0original\n", true);
+    oid_reuse_unbound_record_contract("", false);
+}
+
 
 // 记录实际回调参数和严格次序；此 fixture 不冒充 Serde JSON 对象的内部模型。
 struct SelectionProjectionFixture {

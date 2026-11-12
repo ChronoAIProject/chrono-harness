@@ -40,6 +40,32 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
+OID 复用缓存的绑定守卫由现有 `verified_status.rs` 的 `can_reuse_oid` 和
+`record_verified_oid` 定义，真实 `Reader` 的同名方法直接消费。
+无绑定时不调用查询或插入接口，返回原状态，查询结果固定为 false；有绑定时仅转交
+一次完整原键，并保留实际查询结果及返回的缓存状态。独立 Verus 预期使用有调用次数和
+原键记录的 fixture，核命中、未命中、无绑定、完整 Unicode／NUL／换行和空键；
+无绑定分支传入前提恒假的接口，检查它确实不访问缓存。这五组预期同时作为 Rust 测试运行。
+真实 immutable blob／tree、绑定与环境变化及无效 tree 文本的原行为测试继续保留；
+`verify_oid` 的原 OID 准入、Git 观察顺序、错误及返回合同不因此改变。
+
+本项逐项采用固定 Rust 1.95.0 的以下外部接口：
+
+| 外部接口 | 实际采用的合同 |
+| --- | --- |
+| `Option::is_some` | 真实绑定存在时返回 true，缺失时返回 false；不在适配层另行选择资格。 |
+| `RefCell::borrow`／`borrow_mut`、`Ref::deref`／`RefMut::deref_mut` | 在原借用条件有效时取得同一个完整集合的共享／独占借用；原借用冲突的 panic 继续传播。无绑定时这些接口均不调用。 |
+| `BTreeSet::<String>::contains::<str>` | 按完整文本查询同一个集合，不修改集合；不把前缀或规范化文本当作相同键。 |
+| `BTreeSet::<String>::insert`、`<&str as Into<String>>::into` 及 `<String as From<&str>>::from` | 由完整原文本构造键并插入原集合，保全其它键；重复键保持集合不变，原布尔返回值由此处真实调用方忽略。 |
+
+适配回调只转交这些实际接口，不新增仓内准入或状态分支，也没有仓内函数受信例外。
+本项沿用现有状态生产／独立根、固定工具、严格整 crate 参数及预算。
+FILEMAP 补齐 `facts_binding.rs` 到 runner 专属测试的显式边。新增判断及其独立预期
+分别由已有 program 根负责；适配文件未进入这些 Verus 根的编译输入，存量分类仍为未知，
+不借调用关系取得整文件证明资格。局部守卫不证明整个 Reader、RefCell／集合内部实现、
+其余缓存状态、Git／JSON／进程组合或全仓覆盖。完整源码／编译／调用绑定和其它存量迁移
+仍有各自义务；本候选实际验收须消费原报告。新增构建、证明、CI 和完整生命周期成本未测。
+
 registry snapshot 的实际状态类型与初始双 map 构造由
 `verified_status.rs::RegistrySnapshot<V>` 和 `registry_snapshot_initial` 拥有。
 同源后置条件精确规定完整入口、有效路径和 selection 原值，以及两个 map 的全部键值：
