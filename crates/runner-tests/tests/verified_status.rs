@@ -210,6 +210,11 @@ fn oid_verification_returns_malformed_tree_without_recording() {
         assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
         vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
         assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+        assert(scope_text::oid("1111111111111111111111111111111111111111".spec_bytes()));
+        assert(!scope_text::oid("not-a-tree: é\0original\n".spec_bytes()));
+        assert(oid_fixture_expected("1111111111111111111111111111111111111111"@,
+            Ok("1111111111111111111111111111111111111111"@),
+            Ok("not-a-tree: é\0original\n"@)).0 == 2);
     }
     let out = oid_fixture_run("1111111111111111111111111111111111111111",
         Ok("1111111111111111111111111111111111111111".to_owned()),
