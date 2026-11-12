@@ -10,6 +10,8 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
 #[cfg(verus_keep_ghost)]
@@ -17,6 +19,107 @@ use vstd::vpanic as panic;
 mod continuity;
 
 verus! {
+
+fn expect_restore_text(actual: &str, expected: &str)
+    requires actual@ == expected@,
+{
+    expect_cache_true(actual.to_owned() == expected.to_owned());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn restore_outcome_precedes_any_key_or_prefix() {
+    proof {
+        reveal_strlit("success"); reveal_strlit("failure"); reveal_strlit("cancelled");
+        reveal_strlit("skipped"); reveal_strlit("Success"); reveal_strlit("success\n");
+        reveal_strlit("");
+        assert("success"@[0] != "failure"@[0]);
+        assert("success"@.len() != "cancelled"@.len());
+        assert("success"@[1] != "skipped"@[1]);
+        assert("failure"@.len() != "cancelled"@.len());
+        assert("failure"@[0] != "skipped"@[0]);
+        assert("cancelled"@.len() != "skipped"@.len());
+        assert("Success"@[0] != "success"@[0]);
+        assert("Success"@[0] != "failure"@[0]);
+        assert("Success"@.len() != "cancelled"@.len());
+        assert("Success"@[0] != "skipped"@[0]);
+        assert("success\n"@.len() != "success"@.len());
+        assert("success\n"@.len() != "failure"@.len());
+        assert("success\n"@.len() != "cancelled"@.len());
+        assert("success\n"@.len() != "skipped"@.len());
+    }
+    let prefixes = [Some("key")];
+    expect_restore_text(policy::restore_status(Some("failure"), Some("key"), Some("key"), &prefixes), "error");
+    expect_restore_text(policy::restore_status(Some("cancelled"), Some("key"), Some("key"), &prefixes), "error");
+    expect_restore_text(policy::restore_status(Some("skipped"), Some("key"), Some("key"), &prefixes), "not-attempted");
+    expect_restore_text(policy::restore_status(None, Some("key"), Some("key"), &prefixes), "unavailable");
+    expect_restore_text(policy::restore_status(Some("Success"), Some("key"), Some("key"), &prefixes), "unavailable");
+    expect_restore_text(policy::restore_status(Some("success\n"), Some("key"), Some("key"), &prefixes), "unavailable");
+    expect_restore_text(policy::restore_status(Some(""), Some("key"), Some("key"), &prefixes), "unavailable");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn successful_restore_needs_a_nonempty_observed_key_and_exact_match_wins() {
+    proof {
+        reveal_strlit(""); reveal_strlit("key");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("key") && vstd::string::is_ascii(""));
+        assert("key".spec_bytes().len() == 3);
+        assert("".spec_bytes().len() == 0);
+    }
+    expect_restore_text(policy::restore_status(Some("success"), Some("key"), None, &[]), "miss-or-unavailable");
+    expect_restore_text(policy::restore_status(Some("success"), Some(""), Some(""), &[Some("")]), "miss-or-unavailable");
+    expect_restore_text(policy::restore_status(Some("success"), Some("key"), Some("key"), &[]), "exact");
+    expect_restore_text(policy::restore_status(Some("success"), Some("key"), Some("key"), &[Some("key")]), "exact");
+    expect_restore_text(policy::restore_status(Some("success"), None, Some("key"), &[]), "incompatible");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn every_prefix_is_examined_but_missing_empty_case_and_longer_prefixes_do_not_match() {
+    proof {
+        reveal_strlit(""); reveal_strlit("cache/revision"); reveal_strlit("other/");
+        reveal_strlit("cache/"); reveal_strlit("Cache/");
+        reveal_strlit("cache/revision-extra"); reveal_strlit("cache/\0");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii("") && vstd::string::is_ascii("cache/revision")
+            && vstd::string::is_ascii("other/") && vstd::string::is_ascii("cache/")
+            && vstd::string::is_ascii("Cache/") && vstd::string::is_ascii("cache/revision-extra")
+            && vstd::string::is_ascii("cache/\0"));
+        assert("cache/revision".spec_bytes()[0] != "Cache/".spec_bytes()[0]);
+        assert("cache/revision".spec_bytes()[6] != "cache/\0".spec_bytes()[6]);
+        assert("cache/revision".spec_bytes()[0] != "other/".spec_bytes()[0]);
+        assert("cache/revision-extra".spec_bytes().len() > "cache/revision".spec_bytes().len());
+        assert(forall|i: int| 0 <= i < "cache/".spec_bytes().len()
+            ==> "cache/revision".spec_bytes()[i] == "cache/".spec_bytes()[i]);
+    }
+    let key = Some("cache/revision");
+    let prefixes = [None, Some(""), Some("other/"), Some("cache/")];
+    proof { assert(policy::restore_prefix_matches("cache/revision", prefixes@[3])); }
+    expect_restore_text(policy::restore_status(Some("success"), None, key, &prefixes), "compatible");
+    expect_restore_text(policy::restore_status(Some("success"), None, key, &[None, Some("")]), "incompatible");
+    expect_restore_text(policy::restore_status(Some("success"), None, key, &[Some("Cache/")]), "incompatible");
+    expect_restore_text(policy::restore_status(Some("success"), None, key, &[Some("cache/revision-extra")]), "incompatible");
+    expect_restore_text(policy::restore_status(Some("success"), None, key, &[Some("cache/\0")]), "incompatible");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn restore_identity_and_full_prefix_keep_unicode_nul_and_newline() {
+    let key = "缓存/λ\0\n";
+    proof {
+        reveal_strlit("缓存/λ\0\n");
+        vstd::utf8::encode_utf8_valid_utf8(key@);
+        vstd::utf8::encode_utf8_decode_utf8(key@);
+        assert(key.spec_bytes().len() > 0) by {
+            if key.spec_bytes().len() == 0 {
+                assert(key.spec_bytes() == Seq::<u8>::empty());
+                reveal(vstd::utf8::decode_utf8);
+            }
+        }
+        assert(forall|i: int| 0 <= i < key.spec_bytes().len()
+            ==> key.spec_bytes()[i] == key.spec_bytes()[i]);
+    }
+    expect_restore_text(policy::restore_status(Some("success"), Some(key), Some(key), &[]), "exact");
+    expect_restore_text(policy::restore_status(Some("success"), None, Some(key), &[Some(key)]), "compatible");
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn only_observed_success_or_opted_in_failure_can_seal() {

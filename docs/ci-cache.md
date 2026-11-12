@@ -23,6 +23,10 @@ planner 准备身份；GitHub provider 在原 bootstrap 和检查／发布命令
 
 每份计划记录准备它的 `chrono-cache` 精确摘要和版本；恢复与封存在执行前核对当前执行物。当前传输要求主 Git 检出；linked worktree 需要贯穿恢复／保存的租约，尚不支持。
 
+恢复原因的精确／兼容键、全部非空前缀及原生结果优先级由现有同源 Verus planner 根负责，
+恢复入口直接消费；独立边界预期同时执行 Rust。JSON、原生缓存后端、完整恢复事务和
+编译器复用仍须各自验收，具体证明边界见 [缓存 planner](verus.md#缓存-planner-身份)。
+
 本宿主标准检查 action 明确设 `CARGO_INCREMENTAL=1`。core、full、cache seed bootstrap 和 v5 发布配方设 `rust_incremental: true`，原构建调用收到对应环境值，包含 release 构建和 Rust 验证单元。发布配方通过明确 `rust_toolchain` 把设置限制在 Rust 消费者；非 Rust 单元保留自身环境。
 
 bootstrap／发布回执记录传给子进程的值。发布导入／汇总与登记选择比较，并纳入生产者工具链指纹。省略设置保留原环境行为，格式错误在构建工具启动前失败。这些观察不证明缓存传输、实际编译器复用、构建输入完整或原生验收。Rust profile、标志、编译器和 SDK 身份仍须纳入持久缓存兼容合同。
