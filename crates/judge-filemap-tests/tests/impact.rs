@@ -12,7 +12,7 @@ use std::{
 };
 use support::*;
 fn run(a: &Values, b: &Values, d: &[chrono_harness::wire::Delta]) -> (Impact, Vec<Finding>) {
-    produce(&load(a), &load(b), CONFIG, d)
+    produce(&load(a), &load(b), d)
 }
 fn tests(i: &Impact) -> Vec<&str> {
     i.required_tests.iter().map(|t| t.node.as_str()).collect()
@@ -1320,16 +1320,14 @@ fn retained_effective_environment_api_preserves_old_edges_and_rejects_unknown_fa
     let endpoints = json!({"base":{"inherited":{"MODE":"old"},"environment":{"MODE":"old"}},"candidate":{"inherited":{},"environment":{}}});
     let mut evidence = json!({"schema":"chrono-effective-inputs/v1","identity":chrono_harness::wire::digest(&endpoints).unwrap(),"endpoints":endpoints});
     let (impact, findings) =
-        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), CONFIG, &[], &evidence)
-            .unwrap();
+        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), &[], &evidence).unwrap();
     assert!(findings.is_empty());
     assert_eq!(impact.tests, vec!["test:t"]);
     assert!(impact.seeds.contains(&"environment:MODE".into()));
     evidence["endpoints"]["candidate"]["environment"]["UNKNOWN"] = json!("unrepresented");
     evidence["identity"] = json!(chrono_harness::wire::digest(&evidence["endpoints"]).unwrap());
     assert!(
-        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), CONFIG, &[], &evidence)
-            .is_err()
+        chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), &[], &evidence).is_err()
     );
 }
 

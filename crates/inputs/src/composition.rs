@@ -186,7 +186,7 @@ pub fn compose(
     let selected = if chrono_harness::units::full_execution_units(new.config())?.is_some() {
         let delta = facts::delta(&reader.tree(root, base)?, &reader.tree(root, candidate)?);
         let (impact, findings) = chrono_judge_filemap::produce_for_endpoints(
-            root, base, candidate, config, &delta, &old, &new, &reader,
+            root, base, candidate, &delta, &old, &new, &reader,
         )?;
         if findings.iter().any(|f| f.level == "error") {
             return Err(format!(
