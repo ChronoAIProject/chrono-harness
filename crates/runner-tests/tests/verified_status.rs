@@ -125,6 +125,10 @@ fn oid_fixture_error(result: Result<String, String>, expected: &str)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_verification_rejects_invalid_input_before_any_observation() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("invalid: é\0key\n");
+    }
     let out = oid_fixture_run("invalid: é\0key\n", Err("commit unavailable".to_owned()),
         Err("tree unavailable".to_owned()));
     expect_status_true(out.0.phase == 0);
@@ -134,6 +138,13 @@ fn oid_verification_rejects_invalid_input_before_any_observation() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_verification_preserves_the_first_complete_commit_error() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+    }
     let out = oid_fixture_run("1111111111111111111111111111111111111111",
         Err("commit: é\0original\n".to_owned()), Err("tree must not run".to_owned()));
     expect_status_true(out.0.phase == 1);
@@ -142,6 +153,14 @@ fn oid_verification_preserves_the_first_complete_commit_error() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_verification_rejects_a_different_complete_commit_before_tree_read() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        reveal_strlit("1111111111111111111111111111111111111111\0extra");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+    }
     let out = oid_fixture_run("1111111111111111111111111111111111111111",
         Ok("1111111111111111111111111111111111111111\0extra".to_owned()),
         Err("tree must not run".to_owned()));
@@ -151,6 +170,13 @@ fn oid_verification_rejects_a_different_complete_commit_before_tree_read() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_verification_preserves_the_complete_tree_error_without_recording() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+    }
     let out = oid_fixture_run("1111111111111111111111111111111111111111",
         Ok("1111111111111111111111111111111111111111".to_owned()),
         Err("tree: é\0original\n".to_owned()));
@@ -160,6 +186,14 @@ fn oid_verification_preserves_the_complete_tree_error_without_recording() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_verification_returns_malformed_tree_without_recording() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        reveal_strlit("not-a-tree: é\0original\n");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+    }
     let out = oid_fixture_run("1111111111111111111111111111111111111111",
         Ok("1111111111111111111111111111111111111111".to_owned()),
         Ok("not-a-tree: é\0original\n".to_owned()));
@@ -172,6 +206,17 @@ fn oid_verification_returns_malformed_tree_without_recording() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_verification_records_the_original_key_after_both_successful_reads() {
+    proof {
+        reveal(oid_fixture_expected);
+        reveal_strlit("1111111111111111111111111111111111111111");
+        reveal_strlit("2222222222222222222222222222222222222222222222222222222222222222");
+        assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
+        assert(vstd::string::is_ascii("2222222222222222222222222222222222222222222222222222222222222222"));
+        vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
+        vstd::string::is_ascii_spec_bytes("2222222222222222222222222222222222222222222222222222222222222222");
+        assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
+        assert("2222222222222222222222222222222222222222222222222222222222222222".spec_bytes()[0] == 50);
+    }
     let out = oid_fixture_run("1111111111111111111111111111111111111111",
         Ok("1111111111111111111111111111111111111111".to_owned()),
         Ok("2222222222222222222222222222222222222222222222222222222222222222".to_owned()));
