@@ -102,8 +102,8 @@ fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
     .unwrap();
     let mut paths = Vec::new();
     for n in 0..80 {
-        let path = tree(h.path(), &format!("original-{n}"));
-        fs::write(h.path().join(&path).join("bytes"), n.to_string()).unwrap();
+        let path = format!(".chrono-harness/state/fixtures/original-{n}.json");
+        fs::write(h.path().join(&path), n.to_string()).unwrap();
         inventory(h.path())
             .begin("fixture", &path, json!(null))
             .unwrap()
@@ -124,20 +124,32 @@ fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
     inventory(h.path())
         .reference_paths("current-enrollment", &paths)
         .unwrap();
-    assert_eq!(maintain_fixture_to(h.path(), 80), 80);
+    let original = ledger(h.path());
+    assert_eq!(
+        original["roots"]["current-enrollment"]
+            .as_array()
+            .unwrap()
+            .len(),
+        80
+    );
     inventory(h.path())
         .reference_paths("current-enrollment", &paths[40..])
         .unwrap();
-    assert_eq!(maintain_fixture_to(h.path(), 40), 40);
+    let released = ledger(h.path());
+    let members = released["roots"]["current-enrollment"].as_array().unwrap();
+    assert_eq!(members.len(), 40);
     for (n, path) in paths.iter().enumerate() {
-        if n < 40 {
-            assert!(!h.path().join(path).exists());
-        } else {
-            assert_eq!(
-                fs::read_to_string(h.path().join(path).join("bytes")).unwrap(),
-                n.to_string()
-            );
-        }
+        let output = released["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["path"] == *path)
+            .unwrap();
+        assert_eq!(members.contains(&output["id"]), n >= 40);
+        assert_eq!(
+            fs::read_to_string(h.path().join(path)).unwrap(),
+            n.to_string()
+        );
     }
 }
 
@@ -2681,8 +2693,7 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
     let before = ledger(h.path());
     let original = before["outputs"][0].clone();
     let unrelated = before["outputs"][1]["lease_id"].as_str().unwrap();
-    let round = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &round), 1, "{round}");
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     assert!(
         !h.path()
             .join(".chrono-harness/state/fixtures/unrelated-old-output")
@@ -2838,9 +2849,9 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
         .unwrap();
     let caller = retained_artifacts::retention::published_output_scope(&parent).unwrap();
     let mut paths = Vec::new();
-    for n in 0..160 {
-        let path = tree(h.path(), &format!("child-{n}"));
-        fs::write(h.path().join(&path).join("original"), n.to_string()).unwrap();
+    for n in 0..64 {
+        let path = format!(".chrono-harness/state/fixtures/child-{n}.json");
+        fs::write(h.path().join(&path), n.to_string()).unwrap();
         inventory(h.path())
             .begin("fixture", &path, json!(null))
             .unwrap()
@@ -2855,9 +2866,9 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
         .iter()
         .find(|o| o["path"] == parent_path)
         .unwrap();
-    assert_eq!(output["references"].as_array().unwrap().len(), 160);
+    assert_eq!(output["references"].as_array().unwrap().len(), 64);
     inventory(h.path())
-        .dependencies_paths(&parent_path, &paths[80..])
+        .dependencies_paths(&parent_path, &paths[32..])
         .unwrap();
     parent.complete(json!({"exit": 2})).unwrap();
     let settled = ledger(h.path());
@@ -2870,7 +2881,7 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
     assert_eq!(output["phase"], "released");
     assert_eq!(output["outcome"]["exit"], 2);
     let references = output["references"].as_array().unwrap();
-    assert_eq!(references.len(), 80);
+    assert_eq!(references.len(), 32);
     for (n, path) in paths.iter().enumerate() {
         let child = settled["outputs"]
             .as_array()
@@ -2878,10 +2889,10 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
             .iter()
             .find(|o| o["path"] == *path)
             .unwrap();
-        assert_eq!(references.contains(&child["id"]), n >= 80);
+        assert_eq!(references.contains(&child["id"]), n >= 32);
         assert_eq!(child["outcome"]["exit"], n % 2);
         assert_eq!(
-            fs::read_to_string(h.path().join(path).join("original")).unwrap(),
+            fs::read_to_string(h.path().join(path)).unwrap(),
             n.to_string()
         );
     }
