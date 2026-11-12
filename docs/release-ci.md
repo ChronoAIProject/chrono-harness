@@ -128,7 +128,11 @@ frontend 专属用例的 Git 和探针在命令边界复用只依赖标准库的
 
 发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。Git 按所选政策一次解析并固定本轮实际身份；显式配置版本或摘要预期时，不符仍在执行前拒绝。运行读数归 state／线上原件，候选是否可用仍须实际验证。
 
-编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
+**发布程序与判定政策同时修改：**编译器一致性比较保留 Rust 版本、实际 cargo／rustc 字节与 incremental 声明。命令执行物的摘要、长度和权限都等于本单元 rustup 时，将它作为 rustup 代理，跨单元按已核原 `rustup which --toolchain` 输出的实际编译器比较；直接编译器得到同一身份，自定义包装程序继续比较原字节。Git、rustup 和每次调用的工具身份及原过程仍逐回执核验，源码 commit／tree 仍须一致；它们不因此取得完整输入或跨环境同判保证。
+
+运行 43205633182 的 Linux 构建／验证使用相同 cargo／rustc 版本及字节，但 runner 的两种 rustup 代理分别为 21,139,856 和 21,347,088 字节，旧跨单元比较在业务验证前拒绝。原失败、原代理观察和实际编译器观察继续保留。Rust 自含回执回归先检出旧拒绝，再验证代理变更、直接编译器可消费，自定义包装或实际编译器变化仍拒绝；既有 Git 包装差异与原件完整性回归保留。没有新增依赖、执行入口或预算，新增验证及完整原生发布成本未测，两平台和公开安装仍须实际验收。
+
+旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。
 
 Linux 发行政策保留工作树所有者读取登记所需的完整结构。发布编排和登记验证操作使用 Rust 与薄 shell，不再在发布配方或宿主政策中保留无对应操作的 Python 工具槽。多语言接口测试样本使用各自的工具声明；该登记不声称完成 Linux canonical/full 采用。
 
