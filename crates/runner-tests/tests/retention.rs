@@ -95,7 +95,11 @@ fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
     policy["max_related_outputs"] = json!(128);
-    fs::write(h.path().join(POLICY_PATH), serde_json::to_vec(&policy).unwrap()).unwrap();
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
     let mut paths = Vec::new();
     for n in 0..80 {
         let path = tree(h.path(), &format!("original-{n}"));
@@ -107,8 +111,14 @@ fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
             .unwrap();
         paths.push(path);
     }
-    let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
-    assert_eq!(unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) }, 0);
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+        0
+    );
     limit.rlim_cur = limit.rlim_cur.min(256);
     assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
     inventory(h.path())
@@ -123,7 +133,10 @@ fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
         if n < 40 {
             assert!(!h.path().join(path).exists());
         } else {
-            assert_eq!(fs::read_to_string(h.path().join(path).join("bytes")).unwrap(), n.to_string());
+            assert_eq!(
+                fs::read_to_string(h.path().join(path).join("bytes")).unwrap(),
+                n.to_string()
+            );
         }
     }
 }
@@ -2713,6 +2726,169 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
     assert_eq!(maintain_fixture_to(h.path(), 0), 0);
 }
 #[test]
+fn failed_dependency_replacement_keeps_old_and_already_accepted_originals() {
+    if !isolated_capability_test(
+        "failed_dependency_replacement_keeps_old_and_already_accepted_originals",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut paths = Vec::new();
+    for name in ["old", "new", "unavailable", "report"] {
+        let path = tree(h.path(), name);
+        inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit": 0}))
+            .unwrap();
+        paths.push(path);
+    }
+    inventory(h.path())
+        .dependencies_paths(&paths[3], &paths[..1])
+        .unwrap();
+    let before = ledger(h.path());
+    let unavailable = before["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == paths[2])
+        .unwrap();
+    let record_path = retention_state::object_path(h.path(), unavailable["id"].as_str().unwrap());
+    let original = fs::read(&record_path).unwrap();
+    let mut record: Value = serde_json::from_slice(&original).unwrap();
+    record["output"]["phase"] = json!("disposing");
+    fs::write(&record_path, serde_json::to_vec(&record).unwrap()).unwrap();
+    let error = inventory(h.path())
+        .dependencies_paths(&paths[3], &paths[1..3])
+        .unwrap_err();
+    assert!(error.contains("disposal has started"), "{error}");
+    fs::write(&record_path, original).unwrap();
+    let partial = ledger(h.path());
+    let references = &partial["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == paths[3])
+        .unwrap()["references"];
+    for path in &paths[..2] {
+        let output = partial["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["path"] == *path)
+            .unwrap();
+        assert!(references.as_array().unwrap().contains(&output["id"]));
+        assert!(h.path().join(path).is_dir());
+    }
+    inventory(h.path())
+        .dependencies_paths(&paths[3], &paths[1..3])
+        .unwrap();
+    let settled = ledger(h.path());
+    let references = &settled["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == paths[3])
+        .unwrap()["references"];
+    assert_eq!(references.as_array().unwrap().len(), 2);
+    for (n, path) in paths[..3].iter().enumerate() {
+        let output = settled["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["path"] == *path)
+            .unwrap();
+        assert_eq!(
+            references.as_array().unwrap().contains(&output["id"]),
+            n > 0
+        );
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
+    if !isolated_capability_test(
+        "parent_publication_accepts_and_settles_many_children_with_256_descriptors",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(256);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+        0
+    );
+    limit.rlim_cur = limit.rlim_cur.min(256);
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
+    let parent_path = tree(h.path(), "parent-report");
+    let parent = inventory(h.path())
+        .begin("fixture", &parent_path, json!(null))
+        .unwrap();
+    let caller = retained_artifacts::retention::published_output_scope(&parent).unwrap();
+    let mut paths = Vec::new();
+    for n in 0..160 {
+        let path = tree(h.path(), &format!("child-{n}"));
+        fs::write(h.path().join(&path).join("original"), n.to_string()).unwrap();
+        inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit": n % 2}))
+            .unwrap();
+        paths.push(path);
+    }
+    let accepted = ledger(h.path());
+    let output = accepted["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == parent_path)
+        .unwrap();
+    assert_eq!(output["references"].as_array().unwrap().len(), 160);
+    inventory(h.path())
+        .dependencies_paths(&parent_path, &paths[80..])
+        .unwrap();
+    parent.complete(json!({"exit": 2})).unwrap();
+    let settled = ledger(h.path());
+    let output = settled["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == parent_path)
+        .unwrap();
+    assert_eq!(output["phase"], "released");
+    assert_eq!(output["outcome"]["exit"], 2);
+    let references = output["references"].as_array().unwrap();
+    assert_eq!(references.len(), 80);
+    for (n, path) in paths.iter().enumerate() {
+        let child = settled["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["path"] == *path)
+            .unwrap();
+        assert_eq!(references.contains(&child["id"]), n >= 80);
+        assert_eq!(child["outcome"]["exit"], n % 2);
+        assert_eq!(
+            fs::read_to_string(h.path().join(path).join("original")).unwrap(),
+            n.to_string()
+        );
+    }
+    drop(caller);
+}
+
+#[test]
 fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs() {
     if !isolated_capability_test(
         "published_output_scope_keeps_child_reports_without_accumulating_their_inputs",
@@ -2752,7 +2928,11 @@ fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs(
         .reference_paths("unfinished-domain-owner", &[unknown.clone()])
         .unwrap();
     let unrelated = publish("unrelated-expired");
-    let caller = retained_artifacts::retention::published_output_scope(h.path()).unwrap();
+    let parent_path = tree(h.path(), "parent-report");
+    let parent = inventory(h.path())
+        .begin("fixture", &parent_path, json!(null))
+        .unwrap();
+    let caller = retained_artifacts::retention::published_output_scope(&parent).unwrap();
     let mut reports = Vec::new();
     for (group, paths) in groups.iter().enumerate() {
         let _child = retained_artifacts::retention::read_scope(h.path()).unwrap();
@@ -2772,13 +2952,14 @@ fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs(
             .unwrap();
         reports.push(path);
     }
-    // Each child has four actual capabilities, and the parent has three
-    // reports. Accumulating all nine child inputs would exceed the same cap.
-    assert_eq!(maintain_fixture_to(h.path(), 13), 13);
+    // Each child has four actual capabilities. The parent holds one live
+    // report capability, with three durable edges to the child reports.
+    assert_eq!(maintain_fixture_to(h.path(), 14), 14);
     assert!(!h.path().join(unrelated).exists());
     for path in groups.iter().flatten().chain(reports.iter()) {
         assert!(h.path().join(path).is_dir());
     }
+    parent.complete(json!({"exit": 0})).unwrap();
     drop(caller);
     assert_eq!(maintain_fixture_to(h.path(), 1), 1);
     assert!(h.path().join(&unknown).is_dir());
