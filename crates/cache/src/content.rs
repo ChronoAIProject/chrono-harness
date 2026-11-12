@@ -258,6 +258,34 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 "E_CACHE_CONTENT: producer step {work} has no accepted outcome for {id}: {outcome:?}"
             ));
         }
+        // A scoped check may not produce every statically declared cache.
+        // Check all roots before publishing any marker for this cache.
+        let mut absent = BTreeMap::new();
+        for (artifact_id, artifact) in cache["artifacts"]
+            .as_object()
+            .ok_or("E_CACHE_CONTENT: artifacts missing")?
+        {
+            let relative = artifact["path"]
+                .as_str()
+                .ok_or("E_CACHE_CONTENT: artifact path")?;
+            let target = super::path(&root, relative)?;
+            match fs::symlink_metadata(&target) {
+                Ok(metadata) if metadata.is_dir() => (),
+                Ok(_) => {
+                    return Err(format!(
+                        "E_CACHE_CONTENT: {relative}: cache artifact must be a physical directory"
+                    ));
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    absent.insert(artifact_id, relative);
+                }
+                Err(error) => return Err(format!("E_CACHE_CONTENT: {relative}: {error}")),
+            }
+        }
+        if !absent.is_empty() {
+            report["caches"][id] = json!({"status":"unavailable","reason":"artifact-absent","producer":cache["producer"],"producer_step":work,"producer_outcome":outcome,"absent_artifacts":absent});
+            continue;
+        }
         let start = Instant::now();
         let mut manifests = BTreeMap::new();
         for (artifact_id, artifact) in cache["artifacts"]
