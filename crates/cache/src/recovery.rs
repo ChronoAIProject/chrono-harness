@@ -1,8 +1,35 @@
 //! Discard registered host outputs after unusable native restores, before producers run.
+#![allow(unexpected_cfgs)]
+
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+verus! {
+    /// Bind the runtime adapter's decision call to the planner's proved specification.
+    pub fn recovery_action_binding(
+        outcome: Option<&str>, reason: &str, unconfirmed: bool,
+        outputs_is_null_or_object: bool, matched_key_is_null_or_string: bool,
+        content_method: Option<&str>, content_status: Option<&str>, refresh_enabled: bool,
+    ) -> (out: Result<super::RecoveryAction, super::RecoveryDecisionError>)
+        ensures out == super::recovery_action_spec(
+            outcome, reason, unconfirmed, outputs_is_null_or_object,
+            matched_key_is_null_or_string, content_method, content_status, refresh_enabled),
+    {
+        super::recovery_action(
+            outcome, reason, unconfirmed, outputs_is_null_or_object,
+            matched_key_is_null_or_string, content_method, content_status, refresh_enabled,
+        )
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, no_symlink_parents, prepared, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{collections::BTreeMap, fs, io::Write, path::Path};
 
+#[cfg(not(verus_keep_ghost))]
 fn restore_status(cache: &Value, restore: &Value) -> &'static str {
     let prefixes: Vec<_> = cache["restore_keys"]
         .as_array()
@@ -18,6 +45,7 @@ fn restore_status(cache: &Value, restore: &Value) -> &'static str {
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn publish_once(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
     let destination = chrono_harness::prepare_publication(root, path)?;
     fs::OpenOptions::new()
@@ -28,6 +56,7 @@ fn publish_once(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {
         .map_err(|e| format!("E_CACHE_RECOVERY: {path}: {e}"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn retained(root: &Path, plan_path: &str) -> Result<(prepared::Original, Value), String> {
     let directory = plan_path
         .rsplit_once('/')
@@ -43,6 +72,7 @@ fn retained(root: &Path, plan_path: &str) -> Result<(prepared::Original, Value),
     Ok((original, decode(&raw)?))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let mut options = BTreeMap::new();
     for pair in args.chunks(2) {

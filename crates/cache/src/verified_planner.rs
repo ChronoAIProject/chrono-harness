@@ -19,6 +19,9 @@ use chrono_harness::verified_identifiers as identifiers;
 #[cfg(verus_keep_ghost)]
 #[path = "attempt.rs"]
 mod attempt;
+#[cfg(verus_keep_ghost)]
+#[path = "recovery.rs"]
+mod recovery_source;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::attempt::{
     accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
