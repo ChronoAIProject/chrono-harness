@@ -106,9 +106,10 @@ fn observation(row: &OperationResult) -> OperationObservation<'_> {
     OperationObservation {
         status: &row.status,
         process_terminal: row.receipt.as_ref().map(|receipt| {
-            chrono_harness::verified_release::process_exit_known(
+            chrono_harness::verified_release::process_completion_known(
                 receipt.process.exit_code,
                 receipt.process.exit_signal,
+                receipt.process.owned_work_joined,
             )
         }),
     }

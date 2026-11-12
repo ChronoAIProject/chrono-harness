@@ -12,7 +12,8 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
-/// process_terminal 是现役 process_exit_known 对真实退出码／signal 的结果。
+/// process_terminal 是现役 process_completion_known 对真实退出码／signal
+/// 及全部自有工作加入结果的判断。
 /// None 精确保留没有回执，与已返回但终态未知的 Some(false) 分开。
 pub struct OperationObservation<'a> {
     pub status: &'a str,

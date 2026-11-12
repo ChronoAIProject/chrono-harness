@@ -226,6 +226,7 @@ fn unavailable_child_exit_keeps_the_original_operation_unknown() {
     assert_eq!(result["receipts"][0]["exit_code"], -1, "{result}");
     assert!(result["receipts"][0]["exit_signal"].is_null());
     assert!(result["receipts"][0]["failure"].is_string());
+    assert_eq!(result["receipts"][0]["owned_work_joined"], false, "{result}");
     assert_eq!(result["operation_state"], "unknown", "{result}");
     let path = result["operation"].as_str().unwrap();
     let saved = fs::read(h.root.path().join(path).join("result.json")).unwrap();
@@ -1159,6 +1160,7 @@ fn returned_pr_receipt_binds_durable_launch_without_retaining_credentials() {
     let (code, result) = h.status();
     assert_eq!(code, 0, "{result}");
     let receipt = &result["receipts"][0];
+    assert_eq!(receipt["owned_work_joined"], true, "{receipt}");
     let operation = result["operation"].as_str().unwrap();
     let inventory = Inventory::adopted(h.root.path()).unwrap().unwrap();
     for field in ["stdout_original", "stderr_original", "launch_original"] {

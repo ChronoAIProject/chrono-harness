@@ -388,7 +388,11 @@ impl State {
     }
 
     pub(crate) fn receipt(&mut self, n: usize, process: &ProcessResult) -> Result<Value, String> {
-        self.unreturned = !verified::process_exit_known(process.exit_code, process.exit_signal);
+        self.unreturned = !verified::process_completion_known(
+            process.exit_code,
+            process.exit_signal,
+            process.owned_work_joined,
+        );
         let paths = self.process_paths(n);
         let mut originals = Vec::new();
         for path in &paths {
@@ -429,6 +433,7 @@ impl State {
     pub(crate) fn process_fields(process: &ProcessResult) -> Value {
         json!({"argv":process.argv,"executable":process.executable,"sha256":process.sha256,
             "exit_code":process.exit_code,"exit_signal":process.exit_signal,"failure":process.failure,
+            "owned_work_joined":process.owned_work_joined,
             "child_pid":process.child_pid,"launcher_pid":process.launcher_pid,
             "stdout_complete":process.stdout_complete,"stderr_complete":process.stderr_complete,
             "timeout_seconds":process.timeout_seconds,"stdout_sha256":process.stdout_sha256,"stderr_sha256":process.stderr_sha256})
