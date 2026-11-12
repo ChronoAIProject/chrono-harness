@@ -123,11 +123,23 @@ fn oid_fixture_error(result: Result<String, String>, expected: &str)
     }
 }
 
+proof fn oid_fixture_rejects_nonhex_ascii_prefix(text: &str)
+    requires text@.len() > 0, text@[0] as u32 < 128,
+        !scope_text::oid_byte(text@[0] as u8),
+    ensures !scope_text::oid(text.spec_bytes()),
+{
+    assert(vstd::utf8::encode_scalar(text@[0] as u32) == seq![text@[0] as u8]);
+    assert(text.spec_bytes() =~= seq![text@[0] as u8]
+        + vstd::utf8::encode_utf8(text@.drop_first()));
+    assert(text.spec_bytes()[0] == text@[0] as u8);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn oid_verification_rejects_invalid_input_before_any_observation() {
     proof {
         reveal(oid_fixture_expected);
         reveal_strlit("invalid: é\0key\n");
+        oid_fixture_rejects_nonhex_ascii_prefix("invalid: é\0key\n");
     }
     let out = oid_fixture_run("invalid: é\0key\n", Err("commit unavailable".to_owned()),
         Err("tree unavailable".to_owned()));
@@ -190,6 +202,7 @@ fn oid_verification_returns_malformed_tree_without_recording() {
         reveal(oid_fixture_expected);
         reveal_strlit("1111111111111111111111111111111111111111");
         reveal_strlit("not-a-tree: é\0original\n");
+        oid_fixture_rejects_nonhex_ascii_prefix("not-a-tree: é\0original\n");
         assert(vstd::string::is_ascii("1111111111111111111111111111111111111111"));
         vstd::string::is_ascii_spec_bytes("1111111111111111111111111111111111111111");
         assert("1111111111111111111111111111111111111111".spec_bytes()[0] == 49);
