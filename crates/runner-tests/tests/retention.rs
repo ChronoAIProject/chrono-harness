@@ -43,6 +43,17 @@ fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
     fixture_remaining(root, rounds.last().unwrap())
 }
 fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
+    maintain_fixture_rounds_until(
+        root,
+        &format!("{expected} remaining fixture outputs"),
+        |round| fixture_remaining(root, round) == expected,
+    )
+}
+fn maintain_fixture_rounds_until(
+    root: &Path,
+    expected: &str,
+    mut complete: impl FnMut(&Value) -> bool,
+) -> Vec<Value> {
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
     for _ in 0..8 {
@@ -56,16 +67,13 @@ fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
                 <= policy["max_bytes_per_round"].as_u64().unwrap(),
             "{round}"
         );
-        let remaining = fixture_remaining(root, &round);
+        let completed = complete(&round);
         rounds.push(round);
-        if remaining == expected {
+        if completed {
             return rounds;
         }
     }
-    panic!(
-        "bounded fixture recovery did not reach {expected}; rounds: {rounds:?}; actual declarations: {}",
-        ledger(root)
-    );
+    panic!("bounded fixture recovery did not reach {expected}; rounds: {rounds:?}");
 }
 fn tree(root: &Path, name: &str) -> String {
     let path = format!(".chrono-harness/state/fixtures/{name}");
@@ -674,11 +682,13 @@ fn materialized_originals_extend_the_owners_reference_before_content_and_release
         "returning caller still consumes the released original"
     );
     drop(activity);
-    let released = inventory(h.path()).maintain().unwrap();
+    // Disposal can stop at the policy's round limit; the remaining rooted
+    // original must stay protected throughout ordinary continuation rounds.
+    let released = maintain_fixture_to(h.path(), 1);
     assert!(!h.path().join(first).exists(), "{released}");
     assert!(h.path().join(second).is_file());
     inventory(h.path()).reference_paths(role, &[]).unwrap();
-    let unreferenced = inventory(h.path()).maintain().unwrap();
+    let unreferenced = maintain_fixture_to(h.path(), 0);
     assert!(!h.path().join(second).exists(), "{unreferenced}");
 }
 
@@ -772,15 +782,27 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
         };
         let second_path = tree(h.path(), "independent-b");
         let began = std::time::Instant::now();
-        let second = inventory(h.path())
+        let publisher = inventory(h.path());
+        let adopted = began.elapsed();
+        let second = publisher
             .begin("fixture", &second_path, json!(null))
             .unwrap();
+        let reserved = began.elapsed();
         second.complete(json!({"exit": 101})).unwrap();
-        assert!(began.elapsed() < std::time::Duration::from_secs(5));
-        let round = maintenance(h.path());
+        let completed = began.elapsed();
+        assert!(
+            completed < std::time::Duration::from_secs(5),
+            "damaged={damaged}; adopt={adopted:?}; reserve={:?}; complete={:?}; total={completed:?}",
+            reserved - adopted,
+            completed - reserved
+        );
+        let rounds =
+            maintain_fixture_rounds_until(h.path(), "independent physical disposal", |_| {
+                !h.path().join(&second_path).exists()
+            });
         assert!(
             !h.path().join(&second_path).exists(),
-            "independent disposal must progress: {round}"
+            "independent disposal must progress: {rounds:?}"
         );
         assert_eq!(
             fs::read(h.path().join(&first_path).join("body")).unwrap(),
@@ -2439,8 +2461,10 @@ fn per_relation_capacity_preserves_independent_outputs_and_recovers_pending_reco
     fs::write(&pending, b"interrupted record replacement").unwrap();
     second.complete(json!({"exit":7})).unwrap();
     assert!(!pending.exists());
-    let round = maintenance(h.path());
-    assert_eq!(round["related_output_capacity"], 1);
+    let rounds = maintain_fixture_rounds_to(h.path(), 1);
+    for round in &rounds {
+        assert_eq!(round["related_output_capacity"], 1);
+    }
     assert!(h.path().join(&first_path).exists());
     assert!(!h.path().join(&second_path).exists());
     drop(first);
@@ -4218,8 +4242,7 @@ fn explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound()
     .unwrap();
     assert!(ninth.is_dir());
     independent.complete(json!({"exit":9})).unwrap();
-    let round = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &round), 8);
+    assert_eq!(maintain_fixture_to(h.path(), 8), 8);
     assert!(!ninth.exists());
     for (n, p) in live.into_iter().enumerate() {
         p.complete(json!({"exit":n})).unwrap();
@@ -6200,6 +6223,7 @@ fn adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure() {
         b"exact stdin\0",
         &chrono_harness::file_identity(program).unwrap().0,
         &chrono_harness::ProcessEvidence {
+            root: h.path(),
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,

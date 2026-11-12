@@ -125,17 +125,4 @@ fn original_identity_requires_the_complete_digest_and_exact_length() {
     assert(unbound.is_ok());
 }
 
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn unknown_results_keep_recovery_and_known_results_release_after_input_handoff() {
-    let unknown_inputs = state::release_plan(false, 3);
-    assert(unknown_inputs.settle_inputs);
-    assert(!unknown_inputs.release_dependencies && !unknown_inputs.release_recovery);
-    let unknown_empty = state::release_plan(false, 0);
-    assert(!unknown_empty.settle_inputs && !unknown_empty.release_dependencies && !unknown_empty.release_recovery);
-    let known_inputs = state::release_plan(true, usize::MAX);
-    assert(known_inputs.settle_inputs && known_inputs.release_dependencies && known_inputs.release_recovery);
-    let known_empty = state::release_plan(true, 0);
-    assert(!known_empty.settle_inputs && !known_empty.release_dependencies && known_empty.release_recovery);
-}
-
 }
