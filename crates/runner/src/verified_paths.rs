@@ -394,6 +394,7 @@ pub fn no_symlink_path<S, P, C, E, N, A, M, F>(
             },
             Some(component) => component,
         };
+        let ghost original_component = component;
         path = append(path, component);
         let ghost built = path;
         let observation = metadata(path);
@@ -422,6 +423,11 @@ pub fn no_symlink_path<S, P, C, E, N, A, M, F>(
             },
         }
         let ghost after_state = (source, path);
+        assert(next.ensures((states.last().0,), (source, Some(original_component))));
+        assert(append.ensures((states.last().1, original_component), built));
+        assert(metadata.ensures((built,), original));
+        assert(original.0 == path);
+        assert(parent_path_continues(original.1, is_missing));
         assert(parent_path_step::<S, P, C, E, N, A, M, F>(states.last(), after_state,
             next, append, metadata, is_missing)) by {
             reveal(parent_path_step);
