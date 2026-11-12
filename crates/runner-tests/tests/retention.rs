@@ -84,6 +84,51 @@ fn output_retired(root: &Path, id: &str) -> bool {
 }
 
 #[test]
+#[cfg(unix)]
+fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
+    if !isolated_capability_test(
+        "enrollment_original_membership_fits_the_native_256_descriptor_limit",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(128);
+    fs::write(h.path().join(POLICY_PATH), serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut paths = Vec::new();
+    for n in 0..80 {
+        let path = tree(h.path(), &format!("original-{n}"));
+        fs::write(h.path().join(&path).join("bytes"), n.to_string()).unwrap();
+        inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit":0}))
+            .unwrap();
+        paths.push(path);
+    }
+    let mut limit = libc::rlimit { rlim_cur: 0, rlim_max: 0 };
+    assert_eq!(unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) }, 0);
+    limit.rlim_cur = limit.rlim_cur.min(256);
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
+    inventory(h.path())
+        .reference_paths("current-enrollment", &paths)
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 80), 80);
+    inventory(h.path())
+        .reference_paths("current-enrollment", &paths[40..])
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 40), 40);
+    for (n, path) in paths.iter().enumerate() {
+        if n < 40 {
+            assert!(!h.path().join(path).exists());
+        } else {
+            assert_eq!(fs::read_to_string(h.path().join(path).join("bytes")).unwrap(), n.to_string());
+        }
+    }
+}
+
+#[test]
 fn path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity() {
     if !isolated_capability_test(
         "path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity",
