@@ -29,9 +29,22 @@
 - 正式版本目标已明确，且该源码的发布计划已是匹配的正式版本。若须改计划，按发布链改动先经过 integration 和 dev，再为这份新源码发最终测试版；此前候选只可作为固定基线数据。
 - Release 说明准确描述已验收能力、升级所需迁移及已知限制。当前 SPEC 尚未全部实现；正式版不把有限采用包装成全部 SPEC、所有平台或跨环境同判。
 
-条件满足后，在同一发布工作流选择 stable，显式传入完整 source、verified_run、verified_attempt 和匹配计划的 version；复用现有发布者的不可覆盖与身份核验。正式版本仍须核公开 Release 的非 prerelease 状态、标签源码、全部资产和 Linux／macOS 安装结果。随后让四个下游锁定该正式版并验收落地，才报告正式版已被下游采用。若正式版已公开后发现故障，保留其身份和原件，修复后发布新版本，不修改原版本资产或标签。
+条件满足后，先按下文推进 `main`，再在同一发布工作流选择 stable，显式传入完整 source、verified_run、verified_attempt 和匹配计划的 version；发布者核对 `main` 指向该源码，复用现有不可覆盖与身份核验。正式版本仍须核公开 Release 的非 prerelease 状态、标签源码、全部资产和 Linux／macOS 安装结果。随后让四个下游锁定该正式版并验收落地，才报告正式版已被下游采用。若正式版已公开后发现故障，保留其身份和原件，修复后发布新版本，不修改原版本资产或标签。
 
 手动正式发布的 `--ref` 选择已经核验、指向同一源码的最终测试版标签，并核实际 run 的工作流 head。`source` 不控制工作流本身；dev 前移后，新的 needs／downloads 可能与旧源码的构建配方不匹配。核对和恢复由[发布 CI](release-ci.md#持续交付与恢复)负责，不为通过而补假依赖、改原回执或放宽 collector。
+
+## 推进正式版分支
+
+`dev` 是默认开发分支和测试版来源；`main` 是正式发布快照。满足上述全部稳定条件后，固定最终测试版源码 OID，再使用以下唯一晋升入口。将占位符替换为已验收的完整 OID：
+
+```sh
+gh api --method PATCH repos/ChronoAIProject/chrono-harness/git/refs/heads/main \
+  -f sha=<已验收的完整源码OID> -F force=false
+```
+
+`force=false` 只允许快进，保留测试版源码与原 CI 的提交身份。读取实际 `refs/heads/main` 并核对其 commit OID 后，才执行现有 stable 发布入口。更新被拒绝、发生分叉或实际 OID 不符时保留原错误，解决真实依赖；不强推、不制造新的合并提交冒充已验收候选。现役 CI 仍由 `dev` 的固定落地检查提供，`main` 推进本身不触发新测试版。
+
+`main` 首次从已公开正式版 `v0.1.2` 的源码 `5e179a6f9f4ff84b776a6e31bbc85d165c3bab07` 建立，原发布及两平台安装见[正式版运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/43161336225)。既有公开版本和标签保持原身份；分支晋升不代替正式版公开或部署验收。
 
 ## 如何持续改进流程
 
