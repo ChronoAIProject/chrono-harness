@@ -334,9 +334,9 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
         return;
     }
     let h = Host::new("payload");
-    // Keep reuse and expiry as separate real-birth phases, as in the named
-    // checkout test; Git/source preservation is allowed to take over 3 seconds.
-    policy(&h, 1, 60, "dispose");
+    // Keep expiry outside the reuse phase, as in the named checkout test.
+    // Source preservation itself may take longer than the eventual 60s age.
+    policy(&h, 1, 3600, "dispose");
     native_consumer(&h, "ordinary");
     let target = h.parent.join("detached aged checkout");
     git(
@@ -349,6 +349,7 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
             "dev",
         ],
     );
+    let created = fs::metadata(&target).unwrap().created().unwrap();
     let head = git(&target, &["rev-parse", "HEAD"]);
     let dev = git(&h.root, &["rev-parse", "dev"]);
     let (code, imported, error) = h.auto("import", &["--path", target.to_str().unwrap()]);
@@ -411,6 +412,15 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
         "current detached source"
     );
     assert_eq!(cache_identity(&target), cache);
+    let path = target.join(".chrono-harness/cleanup.json");
+    let mut adopted = json(&fs::read(&path).unwrap()).unwrap();
+    adopted["age_policy"]["delete_after_seconds"] = value!(60);
+    fs::write(path, serde_json::to_vec_pretty(&adopted).unwrap()).unwrap();
+    commit(&target);
+    let (code, migrated, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{migrated} {error}");
+    assert_eq!(fs::metadata(&target).unwrap().created().unwrap(), created);
+    assert_eq!(git(&target, &["rev-parse", "--abbrev-ref", "HEAD"]), "HEAD");
     older_than(&target, 60);
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
