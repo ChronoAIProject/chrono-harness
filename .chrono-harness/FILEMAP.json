@@ -12,6 +12,7 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/maintenance.launchd.plist","owner":"repository","surface":"membership","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":"crates/judge-registration-tests/tests/fixtures/host-registries.json","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/release/native-tests/tests/fixtures/consume-launcher.json","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":"crates/distribution-tests/tests/support/bootstrap.rs","owner":"distribution-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution-tests"},{"kind":"test-execution","to":"test:distribution-tests"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner-tests/tests/verified_fixture.rs","operation":"verify.runner-fixture-tests"}]}},

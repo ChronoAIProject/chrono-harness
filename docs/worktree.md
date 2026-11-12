@@ -478,7 +478,7 @@ cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任�
 
 ## 按需采用自动生命周期清理
 
-源码在原 v1／v2 工作树配置增加 `automatic_cleanup`，值为 `.chrono-harness/` 下已跟踪、FILEMAP 登记的政策路径。省略仍走明确维护。不提供 daemon、定期空闲触发、年龄到期、兄弟目录扫描或语言推断。主宿主调用登记 `.chrono-harness/bin/chrono-worktree`，使用新配置前先部署兼容候选工具。
+源码在原 v1／v2 工作树配置增加 `automatic_cleanup`，值为 `.chrono-harness/` 下已跟踪、FILEMAP 登记的政策路径。省略仍走明确维护。产品不内置 daemon、空闲调度、兄弟目录扫描或语言推断；宿主可以用下文登记的原生调度持续调用现有维护入口。主宿主调用登记 `.chrono-harness/bin/chrono-worktree`，使用新配置前先部署兼容候选工具。
 
 本仓选 `.chrono-harness/cleanup.json`，其 v2 保留这些 v1 字段：
 
@@ -516,6 +516,65 @@ chrono-worktree migrate --path /exact/enrolled-worktree
 `cleanup` 保存上次清理的观察，不单独表示仍有任务运行。取得原独占租约并通过上述检查后，先前的等待或缓存回收记录不阻止分支采用；迁移保留这些记录、缓存回执和原件，不补写任务完成，也不清理缓存。use 协调和已封存结果交接各自保存已证实的结果；后续采用失败不撤销这些观察，也不改写旧报告。
 
 采用仅更新当前绑定和一次缓存代际，不切换分支、不写 index／源码／ref，也不声明任务完成或清理资格。只换分支不追加政策迁移历史，重复采用不增加代际；政策同时变化时沿现有政策回执保留旧新输入。升级前须排除旧所有者和全部实际使用方，正式部署理解 `checkout_branch` 的工具后再采用，不能让旧二进制读取已采用的新状态。创建／续接新任务仍由调用方保证最新 dev 和原检查义务；完整语义读写范围、index／ref 冲突协调和分项交接尚未实现。
+
+### 本宿主的持续滚动维护
+
+本机磁盘上的多个工作树会不断产生编译缓存、检查报告和测试现场。只在调用方记得执行
+`finish` 时清理，不能及时处理已释放内容。因此，本宿主用 macOS 原生 `launchd`
+每 900 秒调用一次同一 `chrono-worktree maintain`，登录时也启动一轮。模板唯一来源是
+[maintenance.launchd.plist](../.chrono-harness/maintenance.launchd.plist)，由 repository 所有者维护，
+FILEMAP 将其登记为宿主数据；不另建清理程序或后台扫描器。
+
+| 登记项 | 当前选择与用途 |
+| --- | --- |
+| 输入和使用方 | 模板、物理 Git main 的绝对路径、已安装的兼容所有者及其已提交政策；当前用户的 launchd 消费实例化后的 plist |
+| 正式维护入口 | 模板逐字调用 main 的 `.chrono-harness/bin/chrono-worktree maintain --host-root MAIN`；只处理其声明的登记和生产者 |
+| 触发和并发 | 登录／加载及每 900 秒；launchd 不重叠启动同一任务，上一轮未完成时不另开副本。休眠或正在运行会推迟维护，不承诺 900 秒内清完 |
+| 回收条件 | 继续使用各目标自己的年龄、产物时机和有限保留政策；活租约、未知使用方、源码、未保全提交及必要原件不因调度而释放 |
+| 输出和失败 | 原 stdout／stderr／退出码及逐项回执由现有生命周期报告保留；launchd 的退出码不是逐项清理结果。控制台流丢到 `/dev/null`，不增加无限增长的日志副本 |
+| 资源与成本 | 后台、低优先级 IO、nice 10；一轮的工作树遍历和实际回收成本仍由原维护入口承担，总成本未知。报告内部的单轮预算不等于整个 maintain 已有时间上限 |
+| 容量边界 | 这是持续回收触发，不是全库磁盘硬配额。`finish-dispose` 缓存仍在明确 finish 或实际检出处置时回收；持续活跃或未知的内容可能继续增长 |
+| 配置保管 | 实例 plist 位于 main 的 `.chrono-harness/state/`，由本宿主调度保管；当前用户 LaunchAgents 仅保存指向该文件的链接。任务停用并结束、链接移除后，实例即可删除；模板保留在 Git |
+
+安装前，确认 `maintenance_root` 是本仓实际 Git main，现役所有者和政策可用，原手工
+maintain 已收取结果。下面是唯一的本机登记方法；模板路径来自已交付 main，路径通过
+`plutil` 的字符串参数写入，不能用未转义的文本替换拼 XML。操作只登记当前用户下本仓
+的原生任务，不需要提权。若同名任务、实例或链接已经存在，先核原件和运行身份，再按
+下面的停用流程处理，不能覆盖未知配置。
+
+```sh
+(
+set -eu
+maintenance_root=/absolute/path/to/git-main
+maintenance_uid=$(id -u)
+maintenance_plist="$maintenance_root/.chrono-harness/state/org.chrono-harness.maintenance.plist"
+maintenance_link="$HOME/Library/LaunchAgents/org.chrono-harness.maintenance.plist"
+test ! -e "$maintenance_plist" && test ! -L "$maintenance_plist"
+test ! -e "$maintenance_link" && test ! -L "$maintenance_link"
+cp "$maintenance_root/.chrono-harness/maintenance.launchd.plist" "$maintenance_plist"
+plutil -replace ProgramArguments.0 -string "$maintenance_root/.chrono-harness/bin/chrono-worktree" "$maintenance_plist"
+plutil -replace ProgramArguments.3 -string "$maintenance_root" "$maintenance_plist"
+plutil -replace WorkingDirectory -string "$maintenance_root" "$maintenance_plist"
+plutil -lint "$maintenance_plist"
+ln -s "$maintenance_plist" "$maintenance_link"
+launchctl bootstrap "gui/$maintenance_uid" "$maintenance_plist"
+launchctl print "gui/$maintenance_uid/org.chrono-harness.maintenance"
+)
+```
+
+每一步失败就停止并保留实际结果，不继续后续步骤。模板通过 `plutil -lint`，只证明 plist
+可解析；实际采用还须核 `launchctl print` 的程序、参数、间隔与运行身份，并收取由调度
+实际启动的维护报告。读取该报告的 `drain`、`cleanup_failures`、`producer_drains` 和
+`output_retention`，分别核对已删除路径、仍受保护内容及未完成工作。源模板不证明任务
+已经加载；进程退出 0 也不能代替逐项效果核验。原失败仍由原所有者恢复，不按失败自动
+重启循环；下一次正常维护继续处理独立合格项。
+
+停用时先执行 `launchctl disable "gui/$maintenance_uid/org.chrono-harness.maintenance"`，
+禁止后续触发；已有运行须等待并核对原结果，不能借卸载终止尚未交接的清理。确认任务
+已结束后，执行 `launchctl bootout "gui/$maintenance_uid/org.chrono-harness.maintenance"`，
+核链接仍指向上述实例后移除链接和实例。再次安装前用同一 service target 执行
+`launchctl enable`。注销／重启后的自动加载依赖该用户正常登录及 main 的原路径和工具；
+移动或删除协调者前必须先完成这项交接。
 
 ### 本地状态与 AI 提醒
 
