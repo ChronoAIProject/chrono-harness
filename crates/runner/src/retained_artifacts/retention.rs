@@ -1999,6 +1999,20 @@ impl Inventory {
         self.policy.terminal_limits.get(producer)
     }
 
+    /// Observe the real path/object/consumer exclusion boundary in regressions.
+    #[cfg(feature = "retention-test")]
+    #[doc(hidden)]
+    pub fn metadata_observed(
+        &self,
+        path: &str,
+        roles: &[String],
+        observe: impl FnOnce(),
+    ) -> Result<(), String> {
+        let gate = self.addressed_gate(&[], &[path.into()], roles, None, false, true)?;
+        observe();
+        self.stable(&gate)
+    }
+
     fn keep_seconds(&self, producer: &str) -> u64 {
         self.policy
             .terminal_limits

@@ -1186,6 +1186,94 @@ fn released_original_larger_than_verification_round_is_not_permanently_blocked()
 }
 
 #[test]
+fn returned_metadata_exclusion_is_released_while_an_unrelated_fork_waits_for_exec() {
+    if !isolated_capability_test(
+        "returned_metadata_exclusion_is_released_while_an_unrelated_fork_waits_for_exec",
+    ) {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::{fd::AsRawFd, unix::net::UnixStream, unix::process::CommandExt},
+    };
+    let h = host(256, 16);
+    let path = tree(h.path(), "synchronous-metadata");
+    let owner = inventory(h.path());
+    let publication = inventory(h.path())
+        .begin("fixture", &path, json!(null))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit":7})).unwrap();
+    let role = "current-synchronous-metadata";
+    owner.reference(role, &[id.clone()]).unwrap();
+    let role_record = retention_state::role_path(h.path(), role);
+    let (mut parent, child) = UnixStream::pair().unwrap();
+    let parent_fd = parent.as_raw_fd();
+    let child_fd = child.as_raw_fd();
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"));
+    command.arg("exit-success");
+    unsafe {
+        command.pre_exec(move || {
+            libc::close(parent_fd);
+            let mut byte = 1u8;
+            if libc::write(child_fd, (&byte as *const u8).cast(), 1) != 1
+                || libc::read(child_fd, (&mut byte as *mut u8).cast(), 1) != 1
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let (excluded, signaled, during, snapshot, exact, role_available, resumed, joined) =
+        std::thread::scope(|scope| {
+            let mut launched = None;
+            let mut signaled = None;
+            let mut during = None;
+            let excluded = owner.metadata_observed(&path, &[role.into()], || {
+                launched = Some(scope.spawn(|| command.output()));
+                signaled = Some(parent.read_exact(&mut [0]));
+                during = Some(owner.producer_status("fixture", Some(&path)));
+            });
+            // Keep the unrelated child before exec until all observations have
+            // returned. No retry, process probe or sleep can close its fd copies.
+            let snapshot = owner.producer_status("fixture", None);
+            let exact = owner.producer_status("fixture", Some(&path));
+            let role_available = chrono_harness::ownership::DirectoryLease::acquire(
+                role_record.parent().unwrap(),
+                true,
+                None,
+            )
+            .map(|lease| lease.is_some());
+            let resumed = parent.write_all(&[1]);
+            let joined = launched.map(|child| child.join());
+            (
+                excluded,
+                signaled,
+                during,
+                snapshot,
+                exact,
+                role_available,
+                resumed,
+                joined,
+            )
+        });
+    excluded.unwrap();
+    signaled.unwrap().unwrap();
+    resumed.unwrap();
+    assert!(joined.unwrap().unwrap().unwrap().status.success());
+    assert!(during.unwrap().unwrap_err().contains("busy"));
+    let snapshot = snapshot.unwrap();
+    assert_eq!(snapshot["scope_complete"], true, "{snapshot}");
+    assert_eq!(snapshot["errors"], json!([]), "{snapshot}");
+    assert_eq!(snapshot["records"].as_array().unwrap().len(), 1);
+    assert_eq!(snapshot["records"][0]["id"], id);
+    let exact = exact.unwrap();
+    assert_eq!(exact["scope_complete"], true, "{exact}");
+    assert_eq!(exact["records"][0]["path"], path);
+    assert!(role_available.unwrap());
+}
+
+#[test]
 fn unrelated_fork_retains_a_reader_until_exec_closes_its_capability() {
     if !isolated_capability_test("unrelated_fork_retains_a_reader_until_exec_closes_its_capability")
     {
