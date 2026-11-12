@@ -27,6 +27,119 @@ pub mod scopes;
 
 verus! {
 
+pub open spec fn oid_text_result(value: Result<String, String>) -> Result<Seq<char>, Seq<char>> {
+    match value { Ok(text) => Ok(text@), Err(error) => Err(error@) }
+}
+
+pub open spec fn oid_read_result<S>(value: (S, Result<String, String>))
+    -> (S, Result<Seq<char>, Seq<char>>)
+{
+    (value.0, oid_text_result(value.1))
+}
+
+pub open spec fn oid_commit_matches<S>(observed: (S, Result<String, String>), oid: &str) -> bool {
+    match observed.1 { Ok(text) => text@ == oid@, Err(_) => false }
+}
+
+pub open spec fn oid_tree_valid<S>(observed: (S, Result<String, String>)) -> bool {
+    match observed.1 {
+        Ok(text) => identifiers::oid(vstd::utf8::encode_utf8(text@)), Err(_) => false,
+    }
+}
+
+pub open spec fn oid_tree_relation<S, R>(
+    oid: &str, observed: (S, Result<String, String>), out: (S, Result<String, String>), record: R,
+) -> bool where R: Fn(S, &str) -> S {
+    if oid_tree_valid(observed) {
+        out.1 == observed.1 && record.ensures((observed.0, oid), out.0)
+    } else { out == observed }
+}
+
+pub open spec fn oid_commit_relation<S, T, R>(
+    oid: &str, observed: (S, Result<String, String>), out: (S, Result<String, String>),
+    read_tree: T, record: R,
+) -> bool where T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S {
+    match observed.1 {
+        Err(_) => out == observed,
+        Ok(text) => if text@ != oid@ {
+            oid_read_result(out) == (observed.0, Err::<Seq<char>, Seq<char>>("OID is not a commit"@))
+        } else {
+            exists|second: (S, Result<String, String>)|
+                read_tree.ensures((observed.0, oid), second)
+                    && oid_tree_relation(oid, second, out, record)
+        },
+    }
+}
+
+/// 关系保留每次实际观察，允许同一输入取得不同 IO 结果。
+pub open spec fn verify_oid_relation<S, C, T, R>(
+    state: S, oid: &str, out: (S, Result<String, String>), read_commit: C, read_tree: T, record: R,
+) -> bool where C: Fn(S, &str) -> (S, Result<String, String>),
+    T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S {
+    if !identifiers::oid(vstd::utf8::encode_utf8(oid@)) {
+        oid_read_result(out) == (state,
+            Err::<Seq<char>, Seq<char>>("expected full nonzero lowercase commit OID"@))
+    } else {
+        exists|first: (S, Result<String, String>)| read_commit.ensures((state, oid), first)
+            && oid_commit_relation(oid, first, out, read_tree, record)
+    }
+}
+
+fn finish_oid_tree<S, R>(oid: &str, observed: (S, Result<String, String>), record: R)
+    -> (out: (S, Result<String, String>)) where R: Fn(S, &str) -> S,
+    requires oid_tree_valid(observed) ==> record.requires((observed.0, oid)),
+    ensures oid_tree_relation(oid, observed, out, record),
+{
+    let (state, result) = observed;
+    let tree = match result { Err(error) => { return (state, Err(error)); }, Ok(text) => text };
+    if identifiers::full_oid(tree.as_str()).is_ok() {
+        (record(state, oid), Ok(tree))
+    } else { (state, Ok(tree)) }
+}
+
+fn finish_oid_commit<S, T, R>(
+    oid: &str, observed: (S, Result<String, String>), read_tree: T, record: R,
+) -> (out: (S, Result<String, String>))
+    where T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S,
+    requires oid_commit_matches(observed, oid) ==> read_tree.requires((observed.0, oid)),
+        forall|second: (S, Result<String, String>)| oid_commit_matches(observed, oid)
+            && read_tree.ensures((observed.0, oid), second) && oid_tree_valid(second)
+            ==> record.requires((second.0, oid)),
+    ensures oid_commit_relation(oid, observed, out, read_tree, record),
+{
+    let (state, result) = observed;
+    let commit = match result { Err(error) => { return (state, Err(error)); }, Ok(text) => text };
+    if !identifiers::equal_text(commit.as_str(), oid) {
+        return (state, Err("OID is not a commit".to_owned()));
+    }
+    let second = read_tree(state, oid);
+    finish_oid_tree(oid, second, record)
+}
+
+/// 只要求实际可达阶段可调用；不要求观察回调具有确定性。
+pub fn verify_oid<S, C, T, R>(state: S, oid: &str, read_commit: C, read_tree: T, record: R)
+    -> (out: (S, Result<String, String>))
+    where C: Fn(S, &str) -> (S, Result<String, String>),
+        T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S,
+    requires identifiers::oid(vstd::utf8::encode_utf8(oid@)) ==> read_commit.requires((state, oid)),
+        forall|first: (S, Result<String, String>)| identifiers::oid(vstd::utf8::encode_utf8(oid@))
+            && read_commit.ensures((state, oid), first) && oid_commit_matches(first, oid)
+            ==> read_tree.requires((first.0, oid)),
+        forall|first: (S, Result<String, String>), second: (S, Result<String, String>)|
+            identifiers::oid(vstd::utf8::encode_utf8(oid@))
+                && read_commit.ensures((state, oid), first) && oid_commit_matches(first, oid)
+                && read_tree.ensures((first.0, oid), second) && oid_tree_valid(second)
+                ==> record.requires((second.0, oid)),
+    ensures verify_oid_relation(state, oid, out, read_commit, read_tree, record),
+{
+    match identifiers::full_oid(oid) {
+        Err(error) => { return (state, Err(error)); },
+        Ok(()) => {},
+    }
+    let first = read_commit(state, oid);
+    finish_oid_commit(oid, first, read_tree, record)
+}
+
 /// 无绑定时不查询；有绑定时只向原缓存接口转交同一个完整键。
 pub fn can_reuse_oid<S, Q>(bound: bool, cache: S, oid: &str, contains: Q)
     -> (out: (S, bool))
@@ -54,6 +167,30 @@ pub struct RegistrySnapshot<V> {
     pub entry_path: String,
     pub effective_path: String,
     pub selection: Option<V>,
+}
+
+/// 两条真实 registry 组装路径共用的终态：保留完整错误，成功时组合原身份与实际双 map。
+pub fn registry_snapshot_complete<V>(
+    entry_path: String, effective_path: String, selection: Option<V>,
+    documents: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>,
+) -> (out: Result<RegistrySnapshot<V>, String>)
+    ensures match documents {
+        Err(error) => out == Err::<RegistrySnapshot<V>, String>(error),
+        Ok((bytes, values)) => match out {
+            Err(_) => false,
+            Ok(snapshot) => snapshot.bytes@ == bytes@ && snapshot.values@ == values@
+                && snapshot.entry_path == entry_path
+                && snapshot.effective_path == effective_path
+                && snapshot.selection == selection,
+        },
+    },
+{
+    match documents {
+        Err(error) => Err(error),
+        Ok((bytes, values)) => Ok(RegistrySnapshot {
+            bytes, values, entry_path, effective_path, selection,
+        }),
+    }
 }
 
 /// 同路径保留入口文档；不同路径额外保留目标文档，不合并两个文档的身份。

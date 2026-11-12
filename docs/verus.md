@@ -40,6 +40,25 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
+`Reader::verify_oid` 的仓内控制流由 `verified_status.rs::verify_oid` 拥有：
+先核完整输入 OID，按顺序观察 commit 与 tree，完整 commit 不匹配时不读 tree，
+任一观察失败保留首个完整错误；仅有效 tree 才登记原请求键。
+无效 tree 文本继续成功返回且不登记，保留现役读取器的返回合同。
+同源关系绑定两次实际回调和登记回调的完整输入、结果、状态及次序，
+允许同一状态和键有不同的实际 IO 观察；回调只需在实际可达的阶段可调用。
+本项不把仓内 Git 读取器整体作为外部假设。
+
+独立 Verus fixture 在每一阶段核完整原键与严格前置状态，同样作为 Rust 测试执行，
+覆盖输入失败、commit 错误、完整文本不匹配、tree 错误、无效 tree 返回，
+以及不同的 40／64 字节 commit 和 tree 身份。
+原 Git 读取器行为测试继续核实际进程、原字节与复用组合。
+逐项接口采用固定 Rust 1.95.0 的 `Result::and_then`／`map`、字符串格式化、
+`str::trim` 的 Unicode 首尾空白语义和 `ToOwned<str>` 的完整文本复制；
+UTF-8 成功／失败选择仍直接使用既有 Verus 函数。
+commit 回调为转交拥有所有权的裁剪结果增加一次文本复制；tree 保留原复制。
+本批沿用两项状态证明根及原参数和预算。完整构建、证明、CI 和复制成本未测，
+Git 获取、严格解码、整个 Reader 及生产调用的完整绑定仍有未完成义务。
+
 OID 复用缓存的绑定守卫由现有 `verified_status.rs` 的 `can_reuse_oid` 和
 `record_verified_oid` 定义，真实 `Reader` 的同名方法直接消费。
 无绑定时不调用查询或插入接口，返回原状态，查询结果固定为 false；有绑定时仅转交
@@ -65,6 +84,16 @@ FILEMAP 补齐 `facts_binding.rs` 到 runner 专属测试的显式边。新增�
 不借调用关系取得整文件证明资格。局部守卫不证明整个 Reader、RefCell／集合内部实现、
 其余缓存状态、Git／JSON／进程组合或全仓覆盖。完整源码／编译／调用绑定和其它存量迁移
 仍有各自义务；本候选实际验收须消费原报告。新增构建、证明、CI 和完整生命周期成本未测。
+
+registry snapshot 的最终成功／失败状态由
+`verified_status.rs::registry_snapshot_complete` 拥有。逐路径读取和批量解析两条真实路径
+直接传入剩余的入口、有效路径、selection 和原始双 map 结果；成功时保留两个 map 的
+全部键值及三个身份字段，失败时返回完整原错误，不发布部分 snapshot。
+四组独立 Verus 预期同时作为 Rust 测试执行，核空 map／无 selection、两份完整字节与值、
+原路径及 selection、Unicode／NUL／换行错误和空错误保持失败。
+此函数只有 Result 分支和按值组装，不增加外部假设、克隆、IO、工具或证明根；
+沿用现有状态整 crate 证明及真实消费者测试。外围读取、严格 JSON、selector 与整个
+snapshot 的组合仍待证明，完整构建、证明、运行、CI 和存储成本未测。
 
 registry snapshot 的实际状态类型与初始双 map 构造由
 `verified_status.rs::RegistrySnapshot<V>` 和 `registry_snapshot_initial` 拥有。
