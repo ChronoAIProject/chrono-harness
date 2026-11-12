@@ -87,6 +87,8 @@
     {"path":".chrono-harness/ci/native-tests/tests/download.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":".chrono-harness/ci/native-tests/tests/support/download.rs","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
     {"path":"crates/diagnostics/src/rolling.rs","owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/diagnostics/src/verified_rolling.rs","verification":{"role":"program","roots":[{"path":"crates/diagnostics/src/verified_rolling.rs","operation":"verify.diagnostics-rolling"},{"path":"crates/diagnostics-tests/tests/verified_rolling.rs","operation":"verify.diagnostics-rolling-tests"}]},"owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"compile","to":"project:diagnostics-tests"},{"kind":"test-execution","to":"test:diagnostics-tests"}]},
+    {"path":"crates/diagnostics-tests/tests/verified_rolling.rs","verification":{"role":"program","roots":[{"path":"crates/diagnostics-tests/tests/verified_rolling.rs","operation":"verify.diagnostics-rolling-tests"}]},"owner":"diagnostics-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics-tests"},{"kind":"test-execution","to":"test:diagnostics-tests"}]},
     {"path":"crates/diagnostics/src/verified_runtime.rs","verification":{"role":"program","roots":[{"path":"crates/diagnostics/src/verified_runtime.rs","operation":"verify.diagnostics-runtime"},{"path":"crates/diagnostics-tests/tests/verified_runtime.rs","operation":"verify.diagnostics-runtime-tests"}]},"owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"compile","to":"project:diagnostics-tests"},{"kind":"test-execution","to":"test:diagnostics-tests"}]},
     {"path":"crates/diagnostics-tests/tests/verified_runtime.rs","verification":{"role":"program","roots":[{"path":"crates/diagnostics-tests/tests/verified_runtime.rs","operation":"verify.diagnostics-runtime-tests"}]},"owner":"diagnostics-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics-tests"},{"kind":"test-execution","to":"test:diagnostics-tests"}]},
     {"path":"crates/diagnostics/src/runtime.rs","owner":"diagnostics","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:diagnostics"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -1555,6 +1557,8 @@
     },
     "test:diagnostics-tests": {
       "operations": [
+        "verify.diagnostics-rolling",
+        "verify.diagnostics-rolling-tests",
         "verify.diagnostics-runtime",
         "verify.diagnostics-runtime-tests",
         "fmt.diagnostics",
@@ -1613,6 +1617,8 @@
       "worktree-test-inventory"
     ],
     "claims": {
+      "verify.diagnostics-rolling": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.diagnostics-rolling-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.diagnostics-runtime": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.diagnostics-runtime-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.release-recipe": {"resources":[],"outputs":[".chrono-harness/state/"]},
