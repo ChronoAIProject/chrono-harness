@@ -1,4 +1,4 @@
-//! 发布测试的真实外部工具接口；业务判定在独立 Rust 测试中。
+//! 发布测试的通用命令替身；高频 frontend Git／探针另由轻量替身负责。
 #[path = "context.rs"]
 mod context;
 use serde_json::Value;

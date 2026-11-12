@@ -84,7 +84,7 @@ fn main() {
             println!("original observed output");
         }
         "echo" | "file" => println!("{}", args[1]),
-        "exit" => {
+        "exit" | "seal-failure" => {
             if let Some(count) = args.get(1) {
                 std::fs::OpenOptions::new()
                     .create(true)
@@ -93,6 +93,15 @@ fn main() {
                     .unwrap()
                     .write_all(b"x")
                     .unwrap();
+            }
+            if args[0] == "seal-failure" {
+                for n in 0..10 {
+                    std::fs::write(
+                        std::path::Path::new(&args[2]).join(format!("extra-{n}")),
+                        b"original",
+                    )
+                    .unwrap();
+                }
             }
             eprintln!("original probe failure");
             std::process::exit(7);

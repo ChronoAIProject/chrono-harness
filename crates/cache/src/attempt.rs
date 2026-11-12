@@ -205,7 +205,8 @@ mod runtime {
             if phase == "publishing" {
                 inventory(&root)?.resume_unfinished_directory(PRODUCER, &relative)?
                 .ok_or("E_CACHE_ATTEMPT: unfinished publication unavailable")?
-                .complete(json!({"request_sha256":wire::digest(&request)?,"result":"result.json","completion":"confirmed"}))?;
+                .complete_sealed(json!({"request_sha256":wire::digest(&request)?,"result":"result.json","completion":"confirmed"}))
+                .map_err(|error| publication_error(&relative, &error, result["error"].as_str()))?;
             }
             if !inventory(&root)?.published_tree_member(
                 PRODUCER,
@@ -267,7 +268,10 @@ mod runtime {
             })?;
         // Unknown work retains its original unfinished capability and recovery root.
         if terminal {
-            attempt.publication.complete(json!({"request_sha256":wire::digest(&request)?,"result":"result.json","completion":"confirmed"})).map_err(|e| format!("E_CACHE_ATTEMPT: terminal publication: {e}; original {relative}/result.json"))?;
+            // The immediate plan consumer requires a sealed tree, not just a
+            // completed accounting round. Keep the same capability across rounds.
+            attempt.publication.complete_sealed(json!({"request_sha256":wire::digest(&request)?,"result":"result.json","completion":"confirmed"}))
+                .map_err(|error| publication_error(&relative, &error, result.as_ref().err().map(String::as_str)))?;
             // A failed plan has no downstream restore/seal caller. Its original
             // diagnostic result stays under the adopted finite terminal policy.
             if result.is_err() {
@@ -275,6 +279,15 @@ mod runtime {
             }
         }
         result
+    }
+    fn publication_error(relative: &str, publication: &str, original: Option<&str>) -> String {
+        let publication = format!(
+            "E_CACHE_ATTEMPT: terminal publication: {publication}; original {relative}/result.json"
+        );
+        match original {
+            Some(original) => format!("{original}; {publication}"),
+            None => publication,
+        }
     }
     fn replay(result: &Value) -> Result<Value, String> {
         match (

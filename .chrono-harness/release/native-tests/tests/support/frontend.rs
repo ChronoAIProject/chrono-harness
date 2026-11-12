@@ -34,7 +34,11 @@ impl Fixture {
         fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-git"), &git_tool).unwrap();
         host.config["tools"]["git"] = json!(git_tool);
         let probe = tools.join("probe");
-        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-tool"), &probe).unwrap();
+        fs::hard_link(
+            env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
+            &probe,
+        )
+        .unwrap();
         host.config["tools"]["probe"] = json!(probe);
         host.save();
         let root = host.root();

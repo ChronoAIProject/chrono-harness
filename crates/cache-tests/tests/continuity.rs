@@ -151,6 +151,161 @@ mod behavior {
             .unwrap()
     }
 
+    #[test]
+    fn multi_probe_plan_handoff_requires_the_whole_sealed_attempt() {
+        let (root, mut config) = fixture();
+        let policy_path = root.path().join(".chrono-harness/retention.json");
+        let mut policy = value(&policy_path);
+        // Exercise a supported short accounting round, without changing any
+        // size limits. Success must not depend on fitting the tree in one round.
+        policy["max_millis_per_round"] = json!(1);
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        let count = root.path().join("invocations");
+        probe_config(root.path(), &mut config, json!(["count", count]));
+        for n in 0..6 {
+            let id = format!("probe-{n}");
+            config["inputs"][&id] = config["inputs"]["compiler"].clone();
+            config["caches"]["project"]["compatibility_inputs"]
+                .as_array_mut()
+                .unwrap()
+                .push(json!(id));
+        }
+        fs::write(
+            root.path().join(".chrono-harness/cache.json"),
+            serde_json::to_vec(&config).unwrap(),
+        )
+        .unwrap();
+        let output = ".chrono-harness/state/cache/multi-probe/plan.json";
+        let first = invoke(root.path(), output);
+        assert!(
+            first.status.success(),
+            "{}",
+            String::from_utf8_lossy(&first.stderr)
+        );
+        assert_eq!(fs::read(&count).unwrap(), b"xxxxxxx");
+        let plan: Value = serde_json::from_slice(&first.stdout).unwrap();
+        let attempt = attempt_path(root.path(), output);
+        let receipt = fs::read(attempt.join("result.json")).unwrap();
+        let result = value(&attempt.join("result.json"));
+        assert_eq!(result["terminal"], true);
+        assert_eq!(result["error"], Value::Null);
+        assert_eq!(result["plan"], plan);
+        let state = chrono_harness::retained_artifacts::retention::Inventory::adopted(root.path())
+            .unwrap()
+            .unwrap();
+        let relative = attempt.strip_prefix(root.path()).unwrap().to_str().unwrap();
+        let status = state
+            .producer_status("cache-probe-attempt", Some(relative))
+            .unwrap();
+        assert_eq!(status["records"][0]["phase"], "released", "{status}");
+        let mut originals = 0;
+        for input in plan["inputs"].as_object().unwrap().values() {
+            if input["declaration"]["kind"] != "command" {
+                continue;
+            }
+            originals += 1;
+            let original = input["original"]["path"].as_str().unwrap();
+            let raw = fs::read(root.path().join(original)).unwrap();
+            assert!(
+                state
+                    .published_tree_member(
+                        "cache-probe-attempt",
+                        relative,
+                        original,
+                        &format!("{:x}", Sha256::digest(&raw)),
+                        raw.len() as u64
+                    )
+                    .unwrap()
+            );
+            let process: chrono_harness::ProcessResult = serde_json::from_slice(&raw).unwrap();
+            assert_eq!(process.exit_code, 0);
+            assert!(process.failure.is_none());
+            assert!(process.owned_work_joined);
+            chrono_harness::validate_launch_evidence(
+                &root.path().join(original).with_file_name("launch.json"),
+                &process,
+            )
+            .unwrap();
+        }
+        assert_eq!(originals, 7);
+        let replay = invoke(root.path(), output);
+        assert!(
+            replay.status.success(),
+            "{}",
+            String::from_utf8_lossy(&replay.stderr)
+        );
+        assert_eq!(replay.stdout, first.stdout);
+        assert_eq!(fs::read(&count).unwrap(), b"xxxxxxx");
+        assert_eq!(fs::read(attempt.join("result.json")).unwrap(), receipt);
+    }
+
+    #[test]
+    fn failed_sealing_keeps_the_probe_error_original_and_recovery_root() {
+        let (root, mut config) = fixture();
+        let policy_path = root.path().join(".chrono-harness/retention.json");
+        let mut policy = value(&policy_path);
+        policy["max_manifest_nodes"] = json!(16);
+        for limits in policy["terminal_limits"]
+            .as_object_mut()
+            .unwrap()
+            .values_mut()
+        {
+            limits["max_count"] = json!(16);
+        }
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        let output = ".chrono-harness/state/cache/seal-error/plan.json";
+        let attempt = attempt_path(root.path(), output);
+        let count = root.path().join("invocations");
+        probe_config(
+            root.path(),
+            &mut config,
+            json!(["seal-failure", count, attempt.join("compiler")]),
+        );
+        let first = invoke(root.path(), output);
+        assert_eq!(first.status.code(), Some(2));
+        let error = String::from_utf8_lossy(&first.stderr);
+        assert!(error.contains("exit 7"), "{error}");
+        assert!(error.contains("tree identity manifest capacity"), "{error}");
+        assert!(!root.path().join(output).exists());
+        let receipt = fs::read(attempt.join("result.json")).unwrap();
+        let result = value(&attempt.join("result.json"));
+        assert_eq!(result["terminal"], true);
+        assert!(result["plan"].is_null());
+        assert!(result["error"].as_str().unwrap().contains("exit 7"));
+        let process = value(&attempt.join("compiler/process.json"));
+        assert_eq!(process["exit_code"], 7);
+        assert_eq!(process["stderr"], "original probe failure\n");
+        assert_eq!(process["owned_work_joined"], true);
+        let state = chrono_harness::retained_artifacts::retention::Inventory::adopted(root.path())
+            .unwrap()
+            .unwrap();
+        let intent = value(&attempt.join("intent.json"));
+        let original = state
+            .rooted_original(
+                "cache-probe-attempt",
+                intent["consumer_role"].as_str().unwrap(),
+            )
+            .unwrap()
+            .unwrap();
+        assert_eq!(original.2, "sealing");
+        state
+            .maintain_originals(std::slice::from_ref(&original.0))
+            .unwrap();
+        let replay = invoke(root.path(), output);
+        assert_eq!(replay.status.code(), Some(2));
+        assert_eq!(fs::read(&count).unwrap(), b"x");
+        assert_eq!(fs::read(attempt.join("result.json")).unwrap(), receipt);
+        assert!(
+            state
+                .rooted_original(
+                    "cache-probe-attempt",
+                    intent["consumer_role"].as_str().unwrap()
+                )
+                .unwrap()
+                .is_some()
+        );
+    }
+
     fn seal(root: &Path, output: &str, cache: Option<&str>) -> std::process::Output {
         let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-cache-test-cli"));
         command.args([
