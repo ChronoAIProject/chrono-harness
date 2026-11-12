@@ -3921,7 +3921,9 @@ fn automatic_interrupted_managed_wrapper_keeps_unknown_use_protected() {
         ),
         &h.root,
     );
-    wrapper.await_file(&target.join(".chrono-harness/state/ready"));
+    // Input preparation runs before the managed consumer. Its registered
+    // process bounds govern readiness, just as for the other managed entries.
+    wrapper.await_managed_file(&target.join(".chrono-harness/state/ready"));
     let child_pid = fs::read_to_string(target.join(".chrono-harness/state/ready")).unwrap();
     wrapper.kill().unwrap();
     let out = wrapper.wait_with_output().unwrap();

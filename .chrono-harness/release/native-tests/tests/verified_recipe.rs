@@ -26,6 +26,78 @@ fn expect_recipe(actual: bool)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn promotion_requires_one_unexpired_original_with_the_selected_identity() {
+    let one = delivery::single_original(Some(1), 1);
+    let missing = delivery::single_original(Some(0), 0);
+    let ambiguous = delivery::single_original(Some(2), 1);
+    let valid = delivery::promotion_artifact(Some(30), Some(30), Some(false), Some(1), &[(Some(20), 20)], &[]);
+    let wrong = delivery::promotion_artifact(Some(31), Some(30), Some(false), Some(1), &[], &[]);
+    let expired = delivery::promotion_artifact(Some(30), None, Some(true), Some(1), &[], &[]);
+    let unknown = delivery::promotion_artifact(None, None, Some(false), Some(1), &[], &[]);
+    let empty = delivery::promotion_artifact(Some(30), None, Some(false), Some(0), &[], &[]);
+    let wrong_run = delivery::promotion_artifact(Some(30), None, Some(false), Some(1), &[(Some(21),20)], &[]);
+    let missing_expiry = delivery::promotion_artifact(Some(30), None, None, Some(1), &[], &[]);
+    expect_recipe(one && !missing && !ambiguous && valid && !wrong && !expired && !unknown && !empty && !wrong_run && !missing_expiry);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn promotion_does_not_refresh_the_original_platform_time_window() {
+    let valid = delivery::original_spans(2, 1000000001, Some(1), Some(1000000000), 1, 1);
+    let late = delivery::original_spans(2, 1000000002, Some(1), Some(1000000001), 1, 1);
+    let missing = delivery::original_spans(2, 3, None, Some(1), 1, 1);
+    let rewritten = delivery::original_spans(2, 3, Some(1), Some(1), 1, 1);
+    let reversed = delivery::original_spans(2, 1, Some(1), Some(0), 1, 1);
+    let unit = delivery::original_spans(2, 1000000003, Some(1), Some(1000000002), 1, 2);
+    expect_recipe(valid && !late && !missing && !rewritten && !reversed && !unit);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn promotion_requires_the_original_run_event_and_complete_workflow_head() {
+    proof {
+        reveal_strlit("workflow_run"); reveal_strlit("workflow_dispatch"); reveal_strlit("push");
+        assert("push"@.len() != "workflow_run"@.len());
+        assert("push"@.len() != "workflow_dispatch"@.len());
+    }
+    let head = [97u8; 40];
+    let head_bytes: &[u8] = &head;
+    proof {
+        assert(head_bytes@ == head@);
+        assert(head_bytes@.len() == 40);
+        assert forall|i: int| 0 <= i < head_bytes@.len() implies head_bytes@[i] == 97 by {
+            assert(head@[i] == 97);
+        }
+        assert(head_bytes@[0] == 97);
+        assert(exists|i: int| 0 <= i < head_bytes@.len() && head_bytes@[i] != 48);
+        assert(policy::identifiers::oid(head_bytes@));
+        assert(delivery::text_pair((Some("workflow_run"), "workflow_run")));
+        assert(delivery::text_pair((Some("workflow_dispatch"), "workflow_dispatch")));
+    }
+    let numbers = [(Some(2u64),2u64)];
+    let no_numbers: &[(Option<u64>, u64)] = &[];
+    let no_texts: &[(Option<&str>, &str)] = &[];
+    let raw_head = Some(head_bytes);
+    let valid = delivery::promotion_run(&numbers, no_texts, Some("workflow_run"), raw_head);
+    let manual = delivery::promotion_run(no_numbers, no_texts, Some("workflow_dispatch"), raw_head);
+    proof {
+        // 显式实例化固定切片与 Option 输入；预期结果仍在下方独立断言。
+        assert forall|i: int| 0 <= i < numbers.len() implies numbers@[i].0 == Some(numbers@[i].1) by {}
+        assert forall|i: int| 0 <= i < no_numbers.len() implies no_numbers@[i].0 == Some(no_numbers@[i].1) by {}
+        assert forall|i: int| 0 <= i < no_texts.len() implies delivery::text_pair(no_texts@[i]) by {}
+        assert(match raw_head { Some(value) => policy::identifiers::oid(value@), None => false });
+    }
+    let wrong = delivery::promotion_run(&[], &[], Some("push"), Some(head_bytes));
+    let missing = delivery::promotion_run(&[], &[], None, Some(head_bytes));
+    let short = delivery::promotion_run(&[], &[], Some("workflow_run"), Some(&[97u8]));
+    let attempt = delivery::promotion_run(&[(Some(3),2)], &[], Some("workflow_run"), Some(head_bytes));
+    expect_recipe(valid);
+    expect_recipe(manual);
+    expect_recipe(!wrong);
+    expect_recipe(!missing);
+    expect_recipe(!short);
+    expect_recipe(!attempt);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn delivery_missing_fields_are_not_empty_or_zero_values() {
     proof { reveal_strlit(""); }
     let text = delivery::text_fields(&[(None, "")]);
