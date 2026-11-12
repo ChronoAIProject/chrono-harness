@@ -323,7 +323,8 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         .0;
     std::thread::scope(|scope| {
         let worker = scope.spawn(|| {
-            let result = chrono_harness::run_process_observed(directory.path(), &spec, &[], &digest);
+            let result =
+                chrono_harness::run_process_observed(directory.path(), &spec, &[], &digest);
             // The controller may already be unwinding from a missing arrival.
             // Publish the actual joined result before its scoped worker exits.
             // libtest displays this capture on failure. A watchdog can also
