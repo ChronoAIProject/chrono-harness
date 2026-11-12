@@ -2250,20 +2250,28 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
         &h.root,
     );
     let handshake = target.join(".chrono-harness/state/check-holder");
+    let waiting = Instant::now();
     check.await_managed_file(&handshake);
+    let ready_after = waiting.elapsed();
     assert!(
         other.join("output λ/cache").exists(),
         "ordinary check has no cleanup dependency on another enrollment"
     );
     let _group =
         OwnedGroup(fs::read_to_string(target.join(".chrono-harness/state/check-holder")).unwrap());
-    let (code, maintained, error) = h.auto("maintain", &[]);
-    assert_eq!(code, 0, "{maintained} {error}");
-    assert!(!other.join("output λ").exists());
-    assert!(
-        target.join("output λ/cache").exists(),
-        "native check cache must remain protected: {maintained} {error}"
-    );
+    let maintaining = Instant::now();
+    let (code, report, error) = h.auto("maintain", &[]);
+    let maintenance_elapsed = maintaining.elapsed();
+    let diagnostic = || {
+        format!(
+            "target {}; holder {}; readiness {ready_after:?}; maintenance {maintenance_elapsed:?}; code {code}; report {report}; stderr {error}",
+            target.display(),
+            handshake.display(),
+        )
+    };
+    assert_eq!(code, 0, "{}", diagnostic());
+    assert!(!other.join("output λ").exists(), "{}", diagnostic());
+    assert!(target.join("output λ/cache").exists(), "{}", diagnostic());
     fs::write(
         target.join(".chrono-harness/state/check-release"),
         "join native check",
@@ -2273,9 +2281,10 @@ fn adopted_short_check_enters_owner_and_nested_native_runner_keeps_lease() {
     assert_eq!(
         out.status.code(),
         Some(0),
-        "{} {}",
+        "{} {}; {}",
         String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
+        String::from_utf8_lossy(&out.stderr),
+        diagnostic(),
     );
     assert!(
         String::from_utf8_lossy(&out.stdout).contains("check: pass (exit 0)"),

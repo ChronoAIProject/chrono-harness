@@ -83,6 +83,9 @@ path = "tests/support/git.rs"
 test = false
 bench = false
 
+[profile.dev]
+opt-level = 1
+
 [profile.dev.package.sha2]
 opt-level = 3
 
