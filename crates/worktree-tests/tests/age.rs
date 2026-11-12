@@ -142,10 +142,14 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
         return;
     }
     let h = Host::new("payload");
-    policy(&h, 2, 60, "dispose");
+    // Reuse is one phase of the scenario. Keep expiry outside the registered
+    // execution bound until its phase; native/mock Git work may take over 60s.
+    // The expiry phase below still adopts and checks the original 60s age.
+    policy(&h, 2, 3600, "dispose");
     native_consumer(&h, "ordinary");
     let target = h.parent.join("real-aged-checkout");
     start(&h, "real-aged-checkout", &target);
+    let created = fs::metadata(&target).unwrap().created().unwrap();
     let original = git(&target, &["rev-parse", "HEAD"]);
     fs::write(target.join("payload"), "reflog-only-source").unwrap();
     let reflog_only = commit(&target);
@@ -242,6 +246,14 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
     assert!(target.join("output λ/cache").is_file());
     assert_eq!(cache_identity(&target), cache);
+    let path = target.join(".chrono-harness/cleanup.json");
+    let mut adopted = json(&fs::read(&path).unwrap()).unwrap();
+    adopted["age_policy"]["delete_after_seconds"] = value!(60);
+    fs::write(path, serde_json::to_vec_pretty(&adopted).unwrap()).unwrap();
+    commit(&target);
+    let (code, migrated, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+    assert_eq!(code, 0, "{migrated} {error}");
+    assert_eq!(fs::metadata(&target).unwrap().created().unwrap(), created);
     // Modification now must not extend checkout creation age.
     fs::write(target.join("payload"), "source at deletion").unwrap();
     older_than(&target, 60);
