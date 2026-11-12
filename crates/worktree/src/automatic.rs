@@ -3504,7 +3504,7 @@ impl Manager {
             let Some(owner) = entry
                 .ownership
                 .as_ref()
-                .filter(|_| entry.status == "active")
+                .filter(|_| matches!(entry.status.as_str(), "active" | "terminal" | "retained"))
             else {
                 continue;
             };

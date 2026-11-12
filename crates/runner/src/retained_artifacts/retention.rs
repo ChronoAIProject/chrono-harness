@@ -242,6 +242,7 @@ impl Exclusion for crate::ownership::DirectoryLease {
 }
 struct ReadInputs {
     root: PathBuf,
+    retain_inputs: bool,
     #[cfg(unix)]
     capabilities: RefCell<BTreeMap<String, crate::process_fds::Scope>>,
 }
@@ -260,8 +261,18 @@ impl Drop for ReadScope {
     }
 }
 pub fn read_scope(root: &Path) -> Result<ReadScope, String> {
+    caller_scope(root, true)
+}
+/// An orchestrator whose domain owners durably protect existing inputs keeps
+/// only child-produced originals through its report handoff. Child callers
+/// retain their own actual inputs under ordinary read scopes.
+pub fn published_output_scope(root: &Path) -> Result<ReadScope, String> {
+    caller_scope(root, false)
+}
+fn caller_scope(root: &Path, retain_inputs: bool) -> Result<ReadScope, String> {
     let inputs = Rc::new(ReadInputs {
         root: fs::canonicalize(root).map_err(|e| e.to_string())?,
+        retain_inputs,
         #[cfg(unix)]
         capabilities: RefCell::new(BTreeMap::new()),
     });
@@ -389,12 +400,19 @@ impl Inventory {
         read_scope(&self.root)
     }
     fn remember_input(&self, lease: &Lease) -> Result<(), String> {
+        self.remember_capability(lease, false)
+    }
+    fn remember_output(&self, lease: &Lease) -> Result<(), String> {
+        self.remember_capability(lease, true)
+    }
+    fn remember_capability(&self, lease: &Lease, produced: bool) -> Result<(), String> {
         READ_SCOPES.with(|scopes| {
             for inputs in scopes
                 .borrow()
                 .iter()
                 .filter_map(Weak::upgrade)
                 .filter(|inputs| inputs.root == self.root)
+                .filter(|inputs| inputs.retain_inputs || produced)
             {
                 #[cfg(unix)]
                 {
@@ -1397,7 +1415,11 @@ impl Inventory {
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
-        let gate = self.addressed_gate(&[], paths, &[consumer.into()], None, false, true)?;
+        // This transition changes only the consumer's membership. Its members
+        // retain their outputs and dependency edges under the existing scoped
+        // exclusion, without loading those dependencies into this activity.
+        let gate =
+            self.addressed_gate_scope(&[], paths, &[consumer.into()], None, false, true, true)?;
         let mut l = self.load(&gate)?;
         let mut ids = BTreeSet::new();
         for path in paths {
@@ -3496,7 +3518,7 @@ impl Publication {
         // Returning a completed original hands its capability to any enclosing
         // caller before the producer closes. A nested caller may have no durable
         // root left after success, while its parent still needs its exact result.
-        self.inventory.remember_input(&self.lease)?;
+        self.inventory.remember_output(&self.lease)?;
         if serde_json::to_vec(&outcome)
             .map_err(|e| e.to_string())?
             .len()
