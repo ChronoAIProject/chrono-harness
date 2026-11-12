@@ -248,23 +248,32 @@ pub fn registry_identity(
 
 impl Reader {
     pub fn verify_oid(&self, root: &Path, oid: &str) -> Result<String, String> {
-        full_oid(oid)?;
-        if utf8(self.git(
-            root,
-            &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
-        )?)?
-        .trim()
-            != oid
-        {
-            return Err("OID is not a commit".into());
-        }
-        let tree = utf8(self.git(root, &["rev-parse", &format!("{oid}^{{tree}}")])?)?
-            .trim()
-            .to_string();
-        if full_oid(&tree).is_ok() {
-            self.record_verified_oid(oid);
-        }
-        Ok(tree)
+        crate::verified_status::verify_oid(
+            self,
+            oid,
+            |reader, oid| {
+                let observed = reader
+                    .git(
+                        root,
+                        &["rev-parse", "--verify", &format!("{oid}^{{commit}}")],
+                    )
+                    .and_then(utf8)
+                    .map(|text| text.trim().to_owned());
+                (reader, observed)
+            },
+            |reader, oid| {
+                let observed = reader
+                    .git(root, &["rev-parse", &format!("{oid}^{{tree}}")])
+                    .and_then(utf8)
+                    .map(|text| text.trim().to_owned());
+                (reader, observed)
+            },
+            |reader, oid| {
+                reader.record_verified_oid(oid);
+                reader
+            },
+        )
+        .1
     }
     pub fn blob(&self, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
         relative_path(path)?;
