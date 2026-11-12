@@ -123,9 +123,9 @@ fn checkout_collection_preserves_all_observed_values_and_exact_stage_order() {
         Err(_) => { expect_status_true(false); },
         Ok(checkout) => {
             expect_status_text(checkout.head.as_str(), "HEAD café\0\n");
-            expect_status_true(checkout.tracked.len() == 2 && checkout.untracked.len() == 3);
-            expect_status_text(checkout.tracked[0].as_str(), "tracked café\0\n");
-            expect_status_text(checkout.tracked[1].as_str(), "A");
+            expect_status_true(checkout.r#tracked.len() == 2 && checkout.untracked.len() == 3);
+            expect_status_text(checkout.r#tracked[0].as_str(), "tracked café\0\n");
+            expect_status_text(checkout.r#tracked[1].as_str(), "A");
             expect_status_text(checkout.untracked[0].as_str(), "z");
             expect_status_text(checkout.untracked[1].as_str(), "A");
             expect_status_text(checkout.untracked[2].as_str(), "z");
@@ -208,14 +208,14 @@ fn checkout_success_reads_both_inventories_before_merging() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_value_equality_includes_every_field() {
     let original = policy::Checkout { head: "same".to_owned(),
-        tracked: vec!["tracked".to_owned()], untracked: vec!["untracked".to_owned()],
+        r#tracked: vec!["tracked".to_owned()], untracked: vec!["untracked".to_owned()],
         index_flags: vec![policy::IndexFlag { path: "p".to_owned(), tag: "H".to_owned() }] };
     let mut head = original.clone();
     head.head = "different".to_owned();
     expect_status_true(head != original);
-    let mut tracked = original.clone();
-    tracked.tracked = vec!["tracked extra".to_owned()];
-    expect_status_true(tracked != original);
+    let mut tracked_state = original.clone();
+    tracked_state.r#tracked = vec!["tracked extra".to_owned()];
+    expect_status_true(tracked_state != original);
     let mut untracked = original.clone();
     untracked.untracked = vec!["untracked extra".to_owned()];
     expect_status_true(untracked != original);

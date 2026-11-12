@@ -822,7 +822,7 @@ impl Eq for IndexFlag {}
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
 pub struct Checkout {
     pub head: String,
-    pub tracked: Vec<String>,
+    pub r#tracked: Vec<String>,
     pub untracked: Vec<String>,
     pub index_flags: Vec<IndexFlag>,
 }
@@ -831,13 +831,13 @@ impl Clone for Checkout {
     fn clone(&self) -> (out: Self)
         ensures out == *self,
     {
-        Self { head: self.head.clone(), tracked: self.tracked.clone(),
+        Self { head: self.head.clone(), r#tracked: self.r#tracked.clone(),
             untracked: self.untracked.clone(), index_flags: self.index_flags.clone() }
     }
 }
 
 pub open spec fn checkout_equal(a: &Checkout, b: &Checkout) -> bool {
-    a.head@ == b.head@ && a.tracked@ == b.tracked@
+    a.head@ == b.head@ && a.r#tracked@ == b.r#tracked@
         && a.untracked@ == b.untracked@ && a.index_flags@ == b.index_flags@
 }
 
@@ -852,31 +852,31 @@ impl PartialEq for Checkout {
         ensures equal == checkout_equal(self, other),
     {
         identifiers::equal_text(self.head.as_str(), other.head.as_str())
-            && self.tracked == other.tracked && self.untracked == other.untracked
+            && self.r#tracked == other.r#tracked && self.untracked == other.untracked
             && self.index_flags == other.index_flags
     }
 }
 impl Eq for Checkout {}
 
 pub open spec fn checkout_flags_result<S>(
-    head: String, tracked: Vec<String>, untracked: Vec<String>,
+    head: String, r#tracked: Vec<String>, untracked: Vec<String>,
     observed: (S, Result<Vec<IndexFlag>, String>), out: (S, Result<Checkout, String>),
 ) -> bool {
     out.0 == observed.0 && match observed.1 {
         Err(error) => out.1 == Err::<Checkout, String>(error),
-        Ok(index_flags) => out.1 == Ok::<Checkout, String>(Checkout { head, tracked, untracked, index_flags }),
+        Ok(index_flags) => out.1 == Ok::<Checkout, String>(Checkout { head, r#tracked, untracked, index_flags }),
     }
 }
 
 pub open spec fn checkout_untracked_result<S, F>(
-    head: String, tracked: Vec<String>, observed: (S, Result<Vec<String>, String>),
+    head: String, r#tracked: Vec<String>, observed: (S, Result<Vec<String>, String>),
     flags: F, out: (S, Result<Checkout, String>),
 ) -> bool where F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
     match observed.1 {
         Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
         Ok(untracked) => exists|last: (S, Result<Vec<IndexFlag>, String>)|
             flags.ensures((observed.0,), last)
-                && checkout_flags_result(head, tracked, untracked, last, out),
+                && checkout_flags_result(head, r#tracked, untracked, last, out),
     }
 }
 
@@ -887,28 +887,28 @@ pub open spec fn checkout_tracked_result<S, U, F>(
     F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
     match observed.1 {
         Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
-        Ok(tracked) => exists|next: (S, Result<Vec<String>, String>)|
+        Ok(r#tracked) => exists|next: (S, Result<Vec<String>, String>)|
             untracked.ensures((observed.0,), next)
-                && checkout_untracked_result(head, tracked, next, flags, out),
+                && checkout_untracked_result(head, r#tracked, next, flags, out),
     }
 }
 
 pub open spec fn checkout_head_result<S, T, U, F>(
-    observed: (S, Result<String, String>), tracked: T, untracked: U, flags: F,
+    observed: (S, Result<String, String>), r#tracked: T, untracked: U, flags: F,
     out: (S, Result<Checkout, String>),
 ) -> bool where T: Fn(S) -> (S, Result<Vec<String>, String>),
     U: Fn(S) -> (S, Result<Vec<String>, String>), F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
     match observed.1 {
         Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
         Ok(head) => exists|next: (S, Result<Vec<String>, String>)|
-            tracked.ensures((observed.0,), next)
+            r#tracked.ensures((observed.0,), next)
                 && checkout_tracked_result(head, next, untracked, flags, out),
     }
 }
 
-/// 按 head、tracked、untracked、index flags 的实际观察顺序组装同一个状态。
+/// 按 head、r#tracked、untracked、index flags 的实际观察顺序组装同一个状态。
 /// 回调可以返回不同 IO 观察；首个错误保留完整原值，不启动之后的阶段。
-pub fn collect_checkout<S, H, T, U, F>(source: S, head: H, tracked: T, untracked: U, flags: F)
+pub fn collect_checkout<S, H, T, U, F>(source: S, head: H, r#tracked: T, untracked: U, flags: F)
     -> (out: (S, Result<Checkout, String>))
     where H: Fn(S) -> (S, Result<String, String>),
         T: Fn(S) -> (S, Result<Vec<String>, String>),
@@ -916,11 +916,11 @@ pub fn collect_checkout<S, H, T, U, F>(source: S, head: H, tracked: T, untracked
         F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>),
     requires
         forall|s: S| #[trigger] head.requires((s,)),
-        forall|s: S| #[trigger] tracked.requires((s,)),
+        forall|s: S| #[trigger] r#tracked.requires((s,)),
         forall|s: S| #[trigger] untracked.requires((s,)),
         forall|s: S| #[trigger] flags.requires((s,)),
     ensures exists|first: (S, Result<String, String>)| head.ensures((source,), first)
-        && checkout_head_result(first, tracked, untracked, flags, out),
+        && checkout_head_result(first, r#tracked, untracked, flags, out),
 {
     let first = head(source);
     let ghost original_head = first;
@@ -929,7 +929,7 @@ pub fn collect_checkout<S, H, T, U, F>(source: S, head: H, tracked: T, untracked
         Err(error) => { return (state, Err(error)); },
         Ok(value) => value,
     };
-    let second = tracked(state);
+    let second = r#tracked(state);
     let ghost original_tracked = second;
     let (state, tracked_result) = second;
     let actual_tracked = match tracked_result {
@@ -950,7 +950,7 @@ pub fn collect_checkout<S, H, T, U, F>(source: S, head: H, tracked: T, untracked
         Err(error) => { return (state, Err(error)); },
         Ok(value) => value,
     };
-    (state, Ok(Checkout { head: actual_head, tracked: actual_tracked,
+    (state, Ok(Checkout { head: actual_head, r#tracked: actual_tracked,
         untracked: actual_untracked, index_flags }))
 }
 
