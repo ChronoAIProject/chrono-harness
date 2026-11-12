@@ -36,11 +36,13 @@ projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。�
 
 宿主 bootstrap 和 release 专属测试已在各自 target 从生产 `main.rs` 编译 CLI，测试计划不再前置各自的生产构建。实际前端启动仍使用原生产构建及其缓存；release staging 测试仍保留 `build.cache`。原未过滤测试、断言、profile、线程和时限保持，完整成本收益未测。
 
-judge-ci、CI 和 projects 专属测试都在各自 target 编译同一份 judge-ci 生产 `main.rs`，通过 Cargo 提供的 CLI 路径交给真实 runner。三项测试计划不再前置 `build.judge-ci`；普通单元不再恢复或保存 judge-ci 生产 target，已无使用方的 `check.judge-ci` 缓存退役。detector 启动和公开发布仍按原登记构建生产 judge-ci，并保留各自缓存。发布验证不再为这三项测试依赖、下载或暂存 judge-ci 资产；各项其余真实资产消费保留。原未过滤测试、断言、profile、线程和时限保留，总成本未测。
+judge-ci、CI 和 projects 专属测试都在各自 target 编译同一份 judge-ci 生产 `main.rs`，通过 Cargo 提供的 CLI 路径交给真实 runner。三项测试计划不再前置 `build.judge-ci`；普通单元不再恢复或保存 judge-ci 生产 target，已无使用方的 `check.judge-ci` 缓存退役。detector 启动和公开发布仍按原登记构建生产 judge-ci，并保留各自缓存。发布验证不再为这三项测试依赖、下载或暂存 judge-ci 资产；各项其余真实资产消费保留。原未过滤测试、断言、线程和时限保留，总成本未测。
 
 workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.rs`，通过 Cargo 提供的路径复制并运行真实 CLI。三个 workflow 测试计划不再前置 `build.judge-workflow`，对应单元也不再恢复生产 target；`inputs` 仍消费生产 CLI，保留该构建及缓存，并负责保存缓存。测试根保留原 profile（含 `strip="debuginfo"`）、测试、断言、分组、线程和时限；完整成本收益未测。
 
-**宿主构建登记与测试安装同时修改：**CI、inputs、registration、filemap、projects、workflow 六个测试项目也从唯一的 runner 生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实检查调用。对应八个单元不再前置 `build.runner`，退役已无使用方的 `check.runner` 缓存及其订阅；detector 启动、正式生产构建和发布打包继续使用各自登记。原未过滤测试、断言、profile、线程、分组、cap=2 和时限保留。验证使用正式生成、canonical check 及两段 PR／落地检查，完整成本收益未测。
+**宿主构建登记与测试安装同时修改：**CI、inputs、registration、filemap、projects、workflow 六个测试项目也从唯一的 runner 生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实检查调用。对应八个单元不再前置 `build.runner`，退役已无使用方的 `check.runner` 缓存及其订阅；detector 启动、正式生产构建和发布打包继续使用各自登记。原未过滤测试、断言、线程、分组、cap=2 和时限保留。验证使用正式生成、canonical check 及两段 PR／落地检查，完整成本收益未测。
+
+**生产与测试构建配置同改：**CI、inputs 及各自专属测试项目的开发构建均显式采用 `opt-level=1`，与 runner 的日常构建一致。Cargo 只采用构建根项目的 profile，不继承依赖项目的 profile，因此四个根分别声明，让真实 CLI 和测试 CLI 中的共享原件编码、解码及状态维护采用相同优化选择。Cargo 的开发配置继续启用调试断言和溢出检查，原未过滤测试、断言、线程和时限保留。实际测试、原生消费和完整编译／运行成本须按候选结果核验，配置本身不证明超时原因或收益。
 
 CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
 
