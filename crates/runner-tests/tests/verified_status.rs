@@ -124,7 +124,7 @@ fn oid_fixture_error(result: Result<String, String>, expected: &str)
 }
 
 proof fn oid_fixture_rejects_nonhex_ascii_prefix(text: &str)
-    requires text@.len() > 0, text@[0] as u32 < 128,
+    requires text@.len() > 0, (text@[0] as u32) < 128,
         !scope_text::oid_byte(text@[0] as u8),
     ensures !scope_text::oid(text.spec_bytes()),
 {
