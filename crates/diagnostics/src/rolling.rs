@@ -14,15 +14,16 @@ pub struct RollingFile {
 }
 
 fn regular(path: &Path) -> io::Result<bool> {
-    match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.is_file() => Ok(true),
-        Ok(_) => Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "log member must be a regular file",
-        )),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
-        Err(error) => Err(error),
-    }
+    crate::verified_rolling::regular_member(
+        fs::symlink_metadata(path).map(|metadata| metadata.is_file()),
+        |error: &io::Error| error.kind() == io::ErrorKind::NotFound,
+        || {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "log member must be a regular file",
+            )
+        },
+    )
 }
 
 impl RollingFile {
@@ -68,15 +69,13 @@ impl RollingFile {
         };
         let _lock = writer.lock()?;
         // Validate all reserved slots before deleting any, including a changed policy's excess.
-        for index in 0..MAX_FILES {
-            regular(&writer.path(index))?;
-        }
-        for index in max_files..MAX_FILES {
-            let path = writer.path(index);
-            if regular(&path)? {
-                fs::remove_file(path)?;
-            }
-        }
+        crate::verified_rolling::adopt_members(
+            (),
+            max_files,
+            |(), index| ((), regular(&writer.path(index))),
+            |(), index| ((), fs::remove_file(writer.path(index))),
+        )
+        .1?;
         Ok(writer)
     }
 
@@ -103,20 +102,14 @@ impl RollingFile {
     }
 
     fn rotate(&self) -> io::Result<()> {
-        for index in 0..self.max_files {
-            regular(&self.path(index))?;
-        }
-        let oldest = self.path(self.max_files - 1);
-        if regular(&oldest)? {
-            fs::remove_file(oldest)?;
-        }
-        for index in (1..self.max_files).rev() {
-            let source = self.path(index - 1);
-            if regular(&source)? {
-                fs::rename(source, self.path(index))?;
-            }
-        }
-        Ok(())
+        crate::verified_rolling::rotate_members(
+            (),
+            self.max_files,
+            |(), index| ((), regular(&self.path(index))),
+            |(), index| ((), fs::remove_file(self.path(index))),
+            |(), source, target| ((), fs::rename(self.path(source), self.path(target))),
+        )
+        .1
     }
 }
 
