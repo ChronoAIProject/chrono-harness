@@ -162,31 +162,39 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         for (index, (id, cache)) in caches.into_iter().enumerate() {
             let restore = &steps[format!("cache_{index}_restore")];
             let reason = restore_status(cache, restore);
-            let mut discard = match restore["outcome"].as_str() {
-                Some("failure") => true,
-                Some("success") if config.recover_unconfirmed_restores => {
-                    let outputs = &restore["outputs"];
-                    if (!outputs.is_null() && !outputs.is_object())
-                        || outputs
-                            .get("cache-matched-key")
-                            .is_some_and(|key| !key.is_null() && !key.is_string())
-                    {
-                        return Err(format!(
-                            "E_CACHE_RECOVERY: malformed restore outputs for {id}"
-                        ));
-                    }
-                    matches!(reason, "miss-or-unavailable" | "incompatible")
+            let outputs = &restore["outputs"];
+            let outputs_is_null_or_object = outputs.is_null() || outputs.is_object();
+            let matched_key_is_null_or_string = outputs
+                .get("cache-matched-key")
+                .is_none_or(|key| key.is_null() || key.is_string());
+            let outcome = restore["outcome"].as_str();
+            let base_action = super::verified_planner::recovery_action(
+                outcome,
+                reason,
+                config.recover_unconfirmed_restores,
+                outputs_is_null_or_object,
+                matched_key_is_null_or_string,
+                None,
+                None,
+                false,
+            );
+            let base_action = match base_action {
+                Ok(action) => action,
+                Err(super::verified_planner::RecoveryDecisionError::MalformedOutputs) => {
+                    return Err(format!(
+                        "E_CACHE_RECOVERY: malformed restore outputs for {id}"
+                    ));
                 }
-                Some("success" | "skipped") => false,
-                _ => {
+                Err(super::verified_planner::RecoveryDecisionError::UnknownOutcome) => {
                     return Err(format!(
                         "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for {id}"
                     ));
                 }
             };
-            report["caches"][id] = json!({"restore":restore,"reason":reason,"status":if discard {"pending"} else {"not-required"},"artifacts":[]});
-            if cache["content_verification"] == super::content::METHOD
-                && matches!(reason, "exact" | "compatible")
+            let content_method = cache["content_verification"].as_str();
+            let mut verification = None;
+            if matches!(base_action, super::verified_planner::RecoveryAction::Keep)
+                && super::verified_planner::content_verification_applies(content_method, reason)
             {
                 let verification = super::content::verify(
                     &root,
@@ -195,17 +203,44 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     cache,
                     restore["outputs"]["cache-matched-key"].as_str().unwrap(),
                 )?;
-                discard = verification["status"] != "matched";
+                verification = Some(verification);
+            }
+            let content_status = verification
+                .as_ref()
+                .and_then(|value| value["status"].as_str());
+            let action = super::verified_planner::recovery_action(
+                outcome,
+                reason,
+                config.recover_unconfirmed_restores,
+                outputs_is_null_or_object,
+                matched_key_is_null_or_string,
+                content_method,
+                content_status,
+                config.caches[id].refresh_sources,
+            );
+            let action = match action {
+                Ok(action) => action,
+                Err(super::verified_planner::RecoveryDecisionError::MalformedOutputs) => {
+                    return Err(format!(
+                        "E_CACHE_RECOVERY: malformed restore outputs for {id}"
+                    ));
+                }
+                Err(super::verified_planner::RecoveryDecisionError::UnknownOutcome) => {
+                    return Err(format!(
+                        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for {id}"
+                    ));
+                }
+            };
+            let discard = matches!(action, super::verified_planner::RecoveryAction::Discard);
+            report["caches"][id] = json!({"restore":restore,"reason":reason,"status":if discard {"pending"} else {"not-required"},"artifacts":[]});
+            if let Some(verification) = verification {
                 report["caches"][id]["verification"] = verification;
                 if discard {
                     report["caches"][id]["status"] = json!("pending");
                 }
             }
             if !discard {
-                if super::verified_planner::refresh_sources(
-                    config.caches[id].refresh_sources,
-                    reason,
-                ) {
+                if matches!(action, super::verified_planner::RecoveryAction::Refresh) {
                     let refresh = super::freshness::prepare(
                         &root,
                         &config.caches[id],
