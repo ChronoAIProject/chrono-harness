@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use verified_graph::valid_types;
 
-pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v3";
+pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v4";
 /// Complete endpoint definitions; zero is absent, several are ambiguous.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
@@ -40,8 +40,6 @@ pub struct RequiredTest {
     pub candidate_present: bool,
     pub candidate_ambiguous: bool,
     pub execution_edges: Vec<Edge>,
-    pub base_cost: Option<Value>,
-    pub candidate_cost: Option<Value>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JudgeSelection {
@@ -95,11 +93,6 @@ pub fn edges(r: &Registrations) -> BTreeSet<Edge> {
         add(e["from"].as_str().unwrap(), e);
     }
     out
-}
-fn cost(r: &Registrations, test: &str) -> Option<Value> {
-    r.filemap()["test_costs"].as_array().unwrap().iter().find(|c| c["test"].as_str() == test.strip_prefix("test:")).map(|c| {
-        json!({"reference": c["cost"], "value": r.filemap()["cost_models"].get(c["cost"].as_str().unwrap())})
-    })
 }
 /// Pure declaration-level impact. External input records are compared, not retained input bytes.
 /// Callers must supply factual, complete DELTA; the judge entrypoint binds it to fixed Git objects.
@@ -443,8 +436,6 @@ fn produce_environment(
                 .filter(|e| e.edge.kind == EdgeKind::TestExecution && e.edge.to == node)
                 .map(|e| e.edge.clone())
                 .collect(),
-            base_cost: cost(base, &node),
-            candidate_cost: cost(candidate, &node),
             node,
         })
         .collect();

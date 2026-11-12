@@ -1,6 +1,6 @@
 # 变更影响的成本报告
 
-`chrono-judge-cost` 读取 registration 解释后的基线与候选登记，以及 FILEMAP 的 `chrono-filemap-impact/v3` 结果，报告受影响内容的登记成本。它不查找依赖、不选择或执行测试，也不测量实际资源消耗。专属测试项目是 `judge-cost-tests`。
+`chrono-judge-cost` 读取 registration 解释后的基线与候选登记，以及 FILEMAP 的 `chrono-filemap-impact/v4` 结果，报告受影响内容的登记成本。它不查找依赖、不选择或执行测试，也不测量实际资源消耗。专属测试项目是 `judge-cost-tests`。
 
 结果放在 `outputs.costs`，格式为 `chrono-costs/v1`。runner 把原值放进报告的 `costs` 字段，并记录来源位置。结果绑定精确的基线提交、候选提交、候选文件树、登记和上下文。FILEMAP 结果缺失、冲突、格式不支持或变更范围不符时会报错，不能用空结果代替成功。
 
