@@ -2593,7 +2593,9 @@
             "test",
             "--locked",
             "--manifest-path",
-            "crates/judge-workflow-tests/Cargo.toml"
+            "crates/judge-workflow-tests/Cargo.toml",
+            "--",
+            "--test-threads=2"
           ]
         },
         "execute_core": {
@@ -2617,6 +2619,7 @@
             "--test",
             "verified_transition",
             "--",
+            "--test-threads=2",
             "--skip",
             "full_units::"
           ]
@@ -2633,6 +2636,7 @@
             "consumer",
             "full_units::",
             "--",
+            "--test-threads=2",
             "--skip",
             "full_units::full_short::"
           ]
@@ -2647,7 +2651,9 @@
             "crates/judge-workflow-tests/Cargo.toml",
             "--test",
             "consumer",
-            "full_units::full_short::"
+            "full_units::full_short::",
+            "--",
+            "--test-threads=2"
           ]
         },
         "update_lockfile": {
