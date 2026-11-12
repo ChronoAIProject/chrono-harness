@@ -1665,6 +1665,24 @@ fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams
     let (code, report, error) = h.auto("use", &["--operation", "use.consumer"]);
     assert_eq!(code, 2, "{error}");
     assert_eq!(report["managed_process"]["exit_code"], 7);
+    let originals = h
+        .root
+        .join(report["managed_process_original"]["path"].as_str().unwrap());
+    let result = json(&fs::read(originals.join("result.json")).unwrap()).unwrap();
+    assert_eq!(
+        result["schema"],
+        "chrono-worktree-managed-process-result/v1"
+    );
+    assert_eq!(result["exit_code"], 7);
+    assert_eq!(result["owned_work_joined"], true);
+    assert_eq!(
+        fs::read(originals.join("stdout")).unwrap(),
+        b"\xffpartial stdout\0\n"
+    );
+    assert_eq!(
+        fs::read(originals.join("stderr")).unwrap(),
+        b"\xfepartial stderr\0\n"
+    );
     assert_eq!(
         report["managed_process"]["stdout_bytes"],
         value!(b"\xffpartial stdout\0\n".as_slice())

@@ -380,6 +380,16 @@ pub fn process_exit_known(exit_code: i32, signal: Option<i32>) -> (known: bool)
     }
 }
 
+/// A direct exit does not settle a launch whose owned work has not joined.
+pub fn process_completion_known(exit_code: i32, signal: Option<i32>, owned_work_joined: bool) -> (known: bool)
+    ensures known == (owned_work_joined && match signal {
+        None => exit_code >= 0,
+        Some(value) => exit_code == -1 && value > 0,
+    }),
+{
+    owned_work_joined && process_exit_known(exit_code, signal)
+}
+
 pub fn settled_pr_command(unreturned: bool, unresolved_create: bool, originals_complete: bool) -> (ok: bool)
     ensures ok == (!unreturned && !unresolved_create && originals_complete),
 { !unreturned && !unresolved_create && originals_complete }

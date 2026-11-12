@@ -8,6 +8,7 @@ autotests = false
 [dependencies]
 shlex = "=2.0.1"
 sha1 = "0.10"
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-harness = { path = "../runner" }

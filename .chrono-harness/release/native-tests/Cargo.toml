@@ -23,6 +23,7 @@ path = "tests/verified_recipe.rs"
 
 [dependencies]
 sha1 = "0.10"
+sha2 = "0.10"
 chrono-host-bootstrap = { path = "../../ci/native" }
 chrono-harness = { path = "../../../crates/runner" }
 chrono-host-release = { path = "../native" }

@@ -10,6 +10,7 @@ shlex = "=2.0.1"
 tempfile = "3"
 serde = { version = "1", features = ["derive"] }
 sha1 = "0.10"
+sha2 = "0.10"
 serde_json = "1"
 chrono-distribution = { path = "../distribution" }
 chrono-harness = { path = "../runner" }

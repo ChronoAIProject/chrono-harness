@@ -650,7 +650,7 @@ impl Reader {
             value!({"message":message,"observation":self.observation()})
         )
     }
-    fn unchanged(&self) -> Result<(), String> {
+    fn unchanged(&self, check_executable_bytes: bool) -> Result<(), String> {
         let b = self.bound.as_ref().ok_or("missing binding")?;
         if let Some(selection) = &b.selection {
             selection.unchanged(&b.root)?;
@@ -666,7 +666,8 @@ impl Reader {
             Some(b.spec.env.get("PATH").map(String::as_str).unwrap_or("")),
         )?;
         if path != Path::new(&b.spec.program)
-            || sha256(&fs::read(&path).map_err(|e| e.to_string())?) != b.binding["sha256"]
+            || (check_executable_bytes
+                && sha256(&fs::read(&path).map_err(|e| e.to_string())?) != b.binding["sha256"])
             || fs::canonicalize(text(&b.binding, "location")?).map_err(|e| e.to_string())?
                 != fs::canonicalize(&path).map_err(|e| e.to_string())?
         {
@@ -699,7 +700,7 @@ impl Reader {
         let key = (oid.to_string(), path.to_string());
         let prior = self.blobs.borrow().get(&key).cloned();
         if let Some(receipt) = prior {
-            self.unchanged().map_err(|e| self.error(&e))?;
+            self.unchanged(true).map_err(|e| self.error(&e))?;
             let processes = self.processes.borrow();
             let bytes = processes[receipt.process].stdout_bytes[receipt.range].to_vec();
             if let Some((metadata_process, object)) = &receipt.object {
@@ -709,7 +710,7 @@ impl Reader {
                 debug_assert!(object.matches(&bytes));
             }
             self.check_root(root)?;
-            self.unchanged().map_err(|e| self.error(&e))?;
+            self.unchanged(true).map_err(|e| self.error(&e))?;
             return Ok(bytes);
         }
         let bytes = self.git(root, &["show", &format!("{oid}:{path}")])?;
@@ -732,10 +733,10 @@ impl Reader {
             self.check_root(root)?;
             let prior = self.trees.borrow().get(oid).copied();
             if let Some(process) = prior {
-                self.unchanged().map_err(|e| self.error(&e))?;
+                self.unchanged(true).map_err(|e| self.error(&e))?;
                 let tree = facts::parse_tree(&self.processes.borrow()[process].stdout_bytes)?;
                 self.check_root(root)?;
-                self.unchanged().map_err(|e| self.error(&e))?;
+                self.unchanged(true).map_err(|e| self.error(&e))?;
                 return Ok(tree);
             }
         }
@@ -838,7 +839,9 @@ impl Reader {
     ) -> Result<Vec<u8>, String> {
         let b = self.bound.as_ref().ok_or("missing binding")?;
         self.check_root(root)?;
-        self.unchanged().map_err(|e| self.error(&e))?;
+        // The same process engine checks the bound executable digest before
+        // spawn. Keep the other guards here without reading that file twice.
+        self.unchanged(false).map_err(|e| self.error(&e))?;
         let mut spec = CommandSpec {
             args,
             ..b.spec.clone()
@@ -856,7 +859,7 @@ impl Reader {
         let bytes = result.stdout_bytes.clone();
         self.processes.borrow_mut().push(result);
         self.check_root(root)?;
-        self.unchanged().map_err(|e| self.error(&e))?;
+        self.unchanged(true).map_err(|e| self.error(&e))?;
         if let Some(failure) = failure {
             return Err(self.error(&failure));
         }
