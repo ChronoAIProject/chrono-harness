@@ -9,6 +9,7 @@ autotests = false
 chrono-diagnostics = { path = "../diagnostics" }
 chrono-judge-ci = { path = "../judge-ci" }
 chrono-harness = { path = "../runner" }
+libc = "0.2"
 serde_json = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 

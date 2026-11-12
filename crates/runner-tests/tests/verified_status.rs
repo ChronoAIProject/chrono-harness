@@ -812,6 +812,17 @@ fn evidence_identity_keeps_exact_prefix_and_nonempty_kind() {
     expect_status_true(!no_kind);
 }
 
+proof fn utf8_encoding_concat(prefix: Seq<char>, suffix: Seq<char>)
+    ensures vstd::utf8::encode_utf8(prefix + suffix)
+        == vstd::utf8::encode_utf8(prefix) + vstd::utf8::encode_utf8(suffix),
+    decreases prefix.len(),
+{
+    if prefix.len() > 0 {
+        assert((prefix + suffix).drop_first() =~= prefix.drop_first() + suffix);
+        utf8_encoding_concat(prefix.drop_first(), suffix);
+    }
+}
+
 proof fn unicode_evidence_prefix_encoding()
     ensures vstd::utf8::encode_utf8(".chrono-harness/state/"@).len() == 22,
         vstd::utf8::encode_utf8(".chrono-harness/state/中文\0"@).len() >= 22,
@@ -820,7 +831,11 @@ proof fn unicode_evidence_prefix_encoding()
 {
     reveal_strlit(".chrono-harness/state/");
     reveal_strlit(".chrono-harness/state/中文\0");
-    reveal_with_fuel(vstd::utf8::encode_utf8, 24);
+    reveal_strlit("中文\0");
+    assert(vstd::string::is_ascii(".chrono-harness/state/"));
+    vstd::string::is_ascii_spec_bytes(".chrono-harness/state/");
+    assert(".chrono-harness/state/中文\0"@ =~= ".chrono-harness/state/"@ + "中文\0"@);
+    utf8_encoding_concat(".chrono-harness/state/"@, "中文\0"@);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

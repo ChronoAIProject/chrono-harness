@@ -778,6 +778,8 @@ pub struct ProcessEvidence<'a> {
     pub stdout: &'a Path,
     pub stderr: &'a Path,
     pub launch: &'a Path,
+    /// Existing directory owner; its caller seals the whole operation after joining.
+    pub publication: Option<&'a retained_artifacts::retention::Publication>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1159,6 +1161,7 @@ fn run_process_inner_with_stdout(
     };
     let root = fs::canonicalize(root)
         .map_err(|e| ProcessFailure::native("E_PROCESS_CWD", format!("process cwd: {e}"), e))?;
+    let publication = evidence.and_then(|paths| paths.publication);
     let evidence_paths = evidence
         .map(|paths| validate_process_evidence_paths(&root, paths))
         .transpose()?;
@@ -1168,6 +1171,7 @@ fn run_process_inner_with_stdout(
             stdout,
             stderr,
             launch,
+            publication,
         });
     let launcher_pid = std::process::id();
     let mut environment = if expected.is_some() {
@@ -1214,6 +1218,13 @@ fn run_process_inner_with_stdout(
         .into_iter()
         .enumerate()
         {
+            if let Some(publication) = paths.publication {
+                let path = publication.write_destination(path, bound as u64)?;
+                enrolled_streams[index] = Some(fs::File::create_new(path).map_err(|e| {
+                    ProcessFailure::native("E_PROCESS_EVIDENCE", format!("stream original: {e}"), e)
+                })?);
+                continue;
+            }
             let relative = path
                 .strip_prefix(&root)
                 .map_err(|e| e.to_string())?
@@ -1270,7 +1281,7 @@ fn run_process_inner_with_stdout(
                 Ok(file) => file,
                 Err(error) => {
                     drop(stdout);
-                    let cleanup = if stream_publications.is_empty() {
+                    let cleanup = if stream_publications.is_empty() && paths.publication.is_none() {
                         cleanup_evidence_path(paths.stdout).err()
                     } else {
                         None
@@ -1300,7 +1311,7 @@ fn run_process_inner_with_stdout(
                 drop(stderr_original);
                 let cleanup = evidence
                     .as_ref()
-                    .filter(|_| stream_publications.is_empty())
+                    .filter(|paths| stream_publications.is_empty() && paths.publication.is_none())
                     .map(|paths| {
                         [paths.stdout, paths.stderr]
                             .into_iter()
@@ -1379,6 +1390,10 @@ fn run_process_inner_with_stdout(
             let published = (|| -> Result<(), Failure> {
                 let relative = paths.launch.strip_prefix(&root).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?.to_str().ok_or_else(||Failure::new("E_PROCESS_EVIDENCE","launch path UTF-8"))?;
                 let raw = serde_json::to_vec(&record).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?;
+                if let Some(publication) = paths.publication {
+                    publication.write_file(paths.launch, &raw).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e))?;
+                    return Ok(());
+                }
                 if retained_artifacts::retention::publish_pending_original(&root, "check-original", relative, &raw,
                     serde_json::json!({"kind":"process-launch","child_pid":pid,"outcome":"not-established"})).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e))? { return Ok(()); }
                 let mut original = tempfile::NamedTempFile::new_in(
@@ -1666,6 +1681,11 @@ fn run_process_inner_with_stdout(
             let cleanup = Failure::new(
                 "E_PROCESS_OWNERSHIP_CLEANUP",
                 "nested owner did not acknowledge joined completion",
+            )
+            .at("child_joined", status.is_some())
+            .at(
+                "ownership_after_cleanup",
+                child.ownership.monitor_observation(),
             );
             failure_detail = Some(match failure_detail.take() {
                 Some(original) => original.with_related("ownership_cleanup", cleanup),
@@ -2323,6 +2343,7 @@ fn execute_check(
                 stdout: &stdout_path,
                 stderr: &stderr_path,
                 launch: &launch_path,
+                publication: None,
             };
             run_process_observed_retained(
                 &root,
@@ -2353,6 +2374,7 @@ fn execute_check(
                 stdout,
                 stderr,
                 launch,
+                publication: None,
             });
         run_process_inner(
             &root,
