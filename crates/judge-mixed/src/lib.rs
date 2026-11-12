@@ -122,7 +122,7 @@ pub fn produce(
 }
 /// Known interpreted registries for declaration-only consumers. Other named JSON
 /// must be supplied explicitly; absence is an error when a pattern consumes it.
-pub fn registry_documents(r: &Registrations, _config_path: &str) -> Documents {
+pub fn registry_documents(r: &Registrations) -> Documents {
     let mut out = BTreeMap::from([(r.effective_config_path().into(), r.config().clone())]);
     out.insert(r.entry_path().into(), r.entry().clone());
     for (key, value) in [

@@ -73,7 +73,6 @@ fn normalize(v: &Value, key: &str) -> Value {
 }
 pub fn inventory(
     r: &Registrations,
-    _config_path: &str,
     nodes: &BTreeMap<String, NodeView<'_>>,
     effective_environment: Option<&BTreeMap<String, String>>,
 ) -> BTreeMap<String, Record> {

@@ -94,8 +94,7 @@ fn language_only_delta_selects_the_pair_and_unrelated_delta_does_not_rejudge_it(
         new.get_mut(PROJECTS).unwrap()[collection][1]["language"] = json!("python");
         let before = load(&old);
         let after = load(&new);
-        let (impact, findings) =
-            chrono_judge_filemap::produce(&before, &after, CONFIG, &[delta(PROJECTS)]);
+        let (impact, findings) = chrono_judge_filemap::produce(&before, &after, &[delta(PROJECTS)]);
         assert!(findings.is_empty(), "{findings:?}");
         assert_eq!(
             impact
@@ -112,7 +111,7 @@ fn language_only_delta_selects_the_pair_and_unrelated_delta_does_not_rejudge_it(
                 .starts_with("E_TEST_LANGUAGE:")
         );
         let (unrelated, findings) =
-            chrono_judge_filemap::produce(&after, &after, CONFIG, &[delta("doc.txt")]);
+            chrono_judge_filemap::produce(&after, &after, &[delta("doc.txt")]);
         assert!(findings.is_empty(), "{findings:?}");
         assert!(unrelated.required_tests.is_empty());
         pairs(
