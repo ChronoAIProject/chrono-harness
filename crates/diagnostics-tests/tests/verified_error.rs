@@ -105,4 +105,40 @@ fn append_keeps_source_duplicates_order_and_entire_error_values() {
     expect_cause(&related[2].1, u64::MAX);
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn new_error_node_keeps_each_text_field_and_the_entire_context() {
+    let node = policy::ErrorNode::new(
+        "owner::Native λ".to_string(),
+        "E_INPUT\0IDENTITY".to_string(),
+        "original failure\n终止".to_string(),
+        vec![0u8, 255u8, 10u8],
+    );
+    expect(node.error_type == "owner::Native λ".to_string());
+    expect(node.code == "E_INPUT\0IDENTITY".to_string());
+    expect(node.message == "original failure\n终止".to_string());
+    expect(node.context.len() == 3);
+    expect(node.context[0] == 0);
+    expect(node.context[1] == 255);
+    expect(node.context[2] == 10);
+    expect(node.source.is_none());
+    expect(node.native_code.is_none());
+    expect(node.traceback.is_none());
+    expect(node.related.is_empty());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn new_error_node_keeps_empty_text_and_context_without_inventing_a_cause() {
+    let node = policy::ErrorNode::new(
+        "".to_string(), "".to_string(), "".to_string(), Vec::<u8>::new(),
+    );
+    expect(node.error_type == "".to_string());
+    expect(node.code == "".to_string());
+    expect(node.message == "".to_string());
+    expect(node.context.is_empty());
+    expect(node.source.is_none());
+    expect(node.native_code.is_none());
+    expect(node.traceback.is_none());
+    expect(node.related.is_empty());
+}
+
 }
