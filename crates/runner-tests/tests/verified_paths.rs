@@ -397,6 +397,7 @@ proof fn parent_fixture_step<M>(before: (u8, Vec<u8>), after: (u8, Vec<u8>), mod
     if parent_fixture_kind(mode, built@.len()) == 3 {
         let error = observation->Err_0;
         assert(error@ == "io: denied é\nend"@);
+        assert(error@.len() != "missing: é\0end"@.len());
         assert(error@ != "missing: é\0end"@);
         assert(parent_fixture_missing.ensures((&error,), true));
         assert(false);
