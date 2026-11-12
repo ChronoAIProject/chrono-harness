@@ -372,38 +372,37 @@ pub fn prepare_publication(root: &Path, relative: &str) -> Result<PathBuf, Strin
     relative_path(relative)?;
     let components: Vec<_> = Path::new(relative).components().collect();
     let target = root.join(relative);
-    let mut current = root.to_path_buf();
-    for (index, component) in components.iter().enumerate() {
-        current.push(component);
-        let final_component = index + 1 == components.len();
-        match fs::symlink_metadata(&current) {
-            Ok(metadata) if metadata.file_type().is_symlink() => {
-                return Err(format!(
-                    "symlink path is not allowed: {}",
-                    current.display()
-                ));
-            }
-            Ok(metadata) if !final_component && !metadata.is_dir() => {
-                return Err(format!(
-                    "publication parent is not a directory: {}",
-                    current.display()
-                ));
-            }
-            Ok(metadata) if final_component && !metadata.is_file() => {
-                return Err(format!(
-                    "publication destination is not a file: {}",
-                    current.display()
-                ));
-            }
-            Ok(_) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
-            Err(error) => return Err(error.to_string()),
-        }
-    }
-    if let Some(parent) = target.parent() {
-        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-    }
-    no_symlink_parents(root, relative)
+    verified_paths::prepare_publication(
+        &components,
+        root.to_path_buf(),
+        &target,
+        |mut path: PathBuf, component: std::path::Component<'_>| {
+            path.push(component);
+            path
+        },
+        |path: PathBuf| {
+            let observation =
+                fs::symlink_metadata(&path).map(|metadata| verified_paths::PublicationMetadata {
+                    symlink: metadata.file_type().is_symlink(),
+                    directory: metadata.is_dir(),
+                    file: metadata.is_file(),
+                });
+            (path, observation)
+        },
+        |error: &std::io::Error| error.kind() == std::io::ErrorKind::NotFound,
+        |target: &PathBuf| target.parent(),
+        |parent: &Path| fs::create_dir_all(parent),
+        || no_symlink_parents(root, relative),
+    )
+    .map_err(|failure| {
+        failure.render(
+            |path: PathBuf| format!("symlink path is not allowed: {}", path.display()),
+            |path: PathBuf| format!("publication parent is not a directory: {}", path.display()),
+            |path: PathBuf| format!("publication destination is not a file: {}", path.display()),
+            |error: std::io::Error| error.to_string(),
+            |error: String| error,
+        )
+    })
 }
 
 fn invocation_template(template: &[String], binding: &Value) -> Vec<String> {
