@@ -27,6 +27,26 @@ pub mod scopes;
 
 verus! {
 
+/// 无绑定时不查询；有绑定时只向原缓存接口转交同一个完整键。
+pub fn can_reuse_oid<S, Q>(bound: bool, cache: S, oid: &str, contains: Q)
+    -> (out: (S, bool))
+    where Q: Fn(S, &str) -> (S, bool),
+    requires bound ==> contains.requires((cache, oid)),
+    ensures if bound { contains.ensures((cache, oid), out) } else { out == (cache, false) },
+{
+    if bound { contains(cache, oid) } else { (cache, false) }
+}
+
+/// 只有绑定读取器才登记已验证的原键；无绑定时保持原缓存状态。
+pub fn record_verified_oid<S, I>(bound: bool, cache: S, oid: &str, insert: I)
+    -> (out: S)
+    where I: Fn(S, &str) -> S,
+    requires bound ==> insert.requires((cache, oid)),
+    ensures if bound { insert.ensures((cache, oid), out) } else { out == cache },
+{
+    if bound { insert(cache, oid) } else { cache }
+}
+
 /// 一次固定读取的完整原字节、解析值及入口／有效路径；JSON 值由实际使用方提供。
 pub struct RegistrySnapshot<V> {
     pub bytes: BTreeMap<String, Vec<u8>>,
