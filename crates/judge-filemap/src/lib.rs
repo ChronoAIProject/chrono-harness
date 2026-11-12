@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use verified_graph::valid_types;
 
-pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v4";
+pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v5";
 /// Complete endpoint definitions; zero is absent, several are ambiguous.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
@@ -38,13 +38,11 @@ pub struct NodeAmbiguity {
 pub struct RequiredTest {
     pub node: String,
     pub candidate_present: bool,
-    pub candidate_ambiguous: bool,
     pub execution_edges: Vec<Edge>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JudgeSelection {
     pub node: String,
-    pub every_delta: bool,
     pub triggers: Vec<Edge>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -429,7 +427,6 @@ fn produce_environment(
         .into_iter()
         .map(|node| RequiredTest {
             candidate_present: bn.get(&node).is_some_and(|n| n.kind == NodeKind::Test),
-            candidate_ambiguous: bn.get(&node).is_some_and(|n| n.definitions.len() > 1),
             execution_edges: closure
                 .traversed
                 .iter()
@@ -446,7 +443,6 @@ fn produce_environment(
         .map(|j| {
             let node = format!("judge:{}", j["id"].as_str().unwrap());
             JudgeSelection {
-                every_delta: j["selector"] == "every-delta",
                 triggers: closure
                     .traversed
                     .iter()
