@@ -77,6 +77,7 @@ dependencies = [
  "time",
  "tracing",
  "tracing-subscriber",
+ "verus_builtin_macros",
 ]
 
 [[package]]

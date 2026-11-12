@@ -183,6 +183,18 @@
       "root": "crates/runner",
       "test_project": "runner-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.runner",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/runner/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.runner",
           "tool": "bootstrap-native",
@@ -865,6 +877,18 @@
       "root": "crates/judge-ci",
       "test_project": "judge-ci-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-ci",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-ci/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.judge-ci",
           "tool": "cargo",
@@ -937,6 +961,18 @@
       "root": "crates/judge-ci-tests",
       "tests_for": "judge-ci",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-ci-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.judge-ci-tests",
           "tool": "cargo",
@@ -999,6 +1035,18 @@
       "root": "crates/ci",
       "test_project": "ci-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.ci",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/ci/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.ci",
           "tool": "cargo",
@@ -1181,6 +1229,18 @@
       "root": "crates/ci-tests",
       "tests_for": "ci",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.ci-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.ci-tests",
           "tool": "cargo",
@@ -1265,6 +1325,18 @@
       "root": "crates/judge-registration",
       "test_project": "judge-registration-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-registration",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-registration/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.judge-registration",
           "tool": "cargo",
@@ -1415,6 +1487,18 @@
       "root": "crates/judge-registration-tests",
       "tests_for": "judge-registration",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-registration-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-registration-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.judge-registration-tests",
           "tool": "cargo",
@@ -1565,6 +1649,18 @@
       "root": "crates/judge-filemap",
       "test_project": "judge-filemap-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-filemap",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-filemap/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.judge-filemap",
           "tool": "cargo",
@@ -1701,6 +1797,18 @@
       "root": "crates/judge-routes",
       "test_project": "judge-routes-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-routes",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-routes/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.judge-routes",
           "tool": "cargo",
@@ -1741,6 +1849,18 @@
       "root": "crates/judge-routes-tests",
       "tests_for": "judge-routes",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-routes-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-routes-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.judge-routes-tests",
           "tool": "cargo",
@@ -1781,6 +1901,18 @@
       "root": "crates/judge-projects",
       "test_project": "judge-projects-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-projects",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-projects/Cargo.toml"
+          ]
+        },
         "verify_languages": {
           "operation": "verify.project-languages",
           "tool": "verus",
@@ -1960,6 +2092,18 @@
       "lockfile": "crates/judge-cost/Cargo.lock",
       "root": "crates/judge-cost",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-cost",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-cost/Cargo.toml"
+          ]
+        },
         "verify_cost": {
           "operation": "verify.judge-cost",
           "tool": "verus",
@@ -2022,6 +2166,18 @@
       "lockfile": "crates/judge-cost-tests/Cargo.lock",
       "root": "crates/judge-cost-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-cost-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-cost-tests/Cargo.toml"
+          ]
+        },
         "verify_cost": {
           "operation": "verify.judge-cost-tests",
           "tool": "verus",
@@ -2075,6 +2231,18 @@
       "lockfile": "crates/judge-mixed/Cargo.lock",
       "root": "crates/judge-mixed",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-mixed",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-mixed/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.judge-mixed",
           "tool": "cargo",
@@ -2115,6 +2283,18 @@
       "lockfile": "crates/judge-mixed-tests/Cargo.lock",
       "root": "crates/judge-mixed-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-mixed-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-mixed-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.judge-mixed-tests",
           "tool": "cargo",
@@ -2146,6 +2326,18 @@
       "lockfile": "crates/judge-workflow/Cargo.lock",
       "root": "crates/judge-workflow",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.judge-workflow",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/judge-workflow/Cargo.toml"
+          ]
+        },
         "verify_branch": {
           "operation": "verify.judge-workflow",
           "tool": "verus",
@@ -2517,6 +2709,18 @@
       "lockfile": "crates/inputs/Cargo.lock",
       "root": "crates/inputs",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.inputs",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/inputs/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.inputs",
           "tool": "cargo",
@@ -2600,6 +2804,18 @@
       "lockfile": "crates/distribution/Cargo.lock",
       "root": "crates/distribution",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.distribution",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/distribution/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.distribution",
           "tool": "cargo",
@@ -2631,6 +2847,18 @@
       "lockfile": "crates/distribution-tests/Cargo.lock",
       "root": "crates/distribution-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.distribution-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/distribution-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.distribution-tests",
           "tool": "cargo",
@@ -2662,6 +2890,18 @@
       "lockfile": "crates/worktree/Cargo.lock",
       "root": "crates/worktree",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.worktree",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.worktree",
           "tool": "cargo",
@@ -2939,6 +3179,40 @@
       "lockfile": "crates/diagnostics/Cargo.lock",
       "root": "crates/diagnostics",
       "actions": {
+        "verify_runtime": {
+          "operation": "verify.diagnostics-runtime",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.diagnostics-runtime.rlib,dep-info=.chrono-harness/state/verify.diagnostics-runtime.rlib.d",
+            "crates/diagnostics/src/verified_runtime.rs",
+            "-o",
+            ".chrono-harness/state/verify.diagnostics-runtime.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "update_lockfile": {
+          "operation": "lock.diagnostics",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/diagnostics/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.diagnostics",
           "tool": "cargo",
@@ -2970,6 +3244,40 @@
       "lockfile": "crates/diagnostics-tests/Cargo.lock",
       "root": "crates/diagnostics-tests",
       "actions": {
+        "verify_runtime": {
+          "operation": "verify.diagnostics-runtime-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.diagnostics-runtime-tests.rlib,dep-info=.chrono-harness/state/verify.diagnostics-runtime-tests.rlib.d",
+            "crates/diagnostics-tests/tests/verified_runtime.rs",
+            "-o",
+            ".chrono-harness/state/verify.diagnostics-runtime-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "update_lockfile": {
+          "operation": "lock.diagnostics-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/diagnostics-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.diagnostics-tests",
           "tool": "cargo",
@@ -3001,6 +3309,18 @@
       "lockfile": "crates/cache/Cargo.lock",
       "root": "crates/cache",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.cache",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/cache/Cargo.toml"
+          ]
+        },
         "build": {
           "operation": "build.cache",
           "tool": "cargo",
@@ -3054,6 +3374,18 @@
       "lockfile": "crates/cache-tests/Cargo.lock",
       "root": "crates/cache-tests",
       "actions": {
+        "update_lockfile": {
+          "operation": "lock.cache-tests",
+          "tool": "cargo",
+          "argv": [
+            "update",
+            "--offline",
+            "--package",
+            "chrono-diagnostics",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
+        },
         "format_check": {
           "operation": "fmt.cache-tests",
           "tool": "cargo",
@@ -3318,7 +3650,9 @@
           "operation": "lockfile.pr",
           "tool": "cargo",
           "argv": [
-            "generate-lockfile",
+            "update",
+            "--offline",
+            "--workspace",
             "--manifest-path",
             "crates/pr/Cargo.toml"
           ]
@@ -3369,7 +3703,9 @@
           "operation": "lockfile.pr-tests",
           "tool": "cargo",
           "argv": [
-            "generate-lockfile",
+            "update",
+            "--offline",
+            "--workspace",
             "--manifest-path",
             "crates/pr-tests/Cargo.toml"
           ]
