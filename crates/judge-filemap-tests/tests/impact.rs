@@ -1340,7 +1340,12 @@ fn retained_effective_environment_api_preserves_old_edges_and_rejects_unknown_fa
         chrono_judge_filemap::produce_with_inputs(&load(&a), &load(&b), &[], &evidence).unwrap();
     assert!(findings.is_empty());
     assert_eq!(impact.tests, vec!["test:t"]);
-    assert!(impact.seeds.contains(&"environment:MODE".into()));
+    assert!(
+        impact
+            .seed_causes
+            .iter()
+            .any(|s| s.node == "environment:MODE")
+    );
     evidence["endpoints"]["candidate"]["environment"]["UNKNOWN"] = json!("unrepresented");
     evidence["identity"] = json!(chrono_harness::wire::digest(&evidence["endpoints"]).unwrap());
     assert!(
@@ -1365,8 +1370,8 @@ fn artifact_owner_changes_and_removal_preserve_explicit_endpoint_consumers() {
     let (impact, findings) = run(&a, &b, &[delta(CONFIG)]);
     assert!(findings.is_empty());
     assert_eq!(tests(&impact), ["test:st", "test:t"]);
-    assert!(impact.seeds.contains(&"project:p".into()));
-    assert!(impact.seeds.contains(&"script:s".into()));
+    assert!(impact.seed_causes.iter().any(|s| s.node == "project:p"));
+    assert!(impact.seed_causes.iter().any(|s| s.node == "script:s"));
     let mut removed = a.clone();
     removed.get_mut(CONFIG).unwrap()["artifacts"]
         .as_array_mut()
