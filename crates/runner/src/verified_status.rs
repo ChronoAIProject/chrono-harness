@@ -133,7 +133,16 @@ pub fn verify_oid<S, C, T, R>(state: S, oid: &str, read_commit: C, read_tree: T,
     ensures verify_oid_relation(state, oid, out, read_commit, read_tree, record),
 {
     match identifiers::full_oid(oid) {
-        Err(error) => { return (state, Err(error)); },
+        Err(error) => {
+            assert(!identifiers::oid(oid.spec_bytes()));
+            assert(oid.spec_bytes() == vstd::utf8::encode_utf8(oid@));
+            assert(error@ == "expected full nonzero lowercase commit OID"@);
+            let out = (state, Err(error));
+            assert(oid_read_result(out) == (state,
+                Err::<Seq<char>, Seq<char>>("expected full nonzero lowercase commit OID"@)));
+            assert(verify_oid_relation(state, oid, out, read_commit, read_tree, record));
+            return out;
+        },
         Ok(()) => {},
     }
     let first = read_commit(state, oid);
@@ -817,6 +826,267 @@ impl PartialEq for IndexFlag {
     }
 }
 impl Eq for IndexFlag {}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct Checkout {
+    pub head: String,
+    pub r#tracked: Vec<String>,
+    pub untracked: Vec<String>,
+    pub index_flags: Vec<IndexFlag>,
+}
+
+impl Clone for Checkout {
+    fn clone(&self) -> (out: Self)
+        ensures out.head == self.head, out.r#tracked@ == self.r#tracked@,
+            out.untracked@ == self.untracked@, out.index_flags@ == self.index_flags@,
+    {
+        Self { head: self.head.clone(), r#tracked: self.r#tracked.clone(),
+            untracked: self.untracked.clone(), index_flags: self.index_flags.clone() }
+    }
+}
+
+pub open spec fn checkout_texts_equal(a: Seq<String>, b: Seq<String>) -> bool {
+    a.len() == b.len() && (forall|i: int| 0 <= i < a.len() ==> (#[trigger] a[i])@ == b[i]@)
+}
+
+fn equal_checkout_texts(a: &[String], b: &[String]) -> (equal: bool)
+    ensures equal == checkout_texts_equal(a@, b@),
+{
+    if a.len() != b.len() { return false; }
+    let mut i = 0;
+    while i < a.len()
+        invariant a.len() == b.len(), 0 <= i <= a.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] a[j])@ == b[j]@,
+        decreases a.len() - i,
+    {
+        if !identifiers::equal_text(a[i].as_str(), b[i].as_str()) { return false; }
+        i += 1;
+    }
+    true
+}
+
+pub open spec fn checkout_equal(a: &Checkout, b: &Checkout) -> bool {
+    a.head@ == b.head@ && checkout_texts_equal(a.r#tracked@, b.r#tracked@)
+        && checkout_texts_equal(a.untracked@, b.untracked@)
+        && a.index_flags.len() == b.index_flags.len()
+        && (forall|i: int| 0 <= i < a.index_flags.len() ==>
+            #[trigger] index_flags_equal(&a.index_flags[i], &b.index_flags[i]))
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::cmp::PartialEqSpecImpl for Checkout {
+    open spec fn obeys_eq_spec() -> bool { true }
+    open spec fn eq_spec(&self, other: &Self) -> bool { checkout_equal(self, other) }
+}
+
+impl PartialEq for Checkout {
+    fn eq(&self, other: &Self) -> (equal: bool)
+        ensures equal == checkout_equal(self, other),
+    {
+        identifiers::equal_text(self.head.as_str(), other.head.as_str())
+            && equal_checkout_texts(&self.r#tracked, &other.r#tracked)
+            && equal_checkout_texts(&self.untracked, &other.untracked)
+            && self.index_flags == other.index_flags
+    }
+
+    fn ne(&self, other: &Self) -> (different: bool)
+        ensures different == !checkout_equal(self, other),
+    {
+        !self.eq(other)
+    }
+}
+impl Eq for Checkout {}
+
+pub open spec fn checkout_flags_result<S>(
+    head: String, r#tracked: Vec<String>, untracked: Vec<String>,
+    observed: (S, Result<Vec<IndexFlag>, String>), out: (S, Result<Checkout, String>),
+) -> bool {
+    out.0 == observed.0 && match observed.1 {
+        Err(error) => out.1 == Err::<Checkout, String>(error),
+        Ok(index_flags) => out.1 == Ok::<Checkout, String>(Checkout { head, r#tracked, untracked, index_flags }),
+    }
+}
+
+pub open spec fn checkout_untracked_result<S, F>(
+    head: String, r#tracked: Vec<String>, observed: (S, Result<Vec<String>, String>),
+    flags: F, out: (S, Result<Checkout, String>),
+) -> bool where F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
+    match observed.1 {
+        Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
+        Ok(untracked) => exists|last: (S, Result<Vec<IndexFlag>, String>)|
+            flags.ensures((observed.0,), last)
+                && checkout_flags_result(head, r#tracked, untracked, last, out),
+    }
+}
+
+pub open spec fn checkout_tracked_result<S, U, F>(
+    head: String, observed: (S, Result<Vec<String>, String>), untracked: U, flags: F,
+    out: (S, Result<Checkout, String>),
+) -> bool where U: Fn(S) -> (S, Result<Vec<String>, String>),
+    F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
+    match observed.1 {
+        Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
+        Ok(r#tracked) => exists|next: (S, Result<Vec<String>, String>)|
+            untracked.ensures((observed.0,), next)
+                && checkout_untracked_result(head, r#tracked, next, flags, out),
+    }
+}
+
+pub open spec fn checkout_head_result<S, T, U, F>(
+    observed: (S, Result<String, String>), r#tracked: T, untracked: U, flags: F,
+    out: (S, Result<Checkout, String>),
+) -> bool where T: Fn(S) -> (S, Result<Vec<String>, String>),
+    U: Fn(S) -> (S, Result<Vec<String>, String>), F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>) {
+    match observed.1 {
+        Err(error) => out == (observed.0, Err::<Checkout, String>(error)),
+        Ok(head) => exists|next: (S, Result<Vec<String>, String>)|
+            r#tracked.ensures((observed.0,), next)
+                && checkout_tracked_result(head, next, untracked, flags, out),
+    }
+}
+
+fn finish_checkout_flags<S>(head: String, changed: Vec<String>, untracked: Vec<String>,
+    observed: (S, Result<Vec<IndexFlag>, String>)) -> (out: (S, Result<Checkout, String>))
+    ensures checkout_flags_result(head, changed, untracked, observed, out),
+{
+    let (state, result) = observed;
+    match result {
+        Err(error) => (state, Err(error)),
+        Ok(index_flags) => (state, Ok(Checkout { head, r#tracked: changed, untracked, index_flags })),
+    }
+}
+
+fn finish_checkout_untracked<S, F>(head: String, changed: Vec<String>,
+    observed: (S, Result<Vec<String>, String>), flags: F) -> (out: (S, Result<Checkout, String>))
+    where F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>),
+    requires forall|s: S| #[trigger] flags.requires((s,)),
+    ensures checkout_untracked_result(head, changed, observed, flags, out),
+{
+    let (state, result) = observed;
+    let untracked = match result { Err(error) => { return (state, Err(error)); }, Ok(value) => value };
+    let last = flags(state);
+    finish_checkout_flags(head, changed, untracked, last)
+}
+
+fn finish_checkout_tracked<S, U, F>(head: String,
+    observed: (S, Result<Vec<String>, String>), untracked: U, flags: F)
+    -> (out: (S, Result<Checkout, String>))
+    where U: Fn(S) -> (S, Result<Vec<String>, String>), F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>),
+    requires forall|s: S| #[trigger] untracked.requires((s,)),
+        forall|s: S| #[trigger] flags.requires((s,)),
+    ensures checkout_tracked_result(head, observed, untracked, flags, out),
+{
+    let (state, result) = observed;
+    let changed = match result { Err(error) => { return (state, Err(error)); }, Ok(value) => value };
+    let next = untracked(state);
+    finish_checkout_untracked(head, changed, next, flags)
+}
+
+fn finish_checkout_head<S, T, U, F>(observed: (S, Result<String, String>), changed: T,
+    untracked: U, flags: F) -> (out: (S, Result<Checkout, String>))
+    where T: Fn(S) -> (S, Result<Vec<String>, String>),
+        U: Fn(S) -> (S, Result<Vec<String>, String>), F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>),
+    requires forall|s: S| #[trigger] changed.requires((s,)),
+        forall|s: S| #[trigger] untracked.requires((s,)),
+        forall|s: S| #[trigger] flags.requires((s,)),
+    ensures checkout_head_result(observed, changed, untracked, flags, out),
+{
+    let (state, result) = observed;
+    let head = match result { Err(error) => { return (state, Err(error)); }, Ok(value) => value };
+    let next = changed(state);
+    finish_checkout_tracked(head, next, untracked, flags)
+}
+
+/// 按 head、tracked、untracked、index flags 的实际观察顺序组装同一个状态。
+/// 回调可以返回不同 IO 观察；首个错误保留完整原值，不启动之后的阶段。
+pub fn collect_checkout<S, H, T, U, F>(source: S, head: H, r#tracked: T, untracked: U, flags: F)
+    -> (out: (S, Result<Checkout, String>))
+    where H: Fn(S) -> (S, Result<String, String>),
+        T: Fn(S) -> (S, Result<Vec<String>, String>),
+        U: Fn(S) -> (S, Result<Vec<String>, String>),
+        F: Fn(S) -> (S, Result<Vec<IndexFlag>, String>),
+    requires
+        forall|s: S| #[trigger] head.requires((s,)),
+        forall|s: S| #[trigger] r#tracked.requires((s,)),
+        forall|s: S| #[trigger] untracked.requires((s,)),
+        forall|s: S| #[trigger] flags.requires((s,)),
+    ensures exists|first: (S, Result<String, String>)| head.ensures((source,), first)
+        && checkout_head_result(first, r#tracked, untracked, flags, out),
+{
+    let first = head(source);
+    finish_checkout_head(first, r#tracked, untracked, flags)
+}
+
+pub open spec fn checkout_paths_merged(out: Seq<String>, first: Seq<String>, second: Seq<String>) -> bool {
+    (forall|path: Seq<char>| #[trigger] checkout_path_prefix(out, out.len() as int, path)
+        == checkout_path_prefix(first + second, (first.len() + second.len()) as int, path))
+        && (forall|i: int, j: int| 0 <= i < j < out.len()
+            ==> identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] out[i])@),
+                vstd::utf8::encode_utf8((#[trigger] out[j])@)))
+        && out.len() <= first.len() + second.len()
+}
+
+pub open spec fn checkout_ignored_result<S>(
+    first: Vec<String>, observed: (S, Result<Vec<String>, String>),
+    out: (S, Result<Vec<String>, String>),
+) -> bool {
+    out.0 == observed.0 && match observed.1 {
+        Err(error) => out.1 == Err::<Vec<String>, String>(error),
+        Ok(second) => match out.1 {
+            Err(_) => false,
+            Ok(paths) => checkout_paths_merged(paths@, first@, second@),
+        },
+    }
+}
+
+pub open spec fn checkout_inventory_result<S, I>(observed: (S, Result<Vec<String>, String>),
+    ignored: I, out: (S, Result<Vec<String>, String>)) -> bool
+    where I: Fn(S) -> (S, Result<Vec<String>, String>) {
+    match observed.1 {
+        Err(error) => out == (observed.0, Err::<Vec<String>, String>(error)),
+        Ok(paths) => exists|second: (S, Result<Vec<String>, String>)|
+            ignored.ensures((observed.0,), second) && checkout_ignored_result(paths, second, out),
+    }
+}
+
+fn finish_checkout_ignored<S>(paths: Vec<String>, observed: (S, Result<Vec<String>, String>))
+    -> (out: (S, Result<Vec<String>, String>))
+    ensures checkout_ignored_result(paths, observed, out),
+{
+    let (state, result) = observed;
+    match result {
+        Err(error) => (state, Err(error)),
+        Ok(ignored) => (state, Ok(normalize_checkout_paths(paths, ignored))),
+    }
+}
+
+fn finish_checkout_inventory<S, I>(observed: (S, Result<Vec<String>, String>), ignored: I)
+    -> (out: (S, Result<Vec<String>, String>))
+    where I: Fn(S) -> (S, Result<Vec<String>, String>),
+    requires forall|s: S| #[trigger] ignored.requires((s,)),
+    ensures checkout_inventory_result(observed, ignored, out),
+{
+    let (state, result) = observed;
+    let paths = match result { Err(error) => { return (state, Err(error)); }, Ok(value) => value };
+    let second = ignored(state);
+    finish_checkout_ignored(paths, second)
+}
+
+/// 普通 checkout 先读取未跟踪库存，再读取 ignored 库存，成功后复用原全文合并。
+pub fn collect_checkout_untracked<S, U, I>(source: S, untracked: U, ignored: I)
+    -> (out: (S, Result<Vec<String>, String>))
+    where U: Fn(S) -> (S, Result<Vec<String>, String>),
+        I: Fn(S) -> (S, Result<Vec<String>, String>),
+    requires
+        forall|s: S| #[trigger] untracked.requires((s,)),
+        forall|s: S| #[trigger] ignored.requires((s,)),
+    ensures exists|first: (S, Result<Vec<String>, String>)| untracked.ensures((source,), first)
+        && checkout_inventory_result(first, ignored, out),
+{
+    let first = untracked(source);
+    finish_checkout_inventory(first, ignored)
+}
 
 pub enum UnsupportedIndexFlag {
     AssumeUnchanged,

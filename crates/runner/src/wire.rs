@@ -15,7 +15,9 @@ pub fn digest<T: Serialize>(value: &T) -> Result<String, String> {
     Ok(sha256(&canonical(value)?))
 }
 pub use crate::verified_identifiers::valid_digest_text as is_digest;
-pub use crate::verified_status::{Delta, Finding, IndexFlag, WireStatus as Status, append_finding};
+pub use crate::verified_status::{
+    Checkout, Delta, Finding, IndexFlag, WireStatus as Status, append_finding,
+};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Evidence {
@@ -53,14 +55,6 @@ pub struct Registries {
 pub struct Context {
     pub path: PathBuf,
     pub sha256: String,
-}
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Checkout {
-    pub head: String,
-    pub tracked: Vec<String>,
-    pub untracked: Vec<String>,
-    pub index_flags: Vec<IndexFlag>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
