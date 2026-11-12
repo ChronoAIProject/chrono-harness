@@ -15,7 +15,9 @@ const STATE: &str = ".chrono-harness/state";
 
 fn mark(name: &str, bytes: impl AsRef<[u8]>) {
     fs::create_dir_all(STATE).unwrap();
-    fs::write(Path::new(STATE).join(name), bytes).unwrap();
+    let pending = Path::new(STATE).join(format!(".{name}-{}.tmp", std::process::id()));
+    fs::write(&pending, bytes).unwrap();
+    fs::rename(pending, Path::new(STATE).join(name)).unwrap();
 }
 
 fn wait(name: &str) {
@@ -138,12 +140,7 @@ fn main() -> ExitCode {
             print!("completed");
         }
         "unknown-use" => {
-            mark("ready.tmp", std::process::id().to_string());
-            fs::rename(
-                Path::new(STATE).join("ready.tmp"),
-                Path::new(STATE).join("ready"),
-            )
-            .unwrap();
+            mark("ready", std::process::id().to_string());
             wait("release");
         }
         "waiting-completion" => {
