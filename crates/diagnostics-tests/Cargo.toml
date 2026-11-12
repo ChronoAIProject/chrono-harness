@@ -22,6 +22,10 @@ path = "tests/rolling.rs"
 name = "verified_runtime"
 path = "tests/verified_runtime.rs"
 
+[[test]]
+name = "verified_rolling"
+path = "tests/verified_rolling.rs"
+
 [[bin]]
 name = "chrono-test-log-writer"
 path = "tests/support/log_writer.rs"
