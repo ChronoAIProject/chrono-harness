@@ -19,6 +19,10 @@ name = "rolling"
 path = "tests/rolling.rs"
 
 [[test]]
+name = "verified_error"
+path = "tests/verified_error.rs"
+
+[[test]]
 name = "verified_runtime"
 path = "tests/verified_runtime.rs"
 

@@ -129,19 +129,21 @@ pub struct Failure {
 
 impl Failure {
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
-        Self {
-            node: ErrorNode {
-                error_type: std::any::type_name::<Self>().into(),
-                code: code.into(),
-                message: message.into(),
-                context: Context::new(),
-                source: None,
-                native_code: None,
-                traceback: None,
-                related: Vec::new(),
-            },
+        let node = ErrorNode {
+            error_type: std::any::type_name::<Self>().into(),
+            code: code.into(),
+            message: message.into(),
+            context: Context::new(),
             source: None,
+            native_code: None,
+            traceback: None,
             related: Vec::new(),
+        };
+        let (node, source, related) = crate::verified_error::initialize(node);
+        Self {
+            node,
+            source,
+            related,
         }
     }
 
@@ -155,14 +157,36 @@ impl Failure {
         message: impl Into<String>,
         source: impl RecordedError,
     ) -> Self {
-        let mut failure = Self::new(code, message);
-        failure.source = Some(Box::new(source));
-        failure
+        let Self {
+            node,
+            source: previous,
+            related,
+        } = Self::new(code, message);
+        let source: Box<dyn RecordedError> = Box::new(source);
+        let (node, source, related) =
+            crate::verified_error::set_source((node, previous, related), source);
+        Self {
+            node,
+            source,
+            related,
+        }
     }
 
-    pub fn with_related(mut self, role: impl Into<String>, error: impl RecordedError) -> Self {
-        self.related.push((role.into(), Box::new(error)));
-        self
+    pub fn with_related(self, role: impl Into<String>, error: impl RecordedError) -> Self {
+        let Self {
+            node,
+            source,
+            related,
+        } = self;
+        let role = role.into();
+        let error: Box<dyn RecordedError> = Box::new(error);
+        let (node, source, related) =
+            crate::verified_error::append_related((node, source, related), role, error);
+        Self {
+            node,
+            source,
+            related,
+        }
     }
 
     pub fn record(&self) -> ErrorRecord {

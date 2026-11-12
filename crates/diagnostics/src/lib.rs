@@ -4,4 +4,5 @@ pub mod error;
 pub mod logging;
 pub mod rolling;
 pub mod runtime;
+pub mod verified_error;
 pub mod verified_runtime;
