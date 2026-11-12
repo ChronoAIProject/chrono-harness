@@ -1,4 +1,4 @@
-//! 日志文件数、单记录容量和轮转阈值的同源判断。
+//! 日志容量、成员结果及采用和轮转顺序的同源定义。
 #[cfg(not(verus_keep_ghost))]
 use crate::verus;
 #[cfg(verus_keep_ghost)]
@@ -127,7 +127,10 @@ fn run_phase<S, E, F>(
                 assert(phase_result(initial, first, end, step, out));
                 return out;
             },
-            Ok(()) => {},
+            Ok(success) => {
+                assert(success == ());
+                assert(original == (after, Ok::<(), E>(success)));
+            },
         }
         assert(original == (after, Ok::<(), E>(())));
         proof {
@@ -162,7 +165,8 @@ pub open spec fn check_result<S, E, C>(
     where C: Fn(S, usize) -> (S, Result<bool, E>),
 {
     match out.1 {
-        Ok(()) => exists|present: bool| #[trigger] check.ensures((state, index), (out.0, Ok::<bool, E>(present))),
+        Ok(()) => check.ensures((state, index), (out.0, Ok::<bool, E>(true)))
+            || check.ensures((state, index), (out.0, Ok::<bool, E>(false))),
         Err(error) => check.ensures((state, index), (out.0, Err::<bool, E>(error))),
     }
 }
@@ -174,15 +178,22 @@ fn check_slot<S, E, C>(state: S, index: usize, check: &C)
     ensures check_result(state, index, *check, out),
 {
     let ghost initial = state;
-    let (state, observed) = check(state, index);
+    let (state, observed) = (*check)(state, index);
     let ghost original = observed;
     let ghost after = state;
     let out = match observed {
         Ok(present) => {
-            assert(check.ensures((initial, index), (after, Ok::<bool, E>(present))));
-            (state, Ok(()))
+            assert((*check).ensures((initial, index), (after, Ok::<bool, E>(present))));
+            let out = (state, Ok(()));
+            assert(check_result(initial, index, *check, out));
+            out
         },
-        Err(error) => (state, Err(error)),
+        Err(error) => {
+            assert((*check).ensures((initial, index), (after, Err::<bool, E>(error))));
+            let out = (state, Err(error));
+            assert(check_result(initial, index, *check, out));
+            out
+        },
     };
     assert(check.ensures((initial, index), (after, original)));
     out
