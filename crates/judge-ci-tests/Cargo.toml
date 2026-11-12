@@ -7,6 +7,7 @@ autotests = false
 
 [dependencies]
 sha1 = "0.10"
+sha2 = "0.10"
 serde = { version = "1", features = ["derive"] }
 chrono-diagnostics = { path = "../diagnostics" }
 chrono-judge-ci = { path = "../judge-ci" }
