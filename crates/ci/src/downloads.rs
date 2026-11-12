@@ -183,6 +183,7 @@ pub(crate) fn project(parent: &cache::Config, job: &str, body: String) -> Result
     }
     let mut restore = String::new();
     let mut save = String::new();
+    let event_guard = policy::cache_save_event_guard(parent.save_on_push_only);
     for (index, (id, entry)) in selected.iter().enumerate() {
         let stem = prefix(c, id, entry);
         let key = format!("{stem}{}", hash(&entry.source_files));
@@ -198,7 +199,7 @@ pub(crate) fn project(parent: &cache::Config, job: &str, body: String) -> Result
             .unwrap_or_default();
         restore.push_str(&format!("      - name: Restore download cache {id}\n        id: chrono_download_{index}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}          restore-keys: |\n            {stem}\n{fallback}          fail-on-cache-miss: false\n", parent.restore_action, scalar(&key)));
         if &entry.save_job == job {
-            save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ always() && !cancelled() && steps.chrono_download_{index}.outcome == 'success' && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
+            save.push_str(&format!("      - name: Save download cache {id}\n        if: ${{{{ {event_guard}always() && !cancelled() && steps.chrono_download_{index}.outcome == 'success' && steps.chrono_download_{index}.outputs.cache-hit != 'true' }}}}\n        continue-on-error: true\n        uses: {}\n        with:\n          key: {}\n          path: |\n{paths}", parent.save_action, scalar(&key)));
         }
     }
     let mut body = body

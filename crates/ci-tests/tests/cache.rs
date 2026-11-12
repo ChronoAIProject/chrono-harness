@@ -40,7 +40,7 @@ fn download_adoption() -> Value {
 }
 
 #[test]
-fn push_only_target_saving_preserves_downloads_and_pr_restores() {
+fn push_only_saving_limits_downloads_and_targets_but_preserves_pr_restores() {
     let mut value = download_adoption();
     value["persistent_cache"]["save_on_push_only"] = json!(true);
     let config = serde_json::from_value(value).unwrap();
@@ -78,8 +78,21 @@ fn push_only_target_saving_preserves_downloads_and_pr_restores() {
         .unwrap();
     assert_eq!(
         download_save["if"],
-        "${{ always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
+        "${{ github.event_name == 'push' && always() && !cancelled() && steps.chrono_download_0.outcome == 'success' && steps.chrono_download_0.outputs.cache-hit != 'true' }}"
     );
+    for (job, cache) in [("detect", "seed"), ("unit_example", "unit")] {
+        let steps = yaml["jobs"][job]["steps"].as_array().unwrap();
+        let restore = steps
+            .iter()
+            .find(|s| s["name"] == format!("Restore download cache {cache}"))
+            .unwrap();
+        assert!(restore.get("if").is_none());
+        let save = steps
+            .iter()
+            .find(|s| s["name"] == format!("Save download cache {cache}"))
+            .unwrap();
+        assert_eq!(save["if"], download_save["if"]);
+    }
 }
 
 #[test]
