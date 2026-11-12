@@ -91,16 +91,27 @@ fn oid_fixture_record_key(state: OidVerificationFixture, key: &str)
 fn oid_fixture_run(oid: &str, commit: Result<String, String>, tree: Result<String, String>)
     -> (out: (OidVerificationFixture, Result<String, String>))
     ensures out.0.expected@ == oid@,
-        policy::oid_read_result(out) == policy::verify_oid_spec(
-            OidVerificationFixture { phase: 0, expected: out.0.expected, commit, tree },
-            oid@, oid_fixture_commit, oid_fixture_tree, oid_fixture_record),
+        (out.0.phase, policy::oid_text_result(out.1))
+            == oid_fixture_expected(oid@, policy::oid_text_result(commit), policy::oid_text_result(tree)),
 {
     let state = OidVerificationFixture { phase: 0, expected: oid.to_owned(), commit, tree };
     policy::verify_oid(state, oid, oid_fixture_read_commit, oid_fixture_read_tree,
-        oid_fixture_record_key,
-        #[cfg(verus_keep_ghost)] Ghost(oid_fixture_commit),
-        #[cfg(verus_keep_ghost)] Ghost(oid_fixture_tree),
-        #[cfg(verus_keep_ghost)] Ghost(oid_fixture_record))
+        oid_fixture_record_key)
+}
+
+open spec fn oid_fixture_expected(
+    oid: Seq<char>, commit: Result<Seq<char>, Seq<char>>, tree: Result<Seq<char>, Seq<char>>,
+) -> (u8, Result<Seq<char>, Seq<char>>) {
+    if !scope_text::oid(vstd::utf8::encode_utf8(oid)) {
+        (0, Err("expected full nonzero lowercase commit OID"@))
+    } else {
+        match commit {
+            Err(error) => (1, Err(error)),
+            Ok(text) => if text != oid { (1, Err("OID is not a commit"@)) }
+                else { (if match tree { Ok(value) => scope_text::oid(vstd::utf8::encode_utf8(value)),
+                    Err(_) => false } { 3u8 } else { 2u8 }, tree) },
+        }
+    }
 }
 
 fn oid_fixture_error(result: Result<String, String>, expected: &str)

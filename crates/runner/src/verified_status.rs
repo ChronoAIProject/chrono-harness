@@ -37,84 +37,106 @@ pub open spec fn oid_read_result<S>(value: (S, Result<String, String>))
     (value.0, oid_text_result(value.1))
 }
 
-/// 输入准入、两次观察、首错和登记次序的完整控制合同。
-pub open spec fn verify_oid_spec<S>(
-    state: S, oid: Seq<char>,
-    commit: spec_fn(S, Seq<char>) -> (S, Result<Seq<char>, Seq<char>>),
-    tree: spec_fn(S, Seq<char>) -> (S, Result<Seq<char>, Seq<char>>),
-    record: spec_fn(S, Seq<char>) -> S,
-) -> (S, Result<Seq<char>, Seq<char>>) {
-    if !identifiers::oid(vstd::utf8::encode_utf8(oid)) {
-        (state, Err("expected full nonzero lowercase commit OID"@))
-    } else {
-        let first = commit(state, oid);
-        match first.1 {
-            Err(error) => (first.0, Err(error)),
-            Ok(observed) => if observed != oid {
-                (first.0, Err("OID is not a commit"@))
-            } else {
-                let second = tree(first.0, oid);
-                match second.1 {
-                    Err(error) => (second.0, Err(error)),
-                    Ok(value) => if identifiers::oid(vstd::utf8::encode_utf8(value)) {
-                        (record(second.0, oid), Ok(value))
-                    } else { (second.0, Ok(value)) },
-                }
-            },
-        }
+pub open spec fn oid_commit_matches<S>(observed: (S, Result<String, String>), oid: &str) -> bool {
+    match observed.1 { Ok(text) => text@ == oid@, Err(_) => false }
+}
+
+pub open spec fn oid_tree_valid<S>(observed: (S, Result<String, String>)) -> bool {
+    match observed.1 {
+        Ok(text) => identifiers::oid(vstd::utf8::encode_utf8(text@)), Err(_) => false,
     }
 }
 
-/// 回调的实际结果按值转交；只要求实际可达阶段可调用。
-pub fn verify_oid<S, C, T, R>(
-    state: S, oid: &str, read_commit: C, read_tree: T, record: R,
-    #[cfg(verus_keep_ghost)] Ghost(commit_model): Ghost<spec_fn(S, Seq<char>) -> (S, Result<Seq<char>, Seq<char>>)>,
-    #[cfg(verus_keep_ghost)] Ghost(tree_model): Ghost<spec_fn(S, Seq<char>) -> (S, Result<Seq<char>, Seq<char>>)>,
-    #[cfg(verus_keep_ghost)] Ghost(record_model): Ghost<spec_fn(S, Seq<char>) -> S>,
+pub open spec fn oid_tree_relation<S, R>(
+    oid: &str, observed: (S, Result<String, String>), out: (S, Result<String, String>), record: R,
+) -> bool where R: Fn(S, &str) -> S {
+    if oid_tree_valid(observed) {
+        out.1 == observed.1 && record.ensures((observed.0, oid), out.0)
+    } else { out == observed }
+}
+
+pub open spec fn oid_commit_relation<S, T, R>(
+    oid: &str, observed: (S, Result<String, String>), out: (S, Result<String, String>),
+    read_tree: T, record: R,
+) -> bool where T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S {
+    match observed.1 {
+        Err(_) => out == observed,
+        Ok(text) => if text@ != oid@ {
+            oid_read_result(out) == (observed.0, Err("OID is not a commit"@))
+        } else {
+            exists|second: (S, Result<String, String>)|
+                read_tree.ensures((observed.0, oid), second)
+                    && oid_tree_relation(oid, second, out, record)
+        },
+    }
+}
+
+/// 关系保留每次实际观察，允许同一输入取得不同 IO 结果。
+pub open spec fn verify_oid_relation<S, C, T, R>(
+    state: S, oid: &str, out: (S, Result<String, String>), read_commit: C, read_tree: T, record: R,
+) -> bool where C: Fn(S, &str) -> (S, Result<String, String>),
+    T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S {
+    if !identifiers::oid(vstd::utf8::encode_utf8(oid@)) {
+        oid_read_result(out) == (state, Err("expected full nonzero lowercase commit OID"@))
+    } else {
+        exists|first: (S, Result<String, String>)| read_commit.ensures((state, oid), first)
+            && oid_commit_relation(oid, first, out, read_tree, record)
+    }
+}
+
+fn finish_oid_tree<S, R>(oid: &str, observed: (S, Result<String, String>), record: R)
+    -> (out: (S, Result<String, String>)) where R: Fn(S, &str) -> S,
+    requires oid_tree_valid(observed) ==> record.requires((observed.0, oid)),
+    ensures oid_tree_relation(oid, observed, out, record),
+{
+    let (state, result) = observed;
+    let tree = match result { Err(error) => { return (state, Err(error)); }, Ok(text) => text };
+    if identifiers::full_oid(tree.as_str()).is_ok() {
+        (record(state, oid), Ok(tree))
+    } else { (state, Ok(tree)) }
+}
+
+fn finish_oid_commit<S, T, R>(
+    oid: &str, observed: (S, Result<String, String>), read_tree: T, record: R,
 ) -> (out: (S, Result<String, String>))
+    where T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S,
+    requires oid_commit_matches(observed, oid) ==> read_tree.requires((observed.0, oid)),
+        forall|second: (S, Result<String, String>)| oid_commit_matches(observed, oid)
+            && read_tree.ensures((observed.0, oid), second) && oid_tree_valid(second)
+            ==> record.requires((second.0, oid)),
+    ensures oid_commit_relation(oid, observed, out, read_tree, record),
+{
+    let (state, result) = observed;
+    let commit = match result { Err(error) => { return (state, Err(error)); }, Ok(text) => text };
+    if !identifiers::equal_text(commit.as_str(), oid) {
+        return (state, Err("OID is not a commit".to_owned()));
+    }
+    let second = read_tree(state, oid);
+    finish_oid_tree(oid, second, record)
+}
+
+/// 只要求实际可达阶段可调用；不要求观察回调具有确定性。
+pub fn verify_oid<S, C, T, R>(state: S, oid: &str, read_commit: C, read_tree: T, record: R)
+    -> (out: (S, Result<String, String>))
     where C: Fn(S, &str) -> (S, Result<String, String>),
         T: Fn(S, &str) -> (S, Result<String, String>), R: Fn(S, &str) -> S,
-    requires
-        identifiers::oid(vstd::utf8::encode_utf8(oid@)) ==> read_commit.requires((state, oid)),
-        identifiers::oid(vstd::utf8::encode_utf8(oid@))
-            && commit_model(state, oid@).1 == Ok(oid@)
-            ==> read_tree.requires((commit_model(state, oid@).0, oid)),
-        forall|text: Seq<char>| identifiers::oid(vstd::utf8::encode_utf8(oid@))
-            && commit_model(state, oid@).1 == Ok(oid@)
-            && tree_model(commit_model(state, oid@).0, oid@).1 == Ok(text)
-            && identifiers::oid(vstd::utf8::encode_utf8(text))
-            ==> record.requires((tree_model(commit_model(state, oid@).0, oid@).0, oid)),
-        forall|before: S, key: &str, result: (S, Result<String, String>)|
-            read_commit.requires((before, key)) && read_commit.ensures((before, key), result)
-                ==> oid_read_result(result) == commit_model(before, key@),
-        forall|before: S, key: &str, result: (S, Result<String, String>)|
-            read_tree.requires((before, key)) && read_tree.ensures((before, key), result)
-                ==> oid_read_result(result) == tree_model(before, key@),
-        forall|before: S, key: &str, result: S|
-            record.requires((before, key)) && record.ensures((before, key), result)
-                ==> result == record_model(before, key@),
-    ensures oid_read_result(out) == verify_oid_spec(state, oid@, commit_model, tree_model, record_model),
+    requires identifiers::oid(vstd::utf8::encode_utf8(oid@)) ==> read_commit.requires((state, oid)),
+        forall|first: (S, Result<String, String>)| identifiers::oid(vstd::utf8::encode_utf8(oid@))
+            && read_commit.ensures((state, oid), first) && oid_commit_matches(first, oid)
+            ==> read_tree.requires((first.0, oid)),
+        forall|first: (S, Result<String, String>), second: (S, Result<String, String>)|
+            identifiers::oid(vstd::utf8::encode_utf8(oid@))
+                && read_commit.ensures((state, oid), first) && oid_commit_matches(first, oid)
+                && read_tree.ensures((first.0, oid), second) && oid_tree_valid(second)
+                ==> record.requires((second.0, oid)),
+    ensures verify_oid_relation(state, oid, out, read_commit, read_tree, record),
 {
     match identifiers::full_oid(oid) {
         Err(error) => { return (state, Err(error)); },
         Ok(()) => {},
     }
-    let ghost first = commit_model(state, oid@);
-    let observed = read_commit(state, oid);
-    assert(oid_read_result(observed) == first);
-    let (state, commit) = observed;
-    let commit = match commit { Err(error) => { return (state, Err(error)); }, Ok(text) => text };
-    if !identifiers::equal_text(commit.as_str(), oid) {
-        return (state, Err("OID is not a commit".to_owned()));
-    }
-    let ghost second = tree_model(state, oid@);
-    let observed = read_tree(state, oid);
-    assert(oid_read_result(observed) == second);
-    let (state, tree) = observed;
-    let tree = match tree { Err(error) => { return (state, Err(error)); }, Ok(text) => text };
-    if identifiers::full_oid(tree.as_str()).is_ok() {
-        (record(state, oid), Ok(tree))
-    } else { (state, Ok(tree)) }
+    let first = read_commit(state, oid);
+    finish_oid_commit(oid, first, read_tree, record)
 }
 
 /// 无绑定时不查询；有绑定时只向原缓存接口转交同一个完整键。
