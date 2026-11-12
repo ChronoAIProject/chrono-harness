@@ -206,7 +206,7 @@
     {"path":"docs/ci.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/runner/src/wire.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/canonical_request.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
-    {"path":"crates/runner/src/facts.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
+    {"path":"crates/runner/src/facts.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}]},
     {"path":"crates/runner/src/full.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner-tests/tests/protocol_v1.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/judge-registration/Cargo.toml","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-registration"}]},
