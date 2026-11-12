@@ -1617,6 +1617,8 @@
       "worktree-test-inventory"
     ],
     "claims": {
+      "verify.diagnostics-rolling": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.diagnostics-rolling-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.diagnostics-runtime": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.diagnostics-runtime-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.release-recipe": {"resources":[],"outputs":[".chrono-harness/state/"]},
