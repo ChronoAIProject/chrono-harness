@@ -184,39 +184,47 @@ pub open spec fn recovery_action_spec(
     outputs_is_null_or_object: bool, matched_key_is_null_or_string: bool,
     content_method: Option<&str>, content_status: Option<&str>, refresh_enabled: bool,
 ) -> Result<RecoveryAction, RecoveryDecisionError> {
-    let discard = match outcome {
+    let base = match outcome {
         Some(value) => if value@ == "failure"@ {
             Ok(true)
         } else if value@ == "success"@ {
             if unconfirmed {
                 if !outputs_is_null_or_object || !matched_key_is_null_or_string {
-                    return Err(RecoveryDecisionError::MalformedOutputs);
+                    Err(RecoveryDecisionError::MalformedOutputs)
+                } else {
+                    Ok(reason@ == "miss-or-unavailable"@ || reason@ == "incompatible"@)
                 }
-                Ok(reason@ == "miss-or-unavailable"@ || reason@ == "incompatible"@)
             } else {
                 Ok(false)
             }
         } else if value@ == "skipped"@ {
             Ok(false)
         } else {
-            return Err(RecoveryDecisionError::UnknownOutcome);
+            Err(RecoveryDecisionError::UnknownOutcome)
         },
-        None => return Err(RecoveryDecisionError::UnknownOutcome),
+        None => Err(RecoveryDecisionError::UnknownOutcome),
     };
-    if discard? {
-        return Ok(RecoveryAction::Discard);
-    }
-    if match content_method {
-        Some(method) => method@ == "producer-manifest/v1"@
-            && (reason@ == "exact"@ || reason@ == "compatible"@),
-        None => false,
-    } && !match content_status { Some(status) => status@ == "matched"@, None => false } {
-        return Ok(RecoveryAction::Discard);
-    }
-    if refresh_enabled && reason@ == "compatible"@ {
-        Ok(RecoveryAction::Refresh)
-    } else {
-        Ok(RecoveryAction::Keep)
+    match base {
+        Err(error) => Err(error),
+        Ok(true) => Ok(RecoveryAction::Discard),
+        Ok(false) => {
+            let verify_content = match content_method {
+                Some(method) => method@ == "producer-manifest/v1"@
+                    && (reason@ == "exact"@ || reason@ == "compatible"@),
+                None => false,
+            };
+            let content_matched = match content_status {
+                Some(status) => status@ == "matched"@,
+                None => false,
+            };
+            if verify_content && !content_matched {
+                Ok(RecoveryAction::Discard)
+            } else if refresh_enabled && reason@ == "compatible"@ {
+                Ok(RecoveryAction::Refresh)
+            } else {
+                Ok(RecoveryAction::Keep)
+            }
+        }
     }
 }
 
