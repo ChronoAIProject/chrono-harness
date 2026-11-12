@@ -136,16 +136,27 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
     commit(&h.root);
     git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("retained-cache-history");
-    assert_eq!(h.invoke("integration", "retained-cache-history", &target).0, 0);
+    assert_eq!(
+        h.invoke("integration", "retained-cache-history", &target).0,
+        0
+    );
     for _ in 0..3 {
         let (code, used, error) = h.auto(
             "use",
-            &["--path", target.to_str().unwrap(), "--operation", "use.consumer"],
+            &[
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
         );
         assert_eq!(code, 0, "{used} {error}");
     }
     let entry = h.ledger()["entries"][0].clone();
-    assert!(entry["cache_attempts"].as_array().unwrap().len() > 1, "{entry}");
+    assert!(
+        entry["cache_attempts"].as_array().unwrap().len() > 1,
+        "{entry}"
+    );
     let (code, finished, error) = h.auto(
         "finish",
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
@@ -153,11 +164,19 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
     assert_eq!(code, 0, "{finished} {error}");
     let entry = h.ledger()["entries"][0].clone();
     assert_eq!(entry["status"], "retained");
-    assert_eq!(entry["cache_attempts"].as_array().unwrap().len(), 1, "{finished}");
-    assert!(finished["cache_history_rotation"].as_array().unwrap().iter().any(
-        |rotation| rotation["path"] == value!(target)
-            && rotation["removed_records"].as_u64().unwrap() > 0
-    ));
+    assert_eq!(
+        entry["cache_attempts"].as_array().unwrap().len(),
+        1,
+        "{finished}"
+    );
+    assert!(
+        finished["cache_history_rotation"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|rotation| rotation["path"] == value!(target)
+                && rotation["removed_records"].as_u64().unwrap() > 0)
+    );
     assert!(target.join("payload").is_file());
     assert!(target.join(".chrono-harness/state/evidence").is_file());
 }

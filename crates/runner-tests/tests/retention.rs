@@ -94,7 +94,11 @@ fn path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity() 
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
     policy["max_related_outputs"] = json!(4);
-    fs::write(h.path().join(POLICY_PATH), serde_json::to_vec(&policy).unwrap()).unwrap();
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
     let publish = |name: &str| {
         let path = tree(h.path(), name);
         fs::write(h.path().join(&path).join("original"), name.as_bytes()).unwrap();
@@ -134,7 +138,11 @@ fn path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity() 
         .reference_paths("current-enrollment", &sources)
         .unwrap();
     assert_eq!(edges(&ledger(h.path())), edges(&before));
-    assert!(inventory(h.path()).reference_paths("current-enrollment", &paths).is_err());
+    assert!(
+        inventory(h.path())
+            .reference_paths("current-enrollment", &paths)
+            .is_err()
+    );
     publish("independent-expired");
     assert_eq!(maintain_fixture_to(h.path(), 6), 6);
     for path in &paths {

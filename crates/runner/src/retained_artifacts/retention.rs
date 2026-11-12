@@ -1400,9 +1400,8 @@ impl Inventory {
         // This transition changes only the consumer's membership. Its members
         // retain their outputs and dependency edges under the existing scoped
         // exclusion, without loading those dependencies into this activity.
-        let gate = self.addressed_gate_scope(
-            &[], paths, &[consumer.into()], None, false, true, true,
-        )?;
+        let gate =
+            self.addressed_gate_scope(&[], paths, &[consumer.into()], None, false, true, true)?;
         let mut l = self.load(&gate)?;
         let mut ids = BTreeSet::new();
         for path in paths {
