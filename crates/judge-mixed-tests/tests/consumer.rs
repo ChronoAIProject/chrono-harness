@@ -95,9 +95,18 @@ fn actual_mixed_warning_is_zero_exit_with_both_groups_and_bound_cost_provenance(
     let out = &m["outputs"]["rule_changes"];
     assert_eq!(out["rule_paths"], json!([PROJECTS]));
     assert_eq!(out["product_paths"], json!(["src.bin"]));
-    assert_eq!(out["costs"], r["costs"]);
+    assert!(out.get("costs").is_none());
+    assert_eq!(out["schema"], "chrono-rule-changes/v2");
+    let cost_sources = r["sources"]["/costs"].as_array().unwrap();
+    assert!(!cost_sources.is_empty());
+    for source in cost_sources {
+        assert_eq!(r.pointer(source.as_str().unwrap()).unwrap(), &r["costs"]);
+    }
     assert_eq!(out["binding"]["candidate"], h.candidate);
-    assert_eq!(out["costs"]["binding"], out["binding"]);
+    assert_eq!(r["costs"]["binding"], out["binding"]);
+    let warning = m["findings"][0]["message"].as_str().unwrap();
+    assert!(warning.contains("predecessor outputs.costs"));
+    assert!(warning.contains("/sources/~1costs"));
     assert_eq!(out["requires_acknowledgement"], false);
     assert_eq!(m["findings"][0]["causes"], json!(["/outputs/rule_changes"]));
     assert_eq!(

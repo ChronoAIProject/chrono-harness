@@ -51,3 +51,9 @@ opt-level = 3
 # Registry custody belongs to chrono-worktree; use its production dev optimization.
 [profile.dev.package.chrono-worktree]
 opt-level = 1
+
+[[bin]]
+name = "chrono-harness-test-cli"
+path = "../runner/src/main.rs"
+test = false
+bench = false

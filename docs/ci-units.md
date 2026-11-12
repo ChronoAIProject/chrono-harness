@@ -40,6 +40,8 @@ judge-ci、CI 和 projects 专属测试都在各自 target 编译同一份 judge
 
 workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.rs`，通过 Cargo 提供的路径复制并运行真实 CLI。三个 workflow 测试计划不再前置 `build.judge-workflow`，对应单元也不再恢复生产 target；`inputs` 仍消费生产 CLI，保留该构建及缓存，并负责保存缓存。测试根保留原 profile（含 `strip="debuginfo"`）、测试、断言、分组、线程和时限；完整成本收益未测。
 
+**宿主构建登记与测试安装同时修改：**CI、inputs、registration、filemap、projects、workflow 六个测试项目也从唯一的 runner 生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实检查调用。对应八个单元不再前置 `build.runner`，退役已无使用方的 `check.runner` 缓存及其订阅；detector 启动、正式生产构建和发布打包继续使用各自登记。原未过滤测试、断言、profile、线程、分组、cap=2 和时限保留。验证使用正式生成、canonical check 及两段 PR／落地检查，完整成本收益未测。
+
 CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
 
 现役单元 provider 只生成父工作流。独立工作流拓扑及其虚拟单元地址、等待／轮询参数已退役。四个现役外部示例的当前采用与迁移见[示例索引](examples.md)；历史运行仍查原提交与 CI，不要求现役源码继续支持旧拓扑。缺少调度声明或带已退役字段的配置会在写入输出前拒绝。公开新版本和宿主升级仍须分别验收。
@@ -129,6 +131,8 @@ provider 的必需 `job_gating` 字段登记 detector 的平台、时限、boots
 worktree 两个测试组由 Cargo 从唯一 runner 生产 `main.rs` 编译测试 CLI，不再另行构建生产 runner，也不恢复其缓存。测试根保留当前锁定依赖和开发配置，原测试、分组、线程及限制不变；测试锁与生产锁的部分构建依赖版本不同，不据此声称执行物字节相同。完整成本收益未测。
 
 judge-ci 测试也从同一生产 `main.rs` 编译 runner 测试 CLI，两个真实 CLI 调用使用 Cargo 提供的路径。该测试计划不再前置 `build.runner`，对应单元不再恢复生产 runner 缓存；生产 runner 及其他使用方保留。测试根继续使用原锁和开发配置，原断言、测试线程和时限不变；测试与生产的编译配置不同，不声称执行物字节或性能相同，完整成本收益未测。
+
+cost 和 mixed 两个测试项目也从 runner 唯一生产 `main.rs` 编译同名测试 CLI，共享 Host 从各自 Cargo 提供的路径读取并安装它，继续绑定实际字节摘要。两个计划不再前置 `build.runner`，对应单元不再恢复生产 runner 缓存；registration、filemap、cost 和 mixed 判官的实际构建及调用保留。原锁、开发配置、未过滤测试、断言、线程和时限不变，完整成本收益未测。
 
 runner 和 diagnostics 使用普通锁定 Cargo 构建，core 按当前消费者安装所需工具。项目 action、单元、缓存和发布集合由各自登记维护。
 

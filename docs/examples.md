@@ -11,7 +11,7 @@
 
 ## 当前接入方式
 
-四个示例的默认分支都是 `dev`，安装声明位于各自 `.chrono-harness/distribution.json`，共同锁定已公开正式版 [`v0.1.0`](https://github.com/ChronoAIProject/chrono-harness/releases/tag/v0.1.0)。安装由该版本的清单与所选工具表生成 `install.sh`，校验 installer、清单和资产的摘要、长度及真实版本；不编译本仓 Rust 源码，也不提交工具、SDK 或缓存。各宿主的指南选择保留，`AGENTS.md` 仍是指向 `CLAUDE.md` 的相对符号链接。
+四个示例的默认分支都是 `dev`，当前采用的固定版本由各仓 `.chrono-harness/distribution.json` 负责；迭代期间各仓可能处于不同迁移阶段。安装由该版本的清单与所选工具表生成 `install.sh`，校验 installer、清单和资产的摘要、长度及真实版本；不编译本仓 Rust 源码，也不提交工具、SDK 或缓存。各宿主的指南选择保留，`AGENTS.md` 仍是指向 `CLAUDE.md` 的相对符号链接。
 
 Go、TS、混合语言使用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`，collection provider 为 v4。父 workflow 先检测明确登记的 DELTA，再运行所选独立 job 并汇总原件。Go 的 harness／rates、TS 的 harness／labels、混合的 harness／labels／normalize／rates 分配与业务 SDK profile 均保留；harness 和汇总不安装无关业务 SDK。首次接入使用独立 v4 provider，保留单独的初始清单 profile、普通 DELTA profile，以及空 projects／scripts／units，runner 明确选 macOS arm64／`macos-26`。
 
@@ -19,7 +19,7 @@ Go、TS、混合语言使用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`�
 
 ## 验证范围
 
-四个宿主先完成同源码最终测试版的采用，再为正式版分别完成 feature → integration → dev 的真实合并；当前正式版对应的本地 canonical、dev 落地检查、适用 CodeQL 与原安装回执均已核验通过。交付原件分别见 [Go PR #32](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/32)、[TS PR #29](https://github.com/ChronoAIProject/chrono-harness-examples-ts/pull/29)、[混合语言 PR #29](https://github.com/ChronoAIProject/chrono-harness-examples-mix/pull/29)、[首次接入 PR #22](https://github.com/ChronoAIProject/chrono-harness-examples-initial/pull/22)。Go／TS／混合语言的原生 CI 为 Ubuntu 24.04；首次接入为 macOS 26。公开发行的 Linux／macOS 安装由[正式发布原运行](https://github.com/ChronoAIProject/chrono-harness/actions/runs/43022416702)分别验收。
+首轮 v0.1.0 中，四个宿主先完成同源码最终测试版的采用，再为正式版分别完成 feature → integration → dev 的真实合并；该轮本地 canonical、dev 落地检查、适用 CodeQL 与原安装回执均已核验通过。历史交付原件分别见 [Go PR #32](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/32)、[TS PR #29](https://github.com/ChronoAIProject/chrono-harness-examples-ts/pull/29)、[混合语言 PR #29](https://github.com/ChronoAIProject/chrono-harness-examples-mix/pull/29)、[首次接入 PR #22](https://github.com/ChronoAIProject/chrono-harness-examples-initial/pull/22)。该轮 Go／TS／混合语言的原生 CI 为 Ubuntu 24.04；首次接入为 macOS 26。Linux／macOS 安装由[该轮正式发布](https://github.com/ChronoAIProject/chrono-harness/actions/runs/43022416702)分别验收。这些历史结果不替代新版本的采用验收；每轮结果由对应 PR／Release 引用原件。
 
 Go 的原 Linux Git pin 漂移已按该候选 bootstrap 原日志显式更新，未放宽约束。首次接入旧 runner 的不可调度注释已定位并迁移。首轮 Python 安装器退役后，远端旧扫描仍固定 Python 并以提取 0 个模块失败，现有凭据访问扫描配置返回 403；原件保留在 PR #18。本轮首次接入的 Actions CodeQL 与汇总检查均成功，实际树仍无 Python；这不证明远端配置为何变化，不回填历史失败，也没有增加空源文件。
 
