@@ -521,7 +521,7 @@ chrono-worktree migrate --path /exact/enrolled-worktree
 
 本机磁盘上的多个工作树会不断产生编译缓存、检查报告和测试现场。只在调用方记得执行
 `finish` 时清理，不能及时处理已释放内容。因此，本宿主用 macOS 原生 `launchd`
-每 900 秒调用一次同一 `chrono-worktree maintain`，登录时也启动一轮。模板唯一来源是
+每 3600 秒调用一次同一 `chrono-worktree maintain`，登录时也启动一轮。模板唯一来源是
 [maintenance.launchd.plist](../.chrono-harness/maintenance.launchd.plist)，由 repository 所有者维护，
 FILEMAP 将其登记为宿主数据；不另建清理程序或后台扫描器。
 
@@ -529,7 +529,7 @@ FILEMAP 将其登记为宿主数据；不另建清理程序或后台扫描器。
 | --- | --- |
 | 输入和使用方 | 模板、物理 Git main 的绝对路径、已安装的兼容所有者及其已提交政策；当前用户的 launchd 消费实例化后的 plist |
 | 正式维护入口 | 模板逐字调用 main 的 `.chrono-harness/bin/chrono-worktree maintain --host-root MAIN`；只处理其声明的登记和生产者 |
-| 触发和并发 | 登录／加载及每 900 秒；launchd 不重叠启动同一任务，上一轮未完成时不另开副本。休眠或正在运行会推迟维护，不承诺 900 秒内清完 |
+| 触发和并发 | 登录／加载及每 3600 秒；launchd 不重叠启动同一任务，上一轮未完成时不另开副本。休眠或正在运行会推迟维护，不承诺 3600 秒内清完 |
 | 回收条件 | 继续使用各目标自己的年龄、产物时机和有限保留政策；活租约、未知使用方、源码、未保全提交及必要原件不因调度而释放 |
 | 输出和失败 | 原 stdout／stderr／退出码及逐项回执由现有生命周期报告保留；launchd 的退出码不是逐项清理结果。控制台流丢到 `/dev/null`，不增加无限增长的日志副本 |
 | 资源与成本 | 后台、低优先级 IO、nice 10；一轮的工作树遍历和实际回收成本仍由原维护入口承担，总成本未知。报告内部的单轮预算不等于整个 maintain 已有时间上限 |

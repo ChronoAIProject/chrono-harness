@@ -14,7 +14,7 @@
     <key>WorkingDirectory</key>
     <string>@COORDINATOR@</string>
     <key>StartInterval</key>
-    <integer>900</integer>
+    <integer>3600</integer>
     <key>RunAtLoad</key>
     <true/>
     <key>ProcessType</key>
