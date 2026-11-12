@@ -4053,12 +4053,12 @@ fn status_observes_busy_metadata_without_mutating_enrollments() {
     use chrono_harness::ownership::{DirectoryLease, Lease};
     let h = Host::new("payload");
     h.kernel_cleanup();
-    h.policy(|policy| policy["timeout_seconds"] = value!(1));
     let target = h.parent.join("busy-status");
     let (code, created, error) = h.invoke("feature", "busy-status", &target);
     assert_eq!(code, 0, "{created} {error}");
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
+    h.policy(|policy| policy["timeout_seconds"] = value!(1));
     let originals: Vec<_> = [&h.root, &target]
         .into_iter()
         .flat_map(|path| {

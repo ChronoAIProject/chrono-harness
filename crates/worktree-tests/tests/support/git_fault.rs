@@ -794,8 +794,13 @@ fn main() {
                 && args.get(2).is_some_and(|arg| arg == "add")
             {
                 fs::write(
-                    home.join("admission-holder"),
+                    home.join("admission-holder.tmp"),
                     std::process::id().to_string(),
+                )
+                .unwrap();
+                fs::rename(
+                    home.join("admission-holder.tmp"),
+                    home.join("admission-holder"),
                 )
                 .unwrap();
                 redirect(&home.join("git-mutation.stdout"), 1);
