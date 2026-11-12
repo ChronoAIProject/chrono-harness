@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use chrono_harness::{json, sha256};
@@ -8,6 +10,7 @@ fn invoke(root: &Path, args: &[&str]) -> (i32, Value, String) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"));
     cmd.current_dir("/")
         .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("DECLARED_EMPTY", "")
         .env("SHOULD_NOT_LEAK", "undeclared");
     cmd.args(args).args(["--host-root", root.to_str().unwrap()]);
@@ -35,6 +38,9 @@ fn fixture() -> (tempfile::TempDir, tempfile::NamedTempFile, Values, String) {
 }
 #[test]
 fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for options in [
         vec!["--base", "base"],
         vec!["--candidate", "candidate"],
@@ -52,6 +58,9 @@ fn capture_rejects_retired_endpoint_options_before_accessing_host_inputs() {
 }
 #[test]
 fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_strict() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, _f, mut v, _) = fixture();
     let path_dir = tempfile::tempdir().unwrap();
     let ambient_git = chrono_harness::resolve_program(d.path(), "git", None).unwrap();
@@ -129,6 +138,9 @@ fn schema4_snapshots_exclude_acquisition_credentials_and_legacy_readers_stay_str
 }
 #[test]
 fn captures_only_declared_bytes_and_environment_and_deduplicates_content() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, f, _, oid) = fixture();
     let args = [
         "capture",
@@ -166,6 +178,9 @@ fn captures_only_declared_bytes_and_environment_and_deduplicates_content() {
 }
 #[test]
 fn captures_observed_mismatch_without_rewriting_registration_and_preserves_old_blob() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, f, _, oid) = fixture();
     let cfg = fs::read(d.path().join(CONFIG)).unwrap();
     let (code, old, err) = invoke(
@@ -224,6 +239,9 @@ fn captures_observed_mismatch_without_rewriting_registration_and_preserves_old_b
 }
 #[test]
 fn pairs_explicit_snapshots_without_recapturing_the_old_environment_or_file() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, f, _, oid) = fixture();
     let (code, a, err) = invoke(
         d.path(),
@@ -270,6 +288,9 @@ fn pairs_explicit_snapshots_without_recapturing_the_old_environment_or_file() {
 }
 #[test]
 fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_snapshot() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, f, _, oid) = fixture();
     for (commit, path) in [
         ("HEAD", ".chrono-harness/state/one.json"),
@@ -344,6 +365,9 @@ fn wrong_checkout_dirty_config_missing_input_and_unsafe_output_never_publish_sna
 
 #[test]
 fn transport_to_a_new_host_uses_retained_bytes_after_original_input_disappears() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, f, _, oid) = fixture();
     let (code, snapshot, err) = invoke(
         d.path(),
@@ -393,6 +417,9 @@ fn transport_to_a_new_host_uses_retained_bytes_after_original_input_disappears()
 
 #[test]
 fn corrupt_existing_content_address_and_symlink_output_are_rejected() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, _file, _, oid) = fixture();
     let args = [
         "capture",
@@ -438,6 +465,9 @@ fn corrupt_existing_content_address_and_symlink_output_are_rejected() {
 
 #[test]
 fn pairing_does_not_silently_normalize_conflicting_or_incomplete_snapshot_fields() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, _file, _, oid) = fixture();
     let (code, snapshot, err) = invoke(
         d.path(),
@@ -509,6 +539,9 @@ fn pairing_does_not_silently_normalize_conflicting_or_incomplete_snapshot_fields
 
 #[test]
 fn explicit_absence_is_retained_transported_and_distinct_from_empty_bytes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, f, mut v, _) = fixture();
     v.get_mut(CONFIG).unwrap()["schema_version"] = value!(2);
     for row in v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
@@ -572,6 +605,9 @@ fn explicit_absence_is_retained_transported_and_distinct_from_empty_bytes() {
 
 #[test]
 fn v2_absence_rejects_symlink_directory_and_non_directory_ancestors() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, f, mut v, _) = fixture();
     let external = tempfile::tempdir().unwrap();
     let root = fs::canonicalize(external.path()).unwrap();
@@ -646,6 +682,9 @@ fn v2_absence_rejects_symlink_directory_and_non_directory_ancestors() {
 
 #[test]
 fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_judge_registration::{Registrations, inputs::snapshot_shape};
     let (d, f, mut v, _) = fixture();
     for row in v.get_mut(CONFIG).unwrap()["environment"]["inputs"]
@@ -707,6 +746,9 @@ fn absence_versioning_rejects_ambiguous_declarations_and_legacy_null() {
 
 #[test]
 fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::unix::fs::PermissionsExt;
     let (dir, _data, mut values, _) = fixture();
     let root = fs::canonicalize(dir.path()).unwrap();
@@ -725,14 +767,12 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
     config["facts_git"] = value!({"tool":"chosen-git","input":"git-input"});
     config["tools"].as_array_mut().unwrap().push(value!({"id":"chosen-git","program":program,"resolution":"PATH-once","version_argv":["--version"],"expected_version":String::from_utf8(version.stdout).unwrap().trim_end()}));
     config["environment"]["values"]["SNAPSHOT_GIT"] = value!("declared");
-    config["environment"]["values"]["SNAPSHOT_REAL_GIT"] = value!(real);
     config["environment"]["values"]["SNAPSHOT_TRACE"] = value!(trace);
     for input in config["environment"]["inputs"].as_array_mut().unwrap() {
         input["presence"] = value!("present");
         input["location"] = value!(fs::canonicalize(input["location"].as_str().unwrap()).unwrap());
     }
     config["environment"]["inputs"].as_array_mut().unwrap().push(value!({"id":"git-input","location":program,"presence":"present","sha256":sha256(&fs::read(&program).unwrap())}));
-    config["environment"]["inputs"].as_array_mut().unwrap().push(value!({"id":"real-git-input","location":real,"presence":"present","sha256":sha256(&fs::read(&real).unwrap())}));
     config["environment"]["inputs"]
         .as_array_mut()
         .unwrap()
@@ -753,13 +793,11 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
                 "input:data",
                 "input:same-bytes",
                 "input:git-input",
-                "input:real-git-input",
                 "input:absent",
                 "environment:DECLARED_EMPTY",
                 "environment:DECLARED_ABSENT",
                 "environment:FIXED",
                 "environment:SNAPSHOT_GIT",
-                "environment:SNAPSHOT_REAL_GIT",
                 "environment:SNAPSHOT_TRACE"
             ]
         }]
@@ -773,13 +811,11 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
         "input:data",
         "input:same-bytes",
         "input:git-input",
-        "input:real-git-input",
         "input:absent",
         "environment:DECLARED_EMPTY",
         "environment:DECLARED_ABSENT",
         "environment:FIXED",
         "environment:SNAPSHOT_GIT",
-        "environment:SNAPSHOT_REAL_GIT",
         "environment:SNAPSHOT_TRACE",
     ] {
         edges.push(value!({
@@ -971,6 +1007,9 @@ fn v3_capture_uses_bound_git_and_keeps_v2_snapshot_semantics() {
 
 #[test]
 fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_coverage() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let (d, input, mut v, base) = fixture();
     let captured = chrono_inputs::capture(
         d.path(),

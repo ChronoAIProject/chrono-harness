@@ -1,3 +1,5 @@
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+mod chrono_git_boundary;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
 mod support;
 use serde_json::json;
@@ -10,6 +12,9 @@ use host::Host;
 
 #[test]
 fn actual_cost_judge_reports_unknown_warning_with_zero_exit_and_source_fidelity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = Host::new(true);
     let (exit, r) = h.run();
     assert_eq!(exit, 0, "status={} findings={}", r["status"], r["findings"]);
@@ -34,6 +39,9 @@ fn actual_cost_judge_reports_unknown_warning_with_zero_exit_and_source_fidelity(
 
 #[test]
 fn actual_known_costs_pass_and_docs_do_not_report_unrelated_projects() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     let (exit, r) = h.run();
     assert_eq!(exit, 0, "status={} findings={}", r["status"], r["findings"]);
@@ -60,6 +68,9 @@ fn actual_known_costs_pass_and_docs_do_not_report_unrelated_projects() {
 
 #[test]
 fn missing_impact_producer_fails_instead_of_emitting_empty_costs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(false);
     let js = &mut h.values.get_mut(JUDGES).unwrap()["judges"];
     js.as_array_mut().unwrap().retain(|j| j["id"] != "filemap");
@@ -79,6 +90,9 @@ fn missing_impact_producer_fails_instead_of_emitting_empty_costs() {
 
 #[test]
 fn retained_environment_impact_with_empty_git_delta_can_warn_successfully() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = Host::new(true);
     h.values.get_mut(FM).unwrap()["project_edges"]
         .as_array_mut()

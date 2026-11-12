@@ -81,6 +81,7 @@ pub(crate) fn revalidate(
     if expected != *plan {
         return Err("E_CACHE_CONTENT: plan differs from current registration or host".into());
     }
+    super::attempt::validate(root, plan, false)?;
     Ok(config)
 }
 
@@ -182,6 +183,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             .ok_or_else(|| format!("E_CACHE_CONTENT: missing {key}"))
     };
     let root = fs::canonicalize(required("--host-root")?).map_err(|e| e.to_string())?;
+    let _activity = chrono_harness::retained_artifacts::retention::read_scope(&root)?;
     let plan_path = required("--plan")?;
     if !plan_path.starts_with(".chrono-harness/state/") {
         return Err("E_CACHE_CONTENT: expected retained state plan".into());
@@ -300,6 +302,13 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             .open(output)
             .and_then(|mut f| f.write_all(outputs.as_bytes()))
             .map_err(|e| e.to_string())?;
+    }
+    if !options.contains_key("--cache") {
+        // Qualify and release the enrolled plan first. A caller's unregistered
+        // handoff must fail while its attempt recovery root still protects it.
+        // The enclosing read scope keeps both actual inputs live throughout.
+        super::attempt::release_plan(&root, plan_path, &plan_raw)?;
+        super::attempt::validate(&root, &plan, true)?;
     }
     Ok(
         serde_json::to_string(&json!({"report":original,"observation":report}))

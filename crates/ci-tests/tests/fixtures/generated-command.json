@@ -1,0 +1,1 @@
+{"argv": ["-e", "-c", "'/usr/bin/printf' '%s' 'literal '\"'\"' argument $(printf unsafe)'"], "stdout": "literal ' argument $(printf unsafe)", "stderr": "", "exit": 0}

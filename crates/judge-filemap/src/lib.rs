@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use verified_graph::valid_types;
 
-pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v4";
+pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v5";
 /// Complete endpoint definitions; zero is absent, several are ambiguous.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
@@ -38,13 +38,11 @@ pub struct NodeAmbiguity {
 pub struct RequiredTest {
     pub node: String,
     pub candidate_present: bool,
-    pub candidate_ambiguous: bool,
     pub execution_edges: Vec<Edge>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct JudgeSelection {
     pub node: String,
-    pub every_delta: bool,
     pub triggers: Vec<Edge>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -99,17 +97,15 @@ pub fn edges(r: &Registrations) -> BTreeSet<Edge> {
 pub fn produce(
     base: &Registrations,
     candidate: &Registrations,
-    config_path: &str,
     delta: &[Delta],
 ) -> (Impact, Vec<Finding>) {
     produce_with_documents(
         base,
         candidate,
-        config_path,
         delta,
         &[
-            chrono_judge_mixed::registry_documents(base, config_path),
-            chrono_judge_mixed::registry_documents(candidate, config_path),
+            chrono_judge_mixed::registry_documents(base),
+            chrono_judge_mixed::registry_documents(candidate),
         ],
     )
 }
@@ -117,37 +113,33 @@ pub fn produce(
 pub fn produce_with_documents(
     base: &Registrations,
     candidate: &Registrations,
-    config_path: &str,
     delta: &[Delta],
     documents: &[chrono_judge_mixed::Documents; 2],
 ) -> (Impact, Vec<Finding>) {
-    produce_environment(base, candidate, config_path, delta, None, documents)
+    produce_environment(base, candidate, delta, None, documents)
 }
 /// Effective-input impact for validated retained endpoint facts. Declarations and
 /// effective values use the same explicit environment nodes; no edges are inferred.
 pub fn produce_with_inputs(
     base: &Registrations,
     candidate: &Registrations,
-    config_path: &str,
     delta: &[Delta],
     effective_inputs: &Value,
 ) -> Result<(Impact, Vec<Finding>), String> {
     produce_with_inputs_and_documents(
         base,
         candidate,
-        config_path,
         delta,
         effective_inputs,
         &[
-            chrono_judge_mixed::registry_documents(base, config_path),
-            chrono_judge_mixed::registry_documents(candidate, config_path),
+            chrono_judge_mixed::registry_documents(base),
+            chrono_judge_mixed::registry_documents(candidate),
         ],
     )
 }
 pub fn produce_with_inputs_and_documents(
     base: &Registrations,
     candidate: &Registrations,
-    config_path: &str,
     delta: &[Delta],
     effective_inputs: &Value,
     documents: &[chrono_judge_mixed::Documents; 2],
@@ -160,7 +152,6 @@ pub fn produce_with_inputs_and_documents(
     Ok(produce_environment(
         base,
         candidate,
-        config_path,
         delta,
         environments.as_ref(),
         documents,
@@ -169,15 +160,14 @@ pub fn produce_with_inputs_and_documents(
 fn produce_environment(
     base: &Registrations,
     candidate: &Registrations,
-    config_path: &str,
     delta: &[Delta],
     environments: Option<&[BTreeMap<String, String>; 2]>,
     documents: &[chrono_judge_mixed::Documents; 2],
 ) -> (Impact, Vec<Finding>) {
     let an = base.node_data();
     let bn = candidate.node_data();
-    let a = records::inventory(base, config_path, &an, environments.map(|p| &p[0]));
-    let b = records::inventory(candidate, config_path, &bn, environments.map(|p| &p[1]));
+    let a = records::inventory(base, &an, environments.map(|p| &p[0]));
+    let b = records::inventory(candidate, &bn, environments.map(|p| &p[1]));
     let mut findings = vec![];
     let workflow = match workflow::select(base, candidate, delta, [&a, &b], documents) {
         Ok(selection) => selection,
@@ -429,7 +419,6 @@ fn produce_environment(
         .into_iter()
         .map(|node| RequiredTest {
             candidate_present: bn.get(&node).is_some_and(|n| n.kind == NodeKind::Test),
-            candidate_ambiguous: bn.get(&node).is_some_and(|n| n.definitions.len() > 1),
             execution_edges: closure
                 .traversed
                 .iter()
@@ -446,7 +435,6 @@ fn produce_environment(
         .map(|j| {
             let node = format!("judge:{}", j["id"].as_str().unwrap());
             JudgeSelection {
-                every_delta: j["selector"] == "every-delta",
                 triggers: closure
                     .traversed
                     .iter()
@@ -509,12 +497,10 @@ fn produce_environment(
 /// Fixed semantic documents are consumed through the same full impact producer.
 /// Declaration-level scheduling impact, before external SDK snapshots exist.
 /// Final admission continues to use produce_for_request with actual validated inputs.
-#[allow(clippy::too_many_arguments)]
 pub fn produce_for_endpoints(
     root: &std::path::Path,
     base: &str,
     candidate: &str,
-    config_path: &str,
     delta: &[Delta],
     old: &Registrations,
     current: &Registrations,
@@ -523,13 +509,7 @@ pub fn produce_for_endpoints(
     let documents = chrono_judge_mixed::load_documents_for_endpoints(
         root, base, candidate, delta, old, current, reader,
     )?;
-    Ok(produce_with_documents(
-        old,
-        current,
-        config_path,
-        delta,
-        &documents,
-    ))
+    Ok(produce_with_documents(old, current, delta, &documents))
 }
 pub fn produce_for_request(
     req: &Request,
@@ -539,14 +519,7 @@ pub fn produce_for_request(
     inputs: &Value,
 ) -> Result<(Impact, Vec<Finding>), String> {
     let documents = chrono_judge_mixed::load_documents_with_reader(req, old, current, reader)?;
-    produce_with_inputs_and_documents(
-        old,
-        current,
-        &req.config_path,
-        &req.delta,
-        inputs,
-        &documents,
-    )
+    produce_with_inputs_and_documents(old, current, &req.delta, inputs, &documents)
 }
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
@@ -614,13 +587,7 @@ fn evaluate(
     let (a, b, view) = chrono_judge_registration::views_with_reader(req, reader)?;
     let inputs = chrono_judge_registration::inputs::validate(req, &a, &b)?;
     let documents = chrono_judge_mixed::load_documents_with_reader(req, &a, &b, reader)?;
-    let (impact, findings) = produce_with_inputs_and_documents(
-        &a,
-        &b,
-        &req.config_path,
-        &req.delta,
-        &inputs,
-        &documents,
-    )?;
+    let (impact, findings) =
+        produce_with_inputs_and_documents(&a, &b, &req.delta, &inputs, &documents)?;
     Ok((impact, findings, view))
 }

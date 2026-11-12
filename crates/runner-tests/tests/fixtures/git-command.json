@@ -1,0 +1,7 @@
+{
+  "bytes": [104, 101, 108, 108, 111, 10],
+  "blob_oid": "ce013625030ba8dba906f756967f9e9ca394464a",
+  "metadata": "ce013625030ba8dba906f756967f9e9ca394464a blob 6\n",
+  "unknown_argv": ["fetch", "unregistered-network-source"],
+  "unknown_exit": 93
+}

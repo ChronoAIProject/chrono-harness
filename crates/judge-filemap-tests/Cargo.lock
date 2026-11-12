@@ -96,6 +96,7 @@ dependencies = [
  "chrono-worktree",
  "serde",
  "serde_json",
+ "sha1",
  "tempfile",
 ]
 

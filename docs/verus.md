@@ -8,7 +8,7 @@ FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 推断基线未启用；只有已确认的初始输入没有基线，启用后全部行视为新增。
 基线和候选均未启用时仍沿用原范围。以上判法由同一 Verus 实现与独立预期验收，
 未增加基线读取、证明操作或预算。
-数据声明仍不得有根，program／specification 必须有有效根，并继续接受现有严格计划、
+数据声明必须显式给出空 `roots: []`，program／specification 必须有有效根，并继续接受现有严格计划、
 编译源码、原证明及真实消费者的绑定检查。独立预期同为 Verus，并作为 Rust 测试运行。
 
 本宿主 FILEMAP 已采用该字段，新增登记行必须分类，已有分类不得删除。
@@ -39,6 +39,15 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 本仓按批次把实际决策和状态逻辑迁到 Verus。完整目标是所有 SPEC 与仓内程序逻辑都有证明，
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
+
+缓存验收采用的私有 fixture 保管，沿用 `verify.runner-fixture-tests` 判断原测试结果与
+生产者退役观察必须同时具备；沿用 worktree lifecycle 两项严格根，规定对象登记为空、
+待退役元数据为空且命名空间成员均有明确归属，才允许外层夹具退出。生产者在原位置
+读取 v2 对象登记、核对身份和待退役目录；外部 IO 的成功与完整性不是这些布尔判断的
+证明结论。Rust 独立预期覆盖实际活跃、unknown、终态但消费者未释放、capability、
+失败、诊断、损坏登记与完整退役，并核四个生产者释放后外层目录实际消失。
+这些源码与 FILEMAP 影响边同时变更，原动作、线程和限制保留；证明与行为结果须以
+固定候选原报告为准，不能据根已登记宣称通过。全部编译、验证、IO、存储及 CI 成本未知。
 
 checkout 的实际状态类型 `Checkout` 归 `verified_status.rs`，原 `wire::Checkout`
 只重导出同一个类型。完整字段克隆和相等比较同源定义，保留 head、tracked、untracked
@@ -88,6 +97,11 @@ FILEMAP 为新模块登记原两个证明根；facts 适配文件未参与这些
 没有新增运行时进程或 IO。复用已有有序树借用库存，额外暂存 E 个条目引用，空间为
 O(E)；复用模式原有 B 个 blob 路径克隆继续保留。证明中的状态序列不进入运行程序。
 完整构建、证明、运行、CI 与存储成本未测。
+
+本批本地验收实际遇到磁盘空间不足，runner-tests 的旧 Cargo 输出需要在继续复用检出时回收。
+其现有项目登记增加 `clean.runner-tests-output`，复用 Cargo 的按包清理，参数由 projects.json
+唯一维护；通过受保护的 worktree use 执行。调用方先加入该测试项目的全部进程并排除其产物
+使用方，保留源码、固定提交及失败原件。清理效果按原回执核验，完整重建成本未测。
 
 `Reader::verify_oid` 的仓内控制流由 `verified_status.rs::verify_oid` 拥有：
 先核完整输入 OID，按顺序观察 commit 与 tree，完整 commit 不匹配时不读 tree，

@@ -4,6 +4,8 @@
 
 格式、准备状态、工作树和直接引用是否合法，仍由 registration 负责。它的不可变 `node_data()` 是完整格式节点清单的唯一来源。读到清单本身，不代表内容含义有效或输入已经齐全。
 
+影响计算和规则文档库接口直接使用每端 `Registrations` 已绑定的有效配置路径，不再接收未使用的额外 `config_path` 参数。固定提交的登记加载仍显式指定入口；平台选择和登记重定位由原负责方核对。
+
 编译依赖方向是 `judge-ci → judge-filemap → judge-mixed → judge-registration → runner`，需要 Git 事实或传输的项目也直接依赖 runner。filemap 的测试项目独立拥有清单、锁文件和构建目录，没有根 workspace 或通用登记项目。
 
 ## 按配置选择依赖边
@@ -48,7 +50,7 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 
 ## 带版本的输出
 
-`schema` 为 `chrono-filemap-impact/v4`。Rust 消费者可反序列化成 `chrono_judge_filemap::Impact`；JSON 消费者必须核对格式。外层 v1 请求／报告绑定两端提交、文件树和登记摘要。数组与映射按确定顺序输出，未知成本保留为 JSON `null`。
+`schema` 为 `chrono-filemap-impact/v5`。Rust 消费者可反序列化成 `chrono_judge_filemap::Impact`；JSON 消费者必须核对格式。外层 v1 请求／报告绑定两端提交、文件树和登记摘要。数组与映射按确定顺序输出，未知成本保留为 JSON `null`。
 
 结果说明登记图中的影响；提供并验证实际环境变化时也将其纳入。它不证明操作已执行、移除已获准或成本已合格。
 
@@ -67,8 +69,8 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 | `closure.traversed` | 每条走过的边及所有相关起点；保留分叉后汇合的不同路径和环，不枚举无穷路径 |
 | `tests` | 候选仍存在的已选测试 ID，排序去重，也包含歧义 ID；存在不代表唯一或已执行 |
 | `retired_tests` | 候选已不存在的必需测试 ID，排序去重；只说明移除事实，不表示允许移除 |
-| `required_tests` | 全部已选 ID、`candidate_present`、`candidate_ambiguous` 和实际选测的 `execution_edges`；成本声明保留在两端完整 `records`，由成本判官产生报告 |
-| `judges` | 候选中每个每次变更必跑的检查程序只列一次，附受影响的 `judge-trigger` 边作为原因 |
+| `required_tests` | 全部已选 ID、`candidate_present` 和实际选测的 `execution_edges`；成本声明保留在两端完整 `records`，由成本判官产生报告 |
+| `judges` | 候选中每个每次变更必跑的检查程序只列一次，保存节点 ID 和受影响的 `judge-trigger` 边 `triggers` |
 | `historical_context` | 未受影响的边含义错误及所属端；不算本次问题 |
 | `historical_ambiguities` | 未受影响的歧义节点、所属端和定义身份；只记录事实 |
 | `limits` | 明确列出限制：不判断执行／移除／成本，未保留的外部字节，以及尚未证明的完整性和影响范围正确性 |
@@ -90,6 +92,8 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 完整求值会把 registration 核验过的保留 `effective` 环境值加到两端记录。`null` 表示缺失，区别于空字符串；配置值覆盖继承值。`produce` 只读取声明；`produce_with_inputs` 通过 registration 输入 API 验证并使用实际保留事实。两者共用图、记录和历史解释，缺失或不一致的实际事实不能当作没有变化。
 
 registration 清单保留每条定义及其身份，例如 `project:t` 与 `script:t` 都可能定义 `test:t`。只有恰好一个定义时，`NodeView::unique()` 才返回它。输出通过两端定义数组的长度区分缺席、唯一和歧义；冲突时不能任取一个可执行值。project 和 script 都在 `targets` 中保留测试别名，filemap 直接复用，不重新查找别名。
+
+必需测试的歧义由完整候选定义表达，不另存布尔副本。registration 已核对每个判官采用 `every-delta`，影响报告直接列出全部判官及触发原因，不重复保存恒为真的选择标记。
 
 两端完整 `records` 保留负责人、`test_costs` 引用和 `cost_models` 值，`required_tests` 只保存选择事实。成本判官从 registration 的两端登记产生权威成本报告，不在选测条目中重复组装成本。已移除的必需测试仍在 `required_tests` 中，标为 `candidate_present:false`，并进入 `retired_tests`。`tests`／`retired_tests` 只按候选是否存在分组，不存放“已执行”或“允许移除”状态。进入 `retired_tests` 不能豁免 `E_REQUIRED_TEST_REMOVED`；后续 projects／workflow 仍须核对 SPEC 要求的移除／替代证据，缺少时必须失败。projects 验证替代项实际执行；工作流的移除证明仍有未完成项。缺席的端点记录为 `null`，模型中的未知成本仍为 `null`，不能写成零；后续程序各自作出判断。
 

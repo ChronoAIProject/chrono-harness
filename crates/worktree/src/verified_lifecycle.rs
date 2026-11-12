@@ -12,6 +12,35 @@ use identifiers::equal_text;
 
 verus! {
 
+pub enum ProducerNamespaceMember { Owner, Records, Metadata, Disposals, Unknown }
+
+pub fn producer_namespace_member(name: &str) -> (member: ProducerNamespaceMember)
+    ensures match member {
+        ProducerNamespaceMember::Owner => name@ == "objects.json"@,
+        ProducerNamespaceMember::Records => name@ == "producer-records"@,
+        ProducerNamespaceMember::Metadata => name@ == "rolling-metadata"@,
+        ProducerNamespaceMember::Disposals => name@ == "rolling-disposals"@,
+        ProducerNamespaceMember::Unknown => name@ != "objects.json"@
+            && name@ != "producer-records"@ && name@ != "rolling-metadata"@
+            && name@ != "rolling-disposals"@,
+    },
+{
+    if equal_text(name, "objects.json") { ProducerNamespaceMember::Owner }
+    else if equal_text(name, "producer-records") { ProducerNamespaceMember::Records }
+    else if equal_text(name, "rolling-metadata") { ProducerNamespaceMember::Metadata }
+    else if equal_text(name, "rolling-disposals") { ProducerNamespaceMember::Disposals }
+    else { ProducerNamespaceMember::Unknown }
+}
+
+/// An enclosing fixture may retire only after the producer has retired every
+/// object and metadata handoff, with no unowned member in its namespace.
+pub fn producer_namespace_retired(objects_empty: bool, metadata_empty: bool,
+    members_known: bool) -> (retired: bool)
+    ensures retired == (objects_empty && metadata_empty && members_known),
+{
+    objects_empty && metadata_empty && members_known
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, PartialEq, Eq, serde::Deserialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
 pub enum Disposition {

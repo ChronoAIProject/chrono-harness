@@ -1076,8 +1076,12 @@ impl RetainedArtifact {
         if released && !object.consumers.contains_key(consumer) {
             return Err("unknown consumer cannot publish released state".into());
         }
+        let prefix = object.rolling.as_ref().map_or_else(
+            || "producer-reference".to_owned(),
+            |rolling| format!("{}/producer-reference", rolling.metadata),
+        );
         let receipt = store.receipt(
-            "producer-reference",
+            &prefix,
             &value!({"schema":"chrono-retained-artifact-reference/v1",
             "path":object.path,"identity":object.identity,"intent":object.intent,
             "consumer":consumer,"released":released,"reason":reason}),

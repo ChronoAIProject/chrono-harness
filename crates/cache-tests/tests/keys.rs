@@ -1,3 +1,8 @@
+#![allow(unexpected_cfgs)]
+
+#[path = "continuity.rs"]
+mod continuity;
+
 #[path = "recovery.rs"]
 mod recovery;
 
@@ -38,6 +43,11 @@ impl Drop for Host {
 fn fixture() -> (Host, Value) {
     let root = Host::new();
     fs::create_dir(root.path().join(".chrono-harness")).unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/retention.json"),
+        include_bytes!("../../../.chrono-harness/retention.json"),
+    )
+    .unwrap();
     fs::write(root.path().join("compiler"), b"compiler-one").unwrap();
     fs::write(root.path().join("source"), b"source-one").unwrap();
     let mut config = json!({"schema":"chrono-cache/v2","namespace":"fixture","artifact_registry":".chrono-harness/artifacts.json",
@@ -399,8 +409,10 @@ fn plan_retains_probe_original_without_creating_release_output() {
         prepared,
         serde_json::from_slice::<Value>(&fs::read(root.path().join(&plan_path)).unwrap()).unwrap()
     );
-    let original = prepared["inputs"]["compiler"]["original"].as_str().unwrap();
-    assert!(original.starts_with(".chrono-harness/state/cache/check.one/"));
+    let original = prepared["inputs"]["compiler"]["original"]["path"]
+        .as_str()
+        .unwrap();
+    assert!(original.starts_with(".chrono-harness/state/cache-probes/plan-"));
     assert!(
         !root.path().join(directory).exists(),
         "preparation must not create release output"
@@ -800,15 +812,10 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
             .unwrap()
             .remove("original")
             .unwrap();
-        let path = original.as_str().unwrap();
+        let path = original["path"].as_str().unwrap();
         let bytes = fs::read(root.path().join(path)).unwrap();
-        assert_eq!(
-            path,
-            format!(
-                ".chrono-harness/state/cache-probes/{:x}.json",
-                Sha256::digest(&bytes)
-            )
-        );
+        assert!(path.starts_with(".chrono-harness/state/cache-probes/attempt-"));
+        assert!(path.ends_with("/compiler/process.json"));
         let process: Value = serde_json::from_slice(&bytes).unwrap();
         let observed = &report["inputs"]["compiler"]["observation"];
         assert_eq!(process["exit_code"], observed["exit_code"]);
@@ -877,7 +884,9 @@ fn failed_and_bounded_probes_retain_original_results_and_stop_planning() {
             .map(|v| v.unwrap().path())
             .collect::<Vec<_>>();
         assert_eq!(files.len(), 1);
-        let evidence: Value = serde_json::from_slice(&fs::read(&files[0]).unwrap()).unwrap();
+        let evidence: Value =
+            serde_json::from_slice(&fs::read(files[0].join("compiler/process.json")).unwrap())
+                .unwrap();
         assert!(error.contains(files[0].file_name().unwrap().to_str().unwrap()));
         if mode == "exit" {
             assert_eq!(evidence["exit_code"], 7, "{evidence}");
@@ -980,38 +989,12 @@ fn primary_checkout_transport_refuses_linked_worktrees_before_restoration() {
             .unwrap_err()
             .contains("E_CACHE_OWNERSHIP")
     );
-    let git = |args: &[&str]| {
-        let result = Command::new("/usr/bin/git")
-            .args(args)
-            .current_dir(root.path())
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
-    };
-    git(&["init", "-q"]);
-    git(&["add", "."]);
-    git(&[
-        "-c",
-        "user.name=Fixture",
-        "-c",
-        "user.email=fixture@example.invalid",
-        "commit",
-        "-qm",
-        "fixture",
-    ]);
+    // Ownership consumes physical metadata only. Model those inputs directly;
+    // no Git executable, repository initialization, commit or worktree is needed.
+    fs::create_dir(root.path().join(".git")).unwrap();
     assert!(plan(root.path(), &config, "check.one").is_ok());
     let linked = tempfile::tempdir().unwrap();
-    git(&[
-        "worktree",
-        "add",
-        "--detach",
-        linked.path().to_str().unwrap(),
-        "HEAD",
-    ]);
+    fs::write(linked.path().join(".git"), b"gitdir: fixture-metadata\n").unwrap();
     assert!(
         plan(linked.path(), &config, "check.one")
             .unwrap_err()
@@ -1030,6 +1013,11 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
             .unwrap();
     let root = Host::new();
     fs::create_dir_all(root.path().join(".chrono-harness/ci")).unwrap();
+    fs::write(
+        root.path().join(".chrono-harness/retention.json"),
+        include_bytes!("../../../.chrono-harness/retention.json"),
+    )
+    .unwrap();
     config["require_primary_checkout"] = json!(false);
     config["recover_failed_restores"] = json!(false);
     config["recover_unconfirmed_restores"] = json!(false);
@@ -1320,7 +1308,7 @@ fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality(
 }
 
 #[test]
-fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_domain() {
+fn registered_producer_mock_preserves_source_refresh_and_compatible_domain() {
     let (root, mut config) = host_cache_fixture(&["check.unit_cache"]);
     fs::create_dir_all(root.path().join(".git")).unwrap();
     config["require_primary_checkout"] = json!(true);
@@ -1348,7 +1336,7 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
     ] {
         config["inputs"][id] = json!({"kind":"file","path":path,"presence":"present"});
     }
-    config["inputs"]["rustc.version"] = json!({"kind":"command","command":{"program":"rustc","args":["--version","--verbose"],"env":{},"timeout_seconds":30,"output_limit_bytes":65536},"inherit":["PATH","RUSTUP_HOME","CARGO_HOME","RUSTUP_TOOLCHAIN"],"result":"stdout"});
+    config["inputs"]["rustc.version"] = json!({"kind":"literal","value":"mock rustc version"});
     let registrations: Value = serde_json::from_slice(
         &fs::read(root.path().join(".chrono-harness/projects.json")).unwrap(),
     )
@@ -1362,7 +1350,9 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
     let action = &owner["actions"]["execute"];
     let argv: Vec<String> = serde_json::from_value(action["argv"].clone()).unwrap();
     let build = || {
-        let result = Command::new(action["tool"].as_str().unwrap())
+        assert_eq!(action["tool"], "cargo");
+        let result = Command::new(env!("CARGO_BIN_EXE_chrono-cache-test-probe"))
+            .arg("cargo")
             .args(&argv)
             .current_dir(root.path())
             .env("CARGO_INCREMENTAL", "1")
@@ -1375,11 +1365,7 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
             "{}",
             String::from_utf8_lossy(&result.stderr)
         );
-        let output = Command::new(project.join("target/debug/cache-compiler-acceptance"))
-            .output()
-            .unwrap();
-        assert!(output.status.success());
-        output.stdout
+        fs::read(project.join("target/debug/mock-output")).unwrap()
     };
     fs::write(
         project.join("src/main.rs"),
@@ -1395,8 +1381,8 @@ fn registered_cargo_producer_rebuilds_changed_source_in_the_same_compatible_doma
         "fn main() { println!(\"candidate-output\"); }\n",
     )
     .unwrap();
-    // A restored build can be newer than the checkout's changed source.
-    // Cargo's timestamp shortcut must not leave the old program in use.
+    // Model a restored output newer than changed source. This tests timestamp
+    // refresh and the command boundary; it does not execute Cargo's shortcut.
     fs::File::open(project.join("src/main.rs"))
         .unwrap()
         .set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1))

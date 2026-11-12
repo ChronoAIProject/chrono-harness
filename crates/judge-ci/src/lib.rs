@@ -1023,7 +1023,7 @@ pub fn full_scheduling_requirements(
     let delta =
         chrono_harness::facts::delta(&reader.tree(root, base)?, &reader.tree(root, candidate)?);
     let (impact, findings) = chrono_judge_filemap::produce_for_endpoints(
-        root, base, candidate, profile, &delta, &old, &current, &reader,
+        root, base, candidate, &delta, &old, &current, &reader,
     )?;
     if findings.iter().any(|f| f.level == "error") {
         return Err(format!(

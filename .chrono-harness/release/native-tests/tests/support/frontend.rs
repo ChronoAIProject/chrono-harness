@@ -28,26 +28,25 @@ impl Fixture {
             .prefix("source-")
             .tempdir_in(case.path())
             .unwrap();
-        let tools = host.root().join("tools");
+        let tools = case.path().join("tools");
         fs::create_dir(&tools).unwrap();
-        for (name, executable) in [
-            (
-                "git",
-                env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
-            ),
-            (
-                "probe",
-                env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
-            ),
-            ("tar", env!("CARGO_BIN_EXE_chrono-test-release-tool")),
-            ("mv", env!("CARGO_BIN_EXE_chrono-test-release-tool")),
-        ] {
-            fs::hard_link(executable, tools.join(name)).unwrap();
-        }
-        host.config["tools"]["git"] = json!(tools.join("git"));
-        host.config["tools"]["probe"] = json!(tools.join("probe"));
+        let git_tool = tools.join("git");
+        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-git"), &git_tool).unwrap();
+        host.config["tools"]["git"] = json!(git_tool);
+        let probe = tools.join("probe");
+        fs::hard_link(
+            env!("CARGO_BIN_EXE_chrono-test-release-frontend-tool"),
+            &probe,
+        )
+        .unwrap();
+        host.config["tools"]["probe"] = json!(probe);
         host.save();
         let root = host.root();
+        fs::write(
+            root.join(".gitignore"),
+            "/.chrono-harness/bin/\n/.chrono-harness/state/\n/frontend/\n/handoffs/\n/consumer/\n",
+        )
+        .unwrap();
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
         let binary = root.join(".chrono-harness/bin/chrono-host-release");
         // 测试父进程并发 fork 时，其他子进程可能短暂继承写描述符。
@@ -64,7 +63,7 @@ impl Fixture {
         };
         let profile = json!({"schema":"chrono-bootstrap/v1", "projects":".chrono-harness/bootstrap-projects.json", "rust_toolchain":"1.95.0", "tools":{},
             "operations":["build.frontend"], "install":[{"source":"out/frontend", "destination":".chrono-harness/bin/chrono-host-release"}],
-            "participation":{"coordinator_root":"git-main-worktree", "program":".chrono-harness/bin/chrono-worktree", "git":"/usr/bin/git", "config":".chrono-harness/worktree.json"},
+            "participation":{"coordinator_root":"git-main-worktree", "program":".chrono-harness/bin/chrono-worktree", "git":git_tool, "config":".chrono-harness/worktree.json"},
             "entrypoint":{"tool":"bash", "script":".chrono-harness/ci/entry.sh"}, "require_tool_bindings":true,
             "tool_bindings_registry":".chrono-harness/ci/registry.json", "report_path":".chrono-harness/state/frontend-bootstrap.json"});
         recipe::write(root, ".chrono-harness/ci/bootstrap-release.json", &profile);
@@ -85,8 +84,44 @@ impl Fixture {
             "registered bootstrap fixture\n",
         )
         .unwrap();
+        for args in [
+            vec!["init", "--quiet"],
+            vec!["add", "--all"],
+            vec![
+                "-c",
+                "user.name=Release fixture",
+                "-c",
+                "user.email=release@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "frontend inputs",
+            ],
+        ] {
+            assert!(
+                Command::new(&git_tool)
+                    .args(args)
+                    .current_dir(root)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+        }
+        let git = |revision| {
+            String::from_utf8(
+                Command::new(&git_tool)
+                    .args(["rev-parse", revision])
+                    .current_dir(root)
+                    .output()
+                    .unwrap()
+                    .stdout,
+            )
+            .unwrap()
+            .trim()
+            .to_owned()
+        };
         let source =
-            json!({"commit":"a".repeat(40), "tree":"b".repeat(40), "dirty":false, "error":null});
+            json!({"commit":git("HEAD"), "tree":git("HEAD^{tree}"), "dirty":false, "error":null});
         let mut registrations = serde_json::Map::new();
         for path in [
             ".chrono-harness/ci/bootstrap-release.json",
@@ -159,7 +194,7 @@ impl Fixture {
     }
 
     pub fn capture_result(&self, command: &mut Command) -> std::io::Result<std::process::Output> {
-        command.env("PATH", self.host.root().join("tools"));
+        command.env("PATH", self.case.path().join("tools"));
         chrono_harness::process_fds::forward_command(command, &[]).unwrap();
         let index = self.calls.get();
         self.calls.set(index + 1);
@@ -246,8 +281,9 @@ impl Fixture {
     }
 
     pub fn unit_through_launcher(&self, directory: &Path) -> std::process::Output {
-        let mut command = context::command("/bin/bash");
+        let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
         command
+            .arg("--consume-launcher")
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
             .arg(self.host.root())
             .arg(directory)

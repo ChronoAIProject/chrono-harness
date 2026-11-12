@@ -8,7 +8,7 @@ fn report(a: &Values, b: &Values, paths: &[&str]) -> Result<Value, String> {
     let a = load(a);
     let b = load(b);
     let delta = paths.iter().map(|p| delta(p)).collect::<Vec<_>>();
-    let (impact, findings) = chrono_judge_filemap::produce(&a, &b, CONFIG, &delta);
+    let (impact, findings) = chrono_judge_filemap::produce(&a, &b, &delta);
     assert!(findings.is_empty(), "{findings:?}");
     produce(&a, &b, &impact)
 }
@@ -159,7 +159,7 @@ fn dangling_cost_reference_is_an_error_not_an_unknown_value() {
         .remove("known");
     let a = load(&a);
     let b = load(&b);
-    let (impact, _) = chrono_judge_filemap::produce(&a, &b, CONFIG, &[delta("src.bin")]);
+    let (impact, _) = chrono_judge_filemap::produce(&a, &b, &[delta("src.bin")]);
     assert!(
         produce(&a, &b, &impact)
             .unwrap_err()

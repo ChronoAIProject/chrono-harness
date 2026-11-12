@@ -28,13 +28,8 @@ fn report_with_costs(a: &Values, b: &Values, paths: &[&str]) -> Result<(Value, V
     let old = load(a);
     let new = load(b);
     let delta = paths.iter().map(|p| delta(p)).collect::<Vec<_>>();
-    let (impact, errors) = chrono_judge_filemap::produce_with_documents(
-        &old,
-        &new,
-        CONFIG,
-        &delta,
-        &[a.clone(), b.clone()],
-    );
+    let (impact, errors) =
+        chrono_judge_filemap::produce_with_documents(&old, &new, &delta, &[a.clone(), b.clone()]);
     if let Some(error) = errors.first() {
         return Err(error.message.clone());
     }
@@ -363,7 +358,7 @@ fn selected_row_subtrees_ignore_reordering_but_operation_sequences_keep_order() 
 fn missing_named_documents_and_incomplete_costs_are_errors_without_fallback() {
     let a = fixture();
     let old = load(&a);
-    let (impact, _) = chrono_judge_filemap::produce(&old, &old, CONFIG, &[delta(PROJECTS)]);
+    let (impact, _) = chrono_judge_filemap::produce(&old, &old, &[delta(PROJECTS)]);
     let mut costs = chrono_judge_cost::produce(&old, &old, &impact).unwrap();
     let mut missing = a.clone();
     missing.remove(PROJECTS);

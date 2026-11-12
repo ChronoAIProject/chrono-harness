@@ -93,7 +93,9 @@ dependencies = [
  "chrono-judge-cost",
  "chrono-judge-filemap",
  "chrono-judge-registration",
+ "serde",
  "serde_json",
+ "sha1",
  "tempfile",
 ]
 

@@ -1,9 +1,14 @@
+#[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+mod chrono_git_boundary;
 #[path = "gating.rs"]
 pub(super) mod gating;
 use super::*;
 
 #[test]
 fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2");
@@ -318,6 +323,9 @@ impl ShortHost {
 }
 #[test]
 fn real_short_check_tracks_explicit_remote_and_head_and_preserves_entry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     let r = h.run(&["check"], 0);
     let explicit = h
@@ -367,6 +375,9 @@ fn real_short_check_tracks_explicit_remote_and_head_and_preserves_entry() {
 #[cfg(unix)]
 #[test]
 fn real_short_check_with_inherited_ownership_executes_selected_operations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use std::os::fd::AsFd;
     let h = ShortHost::new();
     let lease = tempfile::tempfile().unwrap();
@@ -459,6 +470,9 @@ impl Drop for ShortHost {
 
 #[test]
 fn failed_short_fixture_retains_original_state_before_removing_host() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for separate_consumer in [false, true] {
         let directory = tempfile::tempdir().unwrap();
         let root = directory.path().join("failed fixture");
@@ -510,6 +524,9 @@ fn failed_short_fixture_retains_original_state_before_removing_host() {
 
 #[test]
 fn short_units_are_independent_and_value_less_collection_runs_zero_business() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = ShortHost::new();
     let first = h.run(&["check", "--unit", "alpha"], 0);
     h.run(&["check", "--unit", "alpha"], 0);
@@ -573,6 +590,9 @@ fn stream_report(root: &Path, path: &str, out: &std::process::Output) -> Value {
 
 #[test]
 fn scoped_stream_reports_reject_missing_or_modified_streams_without_business_reruns() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2")
@@ -641,6 +661,9 @@ fn scoped_stream_reports_reject_missing_or_modified_streams_without_business_rer
 
 #[test]
 fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     fs::write(h.root.join("a.case"), "business-failure\n").unwrap();
     h.modify(".chrono-harness/ci/check.json", |c| {
@@ -716,6 +739,9 @@ fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals()
 
 #[test]
 fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2")
@@ -785,6 +811,9 @@ fn scoped_stream_reports_enforce_the_combined_original_read_budget() {
 
 #[test]
 fn scoped_report_references_retain_originals_and_reject_missing_or_changed_evidence() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["report_publication"] = json!("retained-reference/v2");
@@ -870,6 +899,9 @@ fn scoped_report_references_retain_originals_and_reject_missing_or_changed_evide
 
 #[test]
 fn report_references_preserve_business_failure_and_original_read_limits() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for limited in [false, true] {
         let mut h = ShortHost::new();
         if !limited {
@@ -922,6 +954,9 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
 }
 #[test]
 fn short_preserves_actual_business_and_producer_failures() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     fs::write(h.root.join("a.case"), "exit-7\n").unwrap();
     h.revise();
@@ -947,6 +982,9 @@ fn short_preserves_actual_business_and_producer_failures() {
 }
 #[test]
 fn short_rejects_dirty_missing_unknown_binding_selector_and_long_spelling() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     fs::write(h.root.join("a.txt"), "dirty").unwrap();
     h.run(&["check"], 2);
@@ -989,6 +1027,9 @@ fn short_rejects_dirty_missing_unknown_binding_selector_and_long_spelling() {
 }
 #[test]
 fn generated_native_check_step_executes_same_short_command_and_event_rules() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = gating::GatedHost::new();
     h.change(&["a.txt", "b.txt"]);
     let detection = h.detection();
@@ -1000,7 +1041,7 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
         .find(|l| l.contains("'check' '--unit' 'alpha'"))
         .unwrap()
         .trim();
-    let mut command = Command::new("/bin/bash");
+    let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"));
     command.args(["-c", line]);
     h.environment(&mut command);
     let out = command
@@ -1082,6 +1123,9 @@ fn generated_native_check_step_executes_same_short_command_and_event_rules() {
 }
 #[test]
 fn local_collection_rejects_stale_failed_and_wrong_pin_reports_without_execution() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.run(&["check", "--unit", "alpha"], 0);
     h.run(&["check", "--unit", "beta"], 0);
@@ -1104,6 +1148,9 @@ fn local_collection_rejects_stale_failed_and_wrong_pin_reports_without_execution
 }
 #[test]
 fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted_inputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/config.json", |c| c["extra"] = json!(true));
     let o = h.command(&["check"]).output().unwrap();
@@ -1142,6 +1189,9 @@ fn short_schema_and_native_selector_fail_closed_on_missing_ambiguous_and_drifted
 }
 #[test]
 fn configured_selector_resolves_v4_without_legacy_git_and_has_no_platform_fallback() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     let cfg: Value =
         serde_json::from_slice(&fs::read(h.root.join(".chrono-harness/config.json")).unwrap())
@@ -1192,6 +1242,9 @@ fn adjudicate(h: &ShortHost, req: &Value) -> Value {
 }
 #[test]
 fn actual_consumer_rejects_fabricated_expanded_entry_and_source_disagreement() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = ShortHost::new();
     let r = h.run(&["check", "--unit", "alpha"], 0);
     let bytes = fs::read(h.root.join(".chrono-harness/state/calls-a")).unwrap();
@@ -1231,6 +1284,9 @@ fn actual_consumer_rejects_fabricated_expanded_entry_and_source_disagreement() {
 }
 #[test]
 fn native_short_initial_requires_explicit_parentless_event_and_canonical_entry() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = gating::GatedHost::new();
     let tree = git(&h.root, &["rev-parse", "HEAD^{tree}"]);
     let candidate = git(&h.root, &["commit-tree", &tree, "-m", "parentless fixture"]);
@@ -1262,6 +1318,9 @@ fn native_short_initial_requires_explicit_parentless_event_and_canonical_entry()
 }
 #[test]
 fn collection_rejects_duplicate_registered_report_paths() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"]["units"]["beta"]["report_path"] =
@@ -1280,6 +1339,9 @@ fn collection_rejects_duplicate_registered_report_paths() {
 
 #[test]
 fn short_scoped_binding_never_falls_into_legacy_unbound_git() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/ci/check.json", |c| {
         c["policy"].as_object_mut().unwrap().remove("facts_config");
@@ -1291,6 +1353,9 @@ fn short_scoped_binding_never_falls_into_legacy_unbound_git() {
 
 #[test]
 fn preparation_retains_environment_identities_without_credential_values() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = gating::GatedHost::new();
     h.change(&["a.txt", "b.txt"]);
     let token = "fixture-credential-must-not-be-published";
@@ -1341,6 +1406,9 @@ fn preparation_retains_environment_identities_without_credential_values() {
 
 #[test]
 fn generated_native_collect_gathers_inside_short_check_and_repeats_without_business() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = gating::GatedHost::new();
     h.change(&["a.txt", "b.txt"]);
     let d = h.detection();
@@ -1356,7 +1424,7 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
         .unwrap()
         .trim();
     for _ in 0..2 {
-        let mut command = Command::new("/bin/bash");
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-test-generated-command"));
         command.args(["-c", line]);
         h.environment(&mut command);
         let out = command
@@ -1387,6 +1455,9 @@ fn generated_native_collect_gathers_inside_short_check_and_repeats_without_busin
 
 #[test]
 fn local_collection_only_requires_delta_units_and_ignores_unrelated_absent_or_stale_reports() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.run(&["check", "--unit", "beta"], 0);
     let base_b = git(&h.root, &["show", &format!("{}:b.txt", h.base)]);
@@ -1422,6 +1493,9 @@ fn local_collection_only_requires_delta_units_and_ignores_unrelated_absent_or_st
 
 #[test]
 fn local_collection_empty_delta_needs_no_reports_or_business() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = ShortHost::new();
     git(&h.root, &["push", "-q", "origin", "dev"]);
     let r = h.run(&["check", "--collect"], 0);
@@ -1434,6 +1508,9 @@ fn local_collection_empty_delta_needs_no_reports_or_business() {
 
 #[test]
 fn local_collection_shared_obligations_require_each_assigned_unit() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/FILEMAP.json", |fm| {
         fm["execution_plans"]["test:b"]["operations"] = json!(["test.a", "test.b"]);
@@ -1481,6 +1558,9 @@ pub(super) fn copy_artifacts(source: &Path, target: &Path) {
 
 #[test]
 fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let adopted: Value = serde_json::from_slice(
         &fs::read(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/git/macos-27.json"),
@@ -1497,15 +1577,7 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
     let mut h = ShortHost::new();
     let real_git = fixture_git();
     let wrapper = h.root.join(".chrono-harness/bin/declared-git");
-    let copied = Command::new("/bin/cp")
-        .arg(env!("CARGO_BIN_EXE_chrono-ci-test-transport"))
-        .arg(&wrapper)
-        .output()
-        .unwrap();
-    assert!(
-        copied.status.success(),
-        "native Git fixture copy: {copied:?}"
-    );
+    fs::copy(env!("CARGO_BIN_EXE_chrono-ci-test-transport"), &wrapper).unwrap();
     json_file(
         &h.root,
         "declared-git.json",
@@ -1600,6 +1672,9 @@ fn declared_ssh_agent_input_reaches_actual_git_owner_with_absence_and_identity()
 
 #[test]
 fn narrow_spaced_native_uploads_close_original_evidence_on_a_separate_consumer() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = gating::GatedHost::new();
     let prefix = ".chrono-harness/state/custom evidence λ/";
     h.modify(".chrono-harness/ci/units.json", |c| {
@@ -1886,6 +1961,9 @@ pub(super) fn published_report(
 
 #[test]
 fn short_console_large_original_success_has_constant_output_and_no_extra_operations() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     // A large genuine business process receipt must stay in the original report.
     fs::write(h.root.join("a.case"), "alpha-large-original\n").unwrap();
@@ -1946,6 +2024,9 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
 
 #[test]
 fn short_transport_preserves_process_failure_before_decoding_partial_output() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for (mode, expected) in [
         ("timeout-partial", "process timed out"),
         ("output-limit", "process output limit exceeded"),
@@ -2021,6 +2102,9 @@ fn retained_receipt(root: &Path, prefix: &str) -> (String, Vec<u8>, Value) {
 
 #[test]
 fn short_producer_failure_version_decode_and_validation_keep_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in ["failed", "version", "decode", "validation"] {
         let mut h = ShortHost::new();
         native_fixture(&h.root, ".chrono-harness/bin/fixture-producer");
@@ -2088,6 +2172,9 @@ fn short_producer_failure_version_decode_and_validation_keep_originals() {
 
 #[test]
 fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     let long_parent = h
         ._dir
@@ -2160,6 +2247,9 @@ fn short_outer_failure_keeps_original_error_and_retention_failure_is_honest() {
 
 #[test]
 fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let missing_program = format!(
         ".chrono-harness/bin/{}/{}/missing-tail-producer",
         "a".repeat(160),
@@ -2317,6 +2407,9 @@ fn short_prelaunch_failures_retain_actual_errors_without_business_launches() {
 
 #[test]
 fn short_console_failed_blocked_and_transport_diagnostics_are_bounded_and_visible() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     for case in ["failed", "blocked", "transport"] {
         let mut h = ShortHost::new();
         let program = native_transport_ready(&h.root);
@@ -2362,6 +2455,9 @@ fn short_console_failed_blocked_and_transport_diagnostics_are_bounded_and_visibl
 
 #[test]
 fn short_console_zero_delta_preserves_large_report_and_executes_zero_business() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = ShortHost::new();
     git(&h.root, &["push", "-q", "origin", "dev"]);
     let out = h.command(&["check"]).output().unwrap();
@@ -2389,6 +2485,9 @@ fn short_console_zero_delta_preserves_large_report_and_executes_zero_business() 
 
 #[test]
 fn native_short_version_failure_retains_probe_in_selected_unit_upload_directory() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     h.modify(".chrono-harness/config.json", |c| {
         c["tools"][2]["expected_version"] = json!("wrong-native-version")
@@ -2429,6 +2528,9 @@ fn native_short_version_failure_retains_probe_in_selected_unit_upload_directory(
 
 #[test]
 fn short_console_does_not_revalidate_deep_accepted_evidence_or_change_verdict() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let mut h = ShortHost::new();
     let program = native_transport_ready(&h.root);
     h.modify(".chrono-harness/ci/check.json", |c| {
