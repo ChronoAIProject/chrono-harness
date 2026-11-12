@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>org.chrono-harness.maintenance</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>@COORDINATOR@/.chrono-harness/bin/chrono-worktree</string>
+        <string>maintain</string>
+        <string>--host-root</string>
+        <string>@COORDINATOR@</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>@COORDINATOR@</string>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>Nice</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>/dev/null</string>
+    <key>StandardErrorPath</key>
+    <string>/dev/null</string>
+</dict>
+</plist>
