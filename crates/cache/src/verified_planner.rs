@@ -4,6 +4,8 @@
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
