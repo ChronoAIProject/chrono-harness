@@ -9,6 +9,7 @@ verus! {
 /// 实际错误节点；上下文保持调用方的完整类型，不在证明中替换为摘要。
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, serde::Deserialize, PartialEq, serde::Serialize))]
 #[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[cfg_attr(not(verus_keep_ghost), serde(bound(deserialize = "C: serde::Deserialize<'de>")))]
 pub struct ErrorNode<C> {
     #[cfg_attr(not(verus_keep_ghost), serde(rename = "type"))]
     pub error_type: String,
