@@ -557,8 +557,10 @@ test ! -e "$maintenance_plist" && test ! -L "$maintenance_plist"
 test ! -e "$maintenance_link" && test ! -L "$maintenance_link"
 test -f "$maintenance_program" && test -x "$maintenance_program" && test ! -L "$maintenance_program"
 git -C "$maintenance_root" show "$maintenance_source:.chrono-harness/maintenance.launchd.plist" > "$maintenance_plist"
-plutil -replace ProgramArguments.0 -string "$maintenance_program" "$maintenance_plist"
-plutil -replace ProgramArguments.3 -string "$maintenance_root" "$maintenance_plist"
+plutil -remove ProgramArguments.0 "$maintenance_plist"
+plutil -insert ProgramArguments.0 -string "$maintenance_program" "$maintenance_plist"
+plutil -remove ProgramArguments.3 "$maintenance_plist"
+plutil -insert ProgramArguments.3 -string "$maintenance_root" "$maintenance_plist"
 plutil -replace WorkingDirectory -string "$maintenance_root" "$maintenance_plist"
 plutil -lint "$maintenance_plist"
 ln -s "$maintenance_plist" "$maintenance_link"
@@ -567,7 +569,9 @@ launchctl print "gui/$maintenance_uid/org.chrono-harness.maintenance"
 )
 ```
 
-每一步失败就停止并保留实际结果，不继续后续步骤。模板通过 `plutil -lint`，只证明 plist
+数组元素先删除、再在同一位置插入；macOS 的 `plutil -replace` 对数组下标会插入新元素，
+不能用来替换这里的两个占位值。每一步失败就停止并保留实际结果，不继续后续步骤。
+模板通过 `plutil -lint`，只证明 plist
 可解析；实际采用还须核 `launchctl print` 的程序、参数、间隔与运行身份，并收取由调度
 实际启动的维护报告。读取该报告的 `drain`、`cleanup_failures`、`producer_drains` 和
 `output_retention`，分别核对已删除路径、仍受保护内容及未完成工作。源模板不证明任务
