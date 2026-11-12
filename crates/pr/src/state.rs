@@ -49,6 +49,13 @@ struct Continuation {
     _reader: Lease,
 }
 
+#[derive(Deserialize)]
+struct ProcessCompletion {
+    exit_code: i32,
+    exit_signal: Option<i32>,
+    owned_work_joined: bool,
+}
+
 impl Continuation {
     fn load(
         root: &Path,
@@ -143,6 +150,19 @@ impl Continuation {
             let (saved, _) = read(&format!("call-{}.result.json", index + 1), 16777216)?;
             if saved != *receipt {
                 return Err("continued process receipt differs from the sealed original".into());
+            }
+            let completion: ProcessCompletion = serde_json::from_value(receipt.clone())
+                .map_err(|error| {
+                    format!("continued process completion is not established: {error}; preserve originals")
+                })?;
+            if !verified::process_completion_known(
+                completion.exit_code,
+                completion.exit_signal,
+                completion.owned_work_joined,
+            ) {
+                return Err(
+                    "continued process completion is not established; preserve originals".into(),
+                );
             }
             for (field, suffix) in [
                 ("stdout_original", "stdout"),
