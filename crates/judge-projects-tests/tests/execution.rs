@@ -1,3 +1,4 @@
+use chrono_harness::retained_artifacts::retention::Inventory;
 use chrono_judge_projects::execute;
 use chrono_judge_registration::execution::{Method, Plan};
 use chrono_judge_routes::prepare;
@@ -230,7 +231,39 @@ fn completed_operations_have_independent_durable_originals() {
         &[("test:a", vec!["a"]), ("test:z", vec!["z"])],
     );
     let plan = retain_operations(plan);
+    std::fs::write(
+        directory.path().join(".chrono-harness/retention.json"),
+        serde_json::to_vec(&json!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"check-original":[".chrono-harness/state/"]},
+            "keep_seconds":0,"diagnostic_keep_seconds":86400,
+            "max_related_outputs":512,"max_summaries":128,"max_nodes_per_round":256,
+            "max_bytes_per_round":67108864,"max_millis_per_round":25
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let results = execute(&plan).unwrap();
+    let inventory = Inventory::adopted(directory.path()).unwrap().unwrap();
+    let status = inventory.producer_status("check-original", None).unwrap();
+    assert_eq!(status["scope_complete"], true, "{status}");
+    assert_eq!(status["errors"], json!([]), "{status}");
+    let mut retained: Vec<_> = status["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| record["path"].as_str().unwrap())
+        .collect();
+    retained.sort_unstable();
+    assert_eq!(
+        retained,
+        [
+            ".chrono-harness/state/projects-run",
+            ".chrono-harness/state/projects-run.operation-0",
+            ".chrono-harness/state/projects-run.operation-1",
+        ],
+        "each operation directory owns its streams and launch original"
+    );
     let returned = serde_json::to_value(&results).unwrap();
     let original = &returned["operation_state"];
     assert!(
