@@ -40,12 +40,12 @@ pub open spec fn restore_prefix_matches(key: &str, prefix: Option<&str>) -> bool
 fn restore_prefix(key: &str, prefix: Option<&str>) -> (matched: bool)
     ensures matched == restore_prefix_matches(key, prefix),
 {
-    let prefix = match prefix {
-        Some(prefix) => prefix,
+    let prefix_text = match prefix {
+        Some(prefix_text) => prefix_text,
         None => return false,
     };
     let key_bytes = key.as_bytes();
-    let prefix_bytes = prefix.as_bytes();
+    let prefix_bytes = prefix_text.as_bytes();
     if prefix_bytes.len() == 0 || prefix_bytes.len() > key_bytes.len() {
         return false;
     }
@@ -53,10 +53,18 @@ fn restore_prefix(key: &str, prefix: Option<&str>) -> (matched: bool)
     while i < prefix_bytes.len()
         invariant i <= prefix_bytes.len(), prefix_bytes.len() <= key_bytes.len(),
             prefix_bytes.len() > 0,
+            prefix == Some(prefix_text),
+            key_bytes@ == key.spec_bytes(), prefix_bytes@ == prefix_text.spec_bytes(),
             forall|j: int| 0 <= j < i ==> key_bytes[j] == prefix_bytes[j],
         decreases prefix_bytes.len() - i,
     {
-        if key_bytes[i] != prefix_bytes[i] { return false; }
+        if key_bytes[i] != prefix_bytes[i] {
+            proof {
+                assert(key.spec_bytes()[i as int] != prefix_text.spec_bytes()[i as int]);
+                assert(!restore_prefix_matches(key, prefix));
+            }
+            return false;
+        }
         i += 1;
     }
     true
