@@ -116,6 +116,10 @@ v5 的 `failure_evidence` 可按 verification operation 登记失败目录。每
 
 ## 验证单元实际消费什么
 
+registration 的 Git facts 用例通过已有输入快照的 `{blob, sha256, length}` 引用保留完整测试执行物和其他声明输入，不再为两端快照把执行物逐字节展开成 JSON 数组。独立原字节、端点配置、摘要、长度、缺失状态和漂移检查仍保留；有界数据的内联／blob 等价性及坏原件拒绝由原 registration 用例覆盖。共享 Git 模型、原用例、断言、默认线程、profile、时限和发布依赖不变，没有新增依赖或传输格式。
+
+该调整针对发布运行 43213816878 的 Linux registration 验证在四项 Git facts 用例超过 60 秒后收到 runner shutdown、退出 143 的观察；同症状也见于 43205633182。原运行没有给出系统关闭的具体原因，仍保持 unknown，不能由后续通过反推根因。JSON 展开是已确认的输入准备成本，完整时间／内存收益及两平台原生发布仍须实测；本地通过不能代替公开发行与安装验收。
+
 v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、需求、输出用途）和 `release_assets`。资产集合必须恰好等于 `needs` 对应构建资产，否则 `E_RELEASE_CONSUMPTION`；非空依赖缺说明时，原 receipt 和 stderr 报 `W_RELEASE_CONSUMPTION_UNVERIFIED`。本宿主[配方](../.chrono-harness/release/build.json)全部验证均采用，回归覆盖全集，并变异核验多余／缺失依赖。通用 v5 仍兼容未采用此合同的宿主。`declared` 只证明登记一致；真实用途和最小依赖须检查实际调用、共享 fixture，并在不提供其他发布二进制时执行原未过滤操作，源码搜索不能代替。
 
 缓存传输的 bootstrap 安装路径和发布验证的 staging 路径用途不同。`chrono-cache` 发布资产只暂存到 `crates/cache/target/debug/chrono-cache`，原 cache-tests 在那里调用；`.chrono-harness/bin/chrono-cache` 归 bootstrap，供外层 plan／recover 使用，发布 staging 不再替换它。源资产、摘要、生产者及前后观察仍按 v5 核验。

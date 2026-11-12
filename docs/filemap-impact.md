@@ -50,7 +50,7 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 
 ## 带版本的输出
 
-`schema` 为 `chrono-filemap-impact/v5`。Rust 消费者可反序列化成 `chrono_judge_filemap::Impact`；JSON 消费者必须核对格式。外层 v1 请求／报告绑定两端提交、文件树和登记摘要。数组与映射按确定顺序输出，未知成本保留为 JSON `null`。
+`schema` 为 `chrono-filemap-impact/v6`。Rust 消费者可反序列化成 `chrono_judge_filemap::Impact`；JSON 消费者必须核对格式。外层 v1 请求／报告绑定两端提交、文件树和登记摘要。数组与映射按确定顺序输出，未知成本保留为 JSON `null`。
 
 结果说明登记图中的影响；提供并验证实际环境变化时也将其纳入。它不证明操作已执行、移除已获准或成本已合格。
 
@@ -62,7 +62,6 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 | `changes` | `{record, fields}`，用相对 JSON 指针列变化字段；空指针表示整条新增／删除，`/$registry_path` 表示移动登记位置 |
 | `nodes` | 节点 ID → 两端完整的 `{identity, value}` 数组 `base_definitions`／`candidate_definitions`；空数组表示缺席，一条表示唯一，多条表示歧义，包括仅旧端存在的定义 |
 | `edges` | 两端全部明确边的平表 `{from, kind, to, origin}`；来源为 `base`、`candidate` 或 `both` |
-| `seeds` | 排序去重的影响起点节点 ID |
 | `seed_causes` | 可累加的 `{id, node, reference, reason}`；引用为实际变更路径、稳定记录 ID 或明确工作流要求指针；原因为 `delta-path`、`record-change` 或 `edge-change` |
 | `closure.reached` | 每个到达节点及所有使它受影响的起点 ID |
 | `closure.predecessors` | 起点 ID → 节点 → 一条最短前驱边；起点处为 `null`，可据此还原有限的连续原因链 |
@@ -74,6 +73,8 @@ registration 的共用 `select_filemap` 只把匹配该端实际政策路径的�
 | `historical_context` | 未受影响的边含义错误及所属端；不算本次问题 |
 | `historical_ambiguities` | 未受影响的歧义节点、所属端和定义身份；只记录事实 |
 | `limits` | 明确列出限制：不判断执行／移除／成本，未保留的外部字节，以及尚未证明的完整性和影响范围正确性 |
+
+影响起点直接来自 `seed_causes[].node`，不另存节点列表；同一节点的不同原因继续分别保留。`closure.traversed[].seeds` 记录边的相关起点原因 ID，仍用于传播事实和路径证明。
 
 稳定记录 ID 以 `/records/<registry>/<collection>/<key>` 开头，key 使用 JSON Pointer 转义。它是 `records` 内的身份，不是源 JSON 的数组下标。
 

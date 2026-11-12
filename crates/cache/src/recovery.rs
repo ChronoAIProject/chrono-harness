@@ -4,30 +4,18 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, io::Write, path::Path};
 
 fn restore_status(cache: &Value, restore: &Value) -> &'static str {
-    let matched = restore["outputs"]["cache-matched-key"]
-        .as_str()
-        .filter(|key| !key.is_empty());
-    match restore["outcome"].as_str() {
-        Some("success") => match matched {
-            Some(key) if cache["key"] == key => "exact",
-            Some(key)
-                if cache["restore_keys"].as_array().is_some_and(|prefixes| {
-                    prefixes.iter().any(|prefix| {
-                        prefix
-                            .as_str()
-                            .is_some_and(|p| !p.is_empty() && key.starts_with(p))
-                    })
-                }) =>
-            {
-                "compatible"
-            }
-            Some(_) => "incompatible",
-            None => "miss-or-unavailable",
-        },
-        Some("failure" | "cancelled") => "error",
-        Some("skipped") => "not-attempted",
-        _ => "unavailable",
-    }
+    let prefixes: Vec<_> = cache["restore_keys"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(Value::as_str)
+        .collect();
+    super::verified_planner::restore_status(
+        restore["outcome"].as_str(),
+        cache["key"].as_str(),
+        restore["outputs"]["cache-matched-key"].as_str(),
+        &prefixes,
+    )
 }
 
 fn publish_once(root: &Path, path: &str, bytes: &[u8]) -> Result<(), String> {

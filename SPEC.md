@@ -629,7 +629,7 @@ stdin 恰好一个 UTF-8 JSON 文档，读到 EOF；stdout 恰好一个 JSON 文
   "registries": {"base": "<snapshot .chrono-harness path>",
                  "candidate": "<snapshot .chrono-harness path>", "digest": "<sha256>"},
   "context": {"path": "<context path>", "sha256": "<sha256>"},
-  "impact": {"schema": "chrono-filemap-impact/v5", "seeds": ["file:old.rs"], "edges": [], "tests": [], "retired_tests": []},
+  "impact": {"schema": "chrono-filemap-impact/v6", "seed_causes": [{"id": "[\"old.rs\",\"delta-path\",\"file:old.rs\"]", "node": "file:old.rs", "reference": "old.rs", "reason": "delta-path"}], "edges": [], "tests": [], "retired_tests": []},
   "prior_results": [{"protocol": "chrono-judge/v1", "request_id": "<registration request_id>",
     "judge_id": "registration", "status": "pass", "findings": [], "evidence": [], "outputs": {}}]
 }
@@ -653,7 +653,7 @@ registries.digest 精确定义为 JCS `{"base": {"<path>": <parsed JSON>, ...}, 
 
 普通 full DELTA CLI 要求两个真实 commit。根提交只通过第 12 节的显式初始化配置进入单候选清单协议；不构造伪造空 base，不产生 DELTA 治理成功。登记版本迁移按第 6 节的候选转换与实际兼容测试合同执行。
 
-impact 的版本为 `schema: "chrono-filemap-impact/v5"`，以下示例列核心字段；完整附加事实见 [FILEMAP impact 合同](docs/filemap-impact.md)。节点只保存两端完整的 `base_definitions`／`candidate_definitions`，每条含 identity 与 value；空数组表示缺席，一条表示唯一，多条表示歧义。impact.edges 为平铺的 `{from, kind, to, origin}`；origin 是 base/candidate/both。seeds 是确定性去重的节点 ID 列表，附加 seed_causes 保留每个原因的 ID、节点、实际路径／记录引用和原因。
+impact 的版本为 `schema: "chrono-filemap-impact/v6"`，以下示例列核心字段；完整附加事实见 [FILEMAP impact 合同](docs/filemap-impact.md)。节点只保存两端完整的 `base_definitions`／`candidate_definitions`，每条含 identity 与 value；空数组表示缺席，一条表示唯一，多条表示歧义。impact.edges 为平铺的 `{from, kind, to, origin}`；origin 是 base/candidate/both。seed_causes 保留每个原因的 ID、节点、实际路径／记录引用和原因，影响起点直接取其 node，不另存节点列表。同一节点的不同原因以及 closure 中的传播事实和路径见证继续保留。
 
 tests 是候选仍存在的选中测试节点 ID 列表，retired_tests 是候选已不存在的选中必需测试节点 ID 列表，两者确定性去重，只表达选择／删除事实，不代表执行或退役批准。required_tests 保存选择事实；成本引用和模型值保留在完整两端记录中，由成本判官产生报告。完整两端记录、节点定义及因果来源作为附加字段保留。retired_tests 成员资格不得豁免 `E_REQUIRED_TEST_REMOVED` 或第 6 节的迁移／退役证据义务。prior_results 仅含 after 列出的前置判官完整响应；不得从运行目录猜测旧输出复用。
 
@@ -672,7 +672,7 @@ registration 先消费原始快照与 context；filemap 据登记生成 impact�
   "status": "pass",
   "findings": [],
   "evidence": [],
-  "outputs": {"impact": {"schema": "chrono-filemap-impact/v5", "seeds": ["file:old.rs"], "edges": [], "tests": [], "retired_tests": []}}
+  "outputs": {"impact": {"schema": "chrono-filemap-impact/v6", "seed_causes": [{"id": "[\"old.rs\",\"delta-path\",\"file:old.rs\"]", "node": "file:old.rs", "reference": "old.rs", "reason": "delta-path"}], "edges": [], "tests": [], "retired_tests": []}}
 }
 ```
 
@@ -1373,6 +1373,13 @@ Git main 的已登记历史可重建产物可经同一生命周期所有者 `mig
 ## Verus 当前实施范围
 
 规范要求由第 2.1.1 节维护。下文只说明当前局部实现，不表示完整覆盖门已启用。
+发布目标的 `prepare_publication` 直接消费同源 Verus 预检与阶段组合：逐组件先拒绝
+symlink，再核父项为目录、末项为文件；首次 NotFound 结束预检，其他首错立即返回。
+预检成功后才按目标 parent 按需创建目录，创建成功后执行原最终路径复查；各阶段保留
+完整原值和原错误优先级。标准 Path／metadata／目录创建接口逐项声明，独立边界与驱动
+同为 Verus。此范围不证明文件系统原子性、整个外围适配文件或全仓覆盖，具体接口和
+验收范围见 [Verus 实施范围](docs/verus.md)。
+
 运行日志 `RuntimeSink` 的双输出写入和独立刷新直接消费 diagnostics 所有者的同源
 Verus：文件写入失败后仍尝试已配置的 stderr，stderr 写入成功后才刷新；单错保留
 完整原错误，双错交给原错误所有者组合。独立 flush 仍在文件首错后停止。

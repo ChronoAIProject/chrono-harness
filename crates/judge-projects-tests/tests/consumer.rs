@@ -808,10 +808,11 @@ fn retained_present_to_absent_selects_and_executes_failing_consumer() {
         "pt"
     );
     assert!(
-        v["impact"]["seeds"]
+        v["impact"]["seed_causes"]
             .as_array()
             .unwrap()
-            .contains(&json!("environment:DECLARED_ABSENT"))
+            .iter()
+            .any(|s| s["node"] == "environment:DECLARED_ABSENT")
     );
 }
 #[test]
