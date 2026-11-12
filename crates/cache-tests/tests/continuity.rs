@@ -716,7 +716,7 @@ mod behavior {
     fn interrupted_live_attempt(while_live: impl FnOnce(&Path, &mut Value, &str)) {
         use std::{
             io::{Read, Write},
-            os::unix::net::UnixListener,
+            os::unix::net::{UnixListener, UnixStream},
         };
         let (root, mut config) = fixture();
         let socket_directory = tempfile::tempdir_in("/tmp").unwrap();
@@ -727,6 +727,7 @@ mod behavior {
         let output = ".chrono-harness/state/cache/live/plan.json";
         let args = plan_args(root.path(), output);
         let actual_root = root.path().to_owned();
+        let notify_socket = socket.clone();
         let owner = Owner(Some(std::thread::spawn(move || {
             let command = chrono_harness::CommandSpec {
                 program: env!("CARGO_BIN_EXE_chrono-cache-test-cli").into(),
@@ -735,31 +736,30 @@ mod behavior {
                 timeout_seconds: 10,
                 output_limit_bytes: 65536,
             };
-            chrono_harness::run_process_observed(
+            let result = chrono_harness::run_process_observed(
                 &actual_root,
                 &command,
                 &[],
                 &chrono_harness::file_identity(Path::new(&command.program))
                     .unwrap()
                     .0,
-            )
+            );
+            // Use the same native channel for early completion. Its bounded
+            // notification cannot block while the caller joins the original.
+            if let Ok(mut terminal) = UnixStream::connect(notify_socket) {
+                let _ = terminal.write_all(b"ended");
+            }
+            result
         })));
-        use std::os::fd::AsRawFd;
-        unsafe {
-            let mut event = libc::pollfd {
-                fd: listener.as_raw_fd(),
-                events: libc::POLLIN,
-                revents: 0,
-            };
-            assert_eq!(libc::poll(&mut event, 1, 5000), 1);
-        }
         let (mut connection, _) = listener.accept().unwrap();
         connection
             .set_read_timeout(Some(std::time::Duration::from_secs(5)))
             .unwrap();
         let mut ready = [0; 5];
         connection.read_exact(&mut ready).unwrap();
-        assert_eq!(&ready, b"ready");
+        if &ready != b"ready" {
+            panic!("process completed before handshake: {:?}", owner.join());
+        }
         let attempt = attempt_path(root.path(), output);
         let intent = value(&attempt.join("compiler/intent.json"));
         assert!(intent["task_identity"].is_null());
