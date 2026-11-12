@@ -731,8 +731,10 @@ mod behavior {
                 "schema":"chrono-runtime-logging/v1", "level":"debug",
                 "directory":".chrono-harness/state/cache-stage-logs/",
                 "max_bytes":1048576, "max_files":2, "stderr":false
-            })).unwrap(),
-        ).unwrap();
+            }))
+            .unwrap(),
+        )
+        .unwrap();
         let socket = socket_directory.path().join("ready.sock");
         // Keep the native socket address within sockaddr_un on macOS.
         let listener = UnixListener::bind(&socket).unwrap();
@@ -795,10 +797,16 @@ mod behavior {
         let released = connection.write_all(b"x");
         let result = owner.join();
         let mut logs = fs::read_dir(root.path().join(".chrono-harness/state/cache-stage-logs"))
-            .unwrap().map(|entry| entry.unwrap().path()).collect::<Vec<_>>();
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect::<Vec<_>>();
         logs.sort();
         for log in logs {
-            eprintln!("cache live phase log {}: {}", log.display(), String::from_utf8_lossy(&fs::read(log).unwrap()));
+            eprintln!(
+                "cache live phase log {}: {}",
+                log.display(),
+                String::from_utf8_lossy(&fs::read(log).unwrap())
+            );
         }
         assert_eq!(
             signalled, 0,

@@ -239,7 +239,11 @@ mod runtime {
                 "E_CACHE_ATTEMPT: original unavailable or released; no redispatch; original {relative}"
             ));
         }
-        tracing::debug!(event_id = "cache.attempt.admitted", elapsed_seconds = began.elapsed().as_secs_f64(), "new probe attempt admission returned");
+        tracing::debug!(
+            event_id = "cache.attempt.admitted",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            "new probe attempt admission returned"
+        );
         let intent = json!({"schema":"chrono-cache-attempt/v1","request":request,
         "request_sha256":wire::digest(&request)?,"updated":timestamp()?,
         "task_identity":null,"result":null,"completion":"unknown",
@@ -247,7 +251,11 @@ mod runtime {
         "consumer_role":role});
         let publication = state.plan_rooted(PRODUCER, &relative, json!({"request_sha256":wire::digest(&request)?,"intent":"intent.json","completion":"not-established"}), &role)?;
         publication.materialize()?;
-        tracing::debug!(event_id = "cache.attempt.materialized", elapsed_seconds = began.elapsed().as_secs_f64(), "new probe attempt materialization returned");
+        tracing::debug!(
+            event_id = "cache.attempt.materialized",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            "new probe attempt materialization returned"
+        );
         let attempt = Attempt {
             directory,
             relative: relative.clone(),
@@ -256,7 +264,12 @@ mod runtime {
         };
         attempt.record(&attempt.directory.join("intent.json"), &intent)?;
         let result = crate::prepare_inputs(&root, c, consumer, None, Some(&attempt));
-        tracing::debug!(event_id = "cache.attempt.inputs_returned", elapsed_seconds = began.elapsed().as_secs_f64(), succeeded = result.is_ok(), "cache input preparation returned");
+        tracing::debug!(
+            event_id = "cache.attempt.inputs_returned",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            succeeded = result.is_ok(),
+            "cache input preparation returned"
+        );
         let terminal = !attempt.unknown.get();
         let receipt = json!({"schema":"chrono-cache-attempt-result/v1","request_sha256":wire::digest(&request)?,
         "updated":timestamp()?,"terminal":terminal,"plan":result.as_ref().ok(),"error":result.as_ref().err()});
@@ -272,14 +285,23 @@ mod runtime {
                     format!("{error}; result publication: {publication}; attempt {relative}")
                 }
             })?;
-        tracing::debug!(event_id = "cache.attempt.result_recorded", elapsed_seconds = began.elapsed().as_secs_f64(), terminal, "original attempt result was recorded");
+        tracing::debug!(
+            event_id = "cache.attempt.result_recorded",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            terminal,
+            "original attempt result was recorded"
+        );
         // Unknown work retains its original unfinished capability and recovery root.
         if terminal {
             // The immediate plan consumer requires a sealed tree, not just a
             // completed accounting round. Keep the same capability across rounds.
             attempt.publication.complete_sealed(json!({"request_sha256":wire::digest(&request)?,"result":"result.json","completion":"confirmed"}))
                 .map_err(|error| publication_error(&relative, &error, result.as_ref().err().map(String::as_str)))?;
-            tracing::debug!(event_id = "cache.attempt.sealed", elapsed_seconds = began.elapsed().as_secs_f64(), "terminal attempt sealing returned");
+            tracing::debug!(
+                event_id = "cache.attempt.sealed",
+                elapsed_seconds = began.elapsed().as_secs_f64(),
+                "terminal attempt sealing returned"
+            );
             // A failed plan has no downstream restore/seal caller. Its original
             // diagnostic result stays under the adopted finite terminal policy.
             if result.is_err() {
@@ -415,7 +437,11 @@ mod runtime {
         }
         let began = std::time::Instant::now();
         validate(root, plan, false)?;
-        tracing::debug!(event_id = "cache.plan.originals_validated", elapsed_seconds = began.elapsed().as_secs_f64(), "plan original qualification returned");
+        tracing::debug!(
+            event_id = "cache.plan.originals_validated",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            "plan original qualification returned"
+        );
         let raw = serde_json::to_vec(plan).map_err(|e| e.to_string())?;
         if !chrono_harness::retained_artifacts::retention::publish_final_original(
             root,
@@ -427,13 +453,21 @@ mod runtime {
         )? {
             return Err("E_CACHE_ATTEMPT: cache-plan scope must be adopted".into());
         }
-        tracing::debug!(event_id = "cache.plan.original_published", elapsed_seconds = began.elapsed().as_secs_f64(), "plan original publication returned");
+        tracing::debug!(
+            event_id = "cache.plan.original_published",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            "plan original publication returned"
+        );
         let state = inventory(root)?;
         if !state.published_original(path, &sha256(&raw), raw.len() as u64)? {
             return Err("E_CACHE_ATTEMPT: plan publication unfinished; original attempt retained; no redispatch".into());
         }
         state.dependencies_paths(path, &originals)?;
-        tracing::debug!(event_id = "cache.plan.dependencies_bound", elapsed_seconds = began.elapsed().as_secs_f64(), "published plan dependencies were bound");
+        tracing::debug!(
+            event_id = "cache.plan.dependencies_bound",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            "published plan dependencies were bound"
+        );
         Ok(true)
     }
 
