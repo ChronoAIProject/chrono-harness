@@ -1343,7 +1343,7 @@ impl Inventory {
             {
                 break;
             }
-            observed.step(&self.root, path, self.policy.max_manifest_nodes, byte_limit)?;
+            observed.step(&self.root, path, self.policy.max_manifest_nodes)?;
         }
         if !observed.sealed || observed.bytes > byte_limit {
             return Err(
@@ -2210,10 +2210,19 @@ impl Inventory {
     /// A caller can name its actual remaining originals without re-enumerating
     /// unrelated diagnostic metadata. The same limits and dependency guards apply.
     pub fn maintain_originals(&self, originals: &[String]) -> Result<Value, String> {
+        self.maintain_originals_at(originals, now()?)
+    }
+    /// Use the caller's time observation, as in maintain_at, for the same
+    /// addressed maintenance without observing unrelated terminal quotas.
+    pub fn maintain_originals_at(
+        &self,
+        originals: &[String],
+        observed: u64,
+    ) -> Result<Value, String> {
         self.validate_originals(originals)?;
         self.round_metadata
             .set(Some(self.policy.max_metadata_bytes_per_round));
-        let result = self.maintain_round(now()?, Some(originals));
+        let result = self.maintain_round(observed, Some(originals));
         self.round_metadata.set(None);
         result
     }
@@ -2474,7 +2483,6 @@ impl Inventory {
                     &self.root,
                     &output.path,
                     self.policy.max_manifest_nodes,
-                    output.byte_limit.unwrap_or(self.policy.max_output_bytes),
                 ) {
                     accounting_errors.push(json!({"id":output.id,"reason":error}));
                     break;
@@ -2643,7 +2651,6 @@ impl Inventory {
                         &self.root,
                         &o.path,
                         self.policy.max_manifest_nodes,
-                        self.policy.max_output_bytes,
                     ) {
                         if o.tree && error.contains("capacity") {
                             l.outputs[i].overflow_disposal = true;
@@ -3536,7 +3543,6 @@ impl Publication {
                     &self.inventory.root,
                     &o.path,
                     self.inventory.policy.max_manifest_nodes,
-                    self.byte_limit,
                 ) {
                     accounting_error = Some(error);
                     break;

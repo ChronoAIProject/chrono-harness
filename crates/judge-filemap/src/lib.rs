@@ -586,8 +586,6 @@ fn evaluate(
     }
     let (a, b, view) = chrono_judge_registration::views_with_reader(req, reader)?;
     let inputs = chrono_judge_registration::inputs::validate(req, &a, &b)?;
-    let documents = chrono_judge_mixed::load_documents_with_reader(req, &a, &b, reader)?;
-    let (impact, findings) =
-        produce_with_inputs_and_documents(&a, &b, &req.delta, &inputs, &documents)?;
+    let (impact, findings) = produce_for_request(req, &a, &b, reader, &inputs)?;
     Ok((impact, findings, view))
 }
