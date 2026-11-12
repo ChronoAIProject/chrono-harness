@@ -16,12 +16,10 @@ use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 use verified_graph::valid_types;
 
-pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v2";
+pub const IMPACT_SCHEMA: &str = "chrono-filemap-impact/v3";
+/// Complete endpoint definitions; zero is absent, several are ambiguous.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct NodePair {
-    /// Only uniquely resolved values. Absent and ambiguous endpoints are distinguished by definitions.
-    pub base: Option<Value>,
-    pub candidate: Option<Value>,
     pub base_definitions: Vec<NodeDefinition>,
     pub candidate_definitions: Vec<NodeDefinition>,
 }
@@ -305,8 +303,6 @@ fn produce_environment(
             (
                 id.clone(),
                 NodePair {
-                    base: an.get(id).and_then(|n| n.unique()).map(|d| d.value.clone()),
-                    candidate: bn.get(id).and_then(|n| n.unique()).map(|d| d.value.clone()),
                     base_definitions: definitions(an.get(id)),
                     candidate_definitions: definitions(bn.get(id)),
                 },
