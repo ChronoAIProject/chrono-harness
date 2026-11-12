@@ -222,8 +222,16 @@ fn actual_native_unit_retains_original_frontend_metadata_for_the_collector() {
         recipe::Loaded,
     };
     let f = Fixture::new();
-    let directory = f.exported();
-    let out = f.unit(&directory.join("chrono-host-release"));
+    let binary = f.executable();
+    use std::os::unix::fs::MetadataExt;
+    let compiled = fs::metadata(env!("CARGO_BIN_EXE_chrono-test-release-cli")).unwrap();
+    let installed = fs::metadata(&binary).unwrap();
+    assert_eq!(
+        (installed.dev(), installed.ino()),
+        (compiled.dev(), compiled.ino())
+    );
+    let directory = binary.parent().unwrap();
+    let out = f.unit(&binary);
     assert!(
         out.status.success(),
         "stderr={}",
@@ -348,4 +356,25 @@ fn native_unit_rejects_an_identical_frontend_executed_outside_the_selected_artif
     );
     assert_eq!(out.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&out.stderr).contains("frontend"));
+}
+
+#[test]
+fn spawn_failure_retains_the_attempted_command_without_inventing_child_output() {
+    let f = Fixture::new();
+    let missing = f.host.root().join("missing-frontend");
+    let error = f
+        .capture_result(&mut std::process::Command::new(&missing))
+        .unwrap_err();
+    let receipt: Value =
+        serde_json::from_slice(&fs::read(f.output.path().join("process-0.json")).unwrap()).unwrap();
+    assert_eq!(receipt["argv"], json!([missing]));
+    assert_eq!(
+        receipt["spawn_error"]["raw_os_error"],
+        json!(error.raw_os_error())
+    );
+    assert_eq!(receipt["spawn_error"]["message"], error.to_string());
+    assert!(receipt["exit_code"].is_null());
+    assert!(receipt["signal"].is_null());
+    assert!(!f.output.path().join("process-0.stdout").exists());
+    assert!(!f.output.path().join("process-0.stderr").exists());
 }

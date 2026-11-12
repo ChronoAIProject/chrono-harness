@@ -124,6 +124,8 @@ Rust `test.host-release-native-tests` 运行全部发布行为测试。真实 di
 
 发布行为测试在创建临时宿主的 CLI／launcher 子进程时，统一移除外层发布的十个控制变量及四个 GitHub 工作流变量，再显式设置该样本的运行、依赖等输入。否则真实 preview 的源码 SHA 或工作流上下文会污染临时仓库，触发正确的身份拒绝。普通 CI 中的 Rust 命令替身回归模拟 build／preview／stable 父环境，核对清除继承值、保留显式输入与其他环境；它不调用 Git 或编译器，也不代替两平台原始未过滤测试与公开发布验收。
 
+frontend 专属用例的 Git、tar、mv 和探针在命令边界使用 Rust 替身，拒绝非预期参数；不再初始化真实 Git 仓库或调用系统归档工具。执行用输入硬链接已完成编译且不被测试改写的程序，内容变异样本独立解包，避免测试父进程把可执行 inode 的写描述符带入并发子进程。launcher 仍运行原薄脚本，替身解包在独立的单线程进程中完成；真实系统归档和发布程序执行须由两平台生产入口验收。启动前保存意图，启动失败保存原错误和系统错误码，不能伪造子进程退出或输出。原断言、默认线程、未过滤操作和期限不变；该准备方式排除一类写入者竞争，不声称已定位旧 `ETXTBSY` 的具体描述符持有者。
+
 发布 runner 标签由[发布登记](../.chrono-harness/ci/release.json)维护。Linux 缓存探测通过[选择器](../.chrono-harness/config.json)读取[发行政策](../.chrono-harness/git/linux-release.json)，只绑定发布消费的 Git 事实和产物声明，不提供 Linux canonical/full 政策。Git 按所选政策一次解析并固定本轮实际身份；显式配置版本或摘要预期时，不符仍在执行前拒绝。运行读数归 state／线上原件，候选是否可用仍须实际验证。
 
 编译器一致性比较保留 Rust 版本、代理程序、实际 cargo／rustc 字节与 incremental 声明；Git 自身的身份与原过程仍逐单元核验，源码 commit／tree 仍须一致。Git 不属于编译器指纹，避免同源码、同编译器因 runner 的 Homebrew Git 包装字节不同而被误拒。真实 fixture 回归同时验证不同 Git 包装可消费、同版本但不同编译器字节仍拒绝。旧 Python `host.bootstrap-tests` 及其专属发布验证单元随启动栈退役，对应构建依赖、下载和暂存消费声明同步移除；现役 Rust bootstrap 与薄 shell 测试仍独立执行。

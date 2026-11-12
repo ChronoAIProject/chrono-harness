@@ -4,13 +4,7 @@ mod context;
 #[path = "recipe.rs"]
 pub mod recipe;
 use serde_json::{Value, json};
-use std::{
-    cell::Cell,
-    fs,
-    os::unix::{fs::PermissionsExt, process::ExitStatusExt},
-    path::Path,
-    process::Command,
-};
+use std::{cell::Cell, fs, os::unix::process::ExitStatusExt, path::Path, process::Command};
 
 pub struct Fixture {
     case: tempfile::TempDir,
@@ -37,10 +31,10 @@ impl Fixture {
         let tools = case.path().join("tools");
         fs::create_dir(&tools).unwrap();
         let git_tool = tools.join("git");
-        fs::copy(env!("CARGO_BIN_EXE_chrono-test-release-git"), &git_tool).unwrap();
+        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-git"), &git_tool).unwrap();
         host.config["tools"]["git"] = json!(git_tool);
         let probe = tools.join("probe");
-        fs::copy(env!("CARGO_BIN_EXE_chrono-test-release-tool"), &probe).unwrap();
+        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-tool"), &probe).unwrap();
         host.config["tools"]["probe"] = json!(probe);
         host.save();
         let root = host.root();
@@ -51,8 +45,9 @@ impl Fixture {
         .unwrap();
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
         let binary = root.join(".chrono-harness/bin/chrono-host-release");
-        fs::copy(env!("CARGO_BIN_EXE_chrono-test-release-cli"), &binary).unwrap();
-        fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
+        // 测试父进程并发 fork 时，其他子进程可能短暂继承写描述符。
+        // 可执行输入直接链接已封口的编译产物，不在父进程中写其 inode。
+        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-cli"), &binary).unwrap();
         let system = match std::env::consts::OS {
             "macos" => "Darwin",
             "linux" => "Linux",
@@ -186,15 +181,35 @@ impl Fixture {
     }
 
     pub fn capture(&self, mut command: Command) -> std::process::Output {
-        let mut paths = vec![self.case.path().join("tools")];
-        paths.extend(std::env::split_paths(
-            &std::env::var_os("PATH").unwrap_or_default(),
-        ));
-        command.env("PATH", std::env::join_paths(paths).unwrap());
-        chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
-        let output = command.output().unwrap();
+        self.capture_result(&mut command).unwrap_or_else(|error| {
+            panic!(
+                "frontend command spawn failed; original intent retained in {}: {error}",
+                self.output.path().display()
+            )
+        })
+    }
+
+    pub fn capture_result(&self, command: &mut Command) -> std::io::Result<std::process::Output> {
+        command.env("PATH", self.case.path().join("tools"));
+        chrono_harness::process_fds::forward_command(command, &[]).unwrap();
         let index = self.calls.get();
         self.calls.set(index + 1);
+        let mut intent = json!({
+            "argv":std::iter::once(command.get_program()).chain(command.get_args()).map(|s|s.to_string_lossy().into_owned()).collect::<Vec<_>>(),
+            "cwd":command.get_current_dir().map(Path::to_path_buf).unwrap_or_else(||std::env::current_dir().unwrap()),
+            "exit_code":null,"signal":null
+        });
+        let receipt = format!("process-{index}.json");
+        recipe::write(self.output.path(), &receipt, &intent);
+        let output = match command.output() {
+            Ok(output) => output,
+            Err(error) => {
+                intent["spawn_error"] =
+                    json!({"message":error.to_string(),"raw_os_error":error.raw_os_error()});
+                recipe::write(self.output.path(), &receipt, &intent);
+                return Err(error);
+            }
+        };
         fs::write(
             self.output.path().join(format!("process-{index}.stdout")),
             &output.stdout,
@@ -205,17 +220,14 @@ impl Fixture {
             &output.stderr,
         )
         .unwrap();
-        recipe::write(
-            self.output.path(),
-            &format!("process-{index}.json"),
-            &json!({
-                "argv":std::iter::once(command.get_program()).chain(command.get_args()).map(|s|s.to_string_lossy().into_owned()).collect::<Vec<_>>(),
-                "cwd":std::env::current_dir().unwrap(),"exit_code":output.status.code(),"signal":output.status.signal(),
-                "stdout":{"size":output.stdout.len(),"sha256":chrono_harness::sha256(&output.stdout)},
-                "stderr":{"size":output.stderr.len(),"sha256":chrono_harness::sha256(&output.stderr)}
-            }),
-        );
-        output
+        intent["exit_code"] = json!(output.status.code());
+        intent["signal"] = json!(output.status.signal());
+        intent["stdout"] =
+            json!({"size":output.stdout.len(),"sha256":chrono_harness::sha256(&output.stdout)});
+        intent["stderr"] =
+            json!({"size":output.stderr.len(),"sha256":chrono_harness::sha256(&output.stderr)});
+        recipe::write(self.output.path(), &receipt, &intent);
+        Ok(output)
     }
 
     pub fn exported(&self) -> std::path::PathBuf {
@@ -235,6 +247,24 @@ impl Fixture {
             .unpack(directory.join("chrono-host-release"))
             .unwrap();
         directory
+    }
+
+    pub fn executable(&self) -> std::path::PathBuf {
+        let directory = self.host.root().join("frontend");
+        let out = self.export(&directory);
+        assert!(
+            out.status.success(),
+            "stderr={}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        // 归档内容仍由原 validate 核验；执行路径使用没有测试写入者的 inode。
+        let binary = directory.join("chrono-host-release");
+        fs::hard_link(env!("CARGO_BIN_EXE_chrono-test-release-cli"), &binary).unwrap();
+        assert!(
+            self.validate(&directory, &self.selected(), Some(&binary))
+                .is_ok()
+        );
+        binary
     }
 
     pub fn unit(&self, executable: &Path) -> std::process::Output {
