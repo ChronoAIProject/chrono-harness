@@ -90,3 +90,9 @@ name = "chrono-test-release-git"
 path = "../../../crates/runner-tests/tests/support/git_model.rs"
 test = false
 bench = false
+
+[[bin]]
+name = "chrono-test-release-frontend-tool"
+path = "tests/support/context.rs"
+test = false
+bench = false

@@ -232,8 +232,8 @@ fn assert_collision(r: &Value, endpoints: &[&str]) {
         }
         let node = &r["impact"]["nodes"]["test:t"];
         assert!(
-            node[endpoint].is_null(),
-            "ambiguous value must never resolve to a winner"
+            node.get(*endpoint).is_none(),
+            "ambiguous definitions must not expose a singular winner"
         );
         let defs = &node[format!("{endpoint}_definitions")];
         assert_eq!(defs.as_array().unwrap().len(), 2);
@@ -273,12 +273,18 @@ fn full_distinct_aliases_preserve_both_executables() {
     h.save();
     let (exit, r) = h.run();
     assert_eq!(exit, 0, "{r:#}");
+    let project = &r["impact"]["nodes"]["test:t"]["candidate_definitions"];
+    let script = &r["impact"]["nodes"]["test:st2"]["candidate_definitions"];
+    assert_eq!(project.as_array().unwrap().len(), 1);
+    assert_eq!(script.as_array().unwrap().len(), 1);
+    assert_eq!(project[0]["identity"], "project:t");
+    assert_eq!(script[0]["identity"], "script:st2");
     assert_eq!(
-        r["impact"]["nodes"]["test:t"]["candidate"]["actions"]["execute"]["operation"],
+        project[0]["value"]["actions"]["execute"]["operation"],
         "execute.t"
     );
     assert_eq!(
-        r["impact"]["nodes"]["test:st2"]["candidate"]["actions"]["execute"]["operation"],
+        script[0]["value"]["actions"]["execute"]["operation"],
         "script.st"
     );
     assert_eq!(
@@ -400,6 +406,14 @@ fn actual_runner_registration_filemap_consumes_fixed_commits_and_attributes_impa
     let h = Host::new();
     let (exit, r) = h.run();
     assert_eq!(exit, 0, "{r:#}");
+    for (id, node) in r["impact"]["nodes"].as_object().unwrap() {
+        for endpoint in ["base", "candidate"] {
+            assert!(
+                node.get(endpoint).is_none(),
+                "{id}: redundant {endpoint} projection: {node:#}"
+            );
+        }
+    }
     assert_eq!(
         r["judges"]
             .as_array()
