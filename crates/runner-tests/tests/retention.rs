@@ -5655,7 +5655,7 @@ fn producer_consumer_retains_interrupted_capture_and_releases_only_accounted_suc
     );
     let release = consumer_release(h.path(), &declaration, "released");
     assert_eq!(consumer_call(h.path(), release).exit_code, 0);
-    maintenance(h.path());
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!h.path().join(path).exists());
     let next = h
         .path()
@@ -5675,7 +5675,7 @@ fn producer_consumer_retains_interrupted_capture_and_releases_only_accounted_suc
     p.write_file(&next.join("stdout"), b"success").unwrap();
     p.complete_releasing_consumer(json!({"exit":0}), &consumer)
         .unwrap();
-    maintenance(h.path());
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
     assert!(!next.exists());
     assert!(ledger(h.path())["roots"].as_object().unwrap().is_empty());
 }
