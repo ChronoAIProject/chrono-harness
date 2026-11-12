@@ -581,6 +581,10 @@ fn seal(root: &Path, steps: &Value) -> std::process::Output {
             "CACHE_PRODUCER_STEPS",
             "--work",
             "work",
+            "--github-output",
+            root.join(".chrono-harness/state/restore/seal-output")
+                .to_str()
+                .unwrap(),
         ])
         .env(
             "CACHE_PRODUCER_STEPS",
@@ -588,6 +592,94 @@ fn seal(root: &Path, steps: &Value) -> std::process::Output {
         )
         .output()
         .unwrap()
+}
+
+#[test]
+fn producer_seal_records_absent_artifacts_without_authorizing_save() {
+    for missing in ["target", "second", "both"] {
+        let (root, mut config, _) = verified_host();
+        config["artifacts"]["second"] = json!({"owner":"project","path":"out/second"});
+        config["caches"]["project"]["artifacts"] = json!(["target", "second"]);
+        register_artifacts(root.path(), &config);
+        let mut prepared = plan(root.path(), &config, "check.one").unwrap();
+        bind_installed_planner(&mut prepared);
+        for (path, value) in [
+            (".chrono-harness/cache.json", &config),
+            (".chrono-harness/state/restore/plan.json", &prepared),
+        ] {
+            fs::write(root.path().join(path), serde_json::to_vec(value).unwrap()).unwrap();
+        }
+        fs::create_dir_all(root.path().join("out/second")).unwrap();
+        fs::write(root.path().join("out/second/keep"), b"compiled output").unwrap();
+        let mut absent = serde_json::Map::new();
+        for (id, path) in [("target", "out/project"), ("second", "out/second")] {
+            if missing == id || missing == "both" {
+                fs::remove_dir_all(root.path().join(path)).unwrap();
+                absent.insert(id.into(), json!(path));
+            }
+        }
+        let steps = json!({"work":{"outcome":"success"}});
+        let output = seal(root.path(), &steps);
+        assert!(
+            output.status.success(),
+            "{missing}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let sealed: Value = serde_json::from_slice(&output.stdout).unwrap();
+        let observation = &sealed["observation"]["caches"]["project"];
+        assert_eq!(observation["status"], "unavailable");
+        assert_eq!(observation["reason"], "artifact-absent");
+        assert_eq!(observation["absent_artifacts"], json!(absent));
+        assert_eq!(observation["producer_outcome"], "success");
+        assert_eq!(
+            fs::read(
+                root.path()
+                    .join(".chrono-harness/state/restore/seal-output")
+            )
+            .unwrap(),
+            b""
+        );
+        for path in ["out/project", "out/second"] {
+            assert!(
+                !root
+                    .path()
+                    .join(path)
+                    .join(".chrono-cache-content-v1.json")
+                    .exists()
+            );
+        }
+        let rejected = seal(root.path(), &json!({"work":{"outcome":"failure"}}));
+        assert!(!rejected.status.success());
+        assert!(String::from_utf8_lossy(&rejected.stderr).contains("no accepted outcome"));
+    }
+}
+
+#[test]
+fn producer_seal_refuses_present_invalid_artifact_roots() {
+    for kind in ["file", "symlink"] {
+        let (root, _, _) = verified_host();
+        let target = root.path().join("out/project");
+        fs::remove_dir_all(&target).unwrap();
+        if kind == "file" {
+            fs::write(&target, b"not a directory").unwrap();
+        } else {
+            std::os::unix::fs::symlink("other", &target).unwrap();
+        }
+        let output = seal(root.path(), &json!({"work":{"outcome":"success"}}));
+        assert!(!output.status.success(), "{kind}");
+        assert!(
+            !root
+                .path()
+                .join("out/other/.chrono-cache-content-v1.json")
+                .exists()
+        );
+        assert!(
+            !root
+                .path()
+                .join(".chrono-harness/state/restore/seal-output")
+                .exists()
+        );
+    }
 }
 
 #[test]
