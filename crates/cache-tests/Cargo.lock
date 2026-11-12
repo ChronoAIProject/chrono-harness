@@ -46,6 +46,7 @@ dependencies = [
  "chrono-harness",
  "serde",
  "serde_json",
+ "tracing",
 ]
 
 [[package]]

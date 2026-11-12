@@ -754,12 +754,6 @@ fn bind_final_binary(
     required.extend(libraries.iter().map(|file| PathBuf::from(&file.path)));
     let mut count = 0;
     for entry in fs::read_dir(&directory).map_err(|e| e.to_string())? {
-        count += 1;
-        if !cargo::output_inventory_within_bound(count) {
-            return Err(
-                "E_VERUS_BUILD: compiler output inventory exceeds its registered bound".into(),
-            );
-        }
         let path = entry.map_err(|e| e.to_string())?.path();
         let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
             continue;
@@ -767,6 +761,12 @@ fn bind_final_binary(
         if !cargo::selected_dependency(name.as_bytes(), config.binary.dependency_prefix.as_bytes())
         {
             continue;
+        }
+        count += 1;
+        if !cargo::output_inventory_within_bound(count) {
+            return Err(
+                "E_VERUS_BUILD: compiler output inventory exceeds its registered bound".into(),
+            );
         }
         let output = path.with_extension("");
         if !output.is_file() {

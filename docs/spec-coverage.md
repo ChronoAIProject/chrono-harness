@@ -9,8 +9,11 @@
 `RollingFile` 的正容量／文件数范围、单条记录容量及严格轮转阈值直接消费同源
 `verified_rolling.rs`。数学整数长度和与实际不下溢减法比较等价，独立 Verus
 边界表同时普通运行；生产根、预期根与未过滤行为测试由同次 DELTA 核验。
-完整文件锁、目录／成员验证、删除／重命名及写入组合仍待证明，不能将整个
-`rolling.rs` 声明为已证明。接口及登记成本见 [Verus 实施范围](verus.md)。
+成员结果和采用／轮转控制也消费同一源：先完整检查，再重查并按需删除，轮转按
+降序重查来源并重命名，首错完整返回；ghost 状态轨迹不增加实际 IO。独立预期
+同时核错误载荷、检查次数与首个删除／重命名下标。完整文件锁、目录验证、原路径
+及 IO 分类／构造回调、写入组合仍待证明，不能将整个 `rolling.rs` 声明为已证明。
+接口及登记成本见 [Verus 实施范围](verus.md)。
 
 运行日志 `RuntimeSink` 的双输出写入与独立刷新直接消费同源
 `verified_runtime.rs`。文件失败仍尝试镜像、镜像写入成功才刷新、单错原值／双错
@@ -121,7 +124,7 @@ CI／worktree 测试准备复用已有 PATH 解析器选择实际 Git，两份�
 | 1 权威与边界 | 部分 | runner `full.rs` 的外部 DAG；R `dag_*` | 其余判官政策和生命周期 |
 | 1 真实消费者与用途 | 部分：带版本的内部共享启动消费合同 | registration 的 `chrono-internal-causal-consumption/v1`；本仓采用已有 runner-startup，复用 need／output_use、生产／调用 action、profile 安装对、claim、真实消费证据。标准 scoped 准入核两端受影响关系，要求原真实消费者测试；Rust 成功／失败／边界及固定 Git 端点回归。这些关系检查不判断价值；全对象必要性继续由 AI 核查当前使用方和验收终点 | 是否有用仍由 AI 负责判断。已有有限 Darwin 内部启动消费；Linux、外部／全消费者采用、完整路径执行尚缺。仅有测试／分发资产不构成真实消费者 |
 | 2 独立项目与采用 | 部分 | 独立 manifest／lock／bootstrap 构建登记；共享身份判断有独立生产库、专属测试项目和 runner 真调用；runner 登记构建核对点名库的原证明、库字节及最终二进制 checksum，暖调用复用原证明，独立测试及其余使用方的编译产物绑定仍缺；SPEC §2.1 明确本仓规格与实现的 Verus 规范性权威，trureturing 提供固定数学参考，实际调用仍须单独验收 | 通用完整 bootstrap 来源及启用；源码归属不证明实现满足模型 |
-| 2.1.1 Verus 规范性权威 | 规范已明确；实现部分完成 | SPEC 统一定义真实使用方、证明与生产调用绑定及 `E_VERUS_COVERAGE`；本地与离线汇总共用 Verus 方法选择及原报告／库／候选源码组合准入，普通成功不产生类型化证明条目；runner 的 paths／scope／status／limits、registration 的 nodes／readiness／consumption／input-coverage 行状态、CI collection 的状态源、CI 字面量、projects 语言配对和 filemap 图内核及其独立预期，以及 identifiers、retention release、runner Git binding、worktree lifecycle／attention／owner publication、cache planner、宿主 bootstrap cargo、bootstrap bindings、runner cargo module、release recipe 和 judge-workflow 的来源／提交数／年龄／执行完成／证书字段／schema migration 绑定准入根和独立预期均完成 FILEMAP `verification` 角色、证明根和 execution-plan 操作绑定，并由现有同源整 crate Verus 调用验收；`evidence.rs` 的收集完成与普通执行路径、`certificate.rs` 的字段绑定路径、`transition.rs` 的 migration 路径直接消费相应证明结果，Rust workflow 核心 consumer 同次验收；范围和外部接口见 Verus 实施说明 | 组合入口已核本次操作的声明根等于实际调用根，且声明文件参与候选编译；CI release／gating、原生发布 publication／identity 与 workflow certificate 五个外围文件的整文件证明声明不成立，已移除，仍为未知覆盖；相应已证明内核的调用、编译与行为测试继续保留。全仓覆盖门、存量文件分类、源码／编译结果／实际调用完整绑定、其余逻辑与 SPEC 对应仍未完成；不以当前 scoped 成功宣称本节已验收 |
+| 2.1.1 Verus 规范性权威 | 规范已明确；实现部分完成 | SPEC 统一定义真实使用方、证明与生产调用绑定及 `E_VERUS_COVERAGE`；本地与离线汇总共用 Verus 方法选择及原报告／库／候选源码组合准入，普通成功不产生类型化证明条目；runner 的 paths／scope／status／limits、registration 的 nodes／readiness／consumption／input-coverage 行状态、CI collection 的状态源、CI 字面量、projects 语言配对和 filemap 图内核及其独立预期，以及 identifiers、retention release、runner Git binding、worktree lifecycle／attention／owner publication、cache planner、宿主 bootstrap cargo、bootstrap bindings、runner cargo module、release recipe 和 judge-workflow 的来源／提交数／年龄／执行完成／证书字段／schema migration 绑定准入根和独立预期均完成 FILEMAP `verification` 角色、证明根和 execution-plan 操作绑定，并由现有同源整 crate Verus 调用验收；`evidence.rs` 的收集完成与普通执行路径、`certificate.rs` 的字段绑定路径、`transition.rs` 的 migration 路径直接消费相应证明结果，Rust workflow 核心 consumer 同次验收；缓存封存的 artifact 预检、完整缺失表、首错及唯一生产者选择迁入同根 Verus，实际封存入口直接调用；范围和外部接口见 Verus 实施说明 | 组合入口已核本次操作的声明根等于实际调用根，且声明文件参与候选编译；CI release／gating、原生发布 publication／identity 与 workflow certificate 五个外围文件的整文件证明声明不成立，已移除，仍为未知覆盖；相应已证明内核的调用、编译与行为测试继续保留。全仓覆盖门、存量文件分类、源码／编译结果／实际调用完整绑定、其余逻辑与 SPEC 对应仍未完成；不以当前 scoped 成功宣称本节已验收 |
 | 2.2 实现／测试语言 | 部分：指令、full／scoped projects v2 配对、原生 helper | 中英文 test.same-language 原子用于新宿主默认及本仓指南；项目／脚本明确语言，受影响配对须同 ID 或 shell→python。实际配对准入由同源 `verified_languages.rs` 定义并已登记整 crate 根，独立预期核完整字面相等、shell→python 的方向及非法边界。Rust schema／配对／语言 metadata DELTA 用例及登记 CI transport、context judge、protocol judge、CLI child、生命周期、Cargo、Git fault helper；本仓 v2、Rust 显式 workflow 清单及配对测试、worktree 核心／采用分组及完整覆盖。固定历史支持退役后 projects 保留原未过滤 action；owner 字节发布与 stage 原件核验迁入现有 Rust worktree 所有者，构建／资格读取及原件核验也由 Rust bootstrap 承担，旧 Python 实现及专属测试退役；Rust 用例验证现役边界，候选验收另记。Python 构建配方／测试对不需 manifest，单元／真实二进制集成组独立 | 完整候选验收、示例采用；迁移剩余内嵌跨语言测试／helper，真实外部接口 fixture 单独登记。声明不能证明实际源码语言 |
 | 2.2 routes 回归 helper 迁移 | 已实现，范围有限 | 八项 judge-routes-tests 回归改用 Rust 测试自有子进程 helper。`tests/support/tool.rs` 是明确 Cargo binary 和 FILEMAP compile 输入，原 test:judge-routes-tests 计划沿用 Cargo test。保留字面／空／换行 argv、cwd／环境、回执篡改、错版本／执行物替换、PATH、版本观察复用、循环／预检拒绝、标准调用、汇总身份。真实标准 DELTA 消费沿原报告验证，运行事实不在表内复制 | 仅限此测试所有者。其余跨语言逻辑／helper、外部接口 fixture 登记、完整输入、启用、同判仍缺 |
 | 3 五份登记 | 部分 | registration `schema.rs`，G `strict_five_schemas_*`、`real_host_pseudo_script_*` | Cargo／SDK 完整输入仍缺；有限配对、routes、迁移和快照已实现 |

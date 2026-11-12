@@ -839,6 +839,12 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
         return Err("plan requires host-root/config/consumer".into());
     }
     let root = Path::new(options["--host-root"]);
+    let began = std::time::Instant::now();
+    tracing::debug!(
+        event_id = "cache.plan.preparing",
+        consumer = options["--consumer"],
+        "preparing cache plan"
+    );
     let _activity = chrono_harness::retained_artifacts::retention::read_scope(root)?;
     let config = options["--config"];
     if !config.starts_with(".chrono-harness/") {
@@ -858,6 +864,11 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
         options["--consumer"],
         options.get("--plan-output").copied(),
     )?;
+    tracing::debug!(
+        event_id = "cache.plan.prepared",
+        elapsed_seconds = began.elapsed().as_secs_f64(),
+        "cache attempt returned its prepared plan"
+    );
     if let Some(path) = options.get("--plan-output") {
         let target = no_symlink_parents(root, path)?;
         fs::create_dir_all(target.parent().ok_or("E_CACHE_OUTPUT: plan parent")?)
@@ -878,6 +889,11 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
                 Err(e) => return Err(format!("E_CACHE_OUTPUT: {e}")),
             }
         }
+        tracing::debug!(
+            event_id = "cache.plan.published",
+            elapsed_seconds = began.elapsed().as_secs_f64(),
+            "cache plan output publication returned"
+        );
     }
     if let Some(output) = options.get("--github-output") {
         let mut text = String::new();

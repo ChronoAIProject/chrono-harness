@@ -599,18 +599,6 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
     }
 }
 
-fn await_file(path: &Path) {
-    let began = std::time::Instant::now();
-    while !path.exists() && began.elapsed() < std::time::Duration::from_secs(10) {
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    assert!(
-        path.exists(),
-        "missing actual consumer handshake: {}",
-        path.display()
-    );
-}
-
 #[test]
 fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
     if !chrono_git_boundary::isolated_git() {
