@@ -7,7 +7,7 @@ use chrono_harness::{
 use chrono_judge_registration::Registrations;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
-pub const MIXED_SCHEMA: &str = "chrono-rule-changes/v1";
+pub const MIXED_SCHEMA: &str = "chrono-rule-changes/v2";
 pub type Documents = BTreeMap<String, Value>;
 fn patterns(a: &Registrations, b: &Registrations) -> BTreeSet<(String, String, String)> {
     [a, b]
@@ -93,7 +93,7 @@ pub fn classify(
         "changes":changes.values().collect::<Vec<_>>(),"product_changes":products.values().collect::<Vec<_>>(),
         "requires_acknowledgement":false}))
 }
-/// Package the shared classification with the already-produced cost wire value.
+/// Publish the shared classification after validating the predecessor costs.
 pub fn produce(
     a: &Registrations,
     b: &Registrations,
@@ -118,7 +118,6 @@ pub fn produce(
         }
     }
     output["schema"] = MIXED_SCHEMA.into();
-    output["costs"] = costs.clone();
     Ok(output)
 }
 /// Known interpreted registries for declaration-only consumers. Other named JSON
@@ -289,7 +288,7 @@ pub fn judge(req: &Request) -> Response {
                         code,
                         level: "warning".into(),
                         message: format!(
-                            "Rule and product changes share this DELTA. Rules: {}; products: {}. Before/after costs: outputs.rule_changes.costs; unknown coordinates remain unknown.",
+                            "Rule and product changes share this DELTA. Rules: {}; products: {}. Before/after costs: predecessor outputs.costs (full report: /costs; provenance: /sources/~1costs); unknown coordinates remain unknown.",
                             output["rule_paths"], output["product_paths"]
                         ),
                         delta_refs: output["rule_paths"]

@@ -24,11 +24,13 @@
 
 ## 输出和结果
 
-每次成功响应都输出 `outputs.rule_changes`，格式为 `chrono-rule-changes/v1`，包含固定 `binding`，排序后的 `rule_paths`、`product_paths`、`changes`、`product_changes`，以及 `mixed`、`requires_acknowledgement: false` 和原始成本结果。
+每次成功响应都输出 `outputs.rule_changes`，格式为 `chrono-rule-changes/v2`，包含固定 `binding`，排序后的 `rule_paths`、`product_paths`、`changes`、`product_changes`，以及 `mixed`、`requires_acknowledgement: false`。
 
-字段含义变化的记录包含模式、修改方式、稳定身份，以及前后两端的实际指针和值。成本保留两端映射、引用、已知和未知维度、受影响和移除的测试，以及测量限制，不另算汇总值。runner 在 mixed 响应中保留结果；workflow 可把 mixed 登记为直接前置后读取它。
+字段含义变化的记录包含模式、修改方式、稳定身份，以及前后两端的实际指针和值。成本继续由前置判官的 `outputs.costs` 负责；mixed 核对成本格式、两端映射、每条变更路径及固定绑定，不在分类结果中复制整份成本。完整报告的 `/costs` 提供原值，`/sources/~1costs` 列出同一报告内原判官响应的指针；直接调用库的使用方读取其传入的成本值。两端映射、引用、已知和未知维度、受影响和移除的测试，以及测量限制仍保留在原成本结果中。runner 保留 mixed 响应；workflow 可把 mixed 登记为直接前置后读取分类结果。
 
 规则修改和产品修改都非空时，警告代码取自候选的 `workflow.mixed_change.code`，本仓默认是 `W_MIXED_JUDGE_PRODUCT`。状态为 `warn`，退出码为 `0`，同时展示两组变化及成本引用。只有规则修改时仍输出变化，状态为 `pass`。
+
+v2 只取消分类结果中的成本副本，不提供旧字段回退。现役测试同时核对成本来源、绑定、已知／未知值、删除路径和原拒绝边界；完整运行、传输与存储成本收益尚未测量。
 
 警告不增加审批或确认步骤，也不豁免其他失败。工作流稳定性、迁移、移除和集成验证仍各有要求，尚未完成的部分不会因此算完成。本仓尚未全面启用完整检查。
 
