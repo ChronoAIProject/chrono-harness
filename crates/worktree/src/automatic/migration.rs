@@ -100,9 +100,9 @@ impl Manager {
                 if !crate::verified_lifecycle::checkout_migration_ready(
                     &e.status,
                     e.terminal.is_some(),
-                    !e.uses.is_empty(),
-                    // Defer only the completed-result handoff until the
-                    // candidate's own inputs and attachment are qualified.
+                    // Defer interrupted uses and completed-result handoff until
+                    // the candidate's own inputs and attachment are qualified.
+                    false,
                     false,
                 ) {
                     return Err("checkout migration preserves pending work; reconcile its use, result or terminal handoff first".into());
@@ -214,12 +214,19 @@ impl Manager {
             return Err("migration target policy changed before adoption".into());
         }
         lease.stable()?;
-        if checkout_changed {
-            if e.report_handoff_pending() {
-                self.reconcile_published_results().map_err(|error| {
-                    format!("checkout migration preserves pending work; result handoff is not established: {error}")
-                })?;
+        if checkout_changed && e.report_handoff_pending() {
+            self.reconcile_published_results().map_err(|error| {
+                format!("checkout migration preserves pending work; result handoff is not established: {error}")
+            })?;
+        }
+        self.reconcile_uses(i, &lease).map_err(|error| {
+            if checkout_changed {
+                format!("checkout migration preserves pending work; interrupted use is not reconciled: {error}")
+            } else {
+                error
             }
+        })?;
+        if checkout_changed {
             let enrolled = &self.ledger.entries[i];
             if !crate::verified_lifecycle::checkout_migration_ready(
                 &enrolled.status,
@@ -230,7 +237,6 @@ impl Manager {
                 return Err("checkout migration preserves pending work; reconcile its use, result or terminal handoff first".into());
             }
         }
-        self.reconcile_uses(i, &lease)?;
         let mut updated = self.ledger.entries[i].clone();
         updated.checkout_branch = current.checkout_branch;
         if let Some(receipt) = &receipt {

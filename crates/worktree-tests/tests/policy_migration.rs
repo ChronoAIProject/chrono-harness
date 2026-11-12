@@ -920,6 +920,153 @@ fn checkout_result_fixture() -> (Host, PathBuf, Value) {
     (h, target, used)
 }
 
+// Reproduce interruption after publishing the original use result but before
+// the ledger atomically removes its token and records the completed result.
+fn restore_interrupted_use(h: &Host, target: &Path, used: &Value) -> PathBuf {
+    let token = used["lock_reason"].as_str().unwrap();
+    let ledger_path = h.ledger_path(target);
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    ledger["entries"][0]["enrollment"]
+        .as_object_mut()
+        .unwrap()
+        .remove("completed_uses");
+    ledger["entries"][0]["uses"] = value!([token]);
+    fs::write(ledger_path, serde_json::to_vec_pretty(&ledger).unwrap()).unwrap();
+    h.root.join(format!(
+        ".chrono-harness/state/automatic-cleanup/use-intent-{token}.json"
+    ))
+}
+
+#[test]
+fn checkout_migration_reconciles_interrupted_uses_without_global_maintenance() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for present in [true, false] {
+        let (h, target, used) = checkout_result_fixture();
+        let intent_path = restore_interrupted_use(&h, &target, &used);
+        let intent = fs::read(&intent_path).unwrap();
+        let result_path = h
+            .root
+            .join(used["managed_use_receipt"]["path"].as_str().unwrap());
+        let result = fs::read(&result_path).unwrap();
+        let saved_result = result_path.with_extension("saved-original");
+        if !present {
+            fs::rename(&result_path, &saved_result).unwrap();
+        }
+        let other = h.parent.join("unrelated-use");
+        assert_eq!(h.invoke("integration", "unrelated-use", &other).0, 0);
+        let other_ledger = fs::read(h.ledger_path(&other)).unwrap();
+        let other_entry = json(&other_ledger).unwrap()["entries"][0].clone();
+        let held = fs::File::open(
+            h.root
+                .join(other_entry["ownership"]["path"].as_str().unwrap()),
+        )
+        .unwrap();
+        held.lock_shared().unwrap();
+        let before =
+            json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
+        let birth_path = h.root.join(
+            before["enrollment"]["sealed_receipt"]["path"]
+                .as_str()
+                .unwrap(),
+        );
+        let birth = fs::read(&birth_path).unwrap();
+        let report_path = h.root.join(used["report_path"].as_str().unwrap());
+        let original_report = fs::read(&report_path).unwrap();
+        let old_head = git(&target, &["rev-parse", "HEAD"]);
+        cache(&target);
+        git(&target, &["checkout", "-b", "integration/next-use"]);
+        let branches = git(&h.root, &["for-each-ref", "refs/heads/"]);
+
+        let report = migrate(&h, &target);
+        assert_eq!(report["checkout_migration"]["status"], "adopted");
+        let after = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
+        assert_eq!(after["uses"], value!([]));
+        let receipt = &after["enrollment"]["interrupted_uses"][0];
+        let recovery_bytes = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+        assert_eq!(sha256(&recovery_bytes), receipt["sha256"]);
+        let recovery = json(&recovery_bytes).unwrap();
+        assert_eq!(recovery["state"], "registered-consumers-quiescent");
+        assert_eq!(
+            recovery["command_outcome"],
+            "result-unavailable-unless-original-proves-it"
+        );
+        assert_eq!(recovery["task_completion"], "not-claimed");
+        assert_eq!(recovery["terminal_handoff"], "not-claimed");
+        assert_eq!(recovery["intent"]["sha256"], sha256(&intent));
+        assert_eq!(recovery["original_result"]["original_outcome"], "unknown");
+        assert_eq!(
+            recovery["original_result"]["presence"],
+            if present { "present" } else { "absent" }
+        );
+        if present {
+            assert_eq!(recovery["original_result"]["sha256"], sha256(&result));
+        } else {
+            assert!(recovery["original_result"]["sha256"].is_null());
+            fs::rename(&saved_result, &result_path).unwrap();
+        }
+        let mut expected = before["enrollment"].clone();
+        expected["interrupted_uses"] = after["enrollment"]["interrupted_uses"].clone();
+        assert_eq!(after["enrollment"], expected);
+        assert_eq!(after["branch"], before["branch"]);
+        assert_eq!(after["checkout_branch"], "integration/next-use");
+        assert_eq!(after["policy_migrations"], before["policy_migrations"]);
+        assert_eq!(after["status"], "active");
+        assert!(after["terminal"].is_null());
+        assert_eq!(fs::read(intent_path).unwrap(), intent);
+        assert_eq!(fs::read(result_path).unwrap(), result);
+        assert_eq!(fs::read(report_path).unwrap(), original_report);
+        assert_eq!(fs::read(birth_path).unwrap(), birth);
+        assert_eq!(git(&target, &["rev-parse", "HEAD"]), old_head);
+        assert_eq!(git(&h.root, &["for-each-ref", "refs/heads/"]), branches);
+        assert!(target.join("output λ/cache").is_file());
+        assert_eq!(fs::read(h.ledger_path(&other)).unwrap(), other_ledger);
+        assert!(
+            report["processes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|row| row["root"] != value!(other))
+        );
+        drop(held);
+    }
+}
+
+#[test]
+fn checkout_migration_preserves_interrupted_uses_with_missing_or_drifted_intents() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let (h, target, used) = checkout_result_fixture();
+    let intent_path = restore_interrupted_use(&h, &target, &used);
+    let bytes = fs::read(&intent_path).unwrap();
+    let saved = intent_path.with_extension("saved-original");
+    git(&target, &["checkout", "-b", "integration/preserve-use"]);
+    let before = fs::read(h.ledger_path(&target)).unwrap();
+    for fault in ["missing", "path", "attachment", "lease_path", "lease_id"] {
+        if fault == "missing" {
+            fs::rename(&intent_path, &saved).unwrap();
+        } else {
+            let mut intent = json(&bytes).unwrap();
+            intent[fault] = value!("changed-binding");
+            fs::write(&intent_path, serde_json::to_vec(&intent).unwrap()).unwrap();
+        }
+        let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+        assert_ne!(code, 0, "{fault}: {report} {error}");
+        assert!(
+            report["error"].as_str().unwrap().contains("pending work"),
+            "{report}"
+        );
+        assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before, "{fault}");
+        if fault == "missing" {
+            fs::rename(&saved, &intent_path).unwrap();
+        } else {
+            fs::write(&intent_path, &bytes).unwrap();
+        }
+    }
+}
+
 #[test]
 fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
     if !chrono_git_boundary::isolated_git() {
@@ -997,19 +1144,31 @@ fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
 }
 
 #[test]
-fn checkout_migration_rejects_candidate_policy_before_releasing_a_completed_result() {
+fn checkout_migration_rejects_candidate_policy_before_recovering_uses_or_results() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    let (h, target, _) = checkout_result_fixture();
-    git(&target, &["checkout", "-b", "integration/wrong-policy"]);
-    edit(&target, CLEANUP, |policy| {
-        policy["allow_evidence_disposal"] = value!(false)
-    });
-    let before = fs::read(h.ledger_path(&target)).unwrap();
-    let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
-    assert_ne!(code, 0, "{report} {error}");
-    assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before);
+    for interrupted in [false, true] {
+        let (h, target, used) = checkout_result_fixture();
+        if interrupted {
+            restore_interrupted_use(&h, &target, &used);
+        }
+        git(&target, &["checkout", "-b", "integration/wrong-policy"]);
+        edit(&target, CLEANUP, |policy| {
+            policy["allow_evidence_disposal"] = value!(false)
+        });
+        let before = fs::read(h.ledger_path(&target)).unwrap();
+        let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
+        assert_ne!(code, 0, "{report} {error}");
+        assert!(
+            report["error"]
+                .as_str()
+                .unwrap()
+                .contains("policy input differs from commit"),
+            "{report}"
+        );
+        assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), before);
+    }
 }
 
 #[test]
