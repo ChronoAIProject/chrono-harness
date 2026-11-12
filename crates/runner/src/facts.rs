@@ -398,41 +398,64 @@ impl Reader {
         dest: &Path,
         max_bytes: u64,
     ) -> Result<(), String> {
-        if self.can_reuse_oid(oid) {
-            let paths = t
-                .iter()
-                .filter(|(_, entry)| entry.kind == "blob")
-                .map(|(path, _)| path.text.clone())
-                .collect::<Vec<_>>();
-            self.immutable_blobs(root, oid, &paths)?;
-        }
-        let mut written = 0u64;
-        for (path, e) in t {
-            if e.kind != "blob" {
-                continue;
-            }
-            let p = no_symlink_parents(dest, path)?;
-            fs::create_dir_all(p.parent().ok_or("snapshot parent")?).map_err(|e| e.to_string())?;
-            let bytes = self.blob(root, oid, path)?;
-            written = written
-                .checked_add(bytes.len() as u64)
-                .ok_or("snapshot byte accounting overflow")?;
-            if written > max_bytes {
-                return Err("snapshot output byte capacity exceeded before writing".into());
-            }
-            if e.mode == "120000" {
-                #[cfg(unix)]
-                std::os::unix::fs::symlink(utf8(bytes)?, &p).map_err(|e| e.to_string())?;
-                #[cfg(not(unix))]
-                return Err("E_INPUT_UNSUPPORTED: symlink snapshot".into());
-            } else {
-                fs::write(&p, bytes).map_err(|e| e.to_string())?;
-                let mut perm = fs::metadata(&p).map_err(|e| e.to_string())?.permissions();
-                perm.set_readonly(true);
-                fs::set_permissions(&p, perm).map_err(|e| e.to_string())?;
-            }
-        }
-        Ok(())
+        use crate::verified_status::snapshot_export::{self, SnapshotExportIo};
+        snapshot_export::snapshot(
+            self,
+            t,
+            self.can_reuse_oid(oid),
+            max_bytes,
+            cfg!(unix),
+            &SnapshotExportIo {
+                prefetch: |reader, paths: &Vec<String>| {
+                    (reader, self.immutable_blobs(root, oid, paths).map(|_| ()))
+                },
+                locate: |reader, path: &String| (reader, no_symlink_parents(dest, path)),
+                parent: |reader, path: &std::path::PathBuf| {
+                    (reader, path.parent().map(Path::to_path_buf))
+                },
+                create_parent: |reader, parent| {
+                    (
+                        reader,
+                        fs::create_dir_all(parent).map_err(|error| error.to_string()),
+                    )
+                },
+                read: |reader, path: &String| (reader, self.blob(root, oid, path)),
+                decode: |reader, bytes| (reader, utf8(bytes)),
+                symlink: |reader, path: &std::path::PathBuf, target: String| {
+                    #[cfg(unix)]
+                    let observed =
+                        std::os::unix::fs::symlink(target, path).map_err(|error| error.to_string());
+                    #[cfg(not(unix))]
+                    let observed = Err("E_INPUT_UNSUPPORTED: symlink snapshot".to_owned());
+                    (reader, observed)
+                },
+                write: |reader, path: &std::path::PathBuf, bytes: Vec<u8>| {
+                    (
+                        reader,
+                        fs::write(path, bytes).map_err(|error| error.to_string()),
+                    )
+                },
+                metadata: |reader, path: &std::path::PathBuf| {
+                    (
+                        reader,
+                        fs::metadata(path)
+                            .map(|metadata| metadata.permissions())
+                            .map_err(|error| error.to_string()),
+                    )
+                },
+                readonly: |reader, mut permissions: fs::Permissions, readonly| {
+                    permissions.set_readonly(readonly);
+                    (reader, permissions)
+                },
+                permissions: |reader, path: &std::path::PathBuf, permissions| {
+                    (
+                        reader,
+                        fs::set_permissions(path, permissions).map_err(|error| error.to_string()),
+                    )
+                },
+            },
+        )
+        .1
     }
     pub fn registry_values(
         &self,
