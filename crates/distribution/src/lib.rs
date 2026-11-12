@@ -287,8 +287,20 @@ fn pack(root: &Path, plan: &Path, out: &Path) -> Result<Value> {
     )
 }
 /// Combine explicitly supplied, matching platform packages; no directory discovery.
-fn assemble(inputs: &[PathBuf], out: &Path, origin: Source) -> Result<Value> {
+fn assemble(
+    inputs: &[PathBuf],
+    out: &Path,
+    origin: Source,
+    promotion: Option<(&str, &str)>,
+) -> Result<Value> {
     source(&origin)?;
+    if let Some((from, to)) = promotion {
+        name(from)?;
+        name(to)?;
+        if from == to {
+            return Err("promotion needs different input and output versions".into());
+        }
+    }
     if inputs.is_empty() || out.exists() {
         return Err("need inputs and absent output".into());
     }
@@ -299,6 +311,9 @@ fn assemble(inputs: &[PathBuf], out: &Path, origin: Source) -> Result<Value> {
     for dir in inputs {
         let r: Release = read(&dir.join("release.json"))?;
         release(&r)?;
+        if promotion.is_some_and(|(from, _)| from != r.version) {
+            return Err("promotion input version differs".into());
+        }
         if let Some(old) = &combined {
             if (
                 old.version.as_str(),
@@ -329,7 +344,10 @@ fn assemble(inputs: &[PathBuf], out: &Path, origin: Source) -> Result<Value> {
             c.platforms.insert(p, members);
         }
     }
-    let r = combined.unwrap();
+    let mut r = combined.unwrap();
+    if let Some((_, version)) = promotion {
+        r.version = version.into();
+    }
     release(&r)?;
     write(&stage.path().join("release.json"), &r)?;
     let identity = inspect(&stage.path().join("release.json"), "release.json".into())?;
@@ -639,6 +657,8 @@ pub fn run(args: &[String]) -> Result<Value> {
             "--source-dir",
             "--base-url",
             "--curl",
+            "--from-version",
+            "--version",
         ],
         "adopt" => &[
             "--host-root",
@@ -687,16 +707,24 @@ pub fn run(args: &[String]) -> Result<Value> {
             Path::new(get("--plan")?),
             Path::new(get("--output")?),
         ),
-        "assemble" => assemble(
-            &values
-                .get("--input")
-                .ok_or("missing --input")?
-                .iter()
-                .map(PathBuf::from)
-                .collect::<Vec<_>>(),
-            Path::new(get("--output")?),
-            origin()?,
-        ),
+        "assemble" => {
+            let promotion = match (values.get("--from-version"), values.get("--version")) {
+                (None, None) => None,
+                (Some(from), Some(to)) => Some((from[0].as_str(), to[0].as_str())),
+                _ => return Err("--from-version and --version must be supplied together".into()),
+            };
+            assemble(
+                &values
+                    .get("--input")
+                    .ok_or("missing --input")?
+                    .iter()
+                    .map(PathBuf::from)
+                    .collect::<Vec<_>>(),
+                Path::new(get("--output")?),
+                origin()?,
+                promotion,
+            )
+        }
         "install" => install(Path::new(get("--host-root")?)),
         "adopt" => {
             let s = origin()?;

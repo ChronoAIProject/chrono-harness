@@ -71,6 +71,24 @@ pub fn verify_workflow(
     {
         return Err(error("missing or mismatched GitHub workflow identity"));
     }
+    verify_workflow_commits(path, source_commit, workflow_commit, commands)
+}
+
+/// 只读核对由 GitHub 原运行 API 取得的工作流提交与固定候选。
+pub(crate) fn verify_workflow_commits(
+    path: &str,
+    source_commit: &str,
+    workflow_commit: &str,
+    commands: &mut impl crate::publication::Commands,
+) -> Result<WorkflowIdentity, String> {
+    chrono_harness::relative_path(path).map_err(error)?;
+    if !path.starts_with(".github/workflows/")
+        || !path.ends_with(".yml")
+        || !chrono_identifiers::valid_oid(workflow_commit.as_bytes())
+        || !chrono_identifiers::valid_oid(source_commit.as_bytes())
+    {
+        return Err(error("invalid fixed workflow identity"));
+    }
     let mut blob = |commit: &str| -> Result<String, String> {
         let reply = commands
             .execute(

@@ -12,6 +12,8 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/release/native/src/promotion.rs","owner":"host-release-native","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
+    {"path":".chrono-harness/release/native-tests/tests/promotion.rs","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}]},
     {"path":"crates/instructions-tests/tests/publication_decision.rs","verification":{"role":"program","roots":[{"path":"crates/instructions-tests/tests/publication_decision.rs","operation":"verify.instructions-publication-tests"}]},"owner":"instructions-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:instructions-tests"}]},
     {"path":"crates/instructions/src/publication_decision.rs","verification":{"role":"program","roots":[{"path":"crates/instructions/src/publication_decision.rs","operation":"verify.instructions-publication"},{"path":"crates/instructions-tests/tests/publication_decision.rs","operation":"verify.instructions-publication-tests"}]},"owner":"instructions","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:instructions"}]},
     {"path":"assets/instructions/standalone-retention.json","verification":{"role":"data","roots":[]},"owner":"instructions","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:instructions"},{"kind":"test-execution","to":"test:instructions-tests"}]},

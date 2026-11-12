@@ -35,6 +35,7 @@ pub struct Config {
     pub tools: BTreeMap<String, String>,
     pub curl: String,
     pub installation: Installation,
+    pub promotion: Option<crate::promotion::Config>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -114,12 +115,21 @@ pub fn verify_package(
     let finish = report["finished_ns"]
         .as_u64()
         .ok_or_else(|| error("missing collector finish"))?;
+    let platform_start = report["platform_started_ns"]
+        .as_u64()
+        .filter(|v| *v > 0)
+        .ok_or_else(|| error("missing original platform start"))?;
     if report["schema"] != "chrono-release-unit/v1"
         || report["status"] != "passed"
         || report["failure"] != Value::Null
         || lineage != expected
         || finish < start
-        || finish - start > loaded.recipe.limits.unit_seconds * 1_000_000_000
+        || u128::from(finish - start)
+            > u128::from(loaded.recipe.limits.unit_seconds) * 1_000_000_000
+        || platform_start > start
+        || report["platform_span_ns"].as_u64() != finish.checked_sub(platform_start)
+        || u128::from(finish - platform_start)
+            > u128::from(loaded.recipe.limits.platform_seconds) * 1_000_000_000
         || report["unit"] != serde_json::to_value(&loaded.recipe.collector).map_err(error)?
         || report["context"]["release_identity"] != serde_json::to_value(identity).map_err(error)?
         || report["context"]["source_commit"] != identity.source_commit
@@ -376,6 +386,7 @@ fn perform(
     let needs = chrono_harness::json(env(environment, "CHRONO_RELEASE_DEPENDENCIES")?.as_bytes())?;
     let run = env(environment, "CHRONO_RELEASE_RUN")?;
     let attempt = env(environment, "CHRONO_RELEASE_ATTEMPT")?;
+    executor.report["dependencies"] = needs.clone();
     let declared = loaded
         .recipe
         .native_frontends
@@ -396,12 +407,34 @@ fn perform(
         &selected,
         Some(&std::env::current_exe().map_err(error)?),
     )?;
+    let promoted = if identity.channel == identity::Channel::Stable {
+        Some(crate::promotion::prepare(
+            root,
+            output,
+            config,
+            loaded,
+            &identity,
+            environment,
+            executor,
+        )?)
+    } else {
+        None
+    };
+    if let Some(origin) = &promoted {
+        executor.report["promotion"] = origin.observation.clone();
+    }
+    let package_identity = promoted.as_ref().map_or(&identity, |p| &p.identity);
+    let packages = promoted.as_ref().map_or(&config.packages, |p| &p.packages);
     let mut inputs = Vec::new();
     let mut reports = BTreeMap::new();
-    for (native, package) in &config.packages {
+    for (native, package) in packages {
         let job = &loaded.recipe.native_jobs[native][&loaded.recipe.collector.id];
-        let selection = select(job, &needs, run, attempt)?;
-        let report = verify_package(root, loaded, package, &selection, &identity)?;
+        let selection = if let Some(origin) = &promoted {
+            origin.selections[native].clone()
+        } else {
+            select(job, &needs, run, attempt)?
+        };
+        let report = verify_package(root, loaded, package, &selection, package_identity)?;
         inputs.push(no_symlink_parents(root, &package.directory)?);
         reports.insert(native, report);
     }
@@ -414,8 +447,7 @@ fn perform(
             ))
             .collect::<BTreeMap<_, _>>()
     );
-    let native = config
-        .packages
+    let native = packages
         .get(&config.frontend)
         .ok_or("missing native assembly package")?;
     let directory = no_symlink_parents(root, &native.directory)?;
@@ -432,6 +464,14 @@ fn perform(
     fs::set_permissions(&program, fs::Permissions::from_mode(mode as u32)).map_err(error)?;
     let combined = output.join("release");
     let mut args = vec!["assemble".into()];
+    if promoted.is_some() {
+        args.extend([
+            "--from-version".into(),
+            package_identity.version.clone(),
+            "--version".into(),
+            identity.version.clone(),
+        ]);
+    }
     for input in inputs {
         args.extend([
             "--input".into(),
@@ -554,32 +594,12 @@ pub fn run(
     outcome.map(|_| 0)
 }
 
-/// 安装使用原发布产物；命令边界在测试中模拟，安装结果由实际安装器产生。
-pub fn install_release(
+pub(crate) fn verify_publication_processes(
     publication: &Path,
-    host: &Path,
+    published: &Value,
     identity: &identity::Identity,
-    platform: &str,
-    members: &BTreeSet<String>,
-    shell: &str,
-    curl: &str,
     repository: &str,
-    public_launcher: &str,
-    commands: &mut impl Commands,
-) -> Result<Value, String> {
-    let published = recipe::read_json(publication, "receipt.json")?;
-    if published["schema"] != "chrono-release-publication/v1"
-        || published["status"] != "passed"
-        || published["identity"] != serde_json::to_value(identity).map_err(error)?
-        || (identity.channel == identity::Channel::Build && published["result"]["mode"] != "build")
-        || (identity.channel != identity::Channel::Build
-            && (published["result"]["release"]["draft"] != false
-                || published["result"]["release"]["tag_name"] != identity.version))
-    {
-        return Err(error(
-            "installation needs the matching successful publication",
-        ));
-    }
+) -> Result<(), String> {
     for process in published["processes"]
         .as_array()
         .filter(|p| !p.is_empty())
@@ -615,6 +635,36 @@ pub fn install_release(
             return Err(error("failed original publication process"));
         }
     }
+    Ok(())
+}
+
+/// 安装使用原发布产物；命令边界在测试中模拟，安装结果由实际安装器产生。
+pub fn install_release(
+    publication: &Path,
+    host: &Path,
+    identity: &identity::Identity,
+    platform: &str,
+    members: &BTreeSet<String>,
+    shell: &str,
+    curl: &str,
+    repository: &str,
+    public_launcher: &str,
+    commands: &mut impl Commands,
+) -> Result<Value, String> {
+    let published = recipe::read_json(publication, "receipt.json")?;
+    if published["schema"] != "chrono-release-publication/v1"
+        || published["status"] != "passed"
+        || published["identity"] != serde_json::to_value(identity).map_err(error)?
+        || (identity.channel == identity::Channel::Build && published["result"]["mode"] != "build")
+        || (identity.channel != identity::Channel::Build
+            && (published["result"]["release"]["draft"] != false
+                || published["result"]["release"]["tag_name"] != identity.version))
+    {
+        return Err(error(
+            "installation needs the matching successful publication",
+        ));
+    }
+    verify_publication_processes(publication, &published, identity, repository)?;
     let directory = no_symlink_parents(publication, "release")?;
     let release = recipe::read_json(&directory, "release.json")?;
     let tools = release["platforms"][platform]

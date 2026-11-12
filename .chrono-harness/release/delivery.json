@@ -26,5 +26,9 @@
     "publisher": "publish",
     "directory": ".chrono-harness/cache/release-publication/",
     "shell": "/bin/sh"
+  },
+  "promotion": {
+    "workflow_id": 368236295,
+    "workflow_config": ".chrono-harness/ci/release.json"
   }
 }

@@ -546,7 +546,7 @@ fn package_fixture() -> (fixture::Fixture, Loaded, Package, Value) {
         fs::write(dir.join("receipt.json"), b"original receipt").unwrap();
         originals.insert(id,json!({"receipt.json":{"path":"receipt.json","size":16,"sha256":chrono_harness::sha256(b"original receipt")}}));
     }
-    let report = json!({"schema":"chrono-release-unit/v1","status":"passed","failure":null,"started_ns":1,"finished_ns":2,"unit":serde_json::to_value(&loaded.recipe.collector).unwrap(),"lineage":{"kind":"github","run_id":"20","attempt":"1","job":"native_collect"},"context":{"source_commit":identity().source_commit,"source_tree":identity().source_tree,"release_identity":identity()},"package":{"release_sha256":chrono_harness::file_identity(&root.join("release.json")).unwrap().0,"assets":observed},"originals":originals,"processes":[{"exit_code":0,"stdout":empty,"stderr":empty}]});
+    let report = json!({"schema":"chrono-release-unit/v1","status":"passed","failure":null,"started_ns":1,"finished_ns":2,"platform_started_ns":1,"platform_span_ns":1,"unit":serde_json::to_value(&loaded.recipe.collector).unwrap(),"lineage":{"kind":"github","run_id":"20","attempt":"1","job":"native_collect"},"context":{"source_commit":identity().source_commit,"source_tree":identity().source_tree,"release_identity":identity()},"package":{"release_sha256":chrono_harness::file_identity(&root.join("release.json")).unwrap().0,"assets":observed},"originals":originals,"processes":[{"exit_code":0,"stdout":empty,"stderr":empty}]});
     fixture::write(&root, "receipt.json", &report);
     (f, loaded, package, report)
 }
@@ -563,7 +563,7 @@ fn consumes_exact_collector_source_lineage_originals_and_asset_bytes() {
 
 #[test]
 fn passing_label_cannot_hide_bad_identity_originals_or_failed_processes() {
-    for case in 0..7 {
+    for case in 0..10 {
         let (f, loaded, package, mut report) = package_fixture();
         match case {
             0 => report["context"]["release_identity"]["verified_ci"]["attempt"] = json!(2),
@@ -584,6 +584,12 @@ fn passing_label_cannot_hide_bad_identity_originals_or_failed_processes() {
                 .map(|_| ())
                 .unwrap(),
             6 => report["finished_ns"] = Value::Null,
+            7 => report["platform_started_ns"] = Value::Null,
+            8 => report["platform_span_ns"] = json!(2),
+            9 => {
+                report["finished_ns"] = json!(121_000_000_001u64);
+                report["platform_span_ns"] = json!(121_000_000_000u64);
+            }
             _ => unreachable!(),
         }
         fixture::write(&f.root().join("package"), "receipt.json", &report);

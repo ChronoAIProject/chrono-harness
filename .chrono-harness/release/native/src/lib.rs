@@ -8,6 +8,7 @@ pub mod frontend;
 pub mod identity;
 pub mod local;
 pub mod process;
+pub mod promotion;
 pub mod publication;
 pub mod receipt;
 pub mod recipe;
