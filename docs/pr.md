@@ -30,6 +30,8 @@ crates/pr/target/debug/chrono-pr pr-watch --pr 123 --head-sha <40位提交SHA>
 
 `pr-status` 一次读取 PR 和指定提交的检查。`pr-watch` 先读取一次；仍待完成时，只启动一个原生 `gh pr checks --watch --interval 60` 等待通道，结束后回读同一 PR／提交。等待程序退出本身不产生通过状态。等待覆盖 gh 看到的全部检查，最终判定只消费配置列出的必需检查；原生通道未见到检查、提前返回或中断时，不额外轮询，结果保持 pending／unknown。超时停止并加入本工具的本地子进程，远端 CI 仍可继续；报告保留 PR、SHA 和原始回执，供后续查询。
 
+等待总期限也包含首次 API 查询。该查询未成功返回时，不能建立已观察的 head 或 pending 状态，超时返回 `unknown`／退出 2；取得有效 pending 观察后，期限耗尽才返回 `pending`／退出 3。回归保留原一秒期限和原生等待输入，另以首次查询的超时输入核对这个边界；实际派发以生产者的原调用回执为准，替身自身的日志可能尚未写完。替身将完整 JSON 行序列化后一次写入，保留 argv／stdin 合同；这不保证任意中断下日志完整，也不代替生产者回执。
+
 ## JSON 和退出码
 
 stdout 恰为一份 `chrono-pr-result/v2` JSON，帮助信息除外。结果含 command、repository、base、pr、expected_head、observed_head、outcome、checks、error 和 receipts，并给出 `operation`、`continued_operation`、`operation_state`、`command_exit_code`、`pr_state`、`merge_commit` 和更新时间。每条回执保存实际 argv、执行物摘要、PID、退出／signal、失败、流完整性和 stdout／stderr／launch 原件的路径、长度及摘要；正常结果不再内嵌两套流字节。消费者读取原件并核摘要。原件写入失败时，stdout 退回实际已取得的内嵌字节并明确报告 `storage_error`，退出 2；该输出不声称已持久保存。不保存子进程环境值或凭据，调用意图只保留环境摘要。
