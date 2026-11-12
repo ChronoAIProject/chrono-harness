@@ -2023,7 +2023,17 @@ fn age_and_quota_maintenance_preserve_live_consumers_and_unresolved_attempts() {
     retention_policy(&host, 1, 1);
     host.init().unwrap();
     let state = inventory(&host);
-    let status = state.producer_status(OP_PRODUCER, None).unwrap();
+    let produced = attempts(&host);
+    assert_eq!(produced.len(), 1);
+    let path = produced[0]
+        .strip_prefix(&host.root)
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let status = state.producer_status(OP_PRODUCER, Some(path)).unwrap();
+    assert_eq!(status["scope_complete"], true, "{status}");
+    assert!(status["errors"].as_array().unwrap().is_empty(), "{status}");
+    assert_eq!(status["records"].as_array().unwrap().len(), 1, "{status}");
     let id = status["records"][0]["id"].as_str().unwrap();
     let original = host
         .root
