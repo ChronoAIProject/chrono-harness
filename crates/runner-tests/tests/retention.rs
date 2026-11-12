@@ -84,6 +84,75 @@ fn output_retired(root: &Path, id: &str) -> bool {
 }
 
 #[test]
+fn path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity() {
+    if !isolated_capability_test(
+        "path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    fs::write(h.path().join(POLICY_PATH), serde_json::to_vec(&policy).unwrap()).unwrap();
+    let publish = |name: &str| {
+        let path = tree(h.path(), name);
+        fs::write(h.path().join(&path).join("original"), name.as_bytes()).unwrap();
+        inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit":0}))
+            .unwrap();
+        path
+    };
+    let mut sources = Vec::new();
+    let mut paths = Vec::new();
+    for group in 0..2 {
+        let leaves = [
+            publish(&format!("leaf-{group}-a")),
+            publish(&format!("leaf-{group}-b")),
+        ];
+        let source = publish(&format!("report-{group}"));
+        inventory(h.path())
+            .dependencies_paths(&source, &leaves)
+            .unwrap();
+        paths.extend(leaves);
+        paths.push(source.clone());
+        sources.push(source);
+    }
+    let before = ledger(h.path());
+    let edges = |snapshot: &Value| {
+        snapshot["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|output| (output["id"].clone(), output["references"].clone()))
+            .collect::<Vec<_>>()
+    };
+    // Two direct members fit, although their six-output closure does not.
+    inventory(h.path())
+        .reference_paths("current-enrollment", &sources)
+        .unwrap();
+    assert_eq!(edges(&ledger(h.path())), edges(&before));
+    assert!(inventory(h.path()).reference_paths("current-enrollment", &paths).is_err());
+    publish("independent-expired");
+    assert_eq!(maintain_fixture_to(h.path(), 6), 6);
+    for path in &paths {
+        assert!(h.path().join(path).is_dir());
+    }
+    inventory(h.path())
+        .reference_paths("current-enrollment", &sources[1..])
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 3), 3);
+    assert!(!h.path().join(&sources[0]).exists());
+    assert!(h.path().join(&sources[1]).exists());
+    inventory(h.path())
+        .reference_paths("current-enrollment", &[])
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+}
+
+#[test]
 #[cfg(unix)]
 fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
     use std::os::unix::fs::{MetadataExt, symlink};

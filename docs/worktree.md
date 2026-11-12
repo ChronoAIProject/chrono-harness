@@ -724,7 +724,7 @@ use 结果及 main-cache release 在最终报告交接前，暂存在所属 enro
 
 **产品与宿主政策同改：**宿主 `retention.json` 为 `lifecycle-original` 增加已采用的 automatic state 地址，只覆盖该生产者实际发布的文件。新增共享引用的原件发布行为及工作树回归；DELTA 沿 runner 和 worktree 的明确依赖验证。额外 IO、维护耗时和存储收益尚未实测。旧协调宿主仍须配套迁移，不能据候选提交宣称已部署。
 
-`cache_history` 使用相同三个限额管理活跃地址的缓存尝试索引，包括主检出。
+`cache_history` 使用相同三个限额管理尚未处置地址的缓存尝试索引，包括活跃主检出及已交接但仍保留的 linked 检出。
 成功清理的生产者记录实际 `completed_at`；同地址后续操作或显式维护只移出早于当前代际的已完成尝试。
 轮换前核精确 intent／result、附件和代际，并持有地址的独占使用租约直到新 ledger 发布。
 当前代际、活跃使用、失败、缺失或变化的原件及未知完成时间继续保护，超限时报告 `over_limit`。

@@ -1397,7 +1397,12 @@ impl Inventory {
     }
     /// Explicit original addresses supplied by the actual consumer, never inferred from JSON or names.
     pub fn reference_paths(&self, consumer: &str, paths: &[String]) -> Result<(), String> {
-        let gate = self.addressed_gate(&[], paths, &[consumer.into()], None, false, true)?;
+        // This transition changes only the consumer's membership. Its members
+        // retain their outputs and dependency edges under the existing scoped
+        // exclusion, without loading those dependencies into this activity.
+        let gate = self.addressed_gate_scope(
+            &[], paths, &[consumer.into()], None, false, true, true,
+        )?;
         let mut l = self.load(&gate)?;
         let mut ids = BTreeSet::new();
         for path in paths {
