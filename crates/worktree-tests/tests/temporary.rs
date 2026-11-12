@@ -122,6 +122,18 @@ fn private_fixture_retirement_observes_actual_release_not_test_success() {
             reference
                 .acquire("assertion", "actual original-byte reader")
                 .unwrap();
+            let declaration = json(&fs::read(&record).unwrap()).unwrap();
+            let object = &declaration["object"];
+            let receipt = object["consumers"]["assertion"]["receipt"]["path"]
+                .as_str()
+                .unwrap();
+            assert!(
+                receipt.starts_with(&format!(
+                    "{}/",
+                    object["rolling"]["metadata"].as_str().unwrap()
+                )),
+                "reference receipt shares the allocation's registered metadata lifetime"
+            );
         }
         let capability = (state == "capability").then(|| fixture.capability().unwrap());
         if state == "diagnostic" {
@@ -149,6 +161,15 @@ fn private_fixture_retirement_observes_actual_release_not_test_success() {
         if matches!(state, "consumer" | "capability") {
             let (code, report, error) = h.auto("maintain", &[]);
             assert_eq!(code, 0, "{report} {error}");
+            if !retired() {
+                eprintln!(
+                    "private retirement {state}: {report}; namespace {:?}",
+                    fs::read_dir(store)
+                        .unwrap()
+                        .map(|entry| entry.unwrap().file_name())
+                        .collect::<Vec<_>>()
+                );
+            }
             assert!(
                 retired(),
                 "last actual consumer released; existing maintenance retires it"

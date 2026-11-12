@@ -82,6 +82,7 @@ fn expect(actual:bool) requires actual, { if !actual {panic!();} }
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn known_git_command_independent_boundaries() {
     proof {
+        reveal_strlit("tag"); reveal_strlit("apply");
         reveal_strlit("--version"); reveal_strlit("check-ref-format"); reveal_strlit("init"); reveal_strlit("clone"); reveal_strlit("add"); reveal_strlit("commit"); reveal_strlit("commit-tree"); reveal_strlit("rev-parse"); reveal_strlit("show"); reveal_strlit("ls-tree"); reveal_strlit("cat-file"); reveal_strlit("ls-files"); reveal_strlit("config"); reveal_strlit("diff"); reveal_strlit("update-index"); reveal_strlit("update-ref"); reveal_strlit("reset"); reveal_strlit("restore"); reveal_strlit("checkout"); reveal_strlit("switch"); reveal_strlit("status"); reveal_strlit("symbolic-ref"); reveal_strlit("branch"); reveal_strlit("show-ref"); reveal_strlit("for-each-ref"); reveal_strlit("remote"); reveal_strlit("ls-remote"); reveal_strlit("push"); reveal_strlit("fetch"); reveal_strlit("merge-base"); reveal_strlit("rev-list"); reveal_strlit("merge"); reveal_strlit("write-tree"); reveal_strlit("read-tree"); reveal_strlit("mv"); reveal_strlit("rm"); reveal_strlit("replace"); reveal_strlit("reflog"); reveal_strlit("worktree"); reveal_strlit(""); reveal_strlit("unknown command"); reveal_strlit("BUILD");
         assert(""@.len() == 0);
         assert("BUILD"@.len() != "clone"@.len() || "BUILD"@[0] != "clone"@[0]);
@@ -149,6 +150,8 @@ fn known_git_command_independent_boundaries() {
     }
     expect(git::known_git_command("--version"));
     expect(git::known_git_command("worktree"));
+    expect(git::known_git_command("tag"));
+    expect(git::known_git_command("apply"));
     expect(git::known_git_command("restore"));
     expect(!git::known_git_command(""));
     expect(!git::known_git_command("unknown command"));

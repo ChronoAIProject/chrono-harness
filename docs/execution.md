@@ -4,7 +4,9 @@
 
 runner 的 Git 输入、快照、checkout、协议和保留使用方，以及 release 的执行、frontend 和 cache staging 使用方，在命令边界采用同一个 Rust fixture。它只提供这些测试实际使用的对象、索引、快照和有界命令接口；未知命令失败，不解析或转交宿主 Git。原批量读取、二进制字节、失败、超时、复用、消费者保管和独立性断言保留。需要 legacy PATH 的 runner 用例在各自子进程绑定私有 fixture，不修改父套件环境，也不串行套件。接口原值样本单独登记，原未过滤操作、线程和限制不变；真实生产验收仍走已登记 bootstrap／canonical 入口。新增进程、fixture IO、验证及存储成本尚未实测，这些 mock 不证明真实 Git 行为或其余选中测试所有者已完成 §2.2 迁移。
 
-workflow 分支用例复用同一私有子进程绑定。共享 projects 测试宿主将选定的 PATH 显式交给清空环境的判官；inputs 的完整输入关系同步声明该值。Git fixture 按实际调用保留 amend 的原父提交，并让普通提交遍历、计数和父提交输出共同遵守浅历史边界。registration 的固定宿主登记样本单独保存在已登记的 JSON 数据中，不在测试时读取源码检出的历史 Git。
+指令终结失败恢复用例复用现有 Rust 子进程隔离，避免其他 libtest 线程的 fork 暂时继承该用例的元数据凭据；五个原失败点、同一尝试恢复及不重新派发的断言不变。原 busy 失败只证明当时未取得锁，不能单独确定历史持有者。
+
+workflow 分支用例复用同一私有子进程绑定。共享 projects 测试宿主将选定的 PATH 显式交给清空环境的判官；inputs 的完整输入关系同步声明该值。Git fixture 按实际调用保留 amend 的原父提交，并让普通提交遍历、计数和父提交输出共同遵守浅历史边界。registration 的固定宿主登记样本单独保存在已登记的 JSON 数据中，不在测试时读取源码检出的历史 Git。普通 diff 的命令替身按明确 text 属性转换 CRLF，并采用 core.symlinks=false；raw checkout 仍核原字节和类型。depth fetch 仅取得所选提交及有限祖先，保留边界提交的原父头和此前已取得的对象；原 acquisition 必须实际 fetch 缺失输入。
 
 执行检查分工明确：registration 解释登记，FILEMAP 决定影响范围，routes 制定计划并核对工具，projects 执行操作、核对原始回执。它们共用已有执行器，不从目录、语言、Cargo 依赖或运行时扫描补出依赖。
 

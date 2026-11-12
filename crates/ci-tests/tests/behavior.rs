@@ -766,26 +766,15 @@ fn retain_command_result(
 ) {
     // Existing callers retain an unreleased diagnostic reference. They do not
     // acquire disposal eligibility from another caller's expected-exit contract.
-    if std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none() {
-        if output.status.success() {
-            return;
-        }
-        // A private command-boundary fixture cannot read the source checkout's
-        // Git policy. Reuse the existing self-contained receipt owner, preserving
-        // its policy and original bytes until this diagnostic is resolved.
-        let mut owner = retained_receipts::Owner::new();
-        owner.preserve_diagnostic();
-        let _ = retain_expected_command_result(&owner.root, root, argv, context, output, None);
+    if std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_none() && output.status.success() {
         return;
     }
-    let _ = retain_expected_command_result(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."),
-        root,
-        argv,
-        context,
-        output,
-        None,
-    );
+    // Both diagnostic consumers use the fixture's actual receipt owner. The
+    // optional destination receives references, as in judge-ci diagnostics;
+    // it is not a request to qualify the exposed source checkout through a mock.
+    let mut owner = retained_receipts::Owner::new();
+    owner.preserve_diagnostic();
+    let _ = retain_expected_command_result(&owner.root, root, argv, context, output, None);
 }
 
 fn retain_expected_command_result(
@@ -807,7 +796,7 @@ fn retain_expected_command_result(
         context,
         output,
         expected_exit,
-        directory.as_deref(),
+        None,
     ))
 }
 
@@ -840,6 +829,30 @@ fn retain_command_result_observed(
     expected_exit: Option<i32>,
     directory_override: Option<&Path>,
     birth_observer: Option<&mut dyn FnMut(&str)>,
+) -> chrono_worktree::RetainedArtifact {
+    let export = std::env::var_os("CHRONO_CI_TEST_RECEIPTS").map(std::path::PathBuf::from);
+    retain_command_result_exported(
+        producer_root,
+        root,
+        argv,
+        context,
+        output,
+        expected_exit,
+        directory_override,
+        birth_observer,
+        export.as_deref(),
+    )
+}
+fn retain_command_result_exported(
+    producer_root: &Path,
+    root: &Path,
+    argv: &[String],
+    context: &Value,
+    output: &std::process::Output,
+    expected_exit: Option<i32>,
+    directory_override: Option<&Path>,
+    birth_observer: Option<&mut dyn FnMut(&str)>,
+    export: Option<&Path>,
 ) -> chrono_worktree::RetainedArtifact {
     let (directory, generated_outputs) = chrono_worktree::RetainedArtifact::registered_store(
         producer_root,
@@ -943,6 +956,33 @@ fn retain_command_result_observed(
         )
     });
     receipt.seal().unwrap();
+    if let Some(export) = export {
+        receipt
+            .acquire(
+                "diagnostic",
+                "finite caller debugging/acceptance; caller owns release",
+            )
+            .unwrap();
+        let mut originals = serde_json::Map::new();
+        for name in ["stdout.bin", "stderr.bin", "binding.json"] {
+            let path = destination.join(name);
+            let (sha256, size) = chrono_harness::file_identity(&path).unwrap();
+            originals.insert(
+                name.into(),
+                json!({"path":path,"sha256":sha256,"size":size}),
+            );
+        }
+        let identity = chrono_harness::sha256(destination.as_os_str().as_encoded_bytes());
+        let mut reference =
+            fs::File::create_new(export.join(format!("ci-command-{identity}.json"))).unwrap();
+        serde_json::to_writer(&mut reference, &json!({
+            "consumer":"finite engineering acceptance",
+            "retention":"until caller debugging/acceptance obligations finish; caller owns release",
+            "producer":"ci-command-result","producer_root":producer_root,
+            "directory":directory,"artifact":destination,"originals":originals,
+            "release_consumers":["command-assertion","diagnostic"]
+        })).unwrap();
+    }
     receipt
 }
 fn retain_context_state(root: &Path, destination: &Path) {

@@ -2600,6 +2600,17 @@ fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_gi
     );
     assert_eq!(ok(&target, &["rev-parse", "HEAD"]), base);
     assert_eq!(fs::read(target.join("payload")).unwrap(), b"before\n");
+    let metadata = std::path::PathBuf::from(
+        fs::read_to_string(target.join(".git"))
+            .unwrap()
+            .trim()
+            .strip_prefix("gitdir: ")
+            .unwrap(),
+    );
+    assert_eq!(
+        fs::read(metadata.join("locked")).unwrap(),
+        b"fixture-owner\n"
+    );
     assert_eq!(ok(&root, &["rev-parse", "HEAD"]), head);
     assert!(
         !call(&root, &["worktree", "remove", "--force", target_text])
@@ -2608,8 +2619,39 @@ fn selected_git_mock_models_revision_cas_and_linked_metadata_without_external_gi
     );
     assert!(target.is_dir());
     ok(&root, &["worktree", "unlock", target_text]);
+    ok(
+        &root,
+        &["worktree", "lock", "--reason", "second-owner", target_text],
+    );
+    assert_eq!(
+        fs::read(metadata.join("locked")).unwrap(),
+        b"second-owner\n"
+    );
+    ok(&root, &["worktree", "unlock", target_text]);
     ok(&root, &["worktree", "remove", "--force", target_text]);
     assert!(!target.exists());
+    let donor = directory.path().join("metadata-only donor");
+    ok(
+        &root,
+        &[
+            "worktree",
+            "add",
+            "--detach",
+            "--no-checkout",
+            donor.to_str().unwrap(),
+            &head,
+        ],
+    );
+    let donor_metadata = std::path::PathBuf::from(ok(&donor, &["rev-parse", "--absolute-git-dir"]));
+    assert!(!donor_metadata.join("index").exists());
+    assert!(!donor.join("payload").exists());
+    ok(&donor, &["symbolic-ref", "HEAD", "refs/heads/dev"]);
+    assert!(!donor_metadata.join("index").exists());
+    let explicit_tree = ok(&root, &["rev-parse", &format!("{base}^{{tree}}")]);
+    ok(&donor, &["read-tree", &explicit_tree]);
+    assert!(donor_metadata.join("index").is_file());
+    assert_eq!(ok(&donor, &["write-tree"]), explicit_tree);
+    assert!(!donor.join("payload").exists());
     let remote = directory.path().join("remote.git");
     fs::create_dir(&remote).unwrap();
     ok(&remote, &["init", "--bare"]);
@@ -2694,6 +2736,7 @@ fn selected_git_mock_preserves_directory_restore_and_shallow_fetch_boundaries() 
     let middle = String::from_utf8(ok(&root, &["rev-parse", "HEAD"])).unwrap();
     fs::write(root.join("tracked/a"), b"head").unwrap();
     ok(&root, &["commit", "-qam", "head"]);
+    let head = String::from_utf8(ok(&root, &["rev-parse", "HEAD"])).unwrap();
     fs::create_dir_all(root.join("untracked/nested")).unwrap();
     fs::create_dir(root.join("empty")).unwrap();
     fs::write(root.join("untracked/nested/file"), b"new").unwrap();
@@ -2764,4 +2807,32 @@ fn selected_git_mock_preserves_directory_restore_and_shallow_fetch_boundaries() 
         &["cat-file", "-e", &format!("{}^{{commit}}", base.trim())],
     );
     assert_eq!(ok(&clone, &["rev-list", "--count", "HEAD"]), b"2\n");
+    let fetched = directory.path().join("fetched");
+    fs::create_dir(&fetched).unwrap();
+    ok(&fetched, &["init", "-q"]);
+    ok(
+        &fetched,
+        &["fetch", "--depth=2", root.to_str().unwrap(), head.trim()],
+    );
+    assert!(
+        !call(
+            &fetched,
+            &["cat-file", "-e", &format!("{}^{{commit}}", base.trim())]
+        )
+        .status
+        .success()
+    );
+    assert_eq!(ok(&fetched, &["rev-list", "--count", "FETCH_HEAD"]), b"2\n");
+    let header = ok(&fetched, &["cat-file", "-p", middle.trim()]);
+    assert!(
+        String::from_utf8(header)
+            .unwrap()
+            .contains(&format!("parent {}\n", base.trim()))
+    );
+    // Fetching an older object must preserve the previously acquired tip.
+    ok(&fetched, &["fetch", root.to_str().unwrap(), base.trim()]);
+    ok(
+        &fetched,
+        &["cat-file", "-e", &format!("{}^{{commit}}", head.trim())],
+    );
 }

@@ -1464,6 +1464,13 @@ fn publication_finishes_sealing_before_reporting_init_generate_and_noop_success(
 
 #[test]
 fn finalization_failure_is_real_and_the_same_attempt_is_recoverable() {
+    // Recovery observes immediate last-close metadata ownership. Run this
+    // host without unrelated libtest forks inheriting its open capabilities.
+    if !isolated_capability::isolated_capability_test(
+        "finalization_failure_is_real_and_the_same_attempt_is_recoverable",
+    ) {
+        return;
+    }
     for point in [
         "cleanup",
         "before-result",

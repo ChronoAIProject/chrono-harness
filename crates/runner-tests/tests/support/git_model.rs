@@ -10,8 +10,8 @@ use vstd::prelude::*;
 
 verus! {
 pub fn known_git_command(command: &str) -> (allowed: bool)
-    ensures allowed == (command@ == "--version"@ || command@ == "check-ref-format"@ || command@ == "init"@ || command@ == "clone"@ || command@ == "add"@ || command@ == "commit"@ || command@ == "commit-tree"@ || command@ == "rev-parse"@ || command@ == "show"@ || command@ == "ls-tree"@ || command@ == "cat-file"@ || command@ == "ls-files"@ || command@ == "config"@ || command@ == "diff"@ || command@ == "update-index"@ || command@ == "update-ref"@ || command@ == "reset"@ || command@ == "restore"@ || command@ == "checkout"@ || command@ == "switch"@ || command@ == "status"@ || command@ == "symbolic-ref"@ || command@ == "branch"@ || command@ == "show-ref"@ || command@ == "for-each-ref"@ || command@ == "remote"@ || command@ == "ls-remote"@ || command@ == "push"@ || command@ == "fetch"@ || command@ == "merge-base"@ || command@ == "rev-list"@ || command@ == "merge"@ || command@ == "write-tree"@ || command@ == "read-tree"@ || command@ == "mv"@ || command@ == "rm"@ || command@ == "replace"@ || command@ == "reflog"@ || command@ == "worktree"@),
-{ identifiers::equal_text(command, "--version") || identifiers::equal_text(command, "check-ref-format") || identifiers::equal_text(command, "init") || identifiers::equal_text(command, "clone") || identifiers::equal_text(command, "add") || identifiers::equal_text(command, "commit") || identifiers::equal_text(command, "commit-tree") || identifiers::equal_text(command, "rev-parse") || identifiers::equal_text(command, "show") || identifiers::equal_text(command, "ls-tree") || identifiers::equal_text(command, "cat-file") || identifiers::equal_text(command, "ls-files") || identifiers::equal_text(command, "config") || identifiers::equal_text(command, "diff") || identifiers::equal_text(command, "update-index") || identifiers::equal_text(command, "update-ref") || identifiers::equal_text(command, "reset") || identifiers::equal_text(command, "restore") || identifiers::equal_text(command, "checkout") || identifiers::equal_text(command, "switch") || identifiers::equal_text(command, "status") || identifiers::equal_text(command, "symbolic-ref") || identifiers::equal_text(command, "branch") || identifiers::equal_text(command, "show-ref") || identifiers::equal_text(command, "for-each-ref") || identifiers::equal_text(command, "remote") || identifiers::equal_text(command, "ls-remote") || identifiers::equal_text(command, "push") || identifiers::equal_text(command, "fetch") || identifiers::equal_text(command, "merge-base") || identifiers::equal_text(command, "rev-list") || identifiers::equal_text(command, "merge") || identifiers::equal_text(command, "write-tree") || identifiers::equal_text(command, "read-tree") || identifiers::equal_text(command, "mv") || identifiers::equal_text(command, "rm") || identifiers::equal_text(command, "replace") || identifiers::equal_text(command, "reflog") || identifiers::equal_text(command, "worktree") }
+    ensures allowed == (command@ == "--version"@ || command@ == "check-ref-format"@ || command@ == "init"@ || command@ == "clone"@ || command@ == "add"@ || command@ == "commit"@ || command@ == "commit-tree"@ || command@ == "rev-parse"@ || command@ == "show"@ || command@ == "ls-tree"@ || command@ == "cat-file"@ || command@ == "ls-files"@ || command@ == "config"@ || command@ == "diff"@ || command@ == "update-index"@ || command@ == "update-ref"@ || command@ == "reset"@ || command@ == "restore"@ || command@ == "checkout"@ || command@ == "switch"@ || command@ == "status"@ || command@ == "symbolic-ref"@ || command@ == "branch"@ || command@ == "show-ref"@ || command@ == "for-each-ref"@ || command@ == "remote"@ || command@ == "ls-remote"@ || command@ == "push"@ || command@ == "fetch"@ || command@ == "merge-base"@ || command@ == "rev-list"@ || command@ == "merge"@ || command@ == "write-tree"@ || command@ == "read-tree"@ || command@ == "mv"@ || command@ == "rm"@ || command@ == "replace"@ || command@ == "reflog"@ || command@ == "worktree"@ || command@ == "tag"@ || command@ == "apply"@),
+{ identifiers::equal_text(command, "--version") || identifiers::equal_text(command, "check-ref-format") || identifiers::equal_text(command, "init") || identifiers::equal_text(command, "clone") || identifiers::equal_text(command, "add") || identifiers::equal_text(command, "commit") || identifiers::equal_text(command, "commit-tree") || identifiers::equal_text(command, "rev-parse") || identifiers::equal_text(command, "show") || identifiers::equal_text(command, "ls-tree") || identifiers::equal_text(command, "cat-file") || identifiers::equal_text(command, "ls-files") || identifiers::equal_text(command, "config") || identifiers::equal_text(command, "diff") || identifiers::equal_text(command, "update-index") || identifiers::equal_text(command, "update-ref") || identifiers::equal_text(command, "reset") || identifiers::equal_text(command, "restore") || identifiers::equal_text(command, "checkout") || identifiers::equal_text(command, "switch") || identifiers::equal_text(command, "status") || identifiers::equal_text(command, "symbolic-ref") || identifiers::equal_text(command, "branch") || identifiers::equal_text(command, "show-ref") || identifiers::equal_text(command, "for-each-ref") || identifiers::equal_text(command, "remote") || identifiers::equal_text(command, "ls-remote") || identifiers::equal_text(command, "push") || identifiers::equal_text(command, "fetch") || identifiers::equal_text(command, "merge-base") || identifiers::equal_text(command, "rev-list") || identifiers::equal_text(command, "merge") || identifiers::equal_text(command, "write-tree") || identifiers::equal_text(command, "read-tree") || identifiers::equal_text(command, "mv") || identifiers::equal_text(command, "rm") || identifiers::equal_text(command, "replace") || identifiers::equal_text(command, "reflog") || identifiers::equal_text(command, "worktree") || identifiers::equal_text(command, "tag") || identifiers::equal_text(command, "apply") }
 }
 
 #[cfg(not(any(verus_keep_ghost, test)))]
@@ -20,7 +20,7 @@ mod runtime {
     use serde::{Deserialize, Serialize};
     use sha1::{Digest, Sha1};
     use std::{
-        collections::BTreeMap,
+        collections::{BTreeMap, BTreeSet},
         fs,
         io::{self, Read},
         os::unix::{ffi::OsStrExt, fs::PermissionsExt},
@@ -41,10 +41,11 @@ mod runtime {
         worktrees: BTreeMap<String, String>,
         parents: BTreeMap<String, Vec<String>>,
         trees: BTreeMap<String, Tree>,
+        tags: BTreeMap<String, String>,
         bare: bool,
         main_root: String,
         width: usize,
-        unmerged: bool,
+        unmerged: BTreeSet<String>,
         head: String,
         index: Tree,
         commits: BTreeMap<String, Tree>,
@@ -167,7 +168,16 @@ mod runtime {
             dir
         }
     }
+    fn index_path(root: &Path) -> PathBuf {
+        std::env::var_os("GIT_INDEX_FILE")
+            .map(PathBuf::from)
+            .map(|p| if p.is_absolute() { p } else { root.join(p) })
+            .unwrap_or_else(|| metadata(root).join("index"))
+    }
     fn load(root: &Path) -> Result<Repository, String> {
+        load_index(root, true)
+    }
+    fn load_index(root: &Path, with_index: bool) -> Result<Repository, String> {
         let dir = metadata(root);
         let mut repo: Repository = serde_json::from_slice(
             &fs::read(common(root).join("fixture.json")).map_err(|e| e.to_string())?,
@@ -198,8 +208,12 @@ mod runtime {
                 repo.head = head.trim().into();
             }
         }
-        if let Ok(index) = fs::read(dir.join("index")) {
-            repo.index = serde_json::from_slice(&index).map_err(|e| e.to_string())?;
+        if with_index {
+            repo.index = match fs::read(index_path(root)) {
+                Ok(index) => serde_json::from_slice(&index).map_err(|e| e.to_string())?,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => Tree::new(),
+                Err(error) => return Err(error.to_string()),
+            };
         }
         Ok(repo)
     }
@@ -251,9 +265,13 @@ mod runtime {
         apply_replace: bool,
     ) -> Result<(String, &'static str), String> {
         if let Some((revision, path)) = query.split_once(':') {
-            let e = tree(repo, revision)?
-                .get(path)
-                .ok_or("missing fixture path")?;
+            let e = (if revision.is_empty() {
+                &repo.index
+            } else {
+                tree(repo, revision)?
+            })
+            .get(path)
+            .ok_or("missing fixture path")?;
             Ok((e.oid.clone(), "blob"))
         } else if repo.commits.contains_key(&resolve(repo, query)) {
             let oid = resolve(repo, query);
@@ -266,6 +284,8 @@ mod runtime {
                 oid
             };
             Ok((replacement, "commit"))
+        } else if repo.tags.contains_key(&resolve(repo, query)) {
+            Ok((resolve(repo, query), "tag"))
         } else if repo.trees.contains_key(query) {
             Ok((query.into(), "tree"))
         } else {
@@ -280,8 +300,13 @@ mod runtime {
             serde_json::to_vec(repo).unwrap(),
         )
         .map_err(|e| e.to_string())?;
-        fs::write(dir.join("index"), serde_json::to_vec(&repo.index).unwrap())
-            .map_err(|e| e.to_string())?;
+        // Metadata-only commands must not create an index in a --no-checkout
+        // allocation. Its first read-tree/add operation supplies the index.
+        let index = index_path(root);
+        if index.exists() || !repo.index.is_empty() {
+            fs::write(index, serde_json::to_vec(&repo.index).unwrap())
+                .map_err(|e| e.to_string())?;
+        }
         let previous = fs::read_to_string(dir.join("HEAD")).unwrap_or_default();
         let mut reflog: Vec<String> = fs::read(dir.join("fixture-reflog.json"))
             .ok()
@@ -445,9 +470,18 @@ mod runtime {
         // Close the option domain at the actual command boundary as well as the
         // command-name gate. Operands remain fixture paths/messages, never tools.
         if command == "add"
-            && a[1..]
-                .iter()
-                .any(|arg| arg.starts_with('-') && !matches!(*arg, "-A" | "--all" | "-f" | "--"))
+            && a[1..].iter().any(|arg| {
+                arg.starts_with('-')
+                    && !matches!(
+                        *arg,
+                        "-A" | "--all"
+                            | "-f"
+                            | "--force"
+                            | "--pathspec-from-file=-"
+                            | "--pathspec-file-nul"
+                            | "--"
+                    )
+            })
         {
             return Err(format!("unhandled Git fixture argv: {a:?}"));
         }
@@ -689,25 +723,46 @@ mod runtime {
         let mut out = Vec::new();
         match command {
             "add" => {
-                let force = a.contains(&"-f");
-                let paths: Vec<_> = a[1..]
+                let force = a.contains(&"-f") || a.contains(&"--force");
+                let mut paths: Vec<String> = a[1..]
                     .iter()
                     .filter(|p| !p.starts_with('-'))
-                    .copied()
+                    .map(|p| (*p).to_owned())
                     .collect();
-                let all =
-                    paths.iter().any(|p| *p == ".") || a.contains(&"--all") || a.contains(&"-A");
+                let from_input = a.contains(&"--pathspec-from-file=-");
+                if from_input {
+                    paths = input
+                        .split(|b| *b == 0)
+                        .filter(|p| !p.is_empty())
+                        .map(|p| String::from_utf8(p.to_vec()).map_err(|e| e.to_string()))
+                        .collect::<Result<_, _>>()?;
+                }
+                let all = !from_input
+                    && (paths.iter().any(|p| p == ".")
+                        || a.contains(&"--all")
+                        || a.contains(&"-A"));
                 let mut files = Vec::new();
                 walk(&root, &root, &mut files).map_err(|e| e.to_string())?;
-                if all {
-                    repo.index
-                        .retain(|p, _| fs::symlink_metadata(root.join(p)).is_ok());
+                if all || a.contains(&"--all") || a.contains(&"-A") {
+                    repo.index.retain(|p, _| {
+                        !(all
+                            || paths
+                                .iter()
+                                .any(|v| p == v || p.starts_with(&format!("{v}/"))))
+                            || fs::symlink_metadata(root.join(p)).is_ok()
+                    });
                 }
-                for path in files {
-                    if !(all
+                repo.unmerged.retain(|path| {
+                    !(all
                         || paths
                             .iter()
-                            .any(|p| path == *p || path.starts_with(&format!("{p}/"))))
+                            .any(|p| path == p || path.starts_with(&format!("{p}/"))))
+                });
+                for path in files {
+                    if !(all
+                        || paths.iter().any(|p| {
+                            path == *p || (!from_input && path.starts_with(&format!("{p}/")))
+                        }))
                     {
                         continue;
                     }
@@ -846,6 +901,12 @@ mod runtime {
                                 repo.branch.clone()
                             }
                         }
+                        value
+                            if value.ends_with("^{tree}")
+                                && repo.trees.contains_key(value.trim_end_matches("^{tree}")) =>
+                        {
+                            value.trim_end_matches("^{tree}").into()
+                        }
                         value if value.ends_with("^{tree}") => hash(
                             "tree",
                             &serde_json::to_vec(tree(&repo, value.trim_end_matches("^{tree}"))?)
@@ -859,8 +920,11 @@ mod runtime {
                             object(&repo, value, !no_replace_objects)?.0
                         }
                         value => {
-                            tree(&repo, value)?;
-                            resolve(&repo, value)
+                            let (oid, _) = object(&repo, value, !no_replace_objects)?;
+                            if !common(&root).join("objects").join(&oid).is_file() {
+                                return Err(format!("missing fixture object {value}"));
+                            }
+                            oid
                         }
                     };
                     out.extend_from_slice(format!("{text}\n").as_bytes());
@@ -956,7 +1020,7 @@ mod runtime {
             }
             "ls-files" => {
                 if a.contains(&"--unmerged") {
-                    return Ok(if repo.unmerged {
+                    return Ok(if !repo.unmerged.is_empty() {
                         b"100644 fixture 1\tconflict\n".to_vec()
                     } else {
                         vec![]
@@ -968,6 +1032,17 @@ mod runtime {
                     walk(&root, &root, &mut files).map_err(|e| e.to_string())?;
                 } else {
                     files.extend(repo.index.keys().cloned());
+                }
+                let selected = a.iter().position(|s| *s == "--").map(|i| &a[i + 1..]);
+                if other {
+                    files.retain(|path| {
+                        !selected.is_some_and(|paths| {
+                            paths.iter().any(|s| {
+                                s.strip_prefix(":(top,exclude,literal)")
+                                    .is_some_and(|p| path.starts_with(p))
+                            })
+                        })
+                    });
                 }
                 files.sort();
                 if other && a.contains(&"--directory") {
@@ -1123,11 +1198,24 @@ mod runtime {
                     .collect();
                 let delete = args.first() == Some(&"-d");
                 let at = usize::from(delete);
-                let name = *args.get(at).ok_or("missing update-ref name")?;
+                let selected = *args.get(at).ok_or("missing update-ref name")?;
+                let name = if selected == "HEAD"
+                    && !a.contains(&"--no-deref")
+                    && !repo.branch.is_empty()
+                {
+                    repo.branch.as_str()
+                } else {
+                    selected
+                };
+                let current = if name == "HEAD" {
+                    repo.head.as_str()
+                } else {
+                    repo.refs.get(name).map(String::as_str).unwrap_or("")
+                };
                 let expected = args.get(at + if delete { 1 } else { 2 });
                 if let Some(expected) = expected {
-                    if repo.refs.get(name).map(String::as_str).unwrap_or("") != *expected
-                        && !(expected.chars().all(|c| c == '0') && !repo.refs.contains_key(name))
+                    if current != *expected
+                        && !(expected.chars().all(|c| c == '0') && current.is_empty())
                     {
                         return Err("fixture update-ref compare failed".into());
                     }
@@ -1140,7 +1228,7 @@ mod runtime {
                     tree(&repo, &oid)?;
                     repo.symbolic.remove(name);
                     repo.refs.insert(name.into(), oid.clone());
-                    if repo.branch == name {
+                    if repo.branch == name || name == "HEAD" {
                         repo.head = oid;
                     }
                 }
@@ -1268,7 +1356,14 @@ mod runtime {
                     let actual = entry(&root, &path, repo.width).ok();
                     let working = match (repo.index.get(&path), actual) {
                         (Some(_), None) => 'D',
-                        (Some(x), Some((y, _))) if x.oid != y.oid || x.mode != y.mode => 'M',
+                        (Some(x), Some((y, _)))
+                            if x.oid != y.oid
+                                || (x.mode != y.mode
+                                    && repo.config.get("core.filemode").map(String::as_str)
+                                        != Some("false")) =>
+                        {
+                            'M'
+                        }
                         _ => ' ',
                     };
                     if staged != ' ' || working != ' ' {
@@ -1327,7 +1422,10 @@ mod runtime {
 
     pub fn dispatch(args: &[String]) {
         let mut input = Vec::new();
-        if args.iter().any(|s| s.starts_with("--batch")) {
+        if args
+            .iter()
+            .any(|s| s.starts_with("--batch") || s == "--pathspec-from-file=-" || s == "apply")
+        {
             io::stdin().read_to_end(&mut input).unwrap();
         }
         match run(std::env::current_dir().unwrap(), args, &input) {
@@ -1337,8 +1435,16 @@ mod runtime {
             }
             Err(error) => {
                 eprintln!("{error}");
+                if let Some(code) = error
+                    .strip_prefix("fixture hook exit:")
+                    .and_then(|v| v.parse::<i32>().ok())
+                {
+                    std::process::exit(code);
+                }
                 std::process::exit(match error.as_str() {
-                    "missing fixture reference"
+                    "fixture apply conflict"
+                    | "fixture remote lease rejected"
+                    | "missing fixture reference"
                     | "not a fixture ancestor"
                     | "not a symbolic fixture ref" => 1,
                     "missing remote fixture reference" => 2,
@@ -1374,7 +1480,10 @@ mod runtime {
                 .write_all(&output.stderr)
                 .map_err(|e| e.to_string())?;
             if !output.status.success() {
-                return Err("fixture post-checkout hook failed".into());
+                return Err(format!(
+                    "fixture hook exit:{}",
+                    output.status.code().unwrap_or(128)
+                ));
             }
         }
         Ok(())
@@ -1397,10 +1506,54 @@ mod runtime {
         root: &Path,
         repo: &mut Repository,
         a: &[&str],
-        _input: &[u8],
+        input: &[u8],
     ) -> Result<Vec<u8>, String> {
         let mut out = Vec::new();
         match a[0] {
+            "tag" if a.len() == 6 && a[1] == "-a" && a[3] == "-m" => {
+                let target = resolve(repo, a[5]);
+                tree(repo, &target)?;
+                let bytes = format!("object {target}\ntype commit\ntag {}\n\n{}\n", a[2], a[4]);
+                let oid = hash("tag", bytes.as_bytes(), repo.width);
+                fs::write(common(root).join("objects").join(&oid), bytes)
+                    .map_err(|e| e.to_string())?;
+                repo.tags.insert(oid.clone(), target);
+                repo.refs.insert(format!("refs/tags/{}", a[2]), oid);
+                save(root, repo)?;
+            }
+            "apply" if a == ["apply", "--3way", "--index", "--binary", "-"] => {
+                // Opaque command-boundary fixture data, produced by this same
+                // mock's diff. Production forwards these original bytes unchanged.
+                let patch: Vec<(String, Option<Entry>, Option<Entry>, Vec<u8>)> =
+                    serde_json::from_slice(input).map_err(|e| e.to_string())?;
+                let mut conflicts = BTreeSet::new();
+                for (path, base, next, bytes) in patch {
+                    let ours = repo.index.get(&path);
+                    if ours != base.as_ref() && ours != next.as_ref() {
+                        conflicts.insert(path);
+                        continue;
+                    }
+                    match next {
+                        Some(next) => {
+                            fs::write(common(root).join("objects").join(&next.oid), bytes)
+                                .map_err(|e| e.to_string())?;
+                            materialize(root, &path, &next)?;
+                            repo.index.insert(path, next);
+                        }
+                        None => {
+                            if fs::symlink_metadata(root.join(&path)).is_ok() {
+                                fs::remove_file(root.join(&path)).map_err(|e| e.to_string())?;
+                            }
+                            repo.index.remove(&path);
+                        }
+                    }
+                }
+                repo.unmerged = conflicts;
+                save(root, repo)?;
+                if !repo.unmerged.is_empty() {
+                    return Err("fixture apply conflict".into());
+                }
+            }
             "symbolic-ref" => {
                 let args: Vec<_> = a[1..]
                     .iter()
@@ -1440,6 +1593,7 @@ mod runtime {
                         let path = common(root).join(reference);
                         fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
                         fs::write(path, format!("ref: {target}\n")).map_err(|e| e.to_string())?;
+                        save(root, repo)?;
                     }
                     _ => return Err(format!("unhandled symbolic-ref {a:?}")),
                 }
@@ -1554,6 +1708,13 @@ mod runtime {
                             name == *selected || name.ends_with(&format!("/{selected}"))
                         })
                     {
+                        if a.contains(&"--symref") {
+                            if let Some(target) = other.symbolic.get(name) {
+                                out.extend_from_slice(
+                                    format!("ref: {target}\t{name}\n").as_bytes(),
+                                );
+                            }
+                        }
                         out.extend_from_slice(format!("{oid}\t{name}\n").as_bytes());
                     }
                 }
@@ -1570,7 +1731,7 @@ mod runtime {
                 let name = args.first().ok_or("missing remote")?;
                 let path = remote(repo, name);
                 if a[0] == "fetch" {
-                    let other = import(root, repo, &path)
+                    let other = load(&path)
                         .map_err(|e| format!("unhandled Git fixture command: {a:?}; {e}"))?;
                     let spec = args
                         .get(1)
@@ -1580,6 +1741,58 @@ mod runtime {
                     let (from, to) = spec.split_once(':').unwrap_or((spec, "FETCH_HEAD"));
                     let oid = resolve(&other, from);
                     tree(&other, &oid)?;
+                    let depth = a
+                        .iter()
+                        .find_map(|v| v.strip_prefix("--depth="))
+                        .map(|v| v.parse::<usize>().map_err(|e| e.to_string()))
+                        .transpose()?;
+                    if depth == Some(0) {
+                        return Err("fixture fetch depth must be positive".into());
+                    }
+                    let mut retained = std::collections::BTreeSet::new();
+                    let mut boundary = std::collections::BTreeSet::new();
+                    let mut pending = vec![(oid.clone(), 1)];
+                    while let Some((current, level)) = pending.pop() {
+                        if !retained.insert(current.clone()) {
+                            continue;
+                        }
+                        if depth == Some(level) {
+                            if other.parents.get(&current).is_some_and(|p| !p.is_empty()) {
+                                boundary.insert(current);
+                            }
+                        } else {
+                            pending.extend(
+                                other
+                                    .parents
+                                    .get(&current)
+                                    .into_iter()
+                                    .flatten()
+                                    .cloned()
+                                    .map(|p| (p, level + 1)),
+                            );
+                        }
+                    }
+                    for current in retained {
+                        let snapshot = tree(&other, &current)?.clone();
+                        let tree_oid =
+                            hash("tree", &serde_json::to_vec(&snapshot).unwrap(), repo.width);
+                        for object in std::iter::once(&current)
+                            .chain(std::iter::once(&tree_oid))
+                            .chain(snapshot.values().map(|entry| &entry.oid))
+                        {
+                            fs::copy(
+                                common(&path).join("objects").join(object),
+                                common(root).join("objects").join(object),
+                            )
+                            .map_err(|e| e.to_string())?;
+                        }
+                        repo.trees.insert(tree_oid, snapshot.clone());
+                        repo.commits.insert(current.clone(), snapshot);
+                        repo.parents.insert(
+                            current.clone(),
+                            other.parents.get(&current).cloned().unwrap_or_default(),
+                        );
+                    }
                     repo.refs.insert(to.into(), oid.clone());
                     if to == "FETCH_HEAD" {
                         repo.refs.insert(
@@ -1595,9 +1808,18 @@ mod runtime {
                     if a.contains(&"--unshallow") {
                         let _ = fs::remove_file(common(root).join("shallow"));
                     }
-                    if a.iter().any(|v| v.starts_with("--depth=")) {
-                        fs::write(common(root).join("shallow"), format!("{oid}\n"))
-                            .map_err(|e| e.to_string())?;
+                    if depth.is_some() && !boundary.is_empty() {
+                        let previous =
+                            fs::read_to_string(common(root).join("shallow")).unwrap_or_default();
+                        boundary.extend(previous.lines().map(str::to_owned));
+                        fs::write(
+                            common(root).join("shallow"),
+                            boundary
+                                .into_iter()
+                                .map(|v| format!("{v}\n"))
+                                .collect::<String>(),
+                        )
+                        .map_err(|e| e.to_string())?;
                     }
                     save(root, repo)?;
                 } else {
@@ -1620,6 +1842,10 @@ mod runtime {
                                 && other.refs.get(reference).map(String::as_str).unwrap_or("")
                                     != expected
                             {
+                                use std::io::Write;
+                                io::stdout()
+                                    .write_all(b"! [rejected] (stale info)\n")
+                                    .map_err(|e| e.to_string())?;
                                 return Err("fixture remote lease rejected".into());
                             }
                         }
@@ -1740,7 +1966,7 @@ mod runtime {
                 }
             }
             "write-tree" if a.len() == 1 => {
-                if repo.unmerged {
+                if !repo.unmerged.is_empty() {
                     return Err("fixture index has unmerged entries".into());
                 }
                 let bytes = serde_json::to_vec(&repo.index).unwrap();
@@ -1762,7 +1988,7 @@ mod runtime {
                 match a {
                     ["read-tree", revision] => {
                         repo.index = get(revision)?;
-                        repo.unmerged = false;
+                        repo.unmerged.clear();
                     }
                     ["read-tree", "-m", base, ours, theirs] => {
                         let base = get(base)?;
@@ -1775,7 +2001,7 @@ mod runtime {
                             .cloned()
                             .collect();
                         let mut index = Tree::new();
-                        let mut unmerged = false;
+                        let mut unmerged = BTreeSet::new();
                         for path in paths {
                             let (b, o, t) = (base.get(&path), ours.get(&path), theirs.get(&path));
                             let selected = if o == t || t == b {
@@ -1783,7 +2009,7 @@ mod runtime {
                             } else if o == b {
                                 t
                             } else {
-                                unmerged = true;
+                                unmerged.insert(path.clone());
                                 o
                             };
                             if let Some(entry) = selected {
@@ -1817,14 +2043,66 @@ mod runtime {
                     .insert(format!("refs/replace/{original}"), replacement);
                 save(root, repo)?;
             }
-            "diff"
-                if a == ["diff", "--name-only"]
-                    || a == ["diff", "--cached", "--name-only"]
-                    || a == ["diff", "--raw", "-z"]
-                    || a == ["diff", "--binary"] =>
-            {
-                out = changed_paths(root, repo, tree(repo, "HEAD")?, a.contains(&"--cached"))?
-                    .into_bytes();
+            "diff" => {
+                let stop = a.iter().position(|v| *v == "--").unwrap_or(a.len());
+                let revisions: Vec<_> = a[1..stop]
+                    .iter()
+                    .filter(|v| !v.starts_with('-'))
+                    .copied()
+                    .collect();
+                if revisions.is_empty() {
+                    out = changed_paths(root, repo, tree(repo, "HEAD")?, a.contains(&"--cached"))?
+                        .into_bytes();
+                } else {
+                    let get = |name: &str| {
+                        repo.trees
+                            .get(name)
+                            .or_else(|| repo.commits.get(&resolve(repo, name)))
+                            .ok_or_else(|| format!("missing fixture tree {name}"))
+                    };
+                    let before = get(revisions[0])?;
+                    let after = if revisions.len() == 2 {
+                        get(revisions[1])?
+                    } else if a.contains(&"--cached") {
+                        &repo.index
+                    } else {
+                        return Err(format!("unsupported fixture diff {a:?}"));
+                    };
+                    let mut patch = Vec::new();
+                    for path in before
+                        .keys()
+                        .chain(after.keys())
+                        .collect::<std::collections::BTreeSet<_>>()
+                    {
+                        if before.get(path) == after.get(path)
+                            || (stop < a.len() - 1 && !a[stop + 1..].contains(&path.as_str()))
+                        {
+                            continue;
+                        }
+                        if a.contains(&"--binary") {
+                            let bytes = after
+                                .get(path)
+                                .map(|e| fs::read(common(root).join("objects").join(&e.oid)))
+                                .transpose()
+                                .map_err(|e| e.to_string())?
+                                .unwrap_or_default();
+                            patch.push((
+                                path.clone(),
+                                before.get(path).cloned(),
+                                after.get(path).cloned(),
+                                bytes,
+                            ));
+                        } else if a.contains(&"--name-only") {
+                            out.extend_from_slice(path.as_bytes());
+                            out.push(if a.contains(&"-z") { 0 } else { b'\n' });
+                        } else {
+                            return Err(format!("unsupported fixture diff {a:?}"));
+                        }
+                    }
+                    if !patch.is_empty() {
+                        out = serde_json::to_vec(&patch).map_err(|e| e.to_string())?;
+                    }
+                }
             }
             "reflog" => {
                 if a != ["reflog", "show", "--format=%H", "HEAD"]
@@ -1850,36 +2128,37 @@ mod runtime {
         let common = common(root);
         match a.get(1).copied().ok_or("missing worktree operation")? {
             "list" => {
-                let mut paths = vec![repo.main_root.clone()];
-                paths.extend(repo.worktrees.keys().cloned());
+                let mut paths = vec![(repo.main_root.clone(), common.clone())];
+                paths.extend(
+                    repo.worktrees
+                        .iter()
+                        .map(|(path, dir)| (path.clone(), PathBuf::from(dir))),
+                );
                 let zero = a.contains(&"-z");
-                for path in paths {
+                for (path, dir) in paths {
                     let path = Path::new(&path);
-                    let state = load(path);
-                    let state = match state {
-                        Ok(v) => v,
-                        Err(_) => {
-                            out.extend_from_slice(
-                                format!(
-                                    "worktree {}\nprunable fixture missing metadata\n\n",
-                                    path.display()
-                                )
-                                .as_bytes(),
-                            );
-                            continue;
-                        }
+                    // Git's inventory reads administrative records, even when
+                    // the checkout's gitfile or index is absent or damaged.
+                    let head = match fs::read_to_string(dir.join("HEAD")) {
+                        Ok(head) => head,
+                        Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                        Err(error) => return Err(error.to_string()),
                     };
+                    let branch = head.trim().strip_prefix("ref: ");
+                    let oid = branch
+                        .map(|name| resolve(repo, name))
+                        .unwrap_or_else(|| head.trim().into());
                     let mut fields = vec![
                         format!("worktree {}", path.display()),
-                        format!("HEAD {}", state.head),
-                        if state.branch.is_empty() {
-                            "detached".into()
-                        } else {
-                            format!("branch {}", state.branch)
-                        },
+                        format!("HEAD {oid}"),
+                        branch
+                            .map(|name| format!("branch {name}"))
+                            .unwrap_or_else(|| "detached".into()),
                     ];
-                    if let Ok(reason) = fs::read_to_string(metadata(path).join("locked")) {
+                    if let Ok(reason) = fs::read_to_string(dir.join("locked")) {
                         fields.push(format!("locked {}", reason.trim()));
+                    } else if !path.join(".git").exists() && path != Path::new(&repo.main_root) {
+                        fields.push("prunable gitdir file points to non-existent location".into());
                     }
                     for field in fields {
                         out.extend_from_slice(field.as_bytes());
@@ -1944,14 +2223,19 @@ mod runtime {
                     linked.refs.insert(linked.branch.clone(), oid.clone());
                 }
                 linked.head = oid.clone();
-                checkout(&path, &mut linked, &oid)?;
+                if a.contains(&"--no-checkout") {
+                    save(&path, &linked)?;
+                } else {
+                    checkout(&path, &mut linked, &oid)?;
+                }
                 if a.contains(&"--lock") {
                     let reason = a
                         .iter()
                         .position(|p| *p == "--reason")
                         .map(|i| a[i + 1])
                         .unwrap_or("initializing");
-                    fs::write(dir.join("locked"), reason).map_err(|e| e.to_string())?;
+                    fs::write(dir.join("locked"), format!("{reason}\n"))
+                        .map_err(|e| e.to_string())?;
                 }
             }
             "lock" | "unlock" => {
@@ -1963,7 +2247,7 @@ mod runtime {
                         .position(|p| *p == "--reason")
                         .map(|i| a[i + 1])
                         .unwrap_or("locked");
-                    fs::write(locked, reason).map_err(|e| e.to_string())?;
+                    fs::write(locked, format!("{reason}\n")).map_err(|e| e.to_string())?;
                 } else {
                     fs::remove_file(locked).map_err(|e| e.to_string())?;
                 }
@@ -2045,7 +2329,29 @@ mod runtime {
             let actual = if cached {
                 repo.index.get(&path).cloned()
             } else {
-                entry(root, &path, repo.width).ok().map(|(e, _)| e)
+                entry(root, &path, repo.width).ok().map(|(mut e, bytes)| {
+                    if attribute(root, &path, "text") {
+                        let normalized: Vec<_> = bytes
+                            .iter()
+                            .enumerate()
+                            .filter_map(|(i, b)| {
+                                if *b == b'\r' && bytes.get(i + 1) == Some(&b'\n') {
+                                    None
+                                } else {
+                                    Some(*b)
+                                }
+                            })
+                            .collect();
+                        e.oid = hash("blob", &normalized, repo.width);
+                    }
+                    if repo.config.get("core.symlinks").map(String::as_str) == Some("false")
+                        && snapshot.get(&path).is_some_and(|e| e.mode == "120000")
+                        && e.mode == "100644"
+                    {
+                        e.mode = "120000".into();
+                    }
+                    e
+                })
             };
             if match (snapshot.get(&path), actual) {
                 (Some(x), Some(y)) => {
@@ -2065,12 +2371,15 @@ mod runtime {
     }
 
     fn clean_filter_path(root: &Path, path: &str) -> bool {
+        attribute(root, path, "filter=hide")
+    }
+    fn attribute(root: &Path, path: &str, attribute: &str) -> bool {
         fs::read_to_string(root.join(".gitattributes"))
             .unwrap_or_default()
             .lines()
             .any(|line| {
                 let mut fields = line.split_whitespace();
-                fields.next() == Some(path) && fields.any(|field| field == "filter=hide")
+                fields.next() == Some(path) && fields.any(|field| field == attribute)
             })
     }
 }

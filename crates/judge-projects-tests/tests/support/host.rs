@@ -25,7 +25,11 @@ pub enum FixtureProbe {
 }
 
 pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureProbe) -> String {
-    let source = source().join(format!("crates/{project}/target/debug/{binary}"));
+    let source = if (project, binary) == ("runner", "chrono-harness") {
+        env!("CARGO_BIN_EXE_chrono-harness-test-cli").into()
+    } else {
+        source().join(format!("crates/{project}/target/debug/{binary}"))
+    };
     install_executable(root, &source, binary, probe)
 }
 

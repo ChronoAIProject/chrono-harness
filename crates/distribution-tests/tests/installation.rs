@@ -794,7 +794,7 @@ fn release_shell_requires_explicit_replacement_and_preserves_host_customization(
 fn interpreter_mock_rejects_unknown_template_and_installed_asset_bytes() {
     let directory = tempdir().unwrap();
     let script = directory.path().join("unknown.sh");
-    fs::write(&script, "#!/bin/sh\nexit 0\n").unwrap();
+    fs::write(&script, include_bytes!("fixtures/unknown-asset.sh")).unwrap();
     let unknown = bootstrap_command()
         .arg(&script)
         .env("TMPDIR", directory.path())

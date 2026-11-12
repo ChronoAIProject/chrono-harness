@@ -317,22 +317,34 @@ mod behavior {
         let intent = value(&attempt.join("intent.json"));
         let role = intent["consumer_role"].as_str().unwrap();
         let relative = attempt.strip_prefix(root.path()).unwrap().to_str().unwrap();
-        let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(root.path())
-            .unwrap().unwrap();
+        let inventory =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(root.path())
+                .unwrap()
+                .unwrap();
         // Model the exact interruption boundary: the actual sealed failure
         // exists, but its existing plan-root release has not completed. Never
         // fabricate a terminal result or execute another probe to recover it.
-        inventory.reference_paths(role, &[relative.to_owned()]).unwrap();
+        inventory
+            .reference_paths(role, &[relative.to_owned()])
+            .unwrap();
         inventory.maintain_at(u64::MAX).unwrap();
-        assert!(attempt.is_dir(), "the pending recovery root protects its original");
+        assert!(
+            attempt.is_dir(),
+            "the pending recovery root protects its original"
+        );
         let replay = invoke(root.path(), output);
         assert_eq!(replay.status.code(), first.status.code());
         assert_eq!(replay.stderr, first.stderr);
         assert_eq!(fs::read(&count).unwrap(), b"x");
         assert_eq!(fs::read(attempt.join("result.json")).unwrap(), receipt);
         let mut rounds = Vec::new();
-        for _ in 0..19 { rounds.push(inventory.maintain_at(u64::MAX).unwrap()); }
-        assert!(!attempt.exists(), "replay must finish the same failed attempt's root release: {rounds:?}");
+        for _ in 0..19 {
+            rounds.push(inventory.maintain_at(u64::MAX).unwrap());
+        }
+        assert!(
+            !attempt.exists(),
+            "replay must finish the same failed attempt's root release: {rounds:?}"
+        );
     }
 
     #[test]

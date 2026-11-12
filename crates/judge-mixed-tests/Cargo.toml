@@ -7,13 +7,13 @@ publish = false
 [dependencies]
 sha1 = "0.10"
 serde = { version = "1", features = ["derive"] }
+chrono-harness = { path = "../runner" }
 serde_json = "1"
 
 [dev-dependencies]
 chrono-judge-mixed = { path = "../judge-mixed" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 chrono-judge-registration = { path = "../judge-registration" }
-chrono-harness = { path = "../runner" }
 tempfile = "3"
 chrono-judge-cost = { path = "../judge-cost" }
 
@@ -29,5 +29,11 @@ opt-level = 3
 [[bin]]
 name = "chrono-test-git-model"
 path = "../runner-tests/tests/support/git_model.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-harness-test-cli"
+path = "../runner/src/main.rs"
 test = false
 bench = false

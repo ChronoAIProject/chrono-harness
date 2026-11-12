@@ -169,7 +169,11 @@ impl Owner {
             &root,
             &["commit", "-qm", "explicit receipt lifecycle fixture"],
         );
-        Self { _dir: dir, root }
+        let mut owner = Self { _dir: dir, root };
+        if std::env::var_os("CHRONO_CI_TEST_RECEIPTS").is_some() {
+            owner.preserve_diagnostic();
+        }
+        owner
     }
 
     fn drain(&self) -> (i32, Value) {
@@ -223,6 +227,55 @@ impl Owner {
             .join(FAMILY)
             .join(registry["objects"][0]["path"].as_str().unwrap())
     }
+}
+
+#[test]
+fn explicit_receipt_export_keeps_original_bytes_and_independent_diagnostic_reference() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let owner = Owner::new();
+    let export = tempfile::tempdir().unwrap();
+    let (execution, output, argv) = cargo_result(true);
+    let receipt = retain_command_result_exported(
+        &owner.root,
+        execution.path(),
+        &argv,
+        &json!({"consumer":"explicit diagnostic export"}),
+        &output,
+        Some(101),
+        None,
+        None,
+        Some(export.path()),
+    );
+    let references: Vec<_> = fs::read_dir(export.path()).unwrap().collect();
+    assert_eq!(references.len(), 1);
+    let descriptor: Value =
+        serde_json::from_slice(&fs::read(references[0].as_ref().unwrap().path()).unwrap()).unwrap();
+    assert_eq!(descriptor["producer_root"], json!(owner.root));
+    assert_eq!(descriptor["artifact"], json!(owner.object()));
+    for (name, original) in [
+        ("stdout.bin", &output.stdout),
+        ("stderr.bin", &output.stderr),
+    ] {
+        let record = &descriptor["originals"][name];
+        let bytes = fs::read(record["path"].as_str().unwrap()).unwrap();
+        assert_eq!(&bytes, original);
+        assert_eq!(record["sha256"], chrono_harness::sha256(&bytes));
+        assert_eq!(record["size"], bytes.len());
+    }
+    receipt
+        .release("command-assertion", "expected original error consumed")
+        .unwrap();
+    let (code, protected) = owner.drain();
+    assert_eq!(code, 0, "{protected}");
+    assert_eq!(producer_objects(&protected)[0]["status"], "protected");
+    receipt
+        .release("diagnostic", "export assertions finished")
+        .unwrap();
+    let (code, released) = owner.drain();
+    assert_eq!(code, 0, "{released}");
+    assert_eq!(producer_objects(&released)[0]["status"], "cleaned");
 }
 
 #[test]

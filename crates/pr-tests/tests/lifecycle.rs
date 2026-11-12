@@ -124,15 +124,34 @@ fn status_passes_only_for_the_bound_head_and_required_success() {
 fn adopted_runtime_logging_preserves_query_wait_and_api_failure_results() {
     for (command, steps, exit, outcome, calls) in [
         ("pr-status", vec![api(snapshot())], 0, "passed", 1),
-        ("pr-watch", vec![api(pending()), watch(1), api(snapshot())], 0, "passed", 3),
-        ("pr-status", vec![json!({"prefix":["api","graphql"],"stderr":"fixture authentication failed\n","exit":1})], 2, "unknown", 1),
+        (
+            "pr-watch",
+            vec![api(pending()), watch(1), api(snapshot())],
+            0,
+            "passed",
+            3,
+        ),
+        (
+            "pr-status",
+            vec![
+                json!({"prefix":["api","graphql"],"stderr":"fixture authentication failed\n","exit":1}),
+            ],
+            2,
+            "unknown",
+            1,
+        ),
     ] {
         let h = Host::new(steps);
-        fs::write(h.root.path().join(".chrono-harness/logging.json"), json!({
-            "schema":"chrono-runtime-logging/v1","level":"debug",
-            "directory":".chrono-harness/state/logs/","max_bytes":1048576,
-            "max_files":2,"stderr":false,
-        }).to_string()).unwrap();
+        fs::write(
+            h.root.path().join(".chrono-harness/logging.json"),
+            json!({
+                "schema":"chrono-runtime-logging/v1","level":"debug",
+                "directory":".chrono-harness/state/logs/","max_bytes":1048576,
+                "max_files":2,"stderr":false,
+            })
+            .to_string(),
+        )
+        .unwrap();
         let (code, result) = h.run(&[command, "--pr", "42", "--head-sha", HEAD]);
         assert_eq!(code, exit, "{result}");
         assert_eq!(result["outcome"], outcome);
@@ -140,19 +159,38 @@ fn adopted_runtime_logging_preserves_query_wait_and_api_failure_results() {
         let mut events = Vec::new();
         for entry in fs::read_dir(h.root.path().join(".chrono-harness/state/logs")).unwrap() {
             let path = entry.unwrap().path();
-            if path.extension().is_some_and(|extension| extension == "jsonl") {
+            if path
+                .extension()
+                .is_some_and(|extension| extension == "jsonl")
+            {
                 let bytes = fs::read(path).unwrap();
                 assert!(bytes.len() <= 1048576);
                 let text = std::str::from_utf8(&bytes).unwrap();
                 assert!(!text.contains("fixture-secret-never-retain"));
-                events.extend(text.lines().map(|line| serde_json::from_str::<Value>(line).unwrap()));
+                events.extend(
+                    text.lines()
+                        .map(|line| serde_json::from_str::<Value>(line).unwrap()),
+                );
             }
         }
         assert!(events.iter().all(|event| event["producer"] == "chrono-pr"));
         assert!(events.iter().any(|event| event["event"] == "cli.started"));
-        assert!(events.iter().any(|event| event["event"] == "process.preparing"));
-        assert!(events.iter().any(|event| event["event"] == "process.completed"));
-        assert!(events.iter().any(|event| event["event"] == "cli.finished" && event["fields"]["exit_code"] == exit));
+        assert!(
+            events
+                .iter()
+                .any(|event| event["event"] == "process.preparing")
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event["event"] == "process.completed")
+        );
+        assert!(
+            events
+                .iter()
+                .any(|event| event["event"] == "cli.finished"
+                    && event["fields"]["exit_code"] == exit)
+        );
     }
 }
 
