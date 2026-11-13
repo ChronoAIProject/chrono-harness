@@ -220,6 +220,7 @@ pub fn install_targets<S, E, Apply>(initial: S, count: usize, apply: Apply)
                             assert(states[position + 1] == next);
                         }
                     }
+                    vstd::seq_lib::lemma_seq_contains_after_push(old_changed, wrote, true);
                     assert(changed.contains(true) == (old_changed.contains(true) || wrote));
                 }
                 any_changed = any_changed || wrote;
