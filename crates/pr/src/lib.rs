@@ -317,6 +317,7 @@ impl Client {
             .call_intent(&spec, input, &self.digest, timeout)?;
         let paths = self.state.process_paths(attempt);
         let evidence = ProcessEvidence {
+            root: &self.root,
             stdout: &paths[0],
             stderr: &paths[1],
             launch: &paths[2],

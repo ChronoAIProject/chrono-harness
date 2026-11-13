@@ -26,7 +26,7 @@ crates/pr/target/debug/chrono-pr pr-watch --pr 123 --head-sha <40位提交SHA>
 
 所有命令支持 `--host-root`、`--config`；`pr-open` 可加 `--draft`。打开前，调用方先保存、检查并推送候选。工具只支持同仓库分支，先核远端分支 SHA，再查找相同 head／base 的现存打开 PR；唯一匹配则复用，无匹配才创建。标题和正文按字面值传给 gh，正文通过 stdin 传输。创建后重新读取 PR，核对仓库、编号、base、分支和 SHA。并发调用或网络中断不保证事务；创建失败或回读失败保留未知结果和原回执。恢复时先核原操作、远端 PR 与固定身份；再次打开虽然会先查询现存打开 PR，但空列表不证明旧创建没有发生，不能据此盲目重复创建。跨中断的自动恢复尚未实现。
 
-`pr-status` 可加 `--continue-operation <前次结果的operation>`，在一次只读查询中接续已有操作。工具先取得原件读取保护，核原生产者封存、物理身份、配置、仓库、PR 和固定 head，再核封存的对象保管状态、每份调用回执及其 stdout／stderr／launch 原件的实际字节、摘要和物理身份；原本地调用须已有完整结果，创建副作用须已核实。新操作独立保存旧结果的精确引用和新结果，不重写旧结果、不重做创建或等待。当前成功查询封存且身份核对通过后，沿原保留所有者补完封存后中断的旧操作保管交接，再结清明确接续的已返回操作。已完成交接可重入；待交接的操作仍要求受保护的封存结果。新记录不建立永久依赖链；旧原件在期限后可能不可取得，缺失不反推旧结果。缺失、部分写入、未封存、活生产者或身份变化均在派发前拒绝。新查询的认证失败是已结束的命令，不能结束旧 OPEN 对象；新发布失败继续保留未知操作。此参数只用于 `pr-status`，不启动第二等待通道。
+`pr-status` 可加 `--continue-operation <前次结果的operation>`，在一次只读查询中接续已有操作。工具先取得原件读取保护，核原生产者封存、物理身份、配置、仓库、PR 和固定 head，再核封存的对象保管状态、每份调用回执及其 stdout／stderr／launch 原件的实际字节、摘要和物理身份；原本地调用须已有完整结果，每条封存回执都须有有效退出结果且 `owned_work_joined=true`；缺失、格式错误或未加入的回执在派发前拒绝。创建副作用须已核实。新操作独立保存旧结果的精确引用和新结果，不重写旧结果、不重做创建或等待。当前成功查询封存且身份核对通过后，沿原保留所有者补完封存后中断的旧操作保管交接，再结清明确接续的已返回操作。已完成交接可重入；待交接的操作仍要求受保护的封存结果。新记录不建立永久依赖链；旧原件在期限后可能不可取得，缺失不反推旧结果。缺失、部分写入、未封存、活生产者或身份变化均在派发前拒绝。新查询的认证失败是已结束的命令，不能结束旧 OPEN 对象；新发布失败继续保留未知操作。此参数只用于 `pr-status`，不启动第二等待通道。
 
 `pr-status` 一次读取 PR 和指定提交的检查。`pr-watch` 先读取一次；仍待完成时，只启动一个原生 `gh pr checks --watch --interval 60` 等待通道，结束后回读同一 PR／提交。等待程序退出本身不产生通过状态。等待覆盖 gh 看到的全部检查，最终判定只消费配置列出的必需检查；原生通道未见到检查、提前返回或中断时，不额外轮询，结果保持 pending／unknown。超时停止并加入本工具的本地子进程，远端 CI 仍可继续；报告保留 PR、SHA 和原始回执，供后续查询。
 
@@ -34,7 +34,7 @@ crates/pr/target/debug/chrono-pr pr-watch --pr 123 --head-sha <40位提交SHA>
 
 ## JSON 和退出码
 
-stdout 恰为一份 `chrono-pr-result/v2` JSON，帮助信息除外。结果含 command、repository、base、pr、expected_head、observed_head、outcome、checks、error 和 receipts，并给出 `operation`、`continued_operation`、`operation_state`、`command_exit_code`、`pr_state`、`merge_commit` 和更新时间。每条回执保存实际 argv、执行物摘要、PID、退出／signal、失败、流完整性和 stdout／stderr／launch 原件的路径、长度及摘要；正常结果不再内嵌两套流字节。消费者读取原件并核摘要。原件写入失败时，stdout 退回实际已取得的内嵌字节并明确报告 `storage_error`，退出 2；该输出不声称已持久保存。不保存子进程环境值或凭据，调用意图只保留环境摘要。
+stdout 恰为一份 `chrono-pr-result/v2` JSON，帮助信息除外。结果含 command、repository、base、pr、expected_head、observed_head、outcome、checks、error 和 receipts，并给出 `operation`、`continued_operation`、`operation_state`、`command_exit_code`、`pr_state`、`merge_commit` 和更新时间。每条回执保存实际 argv、执行物摘要、PID、退出／signal、`owned_work_joined`、失败、流完整性和 stdout／stderr／launch 原件的路径、长度及摘要；正常结果不再内嵌两套流字节。消费者读取原件并核摘要。原件写入失败时，stdout 退回实际已取得的内嵌字节并明确报告 `storage_error`，退出 2；该输出不声称已持久保存。不保存子进程环境值或凭据，调用意图只保留环境摘要。
 
 CLI 复用 runner 已有的宿主日志入口，按明确的 `--host-root` 读取 `.chrono-harness/logging.json`；未采用时沿用原输出。采用后，有限日志保存命令开始、真实返回码和已有进程事件，stdout 的 JSON 与业务 stderr 仍走原出口。日志政策或发布失败沿现有日志入口报错，不伪装为业务成功。时间观察不能代替原进程结果，也不能证明诊断本身没有开销。
 
@@ -55,7 +55,7 @@ CLI 复用 runner 已有的宿主日志入口，按明确的 `--host-root` 读�
 
 每次调用在登记目录下取得独立操作地址。原件保留所有者先登记输出 intent、绑定物理目录并保护恢复使用方；工具再写不可变的 `config.json`、`intent.json`。每次 gh 调用前保存实际 argv、输入原件、执行物／环境摘要、精确时限、输出上限、时间，以及 `process_originals` 的三个明确地址；这些写入失败就不启动 gh。没有实际句柄或结果时字段为 null。现有 runner 在运行中保存 `<operation>/call-N.stdout`、`<operation>/call-N.stderr` 和 `<operation>/call-N.launch.json`，作为操作目录的成员。PR 明确借用现有目录发布能力；runner 复用其路径、节点和字节上限检查，预留两条流的原输出上限，不猜测父目录所有者。启动原件使用 `chrono-process-launch/v2`，绑定实际 PID、argv、执行物、输入及环境摘要，禁止保存环境值；内存执行结果仍保留实际环境，供现役绑定核对。流文件随原读取器写入已经取得的有界字节；launch 和部分流均不表示进程结束。进程返回后，PR 核对原件身份、字节、摘要和启动绑定，直接引用原件，写 `call-N.result.json`，最后发布 `result.json`。文件及所在目录同步后才继续派发。缺失、部分写入或未完成保留发布均不算终态。
 
-`operation_state=completed` 表示本地调用已返回并收取本次子进程的实际退出码或终态 signal，已派发的创建副作用也须有匹配回读。等待失败、没有原退出结果时，操作继续为 unknown；已取得的输出和启动记录保留，后续 PR 查询不结清该原任务。实际命令退出码另存；`pr_state=OPEN` 仍是活跃 PR。MERGED 必须带真实有效的 `mergeCommit.oid`，它只是远端观察，不证明实际落地树／发布已验收。原结果、PR 状态和存储发布状态分开；最后的保留封存或引用释放失败也退出 2，先前已写出的业务结果继续作为原件保护，不把它当完整成功。
+`operation_state=completed` 表示本地调用已返回、收取本次子进程的实际退出码或终态 signal，且 `owned_work_joined=true` 确认全部自有工作已加入；已派发的创建副作用也须有匹配回读。等待失败、没有原退出结果或自有工作尚未全部加入时，操作继续为 unknown；已取得的输出和启动记录保留，后续 PR 查询不结清该原任务。实际命令退出码另存；`pr_state=OPEN` 仍是活跃 PR。MERGED 必须带真实有效的 `mergeCommit.oid`，它只是远端观察，不证明实际落地树／发布已验收。原结果、PR 状态和存储发布状态分开；最后的保留封存或引用释放失败也退出 2，先前已写出的业务结果继续作为原件保护，不把它当完整成功。
 
 PR 对象按“仓库＋PR 编号”保管；head、base 和配置属于本次查询绑定。每次实际查询先在现有逐对象消费者记录中预约递增序号，绑定真实操作输出，并写持久意图。该记录只包含当前有效 OPEN 观察和仍有未结查询的操作；初始私有恢复引用在交接后释放。不同 PR 不争用同一份记录，无总清单准入、全库扫描、后台服务或按时间排序。
 

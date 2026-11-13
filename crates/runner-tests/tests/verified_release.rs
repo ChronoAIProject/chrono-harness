@@ -466,6 +466,25 @@ fn absent_or_conflicting_native_exit_does_not_complete_the_operation() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn direct_exit_requires_joined_owned_work_before_recovery_can_release() {
+    let success = policy::process_completion_known(0,None,true);
+    let failure = policy::process_completion_known(17,None,true);
+    let killed = policy::process_completion_known(-1,Some(9),true);
+    let success_unjoined = policy::process_completion_known(0,None,false);
+    let failure_unjoined = policy::process_completion_known(17,None,false);
+    let killed_unjoined = policy::process_completion_known(-1,Some(9),false);
+    let missing = policy::process_completion_known(-1,None,true);
+    let conflicting = policy::process_completion_known(0,Some(9),true);
+    let invalid_signal = policy::process_completion_known(-1,Some(0),true);
+    expect_true(success && failure && killed);
+    expect_true(!success_unjoined && !failure_unjoined && !killed_unjoined);
+    expect_true(!missing && !conflicting && !invalid_signal);
+    let unknown = policy::unknown_pr_operation(!success_unjoined,false);
+    let settled = policy::settled_pr_command(!success_unjoined,false,true);
+    expect_true(unknown && !settled);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn replay_or_missing_observation_keeps_the_current_original() {
     broadcast use vstd::array::group_array_axioms;
     proof { reveal_strlit("current"); reveal_strlit("unknown"); assert("current"@[0] != "unknown"@[0]); }

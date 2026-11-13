@@ -35,9 +35,6 @@ fn fixture() -> tempfile::TempDir {
 
 #[test]
 fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     let mut valid = config_value();
     valid["schema"] = json!("chrono-github-units/v2");
     valid["collection"]["schema"] = json!("chrono-github-ci/v4");
@@ -108,9 +105,6 @@ fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
 
 #[test]
 fn parent_provider_has_no_independent_workflow_or_polling_inputs() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     let current = config_value();
     let c: chrono_ci::units::Config = serde_json::from_value(current.clone()).unwrap();
     chrono_ci::units::validate(&c).unwrap();
@@ -148,9 +142,6 @@ fn parent_provider_has_no_independent_workflow_or_polling_inputs() {
 
 #[test]
 fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     let mut raw = config_value();
     raw["collection"]["schema"] = json!("chrono-github-ci/v4");
     raw["collection"]["facts_config"] = json!(".chrono-harness/config.json");
@@ -192,9 +183,6 @@ fn parent_diagnostic_artifacts_cannot_alias_another_units_report() {
 
 #[test]
 fn generator_preserves_unowned_parent_before_any_write() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     let d = fixture();
     fs::create_dir_all(d.path().join(".github/workflows")).unwrap();
     fs::write(
@@ -754,9 +742,6 @@ fn download_recovery_does_not_accept_invalid_evidence_after_transport_recovers()
 
 #[test]
 fn download_recovery_configuration_rejects_ambiguous_or_unbounded_policy() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     let mut valid = config_value();
     valid["gather"]["download_retry"] = download_retry();
     let c: chrono_ci::units::Config = serde_json::from_value(valid.clone()).unwrap();
@@ -984,9 +969,6 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
 
 #[test]
 fn unit_init_preserves_host_customization_across_generation() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
     let d = fixture();
     let root = d.path();
     let source = ".chrono-harness/ci/units.json";
