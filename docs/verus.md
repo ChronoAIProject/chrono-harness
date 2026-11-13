@@ -123,6 +123,11 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
+缓存 source freshness 的状态选择已接入 `verified_planner.rs::freshness_decision`：
+实际运行路径直接消费同源 Verus 结果，独立预期覆盖全部当前／首次／重试观察组合。
+时间读取、时间加法、文件属性更新及 IO 错误仍保持为明确适配器边界；此批次不扩大为
+完整 freshness 文件系统事务证明。
+
 缓存验收采用的私有 fixture 保管，沿用 `verify.runner-fixture-tests` 判断原测试结果与
 生产者退役观察必须同时具备；沿用 worktree lifecycle 两项严格根，规定对象登记为空、
 待退役元数据为空且命名空间成员均有明确归属，才允许外层夹具退出。生产者在原位置
