@@ -1,11 +1,34 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use crate::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers as identifiers, verus};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::io::{self, Read, Write};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 
+verus! {
+pub fn producer_mode(mode: Option<&str>) -> (selected: bool)
+    ensures selected == match mode { Some(value) => value@ == "1"@, None => false },
+{
+    match mode {
+        Some(value) => identifiers::equal_text(value, "1"),
+        None => false,
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn main() {
+    if producer_mode(std::env::var("CHRONO_TEST_PRODUCER").ok().as_deref()) {
+        producer_fixture();
+    }
     let executable = std::env::current_exe().unwrap();
     match executable.file_name().unwrap().to_str().unwrap() {
         "true" => std::process::exit(9),
-        "producer-fixture" => producer_fixture(),
         "git-fixture" => {
             let mut marker = std::fs::OpenOptions::new()
                 .create(true)
@@ -52,6 +75,7 @@ fn main() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn judge() {
     let case: Value = serde_json::from_slice(&std::fs::read("cli-case.json").unwrap()).unwrap();
     match case["kind"].as_str().unwrap_or("response") {
@@ -110,6 +134,7 @@ fn judge() {
     std::process::exit(case["exit"].as_i64().unwrap_or(0) as i32);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn producer_fixture() -> ! {
     let exit = chrono_harness::wire::judge_main("chrono-test-producer", "fixture.1", |request| {
         std::fs::OpenOptions::new()
