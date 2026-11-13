@@ -92,6 +92,60 @@ fn output_retired(root: &Path, id: &str) -> bool {
 }
 
 #[test]
+fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
+    if !isolated_capability_test(
+        "explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_metadata_bytes_per_round"] = json!(24 * 1024 * 1024);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut outputs = std::collections::BTreeMap::new();
+    for n in 0..20 {
+        let path = format!(".chrono-harness/state/fixtures/large-metadata-{n}");
+        fs::write(h.path().join(&path), b"required original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication
+            .complete(json!({"diagnostic": "x".repeat(1024 * 1024)}))
+            .unwrap();
+        outputs.insert(id, path);
+    }
+    // Choose the tail of the actual declaration iterator, not an assumed file
+    // name order. Each declaration fits a round; their retained prefix does not.
+    let addresses: Vec<_> = fs::read_dir(
+        h.path().join(".chrono-harness/state/output-retention-v1/objects"),
+    )
+    .unwrap()
+    .map(|entry| entry.unwrap().file_name().into_string().unwrap())
+    .collect();
+    let tail = addresses.last().unwrap();
+    inventory(h.path())
+        .reference("current-inputs", &addresses[..addresses.len() - 1])
+        .unwrap();
+    for _ in 0..3 {
+        let round = inventory(h.path()).maintain_available().unwrap();
+        assert_eq!(round["scope"]["complete"], false, "{round}");
+        assert!(h.path().join(&outputs[tail]).exists(), "{round}");
+    }
+    let sweep = retained_artifacts::retention::maintain_adopted(h.path())
+        .unwrap()
+        .unwrap();
+    assert!(
+        !h.path().join(&outputs[tail]).exists(),
+        "explicit maintenance did not reach the independent expired tail: {sweep}"
+    );
+    for id in &addresses[..addresses.len() - 1] {
+        assert_eq!(fs::read(h.path().join(&outputs[id])).unwrap(), b"required original");
+    }
+}
+
+#[test]
 #[cfg(unix)]
 fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
     if !isolated_capability_test(
