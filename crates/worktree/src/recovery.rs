@@ -529,6 +529,7 @@ pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>,
         "cache_intent",
         "main_cache_release",
         "managed_use_receipt",
+        "managed_process_original",
         "intent",
         "terminal_receipt",
     ] {
@@ -571,6 +572,20 @@ pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>,
     originals.sort();
     originals.dedup();
     Ok(originals)
+}
+
+/// The actual result handoff or exclusive lifecycle reconciliation owns this
+/// release. It does not manufacture a missing command result.
+pub(crate) fn release_managed_process_original(root: &Path, report: &Value) -> Result<(), String> {
+    if let Some(path) = report["managed_process_original"]["path"].as_str() {
+        state_path(root, path)?;
+        if let Some(inventory) =
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
+        {
+            inventory.reference_paths(&format!("recovery:{path}"), &[])?;
+        }
+    }
+    Ok(())
 }
 
 /// Attach recovery inputs before the domain releases a use token or returns
@@ -624,6 +639,9 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
     let originals = original_paths(root, report)?;
     inventory.dependencies_paths(path, &originals)?;
     bind_result_handoffs(&inventory, root, report)?;
+    if report["managed_process_original"]["joined"] == true {
+        release_managed_process_original(root, report)?;
+    }
     if report["status"] == "failed" {
         inventory.retain_diagnostic_path(path)?;
     }

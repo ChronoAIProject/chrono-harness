@@ -1042,11 +1042,12 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
             .unwrap()
             .map(|r| r.unwrap().path())
             .find(|p| {
-                p.file_name()
-                    .unwrap()
-                    .to_str()
-                    .unwrap()
-                    .starts_with("check-")
+                p.extension().is_some_and(|extension| extension == "json")
+                    && p.file_name()
+                        .unwrap()
+                        .to_str()
+                        .unwrap()
+                        .starts_with("check-")
             })
             .unwrap();
         let parent = fs::read(&report_path).unwrap();
@@ -1061,6 +1062,17 @@ fn nonempty_large_cleanup_participation_preserves_reports_and_console_under_boun
             report["managed_process"]["stderr_bytes"],
             value!(b"original warning\n".to_vec())
         );
+        let originals = h
+            .root
+            .join(report["managed_process_original"]["path"].as_str().unwrap());
+        assert_eq!(fs::read(originals.join("stdout")).unwrap(), out.stdout);
+        assert_eq!(
+            fs::read(originals.join("stderr")).unwrap(),
+            b"original warning\n"
+        );
+        let result = json(&fs::read(originals.join("result.json")).unwrap()).unwrap();
+        assert_eq!(result["exit_code"], exit);
+        assert_eq!(result["owned_work_joined"], true);
         assert_eq!(
             report["managed_command_failed"].as_bool().unwrap_or(false),
             exit != 0
@@ -1476,6 +1488,38 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     let mut child = wrapper(&h, &target);
     child.await_managed_file(&target.join(".chrono-harness/state/parent"));
     await_file(&target.join(".chrono-harness/state/grandchild"));
+    let token = h.ledger()["entries"][0]["uses"][0]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let use_intent = json(
+        &fs::read(h.root.join(format!(
+            ".chrono-harness/state/automatic-cleanup/use-intent-{token}.json"
+        )))
+        .unwrap(),
+    )
+    .unwrap();
+    let original_path = use_intent["managed_process_original"]["path"]
+        .as_str()
+        .unwrap();
+    let originals = h.root.join(original_path);
+    let dispatch = json(&fs::read(originals.join("intent.json")).unwrap()).unwrap();
+    let launch_raw = fs::read(originals.join("launch.json")).unwrap();
+    let launch = json(&launch_raw).unwrap();
+    assert_eq!(dispatch["cwd"], value!(target));
+    assert_eq!(launch["cwd"], value!(target));
+    assert_eq!(
+        launch["child_pid"].as_u64().unwrap().to_string(),
+        fs::read_to_string(target.join(".chrono-harness/state/parent")).unwrap()
+    );
+    assert!(originals.join("stdout").is_file());
+    assert!(originals.join("stderr").is_file());
+    assert!(!originals.join("result.json").exists());
+    assert!(
+        fs::read(h.root.join(use_intent["report_path"].as_str().unwrap()))
+            .unwrap()
+            .is_empty()
+    );
     let _group =
         OwnedGroup(fs::read_to_string(target.join(".chrono-harness/state/parent")).unwrap());
     child.kill().unwrap();
@@ -1483,6 +1527,8 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
     assert!(target.join("output λ/cache").exists());
+    assert_eq!(fs::read(originals.join("launch.json")).unwrap(), launch_raw);
+    assert!(!originals.join("result.json").exists());
     assert!(
         report["drain"][0]["preserved_reason"]
             .as_str()
@@ -1512,6 +1558,14 @@ fn killed_wrapper_and_parent_preserve_live_grandchild_until_final_close() {
         json(&fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap()).unwrap();
     assert_eq!(interrupted["original_result"]["presence"], "absent");
     assert_eq!(interrupted["task_completion"], "not-claimed");
+    assert_eq!(fs::read(originals.join("launch.json")).unwrap(), launch_raw);
+    assert!(!originals.join("result.json").exists());
+    assert!(
+        retention_state::snapshot(&h.root)["roots"]
+            .get(format!("recovery:{original_path}"))
+            .is_none(),
+        "the reconciled receipt owns the unknown originals after exclusive lease recovery"
+    );
     let intent = interrupted["intent"]["path"].as_str().unwrap();
     let raw = fs::read(h.root.join(intent)).unwrap();
     assert_eq!(sha256(&raw), interrupted["intent"]["sha256"]);

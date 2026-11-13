@@ -12,7 +12,8 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
-/// process_terminal 是现役 process_exit_known 对真实退出码／signal 的结果。
+/// process_terminal 是现役 process_completion_known 对真实退出码／signal
+/// 及全部自有工作加入结果的判断。
 /// None 精确保留没有回执，与已返回但终态未知的 Some(false) 分开。
 pub struct OperationObservation<'a> {
     pub status: &'a str,
@@ -76,25 +77,6 @@ pub fn validate_original(
             if identifiers::equal_text(digest, wanted_digest) && length == wanted_length { Ok(()) }
             else { Err("operation original differs from the actual process result") }
         },
-    }
-}
-
-pub struct ReleasePlan {
-    pub settle_inputs: bool,
-    pub release_dependencies: bool,
-    pub release_recovery: bool,
-}
-
-/// 输入须先交接，已知终态才可解除依赖与恢复保护；未知终态继续保护。
-pub fn release_plan(known: bool, input_count: usize) -> (plan: ReleasePlan)
-    ensures plan.settle_inputs == (input_count > 0),
-        plan.release_dependencies == (known && input_count > 0),
-        plan.release_recovery == known,
-{
-    ReleasePlan {
-        settle_inputs: input_count > 0,
-        release_dependencies: known && input_count > 0,
-        release_recovery: known,
     }
 }
 
