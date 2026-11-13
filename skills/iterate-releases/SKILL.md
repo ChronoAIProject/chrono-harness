@@ -15,7 +15,7 @@ description: "持续发布测试版，迁移和验证真实下游，修复反馈
 
 1. 固定候选身份：源码 commit/tree、计划版本、landing CI run/attempt、发布 workflow head/blob、公开资产以及两个平台安装结果。检查是否已有同一身份的成功自动发布；没有原生运行时才按固定 ref 派发，不能把移动的 `dev` 或 `latest` 当作候选。
 2. 先发布测试版。检查 frontend、所有登记验证、collector、公开 Release、标签源码、manifest/installer 字节和两平台安装。发布输入必须同时固定 `source`、`--ref`、run/attempt 和 workflow 修订；失败保留原 stdout、stderr、退出码和 artifacts，不改写旧回执、不移动标签、不按 SHA 单独复用。
-3. 四个现役示例按 `feature → integration → dev` 逐仓迁移。使用候选安装器的显式 adopt/replace 更新版本和摘要，保留业务测试、SDK、工作流和宿主定制；本地检查、feature PR、integration PR 和 dev 落地 CI 都要核实际提交 SHA。自动合并不可用时使用已有合并权限，不申请新权限。
+3. 四个现役示例按 `feature → integration → dev` 逐仓迁移。feature 分支和 integration 目标分支都从同一最新 `dev` 基线创建；integration 分支必须保持基线提交，不能预先指向 feature 提交，否则会产生无差异 PR。使用候选安装器的显式 adopt/replace 更新版本和摘要，保留业务测试、SDK、工作流和宿主定制；本地检查、feature PR、integration PR 和 dev 落地 CI 都要核实际提交 SHA。自动合并不可用时使用已有合并权限，不申请新权限。
 4. 失败先读原始结果和实际输入，修复产生错误的负责层。若 runner、工具或环境是 mutable，不能把一次观察写成跨 job 的硬摘要；固定 runner 才使用 executable pin，否则使用 schema4 短绑定并保留每次实际身份。修复后只重跑受影响的依赖闭包，独立下游继续推进。
 5. 所有等待使用原生完成通知或一次 `gh run watch`。保留原 run 句柄；认证失败、丢通知和超时保持 unknown，不重复派发或用新 run 覆盖旧结果。
 6. 只有稳定门槛全部满足才晋升：最终 preview 资产和两平台安装通过、四个下游 dev 落地并全绿、候选相关失败已修复并复验、源码没有漂移。按发布合同将 `main` 快进到同一源码，使用最终 preview run/attempt 派发 stable，核公开状态、标签、完整资产和安装。

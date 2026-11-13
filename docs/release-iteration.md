@@ -64,6 +64,12 @@ preview 的 34 个公开资产、两平台安装和上游单元已通过。正�
 
 `43362310653` 是第四轮前一次发布尝试的失败原件：执行 workflow 修订为 `ea81dd400cdb4a47c85aa72172c2a5f60683cebb`，固定候选 workflow 修订为 `48b3ee73544547a0b557ef1d834a98fb7e68df4a`，因 `E_RELEASE_IDENTITY` 拒绝；其派生的 package 缺失不能另计根因。该 run 的原 stdout、stderr、退出码和 artifacts 继续保留。
 
+第五轮候选固定为 `v0.1.4-dev.43368268229.1.geb40976ebd99b7844420fcf49c95c4ee3ab234ca`：source `eb40976ebd99b7844420fcf49c95c4ee3ab234ca`，tree `3e2519351cab706162a85b8c984ce5d5cd13beff`，landing collection `43368268229`、CodeQL `43368267500`，均为 attempt `1`。发布 workflow 为 `43370230567`，工作流文件 `.github/workflows/chrono-release.yml` 的 blob 为 `ec83d23d5b9122d126898854dfb34d8ad0c4a5f4`。公开 Release 有 34 个资产，公开、非 draft、prerelease；`release.json` 为 6649 bytes、SHA-256 `17c7f7366b2f7309ac13615618274e392cecf8b33b9b7b39d643fb51080a94cf`；Linux/macOS installer 分别为 `a2e20b8e4eb823a9fa455b78f37f730962f5abb8cee3f8ea95e5a548841b15fd`（1656256 bytes）和 `95545bfad80f793a4e40e7527490ba98610a4a16111c952f816bd9829aca7047`（1329600 bytes），发布及两平台安装均成功。
+
+第五轮四仓先完成固定候选的本地单元与汇总检查，再实际走完 feature→integration→dev：Go PR `57` → `58`，dev 落地 `5db7065b8a9048faffb3555fed4cfc8111ef4443`，collection `43374575914`，CodeQL `43374575438`；TypeScript PR `54` → `55`，dev 落地 `31dcb0a9fe763c9dffd9f19de6b25e8e908cc8d0`，collection `43374576232`，CodeQL `43374575880`；Mix PR `54` → `55`，dev 落地 `38ea9cc2f4d1be01d86e59f452ae7869f3267422`，collection `43374578929`，CodeQL `43374578086`；Initial PR `47` → `48`，dev 落地 `89130ad2f158e243af2303d0ad0a91844af7ca67`，宿主检查 `43374576343`，CodeQL `43374576025`。四个下游的 `distribution.json` 均锁定上述 preview 和 manifest 摘要；Go、TS、Mix 的真实单元及汇总、Initial 的登记检查均通过。
+
+第五轮下游落地后，上游 `dev` 又合入 PR `#1026`，从候选 `eb40976ebd99b7844420fcf49c95c4ee3ab234ca` 漂移到 `7561f6232e5a7ee4c0e5904dbab017235f2388d5`（tree `019e1bdb1882290c55fa9cef1d1fc5427437ecdb`）。因此第五轮已完成真实 preview 采用，但稳定门槛再次因源码漂移失败；当前仍保持 preview，不能把第五轮发布成 stable。
+
 ## 稳定门槛与下一轮
 
 下列条件全部满足时，候选才可 stable：上游 preview 公开资产和两平台安装通过；四个下游的 feature、integration、dev 链均落地；dev 上的真实单元、汇总和必要安全检查通过；候选相关失败已经在负责层修复并重新验证；stable Release 的标签、源码、资产和下游稳定版声明一致。任一条件缺失都保持 preview 或 unknown。
