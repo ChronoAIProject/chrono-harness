@@ -5,6 +5,7 @@ fn main() {
     let executable = std::env::current_exe().unwrap();
     match executable.file_name().unwrap().to_str().unwrap() {
         "true" => std::process::exit(9),
+        "producer-fixture" => producer_fixture(),
         "git-fixture" => {
             let mut marker = std::fs::OpenOptions::new()
                 .create(true)
@@ -107,4 +108,36 @@ fn judge() {
     io::stdout().write_all(&raw).unwrap();
     io::stdout().flush().unwrap();
     std::process::exit(case["exit"].as_i64().unwrap_or(0) as i32);
+}
+
+fn producer_fixture() -> ! {
+    let exit = chrono_harness::wire::judge_main("chrono-test-producer", "fixture.1", |request| {
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("producer-evaluated")
+            .unwrap()
+            .write_all(b"call\n")
+            .unwrap();
+        chrono_harness::wire::Response {
+            protocol: request.protocol.clone(),
+            request_id: request.request_id.clone(),
+            judge_id: request.judge_id.clone(),
+            status: match request.mode.as_str() {
+                "warn" => chrono_harness::wire::Status::Warn,
+                "fail" => chrono_harness::wire::Status::Fail,
+                "error" => chrono_harness::wire::Status::Error,
+                _ => chrono_harness::wire::Status::Pass,
+            },
+            findings: vec![],
+            evidence: vec![],
+            outputs: [
+                ("z".into(), serde_json::json!(2)),
+                ("a".into(), serde_json::json!("é")),
+            ]
+            .into_iter()
+            .collect(),
+        }
+    });
+    std::process::exit(i32::from(exit));
 }
