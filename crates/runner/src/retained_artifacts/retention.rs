@@ -243,6 +243,7 @@ impl Exclusion for crate::ownership::DirectoryLease {
 struct ReadInputs {
     root: PathBuf,
     retain_inputs: bool,
+    publication: Option<String>,
     #[cfg(unix)]
     capabilities: RefCell<BTreeMap<String, crate::process_fds::Scope>>,
 }
@@ -261,18 +262,29 @@ impl Drop for ReadScope {
     }
 }
 pub fn read_scope(root: &Path) -> Result<ReadScope, String> {
-    caller_scope(root, true)
+    caller_scope(root, true, None)
 }
 /// An orchestrator whose domain owners durably protect existing inputs keeps
 /// only child-produced originals through its report handoff. Child callers
 /// retain their own actual inputs under ordinary read scopes.
-pub fn published_output_scope(root: &Path) -> Result<ReadScope, String> {
-    caller_scope(root, false)
+pub fn published_output_scope(output: &Publication) -> Result<ReadScope, String> {
+    let scope = caller_scope(&output.inventory.root, false, Some(output.id.clone()))?;
+    // One live parent capability protects all accepted child dependencies,
+    // including after the caller drops its original Publication value.
+    output
+        .inventory
+        .remember_input_for(&scope.0, &output.lease)?;
+    Ok(scope)
 }
-fn caller_scope(root: &Path, retain_inputs: bool) -> Result<ReadScope, String> {
+fn caller_scope(
+    root: &Path,
+    retain_inputs: bool,
+    publication: Option<String>,
+) -> Result<ReadScope, String> {
     let inputs = Rc::new(ReadInputs {
         root: fs::canonicalize(root).map_err(|e| e.to_string())?,
         retain_inputs,
+        publication,
         #[cfg(unix)]
         capabilities: RefCell::new(BTreeMap::new()),
     });
@@ -400,39 +412,47 @@ impl Inventory {
         read_scope(&self.root)
     }
     fn remember_input(&self, lease: &Lease) -> Result<(), String> {
-        self.remember_capability(lease, false)
+        self.remember_capability(lease, None)
     }
-    fn remember_output(&self, lease: &Lease) -> Result<(), String> {
-        self.remember_capability(lease, true)
+    fn remember_output(&self, lease: &Lease, id: &str) -> Result<(), String> {
+        self.remember_capability(lease, Some(id))
     }
-    fn remember_capability(&self, lease: &Lease, produced: bool) -> Result<(), String> {
+    fn remember_capability(&self, lease: &Lease, produced: Option<&str>) -> Result<(), String> {
         READ_SCOPES.with(|scopes| {
             for inputs in scopes
                 .borrow()
                 .iter()
                 .filter_map(Weak::upgrade)
                 .filter(|inputs| inputs.root == self.root)
-                .filter(|inputs| inputs.retain_inputs || produced)
+                .filter(|inputs| inputs.retain_inputs || produced.is_some())
             {
-                #[cfg(unix)]
-                {
-                    use std::os::fd::AsFd;
-                    let mut capabilities = inputs.capabilities.borrow_mut();
-                    if !capabilities.contains_key(lease.id()) {
-                        if capabilities.len() >= self.policy.max_related_outputs {
-                            return Err(
-                                "caller input capability capacity; preserve originals".into()
-                            );
-                        }
-                        capabilities.insert(
-                            lease.id().into(),
-                            crate::process_fds::Scope::new(&[lease.capability()?.as_fd()])?,
-                        );
+                if let (Some(parent), Some(child)) = (&inputs.publication, produced) {
+                    if parent != child {
+                        self.extend_dependency(parent, child)?;
                     }
+                } else {
+                    self.remember_input_for(&inputs, lease)?;
                 }
             }
             Ok(())
         })
+    }
+    fn remember_input_for(&self, inputs: &ReadInputs, lease: &Lease) -> Result<(), String> {
+        #[cfg(unix)]
+        {
+            use std::os::fd::AsFd;
+            let mut capabilities = inputs.capabilities.borrow_mut();
+            if !capabilities.contains_key(lease.id()) {
+                if capabilities.len() >= self.policy.max_related_outputs {
+                    return Err("caller input capability capacity; preserve originals".into());
+                }
+                capabilities.insert(
+                    lease.id().into(),
+                    crate::process_fds::Scope::new(&[lease.capability()?.as_fd()])?,
+                );
+            }
+        }
+        Ok(())
     }
     /// Absence preserves old semantics. Existing unknown output directories are never enrolled by opening.
     pub fn adopted(root: &Path) -> Result<Option<Self>, String> {
@@ -1200,7 +1220,7 @@ impl Inventory {
         ))
     }
     fn validate_original_reuse(&self, path: &str) -> Result<Option<String>, String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let l = self.load(&gate)?;
         if let Some(o) = l.outputs.iter().find(|o| o.path == path) {
             if o.phase == "disposing"
@@ -1216,7 +1236,7 @@ impl Inventory {
             .map(|o| o.id.clone()))
     }
     pub fn enrolled(&self, path: &str) -> Result<bool, String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let l = self.load(&gate)?;
         self.stable(&gate)?;
         Ok(l.outputs.iter().any(|o| o.path == path))
@@ -1230,7 +1250,7 @@ impl Inventory {
         digest: &str,
         length: u64,
     ) -> Result<bool, String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let ledger = self.load(&gate)?;
         let published = match ledger.outputs.iter().find(|o| o.path == path) {
             Some(output) if !output.tree && output.phase == "released" => {
@@ -1259,7 +1279,7 @@ impl Inventory {
         if !member.starts_with(&format!("{tree}/")) {
             return Err("original member is outside its declared tree".into());
         }
-        let gate = self.addressed_gate(&[], &[tree.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[tree.into()])?;
         let ledger = self.load(&gate)?;
         let published = match ledger.outputs.iter().find(|o| o.path == tree) {
             Some(output)
@@ -1396,7 +1416,7 @@ impl Inventory {
     /// before completion. Actual caller
     /// and recovery roots remain authoritative and are never released here.
     pub fn retain_diagnostic_path(&self, path: &str) -> Result<(), String> {
-        let gate = self.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+        let gate = self.member_gate(&[], &[path.into()])?;
         let mut ledger = self.load(&gate)?;
         let output = ledger
             .outputs
@@ -1470,40 +1490,139 @@ impl Inventory {
         }
         self.save(&l, &gate)
     }
-    /// Bind a retained report to the exact originals its producer already declares.
-    pub fn dependencies_paths(&self, path: &str, paths: &[String]) -> Result<(), String> {
-        let gate = self.addressed_gate(
+    // The live parent publication owns this transition. Exclude only the two
+    // endpoint declarations; unchanged outward edges remain durably protected.
+    fn extend_dependency(&self, source: &str, target: &str) -> Result<(), String> {
+        let gate = self.addressed_gate_scope(
+            &[source.into(), target.into()],
             &[],
-            &[paths, &[path.into()]].concat(),
             &[],
             None,
             false,
             true,
+            true,
         )?;
-        let mut l = self.load(&gate)?;
-        let ids: BTreeSet<_> = l
+        let mut ledger = self.load(&gate)?;
+        if !ledger
             .outputs
             .iter()
-            .filter(|o| {
-                paths
-                    .iter()
-                    .any(|p| *p == o.path || (o.tree && p.starts_with(&format!("{}/", o.path))))
-            })
-            .map(|o| o.id.clone())
-            .collect();
-        if l.outputs
-            .iter()
-            .any(|o| ids.contains(&o.id) && o.phase == "disposing")
+            .any(|o| o.id == target && o.phase != "disposing")
         {
-            return Err("report original disposal has started".into());
+            return Err("child original unavailable/disposing".into());
         }
-        if let Some(o) = l.outputs.iter_mut().find(|o| o.path == path) {
-            if o.phase == "disposing" {
-                return Err("report disposal has started".into());
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == source && o.phase != "disposing")
+            .ok_or("parent publication unavailable/disposing")?;
+        if !output.references.iter().any(|id| id == target) {
+            if output.references.len() >= self.policy.max_related_outputs {
+                return Err("caller handoff dependency capacity".into());
             }
-            o.references = ids.into_iter().collect();
+            output.references.push(target.into());
+            output.references.sort();
         }
-        self.save(&l, &gate)
+        self.save(&ledger, &gate)
+    }
+    /// Bind a retained report to the exact originals its producer already declares.
+    /// Install each new edge before retiring old edges. A failed or concurrent
+    /// transition leaves conservative protection, rather than an unprotected gap.
+    pub fn dependencies_paths(&self, path: &str, paths: &[String]) -> Result<(), String> {
+        for original in paths {
+            crate::relative_path(original)?;
+        }
+        let gate = self.addressed_gate_scope(&[], &[path.into()], &[], None, false, true, true)?;
+        let ledger = self.load(&gate)?;
+        let Some(output) = ledger.outputs.iter().find(|o| o.path == path) else {
+            return Ok(());
+        };
+        if output.phase == "disposing" {
+            return Err("report disposal has started".into());
+        }
+        let source = output.id.clone();
+        let mut expected: BTreeSet<_> = output.references.iter().cloned().collect();
+        let owner = Lease::acquire(
+            &self.directory.join(&output.lease),
+            Some(&output.lease_id),
+            false,
+            false,
+            None,
+        )?
+        .ok_or("report has an exclusive consumer")?;
+        drop(gate);
+        let mut desired = BTreeSet::new();
+        for original in paths {
+            let gate = self.addressed_gate_scope(
+                &[source.clone()],
+                &[original.clone()],
+                &[],
+                None,
+                false,
+                true,
+                true,
+            )?;
+            let mut ledger = self.load(&gate)?;
+            let ids: BTreeSet<_> = ledger
+                .outputs
+                .iter()
+                .filter(|o| {
+                    o.path == *original || (o.tree && original.starts_with(&format!("{}/", o.path)))
+                })
+                .map(|o| o.id.clone())
+                .collect();
+            if ledger
+                .outputs
+                .iter()
+                .any(|o| ids.contains(&o.id) && o.phase == "disposing")
+            {
+                return Err("report original disposal has started".into());
+            }
+            let next: BTreeSet<_> = expected.union(&ids).cloned().collect();
+            self.replace_dependency_members(&mut ledger, &source, &expected, &next)?;
+            self.save(&ledger, &gate)?;
+            expected = next;
+            desired.extend(ids);
+        }
+        let obsolete: Vec<_> = expected.difference(&desired).cloned().collect();
+        for target in obsolete {
+            let gate = self.addressed_gate_scope(
+                &[source.clone(), target.clone()],
+                &[],
+                &[],
+                None,
+                false,
+                true,
+                true,
+            )?;
+            let mut ledger = self.load(&gate)?;
+            let mut next = expected.clone();
+            next.remove(&target);
+            self.replace_dependency_members(&mut ledger, &source, &expected, &next)?;
+            self.save(&ledger, &gate)?;
+            expected = next;
+        }
+        owner.stable()
+    }
+    fn replace_dependency_members(
+        &self,
+        ledger: &mut Ledger,
+        source: &str,
+        expected: &BTreeSet<String>,
+        next: &BTreeSet<String>,
+    ) -> Result<(), String> {
+        let output = ledger
+            .outputs
+            .iter_mut()
+            .find(|o| o.id == source && o.phase != "disposing")
+            .ok_or("report unavailable/disposing")?;
+        if output.references.iter().cloned().collect::<BTreeSet<_>>() != *expected {
+            return Err("report dependencies changed concurrently; originals preserved".into());
+        }
+        if next.len() > self.policy.max_related_outputs {
+            return Err("report dependency capacity; originals preserved".into());
+        }
+        output.references = next.iter().cloned().collect();
+        Ok(())
     }
     /// Hand off explicitly declared process originals to an already sealed, rooted
     /// consumer output. The caller holds read guards and has verified actual bytes.
@@ -3138,7 +3257,7 @@ impl Inventory {
     }
     /// Actual consumers use a shared capability while reading an original.
     pub fn consume(&self, id: &str) -> Result<Lease, String> {
-        let gate = self.addressed_gate(&[id.into()], &[], &[], None, false, true)?;
+        let gate = self.member_gate(&[id.into()], &[])?;
         let l = self.load(&gate)?;
         let o = l
             .outputs
@@ -3518,7 +3637,7 @@ impl Publication {
         // Returning a completed original hands its capability to any enclosing
         // caller before the producer closes. A nested caller may have no durable
         // root left after success, while its parent still needs its exact result.
-        self.inventory.remember_output(&self.lease)?;
+        self.inventory.remember_output(&self.lease, &self.id)?;
         if serde_json::to_vec(&outcome)
             .map_err(|e| e.to_string())?
             .len()
@@ -3581,12 +3700,13 @@ impl Publication {
                 .transpose()?
                 .into_iter()
                 .collect::<Vec<_>>();
-            let gate = self.inventory.addressed_gate(
+            let gate = self.inventory.addressed_gate_scope(
                 &[self.id.clone()],
                 &[],
                 &roles,
                 None,
                 false,
+                true,
                 true,
             )?;
             let mut l = self.inventory.load(&gate)?;
@@ -3839,7 +3959,7 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let gate = inventory.addressed_gate(&[], &[path.into()], &[], None, false, true)?;
+    let gate = inventory.member_gate(&[], &[path.into()])?;
     let l = inventory.load(&gate)?;
     let found = l
         .outputs

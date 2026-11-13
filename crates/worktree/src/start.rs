@@ -788,9 +788,14 @@ pub(crate) fn with_report_for_consumer<T>(
         // Enrollment consumers protect existing originals before this command
         // permits cross-object retention. Keep child reports for our handoff,
         // without also retaining every child's independently owned inputs.
-        chrono_harness::retained_artifacts::retention::published_output_scope(root)?
+        report_publication
+            .as_ref()
+            .map(chrono_harness::retained_artifacts::retention::published_output_scope)
+            .transpose()?
     } else {
-        chrono_harness::retained_artifacts::retention::read_scope(root)?
+        Some(chrono_harness::retained_artifacts::retention::read_scope(
+            root,
+        )?)
     };
     let mut output = fs::OpenOptions::new()
         .write(true)
