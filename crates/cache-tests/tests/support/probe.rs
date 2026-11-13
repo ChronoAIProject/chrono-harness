@@ -29,7 +29,18 @@ fn main() {
             let prefix: Vec<_> = args[..args.len() - 1].iter().map(String::as_str).collect();
             assert!(
                 prefix == ["--literal-pathspecs", "ls-files", "-z", "--"]
-                    || prefix == ["--literal-pathspecs", "ls-tree", "-rz", "HEAD", "--"]
+                    || prefix
+                        == [
+                            "--literal-pathspecs",
+                            "diff",
+                            "--cached",
+                            "--name-only",
+                            "-z",
+                            "--no-renames",
+                            "--ignore-submodules=none",
+                            "--diff-filter=D",
+                            "--",
+                        ]
             );
         }
 
