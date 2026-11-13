@@ -18,10 +18,9 @@
 交给已证明的 `source_registry` 构造函数；缺少开关保留 `None`，显式值须为布尔，
 null 或其他类型拒绝。适配器不选择分类政策，也不产生计划准入状态。
 固定基线已启用时，候选仍不能关闭或移除开关。
-`crates/ci/src/gating.rs` 的原生 job 状态与绑定实际调用 `verified_literals.rs`，
-`crates/judge-workflow/src/lib.rs` 的错误分类实际调用 `verified_execution::response`。
-这两个程序文件的分类显式连接原生产根与独立预期根；其余解析、编排、状态及 IO 组合
-继续保留未证明范围，分类登记不表示整文件已证明。
+`crates/ci/src/gating.rs` 和 `crates/judge-workflow/src/lib.rs` 虽然调用已证明的辅助函数，
+自身没有进入那些证明根的编译依赖，因此仍保持未知覆盖，不登记不实文件级证明。
+选测回归制造源码变更时须使用实际已绑定的生产证明根，并保留原选测和失败断言。
 该门控只约束候选 DELTA 的文件计划，不把分类声明、局部证明或普通 CI 绿灯扩大为
 全仓 SPEC 已证明。
 
