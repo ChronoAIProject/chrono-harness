@@ -5,8 +5,10 @@ use chrono_harness::{
     CapturedRegistry, JsonBindingReferences, JsonGuardReferences, JsonSelectorRows, JsonTargetRows,
     SeenSelectorText, json_value_specs as json_spec, verified_git_binding as policy,
 };
-use policy::{BindingReferenceRows, GitTargetRows, RegistryMembership, SelectorRegistryRows,
-    SelectorRows, SelectorSeen};
+use policy::{
+    BindingReferenceRows, GitTargetRows, RegistryMembership, SelectorRegistryRows, SelectorRows,
+    SelectorSeen,
+};
 use serde_json::Value;
 use std::collections::BTreeMap;
 #[cfg(not(verus_keep_ghost))]
@@ -153,30 +155,86 @@ fn record_text<'a>(seen: &mut SeenSelectorText<'a>, text: &'a str, expected_fres
 // 严格证明核驱动的输入合同，Rust 测试另核固定解析器产生的这些真实边界值。
 #[test]
 fn reference_rows_keep_absence_types_order_empty_and_complete_text() {
-    let rows = vec![Value::Null, serde_json::json!({}), serde_json::json!({"id": null}),
-        serde_json::json!({"id": 7}), serde_json::json!({"id": ""}),
-        serde_json::json!({"id": "目录é\0\n尾部"}), serde_json::json!({"id": "目录é\0\n尾部"})];
-    reference_observations(&rows, &[None, None, None, None, Some(""),
-        Some("目录é\0\n尾部"), Some("目录é\0\n尾部")]);
+    let rows = vec![
+        Value::Null,
+        serde_json::json!({}),
+        serde_json::json!({"id": null}),
+        serde_json::json!({"id": 7}),
+        serde_json::json!({"id": ""}),
+        serde_json::json!({"id": "目录é\0\n尾部"}),
+        serde_json::json!({"id": "目录é\0\n尾部"}),
+    ];
+    reference_observations(
+        &rows,
+        &[
+            None,
+            None,
+            None,
+            None,
+            Some(""),
+            Some("目录é\0\n尾部"),
+            Some("目录é\0\n尾部"),
+        ],
+    );
     reference_observations(&[], &[]);
 }
 
 #[test]
 fn selector_rows_distinguish_missing_null_wrong_type_and_full_fields() {
-    let rows = vec![Value::Null, serde_json::json!({}),
+    let rows = vec![
+        Value::Null,
+        serde_json::json!({}),
         serde_json::json!({"sha256": null, "path": null, "registry_path": null}),
         serde_json::json!({"sha256": 7, "path": false, "registry_path": []}),
-        serde_json::json!({"sha256": "摘要\0", "path": "目录é\n", "registry_path": "完整λ", "extra": true})];
-    selector_observations(&rows, &[
-        policy::SelectorRow { fields: None, digest: None, path_present: false, path: None, registry_path_present: false },
-        policy::SelectorRow { fields: Some(0), digest: None, path_present: false, path: None, registry_path_present: false },
-        policy::SelectorRow { fields: Some(3), digest: None, path_present: true, path: None, registry_path_present: true },
-        policy::SelectorRow { fields: Some(3), digest: None, path_present: true, path: None, registry_path_present: true },
-        policy::SelectorRow { fields: Some(4), digest: Some("摘要\0"), path_present: true, path: Some("目录é\n"), registry_path_present: true },
-    ], &[None, None, None, None, Some("完整λ")]);
+        serde_json::json!({"sha256": "摘要\0", "path": "目录é\n", "registry_path": "完整λ", "extra": true}),
+    ];
+    selector_observations(
+        &rows,
+        &[
+            policy::SelectorRow {
+                fields: None,
+                digest: None,
+                path_present: false,
+                path: None,
+                registry_path_present: false,
+            },
+            policy::SelectorRow {
+                fields: Some(0),
+                digest: None,
+                path_present: false,
+                path: None,
+                registry_path_present: false,
+            },
+            policy::SelectorRow {
+                fields: Some(3),
+                digest: None,
+                path_present: true,
+                path: None,
+                registry_path_present: true,
+            },
+            policy::SelectorRow {
+                fields: Some(3),
+                digest: None,
+                path_present: true,
+                path: None,
+                registry_path_present: true,
+            },
+            policy::SelectorRow {
+                fields: Some(4),
+                digest: Some("摘要\0"),
+                path_present: true,
+                path: Some("目录é\n"),
+                registry_path_present: true,
+            },
+        ],
+        &[None, None, None, None, Some("完整λ")],
+    );
     selector_observations(&[], &[], &[]);
-    target_observations(&rows, &[None, None, None, None, Some("摘要\0")],
-        &[None, None, None, None, Some("目录é\n")]);
+    target_observations(
+        &rows,
+        &[None, None, None, None, Some("摘要\0")],
+        &[None, None, None, None, Some("目录é\n")],
+    );
     target_observations(&[], &[], &[]);
 }
 

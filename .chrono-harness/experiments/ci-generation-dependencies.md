@@ -1,32 +1,66 @@
-# CI generation 的有限依赖调查
+# CI generation 的依赖与 runner 适配器候选
 
-本包服务 SPEC §2.1.1 的完整同源证明与实际编译绑定。使用方是本次有限调查的下一位工程工作者及包结束后的一次 sshx review triplet。当前仍未建立全类覆盖依据；本包准备登记，不提供证明成功、生产准入或交付结论。
+本文服务 SPEC §2.1.1 的完整同源证明和实际编译绑定。runner 所有者负责真实借用 JSON、捕获 map 和 seen set；ci 所有者负责 generation 的真实生产闭包。当前交接是完整直接 adapter family 的源码候选，**不是严格证明、依赖准入、正式 DELTA 或交付结果**。全部 SPEC 目标仍未完成。
 
-## 所有者与唯一入口
+## 当前候选及边界
 
-操作及完整参数只由 [projects.json](../projects.json) 维护；runner 所有者负责真实依赖导出，ci 所有者负责真实 generation 导入和缺失证明输入。FILEMAP 仅增加本文的数据分类和三个操作的已有 state 输出占用，没有把实验加入正式执行计划。没有新增程序、执行器、工具、生产合同、证明豁免或 CI 任务。
+基线为干净 `ff006c4e08b7585ac484e583299d65a60d36c35e`。候选保留三处原源码所有者、真实调用、借用和顺序；不改 CAPACITY、lifetime、cfg、program 分类、错误优先级或生产选择。源码库存仍是下面七个具体实现块和 `verified_git_binding` 内两个既有泛型选择适配器，没有发现另外的直接实现或本地实现生成宏。这不是全部 proc-macro／cfg 宇宙的证明。
 
-下一 assignment 只通过以下受保护入口逐项执行，不能直接启动 Verus、使用未提交参数或换用其他操作：
+| 具体实现及实际使用方 | 候选规格不变量 |
+| --- | --- |
+| `facts_binding::JsonBindingReferences` → `declaration` 的唯一 tool/input 引用 | count 是原切片长度；每个有效槽位的 id 是该行完整可选文本；规格的越界位置为 None，执行索引仍须证明界限。 |
+| `facts_inputs::JsonGuardReferences` → guard declaration/reference | 同一借用切片投影；不复制、截断、归一化或重排 id。 |
+| `facts_configs::JsonSelectorRows` → `collect_identity_paths` | 原顺序、对象成员总数、完整 digest/path、get 的键存在性；null 与缺键不同，错误类型仍为 None 文本。 |
+| 同一 `JsonSelectorRows` → `validate_identity_registry_paths` | 同一原切片的完整可选 registry_path 文本序列。 |
+| `facts_configs::JsonTargetRows` → `resolve_target/select_git_target` | count 是原长度；Digest 只选 sha256，Path 只选 path；保留 None、原槽位和完整文本。键选择仍在仓内匹配分支。 |
+| `CapturedRegistry` → `identity/select_captured_target` | has_path 当且仅当实际 map 某原键的全部字符等于查询；不查当前 Git 或执行物。 |
+| `SeenSelectorText` → identity hash/path 去重 | seen 为实际 set 成员的全部字符；record 保留旧文本集合并恰好插入 text，fresh 当且仅当此前不存在；执行仍调用一次原 insert。 |
+
+`json_value_specs.rs` 是这些所有者共享的外部接口规格提案，不包含仓内选择／错误／状态判断。`lib.rs` 的隐藏文档重导出只供独立预期直接消费真实实现，不引入测试替身。Default 从派生改为同样的标准空树集合构造，以便声明空状态。
+
+**源码与宿主登记同时修改：**FILEMAP 将四处当前生产源登记为 program，共享外部接口源为 specification，真实生产根为 `crates/runner/src/lib.rs`。独立 `runner-tests/tests/json_adapters.rs` 为 program，使用候选 runner 的同次库和 VIR。两操作进入原 runner-tests 计划并声明原 state 输出占用；原全部操作、线程、期限和行为断言保留。根登记表达义务，不能证明根已成功或获得准入。
+
+## 外部接口及当前阻断
+
+规格提案逐项对应固定缓存 serde_json 1.0.151：`value/mod.rs::as_str` 只借用 String 全文；`as_object` 只借用 Object；`get` 在非对象／缺键时为 None，存在但为 null 时仍为 Some；`value/index.rs::Index::index` 在缺键／错误类型时返回 Null，其 as_str 为 None；`map.rs::len` 返回原有限成员数。通用索引方法保留原泛型，只有本类实际使用的 &str 键解释为对象成员；不为其他索引类型编造已解释语义。
+
+标准切片长度／索引、Option::map/is_some 和树集合 insert/contains_key 复用固定 vstd。该 vstd 的树集合合同要求 `obeys_cmp`；借用 String → str 的 contains_borrowed_key 及 &str set 与全文集合的对应没有当前可用的完整文本精化。提案只为固定标准文本键声明这些外部模型事实，不假设仓内状态更新正确。固定 Rust 1.95.0 的源码文档中，`core/str/traits.rs::Ord/PartialEq` 使用完整字节，`alloc/collections/btree/set.rs::insert` 返回 map.insert 的 is_none，`map.rs::contains_key` 返回 get 的 is_some；这支持所需合同的现实语义，不证明 Verus 模型或工具准入。
+
+**严格入口仍被外部合同承载方式阻断。**固定工具帮助原件 `/tmp/chrono-generation-verus-bound-help-20261113.stderr` 明确把 assume、admit、external_body 和 assume_specification 列为 `--no-cheating` 禁止项。固定发行物 `builtin_macros/src/syntax.rs` 的 ProofAxiom 分支会把 axiom 转成 external_body；候选不能凭“外部接口”名称取得例外。当前源码提案中的 external type／function specs 和文本键 axioms 尚无已准入的独立外部规格载体；不声称它们会被严格根接受，也没有运行来产生新的拒绝记录。
+
+最小负责方差异：固定工具／外部接口规格及依赖准入所有者须提供能在现役严格根消费的、与这些真实直接接口相符的固定规格输入，并绑定源、工具、库及 VIR；若现役工具没有这样的路径，保持阻断并由该所有者修正方法。这里不改工具、不关闭 no-cheating、不给仓内 adapter/projection/选择/状态函数 external_body、不把仓内库当外部公理。源提案中的接口假设尚未机械精化；它不是可合入的已证明实现。
+
+另一个现有阻断是 `verified_verifier` 只准入原十二项参数形状。根新增的 edition、extern、import/export 等参数不会因登记 output_contract 自动变为合法。正式汇总必须继续拒绝未支持的方法／缺失编译输入，不能把 raw use 的成功报告冒充正式证明贡献。扩大该准入与完整依赖资格不属于此 adapter 包。
+
+## 独立成功、失败和边界预期
+
+预期由原六个 trait 合同、原始 E0046 及上述直接接口语义确定；不声称执行了修改前的新用例。新 Rust/Verus 驱动直接调用两个引用 adapter、selector 的两视图、target 的两字段、真实 captured map 和 seen set，使用独立提供的完整文本／字段预期。Rust fixture 只提供真实 JSON／标准集合值；严格驱动按这些值满足其输入合同证明，fixture 解析本身仍是外部接口，不能由前提冒称已证明 JSON 解析器。
+
+成功预期包括原行数／顺序和完整借用文本、存在但值为 null 的键、不同存储的相同文本命中、每次插入保留 prior。失败／边界包括空切片／空 map／空串、非对象、缺键、null、数字／布尔／数组字段、额外字段总数、前缀、组合 Unicode 差异、NUL／换行、首次插入 true 和重复插入 false。运行预期不符时必须 panic，不由 ghost 断言替代。原 `verified_git_binding` 的独立抽象合同、真实 `git_inputs`／`registry_snapshot` 等消费者用例继续经原未过滤操作验收；七个 E0046 的旧失败原件不被新测试替代。
+
+## 操作、输入与等待
+
+完整参数只由 [projects.json](../projects.json) 维护；不复制另一套运行配方。调用方先提交可审阅候选、记录固定 OID 并保持工作树干净，然后沿唯一受保护入口执行所选现役 operation：
 
 ```sh
-.chrono-harness/bin/chrono-worktree use --operation <下表操作ID> --path /Users/macstudio2/chrono-spec-current-dev
+.chrono-harness/bin/chrono-worktree use --operation <已登记操作ID> --path /Users/macstudio2/chrono-spec-current-dev
 ```
 
-从该工作树根运行。调用方须先保存本包的固定提交并记录 OID，工作树干净；源码与基线 `04cab6acace80dbce489c31e00dc9a505fdf37fb` 相同，仅有本包登记和说明增量。登记解析取目标 HEAD 的 Git 字节，未提交新增 action 不可用。本轮不 commit，也不运行入口。调用方保管既有登记、租约及结果交接，不要求重新部署、迁移、finish 或 maintain 共享协调者。
+| 操作 | 前置、用途与结果边界 |
+| --- | --- |
+| `investigate.ci-generation-dependency.runner` | 真实 runner 整 crate；固定原十二项缓存 extern、edition、manifest 版本和工具。输出新 `libci-generation-dependency-20261114-runner-adapters` 的 rlib/dep-info/VIR，保护此前 runner 原件。先观察全部具体 adapter、直接外部规格声明、其余严格错误和 CAPACITY；没有严格完整成功则不把产物交给依赖证明。 |
+| `verify.runner-json-adapters-tests` | 只有上一操作完整成功且同次源码、库、dep-info、VIR 与工具身份可绑定时，导入真实 runner 证明并消费新独立驱动。输出 `libci-generation-dependency-20261114-runner-adapter-tests` 的 rlib/dep-info；不使用普通缓存 runner 代替。 |
+| `investigate.ci-generation-dependency.consumer` | 前置仍为 runner 同次严格完整成功；同一 generation 根消费新的 runner-adapters 库/VIR。它仍不代表 ci/lib.rs 四个实际生产 prepare 分支。 |
+| `investigate.ci-generation-dependency.missing` | runner 和 consumer 已结束、其余输入未漂移，刻意不存在的原 absent VIR 仍不存在；缺失输入诊断不能证明完整依赖准入。 |
+| 原 `test:runner-tests` 计划及 `test.runner-tests` | 保留所有原证明、格式、未过滤行为测试与新 JSON suite；正式 DELTA 还按前后端登记闭包选中其他受影响所有者。证明失败只阻断其依赖，普通 Rust 行为结果不提供缺失的证明保证。 |
 
-源码依据是 `crates/worktree/src/start.rs::registrations`、`automatic.rs::registered_command/action_command/program_command`：`use` 精确选择唯一 project/script action，将目标作为 cwd，使用目标配置中登记的工具及环境；它保留原进程，不调用生产 verifier 的扩展参数准入。`target_policy_inputs` 仅核 worktree 配置和 cleanup 政策；本包不改两者。实际生命周期状态可能另有阻断，未通过本包验证。普通 `use` 会写已有协调状态，须由具有既有生命周期权限的调用方安排，不能把本 assignment 的协调宿主只读限制当成绕行理由。
+新增生产／独立根已声明固定 `output_contract`，但 raw use 不执行生产 verifier 的扩展参数准入。C 必须区分原工具结果与正式类型化证明。原 consumer/missing 仍无 output_contract，不提供正式证明贡献。不得改变原 `--no-cheating`、`--no-external-by-default`、两线程、整 crate、编译及 checksum；不增加预算、过滤或重复执行。
 
-## 固定输入与执行前提
+C 的有限范围由固定候选的实际登记 DELTA 冻结，适用必需操作各一次；严格诊断至多两个有依据的不同候选。该诊断额度不删除适用行为验收。实际任务失败先读原 stdout/stderr、退出/signal 和输入；同一失败不原地重跑或改候选。子孙及原命令只沿宿主原生等待通道加入；没有结果保持 unknown，不另造轮询或执行器。
 
-工具沿用已安装的 `0.2026.04.24.f8e1704`，commit `f8e17045c4ac17a02e566b8997070f2eecc255be`，Rust `1.95.0-aarch64-apple-darwin`。不 bootstrap、下载、Cargo 构建或运行 cargo-verus。三个 action 都是一次直接 Verus 调用，保持 `--no-cheating`、`--no-external-by-default`、整 crate、原两线程、JSON 报告、编译和 SHA-256 dep-info；不增加 rlimit 或超时预算。`use` 的实际限制来自所选配置的 `protocol`，当前 macOS 为 2400 秒、每流 67108864 字节，不取正式 test 计划的 900 秒／1048576 字节，也不把这项既有区别说成调高限制。
+沿用已安装 Verus `0.2026.04.24.f8e1704`、commit `f8e17045c4ac17a02e566b8997070f2eecc255be`、Rust `1.95.0-aarch64-apple-darwin`。不 bootstrap、下载或无实际必要重建。use 沿所选 protocol 当前为 2400 秒、每流 67108864 字节；正式 runner-tests 计划仍为 900 秒、1048576 字节，两者不能冒称相同。此前 dep-info 已观察 `CARGO_PKG_VERSION=0.1.0` 且 argv 未被命令行拒绝；这不证明完整转发、sysroot/SDK、feature 或传递闭包。
 
-runner 根为真实 `crates/runner/src/lib.rs`；consumer 根为真实 `crates/ci/src/verified_generation.rs`，仍无条件包含 `generation.rs`。不改源码、分类、Serde 派生的现有 cfg、生产入口或具体回调。consumer 根不能代表 `lib.rs` 的四个实际 prepare 分支；后续完整生产闭包仍需验收。
-
-两根使用 manifest 的 edition 2024；runner 的 `env!("CARGO_PKG_VERSION")` 按当前 manifest 固定为 `0.1.0`，通过 rustc `--env-set` 传入，不修改环境政策。Rust 1.95 随附 `unstable-book/compiler-flags/env-set.html` 说明该值进入 dep-info；其在固定 Verus 转发链上的实际支持仍为 **ASSUMED-UNVERIFIED**。不支持时保留原诊断，不能临时加第二个执行器或原地重跑修配方。
-
-runner 的普通依赖选择来自现有 `crates/ci-tests/target/debug/.fingerprint/chrono-harness-1b904f53053eaf74/lib-chrono_harness.json` 的十二个依赖指纹逐项对应，避免混用另一个 profile。直接宏输入选固定 Verus 发行物的 `libverus_builtin_macros.dylib`；普通缓存库仍可能关联原 Cargo 宏。宏、工具链和库的实际兼容性未知，不能从同名或相近版本推导。Serde 缓存已启用 derive／rc，serde_json 缓存已启用 float_roundtrip／raw_value／unbounded_depth；这些是实际诊断输入，不能冒称仅有 ci manifest 的最小 feature 集。
-
-下表记录准备时读取的直接输入。执行者在进入入口前核对它们及固定 HEAD。源码以固定提交和干净树绑定；成功编译后另核 dep-info 中全部实际源、include 数据、宏及库。`-L dependency=crates/ci-tests/target/debug/deps` 还会解析传递缓存输入，其完整身份和 Rust sysroot／SDK 闭包当前未知。缓存输入缺失、变化或编译器报告不兼容时不重建、不换库、不重试相同失败，保留具体缺口交回有限调查。下表的摘要只固定字节，均不授予证明资格。
+下表是原固定工具与直接缓存输入；其摘要只固定字节，不授予证明资格。C 在执行前核对固定候选与这些输入，读取实际 dep-info 闭包；不扫描替换缓存库。任一新输出已有独有工作则停止，不覆盖／删除或换名重复启动。此前失败的旧 runner 输出及原 stdout/stderr继续保护。
 
 | 直接输入路径 | 字节数 | SHA-256 |
 | --- | ---: | --- |
@@ -50,38 +84,10 @@ runner 的普通依赖选择来自现有 `crates/ci-tests/target/debug/.fingerpr
 | `crates/ci-tests/target/debug/deps/libchrono_diagnostics-045e0f0016a85516.rlib` | 6719120 | `f711f3a6bd485af0fa7500d4ed005ad53c254b53010b5d614469f622982f5564` |
 | `crates/ci-tests/target/debug/deps/libtracing-add697f9f59934e7.rlib` | 729992 | `3c7c784df4908c6a620cecd3af91219ac7a1dad9bea4cc1cd2486cade5aabcae` |
 
-## 三个候选及预先承诺的判法
+## 成本、剩余目标和保留
 
-每项最多执行一次，总额不超过三个不同固定工具候选；必要行为操作额度一项继续保留，本包未选择或启动行为操作，不能因此重跑 272 项测试。三个输出分别使用 `libci-generation-dependency-20261114-runner`、`-consumer`、`-missing` 前缀，位于已有 `.chrono-harness/state/`，各有 `.rlib`、`.rlib.d`、`.vir`。另有刻意不存在的输入 `libci-generation-dependency-20261114-absent.vir`。
+本 B 未执行构建、Verus、机器判官、行为测试、bootstrap、lifecycle 或 Git/GitHub 写入；只读取固定源码／原件并编辑、格式化候选。没有新运行成功状态。候选的 JSON 外部规格承载、标准文本键精化、具体方法证明、整 runner 严格编译及 proof admission 都未完成；CAPACITY 因果未知，未作修改。全部仓内传递依赖、cfg/proc-macro 闭包、CI 四生产分支与真实 prepare 调用、正式 DELTA、integration/dev 与落地仍由后续所有者负责。
 
-执行前用文件系统观察核对这十个确切地址都不存在，保留观察。任何地址已有独有工作就停止依赖操作，不覆盖或删除、不换名冒充新候选。缺失输入必须保持缺失；不删除成功 VIR 制造负例。三个 action 参数的输出名称不同只用于保护各自原件。
+运行不新增 JSON 副本或扫描；规格序列、map 和 set 投影均为 ghost，record 仍为一次原树插入。增加的编译、证明、CI、存储及全生命周期总成本未知；原线程和限制保留，不预填收益。
 
-| 顺序／操作 ID | 真实输入和差异 | 预期、可证伪结果与依赖条件 |
-| --- | --- | --- |
-| 1 `investigate.ci-generation-dependency.runner` | 真实 runner 整 crate，加精确十二项 extern 和固定 crate 名；同次严格验证、编译、export。其内部 identifiers／diagnostics 普通库没有现成完整证明资格，本包没有伪造 import。 | 观察原编译／Verus 对真实依赖及仓内适配逻辑的处理。预期可能出现实际语法、类型、宏、库兼容或未证明逻辑错误，不预填具体错误码。必须保留原错误所在源码及输入。若原进程非零、失败、流不完整，或报告非严格整 crate 成功，停止 2／3；失败导出即使存在也不能继续当作成功依赖。 |
-| 2 `investigate.ci-generation-dependency.consumer` | 同一真实 generation 根，serde／serde_json 精确普通库；runner 的 extern 和 import 同时指向候选 1 本次产生的库与 VIR，不使用普通缓存 runner。 | 仅在 1 的原严格成功报告、编译库、dep-info、VIR 和身份都可读取并绑定到本次调用后执行。此条件只允许诊断消费，未赋予传递依赖完整证明资格。预期检验真实 import／extern 对应，并可能暴露 Object／Target／Plan 的 Serde、std、闭包或具体回调缺口；实际错误保持原样。仅成功解析文件或编译不算完整生产证明。 |
-| 3 `investigate.ci-generation-dependency.missing` | 与 2 相同的根、库、工具和输入，只把 runner import 改为上述不存在的 VIR 地址，隔离输出；仍保留对应的 runner extern。 | 依赖 1 完整结束且 2 已结束，输入和库均未漂移。预期原进程非零并明确拒绝缺失证明输入。若 2 本身未到达有效导入／验证，3 的失败只能算缺失输入诊断，不能证明正常 consumer 的资格或失配拒绝。若 3 退出 0／报告成功，原样记录工具接受缺失输入这一反例，不在包装层伪造拒绝。 |
-
-1 失败时不运行 2／3，不偷换为普通 runner 库以完成计数；2 失败时可以运行具备上述输入条件的 3，但不能把其他编译错误当作缺失 VIR 的拒绝证据。未消耗的额度不是追加第四个候选、重复调用或抬预算的授权。实际不支持的参数也是本轮原失败，不另开帮助或版本探测来规避次数。固定 import／export 语法的静态依据是此前保存的固定工具帮助原件 `/tmp/chrono-generation-verus-bound-help-20261113.stderr`，它不证明行为。
-
-## 输入、输出和退出合同
-
-stdin 沿现役 `use` 不提供业务输入；输入是 action 原 argv、目标 cwd、所选配置的有效环境、固定源码与工具和上述库。配置环境继承项可能含工具链／SDK 选择，下一执行者须从原进程核有效输入，不能仅核命令文本。没有增加或读取新权限。外部接口仅是现役文件／进程／Verus 工具边界；没有将 `decode`、路径判断、retention、发布、具体回调等仓内函数登记为外部合同。
-
-stdout／stderr／退出码、signal、超时、失败原因、进程及工具身份、原流完整性和子孙加入证据，以 `use` 的 `managed_process`、`managed_process_original`、原回执及引用原件为准。原 stdout 的 JSON 应报告固定版本／commit、整 crate、success、encountered-error／vir-error、verified／errors；不能手填成功。编译和 export 可能先于最终验证成功，任何单独文件均无资格。读取 `.rlib.d`、库与 VIR 的实际字节、摘要、长度及生产调用对应；没有 dep-info 或源输入无法闭合时保持 unknown。
-
-三个实验 action **没有** `output_contract`，未被登记为生产 proof root，也未加入正式测试计划：现役生产 `verified_verifier` 仍只接受原十二项形状。实验原报告只能供工程调查和后续所有者实现消费，不能作为正式 DELTA 的证明贡献。这里不添加一个宽松验证器、成功转换器或新的准入规则。
-
-原 Verus 非零就是失败观察；现役生命周期包装会报告 `managed_command_failed` 并非零返回，不保证等于子进程退出码。包装 0 仅表示受保护调用正常完成，仍须读取子进程原报告；生命周期或 IO 错误不冒称 Verus 失败。工具未启动、无原结果、通道丢失或超时均保持未知，不重启任务。使用唯一原生等待通道，等待自有子孙后一次收取原结果，不另建轮询器。
-
-完整依赖资格还要求 identifiers、diagnostics 及全部仓内传递逻辑的严格成功证明、源码／库／证明身份和真实生产调用闭合。本包仅把它们作为未取得资格的现役诊断输入；即使 1／2 成功、3 拒绝，也不能断言这些条件满足，更不能把仓内程序作为外部合同。缺失输入拒绝只覆盖本负例，不等于内容错配拒绝、全部编译输入完整或全类覆盖。后续若需要内容错配探测，必须在已有总额度内重新取得明确的不同输入登记；本包不预造第二个依赖或变体。
-
-## 保留、交接与退出
-
-本包不是新产品范围。源码和登记由 ci／runner 现有所有者保管；原进程由现役生命周期原件保管；调用方保存本有限包的实际摘要、结果引用和未知项，交给 B 结束后的同一次 mandatory review triplet。A 登记准备结束不是正式评审点，不在此启动其他工作者。
-
-容量是这一次有限调查的三个调用及至多九个编译／证明产物；无循环或定期生产者。总字节与验证耗时未测，不能宣称节省。已有 `.chrono-harness/state/` 为 evidence-retain，缓存为 finish-dispose；本包不改 retention／cleanup，不把年龄当删除权。调用方在保留原有失败的同时，保护本次实际原件及其引用输入，直到 B 和后续评审／修复已消费；2026-11-21 复核保留需求，复核日期不自动授权删除。
-
-评审不再使用本包且失败已转为可复用判据或必要回归后，现有所有者可在核对活使用方、证据引用和保留义务后删除三个临时 action、对应占用、本文及其登记。原产物另按现役所有者和同样的保留条件回收，不删除源码或普通可复用缓存，不改已提交的七文件行为内容。未满足退出条件就保持有限调查未完成；不新增总账或清理器。
-
-调用方的 Git 交接清单只有 `.chrono-harness/projects.json`、`.chrono-harness/FILEMAP.json` 和本文。提交前核净增量，尤其原七文件中的 FILEMAP 只追加本包记录；其余六文件必须逐字节等于固定基线。本轮没有运行机器判官、Verus、构建、行为测试、正式 DELTA、integration／dev 或落地检查；这些未执行项不写成通过。全 SPEC goal 继续 active。
+本文与临时产物的使用方是后续负责外部接口承载的工程工作者、C 和同包 mandatory review。调用方保管实际结果引用，直到缺口得到调试／验收并被使用方消费；2026-11-21 复核保留需求，不因日期自动删除。已有 state 为 evidence-retain，编译缓存仍复用；未用的产物不建立成功状态。退役调查 action／占用前须核实际使用方、原失败和保留义务；新生产／测试源码及相应必需证明入口不能随临时证据一起删除，不新增总账、清理器或批准关卡。
