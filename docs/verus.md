@@ -46,6 +46,30 @@ null 或其他类型拒绝。适配器不选择分类政策，也不产生计划
 这里只证明恢复参数与上述准入；JSON、其余恢复决策、完整 IO／保留事务及实际编译
 调用绑定仍须各自完成，不把整个 `recovery.rs` 或全仓列为已证明。
 
+## 缓存恢复原结果重放
+
+`recovery.rs` 的 `RecoveryReplay`、`recovery_replay_bound` 和
+`admit_recovery_replay` 直接拥有原结果重放准入。先核完整 schema、计划对象恰好两个
+字段、完整计划路径／摘要及原步骤摘要；绑定失败保留原错误，优先于原失败状态。
+只有绑定相同且终态全文为 `recovered` 或 `not-required` 才成功；其余状态拒绝，
+错误保留原件路径全文。真实 `dispatch` 直接消费该结果，不再自行比较或分类。
+
+独立 Verus 预期同时普通运行，核两种合法终态、逐项缺失或变化、额外计划字段、
+绑定错误优先级、失败／未知／大小写／NUL 状态，以及完整 Unicode／NUL／空绑定和
+原件路径。复用现有生产／独立根、严格整 crate 操作及缓存未过滤测试，不增加验证
+入口、依赖、受信仓内函数或预算。
+
+此处逐项采用现役 lockfile 固定的外部接口：`serde_json::Value` 的字符串键索引、
+`as_str`、`as_object` 提供原字段／类型观测；`serde_json::Map::len` 提供完整对象字段数，
+`Option::map` 仅转交该标准函数的结果；现役 SHA-256 接口返回原计划／步骤字节的摘要；
+标准库字符串切片的 `concat` 按顺序拼接 Verus 返回的两段原文，不选择错误或状态。
+这些接口不选择重放政策。全文比较复用已证明的 `same_attempt`，字符串借用、数组及
+Option 的合同沿用固定 vstd。错误前缀、原路径和两段顺序均在 Verus 内证明；独立预期
+核两段全文，原实际 CLI 回归核格式化后的错误。不增加 `assume`、`external_body` 或
+`assume_specification`。运行时仅增加借用观测和保留一次原有计划摘要，
+完整构建、证明、CI 与存储成本未测；JSON 解码、恢复事务、其余决策和完整编译／调用
+绑定仍未完成，不把整个文件或全仓列为已证明。
+
 ## libtest 清单判断
 
 `crates/ci/src/verified_inventory.rs` 拥有 Cargo 二进制小写十六进制后缀、
