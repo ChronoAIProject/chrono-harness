@@ -15,6 +15,13 @@ use vstd::vpanic as panic;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn empty_admission_has_no_policy_consumer_and_nonempty_enrollments_keep_the_check() {
+    expect(!policy::enrolled_policy_required(0));
+    expect(policy::enrolled_policy_required(1));
+    expect(policy::enrolled_policy_required(usize::MAX));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn producer_namespace_members_require_complete_literal_identity() {
     proof {
         reveal_strlit("objects.json"); reveal_strlit("producer-records");

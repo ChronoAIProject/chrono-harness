@@ -650,6 +650,38 @@ fn enrollment_originals_are_protected_before_global_maintenance() {
 }
 
 #[test]
+fn empty_admission_preserves_foreign_checkout_without_reading_its_policy() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = EnrollmentOriginalsFixture::new();
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    ledger["entries"] = value!([]);
+    let ledger_bytes = serde_json::to_vec(&ledger).unwrap();
+    fs::write(&ledger_path, &ledger_bytes).unwrap();
+    fs::create_dir_all(h.target.join(".chrono-harness")).unwrap();
+    let foreign_policy = h.target.join(POLICY);
+    let foreign_bytes = b"this checkout has not adopted this coordinator's policy\n";
+    fs::write(&foreign_policy, foreign_bytes).unwrap();
+    let source = h.target.join("unsaved-source");
+    fs::write(&source, b"independent work\n").unwrap();
+
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert!(report["cleanup_failures"].as_array().unwrap().is_empty());
+    assert_ne!(report["output_retention"]["status"], "preserved");
+    assert_eq!(fs::read(&ledger_path).unwrap(), ledger_bytes);
+    assert_eq!(fs::read(&foreign_policy).unwrap(), foreign_bytes);
+    assert_eq!(fs::read(&source).unwrap(), b"independent work\n");
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap();
+    maintain_original_until_absent(&inventory, &h.root.join(&h.sibling));
+    assert!(!h.root.join(&h.sibling).exists());
+}
+
+#[test]
 fn enrollment_originals_unknown_metadata_defers_only_global_original_maintenance() {
     if !chrono_git_boundary::isolated_git() {
         return;
