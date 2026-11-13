@@ -63,10 +63,10 @@ fn expect(actual: bool)
     if !actual { panic!(); }
 }
 
-fn expect_source(actual: policy::AbsentPolicySource, expected: policy::AbsentPolicySource)
+fn expect_source(actual: policy::AdoptedPolicySource, expected: policy::AdoptedPolicySource)
     requires actual == expected,
 {
-    use policy::AbsentPolicySource::*;
+    use policy::AdoptedPolicySource::*;
     expect(match (actual, expected) {
         (ImportedOriginal, ImportedOriginal) | (Current, Current)
         | (RetainedTarget, RetainedTarget) => true,
@@ -83,16 +83,20 @@ fn imported_original_precedes_target_binding_and_explicit_migration_supersedes_i
         assert("old"@[0] != "new"@[0]);
         assert("import"@.len() == 6 && "birth"@.len() == 5 && "import\0"@.len() == 7);
     }
-    use policy::AbsentPolicySource::*;
-    expect_source(policy::absent_policy_source("import", false, "old", "old", "old", "old"), ImportedOriginal);
-    expect_source(policy::absent_policy_source("import", false, "old", "new", "old", "new"), ImportedOriginal);
-    expect_source(policy::absent_policy_source("import", true, "old", "old", "old", "old"), Current);
-    expect_source(policy::absent_policy_source("import", true, "old", "new", "old", "old"), RetainedTarget);
-    expect_source(policy::absent_policy_source("import", true, "old", "old", "old", "new"), RetainedTarget);
-    expect_source(policy::absent_policy_source("birth", false, "old", "old", "old", "old"), Current);
-    expect_source(policy::absent_policy_source("birth", false, "old", "new", "old", "old"), RetainedTarget);
-    expect_source(policy::absent_policy_source("birth", true, "old", "old", "old", "new"), RetainedTarget);
-    expect_source(policy::absent_policy_source("import\0", false, "old", "old", "old", "old"), Current);
+    expect(policy::imported_policy_required("import", false));
+    expect(!policy::imported_policy_required("import", true));
+    expect(!policy::imported_policy_required("birth", false));
+    expect(!policy::imported_policy_required("import\0", false));
+    use policy::AdoptedPolicySource::*;
+    expect_source(policy::adopted_policy_source("import", false, "old", "old", "old", "old"), ImportedOriginal);
+    expect_source(policy::adopted_policy_source("import", false, "old", "new", "old", "new"), ImportedOriginal);
+    expect_source(policy::adopted_policy_source("import", true, "old", "old", "old", "old"), Current);
+    expect_source(policy::adopted_policy_source("import", true, "old", "new", "old", "old"), RetainedTarget);
+    expect_source(policy::adopted_policy_source("import", true, "old", "old", "old", "new"), RetainedTarget);
+    expect_source(policy::adopted_policy_source("birth", false, "old", "old", "old", "old"), Current);
+    expect_source(policy::adopted_policy_source("birth", false, "old", "new", "old", "old"), RetainedTarget);
+    expect_source(policy::adopted_policy_source("birth", true, "old", "old", "old", "new"), RetainedTarget);
+    expect_source(policy::adopted_policy_source("import\0", false, "old", "old", "old", "old"), Current);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
