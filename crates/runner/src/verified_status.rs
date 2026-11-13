@@ -4180,6 +4180,15 @@ pub fn copy_hash_stream<S, B, R, V, W, U, F>(
         let ghost after = (state, buffer, next);
         assert(copy_hash_stream_step(states.last(), after, read, view, write, update)) by {
             reveal(copy_hash_stream_step);
+            assert(count > 0 && count <= bytes.len());
+            assert(read.ensures((states.last().0, states.last().1),
+                (observed.0, after.1, Ok::<usize, String>(count))));
+            assert(view.ensures((&after.1,), bytes));
+            assert(chunk@ == bytes@.subrange(0, count as int));
+            assert(write.ensures((observed.0, chunk),
+                (write_observation.0, Ok::<(), String>(()))));
+            assert(update.ensures((write_observation.0, chunk), after.0));
+            assert(states.last().2 as int + count as int == after.2 as int);
         }
         proof {
             let previous = states;

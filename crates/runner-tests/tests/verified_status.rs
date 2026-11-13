@@ -6294,7 +6294,7 @@ fn copy_fixture_read(mut state: CopyFixture, mut buffer: [u8; 4])
         Ok(0)
     } else {
         buffer[0] = if state.phase == 0 { 0 } else { 255 };
-        state.phase += 1;
+        state.phase = state.phase + 1;
         Ok(1)
     };
     (state, buffer, result)
@@ -6332,7 +6332,7 @@ fn copy_fixture_write(mut state: CopyFixture, bytes: &[u8])
         && bytes[0] == if state.phase == 1 { 0u8 } else { 255u8 }
     {
         assert(bytes@ =~= seq![if state.phase == 1 { 0u8 } else { 255u8 }]);
-        state.phase += 1;
+        state.phase = state.phase + 1;
         Ok(())
     } else {
         Err("unexpected write order or bytes".to_owned())
@@ -6350,7 +6350,7 @@ fn copy_fixture_update(mut state: CopyFixture, bytes: &[u8]) -> (out: CopyFixtur
         && bytes[0] == if state.phase == 2 { 0u8 } else { 255u8 }
     {
         assert(bytes@ =~= seq![if state.phase == 2 { 0u8 } else { 255u8 }]);
-        state.phase += 1;
+        state.phase = state.phase + 1;
     } else { state.phase = 250; }
     state
 }
