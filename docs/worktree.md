@@ -610,6 +610,11 @@ launchctl print "gui/$maintenance_uid/org.chrono-harness.maintenance"
 
 无当前登记、记录损坏、附件变化和记录与检出不一致分别显示 `unregistered` 或 `unknown`，保留原件并提醒检查。单个损坏账本不会遮住其他可观察工作树；namespace 本身无法完整枚举时，结果另列未知项，不能据此声称清单完整。观察是本次快照，不授予之后删除或清理的资格。
 
+创建或导入失败后，可能只留下没有登记条目的 metadata 地址。维护仍核对该地址的所有权、
+保留原状态，并处理其已声明的租约退休责任；没有登记条目时，不读取该物理目录的检出政策。
+目录可能属于尚未采用本协调者的独立宿主，不能让它的配置阻断本仓其它已登记内容的回收。
+这不授予该目录删除资格；只要物理目录仍在，空地址继续保留并由 status 提醒显式接管。
+
 采用 automatic_cleanup 后，start／reconstruct、use／check／bootstrap、import／migrate／finish 在原报告中附当前目标状态；maintain 附协调者范围状态。未完成或清理待办以 `W_WORKTREE_ATTENTION` 写 stderr，stdout 仍为与存盘原件相同的完整 JSON，提醒本身不改变退出码。普通入口不读取其他工作树账本。AI 开始及交接工作时运行 `status`，根据下一步提示保全工作、解决保留条件，并在实际完成及加入消费者后执行 finish；提醒不代替这些义务。
 
 提醒分类由 `verified_attention.rs` 同源 Verus 判断，真实 Git／文件系统／JSON 适配与行为测试另验；证明范围见 [Verus 说明](verus.md#本地工作树提醒)。
