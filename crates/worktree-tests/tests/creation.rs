@@ -21,6 +21,75 @@ const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 
+#[test]
+#[cfg(unix)]
+fn cli_read_only_stdout_returns_native_publication_failure() {
+    let expected = chrono_worktree::run(&["--help".into()]);
+    assert_eq!(expected.exit_code, 0);
+    assert!(!expected.stdout.is_empty());
+    assert!(expected.stderr.is_empty());
+    let mut root = tempfile::tempdir().unwrap();
+    root.disable_cleanup(true);
+    eprintln!(
+        "CLI publication failure originals: {}",
+        root.path().display()
+    );
+    let binary = env!("CARGO_BIN_EXE_chrono-worktree-test-cli");
+    let healthy = Command::new(binary)
+        .arg("--help")
+        .current_dir(root.path())
+        .output()
+        .unwrap();
+    assert_eq!(healthy.status.code(), Some(0));
+    assert_eq!(healthy.stdout, expected.stdout.as_bytes());
+    assert!(healthy.stderr.is_empty());
+    let descriptor = root.path().join("read-only-output");
+    let original = b"caller supplied a read-only output descriptor\n";
+    fs::write(&descriptor, original).unwrap();
+    let actual = Command::new(binary)
+        .arg("--help")
+        .current_dir(root.path())
+        .stdout(fs::File::open(&descriptor).unwrap())
+        .output()
+        .unwrap();
+    fs::write(root.path().join("stderr.bin"), &actual.stderr).unwrap();
+    fs::write(
+        root.path().join("observation.json"),
+        serde_json::to_vec(&value!({
+            "argv":[binary,"--help"],
+            "binary_sha256":chrono_harness::file_identity(std::path::Path::new(binary)).unwrap().0,
+            "stdout_descriptor":"open O_RDONLY regular file",
+            "stderr_descriptor":"writable capture pipe",
+            "expected_exit":2,"actual_exit":actual.status.code(),
+            "expected_stdout_bytes":expected.stdout.len(),
+            "captured_stdout_bytes":actual.stdout.len(),
+            "native_error":libc::EBADF
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(actual.status.code(), Some(2));
+    assert!(actual.stdout.is_empty());
+    assert_eq!(fs::read(descriptor).unwrap(), original);
+    assert!(actual.stderr.ends_with(b"\n"));
+    assert_eq!(
+        std::str::from_utf8(&actual.stderr).unwrap().lines().count(),
+        1
+    );
+    let event: Value = serde_json::from_slice(&actual.stderr).unwrap();
+    assert_eq!(event["schema"], "chrono-log/v1");
+    assert_eq!(event["event"], "runner.output_publication_failed");
+    let error = &event["error"]["error"];
+    assert_eq!(error["code"], "E_OUTPUT_PUBLISH");
+    assert_eq!(error["context"]["stream"], "stdout");
+    assert_eq!(error["context"]["phase"], "write");
+    assert_eq!(error["context"]["operation_exit_code"], 0);
+    assert_eq!(error["context"]["output_bytes"], expected.stdout.len());
+    assert_eq!(error["context"]["published_bytes"], 0);
+    assert_eq!(error["source"]["source"]["native_code"], libc::EBADF);
+    root.disable_cleanup(false);
+}
+
 // Decode the current lifecycle interface before exercising the original byte,
 // failure and identity assertions. Other documents keep their original view.
 fn json(bytes: &[u8]) -> Result<Value, String> {

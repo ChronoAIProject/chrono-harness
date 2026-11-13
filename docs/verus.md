@@ -540,6 +540,29 @@ runner、CI、cache、inputs、worktree、distribution 及七个字符串参数�
 仍是外围接口；这项局部证明不代表完整 CLI、诊断体系或全仓已经证明。
 新增两项证明及真实 CLI 回归扩大相应 DELTA 验证成本，总成本未测。
 
+共用判官入口 `wire::judge_main` 直接消费同一 `verified_cli.rs` 的完整控制流程。
+参数只接受单独 `--version` 或精确两项 `--protocol chrono-judge/v1`；版本／用法路径
+不读取输入或求值。读入失败或超过 67108864 字节即拒绝，实际标准输入最多读取
+67108865 字节。准入后按解码、求值、编码、输出顺序转交同一完整载荷；首错停止，
+解码／编码错误原值交给对应诊断接口，输出失败退出 2，输出成功保留原领域退出码。
+版本、用法、读入、编解码及无需诊断的结果也由同源函数选择实际输出接口和最终退出码。
+
+标准输入读取、JSON 编解码、标准输出锁及 Write 操作、标准文本格式化、日志／stderr／版本
+输出是逐项外部接口；各判官求值和实际 `Status::exit_code` 仍由自身所有者负责，
+不据泛型回调合同给仓内函数增加假设。输出 write→flush 顺序复用 diagnostics 的
+`verified_runtime::write_and_flush`：写入失败不刷新，刷新失败不返回领域成功。
+适配层只搬运实际返回值、调用该已证明函数及相应 IO；未新增仓内 `external_body`、
+`assume` 或 `assume_specification`。
+
+独立 Verus 预期同时普通运行，核完整参数／大小写／后缀／NUL／换行、包含上限的读入边界、
+首错后的精确阶段、完整二进制载荷、Unicode／NUL／换行错误和诊断选择。实际协议测试保留
+原 64 MiB／多一字节、原生读写失败、严格解码、领域状态、日志和无效 OS 参数用例。
+**程序与验收登记同步修改：**`wire.rs` 增加 diagnostics 测试的显式依赖，确保其两项
+runtime 证明、独立预期及未过滤行为测试与 runner 的证明／实际消费同次 DELTA 验收。
+Verus 根复用 identifiers 的完整文本比较源码；实际路径不复制输入／响应向量，证明轨迹为 ghost，
+原生调用状态为 unit。比较、证明、构建、额外诊断验证、CI 和存储的总成本未测。
+此范围仍不证明各判官完整求值、JSON／日志内部、其余 wire 功能、完整编译／调用对应或全仓覆盖门。
+
 workflow 的错误分类由 `verified_response.rs::classify_error` 拥有，并加入现有
 `verify.judge-workflow-execution`／独立预期根的整 crate 证明。
 真实 `judge` 将原消息交给此函数，直接使用返回的实际协议 `Status` 与完整错误码；
