@@ -18,7 +18,7 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
     }
     let h = Host::new();
     h.change_registry(CONFIG, |v| {
-        v["policy"]["selection_evidence"] = json!("explicit-graph/v1")
+        v["policy"]["selection_evidence"] = json!("baseline-data-format")
     });
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
         for file in v["files"].as_array_mut().unwrap() {
@@ -32,6 +32,9 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
             .push(json!({"from":"project:lib","kind":"runtime-input","to":"project:lib"}));
     });
     let base = h.commit();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["selection_evidence"] = json!("reachable-graph/v1")
+    });
     let names: Vec<_> = (0..2697)
         .map(|i| format!("registered-input-{}-{i:04}", "x".repeat(64)))
         .collect();
@@ -54,7 +57,7 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
     pass(&r);
     assert_eq!(h.calls(), 1);
     let e = &r.evidence["selection_explanation"];
-    assert_eq!(e["representation"], "explicit-graph/v1");
+    assert_eq!(e["representation"], "reachable-graph/v1");
     assert_eq!(e["closure"]["selected_tests"], json!(["test:suite"]));
     let mut expected_edges: std::collections::BTreeSet<_> = names
         .iter()

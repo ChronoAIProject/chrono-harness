@@ -304,7 +304,7 @@
     },
     "facts_config": ".chrono-harness/config.json",
     "report_publication": "retained-reference/v2",
-    "selection_evidence": "explicit-graph/v1",
+    "selection_evidence": "reachable-graph/v1",
     "causal_consumption": {
       "schema": "chrono-internal-causal-consumption/v1",
       "shared_startup": [
