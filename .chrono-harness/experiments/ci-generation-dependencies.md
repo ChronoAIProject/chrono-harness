@@ -30,7 +30,7 @@
 
 最小负责方差异：固定工具／外部接口规格及依赖准入所有者须提供能在现役严格根消费的、与这些真实直接接口相符的固定规格输入，并绑定源、工具、库及 VIR；若现役工具没有这样的路径，保持阻断并由该所有者修正方法。这里不改工具、不关闭 no-cheating、不给仓内 adapter/projection/选择/状态函数 external_body、不把仓内库当外部公理。源提案中的接口假设尚未机械精化；它不是可合入的已证明实现。
 
-另一个现有阻断是 `verified_verifier` 只准入原十二项参数形状。根新增的 edition、extern、import/export 等参数不会因登记 output_contract 自动变为合法。正式汇总必须继续拒绝未支持的方法／缺失编译输入，不能把 raw use 的成功报告冒充正式证明贡献。扩大该准入与完整依赖资格不属于此 adapter 包。
+现有阻断曾是 `verified_verifier` 只准入原十二项参数形状。E 现在由 runner 所有者把带 edition、extern、import/export 的完整调用按固定选项语法投影回同一十二项语义合同；未知、缺值或冲突参数仍拒绝。该投影只闭合方法、源根、输出和 dep-info 的一致解释，外部库／VIR 的完整同源证明仍是后续义务，不能把 raw use 的成功报告冒充正式证明贡献。
 
 ## 独立成功、失败和边界预期
 
@@ -48,7 +48,7 @@
 
 | 操作 | 前置、用途与结果边界 |
 | --- | --- |
-| `investigate.ci-generation-dependency.runner` | 真实 runner 整 crate；固定原十二项缓存 extern、edition、manifest 版本和工具。输出新 `libci-generation-dependency-20261114-runner-adapters` 的 rlib/dep-info/VIR，保护此前 runner 原件。先观察全部具体 adapter、直接外部规格声明、其余严格错误和 CAPACITY；没有严格完整成功则不把产物交给依赖证明。 |
+| `investigate.ci-generation-dependency.runner` | 真实 runner 整 crate；登记完整 Verus argv，包含缓存 extern、edition、manifest 版本和直接路径 `--export`。输出新 `libci-generation-dependency-20261114-runner-adapters` 的 rlib/dep-info/VIR，保护此前 runner 原件。先观察全部具体 adapter、直接外部规格声明、其余严格错误和 CAPACITY；没有严格完整成功则不把产物交给依赖证明。 |
 | `verify.runner-json-adapters-tests` | 只有上一操作完整成功且同次源码、库、dep-info、VIR 与工具身份可绑定时，导入真实 runner 证明并消费新独立驱动。输出 `libci-generation-dependency-20261114-runner-adapter-tests` 的 rlib/dep-info；不使用普通缓存 runner 代替。 |
 | `investigate.ci-generation-dependency.consumer` | 前置仍为 runner 同次严格完整成功；同一 generation 根消费新的 runner-adapters 库/VIR。它仍不代表 ci/lib.rs 四个实际生产 prepare 分支。 |
 | `investigate.ci-generation-dependency.missing` | runner 和 consumer 已结束、其余输入未漂移，刻意不存在的原 absent VIR 仍不存在；缺失输入诊断不能证明完整依赖准入。 |

@@ -2429,9 +2429,16 @@ FILEMAP 将同源内核和独立预期分别绑定到 `verify.ci-generation`／
 当前固定入口在解析生产模块时报告 `E0432`／`E0433`：未链接 `chrono_harness`、
 `serde`、`serde_json`，并缺少 serde 属性。原报告为整 crate、`success=false`、
 `encountered-error=true`、`verified=0`；尚无本次成功编译库或有效 dep-info 绑定。
-`verified_verifier.rs` 目前只接受固定的十二项参数，没有登记外部 crate 及其证明输入的槽位。
-恢复须由该所有者与 `verified_sources.rs` 一起支持并证明真实依赖的输入和产物绑定，
-保留严格参数、源码摘要及原报告准入。单独提供普通 Cargo rlib 仍缺少仓内依赖的语义证明。
+`verified_verifier.rs` 的十二项参数是统一语义投影。现役 generation dependency 方法还登记
+edition、crate name、环境、搜索路径、extern、import/export 等完整参数；同源入口按固定选项
+语法解析这些参数，再把实际的 emit、源根、`-o` 输出和 checksum 投影到同一合同。未知选项、
+缺少配对值、重复尾部或不一致的 emit／输出关系拒绝。固定 Verus 的 `--import` 使用
+`name=path`，`--export` 使用直接路径，登记与这两个实际语义一致。原回执仍须逐项等于登记
+argv，依赖与库身份仍从同一成功进程取得。
+
+这项投影只修复方法、源根、输出和声明依赖的解释闭包；外部 crate、宏库、VIR 和传递库的
+完整同源证明仍须由现有 dependency owner 完成。单独提供普通 Cargo rlib 仍缺少仓内依赖的
+语义证明。
 现有 `Object` 的 serde 派生仅在普通 Rust 下启用；真实 Serde 编解码如何在严格编译中绑定，
 也尚未验收。未链接之前，后续类型、外部接口及函数证明的工具支持均保持未知。
 
