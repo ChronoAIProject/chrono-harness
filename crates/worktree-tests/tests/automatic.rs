@@ -2762,6 +2762,46 @@ fn automatic_disposed_path_reuse_targets_new_birth_and_import_generations() {
 }
 
 #[test]
+fn absent_cache_maintenance_preserves_unknown_work_without_retrying_checkout_io() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    let target = h.parent.join("missing-cache-owner");
+    let (code, created, error) = h.invoke("feature", "missing-cache-owner", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    git(
+        &h.root,
+        &["worktree", "remove", "--force", target.to_str().unwrap()],
+    );
+    let ledger_path = h.ledger_path(&target);
+    let original = fs::read(&ledger_path).unwrap();
+    let entry = json(&original).unwrap()["entries"][0].clone();
+    assert_eq!(entry["ownership"]["cache_pending"], true);
+    let refs = git(&h.root, &["show-ref"]);
+    for _ in 0..2 {
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        assert!(report["cleanup_failures"].as_array().unwrap().is_empty());
+        let observation = report["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["path"] == value!(target))
+            .unwrap();
+        assert_eq!(observation["status"], "preserved");
+        assert_eq!(observation["checkout_presence"], "absent");
+        assert_eq!(observation["task_completion"], "unknown");
+        assert_eq!(observation["worktree_removal"], "not-claimed");
+        assert!(observation["receipt"].is_null());
+        assert_eq!(fs::read(&ledger_path).unwrap(), original);
+        assert!(!target.exists());
+        assert_eq!(git(&h.root, &["show-ref"]), refs);
+    }
+}
+
+#[test]
 fn automatic_absent_active_enrollment_conflict_preflights_without_creation() {
     if !chrono_git_boundary::isolated_git() {
         return;
