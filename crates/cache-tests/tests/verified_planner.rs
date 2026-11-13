@@ -19,6 +19,10 @@ use vstd::vpanic as panic;
 #[path = "continuity.rs"]
 mod continuity;
 
+#[cfg(verus_keep_ghost)]
+#[path = "support/probe.rs"]
+mod probe;
+
 verus! {
 
 fn recovery_preserves_cache_status(status: Option<&str>)

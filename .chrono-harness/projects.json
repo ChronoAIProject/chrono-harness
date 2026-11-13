@@ -3545,9 +3545,7 @@
             "test",
             "--locked",
             "--manifest-path",
-            "crates/cache-tests/Cargo.toml",
-            "--",
-            "--test-threads=2"
+            "crates/cache-tests/Cargo.toml"
           ]
         },
         "verify_planner": {

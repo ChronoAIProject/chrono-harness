@@ -24,6 +24,22 @@ null 或其他类型拒绝。适配器不选择分类政策，也不产生计划
 该门控只约束候选 DELTA 的文件计划，不把分类声明、局部证明或普通 CI 绿灯扩大为
 全仓 SPEC 已证明。
 
+## 缓存与发布的完整参数预期
+
+缓存测试的真实 Cargo mock 在 `tests/support/probe.rs` 用同源 Verus 常量函数定义
+完整四项参数；原完整参数断言消费该结果。
+该文件接入现有 `verify.cache-planner-tests` 整 crate 根，不放宽为忽略任意尾参。
+
+发布配方测试在 `tests/recipe.rs` 用 Verus 按完整 owner 身份选择线程参数：
+worktree-tests 为 8，judge-workflow-tests、pr-tests 为 2，其余不加参数。
+原未过滤操作验收直接消费此判断，保留其完整参数、原测试和断言。独立 Verus
+预期同时普通运行，核三个已登记身份、cache-tests 的无尾参，以及空、大小写、Unicode 和 NUL 边界；该文件
+接入原 `verify.release-recipe-tests` 根。字符串比较复用已证明的 `equal_text`，
+没有新增依赖、受信接口、证明操作或过滤。
+
+这里只证明新参数预期与选择。两个文件的其余存量 IO、进程、解析和断言尚未完成
+迁移，不能把文件登记或局部证明当作完整文件已证明。构建、证明、CI 和存储总成本未测。
+
 ## 缓存恢复选项解析
 
 `crates/cache/src/recovery.rs` 直接拥有四个恢复选项的完整键分类、按对解析、
