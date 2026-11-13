@@ -171,19 +171,29 @@ fn main() -> ExitCode {
         std::thread::sleep(std::time::Duration::from_secs(30));
         return ExitCode::SUCCESS;
     }
-    if args == ["execute-debug"] {
+    if args == ["judge-debug"] {
         let mut input = Vec::new();
         std::io::stdin().read_to_end(&mut input).unwrap();
-        let prepared: chrono_judge_ci::PreparedExecution = chrono_harness::decode(&input).unwrap();
+        let request: chrono_harness::Request = chrono_harness::decode(&input).unwrap();
+        let log = std::fs::File::create(
+            request
+                .host_root
+                .join(".chrono-harness/state/diagnostics.jsonl"),
+        )
+        .unwrap();
         let logger = chrono_diagnostics::logging::Logger::new(
             "ci-diagnostics-fixture",
             chrono_diagnostics::logging::Level::DEBUG,
-            std::io::stderr(),
+            log,
         );
-        let response = logger.run(|| prepared.execute().unwrap());
+        let response = logger.run(|| chrono_judge_ci::judge(&request));
         logger.finish().unwrap();
         serde_json::to_writer(std::io::stdout(), &response).unwrap();
-        return ExitCode::from(if response.passed() { 0 } else { 1 });
+        return ExitCode::from(if response.status == chrono_harness::Status::Passed {
+            0
+        } else {
+            1
+        });
     }
     assert_eq!(args.first().map(String::as_str), Some("operation"));
     std::io::stdout().write_all(&[255, 0, 10]).unwrap();
