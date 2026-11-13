@@ -925,7 +925,7 @@ GitHub 当前 attempt API 视图可能包含沿用结果，新 job ID 不证明�
 
 下述新鲜度阈值及精确 integration 凭据是显式 full 工作流的合同；本仓仍为 proposed，不是默认 scoped CI 已启用的合并门禁。不能据此重新要求所有普通 PR 串行追平。
 
-现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、固定本地及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口已包含在公开 beta.10，合同见 [远端分支退役](docs/worktree.md#remote-branch-retirement)。
+现役源码新增 `cleanup-remote`，按显式计划与登记 remote 核对唯一 push URL、工作分支期望 OID、本地固定提交对象及远端目标提交，复用 ancestor／same-tree 保留检查，以精确 OID lease 删除并核对远端缺失。真实退出、部分效果与显式缺失重试分别报告；不清理本地工作，不推断 PR 或治理成功。目标引用、配置与服务器观察不构成原子事务；目标在删除期间变化可导致删除后的失败。该入口已包含在公开 beta.10，合同见 [远端分支退役](docs/worktree.md#remote-branch-retirement)。
 
 workflow 当前草案阈值：落后 dev **超过 3 个提交**，或本分支年龄 **超过 24 小时**，
 任一成立即 E_BRANCH_STALE；等于阈值仍允许。二者在 workflow.json 可配置。

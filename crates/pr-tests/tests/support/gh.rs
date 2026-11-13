@@ -59,7 +59,9 @@ fn main() {
         .open("calls.jsonl")
         .unwrap();
     use std::io::Write;
-    writeln!(log, "{}", json!({"args":args,"stdin":input})).unwrap();
+    let mut record = serde_json::to_vec(&json!({"args":args,"stdin":input})).unwrap();
+    record.push(b'\n');
+    log.write_all(&record).unwrap();
     assert_eq!(
         args[0..2],
         serde_json::from_value::<Vec<String>>(step["prefix"].clone()).unwrap()

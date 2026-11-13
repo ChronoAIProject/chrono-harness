@@ -92,6 +92,83 @@ fn output_retired(root: &Path, id: &str) -> bool {
 }
 
 #[test]
+fn path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity() {
+    if !isolated_capability_test(
+        "path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let publish = |name: &str| {
+        let path = tree(h.path(), name);
+        fs::write(h.path().join(&path).join("original"), name.as_bytes()).unwrap();
+        inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit":0}))
+            .unwrap();
+        path
+    };
+    let mut sources = Vec::new();
+    let mut paths = Vec::new();
+    for group in 0..2 {
+        let leaves = [
+            publish(&format!("leaf-{group}-a")),
+            publish(&format!("leaf-{group}-b")),
+        ];
+        let source = publish(&format!("report-{group}"));
+        inventory(h.path())
+            .dependencies_paths(&source, &leaves)
+            .unwrap();
+        paths.extend(leaves);
+        paths.push(source.clone());
+        sources.push(source);
+    }
+    let before = ledger(h.path());
+    let edges = |snapshot: &Value| {
+        snapshot["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|output| (output["id"].clone(), output["references"].clone()))
+            .collect::<Vec<_>>()
+    };
+    // Two direct members fit, although their six-output closure does not.
+    inventory(h.path())
+        .reference_paths("current-enrollment", &sources)
+        .unwrap();
+    assert_eq!(edges(&ledger(h.path())), edges(&before));
+    assert!(
+        inventory(h.path())
+            .reference_paths("current-enrollment", &paths)
+            .is_err()
+    );
+    publish("independent-expired");
+    assert_eq!(maintain_fixture_to(h.path(), 6), 6);
+    for path in &paths {
+        assert!(h.path().join(path).is_dir());
+    }
+    inventory(h.path())
+        .reference_paths("current-enrollment", &sources[1..])
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 3), 3);
+    assert!(!h.path().join(&sources[0]).exists());
+    assert!(h.path().join(&sources[1]).exists());
+    inventory(h.path())
+        .reference_paths("current-enrollment", &[])
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+}
+
+#[test]
 #[cfg(unix)]
 fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
     use std::os::unix::fs::{MetadataExt, symlink};
@@ -1106,6 +1183,94 @@ fn released_original_larger_than_verification_round_is_not_permanently_blocked()
         ledger(h.path())["summaries"][0]["large_original_recheck"],
         "sealed-identity-and-content-stamp; digest-not-reread"
     );
+}
+
+#[test]
+fn returned_metadata_exclusion_is_released_while_an_unrelated_fork_waits_for_exec() {
+    if !isolated_capability_test(
+        "returned_metadata_exclusion_is_released_while_an_unrelated_fork_waits_for_exec",
+    ) {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::{fd::AsRawFd, unix::net::UnixStream, unix::process::CommandExt},
+    };
+    let h = host(256, 16);
+    let path = tree(h.path(), "synchronous-metadata");
+    let owner = inventory(h.path());
+    let publication = inventory(h.path())
+        .begin("fixture", &path, json!(null))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit":7})).unwrap();
+    let role = "current-synchronous-metadata";
+    owner.reference(role, &[id.clone()]).unwrap();
+    let role_record = retention_state::role_path(h.path(), role);
+    let (mut parent, child) = UnixStream::pair().unwrap();
+    let parent_fd = parent.as_raw_fd();
+    let child_fd = child.as_raw_fd();
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"));
+    command.arg("exit-success");
+    unsafe {
+        command.pre_exec(move || {
+            libc::close(parent_fd);
+            let mut byte = 1u8;
+            if libc::write(child_fd, (&byte as *const u8).cast(), 1) != 1
+                || libc::read(child_fd, (&mut byte as *mut u8).cast(), 1) != 1
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let (excluded, signaled, during, snapshot, exact, role_available, resumed, joined) =
+        std::thread::scope(|scope| {
+            let mut launched = None;
+            let mut signaled = None;
+            let mut during = None;
+            let excluded = owner.metadata_observed(&path, &[role.into()], || {
+                launched = Some(scope.spawn(|| command.output()));
+                signaled = Some(parent.read_exact(&mut [0]));
+                during = Some(owner.producer_status("fixture", Some(&path)));
+            });
+            // Keep the unrelated child before exec until all observations have
+            // returned. No retry, process probe or sleep can close its fd copies.
+            let snapshot = owner.producer_status("fixture", None);
+            let exact = owner.producer_status("fixture", Some(&path));
+            let role_available = chrono_harness::ownership::DirectoryLease::acquire(
+                role_record.parent().unwrap(),
+                true,
+                None,
+            )
+            .map(|lease| lease.is_some());
+            let resumed = parent.write_all(&[1]);
+            let joined = launched.map(|child| child.join());
+            (
+                excluded,
+                signaled,
+                during,
+                snapshot,
+                exact,
+                role_available,
+                resumed,
+                joined,
+            )
+        });
+    excluded.unwrap();
+    signaled.unwrap().unwrap();
+    resumed.unwrap();
+    assert!(joined.unwrap().unwrap().unwrap().status.success());
+    assert!(during.unwrap().unwrap_err().contains("busy"));
+    let snapshot = snapshot.unwrap();
+    assert_eq!(snapshot["scope_complete"], true, "{snapshot}");
+    assert_eq!(snapshot["errors"], json!([]), "{snapshot}");
+    assert_eq!(snapshot["records"].as_array().unwrap().len(), 1);
+    assert_eq!(snapshot["records"][0]["id"], id);
+    let exact = exact.unwrap();
+    assert_eq!(exact["scope_complete"], true, "{exact}");
+    assert_eq!(exact["records"][0]["path"], path);
+    assert!(role_available.unwrap());
 }
 
 #[test]
@@ -2614,6 +2779,82 @@ fn caller_read_scope_protects_only_consumed_originals_and_forwards_their_capabil
     drop(caller);
     assert_eq!(maintain_fixture_to(h.path(), 0), 0);
 }
+#[test]
+fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs() {
+    if !isolated_capability_test(
+        "published_output_scope_keeps_child_reports_without_accumulating_their_inputs",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(8);
+    fs::write(
+        h.path().join(POLICY_PATH),
+        serde_json::to_vec(&policy).unwrap(),
+    )
+    .unwrap();
+    let publish = |name: &str| {
+        let path = tree(h.path(), name);
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        publication.complete(json!({"exit":0})).unwrap();
+        path
+    };
+    let groups: Vec<Vec<String>> = (0..3)
+        .map(|group| {
+            let paths = (0..3)
+                .map(|input| publish(&format!("input-{group}-{input}")))
+                .collect::<Vec<_>>();
+            inventory(h.path())
+                .reference_paths(&format!("domain-owner-{group}"), &paths)
+                .unwrap();
+            paths
+        })
+        .collect();
+    let unknown = publish("unknown-domain-input");
+    inventory(h.path())
+        .reference_paths("unfinished-domain-owner", &[unknown.clone()])
+        .unwrap();
+    let unrelated = publish("unrelated-expired");
+    let caller = retained_artifacts::retention::published_output_scope(h.path()).unwrap();
+    let mut reports = Vec::new();
+    for (group, paths) in groups.iter().enumerate() {
+        let _child = retained_artifacts::retention::read_scope(h.path()).unwrap();
+        for path in paths {
+            drop(retained_artifacts::retention::read_guard(h.path(), path).unwrap());
+        }
+        let path = tree(h.path(), &format!("child-report-{group}"));
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        inventory(h.path())
+            .dependencies_paths(&path, paths)
+            .unwrap();
+        publication.complete(json!({"exit":0})).unwrap();
+        inventory(h.path())
+            .reference_paths(&format!("domain-owner-{group}"), &[])
+            .unwrap();
+        reports.push(path);
+    }
+    // Each child has four actual capabilities, and the parent has three
+    // reports. Accumulating all nine child inputs would exceed the same cap.
+    assert_eq!(maintain_fixture_to(h.path(), 13), 13);
+    assert!(!h.path().join(unrelated).exists());
+    for path in groups.iter().flatten().chain(reports.iter()) {
+        assert!(h.path().join(path).is_dir());
+    }
+    drop(caller);
+    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+    assert!(h.path().join(&unknown).is_dir());
+    inventory(h.path())
+        .reference_paths("unfinished-domain-owner", &[])
+        .unwrap();
+    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+}
+
 #[test]
 fn completed_child_original_transfers_to_parent_before_its_success_root_is_released() {
     if !isolated_capability_test(
@@ -5976,6 +6217,65 @@ fn failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer() {
             .unwrap()["original_outcome"]["exit_code"],
         1
     );
+}
+
+#[test]
+fn external_removal_exclusion_survives_handoff_to_its_native_child() {
+    if !isolated_capability_test("external_removal_exclusion_survives_handoff_to_its_native_child")
+    {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::{fd::AsRawFd, unix::net::UnixStream, unix::process::CommandExt},
+    };
+    let h = host(256, 16);
+    let path = tree(h.path(), "external-removal-effect");
+    let guard = retained_artifacts::retention::external_removal_guard(h.path(), &path)
+        .unwrap()
+        .unwrap();
+    let (mut parent, child) = UnixStream::pair().unwrap();
+    let parent_fd = parent.as_raw_fd();
+    let child_fd = child.as_raw_fd();
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"));
+    command.arg("exit-success");
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    unsafe {
+        command.pre_exec(move || {
+            libc::close(parent_fd);
+            let mut byte = 1u8;
+            if libc::write(child_fd, (&byte as *const u8).cast(), 1) != 1
+                || libc::read(child_fd, (&mut byte as *mut u8).cast(), 1) != 1
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    // This is an explicit native handoff, unlike an unrelated fork of a
+    // synchronous metadata operation. The prepared command owns the copies.
+    drop(guard);
+    let (signaled, conflicting, resumed, joined) = std::thread::scope(|scope| {
+        let launched = scope.spawn(move || command.output());
+        let signaled = parent.read_exact(&mut [0]);
+        let conflicting = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .and_then(|publication| publication.complete(json!({"exit": 0})));
+        let resumed = parent.write_all(&[1]);
+        let joined = launched.join();
+        (signaled, conflicting, resumed, joined)
+    });
+    signaled.unwrap();
+    resumed.unwrap();
+    assert!(joined.unwrap().unwrap().status.success());
+    assert!(
+        conflicting.is_err(),
+        "an explicitly forwarded removal capability must exclude overlapping publication"
+    );
+    let publication = inventory(h.path())
+        .begin("fixture", &path, json!(null))
+        .expect("the joined child releases its removal capability");
+    publication.complete(json!({"exit": 0})).unwrap();
 }
 
 #[test]

@@ -5,6 +5,7 @@
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_cache::verified_planner as policy;
+use policy::content_preflight as content;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -19,6 +20,106 @@ use vstd::vpanic as panic;
 mod continuity;
 
 verus! {
+
+fn artifact_trace(mut state: Vec<u8>, event: u8) -> (out: Vec<u8>)
+    ensures out@ == state@.push(event),
+{
+    state.push(event);
+    state
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn artifact_error_renderer_receives_every_original_field() {
+    let prefix = |parts: [&str; 4]| -> (out: String) ensures out@ == parts[0]@,
+        { parts[0].to_owned() };
+    let path = |parts: [&str; 4]| -> (out: String) ensures out@ == parts[1]@,
+        { parts[1].to_owned() };
+    let separator = |parts: [&str; 4]| -> (out: String) ensures out@ == parts[2]@,
+        { parts[2].to_owned() };
+    let detail = |parts: [&str; 4]| -> (out: String) ensures out@ == parts[3]@,
+        { parts[3].to_owned() };
+    expect_restore_text(content::content_error("缓存/λ\0\n", "原错\0\n", &prefix).as_str(), "E_CACHE_CONTENT: ");
+    expect_restore_text(content::content_error("缓存/λ\0\n", "原错\0\n", &path).as_str(), "缓存/λ\0\n");
+    expect_restore_text(content::content_error("缓存/λ\0\n", "原错\0\n", &separator).as_str(), ": ");
+    expect_restore_text(content::content_error("缓存/λ\0\n", "原错\0\n", &detail).as_str(), "原错\0\n");
+}
+
+fn artifact_observation_case(raw: Result<bool, (u32, &str)>, expected: Result<bool, &str>)
+    requires vstd::laws_cmp::obeys_cmp::<&str>(),
+        match raw {
+            Ok(true) => expected == Ok::<bool, &str>(true),
+            Ok(false) => expected == Err::<bool, &str>("cache artifact must be a physical directory"),
+            Err((tag, detail)) => if tag == 404 { expected == Ok::<bool, &str>(false) }
+                else { expected == Err::<bool, &str>(detail) },
+        },
+{
+    let resolve = |state: Vec<u8>, _path: &str| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == state@.push(1), out.1 == Ok::<(), String>(()),
+        { (artifact_trace(state, 1), Ok(())) };
+    let observe = |state: Vec<u8>, _target: &()| -> (out: (Vec<u8>, Result<bool, (u32, &str)>))
+        ensures out.0@ == state@.push(2), out.1 == raw,
+        { (artifact_trace(state, 2), raw) };
+    let error_text = |text: &str| -> (out: String) ensures out@ == text@,
+        { text.to_owned() };
+    let render = |parts: [&str; 4]| -> (out: String) ensures out@ == parts[3]@,
+        { parts[3].to_owned() };
+    let io = content::ArtifactIo { resolve, observe, error_text, render };
+    let rows = [("缓存\0\n", Some("路径/λ\0\n"))];
+    let initial = Vec::<u8>::new();
+    let ghost initial_state = initial;
+    let out = content::preflight(initial, &rows, 404, &io);
+    let _ = (out, expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn artifact_raw_tags_keep_directories_absence_wrong_type_and_original_errors_distinct()
+    requires vstd::laws_cmp::obeys_cmp::<&str>(),
+{
+    artifact_observation_case(Ok(true), Ok(true));
+    artifact_observation_case(Ok(false), Err("cache artifact must be a physical directory"));
+    artifact_observation_case(Err((404, "ignored missing detail")), Ok(false));
+    artifact_observation_case(Err((0, "")), Err(""));
+    artifact_observation_case(Err((u32::MAX, "原错\0\n")), Err("原错\0\n"));
+}
+
+fn artifact_early_error_case(no_artifacts: bool, no_path: bool)
+    requires vstd::laws_cmp::obeys_cmp::<&str>(),
+{
+    let resolve = |state: Vec<u8>, _path: &str| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == state@.push(1), match out.1 {
+            Err(error) => error@ == "原路径错误\0\n"@, _ => false },
+        { (artifact_trace(state, 1), Err("原路径错误\0\n".to_owned())) };
+    let observe = |state: Vec<u8>, _target: &()| -> (out: (Vec<u8>, Result<bool, (u32, &str)>))
+        ensures out.0@ == state@.push(2), out.1 == Ok::<bool, (u32, &str)>(true),
+        { (artifact_trace(state, 2), Ok(true)) };
+    let error_text = |text: &str| -> (out: String) ensures out@ == text@,
+        { text.to_owned() };
+    let render = |parts: [&str; 4]| -> (out: String) ensures out@ == parts[3]@,
+        { parts[3].to_owned() };
+    let io = content::ArtifactIo { resolve, observe, error_text, render };
+    let rows = [("a", if no_path { None } else { Some("root") })];
+    let unavailable = |state: Vec<u8>, _absent: content::MissingArtifacts| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == state@.push(3), out.1 == Ok::<(), String>(()),
+        { (artifact_trace(state, 3), Ok(())) };
+    let available = |state: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == state@.push(4), out.1 == Ok::<(), String>(()),
+        { (artifact_trace(state, 4), Ok(())) };
+    let initial = Vec::<u8>::new();
+    let ghost initial_state = initial;
+    let out = content::with_artifacts(initial, if no_artifacts { None } else { Some(&rows) },
+        404, &io, unavailable, available);
+    let _ = (out, no_artifacts, no_path);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn artifact_input_and_path_failures_do_not_observe_or_publish()
+    requires vstd::laws_cmp::obeys_cmp::<&str>(),
+{
+    artifact_early_error_case(true, false);
+    artifact_early_error_case(true, true);
+    artifact_early_error_case(false, true);
+    artifact_early_error_case(false, false);
+}
 
 fn expect_restore_text(actual: &str, expected: &str)
     requires actual@ == expected@,
@@ -168,6 +269,105 @@ fn only_adopted_compatible_restores_refresh_inputs() {
     expect_cache_true(!policy::refresh_sources(true, "miss-or-unavailable"));
     expect_cache_true(!policy::refresh_sources(true, "compatible\n"));
     expect_cache_true(!policy::refresh_sources(true, ""));
+}
+
+fn recovery_action_tag(
+    outcome: Option<&str>, reason: &str, unconfirmed: bool,
+    outputs_is_null_or_object: bool, matched_key_is_null_or_string: bool,
+    content_method: Option<&str>, content_status: Option<&str>, refresh_enabled: bool,
+    expected: u8,
+)
+    requires match policy::recovery_action_spec(
+        outcome, reason, unconfirmed, outputs_is_null_or_object,
+        matched_key_is_null_or_string, content_method, content_status, refresh_enabled,
+    ) {
+        Ok(policy::RecoveryAction::Keep) => expected == 0,
+        Ok(policy::RecoveryAction::Discard) => expected == 1,
+        Ok(policy::RecoveryAction::Refresh) => expected == 2,
+        Err(policy::RecoveryDecisionError::UnknownOutcome) => expected == 3,
+        Err(policy::RecoveryDecisionError::MalformedOutputs) => expected == 4,
+    },
+{
+    let actual = policy::recovery_action(
+        outcome, reason, unconfirmed, outputs_is_null_or_object,
+        matched_key_is_null_or_string, content_method, content_status, refresh_enabled,
+    );
+    let actual_tag = match actual {
+        Ok(policy::RecoveryAction::Keep) => 0,
+        Ok(policy::RecoveryAction::Discard) => 1,
+        Ok(policy::RecoveryAction::Refresh) => 2,
+        Err(policy::RecoveryDecisionError::UnknownOutcome) => 3,
+        Err(policy::RecoveryDecisionError::MalformedOutputs) => 4,
+    };
+    assert(actual_tag == expected);
+    expect_cache_true(actual_tag == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_decision_covers_outcomes_content_and_refresh_boundaries() {
+    proof {
+        reveal_strlit("failure"); reveal_strlit("success"); reveal_strlit("skipped");
+        reveal_strlit("miss-or-unavailable"); reveal_strlit("incompatible");
+        reveal_strlit("exact"); reveal_strlit("compatible");
+        reveal_strlit("producer-manifest/v1"); reveal_strlit("matched");
+        reveal_strlit("unusable"); reveal_strlit("unknown"); reveal_strlit("");
+        assert("failure"@[0] != "success"@[0]);
+        assert("success"@[1] != "skipped"@[1]);
+        assert("exact"@.len() != "compatible"@.len());
+        assert("matched"@[0] != "unusable"@[0]);
+        assert("producer-manifest/v1"@.len() != "matched"@.len());
+        assert("unknown"@[0] != "success"@[0]);
+    }
+    // A failed provider always discards, regardless of optional content metadata.
+    recovery_action_tag(
+        Some("failure"), "error", false, true, true,
+        Some("producer-manifest/v1"), Some("matched"), true, 1,
+    );
+    // An opted-in unconfirmed restore rejects malformed output shape first.
+    recovery_action_tag(
+        Some("success"), "exact", true, false, true,
+        None, None, false, 4,
+    );
+    // Misses and incompatible keys discard before content verification.
+    recovery_action_tag(
+        Some("success"), "miss-or-unavailable", true, true, true,
+        None, None, false, 1,
+    );
+    recovery_action_tag(
+        Some("success"), "incompatible", true, true, true,
+        None, None, false, 1,
+    );
+    // Exact content verification keeps a matched producer manifest and discards an unusable one.
+    recovery_action_tag(
+        Some("success"), "exact", false, true, true,
+        Some("producer-manifest/v1"), Some("matched"), false, 0,
+    );
+    recovery_action_tag(
+        Some("success"), "exact", false, true, true,
+        Some("producer-manifest/v1"), Some("unusable"), false, 1,
+    );
+    // Compatible restores refresh only when the policy enables source refresh.
+    recovery_action_tag(
+        Some("success"), "compatible", false, true, true,
+        None, None, false, 0,
+    );
+    recovery_action_tag(
+        Some("success"), "compatible", false, true, true,
+        None, None, true, 2,
+    );
+    // Skipped is retained; missing and unknown outcomes are rejected.
+    recovery_action_tag(
+        Some("skipped"), "not-attempted", false, true, true,
+        None, None, false, 0,
+    );
+    recovery_action_tag(
+        None, "unavailable", false, true, true,
+        None, None, false, 3,
+    );
+    recovery_action_tag(
+        Some("unknown"), "unavailable", false, true, true,
+        None, None, false, 3,
+    );
 }
 
 // 同一预期也在普通 Cargo 中实际执行。

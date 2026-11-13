@@ -609,34 +609,65 @@ fn invalid_arguments_and_config_do_no_remote_work() {
 
 #[test]
 fn timeout_and_output_limits_preserve_the_original_local_receipt() {
-    let h = Host::new(vec![
-        api(pending()),
-        json!({"prefix":["pr","checks"],"stdout":"waiting\n","sleep_ms":1800}),
-    ]);
-    let mut c: Value =
-        serde_json::from_slice(&fs::read(h.root.path().join(".chrono-harness/pr.json")).unwrap())
-            .unwrap();
-    c["watch_timeout_seconds"] = json!(1);
-    h.write_config(c);
-    let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
-    assert_eq!(code, 3);
-    assert_eq!(r["outcome"], "pending");
-    match h.calls().len() {
-        1 => {
-            // The one-second operation deadline includes the initial API call.
-            // It may expire before dispatching the native wait under real load.
-            assert_eq!(
+    for initial_timeout in [false, true] {
+        let mut initial = api(pending());
+        if initial_timeout {
+            initial["sleep_ms"] = json!(1800);
+        }
+        let h = Host::new(vec![
+            initial,
+            json!({"prefix":["pr","checks"],"stdout":"waiting\n","sleep_ms":1800}),
+        ]);
+        let mut c: Value = serde_json::from_slice(
+            &fs::read(h.root.path().join(".chrono-harness/pr.json")).unwrap(),
+        )
+        .unwrap();
+        c["watch_timeout_seconds"] = json!(1);
+        h.write_config(c);
+        let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
+        let receipts = r["receipts"].as_array().unwrap();
+        let first = &receipts[0];
+        assert_eq!(r["expected_head"], HEAD, "{r}");
+        assert_eq!(
+            &first["argv"].as_array().unwrap()[1..3],
+            &[json!("api"), json!("graphql")],
+            "{r}"
+        );
+        // The same deadline also bounds the initial query. Without its real
+        // successful exit, even response bytes cannot establish a pending PR.
+        if initial_timeout || first["failure"] == "process timed out" {
+            assert_eq!(code, 2, "{r}");
+            assert_eq!(r["outcome"], "unknown", "{r}");
+            assert_eq!(r["observed_head"], Value::Null, "{r}");
+            assert_eq!(r["error"], "process timed out", "{r}");
+            assert_eq!(receipts.len(), 1, "{r}");
+            assert_eq!(first["failure"], "process timed out", "{r}");
+            assert!(first["child_pid"].is_u64(), "{r}");
+            continue;
+        }
+        assert_eq!(code, 3, "{r}");
+        assert_eq!(r["outcome"], "pending", "{r}");
+        assert_eq!(r["observed_head"], HEAD, "{r}");
+        assert_eq!(first["exit_code"], 0, "{r}");
+        assert_eq!(first["failure"], Value::Null, "{r}");
+        // The producer's receipts count actual dispatches; an interrupted
+        // fixture need not have finished publishing its own call log.
+        match receipts.len() {
+            1 => assert_eq!(
                 r["error"], "operation deadline reached; remote result remains unverified",
                 "{r}"
-            );
-            assert_eq!(r["receipts"].as_array().unwrap().len(), 1, "{r}");
-            assert_eq!(r["receipts"][0]["exit_code"], 0, "{r}");
+            ),
+            2 => {
+                assert_eq!(
+                    &receipts[1]["argv"].as_array().unwrap()[1..3],
+                    &[json!("pr"), json!("checks")],
+                    "{r}"
+                );
+                assert_eq!(receipts[1]["failure"], "process timed out", "{r}");
+                assert!(receipts[1]["child_pid"].is_u64(), "{r}");
+            }
+            count => panic!("unexpected dispatch count {count}: {r}"),
         }
-        2 => {
-            assert_eq!(r["receipts"][1]["failure"], "process timed out", "{r}");
-            assert!(r["receipts"][1]["child_pid"].is_u64(), "{r}");
-        }
-        count => panic!("unexpected dispatch count {count}: {r}"),
     }
     let h = Host::new(vec![
         json!({"prefix":["api","graphql"],"stdout":"x".repeat(100000)}),
@@ -2007,7 +2038,22 @@ fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
         (ready, started)
     };
     let run = |args: &[&str]| {
-        let result = h.run(args);
+        // This isolated test exercises concurrent observations in the real
+        // command implementation. Extra CLI launcher processes add no ordering
+        // evidence; the native gh children and their originals remain real.
+        let args = args
+            .iter()
+            .copied()
+            .chain(["--host-root", h.root.path().to_str().unwrap()])
+            .map(std::ffi::OsString::from)
+            .collect::<Vec<_>>();
+        let output = chrono_pr::run(&args);
+        assert!(output.stderr.is_empty(), "{}", output.stderr);
+        let result = (
+            output.exit_code,
+            serde_json::from_str::<Value>(&output.stdout).unwrap(),
+        );
+        assert_eq!(result.1["schema"], "chrono-pr-result/v2");
         if let Ok(mut ready) = UnixStream::connect(h.root.path().join("response.sock")) {
             let bytes = serde_json::to_vec(&json!({"completed_before_handshake":result})).unwrap();
             let _ = ready.write_all(&(bytes.len() as u32).to_be_bytes());

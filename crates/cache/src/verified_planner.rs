@@ -7,6 +7,9 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 
+#[path = "verified_content.rs"]
+pub mod content_preflight;
+
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
 mod identifiers;
@@ -16,6 +19,9 @@ use chrono_harness::verified_identifiers as identifiers;
 #[cfg(verus_keep_ghost)]
 #[path = "attempt.rs"]
 mod attempt;
+#[cfg(verus_keep_ghost)]
+#[path = "recovery.rs"]
+mod recovery_source;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::attempt::{
     accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
@@ -170,6 +176,118 @@ pub fn refresh_sources(enabled: bool, reason: &str) -> (refresh: bool)
     ensures refresh <==> (enabled && reason@ == "compatible"@),
 {
     enabled && identifiers::equal_text(reason, "compatible")
+}
+
+pub enum RecoveryAction { Keep, Discard, Refresh }
+
+pub enum RecoveryDecisionError { UnknownOutcome, MalformedOutputs }
+
+pub open spec fn recovery_action_spec(
+    outcome: Option<&str>, reason: &str, unconfirmed: bool,
+    outputs_is_null_or_object: bool, matched_key_is_null_or_string: bool,
+    content_method: Option<&str>, content_status: Option<&str>, refresh_enabled: bool,
+) -> Result<RecoveryAction, RecoveryDecisionError> {
+    let base = match outcome {
+        Some(value) => if value@ == "failure"@ {
+            Ok(true)
+        } else if value@ == "success"@ {
+            if unconfirmed {
+                if !outputs_is_null_or_object || !matched_key_is_null_or_string {
+                    Err(RecoveryDecisionError::MalformedOutputs)
+                } else {
+                    Ok(reason@ == "miss-or-unavailable"@ || reason@ == "incompatible"@)
+                }
+            } else {
+                Ok(false)
+            }
+        } else if value@ == "skipped"@ {
+            Ok(false)
+        } else {
+            Err(RecoveryDecisionError::UnknownOutcome)
+        },
+        None => Err(RecoveryDecisionError::UnknownOutcome),
+    };
+    match base {
+        Err(error) => Err(error),
+        Ok(true) => Ok(RecoveryAction::Discard),
+        Ok(false) => {
+            let verify_content = match content_method {
+                Some(method) => method@ == "producer-manifest/v1"@
+                    && (reason@ == "exact"@ || reason@ == "compatible"@),
+                None => false,
+            };
+            let content_matched = match content_status {
+                Some(status) => status@ == "matched"@,
+                None => false,
+            };
+            if verify_content && !content_matched {
+                Ok(RecoveryAction::Discard)
+            } else if refresh_enabled && reason@ == "compatible"@ {
+                Ok(RecoveryAction::Refresh)
+            } else {
+                Ok(RecoveryAction::Keep)
+            }
+        }
+    }
+}
+
+pub fn recovery_action(
+    outcome: Option<&str>, reason: &str, unconfirmed: bool,
+    outputs_is_null_or_object: bool, matched_key_is_null_or_string: bool,
+    content_method: Option<&str>, content_status: Option<&str>, refresh_enabled: bool,
+) -> (out: Result<RecoveryAction, RecoveryDecisionError>)
+    ensures out == recovery_action_spec(
+        outcome, reason, unconfirmed, outputs_is_null_or_object,
+        matched_key_is_null_or_string, content_method, content_status, refresh_enabled),
+{
+    let discard = match outcome {
+        Some(value) if identifiers::equal_text(value, "failure") => true,
+        Some(value) if identifiers::equal_text(value, "success") => {
+            if unconfirmed {
+                if !outputs_is_null_or_object || !matched_key_is_null_or_string {
+                    return Err(RecoveryDecisionError::MalformedOutputs);
+                }
+                identifiers::equal_text(reason, "miss-or-unavailable")
+                    || identifiers::equal_text(reason, "incompatible")
+            } else {
+                false
+            }
+        }
+        Some(value) if identifiers::equal_text(value, "skipped") => false,
+        Some(_) | None => return Err(RecoveryDecisionError::UnknownOutcome),
+    };
+    if discard {
+        return Ok(RecoveryAction::Discard);
+    }
+    let verify_content = match content_method {
+        Some(method) => identifiers::equal_text(method, "producer-manifest/v1")
+            && (identifiers::equal_text(reason, "exact")
+                || identifiers::equal_text(reason, "compatible")),
+        None => false,
+    };
+    if verify_content && !matches!(content_status, Some(status) if identifiers::equal_text(status, "matched")) {
+        return Ok(RecoveryAction::Discard);
+    }
+    if refresh_enabled && identifiers::equal_text(reason, "compatible") {
+        Ok(RecoveryAction::Refresh)
+    } else {
+        Ok(RecoveryAction::Keep)
+    }
+}
+
+pub fn content_verification_applies(method: Option<&str>, reason: &str) -> (applies: bool)
+    ensures applies <==> match method {
+        Some(method) => method@ == "producer-manifest/v1"@
+            && (reason@ == "exact"@ || reason@ == "compatible"@),
+        None => false,
+    },
+{
+    match method {
+        Some(method) => identifiers::equal_text(method, "producer-manifest/v1")
+            && (identifiers::equal_text(reason, "exact")
+                || identifiers::equal_text(reason, "compatible")),
+        None => false,
+    }
 }
 
 pub fn current_registration(schema: &str) -> (valid: bool)

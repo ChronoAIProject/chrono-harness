@@ -1,5 +1,7 @@
 //! Addressed retention metadata. The namespace contains declarations, not a
 //! mutable inventory. Multi-record exclusion is limited to actual graph edges.
+//! These synchronous mutations have no descendant owner. Their local leases
+//! end on return even while an unrelated fork holds incidental fd copies.
 use super::*;
 use crate::ownership::DirectoryLease;
 use crate::verified_release as verified;
@@ -307,7 +309,7 @@ impl Inventory {
     }
     fn prune_object(&self, id: &str, observed: u64, nodes: &mut usize) -> Result<(), String> {
         let directory = self.object_directory(id)?;
-        let Some(gate) = DirectoryLease::acquire(&directory, true, None)? else {
+        let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
             return Ok(());
         };
         let mut record = self.read_object(id, &directory)?;
@@ -335,7 +337,8 @@ impl Inventory {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => record.prune_path = next,
                 Err(e) => return Err(e.to_string()),
                 Ok(_) => {
-                    let Some(path_gate) = DirectoryLease::acquire(&path_directory, true, None)?
+                    let Some(path_gate) =
+                        DirectoryLease::acquire_local(&path_directory, true, None)?
                     else {
                         return Ok(());
                     };
@@ -387,7 +390,7 @@ impl Inventory {
             *nodes += 1;
             let directory = entry.map_err(|e| e.to_string())?.path();
             let attempt = (|| {
-                let Some(gate) = DirectoryLease::acquire(&directory, true, None)? else {
+                let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
                     return Ok(());
                 };
                 let initial: Role = self
@@ -419,7 +422,7 @@ impl Inventory {
         Ok(errors)
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
-        let (leases, directories) = self.path_gates(paths, true, true)?;
+        let (leases, directories) = self.path_gates(paths, true, true, true)?;
         let targets = paths
             .iter()
             .map(|path| Ok((path.clone(), self.path_directory(path)?)))
@@ -773,6 +776,7 @@ impl Inventory {
         paths: &[String],
         wait: bool,
         read_ancestor_addresses: bool,
+        transfer: bool,
     ) -> Result<(Vec<DirectoryLease>, BTreeMap<String, PathBuf>), String> {
         let mut requests = BTreeMap::<String, bool>::new();
         for path in paths {
@@ -807,7 +811,7 @@ impl Inventory {
                     Err(error) => return Err(error.to_string()),
                 };
             if missing {
-                let initial = DirectoryLease::acquire(
+                let initial = DirectoryLease::acquire_local(
                     &directory,
                     true,
                     wait.then(|| Duration::from_secs(5).saturating_sub(began.elapsed())),
@@ -824,7 +828,14 @@ impl Inventory {
                 }
                 initial.stable()?;
             }
-            let lease = DirectoryLease::acquire(
+            // External removal belongs to another owner and may explicitly
+            // hand its capability to a native child. Metadata calls are local.
+            let acquire = if transfer {
+                DirectoryLease::acquire
+            } else {
+                DirectoryLease::acquire_local
+            };
+            let lease = acquire(
                 &directory,
                 exclusive,
                 wait.then(|| Duration::from_secs(5).saturating_sub(began.elapsed())),
@@ -887,7 +898,7 @@ impl Inventory {
     ) -> Result<Gate, String> {
         self.addressed_gate_scope(ids, paths, roles, birth, maintenance, wait, false)
     }
-    fn addressed_gate_scope(
+    pub(super) fn addressed_gate_scope(
         &self,
         ids: &[String],
         paths: &[String],
@@ -900,7 +911,7 @@ impl Inventory {
         let discovery =
             verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
         let discover_under_lease = discovery.object_excluded;
-        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true)?;
+        let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true, false)?;
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
         if birth.is_some() && !occupied.is_empty() {
@@ -955,7 +966,7 @@ impl Inventory {
                     let directory = self.role_directory(&role)?;
                     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
                     leases.push(
-                        DirectoryLease::acquire(
+                        DirectoryLease::acquire_local(
                             &directory,
                             true,
                             wait.then(|| Duration::from_secs(5)),
@@ -1018,7 +1029,7 @@ impl Inventory {
             let directory = self.object_directory(&id)?;
             if discover_under_lease {
                 leases.push(
-                    DirectoryLease::acquire(&directory, true, None)?
+                    DirectoryLease::acquire_local(&directory, true, None)?
                         .ok_or_else(|| format!("retention output metadata is busy: {id}"))?,
                 );
             }
@@ -1062,7 +1073,8 @@ impl Inventory {
                 })
                 .map(|r| r.path.clone())
                 .collect();
-            let (additional, dirs) = self.path_gates(&target_paths, wait, !discover_under_lease)?;
+            let (additional, dirs) =
+                self.path_gates(&target_paths, wait, !discover_under_lease, false)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
         }
@@ -1074,7 +1086,7 @@ impl Inventory {
             } else {
                 fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
                 leases.push(
-                    DirectoryLease::acquire(
+                    DirectoryLease::acquire_local(
                         &directory,
                         true,
                         wait.then(|| Duration::from_secs(5)),
@@ -1127,7 +1139,7 @@ impl Inventory {
             }
             if !discover_under_lease {
                 leases.push(
-                    DirectoryLease::acquire(
+                    DirectoryLease::acquire_local(
                         &directory,
                         true,
                         wait.then(|| Duration::from_secs(5)),

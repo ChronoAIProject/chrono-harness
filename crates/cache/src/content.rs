@@ -258,33 +258,87 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 "E_CACHE_CONTENT: producer step {work} has no accepted outcome for {id}: {outcome:?}"
             ));
         }
-        let start = Instant::now();
-        let mut manifests = BTreeMap::new();
-        for (artifact_id, artifact) in cache["artifacts"]
-            .as_object()
-            .ok_or("E_CACHE_CONTENT: artifacts missing")?
-        {
-            let relative = artifact["path"]
-                .as_str()
-                .ok_or("E_CACHE_CONTENT: artifact path")?;
-            let target = super::path(&root, relative)?;
-            let files =
-                inventory(&target).map_err(|e| format!("E_CACHE_CONTENT: {relative}: {e}"))?;
-            let manifest = json!({"schema":METHOD,"cache":id,"producer":cache["producer"],"key":cache["key"],"artifact_id":artifact_id,"artifact":artifact,"files":files});
-            let raw = serde_json::to_vec(&manifest).map_err(|e| e.to_string())?;
-            // Publication validates marker and parent links; a failed seal never authorizes save.
-            let marker = chrono_harness::prepare_publication(
-                &root,
-                &format!("{}/{MARKER}", relative.trim_end_matches('/')),
-            )?;
-            fs::write(marker, &raw).map_err(|e| e.to_string())?;
-            manifests.insert(
-                artifact_id,
-                super::retain_original(&root, &directory, "producer-manifest", &raw)?,
-            );
-        }
-        report["caches"][id] = json!({"status":"sealed","producer":cache["producer"],"producer_step":work,"producer_outcome":outcome,"manifests":manifests,"elapsed_seconds":start.elapsed().as_secs_f64(),"measurement":"wall-clock content hashing and manifest publication"});
-        outputs.push_str(&format!("cache_{index}_sealed=true\n"));
+        // A scoped check may not produce every statically declared cache.
+        // Check all roots before publishing any marker for this cache.
+        let artifacts = cache["artifacts"].as_object().map(|artifacts| {
+            artifacts
+                .iter()
+                .map(|(id, artifact)| (id.as_str(), artifact["path"].as_str()))
+                .collect::<Vec<_>>()
+        });
+        use super::verified_planner::content_preflight::{ArtifactIo, with_artifacts};
+        let io = ArtifactIo {
+            resolve: |(), relative: &str| ((), super::path(&root, relative)),
+            observe: |(), target: &std::path::PathBuf| {
+                (
+                    (),
+                    fs::symlink_metadata(target)
+                        .map(|metadata| metadata.is_dir())
+                        .map_err(|error| (error.kind() as u32, error)),
+                )
+            },
+            error_text: |error: std::io::Error| error.to_string(),
+            render: |parts: [&str; 4]| parts.concat(),
+        };
+        let (_, result) = with_artifacts(
+            (),
+            artifacts.as_deref(),
+            std::io::ErrorKind::NotFound as u32,
+            &io,
+            |(), absent| {
+                (
+                    (),
+                    Ok((
+                        json!({"status":"unavailable","reason":"artifact-absent","producer":cache["producer"],"producer_step":work,"producer_outcome":outcome,"absent_artifacts":absent}),
+                        String::new(),
+                    )),
+                )
+            },
+            |()| {
+                (
+                    (),
+                    (|| {
+                        let start = Instant::now();
+                        let mut manifests = BTreeMap::new();
+                        for (artifact_id, artifact) in cache["artifacts"]
+                            .as_object()
+                            .ok_or("E_CACHE_CONTENT: artifacts missing")?
+                        {
+                            let relative = artifact["path"]
+                                .as_str()
+                                .ok_or("E_CACHE_CONTENT: artifact path")?;
+                            let target = super::path(&root, relative)?;
+                            let files = inventory(&target)
+                                .map_err(|e| format!("E_CACHE_CONTENT: {relative}: {e}"))?;
+                            let manifest = json!({"schema":METHOD,"cache":id,"producer":cache["producer"],"key":cache["key"],"artifact_id":artifact_id,"artifact":artifact,"files":files});
+                            let raw = serde_json::to_vec(&manifest).map_err(|e| e.to_string())?;
+                            // Publication validates marker and parent links; a failed seal never authorizes save.
+                            let marker = chrono_harness::prepare_publication(
+                                &root,
+                                &format!("{}/{MARKER}", relative.trim_end_matches('/')),
+                            )?;
+                            fs::write(marker, &raw).map_err(|e| e.to_string())?;
+                            manifests.insert(
+                                artifact_id,
+                                super::retain_original(
+                                    &root,
+                                    &directory,
+                                    "producer-manifest",
+                                    &raw,
+                                )?,
+                            );
+                        }
+                        Ok((
+                            json!({"status":"sealed","producer":cache["producer"],"producer_step":work,"producer_outcome":outcome,"manifests":manifests,"elapsed_seconds":start.elapsed().as_secs_f64(),"measurement":"wall-clock content hashing and manifest publication"}),
+                            format!("cache_{index}_sealed=true\n"),
+                        ))
+                    })(),
+                )
+            },
+        );
+        let (row, output) = result?;
+        report["caches"][id] = row;
+        outputs.push_str(&output);
     }
     let raw = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
     let original = super::retain_original(&root, &directory, "producer-seal", &raw)?;

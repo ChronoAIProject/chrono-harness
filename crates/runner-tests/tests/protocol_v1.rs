@@ -1054,12 +1054,15 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
         let base = git(&["rev-parse", "HEAD"]);
         git(&["commit", "--allow-empty", "-qm", "candidate"]);
         let candidate = git(&["rev-parse", "HEAD"]);
-        let result = chrono_harness::full::check(
+        let result = chrono_harness::full::check_prepared(
             root,
             ".chrono-harness/config.json",
             &base,
             &candidate,
             std::path::Path::new(".chrono-harness/state/context.json"),
+            value!(null),
+            None,
+            None,
         );
         if case.starts_with("publication") {
             let error = result.unwrap_err();
