@@ -366,10 +366,14 @@ impl Host {
             ("runner", "chrono-harness"),
             ("judge-registration", "chrono-judge-registration"),
         ] {
-            let p = if (project, binary) == ("runner", "chrono-harness") {
-                PathBuf::from(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
-            } else {
-                source().join(format!("crates/{project}/target/debug/{binary}"))
+            let p = match (project, binary) {
+                ("runner", "chrono-harness") => {
+                    PathBuf::from(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
+                }
+                ("judge-registration", "chrono-judge-registration") => {
+                    env!("CARGO_BIN_EXE_chrono-judge-registration-test-cli").into()
+                }
+                _ => panic!("unregistered fixture binary: {project}/{binary}"),
             };
             assert!(
                 p.is_file(),

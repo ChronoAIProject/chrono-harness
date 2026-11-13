@@ -8,6 +8,11 @@
 JSON 与字符串读取仅作为明确适配器，直接把真实观察交给这些函数；未知分类仍保留
 原错误。
 
+本批同时证明 PR 输入准入：完整 40 位小写十六进制 SHA，以及 `OPEN`／`CLOSED`／
+`MERGED` 状态。`snapshot.rs` 的 head、merge commit 和状态分支直接消费
+`valid_sha_text`、`valid_pr_state`、`pull_request_open`、`pull_request_merged`；
+provider JSON、URL、分页和 IO 仍是明确外部接口，适配器不自行维护这些判断。
+
 独立 `verified_snapshot.rs` 预期同时作为 Rust 测试运行，覆盖全部状态类别、大小写
 差异、未知值以及所有优先级重叠。生产和预期各有固定版本 Verus 整 crate 操作，
 FILEMAP 绑定证明根、真实 `pr-tests` 消费和原 lifecycle 行为测试。JSON、GitHub
@@ -15,7 +20,7 @@ provider、URL、分页和 IO 仍是外部接口；其准入与错误／状态�
 
 **产品与宿主登记同时修改：**新增 PR 生产／独立预期证明操作、显式源码关系和
 `pr-tests` 的固定宏开发依赖；原行为测试、观察顺序、资源边界和失败保留不变。
-本批只覆盖检查终态分类及 stale／closed 优先级，完整快照 JSON／GitHub 事务和
+本批覆盖检查终态分类、stale／closed 优先级及 SHA／PR 状态输入准入，完整快照 JSON／GitHub 事务和
 全仓 `E_VERUS_COVERAGE` 仍待后续批次。
 
 diagnostics 的 `verified_error.rs` 维护实际 `Failure` 的完整字段元组：

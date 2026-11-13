@@ -11,6 +11,10 @@ use chrono_pr::verified_snapshot as policy;
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
 
@@ -26,6 +30,29 @@ fn snapshot_outcome_priority_is_proved() {
     assert(matches!(failed, policy::SnapshotOutcome::Failed));
     assert(matches!(pending, policy::SnapshotOutcome::Pending));
     assert(matches!(passed, policy::SnapshotOutcome::Passed));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_input_boundaries_are_proved() {
+    let valid = [48u8; 40];
+    let uppercase = [65u8; 40];
+    let short = [48u8; 39];
+    expect_snapshot_true(policy::valid_sha(&valid));
+    assert(uppercase@[0] == 65);
+    assert(!policy::sha_byte(uppercase@[0]));
+    expect_snapshot_true(!policy::valid_sha(&uppercase));
+    expect_snapshot_true(!policy::valid_sha(&short));
+    expect_snapshot_true(policy::valid_pr_state("OPEN"));
+    expect_snapshot_true(policy::valid_pr_state("CLOSED"));
+    expect_snapshot_true(policy::valid_pr_state("MERGED"));
+}
+
+fn expect_snapshot_true(actual: bool)
+    requires actual,
+{
+    if !actual {
+        panic!();
+    }
 }
 
 }
@@ -89,4 +116,20 @@ fn rust_snapshot_classification_covers_all_provider_states() {
     assert_eq!(snapshot_outcome_label(SnapshotOutcome::Failed), "failed");
     assert_eq!(snapshot_outcome_label(SnapshotOutcome::Pending), "pending");
     assert_eq!(snapshot_outcome_label(SnapshotOutcome::Passed), "passed");
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn rust_snapshot_input_validation_covers_provider_boundaries() {
+    use chrono_pr::verified_snapshot::{valid_pr_state, valid_sha_text};
+
+    assert!(valid_sha_text("0123456789abcdef0123456789abcdef01234567"));
+    assert!(!valid_sha_text("0123456789ABCDEF0123456789abcdef01234567"));
+    assert!(!valid_sha_text("0123456789abcdef0123456789abcdef0123456"));
+    for state in ["OPEN", "CLOSED", "MERGED"] {
+        assert!(valid_pr_state(state), "{state}");
+    }
+    for state in ["open", "UNKNOWN", ""] {
+        assert!(!valid_pr_state(state), "{state:?}");
+    }
 }

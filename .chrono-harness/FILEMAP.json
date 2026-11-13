@@ -239,7 +239,7 @@
     {"path":"crates/judge-registration/src/lib.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"}]},
     {"path":"crates/judge-registration/src/schema.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"}]},
     {"path":"crates/judge-registration/src/input_coverage.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"}]},
-    {"path":"crates/judge-registration/src/main.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
+    {"path":"crates/judge-registration/src/main.rs","owner":"judge-registration","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration"},{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"compile","to":"project:judge-cost-tests"},{"kind":"compile","to":"project:judge-mixed-tests"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"compile","to":"project:inputs-tests"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-filemap-tests"},{"kind":"test-execution","to":"test:judge-projects-tests"},{"kind":"test-execution","to":"test:judge-cost-tests"},{"kind":"test-execution","to":"test:judge-mixed-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"},{"kind":"test-execution","to":"test:inputs-tests"},{"kind":"test-execution","to":"test:workflow-units"},{"kind":"test-execution","to":"test:workflow-short"}]},
     {"path":"crates/judge-registration-tests/Cargo.toml","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/Cargo.lock","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/registration_contract.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
@@ -1386,7 +1386,6 @@
         "verify.registration-input-coverage-tests",
         "fmt.judge-registration",
         "fmt.judge-registration-tests",
-        "build.judge-registration",
         "test.judge-registration-tests"
       ],
       "timeout_seconds": 900,
@@ -1398,7 +1397,6 @@
         "verify.filemap-graph-tests",
         "fmt.judge-filemap",
         "fmt.judge-filemap-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-routes",
         "build.judge-projects",
@@ -1424,7 +1422,6 @@
         "verify.project-state-tests",
         "fmt.judge-projects",
         "fmt.judge-projects-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-routes",
         "build.judge-projects",
@@ -1439,7 +1436,6 @@
         "verify.judge-cost-tests",
         "fmt.judge-cost",
         "fmt.judge-cost-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-cost",
         "test.judge-cost-tests"
@@ -1451,7 +1447,6 @@
       "operations": [
         "fmt.judge-mixed",
         "fmt.judge-mixed-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-cost",
         "build.judge-mixed",
@@ -1474,7 +1469,6 @@
         "verify.judge-workflow-transition-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-cost",
         "build.judge-mixed",
@@ -1492,7 +1486,6 @@
       "operations": [
         "fmt.inputs",
         "fmt.inputs-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-cost",
         "build.judge-mixed",
@@ -1534,7 +1527,6 @@
       "operations": [
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-cost",
         "build.judge-mixed",
@@ -1552,7 +1544,6 @@
       "operations": [
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
-        "build.judge-registration",
         "build.judge-filemap",
         "build.judge-cost",
         "build.judge-mixed",

@@ -37,6 +37,8 @@ impl Host {
         ] {
             let executable = if project == "runner" {
                 Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli")).to_path_buf()
+            } else if (project, binary) == ("judge-registration", "chrono-judge-registration") {
+                env!("CARGO_BIN_EXE_chrono-judge-registration-test-cli").into()
             } else {
                 source().join(format!("crates/{project}/target/debug/{binary}"))
             };
