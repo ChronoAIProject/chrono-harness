@@ -4185,6 +4185,170 @@ fn independent_live_writers_keep_their_own_sealed_tree_accounting() {
 }
 
 #[test]
+fn source_protection_accepts_unborn_outputs_and_preserves_fixture_git_sources() {
+    if !git_fixture::isolated(
+        "source_protection_accepts_unborn_outputs_and_preserves_fixture_git_sources",
+    ) {
+        return;
+    }
+    source_protection_boundaries(&git_fixture::program());
+}
+
+fn source_protection_boundaries(program: &Path) {
+    use chrono_harness::artifact_disposal::source_safe;
+    let h = host(256, 16);
+    let output = "build[1]";
+    let source = "build[1]/source.rs";
+    fs::create_dir(h.path().join(output)).unwrap();
+    fs::write(h.path().join(output).join("untracked"), b"generated").unwrap();
+    assert!(source_safe(h.path(), output).is_ok());
+    let git = |args: &[&str]| {
+        let result = std::process::Command::new(program)
+            .args([
+                "-c",
+                "user.name=Source protection fixture",
+                "-c",
+                "user.email=source-protection@example.invalid",
+                "-c",
+                "commit.gpgSign=false",
+            ])
+            .args(args)
+            .current_dir(h.path())
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{args:?}: {result:?}");
+        result.stdout
+    };
+    git(&["init", "-q"]);
+    assert_eq!(
+        git(&[
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--no-renames",
+            "--ignore-submodules=none",
+            "--diff-filter=D",
+            "--",
+            output
+        ]),
+        b""
+    );
+    source_safe(h.path(), output).expect("an unborn repository has no committed source");
+
+    fs::write(h.path().join(source), b"source").unwrap();
+    git(&["add", "--", source]);
+    assert!(
+        source_safe(h.path(), output)
+            .unwrap_err()
+            .contains("committed/index source")
+    );
+    git(&["commit", "-qm", "source"]);
+    assert!(
+        source_safe(h.path(), output)
+            .unwrap_err()
+            .contains("committed/index source")
+    );
+
+    git(&["update-index", "--force-remove", "--", source]);
+    assert_eq!(
+        git(&["--literal-pathspecs", "ls-files", "-z", "--", output]),
+        b""
+    );
+    assert_eq!(
+        git(&[
+            "--literal-pathspecs",
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--no-renames",
+            "--ignore-submodules=none",
+            "--diff-filter=D",
+            "--",
+            output
+        ]),
+        format!("{source}\0").as_bytes()
+    );
+    assert!(
+        source_safe(h.path(), output)
+            .unwrap_err()
+            .contains("committed/index source")
+    );
+    assert_eq!(fs::read(h.path().join(source)).unwrap(), b"source");
+
+    git(&["add", "--", source]);
+    git(&["mv", source, "renamed.rs"]);
+    assert!(
+        source_safe(h.path(), output)
+            .unwrap_err()
+            .contains("committed/index source")
+    );
+    assert_eq!(fs::read(h.path().join("renamed.rs")).unwrap(), b"source");
+    git(&["commit", "-qm", "move source out of output"]);
+    fs::create_dir_all(h.path().join("build1")).unwrap();
+    fs::write(h.path().join("build1/source.rs"), b"unrelated source").unwrap();
+    git(&["add", "--", "build1/source.rs"]);
+    git(&[
+        "commit",
+        "-qm",
+        "unrelated path must not match literal output",
+    ]);
+    source_safe(h.path(), output).expect("committed deletions leave only the generated output");
+    let commit = String::from_utf8(git(&["rev-parse", "HEAD"])).unwrap();
+    fs::create_dir(h.path().join("module-output")).unwrap();
+    git(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        &format!("160000,{},module-output", commit.trim()),
+    ]);
+    git(&["commit", "-qm", "tracked gitlink"]);
+    assert!(
+        source_safe(h.path(), "module-output")
+            .unwrap_err()
+            .contains("committed/index source")
+    );
+    git(&["config", "diff.ignoreSubmodules", "all"]);
+    git(&["update-index", "--force-remove", "--", "module-output"]);
+    assert!(
+        source_safe(h.path(), "module-output")
+            .unwrap_err()
+            .contains("committed/index source")
+    );
+    assert_eq!(
+        fs::read(h.path().join(output).join("untracked")).unwrap(),
+        b"generated"
+    );
+    fs::write(
+        h.path().join(".git/HEAD"),
+        b"ffffffffffffffffffffffffffffffffffffffff\n",
+    )
+    .unwrap();
+    let failure = std::process::Command::new(program)
+        .args([
+            "--literal-pathspecs",
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--no-renames",
+            "--ignore-submodules=none",
+            "--diff-filter=D",
+            "--",
+            output,
+        ])
+        .current_dir(h.path())
+        .output()
+        .unwrap();
+    assert!(!failure.status.success(), "{failure:?}");
+    let original_error = String::from_utf8(failure.stderr).unwrap();
+    assert!(!original_error.trim().is_empty());
+    let error = source_safe(h.path(), output).unwrap_err();
+    assert!(error.contains(original_error.trim()), "{error}");
+}
+
+#[test]
 fn staged_source_added_after_publication_prevents_disposal() {
     if !git_fixture::isolated("staged_source_added_after_publication_prevents_disposal") {
         return;
