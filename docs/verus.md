@@ -8,8 +8,15 @@ diagnostics 的 `verified_error.rs` 维护实际 `Failure` 的完整字段元组
 独立 Verus 预期核节点／错误的完整多字段载荷、零／最大值、已有原因替换、
 重复／空角色和多次追加，同一驱动沿原未过滤 diagnostics 测试运行。
 
+同一根定义实际 `ErrorNode<C>`／`RelatedError<C>`；`error.rs` 的类型别名将上下文
+选为原 `BTreeMap<String, Value>`，没有另建模型或节点副本。`Failure::new` 直接调用
+这个节点的默认构造：类型、错误码、消息和整个上下文均保留原值，原因、原生码、
+栈和关联表明确为空。独立预期核不同字段、空值、Unicode／NUL／换行和完整二进制
+上下文，同一驱动也作为 Rust 测试执行；原真实记录用例核实际字段和严格序列化边界。
+通用上下文参数只保留完整 owned 值，不证明 map 维护、JSON 或上下文来源。
+
 明确使用固定 Rust 的元组搬运、`Box::new` 的类型擦除和标准 `Vec`／`String`
-操作接口；真实适配器不把仓内错误生产者登记成外部接口。`ErrorNode` 构造、
+操作接口；真实适配器不把仓内错误生产者登记成外部接口。其它节点装配、
 context 维护、`RecordedError` 投影、`ReceivedError` 递归及 IO 错误分类仍待证明，
 不授予外围 `error.rs` 整文件证明资格。
 

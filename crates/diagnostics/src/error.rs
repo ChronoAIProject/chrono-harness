@@ -7,29 +7,8 @@ use std::io;
 
 pub type Context = BTreeMap<String, Value>;
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ErrorNode {
-    #[serde(rename = "type")]
-    pub error_type: String,
-    pub code: String,
-    pub message: String,
-    pub context: Context,
-    pub source: Option<Box<ErrorNode>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_code: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub traceback: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related: Vec<RelatedError>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct RelatedError {
-    pub role: String,
-    pub error: ErrorNode,
-}
+pub type ErrorNode = crate::verified_error::ErrorNode<Context>;
+pub type RelatedError = crate::verified_error::RelatedError<Context>;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum ErrorSchema {
@@ -129,16 +108,12 @@ pub struct Failure {
 
 impl Failure {
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
-        let node = ErrorNode {
-            error_type: std::any::type_name::<Self>().into(),
-            code: code.into(),
-            message: message.into(),
-            context: Context::new(),
-            source: None,
-            native_code: None,
-            traceback: None,
-            related: Vec::new(),
-        };
+        let node = ErrorNode::new(
+            std::any::type_name::<Self>().into(),
+            code.into(),
+            message.into(),
+            Context::new(),
+        );
         let (node, source, related) = crate::verified_error::initialize(node);
         Self {
             node,
