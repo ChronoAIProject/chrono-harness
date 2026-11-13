@@ -210,6 +210,8 @@
     },
     "shared_operations": {
       "build.ci": [
+        "judge-workflow",
+        "judge-workflow-short",
         "worktree",
         "worktree-adoption"
       ],

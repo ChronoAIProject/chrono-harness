@@ -40,17 +40,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
-name = "chrono-ci"
-version = "0.1.0"
-dependencies = [
- "chrono-harness",
- "chrono-judge-ci",
- "serde",
- "serde_json",
- "verus_builtin_macros",
-]
-
-[[package]]
 name = "chrono-diagnostics"
 version = "0.1.0"
 dependencies = [
@@ -98,21 +87,6 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
-]
-
-[[package]]
-name = "chrono-judge-ci"
-version = "0.1.0"
-dependencies = [
- "chrono-diagnostics",
- "chrono-harness",
- "chrono-judge-filemap",
- "chrono-judge-projects",
- "chrono-judge-registration",
- "chrono-judge-routes",
- "serde",
- "serde_json",
- "tracing",
 ]
 
 [[package]]
@@ -196,7 +170,6 @@ dependencies = [
 name = "chrono-judge-workflow-tests"
 version = "0.1.0"
 dependencies = [
- "chrono-ci",
  "chrono-harness",
  "chrono-identifiers",
  "chrono-inputs",
