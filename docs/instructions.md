@@ -47,7 +47,7 @@ CLI 复用标准诊断库，按明确 `--host-root`（省略时为当前目录�
 
 已有宿主采用新默认时，以所选产品源码版本的 `assets/instructions/catalog.json` 和 `default-manifest.json` 为比较输入。在宿主自己的 catalog 中合入所需规则正文和 `workflow` 布局，再在 manifest 根输出选择 roots／layout。保留自定义 atoms、locale、file 源、其他输出、上下文和块外内容，不整份覆盖 catalog／manifest。已有不解析内容的 file 方法仍由原文件负责方编辑，不用 init 替换。
 
-然后走宿主登记的 `instructions.generate` 入口，核对真实根、AGENTS 字面链接和全部选中 Markdown／skill 使用方；重复生成确认无需写入。本仓使用自己的源和三个输出，产品默认仍只生成根。此路径只更新可读方法，不激活宿主判官，不证明 AI 遵守，也不建立 full／native 验收。
+然后走宿主登记的 `instructions.generate` 入口，核对真实根、AGENTS 字面链接和全部选中 Markdown／skill 使用方；重复生成确认无需写入。本仓使用自己的源和 manifest 选定的输出，产品默认仍只生成根。此路径只更新可读方法，不激活宿主判官，不证明 AI 遵守，也不建立 full／native 验收。
 
 当前 `method.host-tools`、`owner.migration`、`action.autonomy`、`action.blocked` 和 `cost.measure` 等规则保留以下要求：以当前规范为准，不再为历史版本、格式、接口或路径保留执行分支、适配器和测试；变更时迁移当前使用方与登记。固定基线事实、仍有用途的源码和失败原件保留为数据与证据，不让旧合同成为运行时权威。局部失败只阻断明确依赖的工作，其他已授权工作继续；不申请额外权限，移除无必要使用方的特殊权限功能，不建替代激活层。普通必要流程保留已有权限，CI 缓存的普通内容验证、恢复、构建和保存仍由缓存负责方维护。
 
@@ -138,6 +138,8 @@ catalog 可选 `layouts`，省略时为空数组；output 可选 `layout`，引�
 额外 Markdown／skill 整文件都是生成副本。文件不存在时可创建；已有文件必须具备 producer、output ID 和 format 都相符的完整 begin／end 所有权标记。没有标记、身份错误或标记畸形，都会在写入前失败，不会静默覆盖宿主文件。
 
 skill 的 `---` 必须从文件第一个字节开始；name／description 用 JSON 字符串形式的合法 YAML 双引号标量表示，所有权标记位于 front matter 关闭之后。name 为 1–63 位小写 ASCII 字母、数字或连字符，首尾不能是连字符，也不能连续使用；父目录须同名，文件名恰为 SKILL.md。description 非空、单行、无控制字符，最多 1024 个字符且不含尖括号，供当前外部 validator 使用。标题和元数据不自动决定使用范围，作者负责让内容聚焦且实用。
+
+本仓的发布迭代 skill 另由宿主 `core.release-iteration` 生成。迁移原有手写 skill 时，先将完整内容和维护提示移入 catalog、登记 manifest 及 FILEMAP，保全 Git 原件，再将原文件移出输出路径，由正式生成入口创建带所有权标记的副本。不能给旧文件手填生成标记，也不能覆盖其中尚未迁移的经验。个人目录仅安装验收后的生成结果。
 
 只有当前 manifest 的输出受管理。删除条目或改名都会原样保留旧文件；旧标记只记录来源，不代表当前仍受管理。旧 skill 可能继续被发现，已获授权的 AI 必须明确退役旧文件。没有 previous-manifest、history ledger、glob、扫描卸载或自动删除。
 
