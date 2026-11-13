@@ -174,12 +174,6 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
         return Err("v1 cannot declare facts_config, including null".into());
     }
     let p: Policy = serde_json::from_value(c.policy.clone()).map_err(|e| e.to_string())?;
-    if c.policy
-        .get("selection_evidence")
-        .is_some_and(|v| v != "explicit-graph/v1")
-    {
-        return Err("unsupported selection_evidence representation".into());
-    }
     if c.schema == "chrono-ci-check/v2" {
         let path = p
             .facts_config
@@ -759,10 +753,14 @@ fn ci_impact(
     let closure = graph::closure(&edges, &seeds);
     let mut selected = closure.selected_tests();
     selected.extend(extras.keys().cloned());
-    // The explicit graph and seed causes already determine every predecessor
-    // and contributing-seed set. Opted-in hosts publish that sufficient source
-    // once rather than repeating those derived strings for each (seed, node).
-    let replay = new.policy.selection_evidence.as_deref() == Some("explicit-graph/v1");
+    // Every outgoing edge of a reached node contributes to replay, including
+    // alternate paths and cycles. Unreachable sources contribute no causes.
+    // Keep endpoint origins while omitting unrelated graph declarations.
+    let replay = new.policy.selection_evidence.as_deref() == Some("reachable-graph/v1");
+    let evidence_edges: Vec<_> = edges
+        .iter()
+        .filter(|edge| !replay || closure.reached.contains_key(&edge.edge.from))
+        .collect();
     let closure_evidence = if replay {
         object!({"schema":"chrono-ci-reachability/v1",
             "reached":closure.reached.keys().collect::<Vec<_>>(),
@@ -770,9 +768,9 @@ fn ci_impact(
     } else {
         object!(&closure)
     };
-    let mut explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":edges, "seed_causes":seeds, "closure":closure_evidence, "extra_selections":extras});
+    let mut explanation = object!({"scope":"chrono-ci-check/v1-adapter", "edges":evidence_edges, "seed_causes":seeds, "closure":closure_evidence, "extra_selections":extras});
     if replay {
-        explanation["representation"] = object!("explicit-graph/v1");
+        explanation["representation"] = object!("reachable-graph/v1");
     }
     let mut affected: BTreeSet<String> = closure.reached.keys().cloned().collect();
     if old.is_none() {
@@ -1163,6 +1161,15 @@ impl Profile {
             return Err("config does not match candidate/request".into());
         }
         let config: CheckConfig = decode(&bytes)?;
+        // Only the candidate selects a report format. Fixed baseline policy is
+        // input data for DELTA planning and never selects an old formatter.
+        if config
+            .policy
+            .get("selection_evidence")
+            .is_some_and(|v| v != "reachable-graph/v1")
+        {
+            return Err("unsupported selection_evidence representation".into());
+        }
         let policy = policy(&config)?;
         Ok(Self {
             bytes,

@@ -16,11 +16,13 @@
 
 `selection_explanation.extra_selections` 解释操作、绑定、工具、环境或限制变化带来的额外选择。这些不变成完整政策边，见[影响范围说明](filemap-impact.md)。`instructions` 仍独立，catalog、布局和相对根别名不变。
 
-按范围政策可明确选 `selection_evidence: "explicit-graph/v1"`：保留完整两端合并 `edges`、`seed_causes`、额外选择及原因；`closure.schema: "chrono-ci-reachability/v1"` 发布排序的 `reached` 节点和图选中的 `selected_tests`。由保留图和原因可重建前驱及贡献起点表，因此传输省去重复派生字符串，不改选择或执行。省略时发布完整传播结果，null／未知格式在业务前失败。
+按范围政策可明确选 `selection_evidence: "reachable-graph/v1"`：先用完整两端合并图计算影响，再只发布起点可达节点的全部出边，保留每条边的 `base`／`candidate`／`both` 来源、改名两端、替代路径和循环边。`seed_causes`、额外选择及原因保持完整；`closure.schema: "chrono-ci-reachability/v1"` 发布排序的 `reached` 节点和图选中的 `selected_tests`。保留图和起点仍可重建全部前驱及贡献起点表，无关边及重复派生字符串不进入这份说明，不改选择或执行。完整声明仍来自固定两端 FILEMAP，不从精简说明反推全图。省略时发布完整图及传播结果，null／未知格式在业务前失败。
 
 按范围 CI 的起点由 `seed_causes[].node` 维护，不再额外发布重复的 `seeds` 列表；`extra_selections` 与图选测结果已能区分额外选择，也不再发布两者差集 `legacy_only_selections`。完整 FILEMAP 的独立 impact 合同也以 `seed_causes` 维护起点，格式见[FILEMAP 输出](filemap-impact.md#带版本的输出)。输出及计算成本收益尚未实测。
 
-本宿主因 2697 条私有声明使原响应超过未改动的 8 MiB 上限而采用此表示。Rust 测试保留全部 2697 个明确起点输入和输出限制。源码／bootstrap／标准／原生验收及总验证成本仍分别处理。
+格式资格只对当前候选求值。固定基线中的格式字段只作为 DELTA 输入读取，不选择或执行旧格式生产者；现役候选的未知格式仍在业务前拒绝。
+
+本宿主因 2697 条私有声明使原响应超过未改动的 8 MiB 上限而采用可重放表示。当前只采用可达图格式，产品与宿主配置同步迁移；Rust 测试保留全部 2697 个明确起点输入和输出限制，精确核对无关边排除、改名两端及循环边。源码／bootstrap／标准／原生验收及总验证成本仍分别处理。
 
 五份完整治理登记仍为 **proposed**。当前有限宿主 profile `chrono-ci-check/v3` 明确消费 FILEMAP／项目数据，独立单元／汇总使用 `chrono-ci-judge/v2`；不分单元的本地检查及旧 profile 保留各自说明的行为，见[独立 CI 单元](ci-units.md)。
 
