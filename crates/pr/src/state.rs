@@ -49,6 +49,13 @@ struct Continuation {
     _reader: Lease,
 }
 
+#[derive(Deserialize)]
+struct ProcessCompletion {
+    exit_code: i32,
+    exit_signal: Option<i32>,
+    owned_work_joined: bool,
+}
+
 impl Continuation {
     fn load(
         root: &Path,
@@ -143,6 +150,19 @@ impl Continuation {
             let (saved, _) = read(&format!("call-{}.result.json", index + 1), 16777216)?;
             if saved != *receipt {
                 return Err("continued process receipt differs from the sealed original".into());
+            }
+            let completion: ProcessCompletion = serde_json::from_value(receipt.clone())
+                .map_err(|error| {
+                    format!("continued process completion is not established: {error}; preserve originals")
+                })?;
+            if !verified::process_completion_known(
+                completion.exit_code,
+                completion.exit_signal,
+                completion.owned_work_joined,
+            ) {
+                return Err(
+                    "continued process completion is not established; preserve originals".into(),
+                );
             }
             for (field, suffix) in [
                 ("stdout_original", "stdout"),
@@ -388,7 +408,11 @@ impl State {
     }
 
     pub(crate) fn receipt(&mut self, n: usize, process: &ProcessResult) -> Result<Value, String> {
-        self.unreturned = !verified::process_exit_known(process.exit_code, process.exit_signal);
+        self.unreturned = !verified::process_completion_known(
+            process.exit_code,
+            process.exit_signal,
+            process.owned_work_joined,
+        );
         let paths = self.process_paths(n);
         let mut originals = Vec::new();
         for path in &paths {
@@ -429,6 +453,7 @@ impl State {
     pub(crate) fn process_fields(process: &ProcessResult) -> Value {
         json!({"argv":process.argv,"executable":process.executable,"sha256":process.sha256,
             "exit_code":process.exit_code,"exit_signal":process.exit_signal,"failure":process.failure,
+            "owned_work_joined":process.owned_work_joined,
             "child_pid":process.child_pid,"launcher_pid":process.launcher_pid,
             "stdout_complete":process.stdout_complete,"stderr_complete":process.stderr_complete,
             "timeout_seconds":process.timeout_seconds,"stdout_sha256":process.stdout_sha256,"stderr_sha256":process.stderr_sha256})

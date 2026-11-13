@@ -1784,6 +1784,7 @@ fn retained_nested_helper() {
         &[],
         &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
         &chrono_harness::ProcessEvidence {
+            root,
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
@@ -1819,6 +1820,7 @@ fn retained_launch_publication_failure_preserves_original_process() {
         &[],
         binding.sha256.as_deref().unwrap(),
         &chrono_harness::ProcessEvidence {
+            root: dir.path(),
             stdout: &dir.path().join("original.stdout"),
             stderr: &dir.path().join("original.stderr"),
             launch: &launch,
@@ -1920,6 +1922,7 @@ fn retained_stream_publication_failure_helper() {
         &[],
         &digest,
         &chrono_harness::ProcessEvidence {
+            root,
             stdout: &root.join("original.stdout"),
             stderr: &root.join("original.stderr"),
             launch: &root.join("launch.json"),
@@ -2018,6 +2021,7 @@ fn retained_stream_publication_failure_preserves_bytes_after_partial_write() {
 #[test]
 fn retained_originals_match_complete_streams_and_launch_identity() {
     let root = tempfile::tempdir().unwrap();
+    let working = tempfile::tempdir().unwrap();
     let spec = chrono_harness::CommandSpec {
         program: PROCESS_FIXTURE.into(),
         args: vec!["retained".into(), "normal".into()],
@@ -2032,13 +2036,14 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
     };
     let digest = sha256(&fs::read(PROCESS_FIXTURE).unwrap());
     let paths = chrono_harness::ProcessEvidence {
+        root: root.path(),
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),
         publication: None,
     };
     let result = chrono_harness::run_process_observed_retained(
-        root.path(),
+        working.path(),
         &spec,
         b"original stdin",
         &digest,
@@ -2062,6 +2067,11 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
     assert_eq!(launch["launcher_pid"], value!(result.launcher_pid.unwrap()));
     assert_eq!(launch["argv"], value!(result.argv));
     assert_eq!(launch["cwd"], value!(result.cwd));
+    assert_eq!(result.cwd, fs::canonicalize(working.path()).unwrap());
+    assert_eq!(
+        result.launch_original.as_ref().unwrap()["path"],
+        "launch.json"
+    );
     assert_eq!(launch["sha256"], digest);
     assert_eq!(launch["schema"], "chrono-process-launch/v2");
     assert!(launch.get("environment").is_none());
@@ -2081,10 +2091,10 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
     assert_eq!(launch["output_limit_bytes"], 4096);
     assert_eq!(
         launch["child_pid"].as_u64().unwrap().to_string(),
-        fs::read_to_string(root.path().join("retained.pid")).unwrap()
+        fs::read_to_string(working.path().join("retained.pid")).unwrap()
     );
     assert!(
-        chrono_harness::run_process_observed_retained(root.path(), &spec, &[], &digest, &paths)
+        chrono_harness::run_process_observed_retained(working.path(), &spec, &[], &digest, &paths)
             .is_err()
     );
     assert_eq!(
@@ -2119,6 +2129,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
         &[],
         &sha256(&fs::read(PROCESS_FIXTURE).unwrap()),
         &chrono_harness::ProcessEvidence {
+            root: root.path(),
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,
@@ -2277,6 +2288,7 @@ fn retained_originals_keep_the_existing_stream_limit_and_failure() {
         output_limit_bytes: 8,
     };
     let paths = chrono_harness::ProcessEvidence {
+        root: root.path(),
         stdout: &root.path().join("original.stdout"),
         stderr: &root.path().join("original.stderr"),
         launch: &root.path().join("launch.json"),

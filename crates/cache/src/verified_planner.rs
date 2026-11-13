@@ -178,6 +178,48 @@ pub fn refresh_sources(enabled: bool, reason: &str) -> (refresh: bool)
     enabled && identifiers::equal_text(reason, "compatible")
 }
 
+/// The filesystem adapter reports observations; this function owns the
+/// freshness state transition after each observation. It does not interpret
+/// timestamps or filesystem errors.
+pub enum FreshnessDecision { AlreadyNewer, Updated, Retry, Failed }
+
+pub open spec fn freshness_decision_spec(
+    current_newer: bool, first_newer: bool, second_newer: bool,
+    second_attempted: bool,
+) -> FreshnessDecision {
+    if current_newer {
+        FreshnessDecision::AlreadyNewer
+    } else if first_newer {
+        FreshnessDecision::Updated
+    } else if second_attempted {
+        if second_newer {
+            FreshnessDecision::Updated
+        } else {
+            FreshnessDecision::Failed
+        }
+    } else {
+        FreshnessDecision::Retry
+    }
+}
+
+pub fn freshness_decision(
+    current_newer: bool, first_newer: bool, second_newer: bool,
+    second_attempted: bool,
+) -> (decision: FreshnessDecision)
+    ensures decision == freshness_decision_spec(
+        current_newer, first_newer, second_newer, second_attempted),
+{
+    if current_newer {
+        FreshnessDecision::AlreadyNewer
+    } else if first_newer {
+        FreshnessDecision::Updated
+    } else if second_attempted {
+        if second_newer { FreshnessDecision::Updated } else { FreshnessDecision::Failed }
+    } else {
+        FreshnessDecision::Retry
+    }
+}
+
 pub enum RecoveryAction { Keep, Discard, Refresh }
 
 pub enum RecoveryDecisionError { UnknownOutcome, MalformedOutputs }

@@ -123,6 +123,11 @@ Serde `Deserialize` 派生：读取原文件行，缺失的布尔字段保留为
 外部接口只采用明确登记的假设。目前只完成下列局部范围；全仓强制覆盖门和其他程序的迁移仍在实施。
 Python 实现暂缓，不把未迁移程序列为已证明。
 
+缓存 source freshness 的状态选择已接入 `verified_planner.rs::freshness_decision`：
+实际运行路径直接消费同源 Verus 结果，独立预期覆盖全部当前／首次／重试观察组合。
+时间读取、时间加法、文件属性更新及 IO 错误仍保持为明确适配器边界；此批次不扩大为
+完整 freshness 文件系统事务证明。
+
 缓存验收采用的私有 fixture 保管，沿用 `verify.runner-fixture-tests` 判断原测试结果与
 生产者退役观察必须同时具备；沿用 worktree lifecycle 两项严格根，规定对象登记为空、
 待退役元数据为空且命名空间成员均有明确归属，才允许外层夹具退出。生产者在原位置
@@ -528,7 +533,7 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 
 `judge-projects/src/verified_state.rs` 拥有完整状态文本与原进程终态的组合、
 `completed`／`unknown` 选择、全部操作的终态汇总、原件摘要和长度的精确核验，
-以及输入交接后解除依赖／恢复保护的条件。`state.rs` 的真实原件路径直接消费这些函数；
+以及解除恢复保护所需的终态条件。`state.rs` 的真实原件路径直接消费这些函数；
 进程终态继续复用现役已证明的 `process_exit_known`，不以回执存在或状态声称成功代替。
 `verify.project-state`／`verify.project-state-tests` 使用固定 Verus 和整 crate 参数，
 独立预期同时作为普通 Rust 测试运行，并与既有执行／中断／原件行为测试同次验收。

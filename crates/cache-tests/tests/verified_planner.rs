@@ -472,4 +472,49 @@ fn mismatches_do_not_accept_case_or_prefixes() {
     expect(Some("digest"), Some("版本甲"), Some("digest"), Some("版本乙"), false);
 }
 
+fn expect_freshness(
+    current_newer: bool, first_newer: bool, second_newer: bool,
+    second_attempted: bool, expected: u8,
+)
+    requires expected == match policy::freshness_decision_spec(
+        current_newer, first_newer, second_newer, second_attempted,
+    ) {
+        policy::FreshnessDecision::AlreadyNewer => 0u8,
+        policy::FreshnessDecision::Updated => 1u8,
+        policy::FreshnessDecision::Retry => 2u8,
+        policy::FreshnessDecision::Failed => 3u8,
+    },
+{
+    let actual: u8 = match policy::freshness_decision(
+        current_newer, first_newer, second_newer, second_attempted,
+    ) {
+        policy::FreshnessDecision::AlreadyNewer => 0u8,
+        policy::FreshnessDecision::Updated => 1u8,
+        policy::FreshnessDecision::Retry => 2u8,
+        policy::FreshnessDecision::Failed => 3u8,
+    };
+    assert(actual == expected);
+    expect_cache_true(actual == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn freshness_transition_prioritizes_observed_state_and_retries_once() {
+    expect_freshness(false, false, false, false, 2u8);
+    expect_freshness(false, false, false, true, 3u8);
+    expect_freshness(false, false, true, false, 2u8);
+    expect_freshness(false, false, true, true, 1u8);
+    expect_freshness(false, true, false, false, 1u8);
+    expect_freshness(false, true, false, true, 1u8);
+    expect_freshness(false, true, true, false, 1u8);
+    expect_freshness(false, true, true, true, 1u8);
+    expect_freshness(true, false, false, false, 0u8);
+    expect_freshness(true, false, false, true, 0u8);
+    expect_freshness(true, false, true, false, 0u8);
+    expect_freshness(true, false, true, true, 0u8);
+    expect_freshness(true, true, false, false, 0u8);
+    expect_freshness(true, true, false, true, 0u8);
+    expect_freshness(true, true, true, false, 0u8);
+    expect_freshness(true, true, true, true, 0u8);
+}
+
 }

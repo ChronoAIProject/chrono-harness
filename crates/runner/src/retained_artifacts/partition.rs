@@ -1,5 +1,7 @@
 //! Addressed retention metadata. The namespace contains declarations, not a
 //! mutable inventory. Multi-record exclusion is limited to actual graph edges.
+//! These synchronous mutations have no descendant owner. Their local leases
+//! end on return even while an unrelated fork holds incidental fd copies.
 use super::*;
 use crate::ownership::DirectoryLease;
 use crate::verified_release as verified;
@@ -307,7 +309,7 @@ impl Inventory {
     }
     fn prune_object(&self, id: &str, observed: u64, nodes: &mut usize) -> Result<(), String> {
         let directory = self.object_directory(id)?;
-        let Some(gate) = DirectoryLease::acquire(&directory, true, None)? else {
+        let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
             return Ok(());
         };
         let mut record = self.read_object(id, &directory)?;
@@ -335,7 +337,8 @@ impl Inventory {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => record.prune_path = next,
                 Err(e) => return Err(e.to_string()),
                 Ok(_) => {
-                    let Some(path_gate) = DirectoryLease::acquire(&path_directory, true, None)?
+                    let Some(path_gate) =
+                        DirectoryLease::acquire_local(&path_directory, true, None)?
                     else {
                         return Ok(());
                     };
@@ -387,7 +390,7 @@ impl Inventory {
             *nodes += 1;
             let directory = entry.map_err(|e| e.to_string())?.path();
             let attempt = (|| {
-                let Some(gate) = DirectoryLease::acquire(&directory, true, None)? else {
+                let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
                     return Ok(());
                 };
                 let initial: Role = self
@@ -825,9 +828,8 @@ impl Inventory {
                 }
                 initial.stable()?;
             }
-            // Only an external removal guard crosses another owner's effect.
-            // Internal metadata transactions finish synchronously and never
-            // transfer their directory locks to process-engine descendants.
+            // External removal belongs to another owner and may explicitly
+            // hand its capability to a native child. Metadata calls are local.
             let acquire = if transfer {
                 DirectoryLease::acquire
             } else {

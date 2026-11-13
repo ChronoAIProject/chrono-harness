@@ -784,6 +784,8 @@ pub(crate) fn run_process_observed_detailed(
 /// Stream files contain only bytes actually read, within the unchanged output bound.
 /// A launch record is not a terminal receipt; absent terminal evidence stays unknown.
 pub struct ProcessEvidence<'a> {
+    /// Explicit storage owner, independent of the command's working directory.
+    pub root: &'a Path,
     pub stdout: &'a Path,
     pub stderr: &'a Path,
     pub launch: &'a Path,
@@ -1171,12 +1173,25 @@ fn run_process_inner_with_stdout(
     let root = fs::canonicalize(root)
         .map_err(|e| ProcessFailure::native("E_PROCESS_CWD", format!("process cwd: {e}"), e))?;
     let publication = evidence.and_then(|paths| paths.publication);
+    let evidence_root = evidence
+        .map(|paths| {
+            fs::canonicalize(paths.root).map_err(|e| {
+                ProcessFailure::native(
+                    "E_PROCESS_EVIDENCE_PATH",
+                    format!("process evidence root: {e}"),
+                    e,
+                )
+            })
+        })
+        .transpose()?;
     let evidence_paths = evidence
-        .map(|paths| validate_process_evidence_paths(&root, paths))
+        .zip(evidence_root.as_deref())
+        .map(|(paths, storage_root)| validate_process_evidence_paths(storage_root, paths))
         .transpose()?;
     let evidence = evidence_paths
         .as_ref()
         .map(|(stdout, stderr, launch)| ProcessEvidence {
+            root: evidence_root.as_deref().expect("validated evidence root"),
             stdout,
             stderr,
             launch,
@@ -1235,16 +1250,16 @@ fn run_process_inner_with_stdout(
                 continue;
             }
             let relative = path
-                .strip_prefix(&root)
+                .strip_prefix(paths.root)
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("stream path UTF-8")?;
             if publication.is_none()
-                && retained_artifacts::retention::Inventory::adopted(&root)?
+                && retained_artifacts::retention::Inventory::adopted(paths.root)?
                     .is_some_and(|i| i.accepts("check-original", relative))
             {
                 let publication = retained_artifacts::retention::create_adopted_for_consumer(
-                    &root, "check-original", path, false,
+                    paths.root, "check-original", path, false,
                     serde_json::json!({"kind":"process-stream","stream":index,"stdin_sha256":stdin_sha256,"outcome":"not-established"}),
                     Some(bound as u64), "publication-recheck"
                 )?.ok_or("stream publication adoption changed")?;
@@ -1423,9 +1438,9 @@ fn run_process_inner_with_stdout(
             let mut record = launch_record.as_ref().expect("prepared launch record").clone();
             record["child_pid"] = serde_json::json!(pid);
             let published = (|| -> Result<(), Failure> {
-                let relative = paths.launch.strip_prefix(&root).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?.to_str().ok_or_else(||Failure::new("E_PROCESS_EVIDENCE","launch path UTF-8"))?;
+                let relative = paths.launch.strip_prefix(paths.root).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?.to_str().ok_or_else(||Failure::new("E_PROCESS_EVIDENCE","launch path UTF-8"))?;
                 let raw = serde_json::to_vec(&record).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e.to_string()))?;
-                if publication.is_none() && retained_artifacts::retention::publish_pending_original(&root, "check-original", relative, &raw,
+                if publication.is_none() && retained_artifacts::retention::publish_pending_original(paths.root, "check-original", relative, &raw,
                     serde_json::json!({"kind":"process-launch","child_pid":pid,"outcome":"not-established"})).map_err(|e|Failure::new("E_PROCESS_EVIDENCE",e))? { return Ok(()); }
                 let mut original = tempfile::NamedTempFile::new_in(
                     paths
@@ -1887,7 +1902,7 @@ fn run_process_inner_with_stdout(
                     error: detail,
                 }));
             }
-            process.launch_original = launch_descriptor(&process.cwd, paths.launch);
+            process.launch_original = launch_descriptor(paths.root, paths.launch);
         }
         tracing::debug!(
             event_id = "process.scope_exit",
@@ -2378,6 +2393,7 @@ fn execute_check(
             let stderr_path = no_symlink_parents(&root, stderr)?;
             let launch_path = no_symlink_parents(&root, launch)?;
             let evidence = ProcessEvidence {
+                root: &root,
                 stdout: &stdout_path,
                 stderr: &stderr_path,
                 launch: &launch_path,
@@ -2409,6 +2425,7 @@ fn execute_check(
         let evidence = evidence_paths
             .as_ref()
             .map(|(stdout, stderr, launch)| ProcessEvidence {
+                root: &root,
                 stdout,
                 stderr,
                 launch,
