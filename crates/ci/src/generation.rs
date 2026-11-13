@@ -629,7 +629,9 @@ pub fn resume(root: &Path, path: &str) -> Result<Value, String> {
     let role = format!("ci-generation-recovery:{path}");
     let expected = original["observed_return"]["result_record"].clone();
     if expected.is_null() {
-        return Ok(report);
+        let mut unknown = report;
+        unknown["completion"] = json!("unknown");
+        return Ok(unknown);
     }
     let attached = state.rooted_original(PRODUCER, &role)?;
     if original["phase"] == "released" && original["sealed"] == true {

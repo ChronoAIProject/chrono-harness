@@ -88,18 +88,22 @@ fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
         }
         let d = tempfile::tempdir().unwrap();
         json_file(d.path(), ".chrono-harness/ci/units.json", &value);
-        assert!(
-            generate(d.path(), ".chrono-harness/ci/units.json", false).is_err(),
-            "accepted {case}"
-        );
+        let error = generate(d.path(), ".chrono-harness/ci/units.json", false)
+            .expect_err(&format!("accepted {case}"));
         assert!(
             !d.path().join(".github").exists(),
             "wrote output for {case}"
         );
-        assert!(
-            !d.path().join(".chrono-harness/state").exists(),
-            "wrote state for {case}"
+        let operation = super::generation_operation(d.path());
+        let result: Value =
+            serde_json::from_slice(&fs::read(operation.join("result.json")).unwrap()).unwrap();
+        assert_eq!(
+            result["producer_evaluation"],
+            json!({"error":error}),
+            "{case}"
         );
+        assert_eq!(result["effects"], "not-started", "{case}");
+        assert_eq!(result["original_process_exit"], Value::Null, "{case}");
     }
 }
 

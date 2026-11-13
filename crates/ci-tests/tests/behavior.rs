@@ -340,7 +340,7 @@ fn interrupted_generation_resumes_only_a_returned_evaluation_and_never_replays_e
         assert_eq!(generation_operation(host.path()), operation);
         if matches!(point, "intent" | "prepared" | "effect") {
             assert_eq!(before.is_some(), point == "effect");
-            assert_ne!(result["completion"], "confirmed-evaluation");
+            assert_eq!(result["completion"], "unknown");
             assert!(!operation.join("result.json").exists());
         } else {
             assert!(before.is_some());
@@ -409,12 +409,35 @@ fn generation_terminal_records_retire_through_the_adopted_finite_policy() {
     let first = generation_operation(host.path());
     let first_path = first.strip_prefix(host.path()).unwrap().to_str().unwrap();
     assert!(!generate(host.path(), source, true).unwrap());
-    let report = chrono_ci::generation::maintain(host.path()).unwrap();
-    assert_eq!(report["quota_scope_complete"], true, "{report}");
-    assert_eq!(report["quota_errors"], json!([]), "{report}");
+    // Each maintenance call is one bounded mutation, not a synchronous drain.
+    // Keep the adopted limits and judge the physical and metadata retirement
+    // after a finite sequence of real rounds, retaining every original result.
+    let mut rounds = Vec::new();
+    for _ in 0..32 {
+        let report = chrono_ci::generation::maintain(host.path()).unwrap();
+        assert_eq!(report["quota_errors"], json!([]), "{rounds:?}; {report}");
+        assert_eq!(
+            report["round"]["accounting_errors"],
+            json!([]),
+            "{rounds:?}; {report}"
+        );
+        assert!(report["round"]["nodes"].as_u64().unwrap() <= 256);
+        rounds.push(report);
+        if !first.exists()
+            && chrono_ci::generation::status(host.path(), first_path).unwrap()["availability"]
+                == "unavailable-or-retired"
+        {
+            break;
+        }
+    }
+    assert!(
+        rounds
+            .iter()
+            .any(|report| report["quota_scope_complete"] == true)
+    );
     assert!(
         !first.exists(),
-        "expired original must be physically retired: {report}"
+        "expired original must be physically retired: {rounds:?}"
     );
     let retired = chrono_ci::generation::status(host.path(), first_path).unwrap();
     assert_eq!(retired["availability"], "unavailable-or-retired");
