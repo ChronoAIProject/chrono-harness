@@ -18,6 +18,10 @@ pub struct Object {
     pub bytes: u64,
 }
 
+pub open spec fn borrowed_object<'a>(object: &'a Option<Object>) -> Option<&'a Object> {
+    match object { Some(object) => Some(object), None => None }
+}
+
 pub open spec fn same_object_spec(first: Option<&Object>, second: Option<&Object>) -> bool {
     match (first, second) {
         (None, None) => true,
@@ -332,7 +336,7 @@ pub open spec fn target_final_result<S, P, E, O, W, N, R, D, F, M>(
     exists|state: S, observed: Result<Option<Object>, E>|
         #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
             Err(error) => out == (state, Err::<bool, E>(error)),
-            Ok(object) => if !published_digest(object.as_ref(), digest) {
+            Ok(object) => if !published_digest(borrowed_object(&object), digest) {
                 match out.1 {
                     Err(error) => io.mismatch.ensures((state, TargetMismatch::Published), (out.0, error)),
                     _ => false,
@@ -449,7 +453,7 @@ pub open spec fn target_staged_result<S, P, E, O, W, N, R, D, F, M>(
     exists|state: S, observed: Result<Option<Object>, E>|
         #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
             Err(error) => out == (state, Err::<bool, E>(error)),
-            Ok(object) => if !same_object_spec(object.as_ref(), before) {
+            Ok(object) => if !same_object_spec(borrowed_object(&object), before) {
                 match out.1 {
                     Err(error) => io.mismatch.ensures((state, TargetMismatch::Rename), (out.0, error)),
                     _ => false,
@@ -497,7 +501,7 @@ pub open spec fn target_installation_result<S, P, E, O, W, N, R, D, F, M>(
     exists|state: S, observed: Result<Option<Object>, E>|
         #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
             Err(error) => out == (state, Err::<bool, E>(error)),
-            Ok(object) => if !same_object_spec(object.as_ref(), before) {
+            Ok(object) => if !same_object_spec(borrowed_object(&object), before) {
                 match out.1 {
                     Err(error) => io.mismatch.ensures((state, TargetMismatch::Prepared), (out.0, error)),
                     _ => false,

@@ -536,20 +536,21 @@ fn target_case(missing: bool, write: bool, fail_at: u8, bad_at: u8, field: u8)
         },
     };
     let before = if missing { None } else { Some(object("prior\0id", "prior\0hash", 7)) };
+    let before_ref = before.as_ref();
     let initial: Vec<u8> = Vec::new();
     let ghost start = initial;
-    let (trace, result) = policy::install_target(initial, before.as_ref(), write, "after\0hash", &io);
+    let (trace, result) = policy::install_target(initial, before_ref, write, "after\0hash", &io);
     proof {
         let (first, observed) = choose|state: Vec<u8>, observed: Result<Option<policy::Object>, TargetFault>|
             #[trigger] io.observe.ensures((start,), (state, observed)) && match observed {
                 Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
-                Ok(value) => if !policy::same_object_spec(value.as_ref(), before.as_ref()) {
+                Ok(value) => if !policy::same_object_spec(policy::borrowed_object(&value), before_ref) {
                     match result { Err(error) => io.mismatch.ensures((state, policy::TargetMismatch::Prepared), (trace, error)), _ => false }
                 } else if !write { (trace, result) == (state, Ok::<bool, TargetFault>(false)) }
                 else { exists|next: Vec<u8>, staged: Result<(u64, u64), TargetFault>|
                     #[trigger] io.stage.ensures((state,), (next, staged)) && match staged {
                         Err(error) => (trace, result) == (next, Err::<bool, TargetFault>(error)),
-                        Ok(parent) => policy::target_staged_result(next, parent, before.as_ref(), "after\0hash", &io, (trace, result)),
+                        Ok(parent) => policy::target_staged_result(next, parent, before_ref, "after\0hash", &io, (trace, result)),
                     }
                 },
             };
@@ -557,14 +558,14 @@ fn target_case(missing: bool, write: bool, fail_at: u8, bad_at: u8, field: u8)
             let (staged_state, staged) = choose|next: Vec<u8>, staged: Result<(u64, u64), TargetFault>|
                 #[trigger] io.stage.ensures((first,), (next, staged)) && match staged {
                     Err(error) => (trace, result) == (next, Err::<bool, TargetFault>(error)),
-                    Ok(parent) => policy::target_staged_result(next, parent, before.as_ref(), "after\0hash", &io, (trace, result)),
+                    Ok(parent) => policy::target_staged_result(next, parent, before_ref, "after\0hash", &io, (trace, result)),
                 };
             if fail_at != 2 {
                 let parent = staged->Ok_0;
                 let (checked, observed) = choose|state: Vec<u8>, observed: Result<Option<policy::Object>, TargetFault>|
                     #[trigger] io.observe.ensures((staged_state,), (state, observed)) && match observed {
                         Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
-                        Ok(value) => if !policy::same_object_spec(value.as_ref(), before.as_ref()) {
+                        Ok(value) => if !policy::same_object_spec(policy::borrowed_object(&value), before_ref) {
                             match result { Err(error) => io.mismatch.ensures((state, policy::TargetMismatch::Rename), (trace, error)), _ => false }
                         } else { policy::target_publish_result(state, parent, missing, "after\0hash", &io, (trace, result)) },
                     };
@@ -590,7 +591,7 @@ fn target_case(missing: bool, write: bool, fail_at: u8, bad_at: u8, field: u8)
                             let (last, observed) = choose|state: Vec<u8>, observed: Result<Option<policy::Object>, TargetFault>|
                                 #[trigger] io.observe.ensures((synced_state,), (state, observed)) && match observed {
                                     Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
-                                    Ok(value) => if !policy::published_digest(value.as_ref(), "after\0hash") {
+                                    Ok(value) => if !policy::published_digest(policy::borrowed_object(&value), "after\0hash") {
                                         match result { Err(error) => io.mismatch.ensures((state, policy::TargetMismatch::Published), (trace, error)), _ => false }
                                     } else { exists|effect: (Vec<u8>, Result<(), TargetFault>)|
                                         #[trigger] io.effect.ensures((state, value), effect) && policy::target_effect_result(effect, (trace, result)) },
