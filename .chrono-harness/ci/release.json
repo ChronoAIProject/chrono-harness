@@ -489,7 +489,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/",
       "needs": [
         "linux_release_frontend",
-        "linux_build_judge_filemap",
         "linux_build_judge_routes",
         "linux_build_judge_projects",
         "linux_build_judge_workflow"
@@ -498,10 +497,6 @@
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "linux_build_judge_routes",
@@ -617,7 +612,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/",
       "needs": [
         "linux_release_frontend",
-        "linux_build_judge_filemap",
         "linux_build_judge_routes",
         "linux_build_judge_projects"
       ],
@@ -625,10 +619,6 @@
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "linux_build_judge_routes",
@@ -660,7 +650,6 @@
       "needs": [
         "linux_release_frontend",
         "linux_build_ci",
-        "linux_build_judge_filemap",
         "linux_build_judge_routes",
         "linux_build_judge_projects",
         "linux_build_inputs"
@@ -673,10 +662,6 @@
         {
           "job": "linux_build_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
-        },
-        {
-          "job": "linux_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "linux_build_judge_routes",
@@ -738,7 +723,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/",
       "needs": [
         "linux_release_frontend",
-        "linux_build_judge_filemap",
         "linux_build_judge_routes",
         "linux_build_judge_projects"
       ],
@@ -746,10 +730,6 @@
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "linux_build_judge_routes",
@@ -806,17 +786,12 @@
       "artifact_name": "chrono-release-linux-verify_judge_cost_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
       "needs": [
-        "linux_release_frontend",
-        "linux_build_judge_filemap"
+        "linux_release_frontend"
       ],
       "downloads": [
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         }
       ]
     },
@@ -838,17 +813,12 @@
       "artifact_name": "chrono-release-linux-verify_judge_mixed_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
       "needs": [
-        "linux_release_frontend",
-        "linux_build_judge_filemap"
+        "linux_release_frontend"
       ],
       "downloads": [
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         }
       ]
     },
@@ -1548,7 +1518,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_inputs_tests/",
       "needs": [
         "macos_release_frontend",
-        "macos_build_judge_filemap",
         "macos_build_judge_routes",
         "macos_build_judge_projects",
         "macos_build_judge_workflow"
@@ -1557,10 +1526,6 @@
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "macos_build_judge_routes",
@@ -1676,7 +1641,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_projects_tests/",
       "needs": [
         "macos_release_frontend",
-        "macos_build_judge_filemap",
         "macos_build_judge_routes",
         "macos_build_judge_projects"
       ],
@@ -1684,10 +1648,6 @@
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "macos_build_judge_routes",
@@ -1719,7 +1679,6 @@
       "needs": [
         "macos_release_frontend",
         "macos_build_ci",
-        "macos_build_judge_filemap",
         "macos_build_judge_routes",
         "macos_build_judge_projects",
         "macos_build_inputs"
@@ -1732,10 +1691,6 @@
         {
           "job": "macos_build_ci",
           "directory": ".chrono-harness/cache/release-handoffs/build_ci/"
-        },
-        {
-          "job": "macos_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "macos_build_judge_routes",
@@ -1797,7 +1752,6 @@
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_filemap_tests/",
       "needs": [
         "macos_release_frontend",
-        "macos_build_judge_filemap",
         "macos_build_judge_routes",
         "macos_build_judge_projects"
       ],
@@ -1805,10 +1759,6 @@
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         },
         {
           "job": "macos_build_judge_routes",
@@ -1865,17 +1815,12 @@
       "artifact_name": "chrono-release-macos-verify_judge_cost_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_cost_tests/",
       "needs": [
-        "macos_release_frontend",
-        "macos_build_judge_filemap"
+        "macos_release_frontend"
       ],
       "downloads": [
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         }
       ]
     },
@@ -1897,17 +1842,12 @@
       "artifact_name": "chrono-release-macos-verify_judge_mixed_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_judge_mixed_tests/",
       "needs": [
-        "macos_release_frontend",
-        "macos_build_judge_filemap"
+        "macos_release_frontend"
       ],
       "downloads": [
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_judge_filemap",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_filemap/"
         }
       ]
     },

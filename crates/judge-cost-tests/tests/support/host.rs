@@ -39,6 +39,8 @@ impl Host {
                 Path::new(env!("CARGO_BIN_EXE_chrono-harness-test-cli")).to_path_buf()
             } else if (project, binary) == ("judge-registration", "chrono-judge-registration") {
                 env!("CARGO_BIN_EXE_chrono-judge-registration-test-cli").into()
+            } else if (project, binary) == ("judge-filemap", "chrono-judge-filemap") {
+                env!("CARGO_BIN_EXE_chrono-judge-filemap-test-cli").into()
             } else if (project, binary) == ("judge-cost", "chrono-judge-cost") {
                 env!("CARGO_BIN_EXE_chrono-judge-cost-test-cli").into()
             } else {

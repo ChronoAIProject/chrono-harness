@@ -160,6 +160,7 @@ dependencies = [
  "chrono-harness",
  "chrono-identifiers",
  "chrono-judge-cost",
+ "chrono-judge-filemap",
  "chrono-judge-mixed",
  "chrono-judge-registration",
  "chrono-judge-workflow",
