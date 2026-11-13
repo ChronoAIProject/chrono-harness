@@ -267,6 +267,61 @@ pub fn admit_recovery_paths(config: &str, plan: &str) -> (out: Result<(), &'stat
     Ok(())
 }
 
+pub struct RecoveryReplay<'a> {
+    pub schema: Option<&'a str>,
+    pub plan_fields: Option<usize>,
+    pub plan_path: Option<&'a str>,
+    pub plan_sha256: Option<&'a str>,
+    pub steps_sha256: Option<&'a str>,
+    pub status: Option<&'a str>,
+}
+
+pub open spec fn recovery_replay_bound(report: &RecoveryReplay, path: &str,
+    plan_hash: &str, steps_hash: &str) -> bool
+{
+    recovery_text(report.schema) == Some("chrono-cache-recovery/v1"@)
+        && report.plan_fields == Some(2usize)
+        && recovery_text(report.plan_path) == Some(path@)
+        && recovery_text(report.plan_sha256) == Some(plan_hash@)
+        && recovery_text(report.steps_sha256) == Some(steps_hash@)
+}
+
+pub open spec fn recovery_replay_completed(report: &RecoveryReplay) -> bool {
+    recovery_text(report.status) == Some("recovered"@)
+        || recovery_text(report.status) == Some("not-required"@)
+}
+
+/// 先核完整输入绑定，再核原终态；错误保留原件地址全文。
+pub fn admit_recovery_replay<'a>(report: &RecoveryReplay, path: &str,
+    plan_hash: &str, steps_hash: &str, original_path: &'a str)
+    -> (out: Result<(), [&'a str; 2]>)
+    ensures match out {
+        Ok(()) => recovery_replay_bound(report, path, plan_hash, steps_hash)
+            && recovery_replay_completed(report),
+        Err(error) => if !recovery_replay_bound(report, path, plan_hash, steps_hash) {
+            error[0]@ == "E_CACHE_RECOVERY: previous recovery belongs to different inputs"@
+                && error[1]@ == ""@
+        } else {
+            !recovery_replay_completed(report)
+                && error[0]@ == "E_CACHE_RECOVERY: previous attempt failed; original "@
+                && error[1]@ == original_path@
+        },
+    },
+{
+    if !planner::same_attempt("chrono-cache-recovery/v1", report.schema)
+        || report.plan_fields != Some(2usize)
+        || !planner::same_attempt(path, report.plan_path)
+        || !planner::same_attempt(plan_hash, report.plan_sha256)
+        || !planner::same_attempt(steps_hash, report.steps_sha256) {
+        return Err(["E_CACHE_RECOVERY: previous recovery belongs to different inputs", ""]);
+    }
+    if !planner::same_attempt("recovered", report.status)
+        && !planner::same_attempt("not-required", report.status) {
+        return Err(["E_CACHE_RECOVERY: previous attempt failed; original ", original_path]);
+    }
+    Ok(())
+}
+
 }
 
 #[cfg(verus_keep_ghost)]
@@ -359,29 +414,28 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         + "/";
     let output = format!("{directory}recovery.json");
     let intent_path = format!("{directory}recovery-intent.json");
-    let binding = json!({"path":plan_path,"sha256":sha256(&plan_raw)});
+    let plan_hash = sha256(&plan_raw);
+    let binding = json!({"path":plan_path,"sha256":&plan_hash});
     let steps_hash = sha256(steps_raw.as_bytes());
     let output_file = no_symlink_parents(&root, &output)?;
     match fs::symlink_metadata(&output_file) {
         Ok(_) => {
             let (original, report) = retained(&root, plan_path)?;
-            if report["schema"] != "chrono-cache-recovery/v1"
-                || report["plan"] != binding
-                || report["native_steps"]["sha256"] != steps_hash
-            {
-                return Err(
-                    "E_CACHE_RECOVERY: previous recovery belongs to different inputs".into(),
-                );
-            }
-            if !matches!(
-                report["status"].as_str(),
-                Some("recovered" | "not-required")
-            ) {
-                return Err(format!(
-                    "E_CACHE_RECOVERY: previous attempt failed; original {}",
-                    original.path
-                ));
-            }
+            admit_recovery_replay(
+                &RecoveryReplay {
+                    schema: report["schema"].as_str(),
+                    plan_fields: report["plan"].as_object().map(serde_json::Map::len),
+                    plan_path: report["plan"]["path"].as_str(),
+                    plan_sha256: report["plan"]["sha256"].as_str(),
+                    steps_sha256: report["native_steps"]["sha256"].as_str(),
+                    status: report["status"].as_str(),
+                },
+                plan_path,
+                &plan_hash,
+                &steps_hash,
+                &original.path,
+            )
+            .map_err(|parts| parts.concat())?;
             // This is the previous operation's result, never a second deletion of
             // outputs that a later producer may already have rebuilt.
             return Ok(serde_json::to_string(
