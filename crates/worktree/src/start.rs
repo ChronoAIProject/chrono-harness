@@ -792,6 +792,8 @@ pub(crate) fn with_report_for_consumer<T>(
             .as_ref()
             .map(chrono_harness::retained_artifacts::retention::published_output_scope)
             .transpose()?
+    } else if let Some(publication) = &report_publication {
+        Some(chrono_harness::retained_artifacts::retention::publication_read_scope(publication)?)
     } else {
         Some(chrono_harness::retained_artifacts::retention::read_scope(
             root,
