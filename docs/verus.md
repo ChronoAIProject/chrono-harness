@@ -2429,16 +2429,27 @@ FILEMAP 将同源内核和独立预期分别绑定到 `verify.ci-generation`／
 当前固定入口在解析生产模块时报告 `E0432`／`E0433`：未链接 `chrono_harness`、
 `serde`、`serde_json`，并缺少 serde 属性。原报告为整 crate、`success=false`、
 `encountered-error=true`、`verified=0`；尚无本次成功编译库或有效 dep-info 绑定。
-`verified_verifier.rs` 的十二项参数是统一语义投影。现役 generation dependency 方法还登记
-edition、crate name、环境、搜索路径、extern、import/export 等完整参数；同源入口按固定选项
-语法解析这些参数，再把实际的 emit、源根、`-o` 输出和 checksum 投影到同一合同。未知选项、
-缺少配对值、重复尾部或不一致的 emit／输出关系拒绝。固定 Verus 的 `--import` 使用
-`name=path`，`--export` 使用直接路径，登记与这两个实际语义一致。原回执仍须逐项等于登记
-argv，依赖与库身份仍从同一成功进程取得。
+`verified_verifier.rs` 仍只准入十二项严格参数；其源根和编译输出选择也仍限于该形状。
+现役 runner dependency、adapter tests、consumer／missing 分别有 46、25、30／30 项，
+**完整方法／源／产物资格类修复尚未完成**。不能将完整 argv 丢弃 extern、import、环境、
+宏及搜索路径后投影成十二项，再用旧的源与库合同准入。缺少合格依赖的方法继续拒绝，
+原 `ProofAdmission`、整 crate、非零 verified、严格参数及编译器 checksum 要求不变。
 
-这项投影只修复方法、源根、输出和声明依赖的解释闭包；外部 crate、宏库、VIR 和传递库的
-完整同源证明仍须由现有 dependency owner 完成。单独提供普通 Cargo rlib 仍缺少仓内依赖的
-语义证明。
+E 仅修正三项 `--export` 登记值：固定 Verus 的 config.rs 原样保存 export，
+import_export.rs 将其直接转为文件路径；`--import` 才使用 `name=path`。
+原先的 `chrono_harness=…vir`／`ci_generation_dependency=…vir` 不会被 export 拆分。
+这项结论来自 D 固定工具源码；D 的实际失败尚未到达 export，不能称为观察过的写错路径。
+登记现在使用原定 VIR 的直接路径，不改输出身份、严格参数、线程或预算。
+VIR 可在 well-formed／solver 完成前写出，因此存在或摘要匹配仍不提供生产者成功保证。
+
+完整方法准入还需要同一实际生产者的源、rlib／dep-info、VIR、原报告与工具身份，
+并逐项覆盖 extern、import、必要宏及传递输入。routes 的现役回执只有原进程、
+`compiler_dependency` 和 `compiler_artifact`；原 typed `ProofAdmission` 只有报告和源码。
+现有 Cargo-Verus／proved-build 绑定仍有用途：`runner-build.json` 绑定 identifiers 库和
+runner 二进制，不能据此授予全部 runner 依赖或其 VIR 证明资格。E 没有新增资格字段、
+受信例外或替代成功路径；完整修复与其独立 Rust／Verus 预期仍须由现有所有者继续完成。
+具体缺口、现役调用、F 的预期和保留边界见
+[CI generation 依赖候选](../.chrono-harness/experiments/ci-generation-dependencies.md#e-输出登记修复与未完成的方法类)。
 现有 `Object` 的 serde 派生仅在普通 Rust 下启用；真实 Serde 编解码如何在严格编译中绑定，
 也尚未验收。未链接之前，后续类型、外部接口及函数证明的工具支持均保持未知。
 
