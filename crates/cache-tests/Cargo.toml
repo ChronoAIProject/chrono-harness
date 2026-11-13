@@ -36,5 +36,9 @@ path = "tests/support/probe.rs"
 test = false
 bench = false
 
+# Keep the actual cache CLI and its test CLI on the same development profile.
+[profile.dev]
+opt-level = 1
+
 [profile.dev.package.sha2]
 opt-level = 3
