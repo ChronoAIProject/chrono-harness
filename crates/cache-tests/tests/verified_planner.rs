@@ -21,6 +21,177 @@ mod continuity;
 
 verus! {
 
+fn recovery_preserves_cache_status(status: Option<&str>)
+    requires policy::recovery_text(status) != Some("pending"@),
+{
+    match policy::complete_recovery_cache(status) {
+        None => (),
+        Some(_) => panic!("non-pending cache status changed"),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_completes_only_the_exact_pending_cache_status() {
+    proof {
+        reveal_strlit("pending"); reveal_strlit("Pending"); reveal_strlit("pending\0");
+        reveal_strlit(""); reveal_strlit("discarded"); reveal_strlit("状态/λ");
+        assert("pending"@.len() == 7); assert("pending\0"@.len() == 8);
+        assert(""@.len() == 0); assert("discarded"@.len() == 9);
+        assert("状态/λ"@.len() == 4);
+        assert("pending"@[0] != "Pending"@[0]);
+    }
+    match policy::complete_recovery_cache(Some("pending")) {
+        Some(status) => expect_restore_text(status, "discarded"),
+        None => panic!("completed pending cache left pending"),
+    }
+    recovery_preserves_cache_status(None);
+    recovery_preserves_cache_status(Some(""));
+    recovery_preserves_cache_status(Some("discarded"));
+    recovery_preserves_cache_status(Some("Pending"));
+    recovery_preserves_cache_status(Some("pending\0"));
+    recovery_preserves_cache_status(Some("状态/λ"));
+}
+
+fn recovery_failure_precedes_cache_effects(summary: &policy::RecoverySummary) {
+    expect_restore_text(summary.status(true), "failed");
+}
+
+fn recovery_changed_cache_recovers(status: &str)
+    requires status@ == "discarded"@ || status@ == "source-times-refreshed"@,
+{
+    let summary = policy::RecoverySummary::new()
+        .observe_cache(Some(status), None)
+        .observe_cache(None, None)
+        .observe_cache(Some("unknown"), None)
+        .observe_cache(Some(status), None);
+    expect_restore_text(summary.status(false), "recovered");
+    recovery_failure_precedes_cache_effects(&summary);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_report_prioritizes_failure_and_recognizes_both_completed_effects() {
+    recovery_failure_precedes_cache_effects(&policy::RecoverySummary::new());
+    recovery_changed_cache_recovers("discarded");
+    recovery_changed_cache_recovers("source-times-refreshed");
+    let summary = policy::RecoverySummary::new()
+        .observe_cache(Some("source-times-refreshed"), None)
+        .observe_cache(Some("discarded"), None)
+        .observe_cache(None, None);
+    expect_restore_text(summary.status(false), "recovered");
+    recovery_failure_precedes_cache_effects(&summary);
+}
+
+fn recovery_unchanged_cache_requires_no_recovery(status: &str)
+    requires status@ != "discarded"@, status@ != "source-times-refreshed"@,
+{
+    let summary = policy::RecoverySummary::new()
+        .observe_cache(None, None)
+        .observe_cache(Some(status), None)
+        .observe_cache(Some(status), None);
+    expect_restore_text(summary.status(false), "not-required");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_report_preserves_empty_unknown_case_and_nul_status_boundaries() {
+    proof {
+        reveal_strlit("discarded"); reveal_strlit("Discarded"); reveal_strlit("discarded\0");
+        reveal_strlit("source-times-refreshed"); reveal_strlit("source-times-refreshed\0");
+        reveal_strlit(""); reveal_strlit("pending"); reveal_strlit("状态/λ");
+        assert("discarded"@.len() == 9); assert("discarded\0"@.len() == 10);
+        assert("source-times-refreshed"@.len() == 22);
+        assert("source-times-refreshed\0"@.len() == 23);
+        assert(""@.len() == 0); assert("pending"@.len() == 7);
+        assert("状态/λ"@.len() == 4);
+        assert("discarded"@[0] != "Discarded"@[0]);
+        assert("Discarded"@.len() == 9);
+    }
+    expect_restore_text(policy::RecoverySummary::new().status(false), "not-required");
+    recovery_unchanged_cache_requires_no_recovery("");
+    recovery_unchanged_cache_requires_no_recovery("pending");
+    recovery_unchanged_cache_requires_no_recovery("Discarded");
+    recovery_unchanged_cache_requires_no_recovery("discarded\0");
+    recovery_unchanged_cache_requires_no_recovery("source-times-refreshed\0");
+    recovery_unchanged_cache_requires_no_recovery("状态/λ");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_warning_accepts_failed_restores_or_removed_artifacts_after_recovery() {
+    let failed = policy::RecoverySummary::new()
+        .observe_cache(Some("discarded"), None)
+        .observe_cache(None, Some("failure"));
+    if !failed.warning(Some("recovered")) {
+        panic!("recovered failed restore did not warn");
+    }
+    let removed = policy::RecoverySummary::new()
+        .observe_cache(Some("source-times-refreshed"), None)
+        .observe_artifact(Some("removed"))
+        .observe_artifact(None);
+    if !removed.warning(Some("recovered")) {
+        panic!("recovered removed artifact did not warn");
+    }
+    let combined = policy::RecoverySummary::new()
+        .observe_cache(Some("discarded"), Some("failure"))
+        .observe_cache(None, Some("failure"))
+        .observe_artifact(Some("removed"));
+    if !combined.warning(Some("recovered")) {
+        panic!("combined recovery effects did not warn");
+    }
+    if policy::RecoverySummary::new().warning(Some("recovered")) {
+        panic!("recovery without a failed restore or removal warned");
+    }
+}
+
+fn recovery_nonterminal_status_never_warns(status: Option<&str>)
+    requires policy::recovery_text(status) != Some("recovered"@),
+{
+    let summary = policy::RecoverySummary::new()
+        .observe_cache(Some("discarded"), Some("failure"))
+        .observe_artifact(Some("removed"));
+    if summary.warning(status) {
+        panic!("unrecovered report warned despite failed restore and removal");
+    }
+}
+
+fn recovery_other_effects_never_warn(outcome: Option<&str>, artifact: Option<&str>)
+    requires policy::recovery_text(outcome) != Some("failure"@),
+        policy::recovery_text(artifact) != Some("removed"@),
+{
+    let summary = policy::RecoverySummary::new()
+        .observe_cache(None, None)
+        .observe_cache(Some("source-times-refreshed"), outcome)
+        .observe_artifact(artifact)
+        .observe_artifact(None);
+    if summary.warning(Some("recovered")) {
+        panic!("unknown restore outcome or artifact status counted as recovery effect");
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_warning_preserves_report_outcome_and_artifact_text_boundaries() {
+    proof {
+        reveal_strlit("recovered"); reveal_strlit("Recovered"); reveal_strlit("recovered\0");
+        reveal_strlit("failure"); reveal_strlit("Failure"); reveal_strlit("failure\0");
+        reveal_strlit("removed"); reveal_strlit("Removed"); reveal_strlit("removed\0");
+        reveal_strlit(""); reveal_strlit("状态/λ");
+        assert("recovered"@.len() == 9); assert("recovered\0"@.len() == 10);
+        assert("failure"@.len() == 7); assert("failure\0"@.len() == 8);
+        assert("removed"@.len() == 7); assert("removed\0"@.len() == 8);
+        assert(""@.len() == 0); assert("状态/λ"@.len() == 4);
+        assert("recovered"@[0] != "Recovered"@[0]);
+        assert("failure"@[0] != "Failure"@[0]);
+        assert("removed"@[0] != "Removed"@[0]);
+    }
+    recovery_nonterminal_status_never_warns(None);
+    recovery_nonterminal_status_never_warns(Some(""));
+    recovery_nonterminal_status_never_warns(Some("Recovered"));
+    recovery_nonterminal_status_never_warns(Some("recovered\0"));
+    recovery_other_effects_never_warn(None, None);
+    recovery_other_effects_never_warn(Some(""), Some(""));
+    recovery_other_effects_never_warn(Some("Failure"), Some("Removed"));
+    recovery_other_effects_never_warn(Some("failure\0"), Some("removed\0"));
+    recovery_other_effects_never_warn(Some("状态/λ"), Some("状态/λ"));
+}
+
 fn replay_observation<'a>(path: &'a str, plan_hash: &'a str, steps_hash: &'a str,
     status: Option<&'a str>) -> (out: policy::RecoveryReplay<'a>)
     ensures out.schema == Some("chrono-cache-recovery/v1"), out.plan_fields == Some(2usize),
