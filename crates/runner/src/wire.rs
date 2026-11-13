@@ -43,7 +43,12 @@ pub fn judge_main(name: &str, version: &str, judge: impl FnOnce(&Request) -> Res
         let response = judge(&req);
         match canonical(&response) {
             Ok(bytes) => {
-                if std::io::stdout().write_all(&bytes).is_err() {
+                let mut stdout = std::io::stdout().lock();
+                if stdout
+                    .write_all(&bytes)
+                    .and_then(|()| stdout.flush())
+                    .is_err()
+                {
                     return 2;
                 }
             }
