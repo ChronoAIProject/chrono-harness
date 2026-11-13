@@ -27,6 +27,17 @@ fn object(identity: &str, sha256: &str, bytes: u64) -> (out: policy::Object)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn generation_objects_preserve_presence_identity_digest_and_length() {
+    proof {
+        reveal_strlit("16777231:42:file");
+        reveal_strlit("16777231:43:file");
+        reveal_strlit("original-digest");
+        reveal_strlit("different-digest");
+        reveal_strlit("目录\0原件\n");
+        reveal_strlit("目录");
+        assert("16777231:42:file"@[10] != "16777231:43:file"@[10]);
+        assert("original-digest"@[0] != "different-digest"@[0]);
+        assert("目录\0原件\n"@.len() != "目录"@.len());
+    }
     let original = object("16777231:42:file", "original-digest", 7);
     let same = object("16777231:42:file", "original-digest", 7);
     let replaced = object("16777231:43:file", "original-digest", 7);
