@@ -1446,10 +1446,13 @@ pub fn validate_selected_roots<'a>(
     let mut i = 0;
     while i < files.len()
         invariant 0 <= i <= files.len(),
+            files@ == inventory.entries@,
+            require_classification == matches!(inventory.require_new_file_classification, Some(true)),
             selected_plan_error(files@, nodes@, methods@, scopes@, require_classification, 0)
                 == selected_plan_error(files@, nodes@, methods@, scopes@, require_classification, i as int),
         decreases files.len() - i,
     {
+        reveal_with_fuel(selected_plan_error, 2);
         match validate_file_plan(&files[i], nodes, methods, scopes, require_classification) {
             Ok(()) => {},
             Err(error) => { return Err(error); },
