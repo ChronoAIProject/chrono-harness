@@ -256,11 +256,39 @@ Release 公开、非 draft、prerelease，共 34 个资产。`release.json` 为 
 
 ### runner 与技能源交付的后续观察
 
-修复 PR #1088 已合入 dev，提交为 `05a9fbee9b140f9d66c5dfc908264783cca0b46a`。PR CI `43515669330/1` 的受验候选为 `ada545eae68fbaa8a7fbab68af5cca687e74e24b`，其 tree 与实际落地同为 `37745aed90d2126f59fd8f8db53c4af37db3c15f`；所选单元原件和进程流已核对。dev collection `43517549958` 与 CodeQL `43517548942` 均成功。原 watch 因网络超时退出 1，随后按同一 run 核到真实成功，不能将传输错误写成 CI 失败。自动发布 `43520283683` 已启动，其实际 source 仍须从原 frontend 核对，Linux 原故障仍待包含修复的新 preview 复验。
+修复 PR #1088 已合入 dev，提交为 `05a9fbee9b140f9d66c5dfc908264783cca0b46a`。PR CI `43515669330/1` 的受验候选为 `ada545eae68fbaa8a7fbab68af5cca687e74e24b`，其 tree 与实际落地同为 `37745aed90d2126f59fd8f8db53c4af37db3c15f`；所选单元原件和进程流已核对。dev collection `43517549958` 与 CodeQL `43517548942` 均成功。原 watch 因网络超时退出 1，随后按同一 run 核到真实成功，不能将传输错误写成 CI 失败。自动发布 `43520283683` 已启动，公开发行仍待整轮及安装验收。已从两平台 runner 原日志核到实际 `CHRONO_RELEASE_SOURCE=05a9fbee…`，原读取失败用例和 `producer_fixture_requires_explicit_mode` 均通过；Linux/macOS job 分别为 `132213282071`、`132213356823`，均成功。旧 retention 失败仍未闭环。
 
-技能源与第十四／十五轮证据 PR #1089 已通过 CI `43515995397/1` 并合入 integration `45fe1868904f7f815361551007494ecfd907120d`。受验 `4db267c532d9a6c5ce867c83a2e932d8902194cb` 与合并树同为 `a90f4361bf2afaca4268dec0afa1c2716a5e0507`；六个所选单元的原报告及全部业务进程流已核。随后 #1090 已通过 CI `43518314086/1` 并自动合入 dev `3a8c12129e98009b16f66e560772c29f340b661b`。受验 `d307c7d97b809507786d7fd711ec4fab2e363299` 与落地 tree 同为 `d7369029e9f7f2fab4325e01838af80289f1302a`，六个所选单元原件已核。本地 canonical 退出 0，dev collection `43520489128` 已成功，CodeQL `43520488265` 仍沿原句柄等待，个人技能副本待落地验收后同步。原等待因 401 中断，保留错误后重新连接同一运行 `43518314086`，没有重新派发 CI。
+技能源与第十四／十五轮证据 PR #1089 已通过 CI `43515995397/1` 并合入 integration `45fe1868904f7f815361551007494ecfd907120d`。受验 `4db267c532d9a6c5ce867c83a2e932d8902194cb` 与合并树同为 `a90f4361bf2afaca4268dec0afa1c2716a5e0507`；六个所选单元的原报告及全部业务进程流已核。随后 #1090 已通过 CI `43518314086/1` 并自动合入 dev `3a8c12129e98009b16f66e560772c29f340b661b`。受验 `d307c7d97b809507786d7fd711ec4fab2e363299` 与落地 tree 同为 `d7369029e9f7f2fab4325e01838af80289f1302a`，六个所选单元原件已核。本地 canonical、dev collection `43520489128` 与 CodeQL `43520488265` 均成功，落地原报告及业务进程流已核验。个人 skill 已同步固定提交生成的原字节：blob `9684519dd4bf95b47ab144f572976c9016ef38de`，14090 bytes，SHA-256 `57fa3022ca5aaf3ee912c1382f85f01fcc0c84fd8456750e21a037bd0abb78d6`，旧副本另存保全。原等待因 401 中断，保留错误后重新连接同一运行 `43518314086`，没有重新派发 CI。
 
 retention 原失败进一步核对为：八轮均无 accounting error，四轮完成处置，另四轮是有界部分处置，仍未达到零个剩余 fixture 输出。每轮 `remaining_outputs` 为 null、scope incomplete；这证明有进展，不能证明已经达到验收，也不足以独立归因于时间上限或判定测试要求多余。没有增加预算、轮数或盲重跑。旧失败原因、bootstrap retention migration unknown 及 stable 安装 skipped 继续保留。
+
+## 第十七轮 `25c3d192…` preview（2026-11-14）
+
+本轮沿用成功发布 `43515733780/1`，固定版本为 `v0.1.5-dev.43513126210.1.g25c3d192687b1d416ab9fc7efc574c81311aac59`，source 为 `25c3d192687b1d416ab9fc7efc574c81311aac59`，tree 为 `7993ae5dd4f8d44e9d04513d1e9610061884b5c7`，landing collection 为 `43513126210`。发布 workflow head 是 `34e04b0d166c24d750d9ec21f215212e522b9d56`，两端 workflow blob 同为 `ce38fbe5b0ced74709141b9ee43f26f4865cd124`；已核标签指向实际 source，没有重复发布。
+
+Release 公开、非 draft、prerelease，共 34 个资产。`release.json` 为 6649 bytes／`df99aa7bb88711f6422bec883b542ca6d547529fa9b052c257804eb6d645185f`，`install.sh` 为 5186 bytes／`24906f786c54c4c356e82922f73050d4ff5280f78d5ded7377e93a2955c75dd1`。Linux/macOS installer 分别为 1660576 bytes／`006651f2331bae218bd00b47f2409a1759ca14034e318b75fc6ccdf702cfbd7d` 和 1329600 bytes／`301a6d248c7a08d97bd6401c7a32dfa89f4f49548e04b18808a7d0630271b32a`。已核全部资产的 API 摘要／长度与清单一致，且下载核对清单、脚本和两平台 installer 原字节；两平台发布安装回执的源码、清单及全部 16 个工具均匹配。
+
+四仓从第十六轮 dev 基线通过正式 start 创建 feature／integration，使用候选安装器显式采用版本；完整工具映射、宿主指南语言、业务和 SDK 定制均保留。适用 bootstrap、指南生成、CI verify、本地 canonical 和两段 PR 原报告均通过并核原输出，实际合并树与受验树一致。
+
+| 下游 | feature head / PR | integration merge / dev PR |
+| --- | --- | --- |
+| Go | `9b59030e256ba4534ff4ed097c90c9e3a835194b` / #98 | `740eb82ca0f95e7c6dabc0b505b5dd3b39e32c47` / #99 |
+| TypeScript | `c6f68f9648a8138e97f1302f9075cd88003285f5` / #93 | `a0667de7ac72efe982da4d60f2aee6691ee91084` / #94 |
+| 混合语言 | `941eeab35700e3675af448256553291720883913` / #93 | `ce4dd887513d54421b11565d98d71e2a93545861` / #94 |
+| 首次接入 | `f21686725b24a5978284246eda903ff0ccd1f3d0` / #86 | `7f28c07c918fd135cef5d17f1651bd506803f1d1` / #87 |
+
+| 下游 | dev SHA | dev 业务／宿主检查 | dev CodeQL |
+| --- | --- | --- | --- |
+| Go | `c4efd2aeda0cceb38058b80c8eda2fecd1f4712a` | `43522810161`，成功 | `43522808828`，成功 |
+| TypeScript | `7c72d676f0a1773a61d03cd62317a75426674b30` | `43522824568`，成功 | `43522823829`，成功 |
+| 混合语言 | `81bacf904b5e8dee4980652faa1e3f3079a1ea00` | `43522839026`，成功 | `43522838665`，成功 |
+| 首次接入 | `09d52691bba0d53e23f5cfe5a19e50f6fef2989f` | `43522857747`，成功 | `43522855610`，成功 |
+
+四仓 dev 的原报告、完整所选单元及业务进程 stdout/stderr、摘要、长度、退出和 join 状态均已核验。Go 执行 rates 构建／测试及 bootstrap；TypeScript 执行 labels 类型检查／测试及 bootstrap；混合仓另执行 invoice、normalize 和 rates；前三仓也执行 `ci.verify`。首次接入为 macOS 无业务单元宿主检查，不宣称完成 Linux 检查。固定 dev 的安装声明均匹配本轮清单、两平台 installer 及上一轮完整 16 工具映射。前三仓 dev 原生日志分别保留 4、4、6 份实际 Linux 安装回执；首次接入 artifact 保留 macOS 安装回执，全部逐项核源码、版本、清单及工具原字节身份。
+
+原件位于 `/tmp/chrono-43513126210-KIND-landing-originals/`，对应 `-landing-originals-verified.json`、`-landing-distribution.json` 和 `-landing-install-receipts.json` 为本轮原件消费结果；最终对账为 `/tmp/chrono-43513126210-final-accounting.json`。远端来源仍是上述固定 GitHub runs／artifacts。本候选不含后续 runner 修复，不能用它证明旧 `ETXTBSY` 已修复。
+
+含 runner 修复的后续发布 `43520283683` 已从同一 run 回读到整体 success，publish `132221905194`、macOS install `132223344002`、Linux install `132223344101` 均成功。原 watch 因网络读取超时退出 1，保留原错误；没有重新派发。公开资产和安装原回执仍须独立核验，当前不提前宣布该候选已完成四仓采用。
 
 ## 稳定门槛与下一轮
 
