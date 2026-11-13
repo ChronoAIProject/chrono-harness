@@ -386,6 +386,16 @@ fn finish_target<S, P, E, O, W, N, R, D, F, M>(
     out
 }
 
+pub open spec fn target_publication_step<S, P, E, N, R>(
+    initial: S, parent: P, missing: bool, create: N, replace: R,
+    observed: (S, Result<(), E>),
+) -> bool
+    where N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+{
+    if missing { create.ensures((initial, &parent), observed) }
+    else { replace.ensures((initial, &parent), observed) }
+}
+
 pub open spec fn target_publish_result<S, P, E, O, W, N, R, D, F, M>(
     initial: S, parent: P, missing: bool, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
     out: (S, Result<bool, E>),
@@ -396,8 +406,8 @@ pub open spec fn target_publish_result<S, P, E, O, W, N, R, D, F, M>(
           M: Fn(S, TargetMismatch) -> (S, E),
 {
     exists|state: S, published: Result<(), E>|
-        (if missing { #[trigger] io.create.ensures((initial, &parent), (state, published)) }
-            else { #[trigger] io.replace.ensures((initial, &parent), (state, published)) })
+        #[trigger] target_publication_step(initial, parent, missing, io.create, io.replace,
+            (state, published))
         && match published {
             Err(error) => out == (state, Err::<bool, E>(error)),
             Ok(()) => exists|next: S, synced: Result<(), E>|
@@ -424,6 +434,8 @@ fn publish_target<S, P, E, O, W, N, R, D, F, M>(
     let ghost original_publish = published;
     assert(if missing { io.create.ensures((initial, &parent), (after_publish, original_publish)) }
         else { io.replace.ensures((initial, &parent), (after_publish, original_publish)) });
+    assert(target_publication_step(initial, parent, missing, io.create, io.replace,
+        (after_publish, original_publish)));
     let out = match published {
         Err(error) => {
             let out = (state, Err(error));

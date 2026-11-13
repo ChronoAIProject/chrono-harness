@@ -571,8 +571,8 @@ fn target_case(missing: bool, write: bool, fail_at: u8, bad_at: u8, field: u8)
                     };
                 if fail_at != 3 && bad_at != 3 {
                     let (published_state, published) = choose|state: Vec<u8>, published: Result<(), TargetFault>|
-                        (if missing { #[trigger] io.create.ensures((checked, &parent), (state, published)) }
-                            else { #[trigger] io.replace.ensures((checked, &parent), (state, published)) })
+                        #[trigger] policy::target_publication_step(checked, parent, missing,
+                            io.create, io.replace, (state, published))
                         && match published {
                             Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
                             Ok(()) => exists|next: Vec<u8>, synced: Result<(), TargetFault>|
