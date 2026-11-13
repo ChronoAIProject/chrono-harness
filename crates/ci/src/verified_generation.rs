@@ -422,8 +422,14 @@ fn publish_target<S, P, E, O, W, N, R, D, F, M>(
     let (state, published) = if missing { (io.create)(state, &parent) } else { (io.replace)(state, &parent) };
     let ghost after_publish = state;
     let ghost original_publish = published;
+    assert(if missing { io.create.ensures((initial, &parent), (after_publish, original_publish)) }
+        else { io.replace.ensures((initial, &parent), (after_publish, original_publish)) });
     let out = match published {
-        Err(error) => (state, Err(error)),
+        Err(error) => {
+            let out = (state, Err(error));
+            assert(target_publish_result(initial, parent, missing, digest, io, out));
+            out
+        },
         Ok(()) => {
             let (state, synced) = (io.sync)(state, parent);
             let ghost after_sync = state;
@@ -438,11 +444,10 @@ fn publish_target<S, P, E, O, W, N, R, D, F, M>(
                     Err(error) => out == (next, Err::<bool, E>(error)),
                     Ok(()) => target_final_result(next, digest, io, out),
                 });
+            assert(target_publish_result(initial, parent, missing, digest, io, out));
             out
         },
     };
-    assert(if missing { io.create.ensures((initial, &parent), (after_publish, original_publish)) }
-        else { io.replace.ensures((initial, &parent), (after_publish, original_publish)) });
     assert(target_publish_result(initial, parent, missing, digest, io, out));
     out
 }
