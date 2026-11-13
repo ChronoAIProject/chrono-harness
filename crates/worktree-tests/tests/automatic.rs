@@ -52,6 +52,9 @@ fn absent_enrollment_requires_exact_registered_kind_and_no_other_attachment() {
         reveal_strlit("birth"); reveal_strlit("import"); reveal_strlit("");
         reveal_strlit("birth\0"); reveal_strlit("HEAD"); reveal_strlit("HEAD\0");
         reveal_strlit("refs/heads/task");
+        assert(""@.len() != "birth"@.len());
+        assert(""@.len() != "import"@.len());
+        assert("birth\0"@.len() != "birth"@.len());
         assert("birth\0"@[0] != "import"@[0]);
         assert("refs/heads/task"@.len() != "HEAD"@.len());
         assert("HEAD\0"@.len() != "HEAD"@.len());

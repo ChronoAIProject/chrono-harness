@@ -50,16 +50,22 @@ pub fn missing_cache_observation() -> (observation: MissingCacheObservation)
 }
 
 #[cfg(not(verus_keep_ghost))]
+#[path = "automatic/age.rs"]
 mod age;
 #[cfg(not(verus_keep_ghost))]
+#[path = "automatic/cache_adoption.rs"]
 mod cache_adoption;
 #[cfg(not(verus_keep_ghost))]
+#[path = "automatic/migration.rs"]
 mod migration;
 #[cfg(not(verus_keep_ghost))]
+#[path = "automatic/owner_deployment.rs"]
 mod owner_deployment;
 #[cfg(not(verus_keep_ghost))]
+#[path = "automatic/producer.rs"]
 mod producer;
 #[cfg(not(verus_keep_ghost))]
+#[path = "automatic/retirement.rs"]
 mod retirement;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_lifecycle::{Disposition, select_artifact};
