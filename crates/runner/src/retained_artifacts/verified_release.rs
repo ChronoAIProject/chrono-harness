@@ -408,6 +408,14 @@ pub fn global_maintenance(originals: Option<&[String]>) -> (global: bool)
     match originals { None => true, Some(_) => false }
 }
 
+/// The explicit sweep retains bounded observation bytes, without overflowing
+/// when an individual observation cannot fit its remaining report capacity.
+pub fn observation_bytes_fit(used: u64, next: u64, maximum: u64) -> (fits: bool)
+    ensures fits == (used as int + next as int <= maximum as int),
+{
+    used <= maximum && next <= maximum - used
+}
+
 
 pub fn observation_role(trimmed_role: &str, role_bytes: usize, attempt: u64) -> (ok: bool)
     ensures ok == (0 < trimmed_role@.len() && role_bytes <= 256 && attempt > 0),

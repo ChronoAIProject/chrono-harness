@@ -436,6 +436,18 @@ fn release_requires_closed_users_and_keeps_original_size_boundary() {
 
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn sweep_observation_capacity_accepts_exact_fit_and_rejects_overflow() {
+    expect_true(policy::observation_bytes_fit(0, 0, 0));
+    expect_true(policy::observation_bytes_fit(0, 65536, 65536));
+    expect_true(policy::observation_bytes_fit(65535, 1, 65536));
+    expect_true(!policy::observation_bytes_fit(65536, 1, 65536));
+    expect_true(!policy::observation_bytes_fit(1, 0, 0));
+    expect_true(policy::observation_bytes_fit(u64::MAX, 0, u64::MAX));
+    expect_true(!policy::observation_bytes_fit(u64::MAX, 1, u64::MAX));
+    expect_true(!policy::observation_bytes_fit(1, u64::MAX, u64::MAX));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn object_order_and_returned_command_have_independent_boundaries() {
     let reserve = policy::observation_owner(false,true,true);
     let ordinary = policy::observation_owner(false,false,true);
