@@ -31,7 +31,7 @@ v3 将输入范围标为 `declared-complete` 时，必须提供 `bindings`，每
 
 macOS 27 不把某次源码 bootstrap 的安装摘要作为后续构建的固定预期。旧安装文件输入、对应绑定引用和配置专属 FILEMAP 边已删除；当前 `chrono-ci`、`chrono-worktree` 的工具名、版本及使用方继续由现有登记负责。本次安装的文件身份由实际 bootstrap／检查报告产生，按其使用方与保留期使用，不复制回跟踪政策。
 
-本仓当前 scoped 入口没有调用已安装的 `chrono-inputs`，因此 core 的获取、构建、安装、共享传递及宿主工具声明一同移除。inputs 专属测试由 Cargo 从唯一生产 `main.rs` 编译测试 CLI；workflow 的三个测试组仍构建并运行生产 inputs CLI，继续使用 `check.inputs` 缓存。发布保留生产资产。未来采用完整输入采集时，须由实际入口登记所需安装，不能据此为当前单元预先准备。
+本仓当前 scoped 入口没有调用已安装的 `chrono-inputs`，因此 core 的获取、构建、安装、共享传递及宿主工具声明一同移除。inputs 与 workflow 专属测试都由各自 Cargo target 从唯一生产 `main.rs` 编译 inputs 测试 CLI，保留真实 capture 调用；三个 workflow 计划删除重复生产构建，无使用方的 `check.inputs` 缓存及订阅同步退役。发布保留生产资产。未来采用完整输入采集时，须由实际入口登记所需安装，不能据此为当前单元预先准备。
 
 macOS 27 的 tar 使用 `expected_version: null`，负责现役解包操作。Verus 下载和包摘要校验由 `host.verus-download` 委托 Rust bootstrap 程序完成；外层不再重复调用 shasum 或登记其专属工具槽位。curl 路径由下载操作的参数指定，外层工具表不重复登记没有直接 action 的 curl。Verus 的所选版本、下载地址、摘要和证明结果合同归现役 bootstrap／项目操作。无实际使用方的 `CHRONO_XCODE_CONTENTS` 不进入环境。SDK、开发目录和链接器不覆盖为某一 Xcode 安装的绝对路径；沿已登记变量继承当前选择，未设置时由既有 Rust／Cargo 和 Xcode 工具选择。这些取舍不补齐 full 输入或执行物绑定。
 

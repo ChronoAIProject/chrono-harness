@@ -12,6 +12,7 @@ test = false
 bench = false
 
 [dependencies]
+chrono-inputs = { path = "../inputs" }
 chrono-judge-projects = { path = "../judge-projects" }
 chrono-judge-routes = { path = "../judge-routes" }
 chrono-judge-filemap = { path = "../judge-filemap" }
@@ -142,5 +143,11 @@ bench = false
 [[bin]]
 name = "chrono-judge-projects-test-cli"
 path = "../judge-projects/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-inputs-test-cli"
+path = "../inputs/src/main.rs"
 test = false
 bench = false

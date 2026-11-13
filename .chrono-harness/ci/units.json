@@ -877,7 +877,6 @@
         "consumer": "check.unit_judge-workflow",
         "caches": [
           "check.ci",
-          "check.inputs",
           "check.judge-workflow-tests"
         ],
         "save_caches": [
@@ -897,12 +896,10 @@
         ],
         "consumer": "check.unit_inputs",
         "caches": [
-          "check.inputs-tests",
-          "check.judge-workflow"
+          "check.inputs-tests"
         ],
         "save_caches": [
-          "check.inputs-tests",
-          "check.judge-workflow"
+          "check.inputs-tests"
         ]
       },
       "unit_distribution": {
@@ -958,7 +955,6 @@
         "consumer": "check.unit_judge-workflow-units",
         "caches": [
           "check.ci",
-          "check.inputs",
           "check.judge-workflow-tests.judge-workflow-units"
         ],
         "save_caches": [
@@ -979,7 +975,6 @@
         "consumer": "check.unit_judge-workflow-short",
         "caches": [
           "check.ci",
-          "check.inputs",
           "check.judge-workflow-tests.judge-workflow-short"
         ],
         "save_caches": [

@@ -12,9 +12,17 @@ use support::*;
 
 fn fixture() -> Host {
     let mut h = Host::new(true);
-    for (id, deps) in [
-        ("cost", vec!["registration", "filemap"]),
-        ("mixed", vec!["registration", "filemap", "cost"]),
+    for (id, deps, original) in [
+        (
+            "cost",
+            vec!["registration", "filemap"],
+            env!("CARGO_BIN_EXE_chrono-judge-cost-test-cli"),
+        ),
+        (
+            "mixed",
+            vec!["registration", "filemap", "cost"],
+            env!("CARGO_BIN_EXE_chrono-judge-mixed-test-cli"),
+        ),
         (
             "workflow",
             vec![
@@ -25,15 +33,10 @@ fn fixture() -> Host {
                 "cost",
                 "mixed",
             ],
+            env!("CARGO_BIN_EXE_chrono-judge-workflow-test-cli"),
         ),
     ] {
-        let original = if id == "mixed" {
-            env!("CARGO_BIN_EXE_chrono-judge-mixed-test-cli").into()
-        } else if id == "cost" {
-            env!("CARGO_BIN_EXE_chrono-judge-cost-test-cli").into()
-        } else {
-            source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"))
-        };
+        let original = std::path::Path::new(original);
         let bytes = fs::read(&original).unwrap();
         let path = format!(".chrono-harness/bin/chrono-judge-{id}");
         host::copied_fixture_input(&h.root(), &original, &h.root().join(&path));
