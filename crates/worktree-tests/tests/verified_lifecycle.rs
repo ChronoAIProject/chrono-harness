@@ -100,6 +100,15 @@ fn imported_original_precedes_target_binding_and_explicit_migration_supersedes_i
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn present_import_restoration_requires_explicit_maintenance_and_managed_originals() {
+    expect(policy::restore_present_import(true, true, true));
+    expect(!policy::restore_present_import(false, true, true));
+    expect(!policy::restore_present_import(true, false, true));
+    expect(!policy::restore_present_import(true, true, false));
+    expect(!policy::restore_present_import(false, false, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn imported_policy_requires_published_original_and_exact_receipt_fields() {
     broadcast use vstd::string::group_string_axioms;
     proof {

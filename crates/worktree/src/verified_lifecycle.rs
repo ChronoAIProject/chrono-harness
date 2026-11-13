@@ -183,6 +183,13 @@ pub fn imported_policy_required(kind: &str, migrated: bool) -> (required: bool)
     equal_text(kind, "import") && !migrated
 }
 
+pub fn restore_present_import(imported: bool, maintenance: bool,
+    managed_originals: bool) -> (restore: bool)
+    ensures restore <==> (imported && maintenance && managed_originals),
+{
+    imported && maintenance && managed_originals
+}
+
 pub fn adopted_policy_source(kind: &str, migrated: bool, head: &str, current_head: &str,
     digest: &str, current_digest: &str) -> (source: AdoptedPolicySource)
     ensures

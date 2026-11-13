@@ -2024,7 +2024,7 @@ impl Manager {
         Ok(())
     }
 
-    fn adopt_maintenance_policy(&mut self, r: &mut Runner) -> Result<(), String> {
+    fn adopt_cleanup_policy(&mut self, r: &mut Runner, maintenance: bool) -> Result<(), String> {
         let imported = self.current_entry(&self.scope).is_some_and(|i| {
             let entry = &self.ledger.entries[i];
             crate::verified_lifecycle::imported_policy_required(
@@ -2032,7 +2032,21 @@ impl Manager {
                 !entry.policy_migrations.is_empty(),
             )
         });
-        if imported {
+        // An optional retention owner supplies the identity-bound original.
+        // Other hosts retain their existing current-target validation path.
+        let managed_originals = if imported && maintenance {
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(
+                &self.inputs.policy.coordinator_root,
+            )?
+            .is_some()
+        } else {
+            false
+        };
+        if crate::verified_lifecycle::restore_present_import(
+            imported,
+            maintenance,
+            managed_originals,
+        ) {
             self.restore_adopted_policy(r)
         } else {
             self.adopt_live_policy(r)
@@ -3388,7 +3402,7 @@ impl Manager {
         // A failed admission can leave an owned metadata address without an
         // enrolled checkout. Its existing directory is not a policy consumer.
         if crate::verified_lifecycle::enrolled_policy_required(self.ledger.entries.len()) {
-            self.adopt_maintenance_policy(r)?;
+            self.adopt_cleanup_policy(r, maintenance)?;
         }
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
@@ -3501,7 +3515,7 @@ impl Manager {
                 "cleanup",
                 "cleaned",
                 |r, token, attempt| {
-                    self.adopt_maintenance_policy(r)?;
+                    self.adopt_cleanup_policy(r, maintenance)?;
                     attempt["source_commit"] = value!(self.inputs.anchor_head);
                     attempt["policy_source_root"] = value!(self.inputs.source_root);
                     attempt["policy_source_commit"] = value!(self.inputs.source_head);
