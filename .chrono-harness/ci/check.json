@@ -15,6 +15,7 @@
     "artifacts": [
       ".chrono-harness/bin/",
       ".chrono-harness/state/",
+      "examples/ci-host-job-gating/.chrono-harness/state/",
       "crates/runner/target/",
       "crates/runner-tests/target/",
       "crates/instructions/target/",

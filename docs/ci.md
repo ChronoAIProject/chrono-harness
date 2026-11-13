@@ -57,6 +57,9 @@ selector 选择，缓存登记、下载登记和显式文件输入使用同一�
 宿主若已有 retention，必须先登记 `ci-generation-operation` 的准确目录和有限
 `terminal_limits`，缺少登记会在写工作流前失败。未采用 retention 的独立宿主使用
 产品自带政策：终态保留一天，最多 32 个、64 MiB，退役 metadata 不另行永久保留。
+外层宿主校验仓内嵌套示例时，也须在自己的检查政策登记示例的
+`.chrono-harness/state/` 产物；示例内的登记不会自动扩展外层范围。本仓为
+`ci.verify-job-gating-example` 显式登记了该示例的状态目录。
 已确认终态且消费者释放后，由现有保留维护入口或下列生成所有者入口执行有界维护：
 
 ```sh
