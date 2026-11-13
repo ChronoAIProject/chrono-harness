@@ -119,7 +119,8 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
     // Choose the tail of the actual declaration iterator, not an assumed file
     // name order. Each declaration fits a round; their retained prefix does not.
     let addresses: Vec<_> = fs::read_dir(
-        h.path().join(".chrono-harness/state/output-retention-v1/objects"),
+        h.path()
+            .join(".chrono-harness/state/output-retention-v1/objects"),
     )
     .unwrap()
     .map(|entry| entry.unwrap().file_name().into_string().unwrap())
@@ -133,15 +134,18 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
         assert_eq!(round["scope"]["complete"], false, "{round}");
         assert!(h.path().join(&outputs[tail]).exists(), "{round}");
     }
-    let sweep = retained_artifacts::retention::maintain_adopted(h.path())
-        .unwrap()
-        .unwrap();
+    let result = consumer_call(h.path(), json!({"operation":"maintain"}));
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    let sweep: Value = serde_json::from_str(&result.stdout).unwrap();
     assert!(
         !h.path().join(&outputs[tail]).exists(),
         "explicit maintenance did not reach the independent expired tail: {sweep}"
     );
     for id in &addresses[..addresses.len() - 1] {
-        assert_eq!(fs::read(h.path().join(&outputs[id])).unwrap(), b"required original");
+        assert_eq!(
+            fs::read(h.path().join(&outputs[id])).unwrap(),
+            b"required original"
+        );
     }
 }
 
