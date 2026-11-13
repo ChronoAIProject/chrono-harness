@@ -2417,8 +2417,11 @@ runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` �
 
 专属 `verified_generation.rs` 用独立预期核对四种成功／失败组合、完整调用轨迹、
 最大整数计划以及错误的两个原字段；同一预期同时在普通 Rust 和严格 Verus 中运行。
-FILEMAP 将两个根和 `verify.ci-generation`／`verify.ci-generation-tests` 绑定到
-生成所有者及其实际编译／测试计划。
+FILEMAP 将同源内核和独立预期分别绑定到 `verify.ci-generation`／
+`verify.ci-generation-tests`，两项证明进入生成所有者的实际测试计划。
+外围 `generation.rs` 保留生产编译和行为测试依赖；它不在这两个证明根的编译源中，
+因此不声明整文件证明。其 JSON、文件系统及外层组合仍待证明，覆盖校验继续拒绝
+把未参与证明编译的文件登记为已证明源码。
 
 生成原件的实际 `Object` 类型与比较也由同一根负责。`same_object` 同时核存在性、
 完整物理身份、完整摘要和字节数；准备中重复读取、输入稳定性及目标发布前的两次
