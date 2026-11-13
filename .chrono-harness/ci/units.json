@@ -743,8 +743,7 @@
         ],
         "consumer": "check.unit_ci",
         "caches": [
-          "check.ci-tests",
-          "check.judge-registration"
+          "check.ci-tests"
         ],
         "save_caches": [
           "check.ci-tests"

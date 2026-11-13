@@ -550,17 +550,12 @@
       "artifact_name": "chrono-release-linux-verify_ci_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_ci_tests/",
       "needs": [
-        "linux_release_frontend",
-        "linux_build_judge_registration"
+        "linux_release_frontend"
       ],
       "downloads": [
         {
           "job": "linux_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "linux_build_judge_registration",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
         }
       ]
     },
@@ -1684,17 +1679,12 @@
       "artifact_name": "chrono-release-macos-verify_ci_tests",
       "artifact_directory": ".chrono-harness/cache/release-results/verify_ci_tests/",
       "needs": [
-        "macos_release_frontend",
-        "macos_build_judge_registration"
+        "macos_release_frontend"
       ],
       "downloads": [
         {
           "job": "macos_release_frontend",
           "directory": ".chrono-harness/cache/release-frontend/"
-        },
-        {
-          "job": "macos_build_judge_registration",
-          "directory": ".chrono-harness/cache/release-handoffs/build_judge_registration/"
         }
       ]
     },

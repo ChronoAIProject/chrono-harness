@@ -255,7 +255,6 @@
         "judge-workflow-units"
       ],
       "build.judge-registration": [
-        "ci",
         "inputs",
         "judge-cost",
         "judge-filemap",
