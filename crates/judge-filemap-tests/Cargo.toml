@@ -6,6 +6,7 @@ publish = false
 autotests = false
 
 [dependencies]
+chrono-judge-registration = { path = "../judge-registration" }
 chrono-identifiers = { path = "../identifiers" }
 verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 sha1 = "0.10"
@@ -17,7 +18,6 @@ serde_json = "1"
 [dev-dependencies]
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 chrono-judge-filemap = { path = "../judge-filemap" }
-chrono-judge-registration = { path = "../judge-registration" }
 tempfile = "3"
 
 [[bin]]
@@ -58,5 +58,11 @@ bench = false
 [[bin]]
 name = "chrono-harness-test-cli"
 path = "../runner/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-registration-test-cli"
+path = "../judge-registration/src/main.rs"
 test = false
 bench = false

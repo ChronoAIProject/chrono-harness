@@ -140,9 +140,9 @@ worktree 两个测试组由 Cargo 从唯一 runner 生产 `main.rs` 编译测试
 
 judge-ci 测试也从同一生产 `main.rs` 编译 runner 测试 CLI，两个真实 CLI 调用使用 Cargo 提供的路径。该测试计划不再前置 `build.runner`，对应单元不再恢复生产 runner 缓存；生产 runner 及其他使用方保留。测试根继续使用原锁和开发配置，原断言、测试线程和时限不变；测试与生产的编译配置不同，不声称执行物字节或性能相同，完整成本收益未测。
 
-cost 和 mixed 两个测试项目也从 runner 唯一生产 `main.rs` 编译同名测试 CLI，共享 Host 从各自 Cargo 提供的路径读取并安装它，继续绑定实际字节摘要。两个计划不再前置 `build.runner`，对应单元不再恢复生产 runner 缓存；registration、filemap、cost 和 mixed 判官的实际构建及调用保留。原锁、开发配置、未过滤测试、断言、线程和时限不变，完整成本收益未测。
+cost 和 mixed 两个测试项目也从 runner 唯一生产 `main.rs` 编译同名测试 CLI，共享 Host 从各自 Cargo 提供的路径读取并安装它，继续绑定实际字节摘要。两个计划不再前置 `build.runner`，对应单元不再恢复生产 runner 缓存；filemap、cost 和 mixed 判官的实际构建及调用保留。registration 按下文采用测试 CLI。原锁、开发配置、未过滤测试、断言、线程和时限不变，完整成本收益未测。
 
-ci-tests 同样从 registration 唯一生产 `main.rs` 编译测试 CLI，现有 fixture 按 Cargo 提供的路径复制并调用真实程序。该计划不再单独前置 `build.judge-registration`；CI 单元移除对应缓存恢复和订阅，发布验证移除对应构建依赖与资产消费。registration 的其他实际使用方仍由各自登记负责。保留原未过滤测试、协议检查、断言、线程、时限、锁和开发配置；测试与生产的编译配置不同，不声称执行物字节相同，完整成本收益未测。
+**测试构建与宿主登记同改：**CI、registration、cost、mixed、filemap、projects、inputs、workflow 八个测试项目均从 registration 唯一生产 `main.rs` 编译测试 CLI，现有 fixture 按 Cargo 提供的路径复制并调用真实程序。对应十个单元的计划不再前置 `build.judge-registration`，退役已无检查使用方的 `check.judge-registration` 缓存及订阅；发布验证移除对应构建依赖、下载与资产消费。Linux／macOS 生产发布仍构建 registration，保留其共享 target、源码输入和真实 Cargo 下载缓存。原未过滤测试、协议检查、断言、线程、分组、时限、锁和开发配置保留；测试与生产的编译配置不同，不声称执行物字节相同，完整成本收益未测。
 
 runner 和 diagnostics 使用普通锁定 Cargo 构建，core 按当前消费者安装所需工具。项目 action、单元、缓存和发布集合由各自登记维护。
 
