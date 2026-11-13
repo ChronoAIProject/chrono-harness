@@ -616,8 +616,11 @@ impl Inventory {
                         *nodes = 1;
                         self.retire_transaction(&address)
                     }),
+                    // This address came from the declaration namespace, not
+                    // an explicit caller selection. Let the same nonblocking
+                    // reader refuse non-files, links and oversized metadata.
                     "objects" => {
-                        self.maintain_originals_at(std::slice::from_ref(&address), observed)
+                        self.maintain_round(observed, Some(std::slice::from_ref(&address)))
                     }
                     _ => {
                         self.metadata_round(|nodes| self.prune_role(&entry.path(), observed, nodes))

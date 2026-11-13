@@ -531,10 +531,26 @@ fn declarations_reject_special_files_without_blocking_or_disposing_originals() {
         assert!(result.failure.is_none(), "{namespace}/{kind}: {result:?}");
         assert_eq!(result.exit_code, 0, "{namespace}/{kind}: {result:?}");
         let round: Value = serde_json::from_str(&result.stdout).unwrap();
-        assert!(
-            !round["accounting_errors"].as_array().unwrap().is_empty(),
-            "{namespace}/{kind}: {round}"
-        );
+        if namespace == "object" {
+            assert_eq!(round["schema"], "chrono-output-retention-sweep/v1");
+            assert!(
+                round["observations"]["accounting_errors"].as_u64().unwrap() > 0,
+                "{namespace}/{kind}: {round}"
+            );
+            assert!(
+                round["samples"]["items"].as_array().unwrap().iter().any(
+                    |sample| sample["namespace"] == "objects"
+                        && sample["address"] == id
+                        && sample["kind"] == "accounting_errors"
+                ),
+                "{namespace}/{kind}: {round}"
+            );
+        } else {
+            assert!(
+                !round["accounting_errors"].as_array().unwrap().is_empty(),
+                "{namespace}/{kind}: {round}"
+            );
+        }
         assert_eq!(
             round["removed_logical_bytes"], 0,
             "{namespace}/{kind}: {round}"
