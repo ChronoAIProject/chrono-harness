@@ -312,23 +312,39 @@ impl Plan {
                     let io = verified::TargetIo {
                         observe: |state| (state, observe(&path).map(|(object, _)| object)),
                         stage: |state| {
-                            (
+                            // The original plan survives any interruption between a rename and its receipt.
+                            verified::stage_target(
                                 state,
-                                (|| {
-                                    // The original plan survives any interruption between a rename and its receipt.
-                                    let stage = directory.join(&target.staging);
-                                    publication.write_file(&stage, &target.bytes)?;
-                                    record(
-                                        publication,
-                                        directory,
-                                        &format!("staging-{index}.json"),
-                                        &json!({"path":target.staging,"identity":identity(&stage)?,"target":target.path}),
-                                    )?;
-                                    let parent = path.parent().ok_or("generation output parent")?;
-                                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                                    sync_ancestors(parent, root)?;
-                                    Ok((stage, parent))
-                                })(),
+                                directory.join(&target.staging),
+                                |state, stage: &PathBuf| {
+                                    (state, publication.write_file(stage, &target.bytes))
+                                },
+                                |state, stage: &PathBuf| (state, identity(stage)),
+                                |state, _stage: &PathBuf, identity: String| {
+                                    (
+                                        state,
+                                        record(
+                                            publication,
+                                            directory,
+                                            &format!("staging-{index}.json"),
+                                            &json!({"path":target.staging,"identity":identity,"target":target.path}),
+                                        ),
+                                    )
+                                },
+                                |state| {
+                                    (
+                                        state,
+                                        path.parent()
+                                            .ok_or_else(|| "generation output parent".to_owned()),
+                                    )
+                                },
+                                |state, parent: &&Path| {
+                                    (
+                                        state,
+                                        fs::create_dir_all(*parent).map_err(|e| e.to_string()),
+                                    )
+                                },
+                                |state, parent: &&Path| (state, sync_ancestors(parent, root)),
                             )
                         },
                         create: |state, handles: &(PathBuf, &Path)| {

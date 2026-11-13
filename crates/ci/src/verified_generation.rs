@@ -413,6 +413,194 @@ pub fn sync_ancestor_directories<S, P, E, N, C, D>(
     }
 }
 
+pub open spec fn staging_parent_result<S, H, P, E, Parent, Create, Sync>(
+    initial: S, stage: H, parent: Parent, create: Create, sync: Sync,
+    out: (S, Result<(H, P), E>),
+) -> bool
+    where Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+{
+    exists|state: S, observed: Result<P, E>|
+        #[trigger] parent.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<(H, P), E>(error)),
+            Ok(path) => exists|next: S, created: Result<(), E>|
+                #[trigger] create.ensures((state, &path), (next, created)) && match created {
+                    Err(error) => out == (next, Err::<(H, P), E>(error)),
+                    Ok(()) => exists|last: S, synced: Result<(), E>|
+                        #[trigger] sync.ensures((next, &path), (last, synced)) && match synced {
+                            Err(error) => out == (last, Err::<(H, P), E>(error)),
+                            Ok(()) => out == (last, Ok::<(H, P), E>((stage, path))),
+                        },
+                },
+        }
+}
+
+fn prepare_staging_parent<S, H, P, E, Parent, Create, Sync>(
+    state: S, stage: H, parent: Parent, create: Create, sync: Sync,
+) -> (out: (S, Result<(H, P), E>))
+    where Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+    requires parent.requires((state,)),
+        forall|state: S, path: &P| #[trigger] create.requires((state, path)),
+        forall|state: S, path: &P| #[trigger] sync.requires((state, path)),
+    ensures staging_parent_result(state, stage, parent, create, sync, out),
+{
+    let ghost initial = state;
+    let ghost original_stage = stage;
+    let (state, observed) = parent(state);
+    let ghost after_parent = state;
+    let ghost original_parent = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(path) => {
+            let ghost original_path = path;
+            let (state, created) = create(state, &path);
+            let ghost after_create = state;
+            let ghost original_create = created;
+            let out = match created {
+                Err(error) => (state, Err(error)),
+                Ok(success) => {
+                    assert(success == ());
+                    let (state, synced) = sync(state, &path);
+                    let ghost after_sync = state;
+                    let ghost original_sync = synced;
+                    let out = match synced {
+                        Err(error) => (state, Err(error)),
+                        Ok(success) => { assert(success == ()); (state, Ok((stage, path))) },
+                    };
+                    assert(sync.ensures((after_create, &original_path), (after_sync, original_sync)));
+                    out
+                },
+            };
+            assert(create.ensures((after_parent, &original_path), (after_create, original_create)));
+            out
+        },
+    };
+    assert(parent.ensures((initial,), (after_parent, original_parent)));
+    assert(staging_parent_result(initial, original_stage, parent, create, sync, out));
+    out
+}
+
+pub open spec fn staging_identity_result<S, H, V, P, E, Identity, Receipt, Parent, Create, Sync>(
+    initial: S, stage: H, identity: Identity, receipt: Receipt, parent: Parent, create: Create, sync: Sync,
+    out: (S, Result<(H, P), E>),
+) -> bool
+    where Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+{
+    exists|state: S, observed: Result<V, E>|
+        #[trigger] identity.ensures((initial, &stage), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<(H, P), E>(error)),
+            Ok(value) => exists|next: S, recorded: Result<(), E>|
+                #[trigger] receipt.ensures((state, &stage, value), (next, recorded)) && match recorded {
+                    Err(error) => out == (next, Err::<(H, P), E>(error)),
+                    Ok(()) => staging_parent_result(next, stage, parent, create, sync, out),
+                },
+        }
+}
+
+fn retain_staging_identity<S, H, V, P, E, Identity, Receipt, Parent, Create, Sync>(
+    state: S, stage: H, identity: Identity, receipt: Receipt, parent: Parent, create: Create, sync: Sync,
+) -> (out: (S, Result<(H, P), E>))
+    where Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+    requires forall|state: S, stage: &H| #[trigger] identity.requires((state, stage)),
+        forall|state: S, stage: &H, value: V| #[trigger] receipt.requires((state, stage, value)),
+        forall|state: S| #[trigger] parent.requires((state,)),
+        forall|state: S, path: &P| #[trigger] create.requires((state, path)),
+        forall|state: S, path: &P| #[trigger] sync.requires((state, path)),
+    ensures staging_identity_result(state, stage, identity, receipt, parent, create, sync, out),
+{
+    let ghost initial = state;
+    let ghost original_stage = stage;
+    let (state, observed) = identity(state, &stage);
+    let ghost after_identity = state;
+    let ghost original_identity = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(value) => {
+            let ghost original_value = value;
+            let (state, recorded) = receipt(state, &stage, value);
+            let ghost after_receipt = state;
+            let ghost original_receipt = recorded;
+            let out = match recorded {
+                Err(error) => (state, Err(error)),
+                Ok(success) => {
+                    assert(success == ());
+                    prepare_staging_parent(state, stage, parent, create, sync)
+                },
+            };
+            assert(receipt.ensures((after_identity, &original_stage, original_value), (after_receipt, original_receipt)));
+            out
+        },
+    };
+    assert(identity.ensures((initial, &original_stage), (after_identity, original_identity)));
+    assert(staging_identity_result(initial, original_stage, identity, receipt, parent, create, sync, out));
+    out
+}
+
+pub open spec fn staging_result<S, H, V, P, E, Write, Identity, Receipt, Parent, Create, Sync>(
+    initial: S, stage: H, write: Write, identity: Identity, receipt: Receipt,
+    parent: Parent, create: Create, sync: Sync, out: (S, Result<(H, P), E>),
+) -> bool
+    where Write: FnOnce(S, &H) -> (S, Result<(), E>),
+          Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+{
+    exists|state: S, observed: Result<(), E>|
+        #[trigger] write.ensures((initial, &stage), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<(H, P), E>(error)),
+            Ok(()) => staging_identity_result(state, stage, identity, receipt, parent, create, sync, out),
+        }
+}
+
+/// Preserve the first error and exact handles through the six original staging operations.
+pub fn stage_target<S, H, V, P, E, Write, Identity, Receipt, Parent, Create, Sync>(
+    state: S, stage: H, write: Write, identity: Identity, receipt: Receipt,
+    parent: Parent, create: Create, sync: Sync,
+) -> (out: (S, Result<(H, P), E>))
+    where Write: FnOnce(S, &H) -> (S, Result<(), E>),
+          Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+    requires write.requires((state, &stage)),
+        forall|state: S, stage: &H| #[trigger] identity.requires((state, stage)),
+        forall|state: S, stage: &H, value: V| #[trigger] receipt.requires((state, stage, value)),
+        forall|state: S| #[trigger] parent.requires((state,)),
+        forall|state: S, path: &P| #[trigger] create.requires((state, path)),
+        forall|state: S, path: &P| #[trigger] sync.requires((state, path)),
+    ensures staging_result(state, stage, write, identity, receipt, parent, create, sync, out),
+{
+    let ghost initial = state;
+    let ghost original_stage = stage;
+    let (state, observed) = write(state, &stage);
+    let ghost after_write = state;
+    let ghost original_write = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            retain_staging_identity(state, stage, identity, receipt, parent, create, sync)
+        },
+    };
+    assert(write.ensures((initial, &original_stage), (after_write, original_write)));
+    assert(staging_result(initial, original_stage, write, identity, receipt, parent, create, sync, out));
+    out
+}
+
 pub enum TargetMismatch { Prepared, Rename, Published }
 
 impl TargetMismatch {

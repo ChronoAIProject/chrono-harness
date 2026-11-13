@@ -513,6 +513,154 @@ fn ancestor_sync_streams_complete_paths_stops_at_root_and_keeps_first_error() {
     ancestor_case(1, (u64::MAX, 1), false, 0);
 }
 
+spec fn staging_step_result(step: u8, valid: bool, fail_at: u8) -> Result<(), TargetFault> {
+    if !valid { Err::<(), TargetFault>((9u8, u64::MAX)) }
+    else if step == fail_at { Err::<(), TargetFault>((step, u64::MAX)) }
+    else { Ok::<(), TargetFault>(()) }
+}
+
+fn staging_step(mut trace: Vec<u8>, step: u8, valid: bool, fail_at: u8)
+    -> (out: (Vec<u8>, Result<(), TargetFault>))
+    ensures out.0@ == trace@.push(step), out.1 == staging_step_result(step, valid, fail_at),
+{
+    if !valid { trace.push(step); (trace, Err((9, u64::MAX))) }
+    else { target_step(trace, step, fail_at) }
+}
+
+fn staging_case(fail_at: u8)
+    requires fail_at <= 7,
+{
+    let stage = (u64::MAX, 17u64);
+    let write = |trace: Vec<u8>, stage: &(u64, u64)| -> (out: (Vec<u8>, Result<(), TargetFault>))
+        ensures out.0@ == trace@.push(1),
+            out.1 == staging_step_result(1, stage.0 == u64::MAX && stage.1 == 17, fail_at),
+    { staging_step(trace, 1, stage.0 == u64::MAX && stage.1 == 17, fail_at) };
+    let identity = |trace: Vec<u8>, stage: &(u64, u64)|
+        -> (out: (Vec<u8>, Result<(u64, u64), TargetFault>))
+        ensures out.0@ == trace@.push(2),
+            match out.1 {
+                Err(error) => staging_step_result(2, stage.0 == u64::MAX && stage.1 == 17, fail_at)
+                    == Err::<(), TargetFault>(error),
+                Ok(value) => staging_step_result(2, stage.0 == u64::MAX && stage.1 == 17, fail_at)
+                    == Ok::<(), TargetFault>(()) && value == (u64::MAX - 1, 18u64),
+            },
+    {
+        let (trace, result) = staging_step(trace, 2, stage.0 == u64::MAX && stage.1 == 17, fail_at);
+        (trace, match result { Err(error) => Err(error), Ok(()) => Ok((u64::MAX - 1, 18)) })
+    };
+    let receipt = |trace: Vec<u8>, stage: &(u64, u64), identity: (u64, u64)|
+        -> (out: (Vec<u8>, Result<(), TargetFault>))
+        ensures out.0@ == trace@.push(3),
+            out.1 == staging_step_result(3, stage.0 == u64::MAX && stage.1 == 17
+                && identity.0 == u64::MAX - 1 && identity.1 == 18, fail_at),
+    {
+        staging_step(trace, 3, stage.0 == u64::MAX && stage.1 == 17
+            && identity.0 == u64::MAX - 1 && identity.1 == 18, fail_at)
+    };
+    let parent = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(u64, u64), TargetFault>))
+        ensures out.0@ == trace@.push(4),
+            out.1 == if fail_at == 4 { Err::<(u64, u64), TargetFault>((4u8, u64::MAX)) }
+                else { Ok::<(u64, u64), TargetFault>((u64::MAX - 2, 19u64)) },
+    {
+        let (trace, result) = target_step(trace, 4, fail_at);
+        (trace, match result { Err(error) => Err(error), Ok(()) => Ok((u64::MAX - 2, 19)) })
+    };
+    let create = |trace: Vec<u8>, parent: &(u64, u64)| -> (out: (Vec<u8>, Result<(), TargetFault>))
+        ensures out.0@ == trace@.push(5),
+            out.1 == staging_step_result(5, parent.0 == u64::MAX - 2 && parent.1 == 19, fail_at),
+    { staging_step(trace, 5, parent.0 == u64::MAX - 2 && parent.1 == 19, fail_at) };
+    let sync = |trace: Vec<u8>, parent: &(u64, u64)| -> (out: (Vec<u8>, Result<(), TargetFault>))
+        ensures out.0@ == trace@.push(6),
+            out.1 == staging_step_result(6, parent.0 == u64::MAX - 2 && parent.1 == 19, fail_at),
+    { staging_step(trace, 6, parent.0 == u64::MAX - 2 && parent.1 == 19, fail_at) };
+    let initial: Vec<u8> = Vec::new();
+    let ghost start = initial;
+    let (trace, result) = policy::stage_target(initial, stage, write, identity, receipt, parent, create, sync);
+    proof {
+        let (written, observed) = choose|state: Vec<u8>, observed: Result<(), TargetFault>|
+            #[trigger] write.ensures((start, &stage), (state, observed)) && match observed {
+                Err(error) => (trace, result) == (state, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                Ok(()) => policy::staging_identity_result(state, stage, identity, receipt, parent, create, sync, (trace, result)),
+            };
+        if fail_at != 1 {
+            let (identified, observed) = choose|state: Vec<u8>, observed: Result<(u64, u64), TargetFault>|
+                #[trigger] identity.ensures((written, &stage), (state, observed)) && match observed {
+                    Err(error) => (trace, result) == (state, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                    Ok(value) => exists|next: Vec<u8>, recorded: Result<(), TargetFault>|
+                        #[trigger] receipt.ensures((state, &stage, value), (next, recorded)) && match recorded {
+                            Err(error) => (trace, result) == (next, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                            Ok(()) => policy::staging_parent_result(next, stage, parent, create, sync, (trace, result)),
+                        },
+                };
+            if fail_at != 2 {
+                let value = observed->Ok_0;
+                let (recorded, observed) = choose|state: Vec<u8>, observed: Result<(), TargetFault>|
+                    #[trigger] receipt.ensures((identified, &stage, value), (state, observed)) && match observed {
+                        Err(error) => (trace, result) == (state, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                        Ok(()) => policy::staging_parent_result(state, stage, parent, create, sync, (trace, result)),
+                    };
+                if fail_at != 3 {
+                    let (obtained, observed) = choose|state: Vec<u8>, observed: Result<(u64, u64), TargetFault>|
+                        #[trigger] parent.ensures((recorded,), (state, observed)) && match observed {
+                            Err(error) => (trace, result) == (state, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                            Ok(path) => exists|next: Vec<u8>, created: Result<(), TargetFault>|
+                                #[trigger] create.ensures((state, &path), (next, created)) && match created {
+                                    Err(error) => (trace, result) == (next, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                                    Ok(()) => exists|last: Vec<u8>, synced: Result<(), TargetFault>|
+                                        #[trigger] sync.ensures((next, &path), (last, synced)) && match synced {
+                                            Err(error) => (trace, result) == (last, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                                            Ok(()) => (trace, result) == (last, Ok::<((u64, u64), (u64, u64)), TargetFault>((stage, path))),
+                                        },
+                                },
+                        };
+                    if fail_at != 4 {
+                        let path = observed->Ok_0;
+                        let (created, observed) = choose|state: Vec<u8>, observed: Result<(), TargetFault>|
+                            #[trigger] create.ensures((obtained, &path), (state, observed)) && match observed {
+                                Err(error) => (trace, result) == (state, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                                Ok(()) => exists|last: Vec<u8>, synced: Result<(), TargetFault>|
+                                    #[trigger] sync.ensures((state, &path), (last, synced)) && match synced {
+                                        Err(error) => (trace, result) == (last, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                                        Ok(()) => (trace, result) == (last, Ok::<((u64, u64), (u64, u64)), TargetFault>((stage, path))),
+                                    },
+                            };
+                        if fail_at != 5 {
+                            let (synced, observed) = choose|state: Vec<u8>, observed: Result<(), TargetFault>|
+                                #[trigger] sync.ensures((created, &path), (state, observed)) && match observed {
+                                    Err(error) => (trace, result) == (state, Err::<((u64, u64), (u64, u64)), TargetFault>(error)),
+                                    Ok(()) => (trace, result) == (state, Ok::<((u64, u64), (u64, u64)), TargetFault>((stage, path))),
+                                };
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Independent oracle: every successful prefix is exactly 1..=6, cut at its first error.
+    let length = if 1 <= fail_at && fail_at <= 6 { fail_at as usize } else { 6usize };
+    expect(trace.len() == length);
+    expect(trace[0] == 1);
+    if length > 1 { expect(trace[1] == 2); }
+    if length > 2 { expect(trace[2] == 3); }
+    if length > 3 { expect(trace[3] == 4); }
+    if length > 4 { expect(trace[4] == 5); }
+    if length > 5 { expect(trace[5] == 6); }
+    match result {
+        Err(error) => { expect(1 <= fail_at && fail_at <= 6); expect(error.0 == fail_at); expect(error.1 == u64::MAX); },
+        Ok((saved_stage, saved_parent)) => {
+            expect(fail_at == 0 || fail_at == 7);
+            expect(saved_stage.0 == u64::MAX); expect(saved_stage.1 == 17);
+            expect(saved_parent.0 == u64::MAX - 2); expect(saved_parent.1 == 19);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn target_staging_keeps_complete_handles_identity_and_first_error_in_order() {
+    staging_case(0); staging_case(1); staging_case(2); staging_case(3);
+    staging_case(4); staging_case(5); staging_case(6); staging_case(7);
+}
+
 spec fn target_observation_step(length: nat) -> u8 {
     if length == 0 { 1u8 } else if length == 2 { 3u8 } else { 7u8 }
 }
