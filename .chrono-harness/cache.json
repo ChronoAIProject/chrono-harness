@@ -1329,7 +1329,6 @@
       "owner": "judge-registration",
       "producer": "build.judge-registration",
       "consumers": [
-        "check.unit_ci",
         "check.unit_inputs",
         "check.unit_judge-cost",
         "check.unit_judge-filemap",

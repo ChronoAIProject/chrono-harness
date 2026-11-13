@@ -367,9 +367,7 @@
       "id": "verify_ci_tests",
       "kind": "verify",
       "operation": "test.ci-tests",
-      "needs": [
-        "build_judge_registration"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_ci_tests",
       "rust_toolchain": true
     },
@@ -784,10 +782,8 @@
       ]
     },
     "verify_ci_tests": {
-      "need": "ci-tests 由 Cargo 从唯一生产 main.rs 编译 runner、ci、worktree 和 judge-ci 测试 CLI；真实宿主仍消费 registration 发布 CLI，核生成检查、固定 Git 输入与原回执。",
-      "release_assets": [
-        "chrono-judge-registration"
-      ]
+      "need": "ci-tests 由 Cargo 从各自唯一生产 main.rs 编译 runner、ci、worktree、judge-ci 和 registration 测试 CLI，核真实生成检查、固定 Git 输入与原回执，不消费发布资产。",
+      "release_assets": []
     },
     "verify_judge_ci_tests": {
       "need": "judge-ci-tests 由 Cargo 从唯一生产 main.rs 编译 runner 和 judge-ci 测试 CLI，核对分单元执行、汇总原件和固定 Git facts，不消费发布资产。",
