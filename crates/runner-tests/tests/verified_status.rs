@@ -6266,6 +6266,270 @@ fn checkout_stream_rejects_growth_and_early_eof() {
     expect_checkout_stream_failure(shrank, "checkout file shrank during observation");
 }
 
+struct CopyFixture {
+    phase: u8,
+    failure: u8,
+}
+
+spec fn copy_fixture_read_error(state: CopyFixture) -> bool {
+    state.failure == 1 || (state.failure == 2 && state.phase == 3)
+}
+
+fn copy_fixture_read(mut state: CopyFixture, mut buffer: [u8; 4])
+    -> (out: (CopyFixture, [u8; 4], Result<usize, String>))
+    ensures out.0.failure == state.failure,
+        if copy_fixture_read_error(state) {
+            out.0.phase == state.phase && out.1 == buffer
+                && match out.2 { Err(error) => error@ == "read: é\0original\nend"@, Ok(_) => false }
+        } else if state.failure == 5 || (state.phase != 0 && state.phase != 3) {
+            out.0.phase == state.phase && out.1 == buffer && out.2 == Ok::<usize, String>(0)
+        } else {
+            out.0.phase as int == state.phase as int + 1 && out.2 == Ok::<usize, String>(1)
+                && out.1@[0] == if state.phase == 0 { 0u8 } else { 255u8 }
+        },
+{
+    let result = if state.failure == 1 || (state.failure == 2 && state.phase == 3) {
+        Err("read: é\0original\nend".to_owned())
+    } else if state.failure == 5 || (state.phase != 0 && state.phase != 3) {
+        Ok(0)
+    } else {
+        buffer[0] = if state.phase == 0 { 0 } else { 255 };
+        state.phase = state.phase + 1;
+        Ok(1)
+    };
+    (state, buffer, result)
+}
+
+fn copy_fixture_view(buffer: &[u8; 4]) -> (out: &[u8])
+    ensures out@ == buffer@,
+{ buffer.as_slice() }
+
+spec fn copy_fixture_write_error(state: CopyFixture) -> bool {
+    state.failure == 3 || (state.failure == 4 && state.phase == 4)
+}
+
+spec fn copy_fixture_chunk(state: CopyFixture, bytes: Seq<u8>) -> bool {
+    bytes == seq![if state.phase == 1 { 0u8 } else { 255u8 }]
+        && (state.phase == 1 || state.phase == 4)
+}
+
+fn copy_fixture_write(mut state: CopyFixture, bytes: &[u8])
+    -> (out: (CopyFixture, Result<(), String>))
+    ensures out.0.failure == state.failure,
+        if copy_fixture_write_error(state) {
+            out.0.phase == state.phase
+                && match out.1 { Err(error) => error@ == "write: é\0original\nend"@, Ok(_) => false }
+        } else if copy_fixture_chunk(state, bytes@) {
+            out.0.phase as int == state.phase as int + 1 && out.1 == Ok::<(), String>(())
+        } else {
+            out.0.phase == state.phase
+                && match out.1 { Err(error) => error@ == "unexpected write order or bytes"@, Ok(_) => false }
+        },
+{
+    let result = if state.failure == 3 || (state.failure == 4 && state.phase == 4) {
+        Err("write: é\0original\nend".to_owned())
+    } else if (state.phase == 1 || state.phase == 4) && bytes.len() == 1
+        && bytes[0] == if state.phase == 1 { 0u8 } else { 255u8 }
+    {
+        assert(bytes@ =~= seq![if state.phase == 1 { 0u8 } else { 255u8 }]);
+        state.phase = state.phase + 1;
+        Ok(())
+    } else {
+        Err("unexpected write order or bytes".to_owned())
+    };
+    (state, result)
+}
+
+fn copy_fixture_update(mut state: CopyFixture, bytes: &[u8]) -> (out: CopyFixture)
+    ensures out.failure == state.failure,
+        out.phase == if (state.phase == 2 || state.phase == 5)
+            && bytes@ == seq![if state.phase == 2 { 0u8 } else { 255u8 }]
+        { (state.phase + 1) as u8 } else { 250u8 },
+{
+    if (state.phase == 2 || state.phase == 5) && bytes.len() == 1
+        && bytes[0] == if state.phase == 2 { 0u8 } else { 255u8 }
+    {
+        assert(bytes@ =~= seq![if state.phase == 2 { 0u8 } else { 255u8 }]);
+        state.phase = state.phase + 1;
+    } else { state.phase = 250; }
+    state
+}
+
+fn copy_fixture_finalize(state: CopyFixture) -> (out: String)
+    ensures out@ == if state.phase == 0 { "empty"@ }
+        else if state.phase == 6 { "digest: \0ÿ"@ } else { "unexpected finalize order"@ },
+{
+    if state.phase == 0 { "empty".to_owned() }
+    else if state.phase == 6 { "digest: \0ÿ".to_owned() }
+    else { "unexpected finalize order".to_owned() }
+}
+
+proof fn copy_fixture_step(before: (CopyFixture, [u8; 4], u64),
+    after: (CopyFixture, [u8; 4], u64))
+    requires policy::copy_hash_stream_step(before, after, copy_fixture_read, copy_fixture_view,
+        copy_fixture_write, copy_fixture_update),
+    ensures before.0.phase == 0 || before.0.phase == 3,
+        before.0.failure != 1 && before.0.failure != 3 && before.0.failure != 5,
+        before.0.phase == 3 ==> before.0.failure != 2 && before.0.failure != 4,
+        after.0.phase as int == before.0.phase as int + 3,
+        after.0.failure == before.0.failure,
+        after.2 as int == before.2 as int + 1,
+{
+    reveal(policy::copy_hash_stream_step);
+    let (count, observed, bytes, chunk, written) = choose|count: usize, observed: CopyFixture,
+        bytes: &[u8], chunk: &[u8], written: (CopyFixture, Result<(), String>)|
+        count > 0 && count <= bytes.len()
+        && copy_fixture_read.ensures((before.0, before.1),
+            (observed, after.1, Ok::<usize, String>(count)))
+        && copy_fixture_view.ensures((&after.1,), bytes)
+        && chunk@ == bytes@.subrange(0, count as int)
+        && copy_fixture_write.ensures((observed, chunk), written) && written.1.is_ok()
+        && copy_fixture_update.ensures((written.0, chunk), after.0)
+        && before.2 as int + count as int == after.2 as int;
+    assert(count == 1);
+    if before.0.phase == 0 { assert(chunk@ =~= seq![0u8]); }
+    else { assert(before.0.phase == 3); assert(chunk@ =~= seq![255u8]); }
+}
+
+spec fn copy_fixture_expected(failure: u8, out: Result<(String, u64), String>) -> bool {
+    if failure == 0 {
+        match out { Ok((digest, length)) => digest@ == "digest: \0ÿ"@ && length == 2, Err(_) => false }
+    } else if failure == 5 {
+        match out { Ok((digest, length)) => digest@ == "empty"@ && length == 0, Err(_) => false }
+    } else {
+        match out { Err(error) => error@ == if failure == 1 || failure == 2 {
+            "read: é\0original\nend"@ } else { "write: é\0original\nend"@ }, Ok(_) => false }
+    }
+}
+
+proof fn copy_stream_prefix_at<S, B, R, V, W, U>(
+    states: Seq<(S, B, u64)>, initial: (S, B, u64), read: R, view: V, write: W, update: U, index: int,
+)
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S,
+    requires policy::copy_hash_stream_prefix(states, initial, read, view, write, update),
+        0 <= index < states.len() - 1,
+    ensures policy::copy_hash_stream_step(states[index], states[index + 1], read, view, write, update),
+{ }
+
+proof fn copy_fixture_result(buffer: [u8; 4], failure: u8, out: Result<(String, u64), String>)
+    requires failure <= 5,
+        policy::copy_hash_stream_result((CopyFixture { phase: 0, failure }, buffer, 0u64),
+            copy_fixture_read, copy_fixture_view, copy_fixture_write, copy_fixture_update,
+            copy_fixture_finalize, out),
+    ensures copy_fixture_expected(failure, out),
+{
+    let initial = (CopyFixture { phase: 0, failure }, buffer, 0u64);
+    let (states, observation) = choose|states: Seq<(CopyFixture, [u8; 4], u64)>,
+        observation: (CopyFixture, [u8; 4], Result<usize, String>)|
+        policy::copy_hash_stream_prefix(states, initial, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update)
+        && policy::copy_hash_stream_terminal(states.last(), observation, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update, copy_fixture_finalize, out);
+    if states.len() >= 2 {
+        copy_stream_prefix_at(states, initial, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update, 0);
+        copy_fixture_step(states[0], states[1]);
+    }
+    if states.len() >= 3 {
+        copy_stream_prefix_at(states, initial, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update, 1);
+        copy_fixture_step(states[1], states[2]);
+    }
+    if states.len() >= 4 {
+        copy_stream_prefix_at(states, initial, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update, 2);
+        copy_fixture_step(states[2], states[3]);
+        assert(false);
+    }
+    assert(1 <= states.len() <= 3);
+    if states.len() == 1 { assert(states.last() == initial); }
+    else if states.len() == 2 { assert(states.last() == states[1]); }
+    else { assert(states.last() == states[2]); }
+    let last = states.last();
+    assert(last.2 <= 2);
+    assert(last.0.failure == failure);
+    assert(last.0.phase == 0 || last.0.phase == 3 || last.0.phase == 6);
+    match observation.2 {
+        Err(_) => { assert(failure == 1 || failure == 2); },
+        Ok(count) => if count > 0 {
+            let (bytes, chunk, written) = choose|bytes: &[u8], chunk: &[u8],
+                written: (CopyFixture, Result<(), String>)|
+                count <= bytes.len() && copy_fixture_view.ensures((&observation.1,), bytes)
+                && chunk@ == bytes@.subrange(0, count as int)
+                && copy_fixture_write.ensures((observation.0, chunk), written)
+                && match written.1 {
+                    Err(error) => match out { Err(message) => message@ == error@, Ok(_) => false },
+                    Ok(()) => exists|hashed: CopyFixture|
+                        copy_fixture_update.ensures((written.0, chunk), hashed)
+                        && match (policy::copy_hash_advance_spec(last.2, count), out) {
+                            (Err(expected), Err(message)) => message@ == expected,
+                            _ => false,
+                        },
+                };
+            assert(count == 1);
+            assert(last.0.phase == 0 || last.0.phase == 3);
+            if last.0.phase == 0 { assert(chunk@ =~= seq![0u8]); }
+            else { assert(chunk@ =~= seq![255u8]); }
+            assert(copy_fixture_chunk(observation.0, chunk@));
+            assert(written.1.is_err());
+            assert(failure == 3 || failure == 4);
+        } else {
+            assert((failure == 5 && last.0.phase == 0) || (failure == 0 && last.0.phase == 6));
+        },
+    }
+}
+
+fn copy_fixture_case(failure: u8)
+    requires failure <= 5,
+{
+    let buffer = [77u8; 4];
+    let ghost initial_buffer = buffer;
+    let out = policy::copy_hash_stream(CopyFixture { phase: 0, failure }, buffer,
+        copy_fixture_read, copy_fixture_view, copy_fixture_write, copy_fixture_update, copy_fixture_finalize);
+    proof { copy_fixture_result(initial_buffer, failure, out); }
+    if failure == 0 || failure == 5 {
+        match out {
+            Ok((digest, length)) => {
+                expect_status_text(digest.as_str(), if failure == 0 { "digest: \0ÿ" } else { "empty" });
+                expect_status_true(length == if failure == 0 { 2u64 } else { 0u64 });
+            },
+            Err(_) => panic!(),
+        }
+    } else {
+        expect_checkout_observation_error(out,
+            if failure == 1 || failure == 2 { "read: é\0original\nend" } else { "write: é\0original\nend" });
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn copy_stream_keeps_original_binary_chunks_write_hash_order_and_length() { copy_fixture_case(0); }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn copy_stream_preserves_first_read_error_without_writing_or_finalizing() { copy_fixture_case(1); }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn copy_stream_preserves_late_read_error_after_the_successful_prefix() { copy_fixture_case(2); }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn copy_stream_preserves_first_write_error_before_hashing() { copy_fixture_case(3); }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn copy_stream_preserves_late_write_error_after_the_successful_prefix() { copy_fixture_case(4); }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn copy_stream_empty_eof_finalizes_without_writing() { copy_fixture_case(5); }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn copy_stream_counter_keeps_maximum_length_and_rejects_the_next_byte() {
+    expect_checkout_hash_count(policy::copy_hash_advance(0, 0), 0);
+    expect_checkout_hash_count(policy::copy_hash_advance(0, usize::MAX), usize::MAX as u64);
+    expect_checkout_hash_count(policy::copy_hash_advance(u64::MAX, 0), u64::MAX);
+    expect_checkout_hash_count(policy::copy_hash_advance(u64::MAX - 1, 1), u64::MAX);
+    expect_checkout_observation_error(policy::copy_hash_advance(u64::MAX, 1), "input length overflow");
+    expect_checkout_observation_error(policy::copy_hash_advance(u64::MAX - 1, 2), "input length overflow");
+}
+
 fn checkout_parent_fixture_next(source: u8) -> (out: (u8, Option<u8>))
     ensures out == if source == 0 { (0u8, None) }
         else { ((source - 1) as u8, Some(if source == 1 { 0u8 } else { 1u8 })) },

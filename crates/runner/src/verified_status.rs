@@ -4000,6 +4000,214 @@ pub fn checkout_hash_stream<S, D, B, R, V, U, F>(
 }
 
 
+pub open spec fn copy_hash_advance_spec(total: u64, count: usize) -> Result<u64, Seq<char>> {
+    if total as int + count as int > u64::MAX { Err("input length overflow"@) }
+    else { Ok((total as int + count as int) as u64) }
+}
+
+pub fn copy_hash_advance(total: u64, count: usize) -> (out: Result<u64, String>)
+    ensures match out {
+        Ok(next) => copy_hash_advance_spec(total, count) == Ok::<u64, Seq<char>>(next),
+        Err(error) => copy_hash_advance_spec(total, count) == Err::<u64, Seq<char>>(error@),
+    },
+{
+    match total.checked_add(count as u64) {
+        Some(next) => Ok(next),
+        None => Err("input length overflow".to_owned()),
+    }
+}
+
+#[verifier::opaque]
+pub open spec fn copy_hash_stream_step<S, B, R, V, W, U>(
+    before: (S, B, u64), after: (S, B, u64), read: R, view: V, write: W, update: U,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S,
+{
+    exists|count: usize, observed: S, bytes: &[u8], chunk: &[u8], written: (S, Result<(), String>)|
+        count > 0 && count <= bytes.len()
+        && read.ensures((before.0, before.1), (observed, after.1, Ok::<usize, String>(count)))
+        && view.ensures((&after.1,), bytes) && chunk@ == bytes@.subrange(0, count as int)
+        && write.ensures((observed, chunk), written) && written.1.is_ok()
+        && update.ensures((written.0, chunk), after.0)
+        && before.2 as int + count as int == after.2 as int
+}
+
+pub open spec fn copy_hash_stream_prefix<S, B, R, V, W, U>(
+    states: Seq<(S, B, u64)>, initial: (S, B, u64), read: R, view: V, write: W, update: U,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S,
+{
+    states.len() > 0 && states[0] == initial
+        && states.len() <= states.last().2 as int + 1
+        && (forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] copy_hash_stream_step(states[i], states[i + 1], read, view, write, update))
+}
+
+pub open spec fn copy_hash_stream_terminal<S, B, R, V, W, U, F>(
+    before: (S, B, u64), observation: (S, B, Result<usize, String>),
+    read: R, view: V, write: W, update: U, finalize: F, out: Result<(String, u64), String>,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S, F: Fn(S) -> String,
+{
+    read.ensures((before.0, before.1), observation)
+        && match observation.2 {
+            Err(error) => match out { Err(message) => message@ == error@, Ok(_) => false },
+            Ok(count) => if count == 0 {
+                match out {
+                    Ok((digest, length)) => length == before.2 && finalize.ensures((observation.0,), digest),
+                    Err(_) => false,
+                }
+            } else {
+                exists|bytes: &[u8], chunk: &[u8], written: (S, Result<(), String>)|
+                    count <= bytes.len() && view.ensures((&observation.1,), bytes)
+                    && chunk@ == bytes@.subrange(0, count as int)
+                    && write.ensures((observation.0, chunk), written)
+                    && match written.1 {
+                        Err(error) => match out { Err(message) => message@ == error@, Ok(_) => false },
+                        Ok(()) => exists|hashed: S|
+                            update.ensures((written.0, chunk), hashed)
+                            && match (copy_hash_advance_spec(before.2, count), out) {
+                                (Err(expected), Err(message)) => message@ == expected,
+                                _ => false,
+                            },
+                    }
+            },
+        }
+}
+
+pub open spec fn copy_hash_stream_result<S, B, R, V, W, U, F>(
+    initial: (S, B, u64), read: R, view: V, write: W, update: U, finalize: F,
+    out: Result<(String, u64), String>,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S, F: Fn(S) -> String,
+{
+    exists|states: Seq<(S, B, u64)>, observation: (S, B, Result<usize, String>)|
+        copy_hash_stream_prefix(states, initial, read, view, write, update)
+        && copy_hash_stream_terminal(states.last(), observation, read, view, write, update, finalize, out)
+}
+
+/// 读取原块后先完整写入，再更新摘要和计数；首错停止，EOF 才终结摘要。
+/// 输入、输出与摘要共享一个搬运状态，证明中的轨迹不产生运行时副本。
+pub fn copy_hash_stream<S, B, R, V, W, U, F>(
+    input_state: S, input_buffer: B, read: R, view: V, write: W, update: U, finalize: F,
+) -> (out: Result<(String, u64), String>)
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S, F: Fn(S) -> String,
+    requires
+        forall|buffer: &B| #[trigger] view.requires((buffer,)),
+        forall|state: S, buffer: B| #[trigger] read.requires((state, buffer)),
+        forall|state: S, buffer: B, result: (S, B, Result<usize, String>)|
+            #[trigger] read.ensures((state, buffer), result) ==>
+                (forall|bytes: &[u8]| #[trigger] view.ensures((&result.1,), bytes)
+                    ==> match result.2 { Ok(count) => count <= bytes.len(), Err(_) => true }),
+        forall|state: S, bytes: &[u8]| #[trigger] write.requires((state, bytes)),
+        forall|state: S, bytes: &[u8]| #[trigger] update.requires((state, bytes)),
+        forall|state: S| #[trigger] finalize.requires((state,)),
+    ensures copy_hash_stream_result((input_state, input_buffer, 0), read, view, write, update, finalize, out),
+{
+    let ghost initial = (input_state, input_buffer, 0u64);
+    let ghost states = seq![initial];
+    let mut state = input_state;
+    let mut buffer = input_buffer;
+    let mut total = 0u64;
+    loop
+        invariant
+            initial == (input_state, input_buffer, 0u64),
+            states.last() == (state, buffer, total),
+            copy_hash_stream_prefix(states, initial, read, view, write, update),
+            forall|buffer: &B| #[trigger] view.requires((buffer,)),
+            forall|state: S, buffer: B| #[trigger] read.requires((state, buffer)),
+            forall|state: S, buffer: B, result: (S, B, Result<usize, String>)|
+                #[trigger] read.ensures((state, buffer), result) ==>
+                    (forall|bytes: &[u8]| #[trigger] view.ensures((&result.1,), bytes)
+                        ==> match result.2 { Ok(count) => count <= bytes.len(), Err(_) => true }),
+            forall|state: S, bytes: &[u8]| #[trigger] write.requires((state, bytes)),
+            forall|state: S, bytes: &[u8]| #[trigger] update.requires((state, bytes)),
+            forall|state: S| #[trigger] finalize.requires((state,)),
+        decreases u64::MAX - total,
+    {
+        let observation = read(state, buffer);
+        let ghost observed = observation;
+        let (next_state, next_buffer, result) = observation;
+        state = next_state;
+        buffer = next_buffer;
+        let count = match result {
+            Err(error) => {
+                assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, Err(error)));
+                assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(count) => count,
+        };
+        if count == 0 {
+            let digest = finalize(state);
+            let out = Ok((digest, total));
+            assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, out));
+            assert(copy_hash_stream_result(initial, read, view, write, update, finalize, out));
+            return out;
+        }
+        let bytes = view(&buffer);
+        #[cfg(verus_keep_ghost)]
+        let chunk = vstd::slice::slice_subrange(bytes, 0, count);
+        #[cfg(not(verus_keep_ghost))]
+        let chunk = &bytes[0..count];
+        let ghost write_input = state;
+        assert(write_input == observed.0);
+        let written = write(state, chunk);
+        let ghost write_observation = written;
+        assert(write.ensures((write_input, chunk), write_observation));
+        let (written_state, result) = written;
+        state = written_state;
+        match result {
+            Err(error) => {
+                assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, Err(error)));
+                assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(()) => { assert(write_observation.1.is_ok()); },
+        }
+        assert(state == write_observation.0);
+        state = update(state, chunk);
+        let next = match copy_hash_advance(total, count) {
+            Err(error) => {
+                assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, Err(error)));
+                assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(next) => next,
+        };
+        assert(next > total);
+        let ghost after = (state, buffer, next);
+        assert(copy_hash_stream_step(states.last(), after, read, view, write, update)) by {
+            reveal(copy_hash_stream_step);
+            assert(count > 0 && count <= bytes.len());
+            assert(read.ensures((states.last().0, states.last().1),
+                (observed.0, after.1, Ok::<usize, String>(count))));
+            assert(view.ensures((&after.1,), bytes));
+            assert(chunk@ == bytes@.subrange(0, count as int));
+            assert(write.ensures((observed.0, chunk), write_observation));
+            assert(write_observation.1.is_ok());
+            assert(update.ensures((write_observation.0, chunk), after.0));
+            assert(states.last().2 as int + count as int == after.2 as int);
+        }
+        proof {
+            let previous = states;
+            states = states.push(after);
+            assert forall|i: int| 0 <= i < states.len() - 1 implies
+                #[trigger] copy_hash_stream_step(states[i], states[i + 1], read, view, write, update) by {
+                if i < previous.len() - 1 {
+                    assert(copy_hash_stream_step(previous[i], previous[i + 1], read, view, write, update));
+                }
+            }
+        }
+        total = next;
+    }
+}
+
 pub open spec fn git_tree_row_at(rows: Seq<&str>, i: int) -> Result<GitTreeRowBytes, GitInventoryErrorView> {
     git_tree_row_spec(rows[i].spec_bytes())
 }
