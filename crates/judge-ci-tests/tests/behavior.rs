@@ -88,11 +88,10 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
             )
         })
         .collect();
-    assert_eq!(
-        actual_edges
-            .symmetric_difference(&expected_edges)
-            .collect::<Vec<_>>(),
-        vec![]
+    let differing_edges: Vec<_> = actual_edges.symmetric_difference(&expected_edges).collect();
+    assert!(
+        differing_edges.is_empty(),
+        "differing edges: {differing_edges:?}"
     );
     assert_eq!(e["edges"].as_array().unwrap().len(), expected_edges.len());
     for name in &names {
