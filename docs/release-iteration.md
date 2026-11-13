@@ -127,6 +127,28 @@ stable 正式采用已在四个下游完成：Go feature PR `71`（head `b297569
 
 收口时按登记入口执行 `/bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json`，退出码为 `2`，原始原因是 `retention policy migration required; original record preserved`。这是宿主生命周期的前置缺口，不是发布或下游采用失败；未重复启动该 bootstrap。由于该前置未完成，FILEMAP／登记 canonical judge 没有有效结果，本轮登记检查保持 `unknown`。不依赖 bootstrap 的文档检查（`git diff --check` 和登记 JSON 解析）已通过。
 
+## 第十二轮 v0.1.5 preview 采用与下一候选（2026-11-13～14）
+
+上一正式版 `v0.1.4` 之后确认上游存在真实净改动，版本计划已推进到 `v0.1.5`。最近一个完整成功的测试版固定为：
+
+| 项目 | 身份 |
+| --- | --- |
+| preview 版本 | `v0.1.5-dev.43478399135.1.g07876e055ad618bf830788d37458377dcca6a9e6` |
+| source / tree | `07876e055ad618bf830788d37458377dcca6a9e6` / `7c65e6737a49f98e33bbf3c685217d4a745d9af4` |
+| landing collection / CodeQL | `43478399135` / `43478397347`，均 attempt `1` |
+| 发布 workflow | run `43482547108`，attempt `1`；`.github/workflows/chrono-release.yml` blob `ce38fbe5b0ced74709141b9ee43f26f4865cd124` |
+| Release | 公开、非 draft、prerelease，标签目标为 `07876e055ad618bf830788d37458377dcca6a9e6` |
+| 公开资产 | 34 个；`release.json` 6649 bytes，`4eb1c64ba88b8bbfef2f9eb0a9e0cc10277a30f76cd3a66196845898c5cfa166` |
+| 两平台资产 | Linux `1657696` bytes，`9091d00b8beb1546781c1031662fc171a14aa264ea24ff1e84c0996a045403c3`；macOS `1329600` bytes，`b3a21d966d19bf360daecaea1bdb1722b08e394a81c95648c337068ba7034837` |
+
+该发布 run 的 Linux/macOS frontend、全部登记构建与验证、package、publish、Linux 安装和 macOS 安装均成功。四个下游的 `dev` 声明都锁定该 preview；当前落地和最新 CI 为：Go `4639d31dea633c935ebbc14a308a1bd58c186624`（collection `43490975370`、CodeQL `43490974524`），TypeScript `717e65192567c1890228a13aec442eae0c30cf7b`（`43490976822`、`43490974801`），混合语言 `8a9167496f85ebf5b4690f084e7ba781b926cce0`（`43490976918`、`43490976242`），首次接入 `47d117da4d6d774468614ec43da2294f13f07dd8`（宿主检查 `43490974834`、CodeQL `43490974883`）；这些落地运行均成功。
+
+上游随后继续前进到 `00abeb0c559268f8ac762341fbcc00a0c1648071`，因此不能把上述 preview 晋升为 stable。其 landing collection `43490624514` 触发的下一次发布 run `43491845132` 仍在运行，当前状态为 `in_progress`，尚无公开资产或下游迁移证据。
+
+此前同一连续迭代中的失败 run `43487804581`（source `e83c53877c2b7fc87300f37d619b85861ac85280`）已终态为 failure：`linux_verify_runner_tests` 的 `producer_native_read_failure_keeps_transport_exit` 观察到 Linux `ETXTBSY (Text file busy)`，`linux_verify_worktree_tests` 的 `owner_deployment::owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs` 失败，随后 `linux_package` 失败；`publish`、`linux_install`、`macos_install` 均 skipped。原 stdout、stderr、退出码及诊断 artifact 已保留，不能用后续运行覆盖这些失败证据。
+
+收口时仍保留 bootstrap `retention policy migration required; original record preserved` 的退出码 `2` 和登记检查 `unknown`，不把它写成通过。
+
 ## 稳定门槛与下一轮
 
 下列条件全部满足时，候选才可 stable：上游 preview 公开资产和两平台安装通过；四个下游的 feature、integration、dev 链均落地；dev 上的真实单元、汇总和必要安全检查通过；候选相关失败已经在负责层修复并重新验证；stable Release 的标签、源码、资产和下游稳定版声明一致。任一条件缺失都保持 preview 或 unknown。

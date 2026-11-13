@@ -11,7 +11,7 @@
 
 ## 当前接入方式
 
-四个示例的默认分支都是 `dev`，安装声明位于各自的 `.chrono-harness/distribution.json`，当前均锁定测试版 `v0.1.4-dev.43435181626.1.g7c20c55c12e26f31c1afefecbc75ef045dd70d6f` 及其 `release.json` 摘要。它们下载选定的发布工具，不编译本仓 Rust 源码，也不提交工具二进制、SDK 或缓存。指南选择由各自 `.chrono-harness/instructions/` 维护，`AGENTS.md` 是指向 `CLAUDE.md` 的相对符号链接。
+四个示例的默认分支都是 `dev`，安装声明位于各自的 `.chrono-harness/distribution.json`，当前均锁定测试版 `v0.1.5-dev.43478399135.1.g07876e055ad618bf830788d37458377dcca6a9e6` 及其 `release.json` 摘要。它们下载选定的发布工具，不编译本仓 Rust 源码，也不提交工具二进制、SDK 或缓存。指南选择由各自 `.chrono-harness/instructions/` 维护，`AGENTS.md` 是指向 `CLAUDE.md` 的相对符号链接。
 
 Go、TS、混合示例采用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`，在 `.chrono-harness/ci/units.json` 明确登记单元、工作流、SDK、测试计划及依赖。Go 有 harness／rates 两个单元，TS 有 harness／labels 两个单元，混合示例有 harness、labels、normalize、rates 四个单元；harness 与汇总不安装业务 SDK。首次接入示例采用独立 `chrono-github-ci/v2`，只登记 macOS arm64／`macos-14`。
 
