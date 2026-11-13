@@ -2509,3 +2509,25 @@ runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` �
 已声明根不能代替原进程成功结果；观察事实的
 采集、JSON、文件发布、目录身份、租约、跨进程恢复和整个 IO 组合仍未证明，不能将
 局部谓词称为完整事务证明。行为验收与平台／宿主／交付缺口继续保留。
+
+## 缺失检出的缓存维护观察
+
+`verify.worktree-lifecycle` 从 `verified_lifecycle.rs` 编译 `automatic.rs` 和
+`automatic/owner_deployment.rs` 中的真实生产判定。显式维护、缓存待办和原独占租约
+共同决定是否观察缺失；登记类型必须是 birth 或 import；库存中的同路径附件，或
+非 detached 分支的另一个附件，继续拒绝缺失恢复。缺失报告的状态、两项存在性、
+任务结果和移除声明由同一类型化构造函数产生，分别固定为 preserved、absent、
+absent、unknown 和 not-claimed。真实维护和所有者部署直接调用这些函数。
+
+`verify.worktree-lifecycle-tests` 同时编译 `automatic.rs` 的独立边界预期，覆盖
+全部八种维护选择、精确登记类型、普通／detached 分支冲突和报告字段。相同预期也由
+普通 Rust 测试运行；原命令边界 mock 回归继续检查重复维护、部分附件、另附分支、
+账本与未保存源码保护。两项操作和原预算由现有登记负责，完整新增成本未测。
+
+本轮同时修改产品与宿主验证登记：三个程序文件登记上述实际编译根，说明文档显式
+登记为 data。既有运行时实现保留在 `cfg(not(verus_keep_ghost))` 下；文件进入编译
+依赖不表示其中全部函数已证明。JSON／Serde 序列化和字段插入、路径比较、文件存在性、
+Git inventory、租约、政策绑定、错误传播和外层维护组合仍有各自的证明与真实验收义务。
+本轮采用 Serde 对静态字符串字段的 Serialize，以及 serde_json::to_value／索引赋值
+保留字段和值的外部接口合同；这里只把类型化报告转为 JSON，并补入实际目标 path。
+全仓证明、完整外层组合和真实宿主持续稳定性继续保持未完成。

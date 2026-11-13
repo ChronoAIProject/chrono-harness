@@ -10,6 +10,23 @@ mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
+#[cfg(verus_keep_ghost)]
+#[path = "automatic.rs"]
+// The ordinary automatic module owns formatting of its runtime child modules.
+// This proof-only alias has a different module directory and must not traverse them.
+#[rustfmt::skip]
+mod automatic_verification;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::{
+    MissingCacheObservation, absence_probe_required, absent_attachment_conflict,
+    known_absent_enrollment, missing_cache_observation,
+};
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::{
+    MissingCacheObservation, absence_probe_required, absent_attachment_conflict,
+    known_absent_enrollment, missing_cache_observation,
+};
+
 verus! {
 
 /// An address left by failed admission has no checkout policy consumer.

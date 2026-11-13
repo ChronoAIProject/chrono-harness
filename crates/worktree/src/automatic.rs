@@ -1,20 +1,79 @@
 //! Opt-in lifecycle cleanup with explicit terminal and kernel-quiescent cache phases.
-mod age;
-mod cache_adoption;
-mod migration;
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/owner_deployment.rs"]
 mod owner_deployment;
+pub use owner_deployment::{absent_attachment_conflict, known_absent_enrollment};
+
+verus! {
+
+/// Only explicit maintenance with the original exclusion probes a missing cache.
+pub fn absence_probe_required(maintenance: bool, cache_pending: bool, excluded: bool)
+    -> (required: bool)
+    ensures required == (maintenance && cache_pending && excluded),
+{
+    maintenance && cache_pending && excluded
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(serde::Serialize))]
+pub struct MissingCacheObservation {
+    pub status: &'static str,
+    pub checkout_presence: &'static str,
+    pub metadata_presence: &'static str,
+    pub task_completion: &'static str,
+    pub worktree_removal: &'static str,
+    pub preserved_reason: &'static str,
+}
+
+/// An absent filesystem provides no evidence of task or disposal completion.
+pub fn missing_cache_observation() -> (observation: MissingCacheObservation)
+    ensures observation.status@ == "preserved"@,
+        observation.checkout_presence@ == "absent"@,
+        observation.metadata_presence@ == "absent"@,
+        observation.task_completion@ == "unknown"@,
+        observation.worktree_removal@ == "not-claimed"@,
+{
+    MissingCacheObservation {
+        status: "preserved",
+        checkout_presence: "absent",
+        metadata_presence: "absent",
+        task_completion: "unknown",
+        worktree_removal: "not-claimed",
+        preserved_reason: "checkout and original metadata are absent; retain unresolved task and original records",
+    }
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
+mod age;
+#[cfg(not(verus_keep_ghost))]
+mod cache_adoption;
+#[cfg(not(verus_keep_ghost))]
+mod migration;
+#[cfg(not(verus_keep_ghost))]
+mod owner_deployment;
+#[cfg(not(verus_keep_ghost))]
 mod producer;
+#[cfg(not(verus_keep_ghost))]
 mod retirement;
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_lifecycle::{Disposition, select_artifact};
 // Explicit file custody uses these same admission/enrollment capabilities, without
 // draining unrelated entries or migrating a historical checkout's policy.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct EvidenceExclusion {
     coordinator_root: PathBuf,
     config_path: String,
     state_directory: String,
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct EvidenceGuard {
     namespace: Lease,
     admission: Lease,
@@ -22,6 +81,7 @@ pub(crate) struct EvidenceGuard {
     ledger_path: PathBuf,
     ledger_bytes: Vec<u8>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl EvidenceGuard {
     pub(crate) fn capabilities_stable(&self) -> Result<(), String> {
         self.namespace.stable()?;
@@ -36,6 +96,7 @@ impl EvidenceGuard {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl EvidenceExclusion {
     pub(crate) fn acquire(&self, r: &mut Runner, target: &Path) -> Result<EvidenceGuard, String> {
         let coordinator = absolute(&self.coordinator_root, false)?;
@@ -196,19 +257,28 @@ impl EvidenceExclusion {
         Ok(guard)
     }
 }
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_owner_publication::{PolicyNamespace, policy_namespace_matches};
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     Start, artifact_disposal,
     maintenance::{self, Cleanup, Retention},
     ownership::Lease,
     start::{self, Runner},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers::{equal_bytes, equal_text};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{CommandSpec, decode, facts, json, no_symlink_parents, relative_path, sha256};
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::Registrations;
+#[cfg(not(verus_keep_ghost))]
 pub use producer::{RetainedArtifact, TemporaryHost};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -219,6 +289,7 @@ use std::{
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Policy {
     schema: String,
     coordinator_root: PathBuf,
@@ -241,6 +312,7 @@ struct Policy {
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct TerminalHistory {
     keep_seconds: u64,
     max_entries: usize,
@@ -248,12 +320,14 @@ struct TerminalHistory {
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Artifact {
     path: String,
     disposition: Disposition,
 }
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Attachment {
     gitfile_sha256: String,
     gitfile_id: String,
@@ -262,12 +336,14 @@ struct Attachment {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Receipt {
     path: String,
     sha256: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Attempt {
     path: String,
     token: String,
@@ -275,6 +351,7 @@ struct Attempt {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Terminal {
     head: String,
     retained_commit: String,
@@ -284,6 +361,7 @@ struct Terminal {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Ownership {
     path: String,
     id: String,
@@ -292,6 +370,7 @@ struct Ownership {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct CacheAttempt {
     path: String,
     intent: Receipt,
@@ -302,6 +381,7 @@ struct CacheAttempt {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Entry {
     path: PathBuf,
     #[serde(default)]
@@ -333,6 +413,7 @@ struct Entry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     disposed_at: Option<u64>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Entry {
     // Creation evidence keeps `branch`; only explicit migrate adopts a new checkout.
     fn current_branch(&self) -> &str {
@@ -371,6 +452,7 @@ impl Entry {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct CleanupProgress {
     stage: crate::verified_lifecycle::CleanupStage,
     detail: String,
@@ -378,6 +460,7 @@ struct CleanupProgress {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Ledger {
     schema: String,
     coordinator_root: PathBuf,
@@ -388,12 +471,14 @@ struct Ledger {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     retired_leases: Vec<retirement::RetiredLease>,
 }
+#[cfg(not(verus_keep_ghost))]
 struct Gate {
     path: PathBuf,
     token: String,
     lease: Option<Lease>,
     directory: Option<chrono_harness::ownership::DirectoryLease>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Gate {
     fn stable(&self) -> Result<(), String> {
         if let Some(directory) = &self.directory {
@@ -405,6 +490,7 @@ impl Gate {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Gate {
     fn drop(&mut self) {
         if self.lease.is_none()
@@ -415,6 +501,7 @@ impl Drop for Gate {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 struct PolicyInputs {
     policy: Policy,
     policy_path: String,
@@ -433,6 +520,7 @@ struct PolicyInputs {
     registry_digest: String,
     common: PathBuf,
 }
+#[cfg(not(verus_keep_ghost))]
 struct Manager {
     inputs: PolicyInputs,
     ledger: Ledger,
@@ -444,6 +532,7 @@ struct Manager {
     _namespace: Lease,
     _gate: Gate,
 }
+#[cfg(not(verus_keep_ghost))]
 fn record_directory(directory: &Path, target: &Path) -> Result<PathBuf, String> {
     let address = target.to_str().ok_or("worktree address is not UTF-8")?;
     no_symlink_parents(
@@ -451,6 +540,7 @@ fn record_directory(directory: &Path, target: &Path) -> Result<PathBuf, String> 
         &format!("enrollments/{}", sha256(address.as_bytes())),
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn absolute(path: &Path, absent: bool) -> Result<PathBuf, String> {
     if !path.is_absolute()
         || path
@@ -470,6 +560,7 @@ fn absolute(path: &Path, absent: bool) -> Result<PathBuf, String> {
     }
     Ok(p)
 }
+#[cfg(not(verus_keep_ghost))]
 fn directory_id(path: &Path) -> Result<String, String> {
     let m = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     if m.file_type().is_symlink() {
@@ -489,10 +580,12 @@ fn directory_id(path: &Path) -> Result<String, String> {
         ))
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn attachment(r: &mut Runner, target: &Path) -> Result<Attachment, String> {
     let metadata = r.text(target, &["rev-parse", "--absolute-git-dir"])?;
     attachment_at(target, Path::new(metadata.trim()))
 }
+#[cfg(not(verus_keep_ghost))]
 fn attachment_at(target: &Path, metadata: &Path) -> Result<Attachment, String> {
     absolute(target, false)?;
     let gitfile = target.join(".git");
@@ -510,6 +603,7 @@ fn attachment_at(target: &Path, metadata: &Path) -> Result<Attachment, String> {
         metadata,
     })
 }
+#[cfg(not(verus_keep_ghost))]
 fn main_attachment(target: &Path, metadata: &Path) -> Result<Attachment, String> {
     let git = target.join(".git");
     if !fs::symlink_metadata(&git)
@@ -526,12 +620,14 @@ fn main_attachment(target: &Path, metadata: &Path) -> Result<Attachment, String>
         metadata: metadata.into(),
     })
 }
+#[cfg(not(verus_keep_ghost))]
 fn write_json(path: &Path, v: &impl Serialize, immutable: bool) -> Result<Vec<u8>, String> {
     let mut bytes = serde_json::to_vec_pretty(v).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
     write_bytes(path, &bytes, immutable)?;
     Ok(bytes)
 }
+#[cfg(not(verus_keep_ghost))]
 fn write_bytes(path: &Path, bytes: &[u8], immutable: bool) -> Result<(), String> {
     write_bytes_staged(
         path,
@@ -540,6 +636,7 @@ fn write_bytes(path: &Path, bytes: &[u8], immutable: bool) -> Result<(), String>
         path.parent().ok_or("publication parent")?,
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn write_bytes_staged(
     path: &Path,
     bytes: &[u8],
@@ -562,11 +659,13 @@ fn write_bytes_staged(
 
 /// The lifecycle report owns these live process originals, even when the
 /// command runs in another checkout. The existing engine remains the only wait.
+#[cfg(not(verus_keep_ghost))]
 struct ManagedProcessOriginals {
     root: PathBuf,
     directory: PathBuf,
     publication: Option<chrono_harness::retained_artifacts::retention::Publication>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl ManagedProcessOriginals {
     fn begin(report: &mut Value) -> Result<Self, String> {
         let root = PathBuf::from(
@@ -682,6 +781,7 @@ impl ManagedProcessOriginals {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn load_policy(
     r: &mut Runner,
     root: &Path,
@@ -707,6 +807,7 @@ fn load_policy(
     let p = parse_policy(r, root, &policy_bytes)?;
     Ok(Some((p, path, policy_bytes)))
 }
+#[cfg(not(verus_keep_ghost))]
 fn parse_policy(r: &mut Runner, root: &Path, policy_bytes: &[u8]) -> Result<Policy, String> {
     let mut p: Policy = decode(policy_bytes)?;
     if !matches!(
@@ -775,6 +876,7 @@ fn parse_policy(r: &mut Runner, root: &Path, policy_bytes: &[u8]) -> Result<Poli
     }
     Ok(p)
 }
+#[cfg(not(verus_keep_ghost))]
 fn policy_namespace(policy: &Policy) -> PolicyNamespace {
     PolicyNamespace {
         schema: policy.schema.clone(),
@@ -786,6 +888,7 @@ fn policy_namespace(policy: &Policy) -> PolicyNamespace {
         state_directory: policy.state_directory.clone(),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl PolicyInputs {
     fn report_source(&self, report: &mut Value) {
         report["source_root"] = value!(self.policy.coordinator_root);
@@ -962,12 +1065,14 @@ impl PolicyInputs {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 struct Observation<'a> {
     inputs: &'a PolicyInputs,
     directory: &'a Path,
     scope: &'a Path,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn observe_status(
     r: &mut Runner,
     inputs: &PolicyInputs,
@@ -1071,6 +1176,7 @@ fn observe_status(
     stable(r)
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
     fn observation(&self) -> Observation<'_> {
         Observation {
@@ -1103,6 +1209,7 @@ impl Manager {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Observation<'_> {
     /// Observe Git's explicit owner inventory without enrolling or leasing rows.
     /// This is diagnostic input, never authority for a later cleanup effect.
@@ -1556,6 +1663,7 @@ impl Observation<'_> {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
     fn protect_reports(&self, r: &mut Runner, invoking: &Path) -> Result<(), String> {
         let coordinator = &self.inputs.policy.coordinator_root;
@@ -3495,6 +3603,40 @@ impl Manager {
                 );
                 continue;
             }
+            // A missing checkout has no cache filesystem to maintain. Observe
+            // the original attachment under its lease without claiming that
+            // the external removal finished this task or authorizes retirement.
+            if absence_probe_required(maintenance, cache, _lease.is_some()) {
+                let absence = (|| {
+                    if !retirement::absent(&e.path)? {
+                        return Ok(false);
+                    }
+                    self.check_absent_enrollment(
+                        &e,
+                        &r.inventory(&self.inputs.policy.coordinator_root)?,
+                    )?;
+                    self.stable(r)?;
+                    _lease.as_ref().unwrap().stable()?;
+                    Ok::<_, String>(true)
+                })();
+                match absence {
+                    Ok(true) => {
+                        let mut observation = value!(missing_cache_observation());
+                        observation["path"] = value!(e.path);
+                        report["drain"].as_array_mut().unwrap().push(observation);
+                        continue;
+                    }
+                    Ok(false) => (),
+                    Err(error) => {
+                        failures.push(format!("{}: {error}", e.path.display()));
+                        report["drain"]
+                            .as_array_mut()
+                            .unwrap()
+                            .push(value!({"path":e.path,"status":"failed","error":error}));
+                        continue;
+                    }
+                }
+            }
             let (config, bytes) = crate::configuration(
                 &self.inputs.policy.coordinator_root,
                 &self.inputs.config_path,
@@ -4178,6 +4320,7 @@ impl Manager {
 }
 
 /// Runs while the admission gate is held through drain, creation and enrollment.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn create(
     r: &mut Runner,
     o: &Start,
@@ -4219,6 +4362,7 @@ pub(crate) fn create(
 }
 
 /// Preserve the original producer report at the surviving anchor before admitting use/finish.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn seal_birth(
     r: &mut Runner,
     root: &Path,
@@ -4246,6 +4390,7 @@ pub(crate) fn seal_birth(
     manager.save()
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     let operation = args.first().ok_or("missing lifecycle command")?;
     let mut values = BTreeMap::new();
@@ -4705,6 +4850,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
 }
 
 /// Warnings are a projection of the already-persisted report, never new state.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn attention_reminder(report: &Value) -> String {
     let mut text = String::new();
     let status = &report["worktree_status"];
@@ -4745,6 +4891,7 @@ pub(crate) fn attention_reminder(report: &Value) -> String {
     text
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn registered_command(
     root: &Path,
     registrations: &Registrations,
@@ -4772,6 +4919,7 @@ fn registered_command(
     }
     action_command(root, registrations.config(), selected[0])
 }
+#[cfg(not(verus_keep_ghost))]
 fn action_command(root: &Path, config: &Value, a: &Value) -> Result<CommandSpec, String> {
     let tool = config["tools"]
         .as_array()
@@ -4786,6 +4934,7 @@ fn action_command(root: &Path, config: &Value, a: &Value) -> Result<CommandSpec,
         serde_json::from_value(a["argv"].clone()).map_err(|e| e.to_string())?,
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn program_command(
     root: &Path,
     config: &Value,
@@ -4832,6 +4981,7 @@ fn program_command(
     Ok(command)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn bootstrap_policy(
     r: &mut Runner,
     root: &Path,
@@ -4864,6 +5014,7 @@ fn bootstrap_policy(
     Ok(policy)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn bootstrap_command(
     r: &mut Runner,
     root: &Path,
@@ -4883,6 +5034,7 @@ fn bootstrap_command(
     Ok(command)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn canonical_command(
     root: &Path,
     registrations: &Registrations,
