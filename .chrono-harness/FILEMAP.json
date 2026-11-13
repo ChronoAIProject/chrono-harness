@@ -12,6 +12,7 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/experiments/ci-generation-dependencies.md","owner":"ci","surface":"documentation","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/maintenance.launchd.plist","owner":"repository","surface":"membership","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":"crates/judge-registration-tests/tests/fixtures/host-registries.json","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/release/native-tests/tests/fixtures/consume-launcher.json","owner":"host-release-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-release-native-tests"},{"kind":"test-execution","to":"test:host-release-native-tests"}],"verification":{"role":"data","roots":[]}},
@@ -1700,6 +1701,9 @@
       },
       "verify.ci-literals": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-literals-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.ci-generation-dependency.runner": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.ci-generation-dependency.consumer": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.ci-generation-dependency.missing": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-generation": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-generation-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-downloads": {"resources":[],"outputs":[".chrono-harness/state/"]},
