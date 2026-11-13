@@ -16,15 +16,17 @@ diagnostics 的 `verified_error.rs` 维护实际 `Failure` 的完整字段元组
 通用上下文参数只保留完整 owned 值，不证明 map 维护、JSON 或上下文来源。
 
 同根的完整装配保留全部八个字段，关联错误构造保留完整角色和节点；原因替换、
-拆出和恢复逐字段保留其它全部值及关联顺序。原生 IO 适配器、`Failure::error_node`
-和 `ReceivedError` 的拆装直接消费这些操作，不增加分配或容器。三项独立 Verus
+拆出和恢复逐字段保留其它全部值及关联顺序。原生 IO 适配器、`Failure::error_node`、
+`ReceivedError` 的拆装及 `LogFailure` 的外层／JSON／时间错误节点装配直接消费
+这些操作，不增加分配或容器。三项独立 Verus
 预期覆盖嵌套原因、重复／空角色、清空／恢复、完整二进制上下文、Unicode／NUL／
 换行及极值；同一驱动也普通运行。原真实记录测试核重复和空角色的完整有序节点、
 原生适配器全部字段及接收后完整记录往返，核对实际参数接线。
 
 明确使用固定 Rust 的元组搬运、`Box::new` 的类型擦除和标准 `Vec`／`String`
 操作接口；真实适配器不把仓内错误生产者登记成外部接口。context 维护、
-字段 clone、`RecordedError` 投影循环、`ReceivedError` 递归及 IO 错误分类仍待证明，
+字段 clone、`RecordedError` 投影循环、`ReceivedError` 递归、`LogFailure` 的种类／
+上下文选择及 IO 错误分类仍待证明，
 不授予外围 `error.rs` 整文件证明资格。
 
 本次节点状态扩展沿用现有生产／独立预期两项严格证明、FILEMAP 关系和 diagnostics

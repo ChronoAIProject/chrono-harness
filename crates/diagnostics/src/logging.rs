@@ -98,31 +98,23 @@ impl RecordedError for LogFailure {
                 context.insert("observed_fields".into(), observed_fields.clone().into());
                 (
                     "E_LOG_JSON",
-                    Some(Box::new(ErrorNode {
-                        error_type: std::any::type_name::<serde_json::Error>().into(),
-                        code: "native".into(),
-                        message: source.to_string(),
-                        context: Context::new(),
-                        source: None,
-                        native_code: None,
-                        traceback: None,
-                        related: Vec::new(),
-                    })),
+                    Some(Box::new(ErrorNode::new(
+                        std::any::type_name::<serde_json::Error>().into(),
+                        "native".into(),
+                        source.to_string(),
+                        Context::new(),
+                    ))),
                     context,
                 )
             }
             Self::Time(source) => (
                 "E_LOG_TIME",
-                Some(Box::new(ErrorNode {
-                    error_type: std::any::type_name::<time::error::Format>().into(),
-                    code: "native".into(),
-                    message: source.to_string(),
-                    context: Context::new(),
-                    source: None,
-                    native_code: None,
-                    traceback: None,
-                    related: Vec::new(),
-                })),
+                Some(Box::new(ErrorNode::new(
+                    std::any::type_name::<time::error::Format>().into(),
+                    "native".into(),
+                    source.to_string(),
+                    Context::new(),
+                ))),
                 Context::new(),
             ),
             Self::InvalidField { field, observed } => {
@@ -149,16 +141,16 @@ impl RecordedError for LogFailure {
                     .collect(),
             ),
         };
-        ErrorNode {
-            error_type: std::any::type_name::<Self>().into(),
-            code: code.into(),
-            message: self.to_string(),
+        ErrorNode::assemble(
+            std::any::type_name::<Self>().into(),
+            code.into(),
+            self.to_string(),
             context,
             source,
-            native_code: None,
-            traceback: None,
-            related: Vec::new(),
-        }
+            None,
+            None,
+            Vec::new(),
+        )
     }
 }
 
