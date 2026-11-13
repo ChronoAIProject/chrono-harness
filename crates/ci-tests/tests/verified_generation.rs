@@ -542,7 +542,7 @@ fn staging_case(fail_at: u8)
                 Err(error) => staging_step_result(2, stage.0 == u64::MAX && stage.1 == 17, fail_at)
                     == Err::<(), TargetFault>(error),
                 Ok(value) => staging_step_result(2, stage.0 == u64::MAX && stage.1 == 17, fail_at)
-                    == Ok::<(), TargetFault>(()) && value == (u64::MAX - 1, 18u64),
+                    == Ok::<(), TargetFault>(()) && value.0 == u64::MAX - 1 && value.1 == 18,
             },
     {
         let (trace, result) = staging_step(trace, 2, stage.0 == u64::MAX && stage.1 == 17, fail_at);
