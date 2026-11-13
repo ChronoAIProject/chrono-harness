@@ -392,6 +392,117 @@ fn original_records_require_the_exact_schema_attempt_digest_and_null_exit() {
 
 type TargetFault = (u8, u64);
 
+type AncestorPath = (u64, u64);
+type AncestorEvent = (u8, u64, u64);
+type AncestorState = (u8, Vec<AncestorEvent>);
+
+fn ancestor_case(count: u8, root: AncestorPath, fail: bool, fail_at: u64)
+    requires count <= 3,
+{
+    let next = |state: AncestorState| -> (out: (AncestorState, Option<AncestorPath>))
+        ensures out.0.0 == if state.0 > 0 { state.0 - 1 } else { 0 },
+            out.0.1@ == state.1@.push((1u8, u64::MAX, state.0 as u64)),
+            out.1 == if state.0 > 0 { Some((u64::MAX, state.0 as u64)) } else { None },
+    {
+        let (remaining, mut trace) = state;
+        trace.push((1, u64::MAX, remaining as u64));
+        if remaining > 0 { ((remaining - 1, trace), Some((u64::MAX, remaining as u64))) }
+        else { ((0, trace), None) }
+    };
+    let same = |path: &AncestorPath, root: &AncestorPath| -> (out: bool)
+        ensures out == (path.0 == root.0 && path.1 == root.1),
+    { path.0 == root.0 && path.1 == root.1 };
+    let flush = |state: AncestorState, path: AncestorPath| -> (out: (AncestorState, Result<(), AncestorPath>))
+        ensures out.0.0 == state.0,
+            out.0.1@ == state.1@.push((2u8, path.0, path.1)),
+            out.1 == if fail && path.1 == fail_at { Err::<(), AncestorPath>(path) } else { Ok::<(), AncestorPath>(()) },
+    {
+        let (remaining, mut trace) = state;
+        trace.push((2, path.0, path.1));
+        ((remaining, trace), if fail && path.1 == fail_at { Err(path) } else { Ok(()) })
+    };
+    proof {
+        let rank = |state: AncestorState| state.0 as nat;
+        assert(policy::directory_steps_finite(next, flush, rank));
+    }
+    let initial: AncestorState = (count, Vec::new());
+    let ghost start = initial;
+    let (state, result) = policy::sync_ancestor_directories(initial, root, next, same, flush);
+    proof {
+        let (states, steps, following) = choose|states: Seq<AncestorState>, steps: Seq<(AncestorState, AncestorPath)>,
+            following: (AncestorState, Option<AncestorPath>)|
+            policy::directory_prefix(start, root, states, steps, next, same, flush)
+                && policy::directory_terminal(states.last(), root, following, next, same, flush, (state, result));
+        assert(states[0] == start);
+        if steps.len() > 0 {
+            assert(next.ensures((states[0],), (steps[0].0, Some(steps[0].1))));
+            assert(flush.ensures((steps[0].0, steps[0].1), (states[1], Ok::<(), AncestorPath>(()))));
+        }
+        if steps.len() > 1 {
+            assert(next.ensures((states[1],), (steps[1].0, Some(steps[1].1))));
+            assert(flush.ensures((steps[1].0, steps[1].1), (states[2], Ok::<(), AncestorPath>(()))));
+        }
+        if steps.len() > 2 {
+            assert(next.ensures((states[2],), (steps[2].0, Some(steps[2].1))));
+            assert(flush.ensures((steps[2].0, steps[2].1), (states[3], Ok::<(), AncestorPath>(()))));
+        }
+        if steps.len() > 3 {
+            assert(next.ensures((states[3],), (steps[3].0, Some(steps[3].1))));
+            assert(false);
+        }
+        assert(steps.len() <= 3);
+        if steps.len() == 0 { assert(states.last() == states[0]); }
+        else if steps.len() == 1 { assert(states.last() == states[1]); }
+        else if steps.len() == 2 { assert(states.last() == states[2]); }
+        else { assert(states.last() == states[3]); }
+    }
+    // A closed-form oracle: ancestors descend from count to the first root or failure.
+    let stop = if root.0 == u64::MAX && 1 <= root.1 && root.1 <= count as u64 { root.1 as usize } else { 0usize };
+    let ancestor_error = fail && (stop as u64) < fail_at && fail_at <= count as u64;
+    let visited = if ancestor_error { count as usize - fail_at as usize + 1 } else { count as usize - stop };
+    let length = 2 * visited + if ancestor_error { 0usize } else { 2usize };
+    let (remaining, trace) = state;
+    expect(trace.len() == length);
+    if visited > 0 { expect(trace[0] == (1u8, u64::MAX, count as u64)); expect(trace[1] == (2u8, u64::MAX, count as u64)); }
+    if visited > 1 { expect(trace[2] == (1u8, u64::MAX, count as u64 - 1)); expect(trace[3] == (2u8, u64::MAX, count as u64 - 1)); }
+    if visited > 2 { expect(trace[4] == (1u8, u64::MAX, count as u64 - 2)); expect(trace[5] == (2u8, u64::MAX, count as u64 - 2)); }
+    if !ancestor_error {
+        expect(trace[2 * visited] == (1u8, u64::MAX, stop as u64));
+        expect(trace[2 * visited + 1] == (2u8, root.0, root.1));
+    }
+    expect(remaining as u64 == if ancestor_error { fail_at - 1 } else if stop > 0 { stop as u64 - 1 } else { 0u64 });
+    match result {
+        Err(path) => {
+            expect(ancestor_error || (fail && root.1 == fail_at));
+            expect(path == if ancestor_error { (u64::MAX, fail_at) } else { root });
+        },
+        Ok(()) => { expect(!ancestor_error && !(fail && root.1 == fail_at)); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn ancestor_sync_streams_complete_paths_stops_at_root_and_keeps_first_error() {
+    ancestor_case(0, (u64::MAX, 17), false, 0);
+    ancestor_case(1, (u64::MAX, 17), false, 0);
+    ancestor_case(3, (u64::MAX, 17), false, 0);
+    ancestor_case(3, (u64::MAX, 3), false, 0);
+    ancestor_case(3, (u64::MAX, 2), false, 0);
+    ancestor_case(3, (u64::MAX, 1), false, 0);
+    ancestor_case(3, (u64::MAX - 1, 2), false, 0);
+    ancestor_case(3, (u64::MAX, 17), true, 3);
+    ancestor_case(3, (u64::MAX, 17), true, 2);
+    ancestor_case(3, (u64::MAX, 17), true, 1);
+    ancestor_case(3, (u64::MAX, 17), true, 17);
+    ancestor_case(3, (u64::MAX, 2), true, 2);
+    ancestor_case(3, (u64::MAX, 2), true, 1);
+    ancestor_case(3, (u64::MAX, 2), true, 3);
+    ancestor_case(3, (u64::MAX, 3), true, 2);
+    ancestor_case(3, (u64::MAX, 0), true, 0);
+    ancestor_case(3, (u64::MAX, u64::MAX), true, u64::MAX);
+    ancestor_case(3, (0, u64::MAX), true, u64::MAX);
+    ancestor_case(1, (u64::MAX, 1), false, 0);
+}
+
 spec fn target_observation_step(length: nat) -> u8 {
     if length == 0 { 1u8 } else if length == 2 { 3u8 } else { 7u8 }
 }

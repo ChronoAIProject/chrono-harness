@@ -271,6 +271,144 @@ pub fn result_address_matches(
     }
 }
 
+pub open spec fn directory_steps_finite<S, P, E, N, D>(next: N, sync: D, rank: spec_fn(S) -> nat) -> bool
+    where N: Fn(S) -> (S, Option<P>), D: Fn(S, P) -> (S, Result<(), E>),
+{
+    (forall|before: S, after: S, path: P|
+        #[trigger] next.ensures((before,), (after, Some(path))) ==> rank(after) < rank(before))
+        && (forall|before: S, path: P, after: S, result: Result<(), E>|
+            #[trigger] sync.ensures((before, path), (after, result)) ==> rank(after) <= rank(before))
+}
+
+pub open spec fn directory_prefix<S, P, E, N, C, D>(
+    initial: S, root: P, states: Seq<S>, steps: Seq<(S, P)>, next: N, same: C, sync: D,
+) -> bool
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+{
+    states.len() == steps.len() + 1 && states.first() == initial
+        && forall|i: int| #![trigger steps[i]] 0 <= i < steps.len() ==>
+            next.ensures((states[i],), (steps[i].0, Some(steps[i].1)))
+                && same.ensures((&steps[i].1, &root), false)
+                && sync.ensures((steps[i].0, steps[i].1), (states[i + 1], Ok::<(), E>(())))
+}
+
+pub open spec fn directory_terminal<S, P, E, N, C, D>(
+    before: S, root: P, following: (S, Option<P>), next: N, same: C, sync: D,
+    out: (S, Result<(), E>),
+) -> bool
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+{
+    next.ensures((before,), following) && match following.1 {
+        None => sync.ensures((following.0, root), out),
+        Some(path) => (same.ensures((&path, &root), true) && sync.ensures((following.0, root), out))
+            || (same.ensures((&path, &root), false) && match out.1 {
+                Err(error) => sync.ensures((following.0, path), (out.0, Err::<(), E>(error))),
+                Ok(()) => false,
+            }),
+    }
+}
+
+pub open spec fn directory_result<S, P, E, N, C, D>(
+    initial: S, root: P, next: N, same: C, sync: D, out: (S, Result<(), E>),
+) -> bool
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+{
+    exists|states: Seq<S>, steps: Seq<(S, P)>, following: (S, Option<P>)|
+        directory_prefix(initial, root, states, steps, next, same, sync)
+            && directory_terminal(states.last(), root, following, next, same, sync, out)
+}
+
+/// Stream ancestors in order; sync the original root once at the boundary and preserve the first error.
+pub fn sync_ancestor_directories<S, P, E, N, C, D>(
+    initial: S, root: P, next: N, same: C, sync: D,
+) -> (out: (S, Result<(), E>))
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+    requires
+        forall|state: S| #[trigger] next.requires((state,)),
+        forall|path: &P, root: &P| #[trigger] same.requires((path, root)),
+        forall|state: S, path: P| #[trigger] sync.requires((state, path)),
+        exists|rank: spec_fn(S) -> nat| directory_steps_finite(next, sync, rank),
+    ensures directory_result(initial, root, next, same, sync, out),
+{
+    let ghost rank = choose|rank: spec_fn(S) -> nat| directory_steps_finite(next, sync, rank);
+    let mut state = initial;
+    let ghost states = seq![initial];
+    let ghost steps: Seq<(S, P)> = Seq::empty();
+    loop
+        invariant
+            directory_prefix(initial, root, states, steps, next, same, sync),
+            states.last() == state,
+            directory_steps_finite(next, sync, rank),
+            forall|state: S| #[trigger] next.requires((state,)),
+            forall|path: &P, root: &P| #[trigger] same.requires((path, root)),
+            forall|state: S, path: P| #[trigger] sync.requires((state, path)),
+        decreases rank(state),
+    {
+        let ghost before = state;
+        let following = next(state);
+        let ghost original_next = following;
+        let (after_next, path) = following;
+        assert(next.ensures((before,), original_next));
+        let path = match path {
+            None => {
+                let out = sync(after_next, root);
+                assert(directory_terminal(before, root, original_next, next, same, sync, out));
+                assert(directory_result(initial, root, next, same, sync, out));
+                return out;
+            },
+            Some(path) => path,
+        };
+        if same(&path, &root) {
+            let out = sync(after_next, root);
+            assert(directory_terminal(before, root, original_next, next, same, sync, out));
+            assert(directory_result(initial, root, next, same, sync, out));
+            return out;
+        }
+        let ghost step = (after_next, path);
+        let synced = sync(after_next, path);
+        let ghost original_sync = synced;
+        let (after_sync, result) = synced;
+        assert(sync.ensures((step.0, step.1), original_sync));
+        match result {
+            Err(error) => {
+                let out = (after_sync, Err(error));
+                assert(directory_terminal(before, root, original_next, next, same, sync, out));
+                assert(directory_result(initial, root, next, same, sync, out));
+                return out;
+            },
+            Ok(()) => (),
+        }
+        assert(next.ensures((before,), (step.0, Some(step.1))));
+        assert(same.ensures((&step.1, &root), false));
+        assert(sync.ensures((step.0, step.1), (after_sync, Ok::<(), E>(()))));
+        proof {
+            let old_states = states;
+            let old_steps = steps;
+            states = states.push(after_sync);
+            steps = steps.push(step);
+            assert forall|i: int| 0 <= i < steps.len() implies
+                #[trigger] next.ensures((states[i],), (steps[i].0, Some(steps[i].1)))
+                    && same.ensures((&steps[i].1, &root), false)
+                    && sync.ensures((steps[i].0, steps[i].1), (states[i + 1], Ok::<(), E>(()))) by {
+                if i < old_steps.len() {
+                    assert(next.ensures((old_states[i],), (old_steps[i].0, Some(old_steps[i].1))));
+                } else {
+                    assert(i == old_steps.len());
+                    assert(states[i] == before);
+                    assert(steps[i] == step);
+                }
+            }
+            assert(directory_prefix(initial, root, states, steps, next, same, sync));
+        }
+        assert(rank(after_sync) < rank(before));
+        state = after_sync;
+    }
+}
+
 pub enum TargetMismatch { Prepared, Rename, Published }
 
 impl TargetMismatch {

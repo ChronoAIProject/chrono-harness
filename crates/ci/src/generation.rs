@@ -326,12 +326,7 @@ impl Plan {
                                     )?;
                                     let parent = path.parent().ok_or("generation output parent")?;
                                     fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                                    for ancestor in
-                                        parent.ancestors().take_while(|ancestor| *ancestor != root)
-                                    {
-                                        sync(ancestor)?;
-                                    }
-                                    sync(root)?;
+                                    sync_ancestors(parent, root)?;
                                     Ok((stage, parent))
                                 })(),
                             )
@@ -396,6 +391,19 @@ fn sync(path: &Path) -> Result<(), String> {
         .and_then(|file| file.sync_all())
         .map_err(|e| format!("sync {}: {e}", path.display()))
 }
+fn sync_ancestors(start: &Path, root: &Path) -> Result<(), String> {
+    verified::sync_ancestor_directories(
+        start.ancestors(),
+        root,
+        |mut ancestors: std::path::Ancestors<'_>| {
+            let path = ancestors.next();
+            (ancestors, path)
+        },
+        |path: &&Path, root: &&Path| *path == *root,
+        |state, path: &Path| (state, sync(path)),
+    )
+    .1
+}
 fn record(
     publication: &Publication,
     directory: &Path,
@@ -433,10 +441,7 @@ pub(super) fn run(
     let state = inventory(&root)?;
     let store = no_symlink_parents(&root, STORE)?;
     fs::create_dir_all(&store).map_err(|e| e.to_string())?;
-    for parent in store.ancestors().take_while(|parent| *parent != root) {
-        sync(parent)?;
-    }
-    sync(&root)?;
+    sync_ancestors(&store, &root)?;
     let directory = unique_path(&store, "operation-", "")?;
     let attempt = directory
         .strip_prefix(&root)
