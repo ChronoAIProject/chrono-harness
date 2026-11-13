@@ -1005,6 +1005,206 @@ pub fn install_targets<S, E, Apply>(initial: S, count: usize, apply: Apply)
     out
 }
 
+pub enum ReturnCheckpoint { Observed, Published }
+
+impl ReturnCheckpoint {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::Observed => out@ == "evaluated"@,
+            Self::Published => out@ == "result"@,
+        },
+    {
+        match self { Self::Observed => "evaluated", Self::Published => "result" }
+    }
+}
+
+pub struct ReturnIo<O, P, Z, R, N> {
+    pub observe: O,
+    pub publish: P,
+    pub seal: Z,
+    pub release: R,
+    pub notify: N,
+}
+
+pub open spec fn return_callable<S, H, T, E, O, P, Z, R, N>(io: &ReturnIo<O, P, Z, R, N>) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    (forall|state: S, evaluated: &Result<T, E>| #[trigger] io.observe.requires((state, evaluated)))
+        && (forall|state: S, publication: &H, evaluated: &Result<T, E>| #[trigger] io.publish.requires((state, publication, evaluated)))
+        && (forall|state: S, publication: H, evaluated: &Result<T, E>| #[trigger] io.seal.requires((state, publication, evaluated)))
+        && (forall|state: S, evaluated: &Result<T, E>| #[trigger] io.release.requires((state, evaluated)))
+        && (forall|state: S, point: ReturnCheckpoint| #[trigger] io.notify.requires((state, point)))
+}
+
+pub open spec fn return_sealed_result<S, H, T, E, O, P, Z, R, N>(
+    initial: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+    out: (S, Result<T, E>),
+) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    exists|state: S, sealed: Result<(), E>|
+        #[trigger] io.seal.ensures((initial, publication, &evaluated), (state, sealed)) && match sealed {
+            Err(error) => out == (state, Err::<T, E>(error)),
+            Ok(()) => if effects is Unknown { out == (state, evaluated) }
+                else { exists|next: S, released: Result<(), E>|
+                    #[trigger] io.release.ensures((state, &evaluated), (next, released)) && match released {
+                        Err(error) => out == (next, Err::<T, E>(error)),
+                        Ok(()) => out == (next, evaluated),
+                    }
+                },
+        }
+}
+
+fn seal_generation_return<S, H, T, E, O, P, Z, R, N>(
+    state: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+) -> (out: (S, Result<T, E>))
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+    requires return_callable(io),
+    ensures return_sealed_result(state, publication, evaluated, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original = evaluated;
+    let ghost original_publication = publication;
+    let (state, sealed) = (io.seal)(state, publication, &evaluated);
+    let ghost after_seal = state;
+    let ghost original_seal = sealed;
+    let out = match sealed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            if effects.can_release() {
+                let (state, released) = (io.release)(state, &evaluated);
+                let ghost after_release = state;
+                let ghost original_release = released;
+                let out = match released {
+                    Err(error) => (state, Err(error)),
+                    Ok(success) => { assert(success == ()); (state, evaluated) },
+                };
+                assert(io.release.ensures((after_seal, &original), (after_release, original_release)));
+                out
+            } else { (state, evaluated) }
+        },
+    };
+    assert(io.seal.ensures((initial, original_publication, &original), (after_seal, original_seal)));
+    assert(return_sealed_result(initial, original_publication, original, effects, io, out));
+    out
+}
+
+pub open spec fn return_published_result<S, H, T, E, O, P, Z, R, N>(
+    initial: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+    out: (S, Result<T, E>),
+) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    exists|state: S, published: Result<(), E>|
+        #[trigger] io.publish.ensures((initial, &publication, &evaluated), (state, published)) && match published {
+            Err(error) => out == (state, Err::<T, E>(error)),
+            Ok(()) => exists|next: S|
+                #[trigger] io.notify.ensures((state, ReturnCheckpoint::Published), next)
+                    && return_sealed_result(next, publication, evaluated, effects, io, out),
+        }
+}
+
+fn publish_generation_return<S, H, T, E, O, P, Z, R, N>(
+    state: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+) -> (out: (S, Result<T, E>))
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+    requires return_callable(io),
+    ensures return_published_result(state, publication, evaluated, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original = evaluated;
+    let ghost original_publication = publication;
+    let (state, published) = (io.publish)(state, &publication, &evaluated);
+    let ghost after_publish = state;
+    let ghost original_publish = published;
+    let out = match published {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            let state = (io.notify)(state, ReturnCheckpoint::Published);
+            let ghost after_notify = state;
+            assert(io.notify.ensures((after_publish, ReturnCheckpoint::Published), after_notify));
+            seal_generation_return(state, publication, evaluated, effects, io)
+        },
+    };
+    assert(io.publish.ensures((initial, &original_publication, &original), (after_publish, original_publish)));
+    assert(return_published_result(initial, original_publication, original, effects, io, out));
+    out
+}
+
+pub open spec fn generation_return_result<S, H, T, E, O, P, Z, R, N>(
+    initial: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+    out: (S, Result<T, E>),
+) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    exists|state: S, observed: Result<(), E>|
+        #[trigger] io.observe.ensures((initial, &evaluated), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<T, E>(error)),
+            Ok(()) => exists|next: S|
+                #[trigger] io.notify.ensures((state, ReturnCheckpoint::Observed), next)
+                    && return_published_result(next, publication, evaluated, effects, io, out),
+        }
+}
+
+/// Observe, publish and seal the exact returned evaluation before conditionally releasing recovery.
+pub fn finish_generation_return<S, H, T, E, O, P, Z, R, N>(
+    state: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+) -> (out: (S, Result<T, E>))
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+    requires return_callable(io),
+    ensures generation_return_result(state, publication, evaluated, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original = evaluated;
+    let ghost original_publication = publication;
+    let (state, observed) = (io.observe)(state, &evaluated);
+    let ghost after_observe = state;
+    let ghost original_observe = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            let state = (io.notify)(state, ReturnCheckpoint::Observed);
+            let ghost after_notify = state;
+            assert(io.notify.ensures((after_observe, ReturnCheckpoint::Observed), after_notify));
+            publish_generation_return(state, publication, evaluated, effects, io)
+        },
+    };
+    assert(io.observe.ensures((initial, &original), (after_observe, original_observe)));
+    assert(generation_return_result(initial, original_publication, original, effects, io, out));
+    out
+}
+
 pub open spec fn evaluation<S, P, T, E, Prepare, Apply>(
     initial: S, prepare: Prepare, apply: Apply, out: (S, Evaluation<T, E>),
 ) -> bool

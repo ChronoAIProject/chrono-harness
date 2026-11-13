@@ -514,27 +514,50 @@ pub(super) fn run(
             "producer_evaluation":match &evaluated { Ok(changed)=>json!({"changed":changed}), Err(error)=>json!({"error":error}) }});
         // The evaluation has returned. Bind its exact result before attempting
         // to publish it, so recovery never needs to repeat projection effects.
-        inventory(&root)?.observe_producer_return(PRODUCER, &attempt,
-            json!({"method":"generation-evaluation","result_record":result,"process_exit":null}))
-            .map_err(|error| format!("{evaluated:?}; generation return observation failed: {error}; attempt {attempt}"))?;
-        checkpoint("evaluated");
-        record(&publication, &directory, "result.json", &result).map_err(|error| {
-            format!(
-                "{evaluated:?}; generation result publication failed: {error}; attempt {attempt}"
-            )
-        })?;
-        checkpoint("result");
-        publication
-            .complete_sealed(json!({"intent":intent,"result":result}))
-            .map_err(|error| {
-                format!("{evaluated:?}; generation sealing failed: {error}; attempt {attempt}")
-            })?;
-        if effects.can_release() {
-            inventory(&root)?.reference_paths(&role, &[]).map_err(|error| {
-                format!("{evaluated:?}; generation recovery release failed: {error}; attempt {attempt}")
-            })?;
-        }
-        evaluated
+        let io = verified::ReturnIo {
+            observe: |state, evaluated: &Result<bool, String>| {
+                (
+                    state,
+                    (|| {
+                        inventory(&root)?.observe_producer_return(PRODUCER, &attempt,
+                            json!({"method":"generation-evaluation","result_record":result,"process_exit":null}))
+                            .map_err(|error| format!("{evaluated:?}; generation return observation failed: {error}; attempt {attempt}"))
+                    })(),
+                )
+            },
+            publish: |state, publication: &Publication, evaluated: &Result<bool, String>| {
+                (
+                    state,
+                    record(publication, &directory, "result.json", &result).map_err(|error| {
+                        format!("{evaluated:?}; generation result publication failed: {error}; attempt {attempt}")
+                    }),
+                )
+            },
+            seal: |state, publication: Publication, evaluated: &Result<bool, String>| {
+                (
+                    state,
+                    publication.complete_sealed(json!({"intent":intent,"result":result}))
+                        .map_err(|error| {
+                            format!("{evaluated:?}; generation sealing failed: {error}; attempt {attempt}")
+                        }),
+                )
+            },
+            release: |state, evaluated: &Result<bool, String>| {
+                (
+                    state,
+                    (|| {
+                        inventory(&root)?.reference_paths(&role, &[]).map_err(|error| {
+                            format!("{evaluated:?}; generation recovery release failed: {error}; attempt {attempt}")
+                        })
+                    })(),
+                )
+            },
+            notify: |state, point: verified::ReturnCheckpoint| {
+                checkpoint(point.label());
+                state
+            },
+        };
+        verified::finish_generation_return((), publication, evaluated, &effects, &io).1
     })();
     evaluated
 }
