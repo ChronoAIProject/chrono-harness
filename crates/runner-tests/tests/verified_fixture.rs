@@ -25,6 +25,9 @@ mod isolation;
 #[cfg(verus_keep_ghost)]
 #[path = "protocol_v1.rs"]
 mod protocol;
+#[cfg(verus_keep_ghost)]
+#[path = "retention.rs"]
+mod retention;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -32,6 +35,14 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 verus! {
+#[cfg(verus_keep_ghost)]
+fn bounded_fixture_recovery_preserves_the_original_eight_round_limit() {
+    expect(retention::fixture_recovery_has_room(0));
+    expect(retention::fixture_recovery_has_room(7));
+    expect(!retention::fixture_recovery_has_room(8));
+    expect(!retention::fixture_recovery_has_room(usize::MAX));
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn custody_release_requires_original_child_result_and_owner_retirement() {
     expect(isolation::release_custody(true, true));
