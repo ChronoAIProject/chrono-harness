@@ -1,5 +1,7 @@
 use chrono_diagnostics::{
-    error::{ErrorNode, ErrorRecord, Failure, NativeIoError, ReceivedError, RecordedError},
+    error::{
+        ErrorNode, ErrorRecord, Failure, NativeIoError, ReceivedError, RecordedError, RelatedError,
+    },
     logging::{self, LogFailure, LogRecord, Logger},
 };
 use serde_json::{Value, json};
@@ -77,7 +79,12 @@ fn wrapping_and_round_trip_keep_actual_causes_native_code_and_related_error() {
         OriginalIo(io::Error::from_raw_os_error(2)),
     )
     .at("path", "input λ")
-    .with_related("cleanup", Failure::new("E_CLEANUP", "cleanup unavailable"));
+    .with_related("cleanup", Failure::new("E_CLEANUP", "cleanup unavailable"))
+    .with_related(
+        "cleanup",
+        Failure::new("E_RETRY", "retry λ\0\n").at("attempt", 7),
+    )
+    .with_related("", Failure::new("E_EMPTY_ROLE", "empty role is retained"));
     let original = failure
         .source()
         .unwrap()
@@ -94,7 +101,55 @@ fn wrapping_and_round_trip_keep_actual_causes_native_code_and_related_error() {
     );
     assert_eq!(failure.related().next().unwrap().0, "cleanup");
     let record = failure.record();
+    assert_eq!(record.error.error_type, std::any::type_name::<Failure>());
+    assert_eq!(record.error.code, "E_READ");
+    assert_eq!(record.error.message, "reading declared input failed");
     assert_eq!(record.error.context["path"], "input λ");
+    assert!(record.error.native_code.is_none());
+    assert!(record.error.traceback.is_none());
+    let related_expected = [
+        (
+            "cleanup",
+            "E_CLEANUP",
+            "cleanup unavailable",
+            Default::default(),
+        ),
+        (
+            "cleanup",
+            "E_RETRY",
+            "retry λ\0\n",
+            [("attempt".into(), json!(7))].into(),
+        ),
+        (
+            "",
+            "E_EMPTY_ROLE",
+            "empty role is retained",
+            Default::default(),
+        ),
+    ]
+    .into_iter()
+    .map(|(role, code, message, context)| RelatedError {
+        role: role.into(),
+        error: ErrorNode {
+            error_type: std::any::type_name::<Failure>().into(),
+            code: code.into(),
+            message: message.into(),
+            context,
+            source: None,
+            native_code: None,
+            traceback: None,
+            related: Vec::new(),
+        },
+    })
+    .collect::<Vec<_>>();
+    assert_eq!(record.error.related, related_expected);
+    let cause = record.error.source.as_ref().unwrap();
+    assert_eq!(cause.error_type, std::any::type_name::<OriginalIo>());
+    assert_eq!(cause.code, "fixture.io");
+    assert_eq!(
+        cause.traceback.as_deref(),
+        Some("obtained upstream traceback")
+    );
     assert_eq!(
         record
             .error
@@ -124,7 +179,16 @@ fn wrapping_and_round_trip_keep_actual_causes_native_code_and_related_error() {
 fn domain_rejection_does_not_invent_a_source_and_wire_version_is_strict() {
     let error = Failure::new("E_USAGE", "invalid argument");
     assert!(error.source().is_none());
-    let mut value = serde_json::to_value(error.record()).unwrap();
+    let record = error.record();
+    assert_eq!(record.error.error_type, std::any::type_name::<Failure>());
+    assert_eq!(record.error.code, "E_USAGE");
+    assert_eq!(record.error.message, "invalid argument");
+    assert!(record.error.context.is_empty());
+    assert!(record.error.source.is_none());
+    assert!(record.error.native_code.is_none());
+    assert!(record.error.traceback.is_none());
+    assert!(record.error.related.is_empty());
+    let mut value = serde_json::to_value(record).unwrap();
     assert_eq!(value["schema"], "chrono-error/v1");
     assert_eq!(value["error"]["source"], Value::Null);
     value["schema"] = json!("chrono-error/v999");
@@ -151,11 +215,22 @@ fn native_io_adapter_preserves_kind_message_and_os_code() {
         Some(32)
     );
     let node = adapted.error_node();
+    assert_eq!(node.error_type, std::any::type_name::<NativeIoError>());
     assert_eq!(node.code, "E_NATIVE_IO");
+    assert_eq!(node.message, message);
     assert_eq!(node.native_code, Some(32));
     assert_eq!(node.context["kind"], format!("{kind:?}"));
     assert_eq!(node.source.as_ref().unwrap().native_code, Some(32));
     assert_eq!(node.source.as_ref().unwrap().message, message);
+    assert!(node.traceback.is_none());
+    assert!(node.related.is_empty());
+    let native = node.source.as_ref().unwrap();
+    assert_eq!(native.error_type, "std::io::Error");
+    assert_eq!(native.code, format!("io::{kind:?}"));
+    assert_eq!(native.context["kind"], format!("{kind:?}"));
+    assert!(native.source.is_none());
+    assert!(native.traceback.is_none());
+    assert!(native.related.is_empty());
 }
 
 #[test]

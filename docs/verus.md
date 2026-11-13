@@ -8,10 +8,29 @@ diagnostics 的 `verified_error.rs` 维护实际 `Failure` 的完整字段元组
 独立 Verus 预期核节点／错误的完整多字段载荷、零／最大值、已有原因替换、
 重复／空角色和多次追加，同一驱动沿原未过滤 diagnostics 测试运行。
 
+同一根定义实际 `ErrorNode<C>`／`RelatedError<C>`；`error.rs` 的类型别名将上下文
+选为原 `BTreeMap<String, Value>`，没有另建模型或节点副本。`Failure::new` 直接调用
+这个节点的默认构造：类型、错误码、消息和整个上下文均保留原值，原因、原生码、
+栈和关联表明确为空。独立预期核不同字段、空值、Unicode／NUL／换行和完整二进制
+上下文，同一驱动也作为 Rust 测试执行；原真实记录用例核实际字段和严格序列化边界。
+通用上下文参数只保留完整 owned 值，不证明 map 维护、JSON 或上下文来源。
+
+同根的完整装配保留全部八个字段，关联错误构造保留完整角色和节点；原因替换、
+拆出和恢复逐字段保留其它全部值及关联顺序。原生 IO 适配器、`Failure::error_node`、
+`ReceivedError` 的拆装及 `LogFailure` 的外层／JSON／时间错误节点装配直接消费
+这些操作，不增加分配或容器。三项独立 Verus
+预期覆盖嵌套原因、重复／空角色、清空／恢复、完整二进制上下文、Unicode／NUL／
+换行及极值；同一驱动也普通运行。原真实记录测试核重复和空角色的完整有序节点、
+原生适配器全部字段及接收后完整记录往返，核对实际参数接线。
+
 明确使用固定 Rust 的元组搬运、`Box::new` 的类型擦除和标准 `Vec`／`String`
-操作接口；真实适配器不把仓内错误生产者登记成外部接口。`ErrorNode` 构造、
-context 维护、`RecordedError` 投影、`ReceivedError` 递归及 IO 错误分类仍待证明，
+操作接口；真实适配器不把仓内错误生产者登记成外部接口。context 维护、
+字段 clone、`RecordedError` 投影循环、`ReceivedError` 递归、`LogFailure` 的种类／
+上下文选择及 IO 错误分类仍待证明，
 不授予外围 `error.rs` 整文件证明资格。
+
+本次节点状态扩展沿用现有生产／独立预期两项严格证明、FILEMAP 关系和 diagnostics
+九项操作，保留原测试、线程、预算及工具版本，无新增依赖或宿主政策；完整成本未测。
 
 **产品与宿主登记同时修改：**沿用固定 Verus／宏和原 diagnostics 单元入口，
 新增生产与独立预期两项整 crate 操作及显式源关系，顺序消费重叠的 state 输出。
