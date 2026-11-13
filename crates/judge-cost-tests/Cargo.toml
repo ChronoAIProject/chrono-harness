@@ -5,6 +5,8 @@ edition = "2024"
 publish = false
 
 [dependencies]
+chrono-judge-filemap = { path = "../judge-filemap" }
+chrono-judge-cost = { path = "../judge-cost" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-identifiers = { path = "../identifiers" }
 verus_builtin_macros = "=0.0.0-2026-04-20-1748"
@@ -15,8 +17,6 @@ serde_json = "1"
 chrono-harness = { path = "../runner" }
 
 [dev-dependencies]
-chrono-judge-cost = { path = "../judge-cost" }
-chrono-judge-filemap = { path = "../judge-filemap" }
 tempfile = "3"
 
 [profile.dev.package.sha2]
@@ -37,5 +37,17 @@ bench = false
 [[bin]]
 name = "chrono-judge-registration-test-cli"
 path = "../judge-registration/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-cost-test-cli"
+path = "../judge-cost/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-filemap-test-cli"
+path = "../judge-filemap/src/main.rs"
 test = false
 bench = false

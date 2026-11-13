@@ -781,13 +781,11 @@
         ],
         "consumer": "check.unit_judge-filemap",
         "caches": [
-          "check.judge-filemap",
           "check.judge-filemap-tests",
           "check.judge-projects",
           "check.judge-routes"
         ],
         "save_caches": [
-          "check.judge-filemap",
           "check.judge-filemap-tests"
         ]
       },
@@ -823,7 +821,6 @@
         ],
         "consumer": "check.unit_judge-projects",
         "caches": [
-          "check.judge-filemap",
           "check.judge-projects",
           "check.judge-projects-tests",
           "check.judge-routes"
@@ -846,12 +843,9 @@
         ],
         "consumer": "check.unit_judge-cost",
         "caches": [
-          "check.judge-cost",
-          "check.judge-cost-tests",
-          "check.judge-filemap"
+          "check.judge-cost-tests"
         ],
         "save_caches": [
-          "check.judge-cost",
           "check.judge-cost-tests"
         ]
       },
@@ -868,8 +862,6 @@
         ],
         "consumer": "check.unit_judge-mixed",
         "caches": [
-          "check.judge-cost",
-          "check.judge-filemap",
           "check.judge-mixed-tests"
         ],
         "save_caches": [
@@ -891,8 +883,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-cost",
-          "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",
           "check.judge-workflow-tests"
@@ -915,8 +905,6 @@
         "consumer": "check.unit_inputs",
         "caches": [
           "check.inputs-tests",
-          "check.judge-cost",
-          "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",
           "check.judge-workflow"
@@ -980,8 +968,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-cost",
-          "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",
           "check.judge-workflow-tests.judge-workflow-units"
@@ -1005,8 +991,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-cost",
-          "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",
           "check.judge-workflow-tests.judge-workflow-short"

@@ -1,4 +1,6 @@
 //! 正式生产者的命令边界验收；外部编译器全部由 Rust mock 提供。
+#[path = "../../../../crates/runner-tests/tests/support/isolated_capability.rs"]
+mod isolated_capability;
 use chrono_host_bootstrap::{bindings::Environment, proved_build};
 use serde_json::{Value, json};
 use std::{
@@ -397,7 +399,17 @@ fn failed_or_ineffective_recovery_preserves_the_failure_and_never_loops() {
 
 #[test]
 fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
-    let f = Fixture::new();
+    if !isolated_capability::isolated_capability_test(
+        "retained_recovery_originals_publish_a_consumer_that_can_be_released",
+    ) {
+        return;
+    }
+    let mut f = Fixture::new();
+    f._temp.disable_cleanup(true);
+    eprintln!(
+        "recovery consumer fixture (retained on failure): {}",
+        f.root.display()
+    );
     write(&f.root.join(".chrono-harness/retention.json"), &serde_json::to_vec(&json!({
         "schema":"chrono-output-retention/v2", "producers":{"check-original":[".chrono-harness/state/proved-builds/"]},
         "keep_seconds":0, "max_related_outputs":512, "max_summaries":128, "max_nodes_per_round":256,
@@ -475,6 +487,7 @@ fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
         assert_eq!(maintenance["remaining_outputs"], Value::Null);
         assert_eq!(maintenance["disposed"], json!([]));
         assert!(f.root.join(notice["path"].as_str().unwrap()).is_dir());
+        f._temp.disable_cleanup(false);
         return;
     }
     assert_eq!(maintenance["accounting_errors"], json!([]));
@@ -496,6 +509,7 @@ fn retained_recovery_originals_publish_a_consumer_that_can_be_released() {
     } else {
         assert_eq!(maintenance["remaining_outputs"], 0);
     }
+    f._temp.disable_cleanup(false);
 }
 
 #[test]

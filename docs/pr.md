@@ -36,6 +36,8 @@ crates/pr/target/debug/chrono-pr pr-watch --pr 123 --head-sha <40位提交SHA>
 
 stdout 恰为一份 `chrono-pr-result/v2` JSON，帮助信息除外。结果含 command、repository、base、pr、expected_head、observed_head、outcome、checks、error 和 receipts，并给出 `operation`、`continued_operation`、`operation_state`、`command_exit_code`、`pr_state`、`merge_commit` 和更新时间。每条回执保存实际 argv、执行物摘要、PID、退出／signal、`owned_work_joined`、失败、流完整性和 stdout／stderr／launch 原件的路径、长度及摘要；正常结果不再内嵌两套流字节。消费者读取原件并核摘要。原件写入失败时，stdout 退回实际已取得的内嵌字节并明确报告 `storage_error`，退出 2；该输出不声称已持久保存。不保存子进程环境值或凭据，调用意图只保留环境摘要。
 
+CLI 输出复用 runner 的原生发布器。写入失败返回 2，并尝试向 stderr 发布带原生错误、原业务退出码及已发布字节数的诊断；健康输出保留原字节和退出码。真实同源 CLI 回归将 stdout 接到只读普通文件，核对 EBADF、单条诊断和原文件字节。失败现场由 pr-tests 保留至调试与验收义务完成，成功时回收；没有新增发布 API、依赖或执行入口，总成本未测。
+
 CLI 复用 runner 已有的宿主日志入口，按明确的 `--host-root` 读取 `.chrono-harness/logging.json`；未采用时沿用原输出。采用后，有限日志保存命令开始、真实返回码和已有进程事件，stdout 的 JSON 与业务 stderr 仍走原出口。日志政策或发布失败沿现有日志入口报错，不伪装为业务成功。时间观察不能代替原进程结果，也不能证明诊断本身没有开销。
 
 **产品与宿主登记同时修改：**PR CLI 接入现有日志政策，FILEMAP 增加对应使用关系；Rust 用例在原 `test.pr-tests` 中核查询、原生等待后回读和 API 失败的结果、原调用次数、有限日志及凭据不泄露。原测试、线程和五秒业务时限保留，不增加诊断专用执行入口；实际超时原因和新增 IO 成本仍须由本轮原件核实。

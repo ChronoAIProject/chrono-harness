@@ -4000,6 +4000,214 @@ pub fn checkout_hash_stream<S, D, B, R, V, U, F>(
 }
 
 
+pub open spec fn copy_hash_advance_spec(total: u64, count: usize) -> Result<u64, Seq<char>> {
+    if total as int + count as int > u64::MAX { Err("input length overflow"@) }
+    else { Ok((total as int + count as int) as u64) }
+}
+
+pub fn copy_hash_advance(total: u64, count: usize) -> (out: Result<u64, String>)
+    ensures match out {
+        Ok(next) => copy_hash_advance_spec(total, count) == Ok::<u64, Seq<char>>(next),
+        Err(error) => copy_hash_advance_spec(total, count) == Err::<u64, Seq<char>>(error@),
+    },
+{
+    match total.checked_add(count as u64) {
+        Some(next) => Ok(next),
+        None => Err("input length overflow".to_owned()),
+    }
+}
+
+#[verifier::opaque]
+pub open spec fn copy_hash_stream_step<S, B, R, V, W, U>(
+    before: (S, B, u64), after: (S, B, u64), read: R, view: V, write: W, update: U,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S,
+{
+    exists|count: usize, observed: S, bytes: &[u8], chunk: &[u8], written: (S, Result<(), String>)|
+        count > 0 && count <= bytes.len()
+        && read.ensures((before.0, before.1), (observed, after.1, Ok::<usize, String>(count)))
+        && view.ensures((&after.1,), bytes) && chunk@ == bytes@.subrange(0, count as int)
+        && write.ensures((observed, chunk), written) && written.1.is_ok()
+        && update.ensures((written.0, chunk), after.0)
+        && before.2 as int + count as int == after.2 as int
+}
+
+pub open spec fn copy_hash_stream_prefix<S, B, R, V, W, U>(
+    states: Seq<(S, B, u64)>, initial: (S, B, u64), read: R, view: V, write: W, update: U,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S,
+{
+    states.len() > 0 && states[0] == initial
+        && states.len() <= states.last().2 as int + 1
+        && (forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] copy_hash_stream_step(states[i], states[i + 1], read, view, write, update))
+}
+
+pub open spec fn copy_hash_stream_terminal<S, B, R, V, W, U, F>(
+    before: (S, B, u64), observation: (S, B, Result<usize, String>),
+    read: R, view: V, write: W, update: U, finalize: F, out: Result<(String, u64), String>,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S, F: Fn(S) -> String,
+{
+    read.ensures((before.0, before.1), observation)
+        && match observation.2 {
+            Err(error) => match out { Err(message) => message@ == error@, Ok(_) => false },
+            Ok(count) => if count == 0 {
+                match out {
+                    Ok((digest, length)) => length == before.2 && finalize.ensures((observation.0,), digest),
+                    Err(_) => false,
+                }
+            } else {
+                exists|bytes: &[u8], chunk: &[u8], written: (S, Result<(), String>)|
+                    count <= bytes.len() && view.ensures((&observation.1,), bytes)
+                    && chunk@ == bytes@.subrange(0, count as int)
+                    && write.ensures((observation.0, chunk), written)
+                    && match written.1 {
+                        Err(error) => match out { Err(message) => message@ == error@, Ok(_) => false },
+                        Ok(()) => exists|hashed: S|
+                            update.ensures((written.0, chunk), hashed)
+                            && match (copy_hash_advance_spec(before.2, count), out) {
+                                (Err(expected), Err(message)) => message@ == expected,
+                                _ => false,
+                            },
+                    }
+            },
+        }
+}
+
+pub open spec fn copy_hash_stream_result<S, B, R, V, W, U, F>(
+    initial: (S, B, u64), read: R, view: V, write: W, update: U, finalize: F,
+    out: Result<(String, u64), String>,
+) -> bool
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S, F: Fn(S) -> String,
+{
+    exists|states: Seq<(S, B, u64)>, observation: (S, B, Result<usize, String>)|
+        copy_hash_stream_prefix(states, initial, read, view, write, update)
+        && copy_hash_stream_terminal(states.last(), observation, read, view, write, update, finalize, out)
+}
+
+/// 读取原块后先完整写入，再更新摘要和计数；首错停止，EOF 才终结摘要。
+/// 输入、输出与摘要共享一个搬运状态，证明中的轨迹不产生运行时副本。
+pub fn copy_hash_stream<S, B, R, V, W, U, F>(
+    input_state: S, input_buffer: B, read: R, view: V, write: W, update: U, finalize: F,
+) -> (out: Result<(String, u64), String>)
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S, F: Fn(S) -> String,
+    requires
+        forall|buffer: &B| #[trigger] view.requires((buffer,)),
+        forall|state: S, buffer: B| #[trigger] read.requires((state, buffer)),
+        forall|state: S, buffer: B, result: (S, B, Result<usize, String>)|
+            #[trigger] read.ensures((state, buffer), result) ==>
+                (forall|bytes: &[u8]| #[trigger] view.ensures((&result.1,), bytes)
+                    ==> match result.2 { Ok(count) => count <= bytes.len(), Err(_) => true }),
+        forall|state: S, bytes: &[u8]| #[trigger] write.requires((state, bytes)),
+        forall|state: S, bytes: &[u8]| #[trigger] update.requires((state, bytes)),
+        forall|state: S| #[trigger] finalize.requires((state,)),
+    ensures copy_hash_stream_result((input_state, input_buffer, 0), read, view, write, update, finalize, out),
+{
+    let ghost initial = (input_state, input_buffer, 0u64);
+    let ghost states = seq![initial];
+    let mut state = input_state;
+    let mut buffer = input_buffer;
+    let mut total = 0u64;
+    loop
+        invariant
+            initial == (input_state, input_buffer, 0u64),
+            states.last() == (state, buffer, total),
+            copy_hash_stream_prefix(states, initial, read, view, write, update),
+            forall|buffer: &B| #[trigger] view.requires((buffer,)),
+            forall|state: S, buffer: B| #[trigger] read.requires((state, buffer)),
+            forall|state: S, buffer: B, result: (S, B, Result<usize, String>)|
+                #[trigger] read.ensures((state, buffer), result) ==>
+                    (forall|bytes: &[u8]| #[trigger] view.ensures((&result.1,), bytes)
+                        ==> match result.2 { Ok(count) => count <= bytes.len(), Err(_) => true }),
+            forall|state: S, bytes: &[u8]| #[trigger] write.requires((state, bytes)),
+            forall|state: S, bytes: &[u8]| #[trigger] update.requires((state, bytes)),
+            forall|state: S| #[trigger] finalize.requires((state,)),
+        decreases u64::MAX - total,
+    {
+        let observation = read(state, buffer);
+        let ghost observed = observation;
+        let (next_state, next_buffer, result) = observation;
+        state = next_state;
+        buffer = next_buffer;
+        let count = match result {
+            Err(error) => {
+                assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, Err(error)));
+                assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(count) => count,
+        };
+        if count == 0 {
+            let digest = finalize(state);
+            let out = Ok((digest, total));
+            assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, out));
+            assert(copy_hash_stream_result(initial, read, view, write, update, finalize, out));
+            return out;
+        }
+        let bytes = view(&buffer);
+        #[cfg(verus_keep_ghost)]
+        let chunk = vstd::slice::slice_subrange(bytes, 0, count);
+        #[cfg(not(verus_keep_ghost))]
+        let chunk = &bytes[0..count];
+        let ghost write_input = state;
+        assert(write_input == observed.0);
+        let written = write(state, chunk);
+        let ghost write_observation = written;
+        assert(write.ensures((write_input, chunk), write_observation));
+        let (written_state, result) = written;
+        state = written_state;
+        match result {
+            Err(error) => {
+                assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, Err(error)));
+                assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(()) => { assert(write_observation.1.is_ok()); },
+        }
+        assert(state == write_observation.0);
+        state = update(state, chunk);
+        let next = match copy_hash_advance(total, count) {
+            Err(error) => {
+                assert(copy_hash_stream_terminal(states.last(), observed, read, view, write, update, finalize, Err(error)));
+                assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
+                return Err(error);
+            },
+            Ok(next) => next,
+        };
+        assert(next > total);
+        let ghost after = (state, buffer, next);
+        assert(copy_hash_stream_step(states.last(), after, read, view, write, update)) by {
+            reveal(copy_hash_stream_step);
+            assert(count > 0 && count <= bytes.len());
+            assert(read.ensures((states.last().0, states.last().1),
+                (observed.0, after.1, Ok::<usize, String>(count))));
+            assert(view.ensures((&after.1,), bytes));
+            assert(chunk@ == bytes@.subrange(0, count as int));
+            assert(write.ensures((observed.0, chunk), write_observation));
+            assert(write_observation.1.is_ok());
+            assert(update.ensures((write_observation.0, chunk), after.0));
+            assert(states.last().2 as int + count as int == after.2 as int);
+        }
+        proof {
+            let previous = states;
+            states = states.push(after);
+            assert forall|i: int| 0 <= i < states.len() - 1 implies
+                #[trigger] copy_hash_stream_step(states[i], states[i + 1], read, view, write, update) by {
+                if i < previous.len() - 1 {
+                    assert(copy_hash_stream_step(previous[i], previous[i + 1], read, view, write, update));
+                }
+            }
+        }
+        total = next;
+    }
+}
+
 pub open spec fn git_tree_row_at(rows: Seq<&str>, i: int) -> Result<GitTreeRowBytes, GitInventoryErrorView> {
     git_tree_row_spec(rows[i].spec_bytes())
 }
@@ -4705,12 +4913,15 @@ pub open spec fn record_reference(reference: Seq<char>) -> bool {
     bytes.len() > 0 && bytes[0] == 47
 }
 
+pub open spec fn delta_reference(reference: Seq<char>, entries: &[Delta]) -> bool {
+    exists|i: int| 0 <= i < entries.len() && #[trigger] entries[i].path@ == reference
+}
+
 #[verifier::inline]
 pub open spec fn reference_allowed(reference: Seq<char>, delta: Option<&[Delta]>) -> bool {
     record_reference(reference) || match delta {
         None => false,
-        Some(entries) => exists|i: int| 0 <= i < entries.len()
-            && #[trigger] entries[i].path@ == reference,
+        Some(entries) => delta_reference(reference, entries),
     }
 }
 
@@ -4736,6 +4947,8 @@ pub fn valid_finding_reference(reference: &str, delta: Option<&[Delta]>) -> (val
                     assert(entries[i as int].path@ == reference@);
                     assert(exists|j: int| 0 <= j < entries.len()
                         && #[trigger] entries[j].path@ == reference@);
+                    assert(delta_reference(reference@, entries));
+                    assert(reference_allowed(reference@, delta));
                     return true;
                 }
                 i += 1;
@@ -4769,11 +4982,285 @@ pub fn valid_finding_references(finding: &Finding, delta: Option<&[Delta]>) -> (
     true
 }
 
-pub open spec fn evidence_identity(path: &str, kind: &str, sha256: &str) -> bool {
+#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+pub struct Evidence {
+    pub path: String,
+    pub sha256: String,
+    pub kind: String,
+}
+
+impl Clone for Evidence {
+    fn clone(&self) -> (out: Self)
+        ensures out.path == self.path, out.sha256 == self.sha256, out.kind == self.kind,
+    {
+        Self { path: self.path.clone(), sha256: self.sha256.clone(), kind: self.kind.clone() }
+    }
+}
+
+pub open spec fn evidence_identity_bytes(path: Seq<u8>, kind: Seq<char>, sha256: Seq<u8>) -> bool {
     let prefix = ".chrono-harness/state/".spec_bytes();
-    path.spec_bytes().len() >= prefix.len()
-        && path.spec_bytes().take(prefix.len() as int) == prefix
-        && kind@.len() > 0 && identifiers::digest_format(sha256.spec_bytes())
+    path.len() >= prefix.len() && path.take(prefix.len() as int) == prefix
+        && kind.len() > 0 && identifiers::digest_format(sha256)
+}
+
+pub open spec fn evidence_record_identity(entry: &Evidence) -> bool {
+    evidence_identity_bytes(vstd::utf8::encode_utf8(entry.path@), entry.kind@,
+        vstd::utf8::encode_utf8(entry.sha256@))
+}
+
+pub open spec fn evidence_hash_result<S, H>(
+    state: S, bytes: Vec<u8>, expected: Seq<char>, hash: H,
+    out: (S, Result<(), String>),
+) -> bool where H: Fn(S, &[u8]) -> (S, String) {
+    exists|raw: &[u8], after: S, digest: String| raw@ == bytes@
+        && hash.ensures((state, raw), (after, digest))
+        && out.0 == after
+        && match out.1 {
+            Ok(()) => digest@ == expected,
+            Err(error) => digest@ != expected
+                && error@ == "E_PROTOCOL: missing/tampered evidence"@,
+        }
+}
+
+fn check_evidence_hash<S, H>(state: S, bytes: Vec<u8>, expected: &str, hash: H)
+    -> (out: (S, Result<(), String>))
+    where H: Fn(S, &[u8]) -> (S, String),
+    requires forall|s: S, raw: &[u8]| #[trigger] hash.requires((s, raw)),
+    ensures evidence_hash_result(state, bytes, expected@, hash, out),
+{
+    let raw = bytes.as_slice();
+    let (after, digest) = hash(state, raw);
+    if identifiers::equal_text(digest.as_str(), expected) {
+        (after, Ok(()))
+    } else { (after, Err("E_PROTOCOL: missing/tampered evidence".to_owned())) }
+}
+
+pub open spec fn evidence_read_result<S, P, B, H>(
+    state: S, path: &P, expected: Seq<char>, read: B, hash: H,
+    out: (S, Result<(), String>),
+) -> bool where B: Fn(S, &P) -> (S, Result<Vec<u8>, String>),
+    H: Fn(S, &[u8]) -> (S, String),
+{
+    exists|after: S, observed: Result<Vec<u8>, String>|
+        read.ensures((state, path), (after, observed))
+        && match observed {
+            Err(error) => out == (after, Err::<(), String>(error)),
+            Ok(bytes) => evidence_hash_result(after, bytes, expected, hash, out),
+        }
+}
+
+fn check_evidence_read<S, P, B, H>(
+    state: S, path: &P, expected: &str, read: B, hash: H,
+) -> (out: (S, Result<(), String>))
+    where B: Fn(S, &P) -> (S, Result<Vec<u8>, String>),
+        H: Fn(S, &[u8]) -> (S, String),
+    requires read.requires((state, path)),
+        forall|s: S, raw: &[u8]| #[trigger] hash.requires((s, raw)),
+    ensures evidence_read_result(state, path, expected@, read, hash, out),
+{
+    let (after, observed) = read(state, path);
+    match observed {
+        Err(error) => (after, Err(error)),
+        Ok(bytes) => check_evidence_hash(after, bytes, expected, hash),
+    }
+}
+
+pub open spec fn evidence_file_result<S, P, F, B, H>(
+    state: S, path: &P, expected: Seq<char>, is_file: F, read: B, hash: H,
+    out: (S, Result<(), String>),
+) -> bool where F: Fn(S, &P) -> (S, bool),
+    B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+{
+    exists|after: S, regular: bool| is_file.ensures((state, path), (after, regular))
+        && if regular { evidence_read_result(after, path, expected, read, hash, out) }
+        else { out.0 == after && match out.1 {
+            Ok(()) => false,
+            Err(error) => error@ == "E_PROTOCOL: missing/tampered evidence"@,
+        } }
+}
+
+fn check_evidence_file<S, P, F, B, H>(
+    state: S, path: &P, expected: &str, is_file: F, read: B, hash: H,
+) -> (out: (S, Result<(), String>))
+    where F: Fn(S, &P) -> (S, bool),
+        B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+    requires is_file.requires((state, path)),
+        forall|s: S, p: &P| #[trigger] read.requires((s, p)),
+        forall|s: S, raw: &[u8]| #[trigger] hash.requires((s, raw)),
+    ensures evidence_file_result(state, path, expected@, is_file, read, hash, out),
+{
+    let (after, regular) = is_file(state, path);
+    if !regular {
+        (after, Err("E_PROTOCOL: missing/tampered evidence".to_owned()))
+    } else { check_evidence_read(after, path, expected, read, hash) }
+}
+
+pub open spec fn evidence_entry_result<S, P, R, F, B, H>(
+    state: S, entry: &Evidence, resolve: R, is_file: F, read: B, hash: H,
+    out: (S, Result<(), String>),
+) -> bool where R: Fn(S, &str) -> (S, Result<P, String>), F: Fn(S, &P) -> (S, bool),
+    B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+{
+    if !evidence_record_identity(entry) {
+        out.0 == state && match out.1 {
+            Ok(()) => false,
+            Err(error) => error@ == "E_PROTOCOL: invalid evidence identity"@,
+        }
+    } else {
+        exists|argument: &str, after: S, observed: Result<P, String>|
+            argument@ == entry.path@
+            && resolve.ensures((state, argument), (after, observed))
+            && match observed {
+                Err(error) => out == (after, Err::<(), String>(error)),
+                Ok(path) => evidence_file_result(after, &path, entry.sha256@,
+                    is_file, read, hash, out),
+            }
+    }
+}
+
+/// 各阶段只接收真实观察；首错停止，完整错误和全部状态归本函数维护。
+pub fn check_evidence_entry<S, P, R, F, B, H>(
+    state: S, entry: &Evidence, resolve: R, is_file: F, read: B, hash: H,
+) -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str) -> (S, Result<P, String>), F: Fn(S, &P) -> (S, bool),
+        B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+    requires forall|s: S, path: &str| #[trigger] resolve.requires((s, path)),
+        forall|s: S, path: &P| #[trigger] is_file.requires((s, path)),
+        forall|s: S, path: &P| #[trigger] read.requires((s, path)),
+        forall|s: S, raw: &[u8]| #[trigger] hash.requires((s, raw)),
+    ensures evidence_entry_result(state, entry, resolve, is_file, read, hash, out),
+{
+    if !valid_evidence_identity(entry.path.as_str(), entry.kind.as_str(), entry.sha256.as_str()) {
+        return (state, Err("E_PROTOCOL: invalid evidence identity".to_owned()));
+    }
+    let argument = entry.path.as_str();
+    let (after, observed) = resolve(state, argument);
+    match observed {
+        Err(error) => (after, Err(error)),
+        Ok(path) => check_evidence_file(after, &path, entry.sha256.as_str(), is_file, read, hash),
+    }
+}
+
+pub open spec fn evidence_prefix<S, P, R, F, B, H>(
+    states: Seq<S>, initial: S, entries: Seq<Evidence>, resolve: R, is_file: F, read: B, hash: H,
+) -> bool where R: Fn(S, &str) -> (S, Result<P, String>), F: Fn(S, &P) -> (S, bool),
+    B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+{
+    1 <= states.len() <= entries.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] evidence_entry_result(states[i], &entries[i], resolve, is_file, read, hash,
+                (states[i + 1], Ok::<(), String>(())))
+}
+
+pub open spec fn evidence_sequence_result<S, P, R, F, B, H>(
+    initial: S, entries: Seq<Evidence>, resolve: R, is_file: F, read: B, hash: H,
+    out: (S, Result<(), String>),
+) -> bool where R: Fn(S, &str) -> (S, Result<P, String>), F: Fn(S, &P) -> (S, bool),
+    B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+{
+    exists|states: Seq<S>| evidence_prefix(states, initial, entries, resolve, is_file, read, hash)
+        && match out.1 {
+            Ok(()) => states.len() == entries.len() + 1 && out.0 == states.last(),
+            Err(_) => states.len() <= entries.len()
+                && evidence_entry_result(states.last(), &entries[states.len() - 1],
+                    resolve, is_file, read, hash, out),
+        }
+}
+
+pub proof fn evidence_prefix_at<S, P, R, F, B, H>(
+    states: Seq<S>, initial: S, entries: Seq<Evidence>, resolve: R, is_file: F, read: B, hash: H,
+    at: int,
+) where R: Fn(S, &str) -> (S, Result<P, String>), F: Fn(S, &P) -> (S, bool),
+    B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+    requires evidence_prefix(states, initial, entries, resolve, is_file, read, hash),
+        0 <= at < states.len() - 1,
+    ensures evidence_entry_result(states[at], &entries[at], resolve, is_file, read, hash,
+        (states[at + 1], Ok::<(), String>(()))),
+{
+}
+
+pub fn check_evidence_sequence<S, P, R, F, B, H>(
+    state: S, entries: &[Evidence], resolve: R, is_file: F, read: B, hash: H,
+) -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str) -> (S, Result<P, String>), F: Fn(S, &P) -> (S, bool),
+        B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+    requires forall|s: S, path: &str| #[trigger] resolve.requires((s, path)),
+        forall|s: S, path: &P| #[trigger] is_file.requires((s, path)),
+        forall|s: S, path: &P| #[trigger] read.requires((s, path)),
+        forall|s: S, raw: &[u8]| #[trigger] hash.requires((s, raw)),
+    ensures evidence_sequence_result(state, entries@, resolve, is_file, read, hash, out),
+{
+    let ghost initial = state;
+    let ghost states = seq![state];
+    let mut current = state;
+    let mut i = 0;
+    while i < entries.len()
+        invariant 0 <= i <= entries.len(), states.len() == i + 1, initial == state,
+            states.last() == current,
+            evidence_prefix(states, initial, entries@, resolve, is_file, read, hash),
+            forall|s: S, path: &str| #[trigger] resolve.requires((s, path)),
+            forall|s: S, path: &P| #[trigger] is_file.requires((s, path)),
+            forall|s: S, path: &P| #[trigger] read.requires((s, path)),
+            forall|s: S, raw: &[u8]| #[trigger] hash.requires((s, raw)),
+        decreases entries.len() - i,
+    {
+        let (after, result) = check_evidence_entry(current, &entries[i], &resolve, &is_file, &read, &hash);
+        match result {
+            Err(error) => {
+                proof {
+                    assert(states.len() <= entries.len());
+                    assert(evidence_entry_result(states.last(), &entries@[states.len() - 1],
+                        resolve, is_file, read, hash, (after, Err::<(), String>(error))));
+                    assert(evidence_sequence_result(initial, entries@, resolve, is_file, read, hash,
+                        (after, Err::<(), String>(error))));
+                }
+                return (after, Err(error));
+            },
+            Ok(()) => {},
+        }
+        proof {
+            let previous = states;
+            states = states.push(after);
+            assert forall|j: int| 0 <= j < states.len() - 1 implies
+                #[trigger] evidence_entry_result(states[j], &entries@[j], resolve, is_file, read, hash,
+                    (states[j + 1], Ok::<(), String>(()))) by {
+                if j < previous.len() - 1 {
+                    assert(evidence_entry_result(previous[j], &entries@[j], resolve, is_file, read, hash,
+                        (previous[j + 1], Ok::<(), String>(()))) );
+                }
+            }
+        }
+        current = after;
+        i += 1;
+    }
+    (current, Ok(()))
+}
+
+/// 头部先验失败不观察证据；成功才逐条消费原证据列表。
+pub fn validate_response_evidence<S, P, R, F, B, H>(
+    header: Result<(), String>, state: S, entries: &[Evidence],
+    resolve: R, is_file: F, read: B, hash: H,
+) -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str) -> (S, Result<P, String>), F: Fn(S, &P) -> (S, bool),
+        B: Fn(S, &P) -> (S, Result<Vec<u8>, String>), H: Fn(S, &[u8]) -> (S, String),
+    requires forall|s: S, path: &str| #[trigger] resolve.requires((s, path)),
+        forall|s: S, path: &P| #[trigger] is_file.requires((s, path)),
+        forall|s: S, path: &P| #[trigger] read.requires((s, path)),
+        forall|s: S, raw: &[u8]| #[trigger] hash.requires((s, raw)),
+    ensures match header {
+        Err(error) => out == (state, Err::<(), String>(error)),
+        Ok(()) => evidence_sequence_result(state, entries@, resolve, is_file, read, hash, out),
+    },
+{
+    match header {
+        Err(error) => (state, Err(error)),
+        Ok(()) => check_evidence_sequence(state, entries, resolve, is_file, read, hash),
+    }
+}
+
+pub open spec fn evidence_identity(path: &str, kind: &str, sha256: &str) -> bool {
+    evidence_identity_bytes(path.spec_bytes(), kind@, sha256.spec_bytes())
 }
 
 /// 保留原前缀合同，不在这里增加词法路径或文件存在条件。

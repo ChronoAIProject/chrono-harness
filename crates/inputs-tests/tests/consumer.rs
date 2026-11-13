@@ -29,6 +29,8 @@ fn fixture() -> Host {
     ] {
         let original = if id == "mixed" {
             env!("CARGO_BIN_EXE_chrono-judge-mixed-test-cli").into()
+        } else if id == "cost" {
+            env!("CARGO_BIN_EXE_chrono-judge-cost-test-cli").into()
         } else {
             source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"))
         };

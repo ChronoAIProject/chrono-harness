@@ -300,24 +300,25 @@ pub fn sha256(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 /// Transport bytes with bounded memory, returning their observed identity.
-pub fn copy_hashed(mut input: impl Read, mut output: impl Write) -> Result<(String, u64), String> {
-    let mut hash = Sha256::new();
-    let mut length = 0_u64;
-    let mut buffer = [0_u8; 65536];
-    loop {
-        let count = input.read(&mut buffer).map_err(|e| e.to_string())?;
-        if count == 0 {
-            break;
-        }
-        output
-            .write_all(&buffer[..count])
-            .map_err(|e| e.to_string())?;
-        hash.update(&buffer[..count]);
-        length = length
-            .checked_add(count as u64)
-            .ok_or("input length overflow")?;
-    }
-    Ok((format!("{:x}", hash.finalize()), length))
+pub fn copy_hashed(input: impl Read, output: impl Write) -> Result<(String, u64), String> {
+    verified_status::copy_hash_stream(
+        (input, output, Sha256::new()),
+        [0_u8; 65536],
+        |(mut input, output, hash), mut buffer| {
+            let result = input.read(&mut buffer).map_err(|error| error.to_string());
+            ((input, output, hash), buffer, result)
+        },
+        |buffer: &[u8; 65536]| buffer.as_slice(),
+        |(input, mut output, hash), chunk| {
+            let result = output.write_all(chunk).map_err(|error| error.to_string());
+            ((input, output, hash), result)
+        },
+        |(input, output, mut hash), chunk| {
+            hash.update(chunk);
+            (input, output, hash)
+        },
+        |(_, _, hash)| format!("{:x}", hash.finalize()),
+    )
 }
 pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     if !fs::metadata(path)
