@@ -88,6 +88,113 @@ pub fn domain_recovery(declared: bool, attached: bool) -> (protect: bool)
     ensures protect == (declared && attached),
 { declared && attached }
 
+pub open spec fn role_observation_protects(observation: Option<Option<bool>>) -> bool {
+    match observation { None => false, Some(None) => true, Some(Some(member)) => member }
+}
+
+/// 已读角色的缺失声明保留原件；现存声明只有实际成员才构成保留根。
+pub fn current_roles_protect(observations: &[Option<Option<bool>>]) -> (protect: bool)
+    ensures protect == (exists|i: int| 0 <= i < observations.len()
+        && role_observation_protects(observations[i])),
+{
+    let mut i = 0;
+    while i < observations.len()
+        invariant i <= observations.len(),
+            forall|j: int| 0 <= j < i ==> !role_observation_protects(observations[j]),
+        decreases observations.len() - i,
+    {
+        let protect = match observations[i] {
+            None => false,
+            Some(None) => true,
+            Some(Some(member)) => member,
+        };
+        if protect { return true; }
+        i += 1;
+    }
+    false
+}
+
+pub open spec fn finalized_observation(retired: usize, output: Option<(bool, &str)>) -> bool {
+    retired == 0 && match output {
+        None => false,
+        Some((sealed, phase)) => sealed && (phase@ == "released"@ || phase@ == "disposing"@),
+    }
+}
+
+pub fn original_finalized(retired: usize, output: Option<(bool, &str)>) -> (finalized: bool)
+    ensures finalized == finalized_observation(retired, output),
+{
+    retired == 0 && match output {
+        None => false,
+        Some((sealed, phase)) => sealed && (identifiers::equal_text(phase, "released")
+            || identifiers::equal_text(phase, "disposing")),
+    }
+}
+
+pub fn defer_finalized_original(discover_under_lease: bool, finalized: bool) -> (defer: bool)
+    ensures defer == (discover_under_lease && finalized),
+{ discover_under_lease && finalized }
+
+pub fn preserve_discovered_original(member: bool, retained: bool, retiring_frontier: bool)
+    -> (preserve: bool)
+    ensures preserve == (member || retained || retiring_frontier),
+{ member || retained || retiring_frontier }
+
+pub struct DeferredOriginal {
+    pending: Option<String>,
+}
+
+impl DeferredOriginal {
+    pub closed spec fn pending_id(&self) -> Option<String> { self.pending }
+
+    pub fn new() -> (out: Self)
+        ensures out.pending_id().is_none(),
+    { Self { pending: None } }
+
+    pub fn defer(&mut self, id: String)
+        ensures self.pending_id() == Some(id),
+    { self.pending = Some(id); }
+
+    pub fn take(&mut self) -> (id: Option<String>)
+        ensures id == old(self).pending_id(), self.pending_id().is_none(),
+    {
+        let mut id = None;
+        core::mem::swap(&mut id, &mut self.pending);
+        id
+    }
+}
+
+pub enum FinalizedExpansion {
+    RetainOnly,
+    RootFrontier,
+    RetireFrontier,
+    Related,
+}
+
+/// 入向引用本身不是保留根。非初始根仍读取一层真实依赖，保留缺失依赖错误。
+pub fn finalized_expansion(rooted: bool, initial: Option<&str>, id: &str,
+    incoming: usize, roles: usize) -> (out: FinalizedExpansion)
+    ensures match out {
+        FinalizedExpansion::RetainOnly => rooted && recovery_text(initial) == Some(id@),
+        FinalizedExpansion::RootFrontier => rooted && recovery_text(initial) != Some(id@),
+        FinalizedExpansion::RetireFrontier => !rooted && recovery_text(initial) == Some(id@)
+            && incoming == 0 && roles == 0,
+        FinalizedExpansion::Related => !rooted && (recovery_text(initial) != Some(id@)
+            || incoming != 0 || roles != 0),
+    },
+{
+    let initial = same_recovery_text(initial, Some(id));
+    if rooted {
+        if initial { FinalizedExpansion::RetainOnly } else { FinalizedExpansion::RootFrontier }
+    } else if initial && incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
+    else { FinalizedExpansion::Related }
+}
+
+/// 原件仍有登记时才排除其物理路径；已移除记录不进入内容维护。
+pub fn maintenance_path_required(present: bool, initial: bool, retained: bool) -> (required: bool)
+    ensures required == (present && (initial || !retained)),
+{ present && (initial || !retained) }
+
 pub fn terminal_eligible(released: bool, sealed: bool) -> (eligible: bool)
     ensures eligible == (released && sealed),
 { released && sealed }

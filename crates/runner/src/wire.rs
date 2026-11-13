@@ -75,15 +75,8 @@ pub fn digest<T: Serialize>(value: &T) -> Result<String, String> {
 }
 pub use crate::verified_identifiers::valid_digest_text as is_digest;
 pub use crate::verified_status::{
-    Checkout, Delta, Finding, IndexFlag, WireStatus as Status, append_finding,
+    Checkout, Delta, Evidence, Finding, IndexFlag, WireStatus as Status, append_finding,
 };
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Evidence {
-    pub path: String,
-    pub sha256: String,
-    pub kind: String,
-}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
@@ -304,7 +297,7 @@ pub(crate) fn validate_response_at(
     exit: i32,
     delta: Option<&[Delta]>,
 ) -> Result<(), String> {
-    crate::verified_status::validate_response_fields(
+    let header = crate::verified_status::validate_response_fields(
         &r.protocol,
         &r.request_id,
         &r.judge_id,
@@ -315,19 +308,22 @@ pub(crate) fn validate_response_at(
         judge_id,
         &r.findings,
         delta,
-    )?;
-    for e in &r.evidence {
-        if !crate::verified_status::valid_evidence_identity(&e.path, &e.kind, &e.sha256) {
-            return Err("E_PROTOCOL: invalid evidence identity".into());
-        }
-        let p = no_symlink_parents(root, &e.path)?;
-        if !p.is_file()
-            || sha256(&fs::read(&p).map_err(|e| format!("E_PROTOCOL: evidence: {e}"))?) != e.sha256
-        {
-            return Err("E_PROTOCOL: missing/tampered evidence".into());
-        }
-    }
-    Ok(())
+    );
+    crate::verified_status::validate_response_evidence(
+        header,
+        (),
+        &r.evidence,
+        |(), path| ((), no_symlink_parents(root, path)),
+        |(), path: &PathBuf| ((), path.is_file()),
+        |(), path: &PathBuf| {
+            (
+                (),
+                fs::read(path).map_err(|error| format!("E_PROTOCOL: evidence: {error}")),
+            )
+        },
+        |(), bytes: &[u8]| ((), sha256(bytes)),
+    )
+    .1
 }
 #[derive(Debug)]
 pub struct TransportFailure {
