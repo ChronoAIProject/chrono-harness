@@ -1,5 +1,29 @@
 # Verus 实施范围
 
+## libtest 清单判断
+
+`crates/ci/src/verified_inventory.rs` 拥有 Cargo 二进制小写十六进制后缀、
+二进制列表的完整内容及顺序比较、suite 的测试／benchmark／名称／去重数量准入，
+以及未结束名称和 suite 数量的完整性判断。真实 `inventory::parse_listing` 直接使用
+这些返回值，保留原错误、检查顺序和原未过滤清单行为测试。
+
+独立 `crates/ci-tests/tests/verified_inventory.rs` 覆盖空输入、非法后缀字节、长度与
+顺序变化、重复名称、Unicode／NUL／换行全文、benchmark、缺失／多余 suite 及 usize
+上界。同一预期在 Rust 中执行保留的失败分支，另核错误预期确实 panic。
+源码所有者计划登记 `verify.ci-inventory`／`verify.ci-inventory-tests`，两项均使用
+固定版本、严格参数和整 crate 证明，与实际 CI 行为测试同次验收。
+
+明确外部接口为固定 Rust 的 `String::as_str`、切片长度／索引及 `str::as_bytes`；
+名称借用和原字节原样交给已证明的比较。既有
+`names.iter().collect::<BTreeSet<_>>().len()` 继续按标准字符串全文集合提供不同名称数，
+数量相等的准入判断归 Verus；集合构造及其比较合同尚未在本仓机械精化。
+Cargo／libtest 输出、JSON、路径和行解析、集合分组状态及 IO 编排仍待各自证明，
+外围 `inventory.rs` 及原行为测试不取得整文件证明资格。
+
+**产品与宿主登记同时修改：**新增两项证明根、执行操作及原测试项目中的独立预期，
+复用现役固定工具和 CI 单元。列表比较不新增临时向量，原树集合去重路径保留；
+完整构建、证明、CI、运行与存储成本未测。局部证明不代表完整清单事务或全仓覆盖完成。
+
 ## PR 快照检查终态
 
 `crates/pr/src/verified_snapshot.rs` 是 PR 快照分类的同源 Verus 所有者。它证明
