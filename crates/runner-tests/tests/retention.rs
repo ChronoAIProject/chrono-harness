@@ -4173,17 +4173,6 @@ fn independent_live_writers_keep_their_own_sealed_tree_accounting() {
 }
 
 #[test]
-fn source_protection_accepts_unborn_outputs_and_preserves_native_git_sources() {
-    if !isolated_capability_test(
-        "source_protection_accepts_unborn_outputs_and_preserves_native_git_sources",
-    ) {
-        return;
-    }
-    let git = chrono_harness::resolve_program(Path::new("."), "git", None).unwrap();
-    source_protection_boundaries(&git);
-}
-
-#[test]
 fn source_protection_accepts_unborn_outputs_and_preserves_fixture_git_sources() {
     if !git_fixture::isolated(
         "source_protection_accepts_unborn_outputs_and_preserves_fixture_git_sources",
@@ -4319,6 +4308,32 @@ fn source_protection_boundaries(program: &Path) {
         fs::read(h.path().join(output).join("untracked")).unwrap(),
         b"generated"
     );
+    fs::write(
+        h.path().join(".git/HEAD"),
+        b"ffffffffffffffffffffffffffffffffffffffff\n",
+    )
+    .unwrap();
+    let failure = std::process::Command::new(program)
+        .args([
+            "--literal-pathspecs",
+            "diff",
+            "--cached",
+            "--name-only",
+            "-z",
+            "--no-renames",
+            "--ignore-submodules=none",
+            "--diff-filter=D",
+            "--",
+            output,
+        ])
+        .current_dir(h.path())
+        .output()
+        .unwrap();
+    assert!(!failure.status.success(), "{failure:?}");
+    let original_error = String::from_utf8(failure.stderr).unwrap();
+    assert!(!original_error.trim().is_empty());
+    let error = source_safe(h.path(), output).unwrap_err();
+    assert!(error.contains(original_error.trim()), "{error}");
 }
 
 #[test]
