@@ -27,7 +27,11 @@ fn fixture() -> Host {
             ],
         ),
     ] {
-        let original = source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"));
+        let original = if id == "mixed" {
+            env!("CARGO_BIN_EXE_chrono-judge-mixed-test-cli").into()
+        } else {
+            source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"))
+        };
         let bytes = fs::read(&original).unwrap();
         let path = format!(".chrono-harness/bin/chrono-judge-{id}");
         host::copied_fixture_input(&h.root(), &original, &h.root().join(&path));
