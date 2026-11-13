@@ -3338,7 +3338,7 @@ impl Manager {
         // pass; independent worktree and producer maintenance has already run.
         report["output_retention"] = if unprotected.is_empty() {
             value!(self.outside_enrollment(r, |inputs, _| {
-                chrono_harness::retained_artifacts::retention::maintain_adopted(
+                chrono_harness::retained_artifacts::retention::maintain_explicit_adopted(
                     &inputs.policy.coordinator_root,
                 )
             })?)
@@ -3365,7 +3365,11 @@ impl Manager {
     ) -> Result<Vec<String>, String> {
         // Selection and execution must use this checkout's committed choices;
         // the coordinator's thresholds can differ or be absent.
-        self.adopt_live_policy(r)?;
+        // A failed admission can leave an owned metadata address without an
+        // enrolled checkout. Its existing directory is not a policy consumer.
+        if crate::verified_lifecycle::enrolled_policy_required(self.ledger.entries.len()) {
+            self.adopt_live_policy(r)?;
+        }
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
         failures.extend(self.rotate_cache_history(r, report)?);
