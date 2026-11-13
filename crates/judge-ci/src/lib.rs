@@ -902,14 +902,6 @@ struct Inventory {
 /// This does not validate a canonical entry, execute operations or grant admission.
 /// Full preparation shares FILEMAP impact and routes' global obligation owner.
 /// No judge or business/version process is launched here.
-pub fn full_collection_requirements(
-    root: &Path,
-    profile: &str,
-    prepared: &chrono_harness::prepared::PreparedCheck,
-    originals: &chrono_harness::units::FullManifest,
-) -> Result<Value, String> {
-    full_collection_requirements_with_inputs(root, profile, prepared, &|_| Ok(originals.clone()))
-}
 /// The acquisition callback is used only for necessary historical conversion.
 /// Registration names the decoder test units; the collector reads DELTA-required
 /// reports separately after the shared selection owner returns its requirements.

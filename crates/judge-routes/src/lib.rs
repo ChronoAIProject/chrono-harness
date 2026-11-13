@@ -234,32 +234,6 @@ pub fn prepare(
         None,
     )
 }
-/// Legacy CI supplies its explicitly scoped declarations; missing version contracts remain unverified.
-pub fn prepare_scoped(
-    root: &Path,
-    binding: Value,
-    selected: &BTreeSet<String>,
-    plans: &BTreeMap<String, Plan>,
-    methods: &BTreeMap<String, Vec<Method>>,
-    execute: &BTreeMap<String, String>,
-    declarations: &Value,
-    environment: BTreeMap<String, String>,
-    reused: &BTreeMap<String, Tool>,
-) -> Result<Execution, String> {
-    prepare_inner(
-        root,
-        binding,
-        selected,
-        plans,
-        methods,
-        execute,
-        declarations,
-        environment,
-        reused,
-        false,
-        None,
-    )
-}
 /// Registered full/scoped callers share one preparation owner and process engine.
 pub fn prepare_scheduled(
     root: &Path,
