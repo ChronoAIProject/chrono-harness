@@ -1,7 +1,7 @@
 //! Verify explicit Cargo/libtest groups; never discover dependencies or select tests.
-use chrono_harness::{decode, file_identity, no_symlink_parents, sha256, CommandSpec};
+use chrono_harness::{CommandSpec, decode, file_identity, no_symlink_parents, sha256};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
