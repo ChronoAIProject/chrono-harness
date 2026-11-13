@@ -1049,9 +1049,6 @@
       "owner": "ci",
       "producer": "build.ci",
       "consumers": [
-        "check.unit_judge-workflow",
-        "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units",
         "check.unit_worktree",
         "check.unit_worktree-adoption"
       ],
@@ -1717,7 +1714,11 @@
         "cache.cargo-registration",
         "bootstrap.toolchains",
         "inputs.manifest",
-        "inputs.lock"
+        "inputs.lock",
+        "ci.manifest",
+        "ci.lock",
+        "judge-ci.manifest",
+        "judge-ci.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -3167,7 +3168,11 @@
         "release.script",
         "release.config",
         "inputs.manifest",
-        "inputs.lock"
+        "inputs.lock",
+        "ci.manifest",
+        "ci.lock",
+        "judge-ci.manifest",
+        "judge-ci.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -4746,7 +4751,11 @@
         "release.script",
         "release.config",
         "inputs.manifest",
-        "inputs.lock"
+        "inputs.lock",
+        "ci.manifest",
+        "ci.lock",
+        "judge-ci.manifest",
+        "judge-ci.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -5202,7 +5211,11 @@
         "cache.cargo-registration",
         "bootstrap.toolchains",
         "inputs.manifest",
-        "inputs.lock"
+        "inputs.lock",
+        "ci.manifest",
+        "ci.lock",
+        "judge-ci.manifest",
+        "judge-ci.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -5266,7 +5279,11 @@
         "cache.cargo-registration",
         "bootstrap.toolchains",
         "inputs.manifest",
-        "inputs.lock"
+        "inputs.lock",
+        "ci.manifest",
+        "ci.lock",
+        "judge-ci.manifest",
+        "judge-ci.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"

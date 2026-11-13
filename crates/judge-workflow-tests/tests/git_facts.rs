@@ -467,7 +467,7 @@ fn full_ci_consumer(selected: bool) {
     let worktree_path = ".chrono-harness/worktree.json";
     for (original, binary) in [
         (
-            source().join("crates/ci/target/debug/chrono-ci"),
+            std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-ci-test-cli")),
             "chrono-ci",
         ),
         (
@@ -537,7 +537,7 @@ fn full_ci_consumer(selected: bool) {
     if selected {
         select(&mut h, NATIVE_CONFIG);
     }
-    let ci = source().join("crates/ci/target/debug/chrono-ci");
+    let ci = std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-ci-test-cli"));
     let workflow_path = ".github/workflows/full.yml";
     let provider = json!({"schema":"chrono-github-full-ci/v2","name":"Full fixture",
         "workflow_path":workflow_path,"runs_on":"ubuntu-24.04","timeout_minutes":20,

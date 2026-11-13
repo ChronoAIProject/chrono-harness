@@ -864,7 +864,7 @@
         ]
       },
       "unit_judge-workflow": {
-        "need": "This job executes the explicitly referenced build and test operations.",
+        "need": "This job compiles the current CI CLI source in its dedicated workflow test target.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/bin/bash",
@@ -876,7 +876,6 @@
         ],
         "consumer": "check.unit_judge-workflow",
         "caches": [
-          "check.ci",
           "check.judge-workflow-tests"
         ],
         "save_caches": [
@@ -942,7 +941,7 @@
         ]
       },
       "unit_judge-workflow-units": {
-        "need": "This job executes the explicitly referenced build and test operations.",
+        "need": "This job compiles the current CI CLI source in its dedicated workflow test target.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/bin/bash",
@@ -954,7 +953,6 @@
         ],
         "consumer": "check.unit_judge-workflow-units",
         "caches": [
-          "check.ci",
           "check.judge-workflow-tests.judge-workflow-units"
         ],
         "save_caches": [
@@ -962,7 +960,7 @@
         ]
       },
       "unit_judge-workflow-short": {
-        "need": "This job executes the explicitly referenced build and test operations.",
+        "need": "This job compiles the current CI CLI source in its dedicated workflow test target.",
         "output_use": "Restore only the listed actual producer targets before the unchanged canonical check; startup binaries arrive from the detector.",
         "prepare": [
           "/bin/bash",
@@ -974,7 +972,6 @@
         ],
         "consumer": "check.unit_judge-workflow-short",
         "caches": [
-          "check.ci",
           "check.judge-workflow-tests.judge-workflow-short"
         ],
         "save_caches": [

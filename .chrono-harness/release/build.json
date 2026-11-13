@@ -391,9 +391,7 @@
       "id": "verify_judge_workflow_tests",
       "kind": "verify",
       "operation": "test.judge-workflow-tests",
-      "needs": [
-        "build_ci"
-      ],
+      "needs": [],
       "handoff": ".chrono-harness/cache/release-handoffs/verify_judge_workflow_tests",
       "rust_toolchain": true
     },
@@ -754,10 +752,8 @@
       "release_assets": []
     },
     "verify_judge_workflow_tests": {
-      "need": "workflow 专属测试在自己的 Cargo target 从唯一生产 main.rs 编译 inputs 测试 CLI，保留五处真实 capture 调用、完整输入与原件断言；现役 CI 输入准备仍消费 chrono-ci 发布资产。",
-      "release_assets": [
-        "chrono-ci"
-      ]
+      "need": "workflow 专属测试在自己的 Cargo target 从生产 main.rs 编译 inputs 与 CI 测试 CLI，保留真实输入准备、生成、capture 调用、完整输入与原件断言；不消费发布资产。",
+      "release_assets": []
     },
     "verify_judge_filemap_tests": {
       "need": "原未过滤操作在自己的 Cargo target 编译现有测试入口及 routes／projects 的唯一生产 main.rs，共享 Host 保留真实复制、协议探测、操作和原件断言。仍需发布资产：无。",

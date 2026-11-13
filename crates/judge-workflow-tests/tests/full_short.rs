@@ -29,7 +29,7 @@ fn adopt_short_host(
     let root = h.root();
     for (original, binary) in [
         (
-            source().join("crates/ci/target/debug/chrono-ci"),
+            std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-ci-test-cli")),
             "chrono-ci",
         ),
         (

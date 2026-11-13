@@ -219,7 +219,7 @@
     {"path":"crates/ci-tests/tests/verified_literals.rs","verification":{"role":"program","roots":[{"path":"crates/ci-tests/tests/verified_literals.rs","operation":"verify.ci-literals-tests"}]},"owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"crates/ci-tests/tests/verified_inventory.rs","verification":{"role":"program","roots":[{"path":"crates/ci-tests/tests/verified_inventory.rs","operation":"verify.ci-inventory-tests"}]},"owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"crates/ci/src/lib.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
-    {"path":"crates/ci/src/main.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"}]},
+    {"path":"crates/ci/src/main.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"},{"kind":"compile","to":"project:judge-workflow-tests"}]},
     {"path":"crates/ci-tests/Cargo.toml","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci-tests"}]},
     {"path":"crates/ci-tests/Cargo.lock","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci-tests"}]},
     {"path":"crates/ci-tests/tests/behavior.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
@@ -637,6 +637,7 @@
     {"path":"crates/ci/src/downloads.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]}
   ],
   "project_edges": [
+    {"from":"project:ci","kind":"compile","to":"project:judge-workflow-tests"},
     {"from":"project:judge-registration","kind":"test-execution","to":"test:ci-tests"},
     {"from":"project:judge-registration","kind":"compile","to":"project:ci-tests"},
     {"from":"project:runner","kind":"compile","to":"project:instructions-tests"},
@@ -1470,7 +1471,6 @@
         "verify.judge-workflow-transition-tests",
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
-        "build.ci",
         "workflow.inventory",
         "test.workflow.core"
       ],
@@ -1516,7 +1516,6 @@
       "operations": [
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
-        "build.ci",
         "workflow.inventory",
         "test.workflow.units"
       ],
@@ -1527,7 +1526,6 @@
       "operations": [
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
-        "build.ci",
         "workflow.inventory",
         "test.workflow.short"
       ],

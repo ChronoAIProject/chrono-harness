@@ -2163,7 +2163,7 @@ jobs:
           include-hidden-files: true
   linux_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
-    needs: ["linux_release_frontend","linux_build_ci"]
+    needs: ["linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
     outputs:
@@ -2186,7 +2186,6 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_2
-      - *chrono_release_download_1
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
@@ -5172,7 +5171,7 @@ jobs:
           include-hidden-files: true
   macos_verify_judge_workflow_tests:
     if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) && inputs.channel != 'stable' }}
-    needs: ["macos_release_frontend","macos_build_ci"]
+    needs: ["macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
     outputs:
@@ -5195,7 +5194,6 @@ jobs:
         run: |
           printf 'run_id=%s\nattempt=%s\n' "$RELEASE_RUN" "$RELEASE_ATTEMPT" >> "$GITHUB_OUTPUT"
       - *chrono_release_download_5
-      - *chrono_release_download_4
       - name: Prepare registered caches
         id: chrono_cache_plan
         shell: bash
