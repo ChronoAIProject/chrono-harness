@@ -11,6 +11,38 @@ pub(crate) mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
+pub enum TargetAdmission { Overlap, Drift, Append }
+
+/// Existing output conflicts take precedence over verification drift.
+pub fn target_admission(overlapping: bool, verify: bool, same: bool) -> (out: TargetAdmission)
+    ensures
+        (out is Overlap) == overlapping,
+        (out is Drift) == (!overlapping && verify && !same),
+        (out is Append) == (!overlapping && (!verify || same)),
+{
+    if overlapping { TargetAdmission::Overlap }
+    else if verify && !same { TargetAdmission::Drift }
+    else { TargetAdmission::Append }
+}
+
+pub open spec fn inventory_collision(
+    adopting: bool, actual: Option<&Vec<u8>>, expected: &Vec<u8>,
+) -> bool {
+    adopting && match actual { Some(bytes) => bytes@ != expected@, None => false }
+}
+
+pub fn inventory_adoption_collision(
+    adopting: bool, actual: Option<&Vec<u8>>, expected: &Vec<u8>,
+) -> (collision: bool)
+    ensures collision == inventory_collision(adopting, actual, expected),
+{
+    if !adopting { return false; }
+    match actual {
+        Some(bytes) => !identifiers::equal_bytes(bytes.as_slice(), expected.as_slice()),
+        None => false,
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, serde::Serialize, serde::Deserialize))]
 pub struct Object {
     pub identity: String,

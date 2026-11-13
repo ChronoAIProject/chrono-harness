@@ -234,7 +234,7 @@ impl Plan {
         verify: bool,
     ) -> Result<(), String> {
         let (before, bytes) = observe(&no_symlink_parents(root, path)?)?;
-        if adopting && bytes.as_ref().is_some_and(|bytes| bytes != &expected) {
+        if verified::inventory_adoption_collision(adopting, bytes.as_ref(), &expected) {
             return Err(format!("initial inventory adoption collision: {path}"));
         }
         self.target(
@@ -261,15 +261,16 @@ impl Plan {
         drift: &str,
     ) -> Result<(), String> {
         relative_path(path)?;
-        if self
+        let overlapping = self
             .targets
             .iter()
-            .any(|target| super::overlap(&target.path, path))
-        {
-            return Err(format!("overlapping generation outputs: {path}"));
-        }
-        if verify && !same {
-            return Err(format!("{drift}: {path}"));
+            .any(|target| super::overlap(&target.path, path));
+        match verified::target_admission(overlapping, verify, same) {
+            verified::TargetAdmission::Overlap => {
+                return Err(format!("overlapping generation outputs: {path}"));
+            }
+            verified::TargetAdmission::Drift => return Err(format!("{drift}: {path}")),
+            verified::TargetAdmission::Append => {}
         }
         self.targets.push(Target {
             path: path.into(),

@@ -23,6 +23,49 @@ fn expect(actual: bool)
     if !actual { panic!(); }
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn target_admission_preserves_overlap_priority_and_verify_drift() {
+    expect(matches!(policy::target_admission(true, true, true), policy::TargetAdmission::Overlap));
+    expect(matches!(policy::target_admission(true, true, false), policy::TargetAdmission::Overlap));
+    expect(matches!(policy::target_admission(true, false, true), policy::TargetAdmission::Overlap));
+    expect(matches!(policy::target_admission(true, false, false), policy::TargetAdmission::Overlap));
+    expect(matches!(policy::target_admission(false, true, false), policy::TargetAdmission::Drift));
+    expect(matches!(policy::target_admission(false, true, true), policy::TargetAdmission::Append));
+    expect(matches!(policy::target_admission(false, false, true), policy::TargetAdmission::Append));
+    expect(matches!(policy::target_admission(false, false, false), policy::TargetAdmission::Append));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_adoption_keeps_missing_equal_and_complete_byte_boundaries() {
+    proof { reveal(original_bytes); }
+    let empty: Vec<u8> = Vec::new();
+    let original = original_fixture(false);
+    let same = original_fixture(false);
+    let mut prefix = Vec::new();
+    prefix.push(0u8);
+    prefix.push(255u8);
+    let mut changed = Vec::new();
+    changed.push(0u8);
+    changed.push(255u8);
+    changed.push(8u8);
+    proof {
+        assert(original@.len() == 3);
+        assert(empty@.len() == 0);
+        assert(original@ != empty@);
+    }
+    expect(!policy::inventory_adoption_collision(true, None, &original));
+    expect(!policy::inventory_adoption_collision(true, Some(&empty), &empty));
+    expect(!policy::inventory_adoption_collision(true, Some(&original), &same));
+    expect(policy::inventory_adoption_collision(true, Some(&empty), &original));
+    expect(policy::inventory_adoption_collision(true, Some(&original), &empty));
+    expect(policy::inventory_adoption_collision(true, Some(&prefix), &original));
+    expect(policy::inventory_adoption_collision(true, Some(&changed), &original));
+    expect(!policy::inventory_adoption_collision(false, None, &original));
+    expect(!policy::inventory_adoption_collision(false, Some(&empty), &original));
+    expect(!policy::inventory_adoption_collision(false, Some(&original), &empty));
+    expect(!policy::inventory_adoption_collision(false, Some(&changed), &original));
+}
+
 fn object(identity: &str, sha256: &str, bytes: u64) -> (out: policy::Object)
     ensures out.identity@ == identity@, out.sha256@ == sha256@, out.bytes == bytes,
 {
