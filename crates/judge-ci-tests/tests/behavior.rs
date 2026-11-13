@@ -18,16 +18,36 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
     }
     let h = Host::new();
     h.change_registry(CONFIG, |v| {
-        v["policy"]["selection_evidence"] = json!("explicit-graph/v1")
+        v["policy"]["selection_evidence"] = json!("baseline-data-format")
+    });
+    h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        for file in v["files"].as_array_mut().unwrap() {
+            if file["path"] == "doc.txt" {
+                file["edges"] = json!([{"kind":"compile","to":"project:lib"}]);
+            }
+        }
+        v["project_edges"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"from":"project:lib","kind":"runtime-input","to":"project:lib"}));
     });
     let base = h.commit();
+    h.change_registry(CONFIG, |v| {
+        v["policy"]["selection_evidence"] = json!("reachable-graph/v1")
+    });
     let names: Vec<_> = (0..2697)
         .map(|i| format!("registered-input-{}-{i:04}", "x".repeat(64)))
         .collect();
     for name in &names {
         h.write(name, "declared input\n");
     }
+    fs::rename(h.root().join("src.txt"), h.root().join("renamed.txt")).unwrap();
     h.change_registry(".chrono-harness/FILEMAP.json", |v| {
+        for file in v["files"].as_array_mut().unwrap() {
+            if file["path"] == "src.txt" {
+                file["path"] = json!("renamed.txt");
+            }
+        }
         for name in &names {
             v["files"].as_array_mut().unwrap().push(json!({"path":name,"owner":"host","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:lib"}]}));
         }
@@ -37,8 +57,46 @@ fn replay_selection_evidence_preserves_many_explicit_seeds_within_the_existing_o
     pass(&r);
     assert_eq!(h.calls(), 1);
     let e = &r.evidence["selection_explanation"];
-    assert_eq!(e["representation"], "explicit-graph/v1");
+    assert_eq!(e["representation"], "reachable-graph/v1");
     assert_eq!(e["closure"]["selected_tests"], json!(["test:suite"]));
+    let mut expected_edges: std::collections::BTreeSet<_> = names
+        .iter()
+        .map(|name| {
+            (
+                format!("file:{name}"),
+                "compile".to_owned(),
+                "project:lib".to_owned(),
+                "candidate".to_owned(),
+            )
+        })
+        .collect();
+    for (from, kind, to, origin) in [
+        ("file:src.txt", "compile", "project:lib", "base"),
+        ("file:renamed.txt", "compile", "project:lib", "candidate"),
+        ("project:lib", "runtime-input", "project:lib", "both"),
+        ("project:lib", "test-execution", "test:suite", "both"),
+    ] {
+        expected_edges.insert((from.into(), kind.into(), to.into(), origin.into()));
+    }
+    let actual_edges: std::collections::BTreeSet<_> = e["edges"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|edge| {
+            (
+                edge["from"].as_str().unwrap().to_owned(),
+                edge["kind"].as_str().unwrap().to_owned(),
+                edge["to"].as_str().unwrap().to_owned(),
+                edge["origin"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect();
+    let differing_edges: Vec<_> = actual_edges.symmetric_difference(&expected_edges).collect();
+    assert!(
+        differing_edges.is_empty(),
+        "differing edges: {differing_edges:?}"
+    );
+    assert_eq!(e["edges"].as_array().unwrap().len(), expected_edges.len());
     for name in &names {
         assert!(
             e["seed_causes"]
