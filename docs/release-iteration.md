@@ -175,6 +175,23 @@ stable 正式采用已在四个下游完成：Go feature PR `71`（head `b297569
 
 四个 `dev` 的声明均锁定上述 preview、manifest 和两平台资产摘要。候选之后上游已继续前进到 `577d82eaf816363e2bd565db4bf789103bc1f512`、`5e8bca29ed4cb0cb6aea197d5bbdea2079fda790`，最新 `dev` 为 `ebcba42683b8f1f7ed820806ffa37334a5b6e8a8`；对应的 landing、CodeQL 和发布任务仍沿原句柄等待。因此本候选完成 preview 采用，但稳定门槛因源码漂移不满足，不能晋升 stable。
 
+## 第十四轮 `577d82e…` preview（2026-11-14）
+
+测试版固定为 `v0.1.5-dev.43496586282.1.g577d82eaf816363e2bd565db4bf789103bc1f512`，source 为 `577d82eaf816363e2bd565db4bf789103bc1f512`，tree 为 `6e5420cad71ff7e181103152f25f2dd3e895f960`；landing collection `43496586282` 与 CodeQL `43496584712` 均成功。发布 run `43500113784/1` 的 workflow head 为 `ebcba42683b8f1f7ed820806ffa37334a5b6e8a8`，frontend 原件明确其实际 source 是 `577d82e…`，两端 workflow blob 都是 `ce38fbe5b0ced74709141b9ee43f26f4865cd124`。workflow head 不能替代 source，也不能将本次发布算作 `ebcba426…` 的采用证据。
+
+Release 公开、非 draft、prerelease，共 34 个资产。`release.json` 为 6649 bytes、SHA-256 `a678187845367bbb33593a27de652d96f6639ae0843f7b22defa2c3d659ea4f8`；`install.sh` 为 5186 bytes、SHA-256 `92e80b24972ad31f673e2fd628a23a6605d01fd1f7835816e98504afeb954c1f`。Linux/macOS installer 分别为 1660576 bytes／`006651f2331bae218bd00b47f2409a1759ca14034e318b75fc6ccdf702cfbd7d` 和 1329600 bytes／`301a6d248c7a08d97bd6401c7a32dfa89f4f49548e04b18808a7d0630271b32a`。上游发布的全部登记验证及两平台安装均成功，Linux/macOS install job 分别为 `132155014843`、`132155014809`。
+
+四仓均通过正式工作树入口从各自最新 `dev` 创建同基线的 feature 和 integration，再使用候选安装器显式 `adopt --replace`。公开安装、适用 SDK bootstrap、CI verify 和本地 canonical check 全部成功；原 stdout 摘要、完整性、退出码和候选 SHA 已核对。Go 实际运行 rates 与 bootstrap，TypeScript 运行 labels 类型检查／测试与 bootstrap，混合仓运行 rates、labels、normalize、invoice 和 bootstrap，首次接入执行文档宿主检查。四仓 feature → integration 和 integration → dev 的适用 PR 检查均成功，并已匹配固定 head 实际合入。已核对各仓远端 `dev` 为表中落地 SHA，且各自 `distribution.json` 均锁定本轮 preview 和 manifest 摘要 `a678187845367bbb33593a27de652d96f6639ae0843f7b22defa2c3d659ea4f8`。
+
+| 下游 | feature → integration PR | integration → dev PR / dev SHA | dev 落地检查（本次观察） |
+| --- | --- | --- | --- |
+| Go | #92 | #93 / `d3fbab3e48a2973260e3ed6ec29c95ec3a3343c0` | collection `43505474427`，运行中 |
+| TypeScript | #87 | #88 / `4e541a833a1145859a4551902e82b52c0f84eb42` | collection `43505506351`，运行中 |
+| 混合语言 | #87 | #88 / `430a686e6c8f39198fbaf14313553d4b43301dc3` | collection `43505517258`，排队中 |
+| 首次接入 | #80 | #81 / `d454fcaaab96d76f25edae19b25c637445ea1980` | 宿主检查 `43505526615`，成功 |
+
+尚未完成全部落地检查及必要安全检查的原件核验，不把实际合并写成完整采用验收通过。后续发布 run `43501191193` 已进入 publish，尚无最终结果，实际 source 仍须核对原件；run `43502804440` 的原件确认 source 为 `ebcba42683b8f1f7ed820806ffa37334a5b6e8a8`、landing CI 为 `43499450155`，其中 `linux_verify_runner_tests`（job `132153400864`）已失败：`producer_native_read_failure_keeps_transport_exit` 在 `tests/protocol_v1.rs:3646` 执行 fixture 时得到 `ExecutableFileBusy`／`Text file busy`（OS code `26`），Cargo 原退出码为 `101`。原日志已保留，其他任务继续沿原句柄等待。修复隔离工作树已从同一 `ebcba426…` 建立，但因果和修复尚未验证；不能靠重跑或重试将该失败记为已解决。此前 bootstrap retention migration 的退出码 `2` 和登记检查 `unknown` 继续保留。
+
 ## 稳定门槛与下一轮
 
 下列条件全部满足时，候选才可 stable：上游 preview 公开资产和两平台安装通过；四个下游的 feature、integration、dev 链均落地；dev 上的真实单元、汇总和必要安全检查通过；候选相关失败已经在负责层修复并重新验证；stable Release 的标签、源码、资产和下游稳定版声明一致。任一条件缺失都保持 preview 或 unknown。
