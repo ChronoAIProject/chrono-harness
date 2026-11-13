@@ -3636,22 +3636,26 @@ fn producer_real_input_bound_accepts_exact_limit_and_rejects_one_more_byte() {
 
 #[test]
 #[cfg(unix)]
-fn producer_native_read_and_write_failures_keep_transport_exit() {
-    use std::os::fd::OwnedFd;
-    use std::process::Stdio;
-    let (root, request) = producer_host();
+fn producer_native_read_failure_keeps_transport_exit() {
+    use std::io::Read;
+    let (root, _) = producer_host();
     let mut command = producer_command(root.path(), &["--protocol", "chrono-judge/v1"], b"");
-    command.stdin(
-        fs::OpenOptions::new()
-            .write(true)
-            .open(root.path().join("producer-input"))
-            .unwrap(),
-    );
+    let directory = fs::File::open(root.path()).unwrap();
+    assert!(directory.try_clone().unwrap().read(&mut [0]).is_err());
+    command.stdin(directory);
     let output = command.output().unwrap();
     assert_eq!(output.status.code(), Some(2));
     assert!(output.stdout.is_empty());
     assert_eq!(output.stderr, b"E_PROTOCOL: request read/bound\n");
     assert!(!root.path().join("producer-evaluated").exists());
+}
+
+#[test]
+#[cfg(unix)]
+fn producer_native_write_failure_keeps_transport_exit() {
+    use std::os::fd::OwnedFd;
+    use std::process::Stdio;
+    let (root, request) = producer_host();
     let (writer, reader) = std::os::unix::net::UnixStream::pair().unwrap();
     drop(reader);
     let output = producer_command(
