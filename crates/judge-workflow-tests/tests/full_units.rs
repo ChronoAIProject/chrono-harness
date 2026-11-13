@@ -1829,7 +1829,7 @@ fn unit_inputs_are_local_but_shared_and_governance_inputs_remain_required() {
     fs::create_dir(tools.path().join("two-sdk")).unwrap();
     let capture = host::capture_native(
         &root,
-        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
             .current_dir(&root)
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")
@@ -2088,7 +2088,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
     let capture = |commit: &str, unit: &str, output: &str| {
         let p = host::capture_native(
             &root,
-            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
                 .current_dir(&root)
                 .env("DECLARED_EMPTY", "")
                 .env_remove("DECLARED_ABSENT")
@@ -2131,7 +2131,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
         );
         let p = host::capture_native(
             &root,
-            Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+            Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
                 .current_dir(&root)
                 .args([
                     "pair",
@@ -2204,7 +2204,7 @@ fn streamed_large_originals_survive_relocated_collection_finalization_and_delive
     let before = marker(tools.path());
     let compose = host::capture_native(
         collector.path(),
-        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
             .current_dir(collector.path())
             .args([
                 "compose",

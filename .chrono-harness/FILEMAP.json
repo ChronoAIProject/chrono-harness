@@ -313,7 +313,7 @@
     {"path":"crates/judge-workflow/Cargo.toml","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-workflow"}]},
     {"path":"crates/judge-workflow/Cargo.lock","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:judge-workflow"}]},
     {"path":"crates/judge-workflow/src/lib.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"}]},
-    {"path":"crates/judge-workflow/src/main.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"},{"kind":"compile","to":"project:judge-workflow-tests"}]},
+    {"path":"crates/judge-workflow/src/main.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"compile","to":"project:inputs-tests"},{"kind":"test-execution","to":"test:inputs-tests"}]},
     {"path":"crates/judge-workflow/src/branch.rs","owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"}]},
     {"path":"crates/judge-workflow/src/verified_branch.rs","verification":{"role":"program","roots":[{"path":"crates/judge-workflow/src/verified_branch.rs","operation":"verify.judge-workflow"},{"path":"crates/judge-workflow-tests/tests/verified_branch.rs","operation":"verify.judge-workflow-tests"}]},"owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"}]},
     {"path":"crates/judge-workflow/src/verified_evidence.rs","verification":{"role":"program","roots":[{"path":"crates/judge-workflow/src/verified_evidence.rs","operation":"verify.judge-workflow-evidence"}]},"owner":"judge-workflow","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"}]},
@@ -337,7 +337,7 @@
     {"path":"crates/inputs/Cargo.toml","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs"}]},
     {"path":"crates/inputs/Cargo.lock","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs"}]},
     {"path":"crates/inputs/src/lib.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"}]},
-    {"path":"crates/inputs/src/main.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"},{"kind":"compile","to":"project:inputs-tests"}]},
+    {"path":"crates/inputs/src/main.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"},{"kind":"compile","to":"project:inputs-tests"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"},{"kind":"test-execution","to":"test:workflow-units"},{"kind":"test-execution","to":"test:workflow-short"}]},
     {"path":"crates/inputs-tests/Cargo.toml","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/Cargo.lock","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/snapshots.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
@@ -1019,6 +1019,7 @@
     {"from":"project:judge-cost","kind":"runtime-input","to":"project:inputs-tests"},
     {"from":"project:judge-mixed","kind":"compile","to":"project:inputs-tests"},
     {"from":"project:judge-mixed","kind":"runtime-input","to":"project:inputs-tests"},
+    {"from":"project:judge-workflow","kind":"compile","to":"project:inputs-tests"},
     {"from":"project:judge-workflow","kind":"runtime-input","to":"project:inputs-tests"},
     {"from":"tool:cargo","kind":"runtime-input","to":"project:inputs"},
     {"from":"environment:PATH","kind":"runtime-input","to":"project:inputs"},
@@ -1089,6 +1090,7 @@
     {"from":"environment:SSH_AUTH_SOCK","kind":"runtime-input","to":"project:worktree"},
     {"from":"project:worktree","kind":"runtime-input","to":"project:judge-workflow-tests"},
     {"from":"project:judge-workflow","kind":"compile","to":"project:worktree"},
+    {"from":"project:inputs","kind":"compile","to":"project:judge-workflow-tests"},
     {"from":"project:inputs","kind":"build-input","to":"project:judge-workflow-tests"},
     {"from":"project:judge-routes","kind":"compile","to":"project:inputs"},
     {"from":"project:judge-filemap","kind":"compile","to":"project:inputs"},
@@ -1469,7 +1471,6 @@
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.ci",
-        "build.inputs",
         "workflow.inventory",
         "test.workflow.core"
       ],
@@ -1480,7 +1481,6 @@
       "operations": [
         "fmt.inputs",
         "fmt.inputs-tests",
-        "build.judge-workflow",
         "test.inputs-tests"
       ],
       "timeout_seconds": 900,
@@ -1517,7 +1517,6 @@
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.ci",
-        "build.inputs",
         "workflow.inventory",
         "test.workflow.units"
       ],
@@ -1529,7 +1528,6 @@
         "fmt.judge-workflow",
         "fmt.judge-workflow-tests",
         "build.ci",
-        "build.inputs",
         "workflow.inventory",
         "test.workflow.short"
       ],

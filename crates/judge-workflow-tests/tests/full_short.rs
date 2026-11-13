@@ -1356,7 +1356,7 @@ fn ordinary_feature_short_check_accepts_null_certificate_but_stability_requires_
     let mut inputs: Value = chrono_harness::json(&fs::read(&inputs_path).unwrap()).unwrap();
     let captured = host::capture_native(
         &lane,
-        Command::new(source().join("crates/inputs/target/debug/chrono-inputs"))
+        Command::new(env!("CARGO_BIN_EXE_chrono-inputs-test-cli"))
             .current_dir(&lane)
             .env("DECLARED_EMPTY", "")
             .env_remove("DECLARED_ABSENT")

@@ -520,9 +520,6 @@ pub fn pairs(root: &Path, r: &Registrations, affected: &BTreeSet<String>) -> Res
     }
     Ok(())
 }
-pub fn snapshot(root: &Path, candidate: &str, artifacts: &[String]) -> Result<(), String> {
-    snapshot_with_reader(root, candidate, artifacts, &facts::Reader::legacy())
-}
 pub fn snapshot_with_reader(
     root: &Path,
     candidate: &str,
@@ -1243,14 +1240,6 @@ fn validate_unit_report(
 
 /// Validate the transported original context and declared input closure for
 /// both contributions and their finalized collector proof.
-pub fn validate_retained_request(
-    req: &Request,
-    old: &Registrations,
-    r: &Registrations,
-    artifacts: &Value,
-) -> Result<Value, String> {
-    validate_retained_request_at(req, old, r, artifacts, &req.candidate.root, None)
-}
 pub fn validate_retained_request_at(
     req: &Request,
     old: &Registrations,
