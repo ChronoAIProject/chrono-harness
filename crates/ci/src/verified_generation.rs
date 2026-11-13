@@ -111,6 +111,33 @@ pub fn recovery_reference_matches(
     }
 }
 
+pub fn intent_address_matches(schema: Option<&str>, attempt: Option<&str>, path: &str) -> (bound: bool)
+    ensures bound == (text_is(schema, "chrono-ci-generation-intent/v1") && text_is(attempt, path)),
+{
+    match (schema, attempt) {
+        (Some(schema), Some(attempt)) =>
+            identifiers::equal_text(schema, "chrono-ci-generation-intent/v1")
+                && identifiers::equal_text(attempt, path),
+        _ => false,
+    }
+}
+
+pub fn result_address_matches(
+    schema: Option<&str>, attempt: Option<&str>, intent_sha256: Option<&str>,
+    path: &str, digest: &str, exit_is_null: bool,
+) -> (bound: bool)
+    ensures bound == (text_is(schema, "chrono-ci-generation-result/v1")
+        && text_is(attempt, path) && text_is(intent_sha256, digest) && exit_is_null),
+{
+    match (schema, attempt, intent_sha256) {
+        (Some(schema), Some(attempt), Some(intent_sha256)) =>
+            identifiers::equal_text(schema, "chrono-ci-generation-result/v1")
+                && identifiers::equal_text(attempt, path)
+                && identifiers::equal_text(intent_sha256, digest) && exit_is_null,
+        _ => false,
+    }
+}
+
 pub open spec fn evaluation<S, P, T, E, Prepare, Apply>(
     initial: S, prepare: Prepare, apply: Apply, out: (S, Evaluation<T, E>),
 ) -> bool

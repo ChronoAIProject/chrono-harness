@@ -542,14 +542,20 @@ fn originals(root: &Path, path: &str, expected: &Value) -> Result<(Vec<u8>, Vec<
         .ok_or("generation result unavailable")?;
     let intent_value: Value = decode(&intent)?;
     let result_value: Value = decode(&result)?;
-    if intent_value["schema"] != "chrono-ci-generation-intent/v1"
-        || intent_value["attempt"] != path
-        || intent_value["host_identity"] != identity(root)?
+    if !verified::intent_address_matches(
+        intent_value["schema"].as_str(),
+        intent_value["attempt"].as_str(),
+        path,
+    ) || intent_value["host_identity"] != identity(root)?
         || result_value != *expected
-        || result_value["schema"] != "chrono-ci-generation-result/v1"
-        || result_value["attempt"] != path
-        || result_value["intent_sha256"] != sha256(&intent)
-        || !result_value["original_process_exit"].is_null()
+        || !verified::result_address_matches(
+            result_value["schema"].as_str(),
+            result_value["attempt"].as_str(),
+            result_value["intent_sha256"].as_str(),
+            path,
+            &sha256(&intent),
+            result_value["original_process_exit"].is_null(),
+        )
     {
         return Err("generation original result/intent binding mismatch".into());
     }

@@ -205,6 +205,48 @@ fn recovery_uses_the_complete_original_id_and_path_and_rejects_missing_fields() 
     expect(policy::recovery_reference_matches(Some(""), Some(""), Some(""), ""));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_records_require_the_exact_schema_attempt_digest_and_null_exit() {
+    proof {
+        reveal_strlit("chrono-ci-generation-intent/v1");
+        reveal_strlit("chrono-ci-generation-result/v1");
+        reveal_strlit("chrono-ci-generation-intent/v1-extra");
+        reveal_strlit("chrono-ci-generation-result/v1-extra");
+        reveal_strlit("目录/原件\0\n"); reveal_strlit("目录/原件\0");
+        reveal_strlit("digest"); reveal_strlit("Digest");
+        reveal_strlit("");
+        assert("chrono-ci-generation-intent/v1"@.len()
+            != "chrono-ci-generation-intent/v1-extra"@.len());
+        assert("chrono-ci-generation-result/v1"@.len()
+            != "chrono-ci-generation-result/v1-extra"@.len());
+        assert("目录/原件\0\n"@.len() != "目录/原件\0"@.len());
+        assert("digest"@[0] != "Digest"@[0]);
+    }
+    let intent = Some("chrono-ci-generation-intent/v1");
+    let result = Some("chrono-ci-generation-result/v1");
+    let path = "目录/原件\0\n";
+    expect(policy::intent_address_matches(intent, Some(path), path));
+    expect(!policy::intent_address_matches(None, Some(path), path));
+    expect(!policy::intent_address_matches(intent, None, path));
+    expect(!policy::intent_address_matches(None, None, path));
+    expect(!policy::intent_address_matches(
+        Some("chrono-ci-generation-intent/v1-extra"), Some(path), path));
+    expect(!policy::intent_address_matches(intent, Some("目录/原件\0"), path));
+    expect(policy::intent_address_matches(intent, Some(""), ""));
+
+    expect(policy::result_address_matches(result, Some(path), Some("digest"), path, "digest", true));
+    expect(!policy::result_address_matches(None, Some(path), Some("digest"), path, "digest", true));
+    expect(!policy::result_address_matches(result, None, Some("digest"), path, "digest", true));
+    expect(!policy::result_address_matches(result, Some(path), None, path, "digest", true));
+    expect(!policy::result_address_matches(None, None, None, path, "digest", true));
+    expect(!policy::result_address_matches(
+        Some("chrono-ci-generation-result/v1-extra"), Some(path), Some("digest"), path, "digest", true));
+    expect(!policy::result_address_matches(result, Some("目录/原件\0"), Some("digest"), path, "digest", true));
+    expect(!policy::result_address_matches(result, Some(path), Some("Digest"), path, "digest", true));
+    expect(!policy::result_address_matches(result, Some(path), Some("digest"), path, "digest", false));
+    expect(policy::result_address_matches(result, Some(""), Some(""), "", "", true));
+}
+
 #[cfg(not(verus_keep_ghost))]
 #[test]
 #[should_panic]
