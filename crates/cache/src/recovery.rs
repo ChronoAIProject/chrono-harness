@@ -519,7 +519,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let steps_original =
         super::retain_original(&root, &directory, "restore-steps", steps_raw.as_bytes())?;
     let mut report = json!({"schema":"chrono-cache-recovery/v1","plan":binding,"native_steps":steps_original,
-        "status":"not-required","caches":{},"error":null,
+        "status":RecoverySummary::new().status(false),"caches":{},"error":null,
         "limits":["isolated provider restore phase, before producers", "registered native observations only; no archive integrity or build verdict", "missing matched keys do not distinguish miss from backend or extraction failure", "linked worktree recovery unsupported"]});
     let result = (|| -> Result<(), String> {
         let config: super::Config =
@@ -723,7 +723,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         RecoverySummary::new(),
         |summary, cache| {
             cache["artifacts"].as_array().unwrap().iter().fold(
-                summary.observe_cache(cache["status"].as_str(), cache["restore"]["outcome"].as_str()),
+                summary.observe_cache(
+                    cache["status"].as_str(),
+                    cache["restore"]["outcome"].as_str(),
+                ),
                 |summary, artifact| summary.observe_artifact(artifact["status"].as_str()),
             )
         },
