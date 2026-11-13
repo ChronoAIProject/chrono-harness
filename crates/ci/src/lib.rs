@@ -11,7 +11,7 @@ mod event_git;
 pub mod full;
 mod gather;
 pub mod gating;
-pub mod generation;
+pub use verified_generation::generation;
 pub mod inventory;
 pub mod migrate;
 pub mod release;
@@ -113,9 +113,7 @@ fn action(s: &str, repo: &str) -> Result<(), String> {
     }
     Ok(())
 }
-fn overlap(a: &str, b: &str) -> bool {
-    a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
-}
+use generation::overlap;
 pub fn load(path: &Path) -> Result<Config, String> {
     let c: Config = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
     validate(&c)?;

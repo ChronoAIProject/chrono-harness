@@ -1,5 +1,8 @@
 //! Preparation must return its durable plan before any projection effect is dispatched.
 #![allow(unexpected_cfgs)]
+#[path = "generation.rs"]
+pub mod generation;
+
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -11,6 +14,124 @@ pub(crate) mod identifiers;
 use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
+pub enum StateCommand<'a> {
+    Status { root: &'a str, path: &'a str },
+    Resume { root: &'a str, path: &'a str },
+    Maintain { root: &'a str },
+}
+
+pub enum StateArgumentError { Malformed, MissingRoot, Unexpected }
+
+impl StateArgumentError {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::Malformed => out@ == "generation state requires unique --host-root and optional --operation-path"@,
+            Self::MissingRoot => out@ == "--host-root required"@,
+            Self::Unexpected => out@ == "unexpected generation state options"@,
+        },
+    {
+        match self {
+            Self::Malformed => "generation state requires unique --host-root and optional --operation-path",
+            Self::MissingRoot => "--host-root required",
+            Self::Unexpected => "unexpected generation state options",
+        }
+    }
+}
+
+pub open spec fn state_option_key(key: Seq<char>) -> bool {
+    key == "--host-root"@ || key == "--operation-path"@
+}
+
+pub open spec fn state_option_shape(args: Seq<String>) -> bool {
+    args.len() == 1
+        || (args.len() == 3 && state_option_key(args[1]@))
+        || (args.len() == 5 && state_option_key(args[1]@)
+            && state_option_key(args[3]@) && args[1]@ != args[3]@)
+}
+
+pub open spec fn state_root(args: Seq<String>) -> Option<Seq<char>> {
+    if args.len() >= 3 && args[1]@ == "--host-root"@ { Some(args[2]@) }
+    else if args.len() >= 5 && args[3]@ == "--host-root"@ { Some(args[4]@) }
+    else { None }
+}
+
+pub open spec fn state_path(args: Seq<String>) -> Option<Seq<char>> {
+    if args.len() >= 3 && args[1]@ == "--operation-path"@ { Some(args[2]@) }
+    else if args.len() >= 5 && args[3]@ == "--operation-path"@ { Some(args[4]@) }
+    else { None }
+}
+
+pub open spec fn state_argument_error(args: Seq<String>) -> Option<StateArgumentError> {
+    if args.len() == 0 { Some(StateArgumentError::Unexpected) }
+    else if !state_option_shape(args) { Some(StateArgumentError::Malformed) }
+    else if state_root(args).is_none() { Some(StateArgumentError::MissingRoot) }
+    else if (args[0]@ == "generation-maintain"@ && state_path(args).is_none())
+        || ((args[0]@ == "generation-status"@ || args[0]@ == "generation-resume"@)
+            && state_path(args).is_some()) { None }
+    else { Some(StateArgumentError::Unexpected) }
+}
+
+pub open spec fn state_command_result(args: Seq<String>, out: Result<StateCommand, StateArgumentError>) -> bool {
+    match out {
+        Err(error) => state_argument_error(args) == Some(error),
+        Ok(command) => state_argument_error(args).is_none() && args.len() > 0 && match command {
+            StateCommand::Status { root, path } => args[0]@ == "generation-status"@
+                && state_root(args) == Some(root@) && state_path(args) == Some(path@),
+            StateCommand::Resume { root, path } => args[0]@ == "generation-resume"@
+                && state_root(args) == Some(root@) && state_path(args) == Some(path@),
+            StateCommand::Maintain { root } => args[0]@ == "generation-maintain"@
+                && state_root(args) == Some(root@) && state_path(args).is_none(),
+        },
+    }
+}
+
+/// Two distinct option keys bound the complete grammar to at most two pairs.
+pub fn parse_state_command<'a>(args: &'a [String]) -> (out: Result<StateCommand<'a>, StateArgumentError>)
+    ensures state_command_result(args@, out),
+{
+    proof {
+        reveal_strlit("--host-root");
+        reveal_strlit("--operation-path");
+        reveal_strlit("generation-maintain");
+        reveal_strlit("generation-status");
+        reveal_strlit("generation-resume");
+        assert("--host-root"@.len() != "--operation-path"@.len());
+        assert("generation-maintain"@.len() != "generation-status"@.len());
+        assert("generation-maintain"@.len() != "generation-resume"@.len());
+        assert("generation-status"@[11] != "generation-resume"@[11]);
+    }
+    if args.len() == 0 { return Err(StateArgumentError::Unexpected); }
+    if args.len() == 1 { return Err(StateArgumentError::MissingRoot); }
+    if args.len() != 3 && args.len() != 5 { return Err(StateArgumentError::Malformed); }
+    let command = args[0].as_str();
+    let first = args[1].as_str();
+    if args.len() == 3 {
+        if identifiers::equal_text(first, "--operation-path") {
+            return Err(StateArgumentError::MissingRoot);
+        }
+        if !identifiers::equal_text(first, "--host-root") {
+            return Err(StateArgumentError::Malformed);
+        }
+        if identifiers::equal_text(command, "generation-maintain") {
+            return Ok(StateCommand::Maintain { root: args[2].as_str() });
+        }
+        return Err(StateArgumentError::Unexpected);
+    }
+    let second = args[3].as_str();
+    let (root, path) = if identifiers::equal_text(first, "--host-root")
+        && identifiers::equal_text(second, "--operation-path") {
+        (args[2].as_str(), args[4].as_str())
+    } else if identifiers::equal_text(first, "--operation-path")
+        && identifiers::equal_text(second, "--host-root") {
+        (args[4].as_str(), args[2].as_str())
+    } else { return Err(StateArgumentError::Malformed); };
+    if identifiers::equal_text(command, "generation-status") {
+        Ok(StateCommand::Status { root, path })
+    } else if identifiers::equal_text(command, "generation-resume") {
+        Ok(StateCommand::Resume { root, path })
+    } else { Err(StateArgumentError::Unexpected) }
+}
+
 pub enum TargetAdmission { Overlap, Drift, Append }
 
 /// Existing output conflicts take precedence over verification drift.

@@ -23,6 +23,131 @@ fn expect(actual: bool)
     if !actual { panic!(); }
 }
 
+fn state_three(command: &str, key: &str, value: &str) -> (args: Vec<String>)
+    ensures args@.len() == 3, args@[0]@ == command@,
+        args@[1]@ == key@, args@[2]@ == value@,
+{
+    let mut args = Vec::new();
+    args.push(command.to_string());
+    args.push(key.to_string());
+    args.push(value.to_string());
+    args
+}
+
+fn state_five(command: &str, first: &str, first_value: &str, second: &str, second_value: &str)
+    -> (args: Vec<String>)
+    ensures args@.len() == 5, args@[0]@ == command@,
+        args@[1]@ == first@, args@[2]@ == first_value@,
+        args@[3]@ == second@, args@[4]@ == second_value@,
+{
+    let mut args = state_three(command, first, first_value);
+    args.push(second.to_string());
+    args.push(second_value.to_string());
+    args
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn state_commands_preserve_complete_values_and_both_option_orders() {
+    proof {
+        reveal_strlit("--host-root");
+        reveal_strlit("--operation-path");
+        reveal_strlit("generation-maintain");
+        reveal_strlit("generation-status");
+        reveal_strlit("generation-resume");
+        assert("--host-root"@.len() != "--operation-path"@.len());
+        assert("generation-status"@[11] != "generation-resume"@[11]);
+        assert("generation-status"@.len() != "generation-maintain"@.len());
+    }
+    let args = state_five("generation-status", "--host-root", "目录\0根\n",
+        "--operation-path", "操作\0原件\n");
+    proof {
+        assert(policy::state_option_shape(args@));
+        assert(policy::state_root(args@) == Some("目录\0根\n"@));
+        assert(policy::state_path(args@) == Some("操作\0原件\n"@));
+        assert(policy::state_argument_error(args@).is_none());
+    }
+    match policy::parse_state_command(&args) {
+        Ok(policy::StateCommand::Status { root, path }) => {
+            expect(identifiers::equal_text(root, "目录\0根\n"));
+            expect(identifiers::equal_text(path, "操作\0原件\n"));
+        },
+        _ => expect(false),
+    }
+    let args = state_five("generation-resume", "--operation-path", "操作\0原件\n",
+        "--host-root", "目录\0根\n");
+    proof {
+        assert(policy::state_option_shape(args@));
+        assert(policy::state_root(args@) == Some("目录\0根\n"@));
+        assert(policy::state_path(args@) == Some("操作\0原件\n"@));
+        assert(policy::state_argument_error(args@).is_none());
+    }
+    match policy::parse_state_command(&args) {
+        Ok(policy::StateCommand::Resume { root, path }) => {
+            expect(identifiers::equal_text(root, "目录\0根\n"));
+            expect(identifiers::equal_text(path, "操作\0原件\n"));
+        },
+        _ => expect(false),
+    }
+    let args = state_three("generation-maintain", "--host-root", "");
+    match policy::parse_state_command(&args) {
+        Ok(policy::StateCommand::Maintain { root }) => expect(identifiers::equal_text(root, "")),
+        _ => expect(false),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn state_commands_keep_form_root_and_operation_error_priority() {
+    proof {
+        reveal_strlit("--host-root");
+        reveal_strlit("--operation-path");
+        reveal_strlit("--HOST-root");
+        reveal_strlit("generation-maintain");
+        reveal_strlit("generation-status");
+        reveal_strlit("generation-resume");
+        reveal_strlit("generation-STATUS");
+        reveal_strlit("unknown");
+        assert("--HOST-root"@[2] != "--host-root"@[2]);
+        assert("generation-STATUS"@[11] != "generation-status"@[11]);
+        assert("generation-STATUS"@[11] != "generation-resume"@[11]);
+    }
+    let duplicate = state_five("generation-status", "--host-root", "one", "--host-root", "two");
+    expect(matches!(policy::parse_state_command(&duplicate), Err(policy::StateArgumentError::Malformed)));
+    let duplicate = state_five("generation-maintain", "--operation-path", "same", "--operation-path", "same");
+    expect(matches!(policy::parse_state_command(&duplicate), Err(policy::StateArgumentError::Malformed)));
+    let unknown = state_three("unknown", "--HOST-root", "root");
+    expect(matches!(policy::parse_state_command(&unknown), Err(policy::StateArgumentError::Malformed)));
+    let missing = state_three("unknown", "--operation-path", "original");
+    expect(matches!(policy::parse_state_command(&missing), Err(policy::StateArgumentError::MissingRoot)));
+    let missing = state_three("generation-status", "--host-root", "root");
+    expect(matches!(policy::parse_state_command(&missing), Err(policy::StateArgumentError::Unexpected)));
+    let extra = state_five("generation-maintain", "--host-root", "root", "--operation-path", "original");
+    expect(matches!(policy::parse_state_command(&extra), Err(policy::StateArgumentError::Unexpected)));
+    let unknown = state_five("generation-STATUS", "--host-root", "root", "--operation-path", "original");
+    expect(matches!(policy::parse_state_command(&unknown), Err(policy::StateArgumentError::Unexpected)));
+    expect(identifiers::equal_text(policy::StateArgumentError::Malformed.label(),
+        "generation state requires unique --host-root and optional --operation-path"));
+    expect(identifiers::equal_text(policy::StateArgumentError::MissingRoot.label(), "--host-root required"));
+    expect(identifiers::equal_text(policy::StateArgumentError::Unexpected.label(), "unexpected generation state options"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn state_commands_reject_incomplete_or_excess_options_without_dispatch() {
+    let mut args = Vec::new();
+    args.push("generation-status".to_string());
+    expect(matches!(policy::parse_state_command(&args), Err(policy::StateArgumentError::MissingRoot)));
+    args.push("--host-root".to_string());
+    expect(matches!(policy::parse_state_command(&args), Err(policy::StateArgumentError::Malformed)));
+    args.push("root".to_string());
+    args.push("--operation-path".to_string());
+    expect(matches!(policy::parse_state_command(&args), Err(policy::StateArgumentError::Malformed)));
+    args.push("original".to_string());
+    args.push("--host-root".to_string());
+    args.push("root".to_string());
+    expect(matches!(policy::parse_state_command(&args), Err(policy::StateArgumentError::Malformed)));
+    let empty: Vec<String> = Vec::new();
+    expect(matches!(policy::parse_state_command(&empty), Err(policy::StateArgumentError::Unexpected)));
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn target_admission_preserves_overlap_priority_and_verify_drift() {
     expect(matches!(policy::target_admission(true, true, true), policy::TargetAdmission::Overlap));

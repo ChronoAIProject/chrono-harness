@@ -1,5 +1,5 @@
 //! Each generation owns its original inputs, plan, effects and recovery reference.
-use super::verified_generation::{self as verified, Object, same_object};
+use super::{self as verified, Object, same_object};
 use chrono_harness::{
     artifact_disposal::identity,
     decode, no_symlink_parents, relative_path,
@@ -20,6 +20,10 @@ const STORE: &str = ".chrono-harness/state/ci-generation-operations";
 const PRODUCER: &str = "ci-generation-operation";
 const POLICY: &[u8] = include_bytes!("../../../assets/ci/standalone-retention.json");
 const LIMIT: u64 = 16 * 1024 * 1024;
+
+pub(crate) fn overlap(a: &str, b: &str) -> bool {
+    a == b || a.starts_with(&format!("{b}/")) || b.starts_with(&format!("{a}/"))
+}
 
 fn checkpoint(_point: &str) {
     #[cfg(feature = "generation-test")]
@@ -87,7 +91,7 @@ fn observe(path: &Path) -> Result<(Option<Object>, Option<Vec<u8>>), String> {
     observed
 }
 
-pub(super) struct Inputs {
+pub(crate) struct Inputs {
     root: PathBuf,
     originals: BTreeMap<String, Original>,
 }
@@ -188,7 +192,7 @@ struct Target {
     previous_bytes: Option<Vec<u8>>,
 }
 #[derive(Default, Serialize)]
-pub(super) struct Plan {
+pub(crate) struct Plan {
     targets: Vec<Target>,
 }
 impl Plan {
@@ -264,7 +268,7 @@ impl Plan {
         let overlapping = self
             .targets
             .iter()
-            .any(|target| super::overlap(&target.path, path));
+            .any(|target| overlap(&target.path, path));
         match verified::target_admission(overlapping, verify, same) {
             verified::TargetAdmission::Overlap => {
                 return Err(format!("overlapping generation outputs: {path}"));
@@ -448,7 +452,7 @@ fn inventory(root: &Path) -> Result<Inventory, String> {
     Ok(inventory)
 }
 
-pub(super) fn run(
+pub(crate) fn run(
     root: &Path,
     operation: &str,
     config: &str,
@@ -787,32 +791,12 @@ pub fn resume(root: &Path, path: &str) -> Result<Value, String> {
     .1
 }
 
-pub(super) fn dispatch(args: &[String]) -> Result<String, String> {
-    let mut opts = BTreeMap::new();
-    for pair in args[1..].chunks(2) {
-        if pair.len() != 2
-            || !["--host-root", "--operation-path"].contains(&pair[0].as_str())
-            || opts.insert(pair[0].as_str(), pair[1].as_str()).is_some()
-        {
-            return Err(
-                "generation state requires unique --host-root and optional --operation-path".into(),
-            );
-        }
-    }
-    let root = Path::new(*opts.get("--host-root").ok_or("--host-root required")?);
-    let report = match args[0].as_str() {
-        "generation-status" if opts.len() == 2 => status(
-            root,
-            opts.get("--operation-path")
-                .ok_or("--operation-path required")?,
-        )?,
-        "generation-resume" if opts.len() == 2 => resume(
-            root,
-            opts.get("--operation-path")
-                .ok_or("--operation-path required")?,
-        )?,
-        "generation-maintain" if opts.len() == 1 => maintain(root)?,
-        _ => return Err("unexpected generation state options".into()),
+pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
+    let command = verified::parse_state_command(args).map_err(|error| error.label().to_owned())?;
+    let report = match command {
+        verified::StateCommand::Status { root, path } => status(Path::new(root), path)?,
+        verified::StateCommand::Resume { root, path } => resume(Path::new(root), path)?,
+        verified::StateCommand::Maintain { root } => maintain(Path::new(root))?,
     };
     Ok(serde_json::to_string_pretty(&report).map_err(|e| e.to_string())? + "\n")
 }

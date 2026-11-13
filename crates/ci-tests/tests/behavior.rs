@@ -178,6 +178,81 @@ fn generation_success_retains_its_intent_and_original_evaluation() {
     assert_eq!(result["producer_evaluation"], json!({"changed": true}));
     // A function return is observable here; the enclosing process has not exited.
     assert_eq!(result["original_process_exit"], Value::Null);
+
+    let path = operation
+        .strip_prefix(host.path())
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let root = host.path().to_str().unwrap();
+    for command in ["generation-status", "generation-resume"] {
+        for options in [
+            ["--host-root", root, "--operation-path", path],
+            ["--operation-path", path, "--host-root", root],
+        ] {
+            let args = std::iter::once(command)
+                .chain(options)
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            let rendered = chrono_ci::dispatch(&args).unwrap();
+            assert!(rendered.ends_with('\n'));
+            let report: Value = serde_json::from_str(&rendered).unwrap();
+            assert_eq!(report["completion"], "confirmed-evaluation");
+            assert_eq!(report["original_result"], result);
+        }
+    }
+    let rendered = chrono_ci::dispatch(&[
+        "generation-maintain".into(),
+        "--host-root".into(),
+        root.into(),
+    ])
+    .unwrap();
+    let report: Value = serde_json::from_str(&rendered).unwrap();
+    assert_eq!(report["schema"], "chrono-retained-producer-maintenance/v1");
+    assert_eq!(report["producer"], "ci-generation-operation");
+    assert_eq!(report["completion"], "not-established");
+    assert_eq!(generation_operation(host.path()), operation);
+}
+
+#[test]
+fn generation_state_dispatch_preserves_argument_errors_before_io() {
+    let malformed = "generation state requires unique --host-root and optional --operation-path";
+    for (args, expected) in [
+        (vec!["generation-status"], "--host-root required"),
+        (
+            vec!["generation-status", "--operation-path", "original"],
+            "--host-root required",
+        ),
+        (vec!["generation-status", "--host-root"], malformed),
+        (vec!["generation-status", "--unknown", "value"], malformed),
+        (
+            vec![
+                "generation-status",
+                "--host-root",
+                "missing\0root",
+                "--host-root",
+                "other",
+            ],
+            malformed,
+        ),
+        (
+            vec!["generation-resume", "--host-root", "missing\0root"],
+            "unexpected generation state options",
+        ),
+        (
+            vec![
+                "generation-maintain",
+                "--operation-path",
+                "original",
+                "--host-root",
+                "missing\0root",
+            ],
+            "unexpected generation state options",
+        ),
+    ] {
+        let args = args.into_iter().map(str::to_owned).collect::<Vec<_>>();
+        assert_eq!(chrono_ci::dispatch(&args).unwrap_err(), expected);
+    }
 }
 
 #[test]
