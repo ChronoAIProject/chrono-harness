@@ -143,7 +143,18 @@ stable 正式采用已在四个下游完成：Go feature PR `71`（head `b297569
 
 该发布 run 的 Linux/macOS frontend、全部登记构建与验证、package、publish、Linux 安装和 macOS 安装均成功。四个下游的 `dev` 声明都锁定该 preview；当前落地和最新 CI 为：Go `4639d31dea633c935ebbc14a308a1bd58c186624`（collection `43490975370`、CodeQL `43490974524`），TypeScript `717e65192567c1890228a13aec442eae0c30cf7b`（`43490976822`、`43490974801`），混合语言 `8a9167496f85ebf5b4690f084e7ba781b926cce0`（`43490976918`、`43490976242`），首次接入 `47d117da4d6d774468614ec43da2294f13f07dd8`（宿主检查 `43490974834`、CodeQL `43490974883`）；这些落地运行均成功。
 
-上游随后继续前进到 `00abeb0c559268f8ac762341fbcc00a0c1648071`，因此不能把上述 preview 晋升为 stable。由该变更触发的发布 run `43491845132` 已成功终态，但发布日志确认其真实候选不是 workflow 自身的 `head_sha=00abeb0c…`，而是固定的 `source=846af39b2372f607dfdd496bc26b41311c497348`，对应 landing collection `43489853160`（CodeQL `43489853379`），workflow blob `ce38fbe5b0ced74709141b9ee43f26f4865cd124`。公开 preview 为 `v0.1.5-dev.43489853160.1.g846af39b2372f607dfdd496bc26b41311c497348`，Release 公开、非 draft、prerelease，共 34 个资产；`release.json` 为 6649 bytes、SHA-256 `78a6a8578c2f02a2f4410d28a0800a9b8c75fae7f1c9a56acbd43ea733d53245`；Linux installer 为 1657696 bytes、SHA-256 `9091d00b8beb1546781c1031662fc171a14aa264ea24ff1e84c0996a045403c3`，macOS installer 为 1329600 bytes、SHA-256 `b3a21d966d19bf360daecaea1bdb1722b08e394a81c95648c337068ba7034837`。publish、Linux install、macOS install 均成功；四个下游尚未迁移到该候选。
+上游随后继续前进到 `00abeb0c559268f8ac762341fbcc00a0c1648071`，因此不能把上述 preview 晋升为 stable。由该变更触发的发布 run `43491845132` 已成功终态，但发布日志确认其真实候选不是 workflow 自身的 `head_sha=00abeb0c…`，而是固定的 `source=846af39b2372f607dfdd496bc26b41311c497348`，对应 landing collection `43489853160`（CodeQL `43489853379`），workflow blob `ce38fbe5b0ced74709141b9ee43f26f4865cd124`。公开 preview 为 `v0.1.5-dev.43489853160.1.g846af39b2372f607dfdd496bc26b41311c497348`，Release 公开、非 draft、prerelease，共 34 个资产；`release.json` 为 6649 bytes、SHA-256 `78a6a8578c2f02a2f4410d28a0800a9b8c75fae7f1c9a56acbd43ea733d53245`；Linux installer 为 1657696 bytes、SHA-256 `9091d00b8beb1546781c1031662fc171a14aa264ea24ff1e84c0996a045403c3`，macOS installer 为 1329600 bytes、SHA-256 `b3a21d966d19bf360daecaea1bdb1722b08e394a81c95648c337068ba7034837`。publish、Linux install、macOS install 均成功。
+
+四个下游随后按 `feature → integration → dev` 完成该候选迁移；四仓本地安装、适用 bootstrap 和 canonical check 均通过。首次 adoption 默认入口因现有版本不同返回 `E_DISTRIBUTION: existing adoption differs`，保留原始 stderr 后使用登记的 `--replace` 完成替换。首次误用不存在的 `bootstrap-native.sh` 返回 `127`，原始 stdout/stderr 保留；Go、TypeScript、混合仓随后均改用其实际登记的 `python3 .chrono-harness/bootstrap.py .`，首次接入仓按登记直接执行 canonical check。
+
+| 下游 | feature PR / merge | integration→dev PR / dev SHA | dev collection / CodeQL |
+| --- | --- | --- | --- |
+| Go | #88 / `44b65f676f6000c7e32a7d504c38bef3f9360c28` | #89 / `ab518ef23ea53e6a3c55cc6fbf768848dffa2aa4` | `43497591420` / `43497590275` |
+| TypeScript | #83 / `a934b932311fae20901b63a54270db18609922a1` | #84 / `e9e484540a08397ac38283e9f7d6b5bd43836b0d` | `43497591062` / `43497590681` |
+| 混合语言 | #83 / `6838467334517469656172a8237f66114db53c79` | #84 / `1c07f4b2d5ffcaff4807273720f352f8b0658045` | `43497596643` / `43497595416` |
+| 首次接入 | #76 / `8dff12f6dc9226d49a6ebce5c82cb26de8916bf1` | #77 / `9512c3e9ff5376878ea78e331b346965de3bfa52` | `43497590892` / `43497590771` |
+
+四个 dev push 的业务检查、汇总和 CodeQL 均成功，且 dev SHA 与上述落地提交一致。由于上游在该候选之后已经漂移到 `00abeb0…`，本候选完成 preview 采用但仍不得晋升 stable。
 
 此前同一连续迭代中的失败 run `43487804581`（source `e83c53877c2b7fc87300f37d619b85861ac85280`）已终态为 failure：`linux_verify_runner_tests` 的 `producer_native_read_failure_keeps_transport_exit` 观察到 Linux `ETXTBSY (Text file busy)`，`linux_verify_worktree_tests` 的 `owner_deployment::owner_deployment_uses_the_declared_producer_entrypoint_for_stage_inputs` 失败，随后 `linux_package` 失败；`publish`、`linux_install`、`macos_install` 均 skipped。原 stdout、stderr、退出码及诊断 artifact 已保留，不能用后续运行覆盖这些失败证据。
 
