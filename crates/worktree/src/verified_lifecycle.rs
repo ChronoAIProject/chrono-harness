@@ -12,6 +12,9 @@ use identifiers::equal_text;
 
 #[cfg(verus_keep_ghost)]
 #[path = "automatic.rs"]
+// The ordinary automatic module owns formatting of its runtime child modules.
+// This proof-only alias has a different module directory and must not traverse them.
+#[rustfmt::skip]
 mod automatic_verification;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::{
