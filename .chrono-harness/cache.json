@@ -1051,8 +1051,7 @@
       "consumers": [
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
-        "check.unit_worktree",
-        "check.unit_worktree-adoption"
+        "check.unit_worktree"
       ],
       "artifacts": [
         "ci.target"

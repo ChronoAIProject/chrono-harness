@@ -212,8 +212,7 @@
       "build.ci": [
         "judge-workflow",
         "judge-workflow-short",
-        "worktree",
-        "worktree-adoption"
+        "worktree"
       ],
       "fmt.judge-workflow": [
         "judge-workflow",
