@@ -11,15 +11,15 @@
 
 ## 当前接入方式
 
-四个示例的默认分支都是 `dev`，安装声明位于各自的 `.chrono-harness/distribution.json`，当前均锁定测试版 `v0.1.4-dev.43388849772.1.g4d31cde6446dadfc4b098ababe4e69ad4b3f9e66` 及其 `release.json` 摘要；正式稳定基线仍是 `v0.1.3`。它们下载选定的发布工具，不编译本仓 Rust 源码，也不提交工具二进制、SDK 或缓存。指南选择由各自 `.chrono-harness/instructions/` 维护，`AGENTS.md` 是指向 `CLAUDE.md` 的相对符号链接。
+四个示例的默认分支都是 `dev`，安装声明位于各自的 `.chrono-harness/distribution.json`，当前均锁定正式版 `v0.1.4` 及其 `release.json` 摘要。它们下载选定的发布工具，不编译本仓 Rust 源码，也不提交工具二进制、SDK 或缓存。指南选择由各自 `.chrono-harness/instructions/` 维护，`AGENTS.md` 是指向 `CLAUDE.md` 的相对符号链接。
 
 Go、TS、混合示例采用 `chrono-ci-check/v3` 和 `chrono-github-units/v1`，在 `.chrono-harness/ci/units.json` 明确登记单元、工作流、SDK、测试计划及依赖。Go 有 harness／rates 两个单元，TS 有 harness／labels 两个单元，混合示例有 harness、labels、normalize、rates 四个单元；harness 与汇总不安装业务 SDK。首次接入示例采用独立 `chrono-github-ci/v2`，只登记 macOS arm64／`macos-14`。
 
-`v0.1.3` 稳定版和当前 preview 都沿用 `feature → integration → dev` 晋升链，四个 `dev` 分支的业务检查和必要安全检查均已通过；每个宿主仍保留自己的业务代码、SDK 选择和 CI 政策。Go 的平台 Git 政策接入见 [PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18)，公开产物清单排除接入见 [PR #19](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/19)。版本和行为升级按[宿主定制与更新](ci-units.md#host-customization-and-updates)明确迁移。
+`v0.1.4` 正式版沿用 `feature → integration → dev` 晋升链，四个 `dev` 分支的业务检查和必要安全检查均已通过；每个宿主仍保留自己的业务代码、SDK 选择和 CI 政策。Go 的平台 Git 政策接入见 [PR #18](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/18)，公开产物清单排除接入见 [PR #19](https://github.com/ChronoAIProject/chrono-harness-examples-go/pull/19)。版本和行为升级按[宿主定制与更新](ci-units.md#host-customization-and-updates)明确迁移。
 
 ## 验证范围
 
-`v0.1.3` 已有四个宿主的本地 macOS 真实安装和 `dev` 原生 CI 采用；当前 `v0.1.4` preview 也已在四个宿主完成本地验证和 `dev` 原生 CI 采用，包括单元执行、原报告汇总及宿主安全检查。具体候选、运行、原报告和失败直接查各宿主的 PR、Actions 和发布原件；本仓的逐轮身份、落地 SHA 和运行号记录在[发布与下游迭代](release-iteration.md)。
+`v0.1.4` 已有四个宿主的本地 macOS 真实安装和 `dev` 原生 CI 采用，包括单元执行、原报告汇总及宿主安全检查。Linux 采用由四个宿主对应的 `dev` CI 实际验证。具体候选、运行、原报告和失败直接查各宿主的 PR、Actions 和发布原件；本仓的逐轮身份、落地 SHA 和运行号记录在[发布与下游迭代](release-iteration.md)。
 
 稳定版 workflow 本身的 `linux_install` 和 `macos_install` 在本轮手动 stable run 中被跳过，因此采用证据由公开 stable 资产的本地 macOS 安装和四个下游 `dev` CI 覆盖，不能把被跳过的 job 写成通过。Go 预览阶段的 Linux Git 摘要绑定失败已在负责的 Git 政策层修复并复验；旧失败和未知结果仍按各自原件解释，后续成功不补作历史证据。当前产品缺口归[覆盖表](spec-coverage.md)。
 
