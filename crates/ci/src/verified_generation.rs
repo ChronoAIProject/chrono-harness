@@ -369,6 +369,7 @@ pub fn bind_generation_originals<S, I, C, H>(
                     assert(hash.ensures((after_equal, intent), (after_hash, original_digest)));
                     out
                 };
+                assert(original_binding_equality_result(after_equal, fields, path, intent, matched, hash, out));
                 assert(equal.ensures((after_identify,), (after_equal, matched)));
                 out
             }
@@ -383,6 +384,153 @@ fn text_matches(actual: Option<&str>, expected: &str) -> (same: bool)
     ensures same == text_is(actual, expected),
 {
     match actual { Some(text) => identifiers::equal_text(text, expected), None => false }
+}
+
+pub struct BoundOriginalIo<V, O, M, H, C> {
+    pub validate: V,
+    pub observe: O,
+    pub missing: M,
+    pub hash: H,
+    pub changed: C,
+}
+
+pub open spec fn bound_original_callable<S, E, V, O, M, H, C>(io: &BoundOriginalIo<V, O, M, H, C>) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    (forall|state: S| #[trigger] io.validate.requires((state,)))
+        && (forall|state: S| #[trigger] io.observe.requires((state,)))
+        && (forall|state: S| #[trigger] io.missing.requires((state,)))
+        && (forall|state: S, bytes: &Vec<u8>| #[trigger] io.hash.requires((state, bytes)))
+        && (forall|state: S| #[trigger] io.changed.requires((state,)))
+}
+
+pub open spec fn bound_hashed_result<S, E, V, O, M, H, C>(
+    initial: S, bytes: Vec<u8>, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>, out: (S, Result<Vec<u8>, E>),
+) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    exists|state: S, digest: String|
+        #[trigger] io.hash.ensures((initial, &bytes), (state, digest)) && if digest@ == expected@ {
+            out == (state, Ok::<Vec<u8>, E>(bytes))
+        } else { match out.1 {
+            Err(error) => io.changed.ensures((state,), (out.0, error)),
+            _ => false,
+        } }
+}
+
+fn finish_bound_original<S, E, V, O, M, H, C>(
+    state: S, bytes: Vec<u8>, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>,
+) -> (out: (S, Result<Vec<u8>, E>))
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+    requires bound_original_callable(io),
+    ensures bound_hashed_result(state, bytes, expected, io, out),
+{
+    let ghost initial = state;
+    let ghost original_bytes = bytes;
+    let (state, digest) = (io.hash)(state, &bytes);
+    let ghost after_hash = state;
+    let ghost original_digest = digest;
+    let out = if identifiers::equal_text(&digest, expected) { (state, Ok(bytes)) }
+    else {
+        let (state, error) = (io.changed)(state);
+        let ghost after_changed = state;
+        let ghost original_error = error;
+        assert(io.changed.ensures((after_hash,), (after_changed, original_error)));
+        (state, Err(error))
+    };
+    assert(io.hash.ensures((initial, &original_bytes), (after_hash, original_digest)));
+    assert(bound_hashed_result(initial, original_bytes, expected, io, out));
+    out
+}
+
+pub open spec fn bound_observed_result<S, E, V, O, M, H, C>(
+    initial: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>, out: (S, Result<Vec<u8>, E>),
+) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Vec<u8>>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<Vec<u8>, E>(error)),
+            Ok(None) => match out.1 {
+                Err(error) => io.missing.ensures((state,), (out.0, error)),
+                _ => false,
+            },
+            Ok(Some(bytes)) => bound_hashed_result(state, bytes, expected, io, out),
+        }
+}
+
+fn observe_bound_original<S, E, V, O, M, H, C>(
+    state: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>,
+) -> (out: (S, Result<Vec<u8>, E>))
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+    requires bound_original_callable(io),
+    ensures bound_observed_result(state, expected, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(None) => {
+            let (state, error) = (io.missing)(state);
+            let ghost after_missing = state;
+            let ghost original_error = error;
+            assert(io.missing.ensures((after_observe,), (after_missing, original_error)));
+            (state, Err(error))
+        },
+        Ok(Some(bytes)) => finish_bound_original(state, bytes, expected, io),
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    assert(bound_observed_result(initial, expected, io, out));
+    out
+}
+
+pub open spec fn bound_original_result<S, E, V, O, M, H, C>(
+    initial: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>, out: (S, Result<Vec<u8>, E>),
+) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    exists|state: S, validated: Result<(), E>|
+        #[trigger] io.validate.ensures((initial,), (state, validated)) && match validated {
+            Err(error) => out == (state, Err::<Vec<u8>, E>(error)),
+            Ok(()) => bound_observed_result(state, expected, io, out),
+        }
+}
+
+/// Validate the requested path before observing bytes, and return only the same bytes whose digest matches.
+pub fn read_bound_original<S, E, V, O, M, H, C>(
+    state: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>,
+) -> (out: (S, Result<Vec<u8>, E>))
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+    requires bound_original_callable(io),
+    ensures bound_original_result(state, expected, io, out),
+{
+    let ghost initial = state;
+    let (state, validated) = (io.validate)(state);
+    let ghost after_validate = state;
+    let ghost original = validated;
+    let out = match validated {
+        Err(error) => (state, Err(error)),
+        Ok(success) => { assert(success == ()); observe_bound_original(state, expected, io) },
+    };
+    assert(io.validate.ensures((initial,), (after_validate, original)));
+    assert(bound_original_result(initial, expected, io, out));
+    out
 }
 
 pub open spec fn directory_steps_finite<S, P, E, N, D>(next: N, sync: D, rank: spec_fn(S) -> nat) -> bool

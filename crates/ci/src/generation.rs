@@ -638,14 +638,21 @@ fn originals(root: &Path, path: &str, expected: &Value) -> Result<(Vec<u8>, Vec<
     )
     .1?;
     let read_bound = |name: &str, expected: &str| -> Result<Vec<u8>, String> {
-        relative_path(name)?;
-        let bytes = observe(&no_symlink_parents(root, &format!("{path}/{name}"))?)?
-            .1
-            .ok_or_else(|| format!("generation original unavailable: {name}"))?;
-        if sha256(&bytes) != expected {
-            return Err(format!("generation original bytes changed: {name}"));
-        }
-        Ok(bytes)
+        let io = verified::BoundOriginalIo {
+            validate: |state| (state, relative_path(name)),
+            observe: |state| {
+                (
+                    state,
+                    no_symlink_parents(root, &format!("{path}/{name}"))
+                        .and_then(|path| observe(&path))
+                        .map(|(_, bytes)| bytes),
+                )
+            },
+            missing: |state| (state, format!("generation original unavailable: {name}")),
+            hash: |state, bytes| (state, sha256(bytes)),
+            changed: |state| (state, format!("generation original bytes changed: {name}")),
+        };
+        verified::read_bound_original((), expected, &io).1
     };
     let inputs: Value = decode(&read_bound(
         "inputs.json",
