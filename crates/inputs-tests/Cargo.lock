@@ -102,6 +102,7 @@ dependencies = [
  "chrono-judge-projects",
  "chrono-judge-registration",
  "chrono-judge-routes",
+ "chrono-judge-workflow",
  "chrono-worktree",
  "serde",
  "serde_json",

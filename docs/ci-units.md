@@ -44,7 +44,7 @@ projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。�
 
 judge-ci、CI 和 projects 专属测试都在各自 target 编译同一份 judge-ci 生产 `main.rs`，通过 Cargo 提供的 CLI 路径交给真实 runner。三项测试计划不再前置 `build.judge-ci`；普通单元不再恢复或保存 judge-ci 生产 target，已无使用方的 `check.judge-ci` 缓存退役。detector 启动和公开发布仍按原登记构建生产 judge-ci，并保留各自缓存。发布验证不再为这三项测试依赖、下载或暂存 judge-ci 资产；各项其余真实资产消费保留。原未过滤测试、断言、线程和时限保留，总成本未测。
 
-workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.rs`，通过 Cargo 提供的路径复制并运行真实 CLI。三个 workflow 测试计划不再前置 `build.judge-workflow`，对应单元也不再恢复生产 target；`inputs` 仍消费生产 CLI，保留该构建及缓存，并负责保存缓存。测试根保留原 profile（含 `strip="debuginfo"`）、测试、断言、分组、线程和时限；完整成本收益未测。
+workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.rs`，通过 Cargo 提供的路径复制并运行真实 CLI。三个 workflow 测试计划不再前置 `build.judge-workflow`，对应单元也不再恢复生产 target；inputs 专属测试也在自己的 target 编译 workflow 测试 CLI，删除最后一项重复构建和已无使用方的 `check.judge-workflow` 缓存及订阅。测试根保留原 profile（含 `strip="debuginfo"`）、测试、断言、分组、线程和时限；完整成本收益未测。
 
 **宿主构建登记与测试安装同时修改：**CI、inputs、registration、filemap、projects、workflow 六个测试项目也从唯一的 runner 生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实检查调用。对应八个单元不再前置 `build.runner`，退役已无使用方的 `check.runner` 缓存及其订阅；detector 启动、正式生产构建和发布打包继续使用各自登记。原未过滤测试、断言、线程、分组、cap=2 和时限保留。验证使用正式生成、canonical check 及两段 PR／落地检查，完整成本收益未测。
 
@@ -132,7 +132,7 @@ provider 的必需 `job_gating` 字段登记 detector 的平台、时限、boots
 
 本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 构建并安装四项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-worktree`，并安装已校验的 Verus 原压缩包 `.chrono-harness/bin/verus.zip`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。单元从该包解压 Verus，不再各自下载、校验和构建 bootstrap 前端；本地 core 仍完成完整安装。
 
-当前宿主没有启用调用 `chrono-inputs` 的 `native_adoption`，登记 action 也不调用它，因此 core 不预先获取、构建、安装或传递这个程序。inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，不再单独构建生产 inputs 项目；workflow 的三个测试组仍按自己的计划构建并消费生产 inputs 程序，公开发布资产保留。宿主工具表及专属依赖边同步移除这项闲置安装的声明，避免把产物的存在当作使用理由。
+当前宿主没有启用调用 `chrono-inputs` 的 `native_adoption`，登记 action 也不调用它，因此 core 不预先获取、构建、安装或传递这个程序。inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，不再单独构建生产 inputs 项目；workflow 的三个测试组也在自己的 target 编译 inputs 测试 CLI，原五处 capture 调用及断言保留，删除重复构建和已无使用方的 `check.inputs` 缓存；公开发布资产保留。宿主工具表及专属依赖边同步移除这项闲置安装的声明，避免把产物的存在当作使用理由。
 
 **实现与宿主政策同时变更：**共享文件允许普通非零权限 `0001`–`0777`，包含无执行位的压缩包；不把数据文件改成可执行文件。现役 Rust 共享入口及其证明采用此范围。安装仍核全部来源、摘要、大小和原权限，使用时拒绝字节或权限漂移；特殊权限、零权限、损坏或缺失仍失败。压缩包随现有 startup 产物传输并沿用保留期限。逐单元外部下载已删除，传输、存储和完整 CI 总成本仍未测。
 
