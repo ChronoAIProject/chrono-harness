@@ -22,6 +22,8 @@ use support::*;
 fn judge_executable(id: &str) -> std::path::PathBuf {
     if id == "workflow" {
         env!("CARGO_BIN_EXE_chrono-judge-workflow-test-cli").into()
+    } else if id == "mixed" {
+        env!("CARGO_BIN_EXE_chrono-judge-mixed-test-cli").into()
     } else {
         source().join(format!("crates/judge-{id}/target/debug/chrono-judge-{id}"))
     }

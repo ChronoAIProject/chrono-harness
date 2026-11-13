@@ -96,6 +96,7 @@ dependencies = [
  "chrono-harness",
  "chrono-identifiers",
  "chrono-inputs",
+ "chrono-judge-mixed",
  "chrono-judge-registration",
  "chrono-worktree",
  "serde",

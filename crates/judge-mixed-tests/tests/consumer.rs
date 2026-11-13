@@ -30,8 +30,8 @@ fn host() -> Host {
         )
         .unwrap();
     let mut h = Host::with_directory(false, dir);
-    let bytes = fs::read(source().join("crates/judge-mixed/target/debug/chrono-judge-mixed"))
-        .expect("build registered mixed executable");
+    let bytes = fs::read(env!("CARGO_BIN_EXE_chrono-judge-mixed-test-cli"))
+        .expect("Cargo built the mixed test executable");
     install(&mut h, "chrono-judge-mixed", &bytes);
     h.values.get_mut(JUDGES).unwrap()["judges"].as_array_mut().unwrap().push(json!({
         "id":"mixed","executable":".chrono-harness/bin/chrono-judge-mixed","version":"0.1.0","sha256":sha256(&bytes),
