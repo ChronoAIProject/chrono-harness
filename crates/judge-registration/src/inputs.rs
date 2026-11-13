@@ -499,14 +499,6 @@ pub fn validate_collection(
     }
     validate(req, old, new)
 }
-pub fn validate_retained(
-    req: &Request,
-    old: &Registrations,
-    new: &Registrations,
-    artifacts: &Value,
-) -> Result<Value, String> {
-    validate_retained_at(req, old, new, artifacts, &req.candidate.root, None)
-}
 pub fn validate_retained_at(
     req: &Request,
     old: &Registrations,

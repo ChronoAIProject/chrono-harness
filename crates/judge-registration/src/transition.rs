@@ -125,15 +125,6 @@ pub fn views_with_reader(
 ) -> Result<(Registrations, Registrations, Value), String> {
     views_using_reports(req, reader, None)
 }
-/// The local collection producer supplies original report inputs before publishing
-/// its required-unit manifest. Registration remains the conversion owner.
-pub fn views_for_collection_inputs(
-    req: &Request,
-    reader: &facts::Reader,
-    reports: &chrono_harness::units::FullManifest,
-) -> Result<(Registrations, Registrations, Value), String> {
-    views_for_collection_inputs_with(req, reader, &|_| Ok(reports.clone()))
-}
 /// Acquire only the declared historical decoder test's unit originals, and only
 /// if the fixed endpoint profiles actually require conversion. DELTA selection
 /// still belongs to FILEMAP/routes after registration interprets those endpoints.
