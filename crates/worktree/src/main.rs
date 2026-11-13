@@ -3,9 +3,10 @@ fn run(args: &[String]) -> u8 {
     if !output.stderr.is_empty() {
         chrono_harness::log_cli_error(&output.stderr);
     }
-    print!("{}", output.stdout);
-    eprint!("{}", output.stderr);
-    output.exit_code
+    match chrono_harness::publish_native_output(&output) {
+        Ok(exit_code) => exit_code,
+        Err(_failure) => 2,
+    }
 }
 
 fn main() -> std::process::ExitCode {
