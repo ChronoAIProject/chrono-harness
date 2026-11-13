@@ -6,6 +6,118 @@ use super::*;
 use crate::ownership::DirectoryLease;
 use crate::verified_release as verified;
 
+// A sweep observes independently bounded rounds. These counts describe actual
+// observations, not a deduplicated inventory or a new source of deletion rights.
+struct SweepReport {
+    value: Value,
+}
+impl SweepReport {
+    fn new(policy: &Policy) -> Self {
+        Self {
+            value: json!({
+                "schema":"chrono-output-retention-sweep/v1",
+                "scope":{"kind":"visited-declarations","complete":false},
+                "remaining_outputs":null,"physical_bytes_reclaimed":null,
+                "completed_work":"not-claimed","removed_logical_bytes":0,
+                "limits_per_round":{"nodes":policy.max_nodes_per_round,
+                    "metadata_bytes":policy.max_metadata_bytes_per_round,
+                    "verified_bytes":policy.max_bytes_per_round,
+                    "millis":policy.max_millis_per_round},
+                "observed_work":{"attempted_rounds":0,"reported_rounds":0,
+                    "failed_rounds":0,"nodes":0,"metadata_bytes":0,"verified_bytes":0},
+                "round_maxima":{"nodes":0,"metadata_bytes":0,"verified_bytes":0},
+                "observations":{"disposed":0,"protected":0,"accounting_errors":0},
+                "samples":{"payload_byte_limit":65536,"payload_bytes":0,"omitted":0,"items":[]},
+                "enumeration":{}
+            }),
+        }
+    }
+    fn add(value: &mut Value, amount: u64) -> Result<(), String> {
+        *value = json!(
+            value
+                .as_u64()
+                .ok_or("sweep counter format")?
+                .checked_add(amount)
+                .ok_or("sweep counter overflow; completion not established")?
+        );
+        Ok(())
+    }
+    fn observation(
+        &mut self,
+        namespace: &str,
+        address: Option<&str>,
+        kind: &str,
+        observation: Value,
+    ) -> Result<(), String> {
+        Self::add(&mut self.value["observations"][kind], 1)?;
+        let sample = json!({"namespace":namespace,"address":address,
+            "kind":kind,"observation":observation});
+        let bytes = serde_json::to_vec(&sample)
+            .map_err(|e| e.to_string())?
+            .len() as u64;
+        let samples = &mut self.value["samples"];
+        if verified::observation_bytes_fit(
+            samples["payload_bytes"]
+                .as_u64()
+                .ok_or("sweep sample bytes")?,
+            bytes,
+            samples["payload_byte_limit"]
+                .as_u64()
+                .ok_or("sweep sample limit")?,
+        ) {
+            Self::add(&mut samples["payload_bytes"], bytes)?;
+            samples["items"]
+                .as_array_mut()
+                .ok_or("sweep samples")?
+                .push(sample);
+        } else {
+            Self::add(&mut samples["omitted"], 1)?;
+        }
+        Ok(())
+    }
+    fn round(
+        &mut self,
+        namespace: &str,
+        address: &str,
+        round: Result<Value, String>,
+    ) -> Result<(), String> {
+        Self::add(&mut self.value["observed_work"]["attempted_rounds"], 1)?;
+        let round = match round {
+            Ok(round) => round,
+            Err(error) => {
+                Self::add(&mut self.value["observed_work"]["failed_rounds"], 1)?;
+                return self.observation(
+                    namespace,
+                    Some(address),
+                    "accounting_errors",
+                    json!({"reason":error,"completion":"not-established"}),
+                );
+            }
+        };
+        Self::add(&mut self.value["observed_work"]["reported_rounds"], 1)?;
+        for field in ["nodes", "metadata_bytes", "verified_bytes"] {
+            let amount = round[field].as_u64().ok_or("sweep round cost")?;
+            Self::add(&mut self.value["observed_work"][field], amount)?;
+            let maximum = self.value["round_maxima"][field]
+                .as_u64()
+                .ok_or("sweep round maximum")?;
+            self.value["round_maxima"][field] = json!(maximum.max(amount));
+        }
+        Self::add(
+            &mut self.value["removed_logical_bytes"],
+            round["removed_logical_bytes"]
+                .as_u64()
+                .ok_or("sweep removed logical bytes")?,
+        )?;
+        for kind in ["disposed", "protected", "accounting_errors"] {
+            for observation in round[kind].as_array().ok_or("sweep round observations")? {
+                self.observation(namespace, Some(address), kind, observation.clone())?;
+            }
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Object {
@@ -377,6 +489,39 @@ impl Inventory {
         }
         Ok(())
     }
+    fn prune_role(
+        &self,
+        directory: &Path,
+        observed: u64,
+        nodes: &mut usize,
+    ) -> Result<bool, String> {
+        if *nodes + 4 > self.policy.max_nodes_per_round
+            || !self.metadata_room()
+            || self.round_began.get().unwrap().elapsed().as_millis()
+                >= self.policy.max_millis_per_round as u128
+        {
+            return Ok(false);
+        }
+        *nodes += 1;
+        let Some(gate) = DirectoryLease::acquire_local(directory, true, None)? else {
+            return Ok(false);
+        };
+        let initial: Role = self
+            .read_metadata(&no_symlink_parents(directory, "record.json")?)?
+            .ok_or("unattached consumer birth; preserve metadata")?;
+        if self.role_directory(&initial.role)? != directory {
+            return Err("consumer record address changed".into());
+        }
+        let role = self
+            .read_role(&initial.role)?
+            .ok_or("consumer record disappeared")?;
+        if role.ids.is_empty() && role.attached.is_empty() && role.metadata_expires <= observed {
+            self.remove_metadata_directory(directory, &gate, &["record.json", "record.pending"])?;
+            *nodes += 3;
+            return Ok(true);
+        }
+        Ok(false)
+    }
     fn prune_roles(&self, observed: u64, nodes: &mut usize) -> Result<Vec<Value>, String> {
         let mut errors = Vec::new();
         for entry in fs::read_dir(self.directory.join("roles")).map_err(|e| e.to_string())? {
@@ -387,39 +532,108 @@ impl Inventory {
             {
                 break;
             }
-            *nodes += 1;
             let directory = entry.map_err(|e| e.to_string())?.path();
-            let attempt = (|| {
-                let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
-                    return Ok(());
-                };
-                let initial: Role = self
-                    .read_metadata(&no_symlink_parents(&directory, "record.json")?)?
-                    .ok_or("unattached consumer birth; preserve metadata")?;
-                if self.role_directory(&initial.role)? != directory {
-                    return Err("consumer record address changed".into());
-                }
-                let role = self
-                    .read_role(&initial.role)?
-                    .ok_or("consumer record disappeared")?;
-                if role.ids.is_empty()
-                    && role.attached.is_empty()
-                    && role.metadata_expires <= observed
-                {
-                    self.remove_metadata_directory(
-                        &directory,
-                        &gate,
-                        &["record.json", "record.pending"],
-                    )?;
-                    *nodes += 3;
-                }
-                Ok::<_, String>(())
-            })();
-            if let Err(error) = attempt {
+            if let Err(error) = self.prune_role(&directory, observed, nodes) {
                 errors.push(json!({"scope":"consumer-metadata","path":directory,"reason":error}));
             }
         }
         Ok(errors)
+    }
+
+    fn metadata_round(
+        &self,
+        action: impl FnOnce(&mut usize) -> Result<bool, String>,
+    ) -> Result<Value, String> {
+        self.with_round_budget(|| {
+            let mut nodes = 0;
+            let attempt = action(&mut nodes);
+            let mut round = json!({"nodes":nodes,"metadata_bytes":
+                self.policy.max_metadata_bytes_per_round - self.round_metadata.get().unwrap_or(0),
+                "verified_bytes":0,"removed_logical_bytes":0,
+                "disposed":[],"protected":[],"accounting_errors":[]});
+            match attempt {
+                Ok(true) => round["disposed"] = json!([{"kind":"metadata","original":"verified-absent"}]),
+                Ok(false) => round["protected"] = json!([{"kind":"metadata","reason":"preserved by existing owner guards or round budget"}]),
+                Err(error) => round["accounting_errors"] = json!([{"reason":error,"completion":"not-established"}]),
+            }
+            Ok(round)
+        })
+    }
+
+    /// One streamed explicit pass. Each declared address gets one existing
+    /// bounded round, without a global cursor, admission lock or retry loop.
+    pub fn maintain_explicit(&self) -> Result<Value, String> {
+        self.maintain_explicit_at(now()?)
+    }
+    pub fn maintain_explicit_at(&self, observed: u64) -> Result<Value, String> {
+        let began = Instant::now();
+        let mut sweep = SweepReport::new(&self.policy);
+        sweep.value["terminal_quotas"] = json!(self.terminal_quotas_at(observed));
+        for namespace in ["transaction-gates", "objects", "roles"] {
+            sweep.value["enumeration"][namespace] = json!({"entries":0,"exhausted":false});
+            let entries = match fs::read_dir(self.directory.join(namespace)) {
+                Ok(entries) => entries,
+                Err(error) => {
+                    sweep.observation(
+                        namespace,
+                        None,
+                        "accounting_errors",
+                        json!({"reason":error.to_string()}),
+                    )?;
+                    continue;
+                }
+            };
+            let mut exhausted = true;
+            for entry in entries {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(error) => {
+                        sweep.observation(
+                            namespace,
+                            None,
+                            "accounting_errors",
+                            json!({"reason":error.to_string()}),
+                        )?;
+                        exhausted = false;
+                        break;
+                    }
+                };
+                SweepReport::add(&mut sweep.value["enumeration"][namespace]["entries"], 1)?;
+                let address = match entry.file_name().into_string() {
+                    Ok(address) => address,
+                    Err(_) => {
+                        sweep.observation(
+                            namespace,
+                            None,
+                            "accounting_errors",
+                            json!({"reason":"declaration address is not UTF8; preserve it"}),
+                        )?;
+                        continue;
+                    }
+                };
+                let round = match namespace {
+                    "transaction-gates" => self.metadata_round(|nodes| {
+                        *nodes = 1;
+                        self.retire_transaction(&address)
+                    }),
+                    // This address came from the declaration namespace, not
+                    // an explicit caller selection. Let the same nonblocking
+                    // reader refuse non-files, links and oversized metadata.
+                    "objects" => {
+                        self.maintain_round(observed, Some(std::slice::from_ref(&address)))
+                    }
+                    _ => {
+                        self.metadata_round(|nodes| self.prune_role(&entry.path(), observed, nodes))
+                    }
+                };
+                sweep.round(namespace, &address, round)?;
+            }
+            sweep.value["enumeration"][namespace]["exhausted"] = json!(exhausted);
+        }
+        // Iterators are not a fixed snapshot, and related components may overlap.
+        // Never sum their retained inventories or infer a global remaining count.
+        sweep.value["elapsed_millis"] = json!(u64::try_from(began.elapsed().as_millis()).ok());
+        Ok(sweep.value)
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
         let (leases, directories) = self.path_gates(paths, true, true, true)?;

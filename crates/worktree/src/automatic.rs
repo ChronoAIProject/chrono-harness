@@ -3358,7 +3358,7 @@ impl Manager {
         // pass; independent worktree and producer maintenance has already run.
         report["output_retention"] = if unprotected.is_empty() {
             value!(self.outside_enrollment(r, |inputs, _| {
-                chrono_harness::retained_artifacts::retention::maintain_adopted(
+                chrono_harness::retained_artifacts::retention::maintain_explicit_adopted(
                     &inputs.policy.coordinator_root,
                 )
             })?)
