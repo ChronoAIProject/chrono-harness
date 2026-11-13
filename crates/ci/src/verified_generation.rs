@@ -433,11 +433,17 @@ fn publish_target<S, P, E, O, W, N, R, D, F, M>(
                 Ok(()) => finish_target(state, digest, io),
             };
             assert(io.sync.ensures((after_publish, parent), (after_sync, original_sync)));
+            assert(exists|next: S, synced: Result<(), E>|
+                #[trigger] io.sync.ensures((after_publish, parent), (next, synced)) && match synced {
+                    Err(error) => out == (next, Err::<bool, E>(error)),
+                    Ok(()) => target_final_result(next, digest, io, out),
+                });
             out
         },
     };
     assert(if missing { io.create.ensures((initial, &parent), (after_publish, original_publish)) }
         else { io.replace.ensures((initial, &parent), (after_publish, original_publish)) });
+    assert(target_publish_result(initial, parent, missing, digest, io, out));
     out
 }
 
