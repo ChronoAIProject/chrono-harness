@@ -44,6 +44,18 @@ preview 的 34 个公开资产、两平台安装和上游单元已通过。正�
 
 四个 dev 的 `.chrono-harness/distribution.json` 都锁定 `v0.1.3` 和上述 manifest 摘要；每个下游的 stable feature→integration→dev PR 均已实际合并。Go 预览迁移曾在 run `43323417443` 因 Linux Git 摘要绑定失败，诊断 run `43324156277` 确认检测 job 与汇总 job 使用了不同的 mutable runner Git 字节；修复在 Go 的 Linux schema4 政策层改用短绑定，最终 preview run `43325200790` 全部通过。该失败原件仍保留，不能由后续绿色结果抹除。
 
+## v0.1.4 测试版迭代记录（2026-11-13）
+
+第一轮候选固定为 `v0.1.4-dev.43341524786.1.gf5c541e2a5cbfa2ca78760f55730fac9922717b7`：source `f5c541e2a5cbfa2ca78760f55730fac9922717b7`，tree `a302b329d9f3ae81a92ecc572cb2b20e5f46050e`，landing run `43341524786` attempt `1`。公开 Release 有 34 个资产，`release.json` 为 6649 bytes、摘要 `6ced0c0a6129f28bf0ddccc62d0f87c71c59c4c9e7d7a0c12b41f9bba070b1c2`；Linux/macOS installer 分别为 `6c3002b7c6d24025a963353ae14f6f7656839a99d25abcfee4c87417da8b733a` 和 `a556921e2baf7f8dc26e47cfa3eebda631f064bbf3eaf371b849a5381acc94ba`，两平台安装和发布 workflow（`43342038213`、`43345275243`）均成功。四仓第一轮 feature→integration→dev 均通过：Go PR `49→50`、dev `374986cf`（collection `43349580288`，CodeQL `43349579551`）；TypeScript PR `46→47`、dev `281407df`（`43349927656`、`43349927171`）；Mix PR `46→47`、dev `6df1c18e`（`43350150391`、`43350149883`）；Initial PR `39→40`、dev `cc780ec6`（`43349832098`、`43349831435`）。
+
+第一轮四仓落地后，上游 `dev` 合入 PR #1014，源码前进到 `1ca9aa00be1147202d1cf3935ced4ba186eb3bba`，所以不能把第一轮候选晋升 stable；该源码漂移作为稳定门槛失败证据保留。
+
+第二轮候选固定为 `v0.1.4-dev.43348924098.1.g1ca9aa00be1147202d1cf3935ced4ba186eb3bba`：source `1ca9aa00be1147202d1cf3935ced4ba186eb3bba`，tree `bb52845468736985d0aa8e351a0a8229d5705d6b`，landing run `43348924098` attempt `1`，release workflow `43351005007`。公开 Release 为 34 个资产、`release.json` 6649 bytes、SHA-256 `aba17a9b40bdb7bc3a939275e2f4fa2512829ae358d1ed3f93f1ed6244c99a0b`；Linux/macOS installer 分别为 `6c3002b7c6d24025a963353ae14f6f7656839a99d25abcfee4c87417da8b733a`（1653840 bytes）和 `a556921e2baf7f8dc26e47cfa3eebda631f064bbf3eaf371b849a5381acc94ba`（1330032 bytes），公开、非 draft、prerelease，两平台安装 job 成功。
+
+第二轮四仓 feature→integration→dev 已实际落地，且落地 SHA 对应的 push collection/CodeQL 均成功：Go feature PR `51`（`85ad778d`）→ integration PR `52`（`316e06ec`）→ dev PR `53`，dev `13e3615647f9069c6df9b4b7f876723c24dd831a`，collection `43355979882`，CodeQL `43355979057`；TypeScript `48`（`790e158f`）→ `49`（`a3e5008b`）→ `50`，dev `454690c48cbc318bae942ec0efaffe4bb752d0c4`，collection `43355978693`，CodeQL `43355978227`；Mix `48`（`1a6c716f`）→ `49`（`c0ec8e65`）→ `50`，dev `49558d0c1816a8670ae9638daa56fb90b3cb49b5`，collection `43355979868`，CodeQL `43355979637`；Initial `41`（`36478118`）→ `42`（`1d67d1b5`）→ `43`，dev `37488c04f62c6557d80ec797d339ef4082e6a0e9`，collection `43355982324`，CodeQL `43355981204`。四个 dev 的 `distribution.json` 均锁定第二轮 preview 和摘要，真实业务单元也通过。
+
+第二轮四仓落地后，上游再次合入维护 PR #1015，`dev` 从候选 `1ca9aa00` 漂移到 `5af328f4565fd10408ac359ef2f10d5ea6a71128`（tree `6a926598234e48719f0387a5018dc276dd20084e`）。因此第二轮也保持 preview，不晋升 stable。当前第三轮候选以 `5af328f4` 为 source，landing collection `43356015909` 仍在运行；对应 CodeQL `43356014786` 已成功。collection 完成前不派发新 release、不迁移下游，避免把未固定的源码或未完成的上游结果写成稳定证据。
+
 ## 稳定门槛与下一轮
 
 下列条件全部满足时，候选才可 stable：上游 preview 公开资产和两平台安装通过；四个下游的 feature、integration、dev 链均落地；dev 上的真实单元、汇总和必要安全检查通过；候选相关失败已经在负责层修复并重新验证；stable Release 的标签、源码、资产和下游稳定版声明一致。任一条件缺失都保持 preview 或 unknown。
