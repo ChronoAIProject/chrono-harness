@@ -2,6 +2,8 @@
 #![allow(unexpected_cfgs)]
 #[path = "../../worktree-tests/tests/support/cargo_model.rs"]
 mod cargo;
+#[path = "support/cli_child.rs"]
+mod cli_child;
 #[cfg(verus_keep_ghost)]
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod custody;
@@ -26,6 +28,20 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_fixture_requires_explicit_mode() {
+    proof {
+        reveal_strlit("1"); reveal_strlit("0"); reveal_strlit("01"); reveal_strlit("");
+        assert("0"@[0] != "1"@[0]);
+        assert("01"@.len() != "1"@.len());
+        assert(""@.len() != "1"@.len());
+    }
+    expect(cli_child::producer_mode(Some("1")));
+    expect(!cli_child::producer_mode(Some("0")));
+    expect(!cli_child::producer_mode(Some("01")));
+    expect(!cli_child::producer_mode(Some("")));
+    expect(!cli_child::producer_mode(None));
+}
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn custody_release_requires_original_child_result_and_owner_retirement() {
     expect(isolation::release_custody(true, true));
