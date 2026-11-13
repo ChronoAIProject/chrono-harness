@@ -150,7 +150,8 @@ fn effect_labels_keep_unknown_distinct_from_no_work_and_completed_work() {
     expect(!uncertain.can_release());
     expect(completed.can_release());
     proof {
-        reveal_strlit("unknown"); reveal_strlit("UNKNOWN"); reveal_strlit("unknown\0");
+        reveal_strlit(""); reveal_strlit("unknown");
+        reveal_strlit("UNKNOWN"); reveal_strlit("unknown\0");
         assert("unknown"@[0] != "UNKNOWN"@[0]);
         assert("unknown"@.len() != "unknown\0"@.len());
         assert("unknown"@.len() != ""@.len());
