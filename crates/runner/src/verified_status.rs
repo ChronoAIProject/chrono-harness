@@ -4155,8 +4155,11 @@ pub fn copy_hash_stream<S, B, R, V, W, U, F>(
         let chunk = vstd::slice::slice_subrange(bytes, 0, count);
         #[cfg(not(verus_keep_ghost))]
         let chunk = &bytes[0..count];
+        let ghost write_input = state;
+        assert(write_input == observed.0);
         let written = write(state, chunk);
         let ghost write_observation = written;
+        assert(write.ensures((write_input, chunk), write_observation));
         let (written_state, result) = written;
         state = written_state;
         match result {
@@ -4165,8 +4168,9 @@ pub fn copy_hash_stream<S, B, R, V, W, U, F>(
                 assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
                 return Err(error);
             },
-            Ok(()) => {},
+            Ok(()) => { assert(write_observation.1 == Ok::<(), String>(())); },
         }
+        assert(state == write_observation.0);
         state = update(state, chunk);
         let next = match copy_hash_advance(total, count) {
             Err(error) => {

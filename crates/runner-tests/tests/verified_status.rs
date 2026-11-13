@@ -6402,6 +6402,16 @@ spec fn copy_fixture_expected(failure: u8, out: Result<(String, u64), String>) -
     }
 }
 
+proof fn copy_stream_prefix_at<S, B, R, V, W, U>(
+    states: Seq<(S, B, u64)>, initial: (S, B, u64), read: R, view: V, write: W, update: U, index: int,
+)
+    where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
+          W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S,
+    requires policy::copy_hash_stream_prefix(states, initial, read, view, write, update),
+        0 <= index < states.len() - 1,
+    ensures policy::copy_hash_stream_step(states[index], states[index + 1], read, view, write, update),
+{ }
+
 proof fn copy_fixture_result(buffer: [u8; 4], failure: u8, out: Result<(String, u64), String>)
     requires failure <= 5,
         policy::copy_hash_stream_result((CopyFixture { phase: 0, failure }, buffer, 0u64),
@@ -6417,18 +6427,18 @@ proof fn copy_fixture_result(buffer: [u8; 4], failure: u8, out: Result<(String, 
         && policy::copy_hash_stream_terminal(states.last(), observation, copy_fixture_read, copy_fixture_view,
             copy_fixture_write, copy_fixture_update, copy_fixture_finalize, out);
     if states.len() >= 2 {
-        assert(policy::copy_hash_stream_step(states[0], states[1], copy_fixture_read, copy_fixture_view,
-            copy_fixture_write, copy_fixture_update));
+        copy_stream_prefix_at(states, initial, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update, 0);
         copy_fixture_step(states[0], states[1]);
     }
     if states.len() >= 3 {
-        assert(policy::copy_hash_stream_step(states[1], states[2], copy_fixture_read, copy_fixture_view,
-            copy_fixture_write, copy_fixture_update));
+        copy_stream_prefix_at(states, initial, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update, 1);
         copy_fixture_step(states[1], states[2]);
     }
     if states.len() >= 4 {
-        assert(policy::copy_hash_stream_step(states[2], states[3], copy_fixture_read, copy_fixture_view,
-            copy_fixture_write, copy_fixture_update));
+        copy_stream_prefix_at(states, initial, copy_fixture_read, copy_fixture_view,
+            copy_fixture_write, copy_fixture_update, 2);
         copy_fixture_step(states[2], states[3]);
         assert(false);
     }
