@@ -4024,12 +4024,12 @@ pub open spec fn copy_hash_stream_step<S, B, R, V, W, U>(
     where R: Fn(S, B) -> (S, B, Result<usize, String>), V: Fn(&B) -> &[u8],
           W: Fn(S, &[u8]) -> (S, Result<(), String>), U: Fn(S, &[u8]) -> S,
 {
-    exists|count: usize, observed: S, bytes: &[u8], chunk: &[u8], written: S|
+    exists|count: usize, observed: S, bytes: &[u8], chunk: &[u8], written: (S, Result<(), String>)|
         count > 0 && count <= bytes.len()
         && read.ensures((before.0, before.1), (observed, after.1, Ok::<usize, String>(count)))
         && view.ensures((&after.1,), bytes) && chunk@ == bytes@.subrange(0, count as int)
-        && write.ensures((observed, chunk), (written, Ok::<(), String>(())))
-        && update.ensures((written, chunk), after.0)
+        && write.ensures((observed, chunk), written) && written.1.is_ok()
+        && update.ensures((written.0, chunk), after.0)
         && before.2 as int + count as int == after.2 as int
 }
 
@@ -4168,7 +4168,7 @@ pub fn copy_hash_stream<S, B, R, V, W, U, F>(
                 assert(copy_hash_stream_result(initial, read, view, write, update, finalize, Err(error)));
                 return Err(error);
             },
-            Ok(()) => { assert(write_observation.1 == Ok::<(), String>(())); },
+            Ok(()) => { assert(write_observation.1.is_ok()); },
         }
         assert(state == write_observation.0);
         state = update(state, chunk);
@@ -4189,8 +4189,8 @@ pub fn copy_hash_stream<S, B, R, V, W, U, F>(
                 (observed.0, after.1, Ok::<usize, String>(count))));
             assert(view.ensures((&after.1,), bytes));
             assert(chunk@ == bytes@.subrange(0, count as int));
-            assert(write.ensures((observed.0, chunk),
-                (write_observation.0, Ok::<(), String>(()))));
+            assert(write.ensures((observed.0, chunk), write_observation));
+            assert(write_observation.1.is_ok());
             assert(update.ensures((write_observation.0, chunk), after.0));
             assert(states.last().2 as int + count as int == after.2 as int);
         }

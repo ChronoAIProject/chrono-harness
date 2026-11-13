@@ -6377,14 +6377,14 @@ proof fn copy_fixture_step(before: (CopyFixture, [u8; 4], u64),
 {
     reveal(policy::copy_hash_stream_step);
     let (count, observed, bytes, chunk, written) = choose|count: usize, observed: CopyFixture,
-        bytes: &[u8], chunk: &[u8], written: CopyFixture|
+        bytes: &[u8], chunk: &[u8], written: (CopyFixture, Result<(), String>)|
         count > 0 && count <= bytes.len()
         && copy_fixture_read.ensures((before.0, before.1),
             (observed, after.1, Ok::<usize, String>(count)))
         && copy_fixture_view.ensures((&after.1,), bytes)
         && chunk@ == bytes@.subrange(0, count as int)
-        && copy_fixture_write.ensures((observed, chunk), (written, Ok::<(), String>(())))
-        && copy_fixture_update.ensures((written, chunk), after.0)
+        && copy_fixture_write.ensures((observed, chunk), written) && written.1.is_ok()
+        && copy_fixture_update.ensures((written.0, chunk), after.0)
         && before.2 as int + count as int == after.2 as int;
     assert(count == 1);
     if before.0.phase == 0 { assert(chunk@ =~= seq![0u8]); }
@@ -6446,6 +6446,38 @@ proof fn copy_fixture_result(buffer: [u8; 4], failure: u8, out: Result<(String, 
     if states.len() == 1 { assert(states.last() == initial); }
     else if states.len() == 2 { assert(states.last() == states[1]); }
     else { assert(states.last() == states[2]); }
+    let last = states.last();
+    assert(last.2 <= 2);
+    assert(last.0.failure == failure);
+    assert(last.0.phase == 0 || last.0.phase == 3 || last.0.phase == 6);
+    match observation.2 {
+        Err(_) => { assert(failure == 1 || failure == 2); },
+        Ok(count) => if count > 0 {
+            let (bytes, chunk, written) = choose|bytes: &[u8], chunk: &[u8],
+                written: (CopyFixture, Result<(), String>)|
+                count <= bytes.len() && copy_fixture_view.ensures((&observation.1,), bytes)
+                && chunk@ == bytes@.subrange(0, count as int)
+                && copy_fixture_write.ensures((observation.0, chunk), written)
+                && match written.1 {
+                    Err(error) => match out { Err(message) => message@ == error@, Ok(_) => false },
+                    Ok(()) => exists|hashed: CopyFixture|
+                        copy_fixture_update.ensures((written.0, chunk), hashed)
+                        && match (policy::copy_hash_advance_spec(last.2, count), out) {
+                            (Err(expected), Err(message)) => message@ == expected,
+                            _ => false,
+                        },
+                };
+            assert(count == 1);
+            assert(last.0.phase == 0 || last.0.phase == 3);
+            if last.0.phase == 0 { assert(chunk@ =~= seq![0u8]); }
+            else { assert(chunk@ =~= seq![255u8]); }
+            assert(copy_fixture_chunk(observation.0, chunk@));
+            assert(written.1.is_err());
+            assert(failure == 3 || failure == 4);
+        } else {
+            assert((failure == 5 && last.0.phase == 0) || (failure == 0 && last.0.phase == 6));
+        },
+    }
 }
 
 fn copy_fixture_case(failure: u8)
