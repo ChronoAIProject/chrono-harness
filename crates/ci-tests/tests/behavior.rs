@@ -138,6 +138,107 @@ fn write(p: &Path, c: &Config) {
     fs::create_dir_all(p.parent().unwrap()).unwrap();
     fs::write(p, serde_json::to_vec_pretty(c).unwrap()).unwrap();
 }
+
+fn generation_operation(root: &Path) -> std::path::PathBuf {
+    let directory = root.join(".chrono-harness/state/ci-generation-operations");
+    assert!(
+        directory.is_dir(),
+        "CI generation returned without a durable operation: {}",
+        directory.display()
+    );
+    let operations = fs::read_dir(directory)
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .collect::<Vec<_>>();
+    assert_eq!(operations.len(), 1, "one invocation must own one operation");
+    operations.into_iter().next().unwrap()
+}
+
+#[test]
+fn generation_success_retains_its_intent_and_original_evaluation() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let host = tempfile::tempdir().unwrap();
+    let source = ".chrono-harness/ci/github.json";
+    let c = config();
+    write(&host.path().join(source), &c);
+    assert!(generate(host.path(), source, false).unwrap());
+    assert!(host.path().join(&c.workflow_path).is_file());
+
+    let operation = generation_operation(host.path());
+    let intent: Value =
+        serde_json::from_slice(&fs::read(operation.join("intent.json")).unwrap()).unwrap();
+    assert_eq!(intent["schema"], "chrono-ci-generation-intent/v1");
+    assert_eq!(intent["operation"], "generate");
+    assert_eq!(intent["config"], source);
+    let result: Value =
+        serde_json::from_slice(&fs::read(operation.join("result.json")).unwrap()).unwrap();
+    assert_eq!(result["schema"], "chrono-ci-generation-result/v1");
+    assert_eq!(result["producer_evaluation"], json!({"changed": true}));
+    // A function return is observable here; the enclosing process has not exited.
+    assert_eq!(result["original_process_exit"], Value::Null);
+}
+
+#[test]
+fn generation_failure_retains_the_actual_error_without_claiming_success() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let host = tempfile::tempdir().unwrap();
+    let source = ".chrono-harness/ci/github.json";
+    let c = config();
+    write(&host.path().join(source), &c);
+    let target = host.path().join(&c.workflow_path);
+    fs::create_dir_all(target.parent().unwrap()).unwrap();
+    fs::write(&target, b"unowned original\n").unwrap();
+    let error = generate(host.path(), source, false).unwrap_err();
+    assert!(error.contains("unowned workflow collision"), "{error}");
+    assert_eq!(fs::read(&target).unwrap(), b"unowned original\n");
+
+    let operation = generation_operation(host.path());
+    let result: Value =
+        serde_json::from_slice(&fs::read(operation.join("result.json")).unwrap()).unwrap();
+    assert!(
+        result["producer_evaluation"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("unowned workflow collision")
+    );
+    assert!(result["producer_evaluation"].get("changed").is_none());
+    assert_eq!(result["original_process_exit"], Value::Null);
+}
+
+#[test]
+fn generation_requires_its_adopted_retention_before_workflow_side_effects() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let host = tempfile::tempdir().unwrap();
+    let source = ".chrono-harness/ci/github.json";
+    let c = config();
+    write(&host.path().join(source), &c);
+    let policy = json!({
+        "schema":"chrono-output-retention/v2",
+        "producers":{"unrelated":[".chrono-harness/state/unrelated/"]},
+        "keep_seconds":0,"diagnostic_keep_seconds":0,"metadata_keep_seconds":86400,
+        "max_related_outputs":512,"max_summaries":32,"max_nodes_per_round":256,
+        "max_bytes_per_round":67108864,"max_millis_per_round":25,
+        "max_output_bytes":67108864
+    });
+    fs::write(
+        host.path().join(".chrono-harness/retention.json"),
+        serde_json::to_vec_pretty(&policy).unwrap(),
+    )
+    .unwrap();
+    let result = generate(host.path(), source, false);
+    assert!(
+        result.is_err(),
+        "generation wrote a workflow without adopted operation retention: {result:?}"
+    );
+    assert!(!host.path().join(&c.workflow_path).exists());
+}
+
 fn git(p: &Path, args: &[&str]) -> String {
     let o = Command::new(fixture_git())
         .args(args)
