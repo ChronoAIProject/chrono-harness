@@ -195,7 +195,7 @@ fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, bytes).unwrap();
     };
-    let config = serde_json::from_value(download_adoption()).unwrap();
+    let config: chrono_ci::units::Config = serde_json::from_value(download_adoption()).unwrap();
     write(
         ".chrono-harness/ci/check.json",
         &serde_json::to_vec(&source(
