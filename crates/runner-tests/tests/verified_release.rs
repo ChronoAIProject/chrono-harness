@@ -159,6 +159,119 @@ fn pending_domain_and_resumed_seal_remain_distinct_from_terminal_eligibility() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn current_roots_distinguish_unread_absent_nonmember_and_member_roles() {
+    expect_true(!policy::current_roles_protect(&vec![]));
+    expect_true(!policy::current_roles_protect(&vec![None, Some(Some(false))]));
+    expect_true(policy::current_roles_protect(&vec![Some(None)]));
+    expect_true(policy::current_roles_protect(&vec![Some(Some(true))]));
+    expect_true(policy::current_roles_protect(&vec![None, Some(Some(false)), Some(None)]));
+    expect_true(policy::current_roles_protect(&vec![Some(Some(false)), Some(Some(true)), None]));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn finalized_requires_sealed_released_or_disposing_output_and_no_retired_leases() {
+    proof {
+        reveal_strlit("released"); reveal_strlit("disposing");
+        reveal_strlit("publishing"); reveal_strlit("released\0");
+        assert("publishing"@[0] != "released"@[0]);
+        assert("publishing"@[0] != "disposing"@[0]);
+        assert("released\0"@.len() != "released"@.len());
+        assert("released\0"@[0] != "disposing"@[0]);
+    }
+    expect_true(!policy::original_finalized(0, None));
+    expect_true(policy::original_finalized(0, Some((true, "released"))));
+    expect_true(policy::original_finalized(0, Some((true, "disposing"))));
+    expect_true(!policy::original_finalized(0, Some((false, "released"))));
+    expect_true(!policy::original_finalized(0, Some((true, "publishing"))));
+    expect_true(!policy::original_finalized(0, Some((true, "released\0"))));
+    expect_true(!policy::original_finalized(1, Some((true, "released"))));
+    expect_true(!policy::original_finalized(usize::MAX, Some((true, "disposing"))));
+    expect_true(policy::defer_finalized_original(true, true));
+    expect_true(!policy::defer_finalized_original(false, true));
+    expect_true(!policy::defer_finalized_original(true, false));
+    expect_true(!policy::defer_finalized_original(false, false));
+}
+
+fn expect_expansion(actual: policy::FinalizedExpansion, expected: u8)
+    requires match actual {
+        policy::FinalizedExpansion::RetainOnly => expected == 0,
+        policy::FinalizedExpansion::RootFrontier => expected == 1,
+        policy::FinalizedExpansion::RetireFrontier => expected == 2,
+        policy::FinalizedExpansion::Related => expected == 3,
+    },
+{
+    let observed = match actual {
+        policy::FinalizedExpansion::RetainOnly => 0u8,
+        policy::FinalizedExpansion::RootFrontier => 1u8,
+        policy::FinalizedExpansion::RetireFrontier => 2u8,
+        policy::FinalizedExpansion::Related => 3u8,
+    };
+    expect_true(observed == expected);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_actual_roots_stop_expansion_and_rootless_cycles_remain_related() {
+    proof {
+        reveal_strlit("initial"); reveal_strlit("parent");
+        reveal_strlit("initial\0"); reveal_strlit("é"); reveal_strlit("e\u{301}");
+        assert("initial"@[0] != "parent"@[0]);
+        assert("initial"@.len() != "initial\0"@.len());
+        assert("é"@[0] != "e\u{301}"@[0]);
+    }
+    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial", 1, 1), 0);
+    expect_expansion(policy::finalized_expansion(true, Some("initial"), "parent", 0, 1), 1);
+    expect_expansion(policy::finalized_expansion(true, None, "parent", 0, 1), 1);
+    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 0), 2);
+    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 1, 0), 3);
+    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", usize::MAX, 0), 3);
+    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 1), 3);
+    expect_expansion(policy::finalized_expansion(false, Some("initial"), "parent", 0, 0), 3);
+    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial\0", 0, 1), 1);
+    expect_expansion(policy::finalized_expansion(false, Some("é"), "e\u{301}", 0, 0), 3);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn deferred_declarations_keep_exact_identity_and_are_consumed_once() {
+    let mut deferred = policy::DeferredOriginal::new();
+    expect_true(deferred.take().is_none());
+    deferred.defer("parent λ\0\n".to_owned());
+    match deferred.take() {
+        Some(id) => expect_retirement_id(&id, "parent λ\0\n"),
+        None => panic!("deferred identity was lost"),
+    }
+    expect_true(deferred.take().is_none());
+    deferred.defer("next".to_owned());
+    match deferred.take() {
+        Some(id) => expect_retirement_id(&id, "next"),
+        None => panic!("next identity was lost"),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn discovered_frontier_keeps_actual_members_dependencies_and_retiring_originals() {
+    expect_true(!policy::preserve_discovered_original(false, false, false));
+    expect_true(policy::preserve_discovered_original(true, false, false));
+    expect_true(policy::preserve_discovered_original(false, true, false));
+    expect_true(policy::preserve_discovered_original(false, false, true));
+    expect_true(policy::preserve_discovered_original(true, true, false));
+    expect_true(policy::preserve_discovered_original(true, false, true));
+    expect_true(policy::preserve_discovered_original(false, true, true));
+    expect_true(policy::preserve_discovered_original(true, true, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_paths_keep_partial_originals_and_skip_only_records_without_an_original() {
+    expect_true(!policy::maintenance_path_required(false, false, false));
+    expect_true(!policy::maintenance_path_required(false, true, false));
+    expect_true(!policy::maintenance_path_required(false, false, true));
+    expect_true(!policy::maintenance_path_required(false, true, true));
+    expect_true(policy::maintenance_path_required(true, false, false));
+    expect_true(policy::maintenance_path_required(true, true, false));
+    expect_true(!policy::maintenance_path_required(true, false, true));
+    expect_true(policy::maintenance_path_required(true, true, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_limits_keep_equal_bytes_and_reject_count_and_overflow() {
     let first = policy::terminal_budget(0, 0, 10, 1, 10);
     let full_count = policy::terminal_budget(1, 0, 1, 1, 10);

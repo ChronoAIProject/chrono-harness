@@ -4,6 +4,8 @@
 
 程序不从目录名选项目，不恢复语言依赖，不重置旧分支，不开 PR，也不作治理判断。
 
+CLI 输出复用 runner 的原生发布器。写入失败返回 2，并尝试向 stderr 发布带原生错误、原业务退出码及已发布字节数的诊断；健康输出保留原字节和退出码。真实同源 CLI 回归将 stdout 接到只读普通文件，核对 EBADF、单条诊断和原文件字节。失败现场由 worktree-tests 保留至调试与验收义务完成，成功时回收；没有新增发布 API、依赖或执行入口，总成本未测。
+
 宿主将 `.chrono-harness/worktree.json` 登记到 FILEMAP。原 `chrono-worktree-config/v1` 形状如下：
 
 ```json

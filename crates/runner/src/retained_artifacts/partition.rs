@@ -948,7 +948,7 @@ impl Inventory {
         let mut wanted_roles: BTreeSet<String> = roles.iter().cloned().collect();
         let initial = (discover_under_lease && selected.len() == 1)
             .then(|| selected.iter().next().unwrap().clone());
-        let mut deferred_initial = false;
+        let mut deferred = verified::DeferredOriginal::new();
         let mut report_frontier = false;
         let mut retiring_report = None;
         let mut retained_dependencies = BTreeSet::new();
@@ -993,33 +993,52 @@ impl Inventory {
                 observed_roles.insert(role, record);
                 continue;
             }
-            if deferred_initial {
-                let id = initial.as_ref().unwrap();
-                let record = observed.get(id).ok_or("initial declaration was not read")?;
-                let protected = record.roles.iter().any(|role| {
-                    observed_roles
-                        .get(role)
-                        .is_some_and(|current| current.as_ref().is_none_or(|r| r.ids.contains(id)))
-                });
-                if protected {
-                    // A finalized current root cannot retire. Its other
-                    // referrers are not required to establish that fact.
-                    retained_dependencies.insert(id.clone());
-                } else {
-                    let output = record.output.as_ref().unwrap();
-                    report_frontier = record.incoming.is_empty() && record.roles.is_empty();
-                    if report_frontier {
+            if let Some(id) = deferred.take() {
+                let record = observed
+                    .get(&id)
+                    .ok_or("deferred declaration was not read")?;
+                let protected = verified::current_roles_protect(
+                    &record
+                        .roles
+                        .iter()
+                        .map(|role| {
+                            observed_roles
+                                .get(role)
+                                .map(|current| current.as_ref().map(|r| r.ids.contains(&id)))
+                        })
+                        .collect::<Vec<_>>(),
+                );
+                let output = record.output.as_ref().unwrap();
+                match verified::finalized_expansion(
+                    protected,
+                    initial.as_deref(),
+                    &id,
+                    record.incoming.len(),
+                    record.roles.len(),
+                ) {
+                    verified::FinalizedExpansion::RetainOnly => {
+                        retained_dependencies.insert(id.clone());
+                    }
+                    verified::FinalizedExpansion::RootFrontier => {
+                        // A discovered root protects this component. Read its
+                        // direct originals, retaining the remaining frontier
+                        // without expanding their independent dependencies.
+                        retained_dependencies.insert(id.clone());
+                        selected.extend(output.references.iter().cloned());
+                        retained_dependencies.extend(output.references.iter().cloned());
+                    }
+                    verified::FinalizedExpansion::RetireFrontier => {
                         // Retire this consumer before releasing its originals.
-                        // Only one outgoing edge can change in this bounded
-                        // pass; the source keeps every other edge durably.
+                        // The source keeps all other edges durably.
                         retiring_report = Some(id.clone());
                         selected.extend(output.references.first().cloned());
-                    } else {
+                        report_frontier = true;
+                    }
+                    verified::FinalizedExpansion::Related => {
                         selected.extend(output.references.iter().cloned());
                         selected.extend(record.incoming.iter().cloned());
                     }
                 }
-                deferred_initial = false;
                 continue;
             }
             let next = selected
@@ -1039,26 +1058,22 @@ impl Inventory {
                 );
             }
             let record = self.read_object(&id, &directory)?;
-            if discovery.retain_member {
-                // Observation transitions own the role and member declarations,
-                // not their output dependencies. Keep every member excluded and
-                // preserve its edges without reading another publisher's graph.
+            if verified::preserve_discovered_original(
+                discovery.retain_member,
+                retained_dependencies.contains(&id),
+                report_frontier,
+            ) {
+                // Observation members and actual root dependencies keep their
+                // edges. A retiring consumer also preserves its originals until
+                // their individual edges can be durably detached.
                 retained_dependencies.insert(id.clone());
                 observed.insert(id, record);
                 continue;
             }
-            if initial.as_ref() == Some(&id) && finalized(&record) {
+            if verified::defer_finalized_original(discover_under_lease, finalized(&record)) {
                 wanted_roles.extend(record.roles.iter().cloned());
-                observed.insert(id, record);
-                deferred_initial = true;
-                continue;
-            }
-            if report_frontier {
-                // Only the released report may retire here. This original is
-                // excluded solely to detach that edge after the report's bytes
-                // are gone. Its phase, consumers and bytes remain untouched.
-                retained_dependencies.insert(id.clone());
-                observed.insert(id, record);
+                observed.insert(id.clone(), record);
+                deferred.defer(id);
                 continue;
             }
             if let Some(output) = &record.output {
@@ -1074,7 +1089,11 @@ impl Inventory {
             let target_paths: Vec<_> = observed
                 .values()
                 .filter(|r| {
-                    initial.as_ref() == Some(&r.id) || !retained_dependencies.contains(&r.id)
+                    verified::maintenance_path_required(
+                        r.output.is_some(),
+                        initial.as_ref() == Some(&r.id),
+                        retained_dependencies.contains(&r.id),
+                    )
                 })
                 .map(|r| r.path.clone())
                 .collect();
@@ -1592,10 +1611,13 @@ impl Inventory {
     }
 }
 fn finalized(record: &Object) -> bool {
-    record.retired_leases.is_empty()
-        && record.output.as_ref().is_some_and(|output| {
-            output.manifest.sealed && matches!(output.phase.as_str(), "released" | "disposing")
-        })
+    verified::original_finalized(
+        record.retired_leases.len(),
+        record
+            .output
+            .as_ref()
+            .map(|output| (output.manifest.sealed, output.phase.as_str())),
+    )
 }
 fn objects_reference(outputs: &[OutputRecord], source: &str, target: &str) -> bool {
     outputs

@@ -12,53 +12,58 @@ pub const PROTOCOL: &str = "chrono-judge/v1";
 pub fn judge_main(name: &str, version: &str, judge: impl FnOnce(&Request) -> Response) -> u8 {
     crate::logged_text_main(name, |args| {
         use std::io::{Read, Write};
-        if args == ["--version"] {
-            println!("{name} {version}");
-            return 0;
-        }
-        if args != ["--protocol", "chrono-judge/v1"] {
-            crate::log_cli_error(&format!("E_USAGE: --protocol chrono-judge/v1"));
-            eprintln!("E_USAGE: --protocol chrono-judge/v1");
-            return 2;
-        }
-        let mut bytes = vec![];
-        if std::io::stdin()
-            .take(64 * 1024 * 1024 + 1)
-            .read_to_end(&mut bytes)
-            .is_err()
-            || bytes.len() > 64 * 1024 * 1024
-        {
-            crate::log_cli_error(&format!("E_PROTOCOL: request read/bound"));
-            eprintln!("E_PROTOCOL: request read/bound");
-            return 2;
-        }
-        let req: Request = match crate::decode(&bytes) {
-            Ok(r) => r,
-            Err(e) => {
-                crate::log_cli_error(&format!("E_PROTOCOL: {e}"));
-                eprintln!("E_PROTOCOL: {e}");
-                return 2;
-            }
-        };
-        let response = judge(&req);
-        match canonical(&response) {
-            Ok(bytes) => {
-                let mut stdout = std::io::stdout().lock();
-                if stdout
-                    .write_all(&bytes)
-                    .and_then(|()| stdout.flush())
-                    .is_err()
-                {
-                    return 2;
-                }
-            }
-            Err(e) => {
-                crate::log_cli_error(&format!("E_PROTOCOL: {e}"));
-                eprintln!("E_PROTOCOL: {e}");
-                return 2;
-            }
-        }
-        response.status.exit_code() as u8
+        let (state, outcome) = crate::verified_cli::run_judge_entry(
+            (),
+            crate::verified_cli::judge_owned_mode(args),
+            |()| {
+                let mut bytes = vec![];
+                let result = std::io::stdin()
+                    .take(crate::verified_cli::JUDGE_READ_LIMIT)
+                    .read_to_end(&mut bytes)
+                    .map(|_| bytes);
+                ((), result)
+            },
+            |(), bytes| ((), crate::decode::<Request>(&bytes)),
+            |(), request| {
+                let response = judge(&request);
+                let exit = response.status.exit_code() as u8;
+                ((), response, exit)
+            },
+            |(), response| ((), canonical(&response)),
+            |(), bytes| {
+                let stdout = std::io::stdout().lock();
+                let (_, result) = chrono_diagnostics::verified_runtime::write_and_flush(
+                    (stdout, bytes),
+                    |(mut stdout, bytes)| {
+                        let result = stdout.write_all(&bytes);
+                        ((stdout, bytes), result)
+                    },
+                    |(mut stdout, bytes)| {
+                        let result = stdout.flush();
+                        ((stdout, bytes), result)
+                    },
+                );
+                ((), result)
+            },
+        );
+        crate::verified_cli::finish_judge_entry(
+            state,
+            outcome,
+            |()| println!("{name} {version}"),
+            |()| {
+                crate::log_cli_error("E_USAGE: --protocol chrono-judge/v1");
+                eprintln!("E_USAGE: --protocol chrono-judge/v1");
+            },
+            |()| {
+                crate::log_cli_error("E_PROTOCOL: request read/bound");
+                eprintln!("E_PROTOCOL: request read/bound");
+            },
+            |(), error| {
+                crate::log_cli_error(&format!("E_PROTOCOL: {error}"));
+                eprintln!("E_PROTOCOL: {error}");
+            },
+        )
+        .1
     })
 }
 
@@ -70,15 +75,8 @@ pub fn digest<T: Serialize>(value: &T) -> Result<String, String> {
 }
 pub use crate::verified_identifiers::valid_digest_text as is_digest;
 pub use crate::verified_status::{
-    Checkout, Delta, Finding, IndexFlag, WireStatus as Status, append_finding,
+    Checkout, Delta, Evidence, Finding, IndexFlag, WireStatus as Status, append_finding,
 };
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Evidence {
-    pub path: String,
-    pub sha256: String,
-    pub kind: String,
-}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Response {
@@ -299,7 +297,7 @@ pub(crate) fn validate_response_at(
     exit: i32,
     delta: Option<&[Delta]>,
 ) -> Result<(), String> {
-    crate::verified_status::validate_response_fields(
+    let header = crate::verified_status::validate_response_fields(
         &r.protocol,
         &r.request_id,
         &r.judge_id,
@@ -310,19 +308,22 @@ pub(crate) fn validate_response_at(
         judge_id,
         &r.findings,
         delta,
-    )?;
-    for e in &r.evidence {
-        if !crate::verified_status::valid_evidence_identity(&e.path, &e.kind, &e.sha256) {
-            return Err("E_PROTOCOL: invalid evidence identity".into());
-        }
-        let p = no_symlink_parents(root, &e.path)?;
-        if !p.is_file()
-            || sha256(&fs::read(&p).map_err(|e| format!("E_PROTOCOL: evidence: {e}"))?) != e.sha256
-        {
-            return Err("E_PROTOCOL: missing/tampered evidence".into());
-        }
-    }
-    Ok(())
+    );
+    crate::verified_status::validate_response_evidence(
+        header,
+        (),
+        &r.evidence,
+        |(), path| ((), no_symlink_parents(root, path)),
+        |(), path: &PathBuf| ((), path.is_file()),
+        |(), path: &PathBuf| {
+            (
+                (),
+                fs::read(path).map_err(|error| format!("E_PROTOCOL: evidence: {error}")),
+            )
+        },
+        |(), bytes: &[u8]| ((), sha256(bytes)),
+    )
+    .1
 }
 #[derive(Debug)]
 pub struct TransportFailure {
