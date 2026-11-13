@@ -281,9 +281,24 @@ fn installation_case(count: usize, fail_at: usize, write_at: usize)
             assert(apply.ensures((states[index], index as usize),
                 (states[index + 1], Ok::<bool, (usize, u64)>(changed[index]))));
         }
-        if changed.len() > 0 { assert(states[1]@ == seq![0usize]); }
-        if changed.len() > 1 { assert(states[2]@ == seq![0usize, 1usize]); }
-        if changed.len() > 2 { assert(states[3]@ == seq![0usize, 1usize, 2usize]); }
+        if changed.len() > 0 {
+            assert(apply.ensures((states[0], 0usize),
+                (states[1], Ok::<bool, (usize, u64)>(changed[0]))));
+            assert(states[1]@ == states[0]@.push(0usize));
+            assert(states[1]@ == seq![0usize]);
+        }
+        if changed.len() > 1 {
+            assert(apply.ensures((states[1], 1usize),
+                (states[2], Ok::<bool, (usize, u64)>(changed[1]))));
+            assert(states[2]@ == states[1]@.push(1usize));
+            assert(states[2]@ == seq![0usize, 1usize]);
+        }
+        if changed.len() > 2 {
+            assert(apply.ensures((states[2], 2usize),
+                (states[3], Ok::<bool, (usize, u64)>(changed[2]))));
+            assert(states[3]@ == states[2]@.push(2usize));
+            assert(states[3]@ == seq![0usize, 1usize, 2usize]);
+        }
         match result {
             Ok(any_changed) => {
                 if fail_at < count { assert(changed[fail_at as int] == (fail_at == write_at)); }
