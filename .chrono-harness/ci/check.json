@@ -254,17 +254,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.judge-registration": [
-        "inputs",
-        "judge-cost",
-        "judge-filemap",
-        "judge-mixed",
-        "judge-projects",
-        "judge-registration",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
       "build.judge-routes": [
         "inputs",
         "judge-filemap",
