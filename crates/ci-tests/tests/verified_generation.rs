@@ -560,7 +560,7 @@ fn staging_case(fail_at: u8)
     let parent = |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(u64, u64), TargetFault>))
         ensures out.0@ == trace@.push(4),
             out.1 == if fail_at == 4 { Err::<(u64, u64), TargetFault>((4u8, u64::MAX)) }
-                else { Ok::<(u64, u64), TargetFault>((u64::MAX - 2, 19u64)) },
+                else { Ok::<(u64, u64), TargetFault>(((u64::MAX - 2) as u64, 19u64)) },
     {
         let (trace, result) = target_step(trace, 4, fail_at);
         (trace, match result { Err(error) => Err(error), Ok(()) => Ok((u64::MAX - 2, 19)) })
