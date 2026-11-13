@@ -54,6 +54,22 @@ fn write(root: &Path, path: &str, value: &Value) {
     fs::create_dir_all(target.parent().unwrap()).unwrap();
     fs::write(target, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
+fn assert_failed_release_adoption(root: &Path, error: &str) {
+    assert!(!root.join(".chrono-harness/ci").exists());
+    let operations: Vec<_> =
+        fs::read_dir(root.join(".chrono-harness/state/ci-generation-operations"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+    assert_eq!(operations.len(), 1);
+    let operation = operations[0].strip_prefix(root).unwrap().to_str().unwrap();
+    let status = chrono_ci::generation::status(root, operation).unwrap();
+    assert_eq!(status["completion"], "confirmed-evaluation");
+    let result = &status["original_result"];
+    assert_eq!(result["producer_evaluation"], json!({"error":error}));
+    assert_eq!(result["effects"], "not-started");
+    assert_eq!(result["original_process_exit"], Value::Null);
+}
 fn cli(root: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
         .args(args)
@@ -240,12 +256,9 @@ fn invalid_release_declarations_fail_before_adoption() {
     for c in bad {
         let d = tempfile::tempdir().unwrap();
         write(d.path(), "source.json", &c);
-        assert!(
-            init(d.path(), &d.path().join("source.json")).is_err(),
-            "{c}"
-        );
+        let error = init(d.path(), &d.path().join("source.json")).unwrap_err();
         assert!(!d.path().join(".github").exists());
-        assert!(!d.path().join(".chrono-harness").exists());
+        assert_failed_release_adoption(d.path(), &error);
     }
     let d = tempfile::tempdir().unwrap();
     let duplicate = serde_json::to_string(&config()).unwrap().replacen(
@@ -254,7 +267,9 @@ fn invalid_release_declarations_fail_before_adoption() {
         1,
     );
     fs::write(d.path().join("source.json"), duplicate).unwrap();
-    assert!(init(d.path(), &d.path().join("source.json")).is_err());
+    let error = init(d.path(), &d.path().join("source.json")).unwrap_err();
+    assert!(!d.path().join(".github").exists());
+    assert_failed_release_adoption(d.path(), &error);
     let valid: release::Config = serde_json::from_value(config()).unwrap();
     assert!(release::render(&valid).is_ok());
 }
@@ -268,13 +283,15 @@ fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
         let path = root.join(".github/workflows/package.yml");
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, text).unwrap();
-        assert!(
-            init(root, &root.join("source.json"))
-                .unwrap_err()
-                .contains("collision")
+        let before = chrono_harness::artifact_disposal::identity(&path).unwrap();
+        let error = init(root, &root.join("source.json")).unwrap_err();
+        assert!(error.contains("collision"));
+        assert_eq!(fs::read_to_string(&path).unwrap(), text);
+        assert_eq!(
+            chrono_harness::artifact_disposal::identity(&path).unwrap(),
+            before
         );
-        assert_eq!(fs::read_to_string(path).unwrap(), text);
-        assert!(!root.join(".chrono-harness").exists());
+        assert_failed_release_adoption(root, &error);
     }
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
