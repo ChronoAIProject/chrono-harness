@@ -97,6 +97,7 @@ dependencies = [
  "chrono-identifiers",
  "chrono-inputs",
  "chrono-judge-cost",
+ "chrono-judge-filemap",
  "chrono-judge-mixed",
  "chrono-judge-registration",
  "chrono-worktree",

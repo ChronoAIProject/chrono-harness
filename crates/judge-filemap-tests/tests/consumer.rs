@@ -30,6 +30,8 @@ impl Host {
                 std::path::PathBuf::from(env!("CARGO_BIN_EXE_chrono-harness-test-cli"))
             } else if (project, binary) == ("judge-registration", "chrono-judge-registration") {
                 env!("CARGO_BIN_EXE_chrono-judge-registration-test-cli").into()
+            } else if (project, binary) == ("judge-filemap", "chrono-judge-filemap") {
+                env!("CARGO_BIN_EXE_chrono-judge-filemap-test-cli").into()
             } else {
                 source().join(format!("crates/{project}/target/debug/{binary}"))
             };

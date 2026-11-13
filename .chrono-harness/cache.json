@@ -1375,65 +1375,6 @@
       "restore": "compatible",
       "refresh_sources": true
     },
-    "check.judge-filemap": {
-      "owner": "judge-filemap",
-      "producer": "build.judge-filemap",
-      "consumers": [
-        "check.unit_inputs",
-        "check.unit_judge-cost",
-        "check.unit_judge-filemap",
-        "check.unit_judge-mixed",
-        "check.unit_judge-projects",
-        "check.unit_judge-workflow",
-        "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units"
-      ],
-      "artifacts": [
-        "judge-filemap.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "judge-filemap.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
     "check.judge-filemap-tests": {
       "owner": "judge-filemap-tests",
       "producer": "test.judge-filemap-tests",
