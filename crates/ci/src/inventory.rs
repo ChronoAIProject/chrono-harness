@@ -250,20 +250,19 @@ pub fn execute(root: &Path, path: &str) -> Result<String, String> {
         .iter()
         .map(|(id, action)| Ok((id.clone(), inventory.listing(action, false)?)))
         .collect::<Result<BTreeMap<_, _>, String>>()?;
-    if !ignored.is_empty() {
+    if !crate::verified_inventory::inventory_members_empty(&ignored) {
         return Err("ignored tests cannot establish complete coverage".into());
     }
-    if complete.is_empty() || observed.is_empty() || observed.values().any(BTreeSet::is_empty) {
+    if !crate::verified_inventory::inventory_groups_nonempty(&complete, &observed) {
         return Err("empty inventory/group".into());
     }
     let mut union = BTreeSet::new();
     for (id, group) in &observed {
-        if group.iter().any(|test| union.contains(test)) {
+        if !crate::verified_inventory::merge_disjoint_inventory_group(&mut union, group) {
             return Err(format!("overlapping inventory group: {id}"));
         }
-        union.extend(group.iter().cloned());
     }
-    if union != complete {
+    if !crate::verified_inventory::same_inventory_members(&union, &complete) {
         return Err(format!(
             "inventory omission/addition: {:?}",
             union.symmetric_difference(&complete)
