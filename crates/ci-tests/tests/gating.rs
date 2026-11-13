@@ -514,7 +514,11 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
             })
             .collect();
         for _ in 0..2 {
-            let out = h.command(&["check", "--collect"], &d, &n).output().unwrap();
+            let out = chrono_worktree::TemporaryHost::capture_bound_output(
+                h.path(),
+                &mut h.command(&["check", "--collect"], &d, &n),
+            )
+            .unwrap();
             if !out.status.success() {
                 // Keep the actual nested producer receipts, including child exit,
                 // stdout and stderr, before the fixture's temporary host is dropped.

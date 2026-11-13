@@ -565,9 +565,11 @@ fn native_check(host: &short::gating::GatedHost, args: &[&str]) -> Command {
 }
 
 fn collect_cli(host: &short::gating::GatedHost) -> std::process::Output {
-    native_check(host, &["check", "--collect"])
-        .output()
-        .unwrap()
+    chrono_worktree::TemporaryHost::capture_bound_output(
+        host.path(),
+        &mut native_check(host, &["check", "--collect"]),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -925,7 +927,14 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
                 host.path()
                     .join(".chrono-harness/state/collection/gather.json"),
             )
-            .unwrap(),
+            .unwrap_or_else(|error| {
+                panic!(
+                    "{mode}: collection did not publish gather.json: {error}; status={} stdout={} stderr={}",
+                    result.status,
+                    String::from_utf8_lossy(&result.stdout),
+                    String::from_utf8_lossy(&result.stderr)
+                )
+            }),
         )
         .unwrap();
         assert!(
