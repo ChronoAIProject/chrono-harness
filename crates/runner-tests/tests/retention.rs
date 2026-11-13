@@ -143,12 +143,140 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
         !h.path().join(&outputs[tail]).exists(),
         "explicit maintenance did not reach the independent expired tail: {sweep}"
     );
+    assert_eq!(sweep["schema"], "chrono-output-retention-sweep/v1");
+    assert_eq!(sweep["removed_logical_bytes"], b"required original".len());
+    assert_eq!(sweep["remaining_outputs"], Value::Null);
+    assert!(sweep["samples"]["payload_bytes"].as_u64().unwrap() <= 65536);
+    assert!(sweep["samples"]["omitted"].as_u64().unwrap() > 0);
+    assert!(serde_json::to_vec(&sweep).unwrap().len() < 128 * 1024);
+    for field in ["nodes", "metadata_bytes", "verified_bytes"] {
+        assert!(
+            sweep["round_maxima"][field].as_u64().unwrap()
+                <= sweep["limits_per_round"][field].as_u64().unwrap(),
+            "{sweep}"
+        );
+    }
     for id in &addresses[..addresses.len() - 1] {
         assert_eq!(
             fs::read(h.path().join(&outputs[id])).unwrap(),
             b"required original"
         );
     }
+}
+
+#[test]
+fn explicit_sweep_preserves_live_rooted_damaged_and_changed_originals() {
+    if !isolated_capability_test(
+        "explicit_sweep_preserves_live_rooted_damaged_and_changed_originals",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut ids = std::collections::BTreeMap::new();
+    for name in ["expired", "required", "changed", "damaged"] {
+        let path = format!(".chrono-harness/state/fixtures/{name}");
+        fs::write(h.path().join(&path), b"original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        ids.insert(name, publication.id().to_owned());
+        publication.complete(json!({"exit":7})).unwrap();
+    }
+    let live = ".chrono-harness/state/fixtures/live";
+    fs::write(h.path().join(live), b"active writer").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", live, json!(null))
+        .unwrap();
+    inventory(h.path())
+        .reference("actual-recheck", &[ids["required"].clone()])
+        .unwrap();
+    let changed = ".chrono-harness/state/fixtures/changed";
+    fs::write(h.path().join(changed), b"new unaccepted bytes").unwrap();
+    let damaged = retention_state::object_path(h.path(), &ids["damaged"]);
+    fs::write(&damaged, b"unknown declaration bytes").unwrap();
+    let unregistered = ".chrono-harness/state/fixtures/unregistered";
+    fs::write(h.path().join(unregistered), b"unique unregistered work").unwrap();
+
+    let result = consumer_call(h.path(), json!({"operation":"maintain"}));
+    assert_eq!(result.exit_code, 0, "{}", result.stderr);
+    let sweep: Value = serde_json::from_str(&result.stdout).unwrap();
+    assert!(
+        !h.path()
+            .join(".chrono-harness/state/fixtures/expired")
+            .exists(),
+        "{sweep}"
+    );
+    assert_eq!(fs::read(h.path().join(live)).unwrap(), b"active writer");
+    assert_eq!(
+        fs::read(h.path().join(changed)).unwrap(),
+        b"new unaccepted bytes"
+    );
+    assert_eq!(fs::read(&damaged).unwrap(), b"unknown declaration bytes");
+    assert_eq!(
+        fs::read(h.path().join(".chrono-harness/state/fixtures/damaged")).unwrap(),
+        b"original"
+    );
+    assert_eq!(
+        fs::read(h.path().join(".chrono-harness/state/fixtures/required")).unwrap(),
+        b"original"
+    );
+    assert_eq!(
+        fs::read(h.path().join(unregistered)).unwrap(),
+        b"unique unregistered work"
+    );
+    assert!(
+        sweep["observations"]["accounting_errors"].as_u64().unwrap() > 0,
+        "{sweep}"
+    );
+    assert!(
+        sweep["observations"]["protected"].as_u64().unwrap() > 0,
+        "{sweep}"
+    );
+    assert_eq!(sweep["scope"]["complete"], false);
+    drop(publication);
+}
+
+#[test]
+fn explicit_sweep_reopens_each_partial_component_with_the_original_node_bound() {
+    if !isolated_capability_test(
+        "explicit_sweep_reopens_each_partial_component_with_the_original_node_bound",
+    ) {
+        return;
+    }
+    let h = host(3, 16);
+    let mut paths = Vec::new();
+    for name in ["first", "second"] {
+        let path = tree(h.path(), name);
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        for n in 0..8 {
+            fs::write(h.path().join(&path).join(n.to_string()), b"partial output").unwrap();
+        }
+        publication.complete(json!({"exit":7})).unwrap();
+        paths.push(path);
+    }
+    let mut removed = 0;
+    let mut rounds = Vec::new();
+    for _ in 0..32 {
+        let result = consumer_call(h.path(), json!({"operation":"maintain"}));
+        assert_eq!(result.exit_code, 0, "{}", result.stderr);
+        let sweep: Value = serde_json::from_str(&result.stdout).unwrap();
+        assert!(
+            sweep["round_maxima"]["nodes"].as_u64().unwrap() <= 3,
+            "{sweep}"
+        );
+        removed += sweep["removed_logical_bytes"].as_u64().unwrap();
+        rounds.push(sweep);
+        if paths.iter().all(|path| !h.path().join(path).exists()) {
+            break;
+        }
+    }
+    assert!(
+        paths.iter().all(|path| !h.path().join(path).exists()),
+        "{rounds:?}"
+    );
+    assert_eq!(removed, 16 * b"partial output".len() as u64, "{rounds:?}");
 }
 
 #[test]

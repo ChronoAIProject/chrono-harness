@@ -153,7 +153,7 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
         }
         Request::Maintain { originals } => match originals {
             Some(originals) => inventory.maintain_originals(&originals),
-            None => inventory.maintain(),
+            None => inventory.maintain_explicit(),
         },
         Request::ReleasePreserved {
             original,
