@@ -2872,9 +2872,22 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
     // Keep ordinary caller files open too. Reading a report and retaining its
     // diagnostic only need that member; opening its 64 dependencies would
     // exhaust this same native budget. These are private Rust-owned files.
+    inventory(h.path())
+        .dependencies_paths(&parent_path, &paths[32..])
+        .unwrap();
     let held: Vec<_> = (0..190)
         .map(|_| fs::File::open("/dev/null").unwrap())
         .collect();
+    let input_caller = retained_artifacts::retention::publication_read_scope(&parent).unwrap();
+    // Recovery may validate a long chain of previous receipts before its next
+    // process call. Keep all actual inputs through the report's capability.
+    for path in &paths {
+        let input = retained_artifacts::retention::read_guard(h.path(), path)
+            .unwrap()
+            .unwrap();
+        assert!(fs::read(h.path().join(path)).unwrap().len() > 0);
+        drop(input);
+    }
     parent.complete(json!({"exit": 2})).unwrap();
     let retained = retained_artifacts::retention::read_guard(h.path(), &parent_path)
         .unwrap()
@@ -2896,6 +2909,20 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
         .unwrap();
     assert_eq!(fs::read(h.path().join(&parent_path)).unwrap(), parent_bytes);
     drop((retained, consumed, held));
+    let protected = ledger(h.path());
+    assert_eq!(
+        protected["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|o| o["path"] == parent_path)
+            .unwrap()["references"]
+            .as_array()
+            .unwrap()
+            .len(),
+        64
+    );
+    drop(input_caller);
     inventory(h.path())
         .dependencies_paths(&parent_path, &paths[32..])
         .unwrap();

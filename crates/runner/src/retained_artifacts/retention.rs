@@ -268,7 +268,19 @@ pub fn read_scope(root: &Path) -> Result<ReadScope, String> {
 /// only child-produced originals through its report handoff. Child callers
 /// retain their own actual inputs under ordinary read scopes.
 pub fn published_output_scope(output: &Publication) -> Result<ReadScope, String> {
-    let scope = caller_scope(&output.inventory.root, false, Some(output.id.clone()))?;
+    publication_scope(output, false)
+}
+/// A report owns its consumed originals through durable dependencies. Forward
+/// its single capability instead of one descriptor for every recovery input.
+pub fn publication_read_scope(output: &Publication) -> Result<ReadScope, String> {
+    publication_scope(output, true)
+}
+fn publication_scope(output: &Publication, retain_inputs: bool) -> Result<ReadScope, String> {
+    let scope = caller_scope(
+        &output.inventory.root,
+        retain_inputs,
+        Some(output.id.clone()),
+    )?;
     // One live parent capability protects all accepted child dependencies,
     // including after the caller drops its original Publication value.
     output
@@ -411,24 +423,24 @@ impl Inventory {
     pub fn read_scope(&self) -> Result<ReadScope, String> {
         read_scope(&self.root)
     }
-    fn remember_input(&self, lease: &Lease) -> Result<(), String> {
-        self.remember_capability(lease, None)
+    fn remember_input(&self, lease: &Lease, id: &str) -> Result<(), String> {
+        self.remember_capability(lease, id, false)
     }
     fn remember_output(&self, lease: &Lease, id: &str) -> Result<(), String> {
-        self.remember_capability(lease, Some(id))
+        self.remember_capability(lease, id, true)
     }
-    fn remember_capability(&self, lease: &Lease, produced: Option<&str>) -> Result<(), String> {
+    fn remember_capability(&self, lease: &Lease, id: &str, produced: bool) -> Result<(), String> {
         READ_SCOPES.with(|scopes| {
             for inputs in scopes
                 .borrow()
                 .iter()
                 .filter_map(Weak::upgrade)
                 .filter(|inputs| inputs.root == self.root)
-                .filter(|inputs| inputs.retain_inputs || produced.is_some())
+                .filter(|inputs| inputs.retain_inputs || produced)
             {
-                if let (Some(parent), Some(child)) = (&inputs.publication, produced) {
-                    if parent != child {
-                        self.extend_dependency(parent, child)?;
+                if let Some(parent) = &inputs.publication {
+                    if parent != id {
+                        self.extend_dependency(parent, id)?;
                     }
                 } else {
                     self.remember_input_for(&inputs, lease)?;
@@ -1719,8 +1731,14 @@ impl Inventory {
         if !transfers.is_empty() {
             self.save(&ledger, &gate)?;
         }
+        drop(gate);
         for lease in &leases {
-            self.remember_input(lease)?;
+            let input = ledger
+                .outputs
+                .iter()
+                .find(|o| o.lease_id == lease.id())
+                .ok_or("publication handoff input capability has no original")?;
+            self.remember_input(lease, &input.id)?;
         }
         Ok(())
     }
@@ -1920,8 +1938,14 @@ impl Inventory {
         l.outputs[target].references = references.into_iter().collect();
         l.roots.remove(&role);
         self.save(&l, &gate)?;
+        drop(gate);
         for lease in &leases {
-            self.remember_input(lease)?;
+            let input = l
+                .outputs
+                .iter()
+                .find(|o| o.lease_id == lease.id())
+                .ok_or("consumer handoff input capability has no original")?;
+            self.remember_input(lease, &input.id)?;
         }
         Ok(())
     }
@@ -3273,7 +3297,8 @@ impl Inventory {
         )?
         .ok_or("original evidence disposal busy")?;
         self.stable(&gate)?;
-        self.remember_input(&lease)?;
+        drop(gate);
+        self.remember_input(&lease, id)?;
         Ok(lease)
     }
 }
@@ -3978,7 +4003,8 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     )?
     .ok_or("original evidence disposal busy")?;
     inventory.stable(&gate)?;
-    inventory.remember_input(&lease)?;
+    drop(gate);
+    inventory.remember_input(&lease, &o.id)?;
     Ok(Some(lease))
 }
 
