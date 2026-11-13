@@ -5,6 +5,10 @@ use crate::verified_git_binding::{
 use crate::{json, no_symlink_parents, sha256};
 use serde_json::{Value, json as value};
 use std::{fs, path::Path};
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 
 fn config_schema(config: &Value) -> GitConfigSchema {
     classify_git_config_schema(config["schema"].as_str())
@@ -244,13 +248,26 @@ pub fn identity(
     })
 }
 
-struct CapturedRegistry<'a>(&'a std::collections::BTreeMap<String, Value>);
+verus! {
+
+#[doc(hidden)]
+pub struct CapturedRegistry<'a>(pub &'a std::collections::BTreeMap<String, Value>);
 
 impl crate::verified_git_binding::RegistryMembership for CapturedRegistry<'_> {
+    open spec fn has_path(&self, path: &str) -> bool {
+        exists|stored: String| #[trigger] self.0@.contains_key(stored) && stored@ == path@
+    }
+
     fn contains_path(&self, path: &str) -> bool {
+        proof {
+            crate::json_value_specs::standard_string_key_order();
+            crate::json_value_specs::string_map_borrow(self.0, path);
+        }
         self.0.contains_key(path)
     }
 }
+
+} // verus!
 
 fn identity_targets(host: &Value, version3: bool) -> Result<Vec<&str>, String> {
     use crate::verified_git_binding::{
@@ -295,9 +312,25 @@ fn render_selector_path_error(error: crate::verified_git_binding::SelectorPathEr
     error.render(|invalid| format!("invalid relative path: {invalid:?}"))
 }
 
-struct JsonSelectorRows<'a>(&'a [Value]);
+verus! {
+
+#[doc(hidden)]
+pub struct JsonSelectorRows<'a>(pub &'a [Value]);
 
 impl<'a> crate::verified_git_binding::SelectorRows<'a> for JsonSelectorRows<'a> {
+    open spec fn rows(&self) -> Seq<crate::verified_git_binding::SelectorRow<'a>> {
+        Seq::new(self.0@.len(), |index: int| {
+            let row = &self.0@[index];
+            crate::verified_git_binding::SelectorRow {
+                fields: crate::json_value_specs::fields(row),
+                digest: crate::json_value_specs::field_text(row, "sha256"@),
+                path_present: crate::json_value_specs::field(row, "path"@).is_some(),
+                path: crate::json_value_specs::field_text(row, "path"@),
+                registry_path_present: crate::json_value_specs::field(row, "registry_path"@).is_some(),
+            }
+        })
+    }
+
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -315,6 +348,11 @@ impl<'a> crate::verified_git_binding::SelectorRows<'a> for JsonSelectorRows<'a> 
 }
 
 impl<'a> crate::verified_git_binding::SelectorRegistryRows<'a> for JsonSelectorRows<'a> {
+    open spec fn registry_paths(&self) -> Seq<Option<&'a str>> {
+        Seq::new(self.0@.len(), |index: int|
+            crate::json_value_specs::field_text(&self.0@[index], "registry_path"@))
+    }
+
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -324,9 +362,25 @@ impl<'a> crate::verified_git_binding::SelectorRegistryRows<'a> for JsonSelectorR
     }
 }
 
-struct JsonTargetRows<'a>(&'a [Value]);
+#[doc(hidden)]
+pub struct JsonTargetRows<'a>(pub &'a [Value]);
 
 impl crate::verified_git_binding::GitTargetRows for JsonTargetRows<'_> {
+    open spec fn count(&self) -> nat { self.0@.len() }
+
+    open spec fn text_at(&self, index: int, field: crate::verified_git_binding::GitTargetField)
+        -> Option<&str>
+    {
+        if 0 <= index < self.0@.len() {
+            match field {
+                crate::verified_git_binding::GitTargetField::Digest =>
+                    crate::json_value_specs::field_text(&self.0@[index], "sha256"@),
+                crate::verified_git_binding::GitTargetField::Path =>
+                    crate::json_value_specs::field_text(&self.0@[index], "path"@),
+            }
+        } else { None }
+    }
+
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -346,14 +400,56 @@ impl crate::verified_git_binding::GitTargetRows for JsonTargetRows<'_> {
     }
 }
 
-#[derive(Default)]
-struct SeenSelectorText<'a>(std::collections::BTreeSet<&'a str>);
+#[doc(hidden)]
+pub struct SeenSelectorText<'a>(pub std::collections::BTreeSet<&'a str>);
 
-impl<'a> crate::verified_git_binding::SelectorSeen<'a> for SeenSelectorText<'a> {
-    fn record(&mut self, text: &'a str) -> bool {
-        self.0.insert(text)
+impl<'a> Default for SeenSelectorText<'a> {
+    fn default() -> (out: Self)
+        ensures out.0@ == Set::<&'a str>::empty(),
+    {
+        Self(std::collections::BTreeSet::new())
     }
 }
+
+impl<'a> crate::verified_git_binding::SelectorSeen<'a> for SeenSelectorText<'a> {
+    open spec fn seen(&self) -> Set<Seq<char>> {
+        self.0@.map(|text: &str| text@)
+    }
+
+    fn record(&mut self, text: &'a str) -> bool {
+        let ghost before = self.0@;
+        proof {
+            crate::json_value_specs::standard_str_key_order();
+            crate::json_value_specs::str_set_membership(&self.0, text);
+        }
+        let fresh = self.0.insert(text);
+        proof {
+            assert(self.0@ == before.insert(text));
+            assert(self.0@.map(|stored: &str| stored@)
+                =~= before.map(|stored: &str| stored@).insert(text@)) by {
+                assert forall|item: Seq<char>|
+                    self.0@.map(|stored: &str| stored@).contains(item)
+                    <==> before.map(|stored: &str| stored@).insert(text@).contains(item) by {
+                    if self.0@.map(|stored: &str| stored@).contains(item) {
+                        let stored = choose|stored: &str| self.0@.contains(stored) && item == stored@;
+                        if stored != text {
+                            assert(before.contains(stored));
+                            assert(before.map(|stored: &str| stored@).contains(item));
+                        }
+                    } else if before.map(|stored: &str| stored@).contains(item) {
+                        let stored = choose|stored: &str| before.contains(stored) && item == stored@;
+                        assert(self.0@.contains(stored));
+                    } else if item == text@ {
+                        assert(self.0@.contains(text));
+                    }
+                }
+            }
+        }
+        fresh
+    }
+}
+
+} // verus!
 
 impl Selection {
     pub fn unchanged(&self, root: &Path) -> Result<(), String> {

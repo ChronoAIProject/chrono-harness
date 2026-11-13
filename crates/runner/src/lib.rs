@@ -27,6 +27,14 @@ pub fn load_selected_config_with(
     facts_configs::resolve(path, bytes, read).map(|(_, _, config, _)| config)
 }
 mod facts_inputs;
+pub mod json_value_specs;
+// 独立预期直接消费这些生产适配器；不复制实现或创建测试专用替身。
+#[doc(hidden)]
+pub use facts_binding::JsonBindingReferences;
+#[doc(hidden)]
+pub use facts_configs::{CapturedRegistry, JsonSelectorRows, JsonTargetRows, SeenSelectorText};
+#[doc(hidden)]
+pub use facts_inputs::JsonGuardReferences;
 pub mod full;
 pub mod initial;
 pub mod input_file;
