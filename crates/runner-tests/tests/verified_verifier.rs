@@ -1879,10 +1879,12 @@ fn unified_bound_result(file: &str, root: &str) -> Result<Option<policy::ProofAd
             verification: None,
         });
     }
-    let registry = Ok(policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
-        entries: files,
-        require_new_file_classification: None,
-    } });
+    let registry = Ok(policy::sources::SourceRegistry {
+        files: policy::sources::SourceFiles {
+            entries: files,
+            require_new_file_classification: None,
+        },
+    });
     let digest = String::from_utf8(BoundSources.digest(b"source")).unwrap();
     let dependency = Some(Ok(format!(
         "out.d: root\n\nout: root\n\nroot:\n\n# checksum:sha256={digest} file_len:6 root\n"
