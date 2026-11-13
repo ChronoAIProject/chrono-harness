@@ -2281,6 +2281,36 @@ impl Manager {
         }
         Ok(inputs)
     }
+    fn check_absent_enrollment(
+        &self,
+        entry: &Entry,
+        inventory: &[BTreeMap<String, String>],
+    ) -> Result<(), String> {
+        absolute(&entry.path, true)?;
+        absolute(&entry.attachment.metadata, true)?;
+        if entry.cache_only
+            || !matches!(entry.enrollment["kind"].as_str(), Some("birth" | "import"))
+            || !retirement::absent(&entry.path)?
+            || !retirement::absent(&entry.attachment.metadata)?
+        {
+            return Err(format!(
+                "enrollment {} has a partial or unknown attachment; preserve original work",
+                entry.path.display()
+            ));
+        }
+        let branch = maintenance::checkout_reference(entry.current_branch());
+        if inventory.iter().any(|row| {
+            Path::new(&row["worktree"]) == entry.path
+                || (branch != "HEAD" && row.get("branch") == Some(&branch))
+        }) {
+            return Err(
+                "missing enrollment has another Git attachment; preserve original work".into(),
+            );
+        }
+        self.policy_binding(entry)?;
+        self.git_locks(entry, None)
+    }
+
     fn check_entry(
         &self,
         r: &mut Runner,
@@ -3460,6 +3490,43 @@ impl Manager {
                     value!({"path":e.path,"status":"failed","error":"active/unknown managed use"}),
                 );
                 continue;
+            }
+            // A missing checkout has no cache filesystem to maintain. Observe
+            // the original attachment under its lease without claiming that
+            // the external removal finished this task or authorizes retirement.
+            if maintenance && cache && _lease.is_some() {
+                let absence = (|| {
+                    if !retirement::absent(&e.path)? {
+                        return Ok(false);
+                    }
+                    self.check_absent_enrollment(
+                        &e,
+                        &r.inventory(&self.inputs.policy.coordinator_root)?,
+                    )?;
+                    self.stable(r)?;
+                    _lease.as_ref().unwrap().stable()?;
+                    Ok::<_, String>(true)
+                })();
+                match absence {
+                    Ok(true) => {
+                        report["drain"].as_array_mut().unwrap().push(value!({
+                            "path":e.path,"status":"preserved","checkout_presence":"absent",
+                            "metadata_presence":"absent","task_completion":"unknown",
+                            "worktree_removal":"not-claimed",
+                            "preserved_reason":"checkout and original metadata are absent; retain unresolved task and original records"
+                        }));
+                        continue;
+                    }
+                    Ok(false) => (),
+                    Err(error) => {
+                        failures.push(format!("{}: {error}", e.path.display()));
+                        report["drain"]
+                            .as_array_mut()
+                            .unwrap()
+                            .push(value!({"path":e.path,"status":"failed","error":error}));
+                        continue;
+                    }
+                }
             }
             let (config, bytes) = crate::configuration(
                 &self.inputs.policy.coordinator_root,

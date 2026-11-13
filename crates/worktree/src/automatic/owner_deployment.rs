@@ -732,34 +732,6 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
 }
 
 impl Manager {
-    fn check_absent_enrollment(
-        &self,
-        entry: &Entry,
-        inventory: &[BTreeMap<String, String>],
-    ) -> Result<(), String> {
-        absolute(&entry.path, true)?;
-        absolute(&entry.attachment.metadata, true)?;
-        if entry.cache_only
-            || !matches!(entry.enrollment["kind"].as_str(), Some("birth" | "import"))
-            || !retirement::absent(&entry.path)?
-            || !retirement::absent(&entry.attachment.metadata)?
-        {
-            return Err(format!(
-                "owner deployment affected enrollment {} has a partial or unknown attachment; preserve selected bytes",
-                entry.path.display()
-            ));
-        }
-        let branch = maintenance::checkout_reference(entry.current_branch());
-        if inventory.iter().any(|row| {
-            Path::new(&row["worktree"]) == entry.path
-                || (branch != "HEAD" && row.get("branch") == Some(&branch))
-        }) {
-            return Err("owner deployment missing enrollment has another Git attachment; preserve selected bytes".into());
-        }
-        self.policy_binding(entry)?;
-        self.git_locks(entry, None)
-    }
-
     pub(super) fn deploy_owner(
         &mut self,
         r: &mut Runner,

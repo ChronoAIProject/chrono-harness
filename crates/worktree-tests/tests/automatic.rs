@@ -2802,6 +2802,76 @@ fn absent_cache_maintenance_preserves_unknown_work_without_retrying_checkout_io(
 }
 
 #[test]
+fn absent_cache_maintenance_rejects_partial_and_relocated_attachments() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    for conflict in ["metadata", "relocated"] {
+        let h = Host::new("payload");
+        h.kernel_cleanup();
+        let target = h.parent.join("missing-cache-owner");
+        assert_eq!(h.invoke("feature", "missing-cache-owner", &target).0, 0);
+        let entry = h.ledger()["entries"][0].clone();
+        git(
+            &h.root,
+            &["worktree", "remove", "--force", target.to_str().unwrap()],
+        );
+        let metadata = PathBuf::from(entry["attachment"]["metadata"].as_str().unwrap());
+        let relocated = h.parent.join("relocated-owner");
+        if conflict == "metadata" {
+            fs::create_dir_all(&metadata).unwrap();
+            fs::write(metadata.join("unknown-work"), b"original metadata conflict").unwrap();
+        } else {
+            git(
+                &h.root,
+                &[
+                    "worktree",
+                    "add",
+                    relocated.to_str().unwrap(),
+                    "feature/missing-cache-owner",
+                ],
+            );
+            fs::write(relocated.join("payload"), b"new unsaved work").unwrap();
+        }
+        let original = fs::read(h.ledger_path(&target)).unwrap();
+        let refs = git(&h.root, &["show-ref"]);
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_ne!(code, 0, "{conflict}: {report} {error}");
+        assert!(
+            report["cleanup_failures"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|failure| {
+                    failure
+                        .as_str()
+                        .unwrap()
+                        .contains(if conflict == "metadata" {
+                            "partial or unknown attachment"
+                        } else {
+                            "another Git attachment"
+                        })
+                }),
+            "{conflict}: {report}"
+        );
+        assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), original);
+        assert!(!target.exists());
+        assert_eq!(git(&h.root, &["show-ref"]), refs);
+        if conflict == "metadata" {
+            assert_eq!(
+                fs::read(metadata.join("unknown-work")).unwrap(),
+                b"original metadata conflict"
+            );
+        } else {
+            assert_eq!(
+                fs::read(relocated.join("payload")).unwrap(),
+                b"new unsaved work"
+            );
+        }
+    }
+}
+
+#[test]
 fn automatic_absent_active_enrollment_conflict_preflights_without_creation() {
     if !chrono_git_boundary::isolated_git() {
         return;
