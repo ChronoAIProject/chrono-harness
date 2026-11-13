@@ -1,0 +1,18 @@
+{
+  "schema": "chrono-ci-generation-plan/v1",
+  "targets": [
+    {
+      "after_sha256": "b7d552ec1ed0831f9b877c5818364139d39b089b73f9da35ebfd85a5c7a24f05",
+      "before": {
+        "bytes": 6105,
+        "identity": "16777231:737758029:file",
+        "sha256": "b7d552ec1ed0831f9b877c5818364139d39b089b73f9da35ebfd85a5c7a24f05"
+      },
+      "original": "output-0.bytes",
+      "path": ".github/workflows/chrono-ci.yml",
+      "previous_original": "previous-0.bytes",
+      "staging": "pending-0.bytes",
+      "write": false
+    }
+  ]
+}

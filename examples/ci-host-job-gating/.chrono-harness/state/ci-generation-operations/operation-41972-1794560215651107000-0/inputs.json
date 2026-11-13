@@ -1,0 +1,22 @@
+[
+  {
+    "object": {
+      "bytes": 1254,
+      "identity": "16777231:744425460:file",
+      "sha256": "41d5a6c26df457c8c8ec875117a741b523f0bfa7e2d10bc98ccc82f5785bc547"
+    },
+    "original": "input-0.bytes",
+    "requested": ".chrono-harness/ci/check.json",
+    "resolved": "/Users/macstudio2/chrono-spec-current-dev/examples/ci-host-job-gating/.chrono-harness/ci/check.json"
+  },
+  {
+    "object": {
+      "bytes": 2811,
+      "identity": "16777231:737758010:file",
+      "sha256": "8200cfe21f7db720f466dd163d840a68f57898657b4b9b402c22913b4602769d"
+    },
+    "original": "input-1.bytes",
+    "requested": ".chrono-harness/ci/units.json",
+    "resolved": "/Users/macstudio2/chrono-spec-current-dev/examples/ci-host-job-gating/.chrono-harness/ci/units.json"
+  }
+]
