@@ -20,6 +20,8 @@
 
 按范围 CI 的起点由 `seed_causes[].node` 维护，不再额外发布重复的 `seeds` 列表；`extra_selections` 与图选测结果已能区分额外选择，也不再发布两者差集 `legacy_only_selections`。完整 FILEMAP 的独立 impact 合同也以 `seed_causes` 维护起点，格式见[FILEMAP 输出](filemap-impact.md#带版本的输出)。输出及计算成本收益尚未实测。
 
+格式资格只对当前候选求值。固定基线中的格式字段只作为 DELTA 输入读取，不选择或执行旧格式生产者；现役候选的未知格式仍在业务前拒绝。
+
 本宿主因 2697 条私有声明使原响应超过未改动的 8 MiB 上限而采用可重放表示。当前只采用可达图格式，产品与宿主配置同步迁移；Rust 测试保留全部 2697 个明确起点输入和输出限制，精确核对无关边排除、改名两端及循环边。源码／bootstrap／标准／原生验收及总验证成本仍分别处理。
 
 五份完整治理登记仍为 **proposed**。当前有限宿主 profile `chrono-ci-check/v3` 明确消费 FILEMAP／项目数据，独立单元／汇总使用 `chrono-ci-judge/v2`；不分单元的本地检查及旧 profile 保留各自说明的行为，见[独立 CI 单元](ci-units.md)。
