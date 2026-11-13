@@ -372,6 +372,7 @@ pub fn sync_ancestor_directories<S, P, E, N, C, D>(
         let synced = sync(after_next, path);
         let ghost original_sync = synced;
         let (after_sync, result) = synced;
+        assert(original_sync == (after_sync, result));
         assert(sync.ensures((step.0, step.1), original_sync));
         match result {
             Err(error) => {
@@ -380,7 +381,7 @@ pub fn sync_ancestor_directories<S, P, E, N, C, D>(
                 assert(directory_result(initial, root, next, same, sync, out));
                 return out;
             },
-            Ok(()) => (),
+            Ok(()) => { assert(original_sync == (after_sync, Ok::<(), E>(()))); },
         }
         assert(next.ensures((before,), (step.0, Some(step.1))));
         assert(same.ensures((&step.1, &root), false));
