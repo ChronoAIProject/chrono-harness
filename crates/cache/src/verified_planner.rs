@@ -26,10 +26,16 @@ mod recovery_source;
 pub use crate::attempt::{
     accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
 };
+#[cfg(not(verus_keep_ghost))]
+pub use crate::recovery::{
+    RecoveryOption, RecoveryOptions, admit_recovery_paths, parse_recovery_options,
+};
 #[cfg(verus_keep_ghost)]
 pub use attempt::{
     accept_original, confirmed_probe, release_custody, replay_attempt, same_attempt,
 };
+#[cfg(verus_keep_ghost)]
+pub use recovery_source::*;
 
 verus! {
 
@@ -43,7 +49,7 @@ pub open spec fn restore_prefix_matches(key: &str, prefix: Option<&str>) -> bool
     }
 }
 
-fn restore_prefix(key: &str, prefix: Option<&str>) -> (matched: bool)
+pub fn restore_prefix(key: &str, prefix: Option<&str>) -> (matched: bool)
     ensures matched == restore_prefix_matches(key, prefix),
 {
     let prefix_text = match prefix {
