@@ -1,31 +1,56 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+#[path = "support/cli_child.rs"]
+mod cli_child;
+#[cfg(verus_keep_ghost)]
+use crate::cli_child;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+
 #[path = "support/git_fixture.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod git_fixture;
 #[path = "support/native_executable.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod native_executable;
 #[path = "support/retention_state.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod retention_state;
 
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{json, sha256, wire};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::json as value;
+#[cfg(not(verus_keep_ghost))]
 use std::fs;
 
 // Isolated launch helpers reject allocator use between fork and exec, including
 // error paths. This observes real child execution, independent of its diagnostics.
+#[cfg(not(verus_keep_ghost))]
 struct ForkCheckedAllocator;
+#[cfg(not(verus_keep_ghost))]
 static LAUNCH_PARENT: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
+#[cfg(not(verus_keep_ghost))]
 unsafe extern "C" {
     fn getpid() -> i32;
     fn _exit(status: i32) -> !;
 }
+#[cfg(not(verus_keep_ghost))]
 fn check_fork_allocator() {
     let parent = LAUNCH_PARENT.load(std::sync::atomic::Ordering::Relaxed);
     if parent != 0 && unsafe { getpid() } != parent {
         unsafe { _exit(97) };
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn check_launch_allocations() {
     LAUNCH_PARENT.store(unsafe { getpid() }, std::sync::atomic::Ordering::Relaxed);
 }
+#[cfg(not(verus_keep_ghost))]
 unsafe impl std::alloc::GlobalAlloc for ForkCheckedAllocator {
     unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
         check_fork_allocator();
@@ -45,16 +70,21 @@ unsafe impl std::alloc::GlobalAlloc for ForkCheckedAllocator {
     }
 }
 #[global_allocator]
+#[cfg(not(verus_keep_ghost))]
 static ALLOCATOR: ForkCheckedAllocator = ForkCheckedAllocator;
 
 // Ordinary protocol cases test responses, not startup latency. Real child
 // startup has exceeded five seconds on the shared host. Deliberate timeout
 // cases below keep their separate two-second bound and thirty-second stall.
+#[cfg(not(verus_keep_ghost))]
 const FIXTURE_TIMEOUT_SECONDS: u64 = 30;
+#[cfg(not(verus_keep_ghost))]
 const PROCESS_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-process-lifecycle");
+#[cfg(not(verus_keep_ghost))]
 const PROTOCOL_FIXTURE: &str = env!("CARGO_BIN_EXE_chrono-test-protocol-judge");
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn live_forwarding_error_keeps_both_original_streams_and_actual_child_status() {
     struct Closed;
     impl std::io::Write for Closed {
@@ -123,6 +153,7 @@ fn live_forwarding_error_keeps_both_original_streams_and_actual_child_status() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn installed_fixture_permissions_are_independent() {
     use std::os::unix::fs::PermissionsExt;
 
@@ -146,6 +177,7 @@ fn installed_fixture_permissions_are_independent() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn published_rfc8785_vectors() {
     // RFC 8785 §3.2.2 and §3.2.3, not produced by this implementation.
     let v =
@@ -165,6 +197,7 @@ fn published_rfc8785_vectors() {
         b"[0,0.000001,1e+21]"
     );
 }
+#[cfg(not(verus_keep_ghost))]
 fn fixture_request(root: &std::path::Path) -> wire::Request {
     let mut r: wire::Request = serde_json::from_value(value!({
         "protocol":"chrono-judge/v1", "request_id":"", "judge_id":"fixture", "mode":"evaluate",
@@ -182,6 +215,7 @@ fn fixture_request(root: &std::path::Path) -> wire::Request {
     r
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::Binding) {
     let dir = tempfile::Builder::new()
         .prefix("v1 host spaces ")
@@ -210,11 +244,13 @@ fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::
     (dir, r, binding)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn replace_judge(directory: &std::path::Path, executable: &str) {
     let path = directory.join("judge");
     fs::remove_file(&path).unwrap();
     native_executable::install(executable, path).unwrap();
 }
+#[cfg(not(verus_keep_ghost))]
 fn initial_fixture(
     case: serde_json::Value,
 ) -> (
@@ -245,6 +281,7 @@ fn initial_fixture(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn initial_transport_has_one_endpoint_and_preserves_real_response_failures() {
     for (name, mut case) in [
         ("pass", value!({})),
@@ -283,6 +320,7 @@ fn initial_transport_has_one_endpoint_and_preserves_real_response_failures() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn initial_transport_rejects_wrong_mode_digest_and_base_placeholder_before_launch() {
     let (dir, request, original) = initial_fixture(value!({"marker":"ran"}));
     for case in ["mode", "digest", "base", "request"] {
@@ -309,6 +347,7 @@ fn initial_transport_rejects_wrong_mode_digest_and_base_placeholder_before_launc
         assert!(!dir.path().join("ran").exists(), "{case}");
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn configure_bound_fixture(
     dir: &std::path::Path,
     binding: &mut wire::Binding,
@@ -328,6 +367,7 @@ fn configure_bound_fixture(
     .unwrap();
     binding.sha256 = Some(sha256(&fs::read(dir.join("judge")).unwrap()));
 }
+#[cfg(not(verus_keep_ghost))]
 fn assert_bound_evidence(failure: wire::TransportFailure, timeout: bool) {
     let expected = if timeout {
         "process timed out"
@@ -364,6 +404,7 @@ fn assert_bound_evidence(failure: wire::TransportFailure, timeout: bool) {
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn bounded_delta_transport_retains_process_evidence() {
     for timeout in [true, false] {
         let (dir, request, mut binding) = fixture(value!({}));
@@ -383,6 +424,7 @@ fn bounded_delta_transport_retains_process_evidence() {
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn bounded_initial_transport_retains_process_evidence() {
     for timeout in [true, false] {
         let (dir, request, mut binding) = initial_fixture(value!({}));
@@ -400,11 +442,13 @@ fn bounded_initial_transport_retains_process_evidence() {
         assert_bound_evidence(failure, timeout);
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn invoke(case: serde_json::Value) -> Result<wire::Response, String> {
     let (_dir, r, b) = fixture(case);
     wire::invoke(&r, &b, &Default::default(), FIXTURE_TIMEOUT_SECONDS, 8192).map(|v| v.0)
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn four_statuses_exact_exits_and_identity() {
     for (status, exit) in [("pass", 0), ("warn", 0), ("fail", 1), ("error", 2)] {
         let findings = if status == "pass" {
@@ -432,6 +476,7 @@ fn four_statuses_exact_exits_and_identity() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn malformed_stdout_crash_and_bounds() {
     for (name, case) in [
         (
@@ -474,6 +519,7 @@ fn malformed_stdout_crash_and_bounds() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn evidence_exists_and_is_bound_to_bytes() {
     let (dir, r, b) = fixture(value!({"fields":{"evidence":[{
         "path":".chrono-harness/state/proof", "sha256":sha256(b"proof"), "kind":"fixture"
@@ -487,6 +533,7 @@ fn evidence_exists_and_is_bound_to_bytes() {
     assert!(call().is_ok());
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn digest_checked_before_launch_environment_cleared_and_literal_argv() {
     let literal = "literal $HOME `whoami` ' \"";
     let (dir, r, mut b) = fixture(value!({"kind":"environment", "argument":literal}));
@@ -511,6 +558,7 @@ fn digest_checked_before_launch_environment_cleared_and_literal_argv() {
     assert_eq!(fs::read(dir.path().join("launched")).unwrap(), b"yes");
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn endpoint_argv_placeholders_replace_only_complete_arguments() {
     let literals = [
         "",
@@ -540,6 +588,7 @@ fn endpoint_argv_placeholders_replace_only_complete_arguments() {
     assert!(!dir.path().join("expanded").exists());
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn request_identity_is_deterministic_and_binds_facts() {
     let (_dir, mut r, _b) = fixture(value!({}));
     let old = r.request_id.clone();
@@ -552,6 +601,7 @@ fn request_identity_is_deterministic_and_binds_facts() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn request_identity_matches_original_projection_for_scopes_and_opaque_evidence() {
     let (_dir, mut request, _binding) = fixture(value!({}));
     request.observations = value!({
@@ -583,6 +633,7 @@ fn request_identity_matches_original_projection_for_scopes_and_opaque_evidence()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn canonical_request_preserves_number_boundaries_unicode_and_original_streams() {
     let (_dir, mut request, _binding) = fixture(value!({}));
     // Independent RFC vectors and the fixed generic JCS implementation remain
@@ -643,6 +694,7 @@ fn canonical_request_preserves_number_boundaries_unicode_and_original_streams() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn prepared_live_dag_rejects_invalid_headers_before_process_effects() {
     let (dir, request, binding) = fixture(value!({"marker":"ran"}));
     for field in ["protocol", "mode"] {
@@ -680,6 +732,7 @@ fn prepared_live_dag_rejects_invalid_headers_before_process_effects() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn dag_forwards_only_direct_predecessors_and_named_outputs() {
     let (_dir, mut r, b) = fixture(value!({"kind":"dag"}));
     r.impact = serde_json::Value::Null;
@@ -709,6 +762,7 @@ fn dag_forwards_only_direct_predecessors_and_named_outputs() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn execution_self_diagnostic_rejects_mutated_records_and_status() {
     let (_dir, request, binding) = fixture(value!({"kind":"response"}));
     let (status, records) = chrono_harness::full::execute(
@@ -781,6 +835,7 @@ fn execution_self_diagnostic_rejects_mutated_records_and_status() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn execution_self_diagnostic_rejects_forged_transport_failure_for_valid_execution() {
     let (_dir, request, binding) = fixture(value!({"kind":"response"}));
     let (status, records) = chrono_harness::full::execute(
@@ -811,6 +866,7 @@ fn execution_self_diagnostic_rejects_forged_transport_failure_for_valid_executio
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn execution_self_diagnostic_rejects_mutated_prelaunch_error_records() {
     let (_dir, request, mut binding) = fixture(value!({}));
     // A bad executable digest fails before a child is launched and therefore
@@ -862,6 +918,7 @@ fn execution_self_diagnostic_rejects_mutated_prelaunch_error_records() {
 // than parsing the compatibility transport_failure message.
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
     use std::os::unix::fs::PermissionsExt;
     for case in ["missing", "permission", "digest"] {
@@ -967,6 +1024,7 @@ fn prelaunch_diagnostics_retain_native_causes_and_unstarted_context() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
     if !git_fixture::isolated("prelaunch_diagnostics_reach_real_full_reports_with_healthy_control")
     {
@@ -1320,6 +1378,7 @@ fn prelaunch_diagnostics_reach_real_full_reports_with_healthy_control() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn prelaunch_diagnostics_keep_executed_originals_and_strict_judge_v1() {
     let (_dir, request, binding) = fixture(
         value!({"kind":"raw","consume_request":true,"stdout":[255,0,10],"stderr":[254,0,10],"exit":17}),
@@ -1351,6 +1410,7 @@ fn prelaunch_diagnostics_keep_executed_originals_and_strict_judge_v1() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn dag_blocks_dependents_and_continues_independent_branch() {
     let (_dir, r, b) = fixture(value!({"kind":"blocked-dag"}));
     let binding = |id: &str, after: &[&str]| {
@@ -1386,6 +1446,7 @@ fn dag_blocks_dependents_and_continues_independent_branch() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn execution_self_diagnostic_preserves_conflicting_predecessor_failure() {
     let (_dir, request, binding) = fixture(value!({"kind":"distinct-impacts"}));
     let plan: Vec<_> = [("a", vec![]), ("b", vec![]), ("c", vec!["a", "b"])]
@@ -1421,6 +1482,7 @@ fn execution_self_diagnostic_preserves_conflicting_predecessor_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn invalid_response_retains_actual_process_exit_in_report() {
     let (_dir, r, b) = fixture(value!({"kind":"raw", "stdout":b"invalid JSON\n", "exit":9}));
     let (status, records) = chrono_harness::full::execute(
@@ -1454,6 +1516,7 @@ fn invalid_response_retains_actual_process_exit_in_report() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
     for (bytes, accepted) in [(vec![239, 191, 189], true), (vec![255], false)] {
         let (_dir, r, b) = fixture(value!({
@@ -1487,6 +1550,7 @@ fn embedded_invalid_utf8_is_protocol_error_and_valid_replacement_passes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() {
     let (_dir, req, mut producer) = fixture(value!({"kind":"prior-process"}));
     producer.id = "producer".into();
@@ -1506,6 +1570,7 @@ fn later_judge_receives_actual_prior_process_identity_not_configured_metadata() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn process_encoding_preserves_actual_binary_failure_and_rejects_conflicting_views() {
     for original in [
         value!({"id":"blocked"}),
@@ -1626,6 +1691,7 @@ fn process_encoding_preserves_actual_binary_failure_and_rejects_conflicting_view
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
     let bytes: Vec<u8> = (0..=255).collect();
     let expected = concat!(
@@ -1689,6 +1755,7 @@ fn original_hex_bytes_cover_empty_and_every_byte_and_reject_corruption() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
     for scoped in [true, false] {
         for current in [false, true] {
@@ -1696,6 +1763,7 @@ fn scoped_predecessors_keep_exact_originals_through_live_and_retained_dag() {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn predecessor_originals(scoped: bool, current: bool) {
     let (_dir, mut req, mut first) = fixture(value!({"kind":"retained-process"}));
     req.candidate.root = fs::canonicalize(&req.candidate.root).unwrap();
@@ -1768,6 +1836,7 @@ fn predecessor_originals(scoped: bool, current: bool) {
 // Real nested runner launch: the outer process must finish only after its owned
 // operation has been terminated. The PID is produced by that actual operation.
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_nested_helper() {
     let Ok(root) = std::env::var("CHRONO_RETAINED_FIXTURE") else {
         return;
@@ -1805,6 +1874,7 @@ fn retained_nested_helper() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_launch_publication_failure_preserves_original_process() {
     let stdout: Vec<u8> = (0..=255).collect();
     let stderr: Vec<u8> = (0..=255).rev().collect();
@@ -1896,6 +1966,7 @@ fn retained_launch_publication_failure_preserves_original_process() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn retained_stream_publication_failure_helper() {
     let Ok(root) = std::env::var("CHRONO_RETAINED_IO_FIXTURE") else {
         return;
@@ -1943,6 +2014,7 @@ fn retained_stream_publication_failure_helper() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn retained_stream_publication_failure_preserves_bytes_after_partial_write() {
     let file_limit = 1024 * 1024;
     let stdout: Vec<u8> = (0..=255).cycle().take(file_limit + 8192).collect();
@@ -2024,6 +2096,7 @@ fn retained_stream_publication_failure_preserves_bytes_after_partial_write() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_originals_match_complete_streams_and_launch_identity() {
     let root = tempfile::tempdir().unwrap();
     let working = tempfile::tempdir().unwrap();
@@ -2110,6 +2183,7 @@ fn retained_originals_match_complete_streams_and_launch_identity() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
     let mut root = tempfile::tempdir().unwrap();
     root.disable_cleanup(true);
@@ -2162,6 +2236,7 @@ fn tampered_launch_evidence_fails_closed_before_scoped_publication() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_originals_survive_enclosing_timeout_even_without_terminal_publication() {
     for case in ["stall", "pause-launcher"] {
         let mut root = tempfile::tempdir().unwrap();
@@ -2283,6 +2358,7 @@ fn retained_originals_survive_enclosing_timeout_even_without_terminal_publicatio
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_originals_keep_the_existing_stream_limit_and_failure() {
     let root = tempfile::tempdir().unwrap();
     let spec = chrono_harness::CommandSpec {
@@ -2319,6 +2395,7 @@ fn retained_originals_keep_the_existing_stream_limit_and_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owned_nested_helper() {
     let Ok(root) = std::env::var("CHRONO_NESTED_FIXTURE") else {
         return;
@@ -2340,6 +2417,7 @@ fn owned_nested_helper() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn outer_timeout_contains_nested_owned_operation() {
     for helper in ["owned_nested_helper", "owned_nested_middle_helper"] {
         let d = tempfile::tempdir().unwrap();
@@ -2423,6 +2501,7 @@ fn outer_timeout_contains_nested_owned_operation() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owned_nested_middle_helper() {
     let Ok(root) = std::env::var("CHRONO_NESTED_FIXTURE") else {
         return;
@@ -2447,6 +2526,7 @@ fn owned_nested_middle_helper() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owned_timeout_helper_keeps_unrelated_sibling() {
     let Ok(root) = std::env::var("CHRONO_SIBLING_FIXTURE") else {
         return;
@@ -2492,6 +2572,7 @@ fn owned_timeout_helper_keeps_unrelated_sibling() {
     });
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn nested_operation_timeout_does_not_cancel_owned_sibling() {
     let d = tempfile::tempdir().unwrap();
     let exe = std::env::current_exe().unwrap();
@@ -2530,6 +2611,7 @@ fn nested_operation_timeout_does_not_cancel_owned_sibling() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_launch_child_owner_helper() {
     let Ok(root) = std::env::var("CHRONO_INTERRUPTED_LAUNCH") else {
         return;
@@ -2552,6 +2634,7 @@ fn interrupted_launch_child_owner_helper() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_launch_survivor_helper() {
     use std::os::unix::process::ExitStatusExt;
     let Ok(root) = std::env::var("CHRONO_INTERRUPTED_LAUNCH") else {
@@ -2591,6 +2674,7 @@ fn interrupted_launch_survivor_helper() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_launch(complete: bool) -> (tempfile::TempDir, chrono_harness::ProcessResult) {
     let d = tempfile::tempdir().unwrap();
     let exe = std::env::current_exe().unwrap();
@@ -2649,6 +2733,7 @@ fn interrupted_launch(complete: bool) -> (tempfile::TempDir, chrono_harness::Pro
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_nested_launcher_with_terminal_child_completes_enclosing_owner() {
     let (d, p) = interrupted_launch(true);
     assert!(d.path().join("ready").exists());
@@ -2666,6 +2751,7 @@ fn interrupted_nested_launcher_with_terminal_child_completes_enclosing_owner() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_nested_launcher_with_live_child_retains_cleanup_failure() {
     let (d, p) = interrupted_launch(false);
     assert!(d.path().join("ready").exists());
@@ -2691,6 +2777,7 @@ fn interrupted_nested_launcher_with_live_child_retains_cleanup_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn owned_launch_burst_helper() {
     let Ok(root) = std::env::var("CHRONO_LAUNCH_BURST") else {
         return;
@@ -2722,6 +2809,7 @@ fn owned_launch_burst_helper() {
     });
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn concurrent_live_identity_handoffs_complete_each_real_child_once() {
     let d = tempfile::tempdir().unwrap();
     let exe = std::env::current_exe().unwrap();
@@ -2762,6 +2850,7 @@ fn concurrent_live_identity_handoffs_complete_each_real_child_once() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn delayed_monitor_helper() {
     let Ok(root) = std::env::var("CHRONO_DELAYED_MONITOR") else {
         return;
@@ -2806,6 +2895,7 @@ fn delayed_monitor_helper() {
 }
 
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
     // CI's retained fixture roots can exceed sockaddr_un's path limit. The
     // protocol must keep working from such a directory using relative sockets.
@@ -2902,6 +2992,7 @@ fn delayed_monitor(case: &str) -> chrono_harness::ProcessResult {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn delayed_monitor_preserves_on_time_child_exit() {
     let result = delayed_monitor("on-time");
     assert!(result.failure.is_none(), "{result:?}");
@@ -2909,6 +3000,7 @@ fn delayed_monitor_preserves_on_time_child_exit() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn delayed_monitor_retains_late_child_timeout() {
     let result = delayed_monitor("late");
     assert_eq!(
@@ -2920,6 +3012,7 @@ fn delayed_monitor_retains_late_child_timeout() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn delayed_monitor_preserves_output_bound() {
     let result = delayed_monitor("overflow");
     assert_eq!(
@@ -2931,6 +3024,7 @@ fn delayed_monitor_preserves_output_bound() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn closed_output_streams_preserve_child_exit_and_timeout() {
     for (delay, expected_exit) in [(50, Some(7)), (20_000, None)] {
         let root = tempfile::tempdir().unwrap();
@@ -2978,6 +3072,7 @@ fn closed_output_streams_preserve_child_exit_and_timeout() {
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn kernel_exit_with_pending_child_join_needs_no_further_advisory_hint() {
     let output = std::process::Command::new(PROCESS_FIXTURE)
         .arg("ordered-completion")
@@ -2990,6 +3085,7 @@ fn kernel_exit_with_pending_child_join_needs_no_further_advisory_hint() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unexpected_exec_helper() {
     if std::env::var_os("CHRONO_UNEXPECTED_EXEC").is_some() {
         fs::File::create_new("unexpected-exec").unwrap();
@@ -2998,6 +3094,7 @@ fn unexpected_exec_helper() {
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn completion_wait_probe_helper() {
     let Ok(root) = std::env::var("CHRONO_WAIT_PROBE_FIXTURE") else {
         return;
@@ -3053,6 +3150,7 @@ fn completion_wait_probe_helper() {
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn completion_wait_blocks_without_periodic_status_probes() {
     // Isolate actual DirectChild probes from other Rust test workers. Count
     // this engine invocation after the real child closes both streams, until
@@ -3100,6 +3198,7 @@ fn completion_wait_blocks_without_periodic_status_probes() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_live_identity_registration_helper() {
     use std::os::fd::AsRawFd;
     let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
@@ -3150,17 +3249,20 @@ fn failed_live_identity_registration_helper() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_live_identity_registration_preserves_actual_kernel_error_before_exec() {
     failed_live_identity_handoff(210, "failed_live_identity_registration_helper");
 }
 
 #[cfg(target_os = "macos")]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_handoff_receive_preserves_original_transport_failure_before_exec() {
     failed_live_identity_handoff(256, "failed_handoff_receive_helper");
 }
 
 #[cfg(target_os = "macos")]
+#[cfg(not(verus_keep_ghost))]
 fn failed_live_identity_handoff(descriptor_limit: libc::rlim_t, helper: &str) {
     use std::os::unix::process::CommandExt;
     let root = tempfile::tempdir().unwrap();
@@ -3217,6 +3319,7 @@ fn failed_live_identity_handoff(descriptor_limit: libc::rlim_t, helper: &str) {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget() {
     use std::os::fd::AsFd;
     let root = tempfile::tempdir().unwrap();
@@ -3248,6 +3351,7 @@ fn fixed_descriptor_exhaustion_keeps_inherited_capabilities_outside_its_budget()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn signal_termination_preserves_actual_pid_and_streams_without_reclassifying_normal_exits() {
     let dir = tempfile::tempdir().unwrap();
     let spec = chrono_harness::CommandSpec {
@@ -3281,6 +3385,7 @@ fn signal_termination_preserves_actual_pid_and_streams_without_reclassifying_nor
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn signal_termination_precedes_json_decode_for_delta_and_initial_transport() {
     let (dir, request, mut binding) = fixture(value!({}));
     replace_judge(dir.path(), PROCESS_FIXTURE);
@@ -3325,6 +3430,7 @@ fn signal_termination_precedes_json_decode_for_delta_and_initial_transport() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_handoff_receive_helper() {
     use std::io::{Read, Write};
     use std::os::fd::AsRawFd;
@@ -3441,6 +3547,7 @@ fn failed_handoff_receive_helper() {
 
 #[cfg(target_os = "macos")]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_handoff_receive_child_helper() {
     use std::io::{Read, Write};
     let Ok(root) = std::env::var("CHRONO_FAILED_HANDOFF") else {
@@ -3507,12 +3614,14 @@ fn failed_handoff_receive_child_helper() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn producer_host() -> (tempfile::TempDir, wire::Request) {
     let root = tempfile::tempdir().unwrap();
     let request = fixture_request(root.path());
     (root, request)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn producer_command(root: &std::path::Path, args: &[&str], input: &[u8]) -> std::process::Command {
     let marker = root.join("producer-evaluated");
     if marker.exists() {
@@ -3529,6 +3638,7 @@ fn producer_command(root: &std::path::Path, args: &[&str], input: &[u8]) -> std:
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_arguments_and_strict_decode_prevent_evaluation() {
     let (root, request) = producer_host();
     let output = producer_command(root.path(), &["--version"], b"invalid input")
@@ -3579,6 +3689,7 @@ fn producer_arguments_and_strict_decode_prevent_evaluation() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_canonical_response_preserves_all_domain_exit_codes() {
     let (root, mut request) = producer_host();
     for (mode, exit) in [("pass", 0), ("warn", 0), ("fail", 1), ("error", 2)] {
@@ -3607,6 +3718,7 @@ fn producer_canonical_response_preserves_all_domain_exit_codes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_real_input_bound_accepts_exact_limit_and_rejects_one_more_byte() {
     let (root, request) = producer_host();
     let mut input = request.canonical().unwrap();
@@ -3632,6 +3744,7 @@ fn producer_real_input_bound_accepts_exact_limit_and_rejects_one_more_byte() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn producer_native_read_failure_keeps_transport_exit() {
     use std::io::Read;
     let (root, _) = producer_host();
@@ -3648,6 +3761,7 @@ fn producer_native_read_failure_keeps_transport_exit() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn producer_native_write_failure_keeps_transport_exit() {
     use std::os::fd::OwnedFd;
     use std::process::Stdio;
@@ -3673,6 +3787,7 @@ fn producer_native_write_failure_keeps_transport_exit() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn producer_logging_and_invalid_os_argument_keep_existing_text_boundary() {
     use std::os::unix::ffi::OsStringExt;
     let (root, _) = producer_host();
@@ -3714,4 +3829,24 @@ fn producer_logging_and_invalid_os_argument_keep_existing_text_boundary() {
         rows.iter()
             .any(|row| row["event"] == "cli.invalid_argument")
     );
+}
+
+// 新模式预期与真实子进程使用同一 helper；其余协议与 IO 用例保留原生执行。
+verus! {
+fn expect_producer_mode(actual: bool) requires actual, { if !actual { panic!(); } }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn producer_fixture_requires_explicit_mode() {
+    proof {
+        reveal_strlit("1"); reveal_strlit("0"); reveal_strlit("01"); reveal_strlit("");
+        assert("0"@[0] != "1"@[0]);
+        assert("01"@.len() != "1"@.len());
+        assert(""@.len() != "1"@.len());
+    }
+    expect_producer_mode(cli_child::producer_mode(Some("1")));
+    expect_producer_mode(!cli_child::producer_mode(Some("0")));
+    expect_producer_mode(!cli_child::producer_mode(Some("01")));
+    expect_producer_mode(!cli_child::producer_mode(Some("")));
+    expect_producer_mode(!cli_child::producer_mode(None));
+}
 }
