@@ -1,5 +1,12 @@
 # SPEC 当前覆盖情况
 
+CI 的 `verified_inventory.rs` 定义并证明二进制后缀、完整且有序的名称列表、suite
+数量与 benchmark／不同名称数准入，以及列表结束完整性；真实 `parse_listing` 直接消费。
+独立预期同时作为 Rust 测试核空／边界、全文／顺序变化及运行时失败分支，沿现有 CI
+计划登记两项严格整 crate 证明。标准树集合提供实际不同名称数；行／路径解析、
+分组状态、JSON 和 IO 组合仍待证明，外围清单文件不取得整文件证明资格。
+具体接口和成本边界见 [Verus 实施范围](verus.md#libtest-清单判断)，全仓覆盖门仍未完成。
+
 `crates/pr/src/verified_snapshot.rs` 证明 PR 检查的 SUCCESS、pending、失败和未知分类，
 并证明 stale、closed、failed、pending、passed 的优先级；同时证明完整 40 位小写十六进制
 SHA 和 `OPEN`／`CLOSED`／`MERGED` 状态准入；`snapshot.rs` 直接消费同源结果。
