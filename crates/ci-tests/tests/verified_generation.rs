@@ -820,6 +820,8 @@ fn resume_case(mode: u8, present: bool, fail_at: u8)
         reveal_strlit("unknown");
         reveal_strlit("unknown\0tail");
         reveal_strlit("complete");
+        assert("unknown\0tail"@.len() != "unknown"@.len());
+        assert("complete"@.len() != "unknown"@.len());
         assert(policy::text_is(effects, "unknown") == (mode == 1));
     }
     let expected = (u64::MAX, 17u64);
