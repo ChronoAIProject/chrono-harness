@@ -846,12 +846,10 @@
         ],
         "consumer": "check.unit_judge-cost",
         "caches": [
-          "check.judge-cost",
           "check.judge-cost-tests",
           "check.judge-filemap"
         ],
         "save_caches": [
-          "check.judge-cost",
           "check.judge-cost-tests"
         ]
       },
@@ -868,7 +866,6 @@
         ],
         "consumer": "check.unit_judge-mixed",
         "caches": [
-          "check.judge-cost",
           "check.judge-filemap",
           "check.judge-mixed-tests"
         ],
@@ -891,7 +888,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-cost",
           "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",
@@ -915,7 +911,6 @@
         "consumer": "check.unit_inputs",
         "caches": [
           "check.inputs-tests",
-          "check.judge-cost",
           "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",
@@ -980,7 +975,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-cost",
           "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",
@@ -1005,7 +999,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-cost",
           "check.judge-filemap",
           "check.judge-projects",
           "check.judge-routes",

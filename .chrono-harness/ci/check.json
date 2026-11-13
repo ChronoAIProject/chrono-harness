@@ -221,14 +221,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.judge-cost": [
-        "inputs",
-        "judge-cost",
-        "judge-mixed",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
       "build.judge-filemap": [
         "inputs",
         "judge-cost",
