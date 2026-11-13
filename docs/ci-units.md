@@ -22,7 +22,7 @@ judge-ci 专属测试根也采用相同优化和调试信息选择。原诊断�
 
 worktree 的 detached 年龄回归与已有具名分支回归一样，先完成复用与源码／索引保全，再通过正式 migrate 采用原 60 秒删除年龄。仍使用真实创建时间，迁移不得重置年龄；不把复用步骤耗时当成应已进入删除阶段。
 
-各组保留构建前置，并通过登记的 `workflow.inventory` 操作运行 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
+核心组与短命令组保留测试实际调用所需的 `build.ci`；直接完整单元组不调用 CI CLI，移除该组无使用方的生产构建及 `check.ci` 缓存订阅。各组继续通过登记的 `workflow.inventory` 操作运行已安装的 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
@@ -49,6 +49,8 @@ workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.r
 **宿主构建登记与测试安装同时修改：**CI、inputs、registration、filemap、projects、workflow 六个测试项目也从唯一的 runner 生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实检查调用。对应八个单元不再前置 `build.runner`，退役已无使用方的 `check.runner` 缓存及其订阅；detector 启动、正式生产构建和发布打包继续使用各自登记。原未过滤测试、断言、线程、分组、cap=2 和时限保留。验证使用正式生成、canonical check 及两段 PR／落地检查，完整成本收益未测。
 
 **生产与测试构建配置同改：**CI、inputs 及各自专属测试项目的开发构建均显式采用 `opt-level=1`，与 runner 的日常构建一致。Cargo 只采用构建根项目的 profile，不继承依赖项目的 profile，因此四个根分别声明，让真实 CLI 和测试 CLI 中的共享原件编码、解码及状态维护采用相同优化选择。Cargo 的开发配置继续启用调试断言和溢出检查，原未过滤测试、断言、线程和时限保留。实际测试、原生消费和完整编译／运行成本须按候选结果核验，配置本身不证明超时原因或收益。
+
+cache 及其专属测试项目也显式采用同一 `opt-level=1`。原本只有 SHA-256 依赖采用优化，缓存 CLI 中的 runner 不继承 runner 项目自身的 profile。本次采用来自 canonical 原件中的两项真实失败：已封存失败尝试在原 19 轮维护内未完成回收，以及原活进程在中断前已超时；原测试、断言、线程、维护轮数及所有时限保持。保留原失败现场，通过同一登记入口核候选行为，不凭优化设置或一次通过认定根因；完整构建、运行、CI 和存储成本及可比收益仍未测。
 
 CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
 

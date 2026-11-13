@@ -517,11 +517,11 @@ pub open spec fn proof_bound(
             process.exit, process.failed)
         && sources::dependency_observed(method.output_contract, process.dependency, method.output_limit_bytes)
         && artifact_observed(method.output_contract, process.artifact, process.argv@.skip(1))
-        && sources::binding_error(registry.files@, method.operation@, method.argv[8]@,
+        && sources::binding_error(registry.files.entries@, method.operation@, method.argv[8]@,
             proof.sources.candidate@, 0).is_none()
         && match process.dependency {
             Some(Ok(bytes)) => sources::admission_matches(&proof.sources,
-                process.argv@.skip(1), bytes@, registry.files@),
+                process.argv@.skip(1), bytes@, registry.files.entries@),
             _ => false,
         }
 }
@@ -616,7 +616,7 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
         Ok(registry) => registry,
         Err(error) => { return Err(error.clone()); },
     };
-    match sources::bind_registered_roots(&source_registry.files, operation,
+    match sources::bind_registered_roots(&source_registry.files.entries, operation,
         args[8].as_str(), &source_admission.candidate) {
         Ok(()) => {},
         Err(error) => { return Err(error.render(format_error)); },
