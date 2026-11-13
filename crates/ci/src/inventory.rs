@@ -47,21 +47,18 @@ fn parse_listing(
                 .file_name()
                 .and_then(|name| name.to_str())
                 .ok_or("malformed listing executable")?;
-            Ok(match name.rsplit_once('-') {
+            let normalized = match name.rsplit_once('-') {
                 Some((name, hash))
-                    if !hash.is_empty()
-                        && hash
-                            .bytes()
-                            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) =>
+                    if crate::verified_inventory::valid_binary_hash_suffix(hash.as_bytes()) =>
                 {
                     name
                 }
                 _ => name,
-            }
-            .to_owned())
+            };
+            Ok(normalized.to_owned())
         })
         .collect::<Result<Vec<_>, String>>()?;
-    if observed != binaries {
+    if !crate::verified_inventory::same_name_sequence(&observed, binaries) {
         return Err(format!("listing binaries differ: {observed:?}"));
     }
     let mut suites = Vec::new();
@@ -81,10 +78,12 @@ fn parse_listing(
                 number(benches, " benchmark", " benchmarks")?,
             ))
         }) {
-            if benches != 0
-                || tests != names.len()
-                || names.iter().collect::<BTreeSet<_>>().len() != names.len()
-            {
+            if !crate::verified_inventory::valid_suite_counts(
+                tests,
+                benches,
+                names.len(),
+                names.iter().collect::<BTreeSet<_>>().len(),
+            ) {
                 return Err("malformed/duplicate libtest listing".into());
             }
             suites.push(std::mem::take(&mut names));
@@ -92,7 +91,11 @@ fn parse_listing(
             return Err(format!("unexpected libtest listing: {line}"));
         }
     }
-    if !names.is_empty() || suites.len() != binaries.len() {
+    if !crate::verified_inventory::valid_complete_listing(
+        names.is_empty(),
+        suites.len(),
+        binaries.len(),
+    ) {
         return Err("incomplete libtest listing".into());
     }
     Ok(binaries
