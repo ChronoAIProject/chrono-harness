@@ -623,6 +623,233 @@ fn bound_original_reading_preserves_complete_bytes_and_first_error() {
     }
 }
 
+fn input_original_case(named: bool, hashed: bool, length_mode: u8, failed: bool, empty: bool)
+    requires length_mode <= 3,
+{
+    let fields = policy::InputOriginal {
+        name: if named { Some("输入/\0原件\n") } else { None },
+        digest: if hashed { Some("摘要\0原件\n") } else { None },
+        bytes: if length_mode == 0 { None } else if length_mode == 1 { Some(if empty { 0u64 } else { 3u64 }) }
+            else if length_mode == 2 { Some(1u64) } else { Some(u64::MAX) },
+    };
+    let read = |mut trace: Vec<u8>, name: &str, digest: &str| -> (out: (Vec<u8>, Result<Vec<u8>, String>))
+        ensures out.0@ == trace@.push(1), match out.1 {
+            Err(error) => if name@ != "输入/\0原件\n"@ || digest@ != "摘要\0原件\n"@ {
+                error@ == "arguments\0changed"@
+            } else { failed && error@ == "read\0failed\n"@ },
+            Ok(bytes) => name@ == "输入/\0原件\n"@ && digest@ == "摘要\0原件\n"@
+                && !failed && bytes@ == original_bytes(empty),
+        },
+    {
+        let valid = identifiers::equal_text(name, "输入/\0原件\n")
+            && identifiers::equal_text(digest, "摘要\0原件\n");
+        trace.push(1);
+        (trace, if !valid { Err("arguments\0changed".to_owned()) }
+            else if failed { Err("read\0failed\n".to_owned()) } else { Ok(original_fixture(empty)) })
+    };
+    let initial: Vec<u8> = Vec::new(); let ghost start = initial;
+    let (trace, result) = policy::check_input_original(initial, &fields, read);
+    proof {
+        if named && hashed {
+            let (next, observed) = choose|state: Vec<u8>, observed: Result<Vec<u8>, String>|
+                #[trigger] read.ensures((start, "输入/\0原件\n", "摘要\0原件\n"), (state, observed))
+                    && trace == state && policy::input_original_read_result(fields.bytes, observed, result);
+        }
+    }
+    expect(trace.len() == if named && hashed { 1usize } else { 0usize });
+    if named && hashed { expect(trace[0] == 1); }
+    match result {
+        Ok(()) => expect(!named || (hashed && !failed && length_mode == 1)),
+        Err(error) => {
+            expect(named);
+            expect(identifiers::equal_text(&error, if !hashed { "generation input digest missing" }
+                else if failed { "read\0failed\n" } else { "generation input original length changed" }));
+            if hashed && !failed { expect(length_mode != 1); }
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn input_originals_skip_absent_names_and_preserve_digest_read_and_length_priority() {
+    let mut flags = 0u8;
+    while flags < 16 invariant flags <= 16, decreases 16 - flags, {
+        input_original_case(flags & 1 != 0, flags & 2 != 0, 0, flags & 4 != 0, flags & 8 != 0);
+        input_original_case(flags & 1 != 0, flags & 2 != 0, 1, flags & 4 != 0, flags & 8 != 0);
+        input_original_case(flags & 1 != 0, flags & 2 != 0, 2, flags & 4 != 0, flags & 8 != 0);
+        input_original_case(flags & 1 != 0, flags & 2 != 0, 3, flags & 4 != 0, flags & 8 != 0);
+        flags += 1;
+    }
+}
+
+fn target_original_case(named: bool, hashed: bool, previous: bool, prior_hash: bool, fail_at: u8)
+    requires fail_at <= 3,
+{
+    let fields = policy::TargetOriginal {
+        name: if named { Some("输出\0new\n") } else { None },
+        digest: if hashed { Some("摘要\0new\n") } else { None },
+        previous: if previous { Some("输出\0old\n") } else { None },
+        previous_digest: if prior_hash { Some("摘要\0old\n") } else { None },
+    };
+    let read = |mut trace: Vec<u8>, name: &str, digest: &str| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(if trace@.len() == 0 { 1u8 } else { 2u8 }),
+            match out.1 {
+                Err(error) => if name@ != (if trace@.len() == 0 { "输出\0new\n"@ } else { "输出\0old\n"@ })
+                    || digest@ != (if trace@.len() == 0 { "摘要\0new\n"@ } else { "摘要\0old\n"@ }) {
+                    error@ == "arguments\0changed"@
+                } else { error@ == "read\0failed\n"@ && fail_at == (if trace@.len() == 0 { 1u8 } else { 2u8 }) },
+                Ok(()) => name@ == (if trace@.len() == 0 { "输出\0new\n"@ } else { "输出\0old\n"@ })
+                    && digest@ == (if trace@.len() == 0 { "摘要\0new\n"@ } else { "摘要\0old\n"@ })
+                    && fail_at != (if trace@.len() == 0 { 1u8 } else { 2u8 }),
+            },
+    {
+        let first = trace.is_empty();
+        let valid = identifiers::equal_text(name, if first { "输出\0new\n" } else { "输出\0old\n" })
+            && identifiers::equal_text(digest, if first { "摘要\0new\n" } else { "摘要\0old\n" });
+        let step = if first { 1u8 } else { 2u8 }; trace.push(step);
+        (trace, if !valid { Err("arguments\0changed".to_owned()) }
+            else if fail_at == step { Err("read\0failed\n".to_owned()) } else { Ok(()) })
+    };
+    let initial: Vec<u8> = Vec::new(); let ghost start = initial;
+    let (trace, result) = policy::check_target_original(initial, &fields, &read);
+    proof {
+        if named && hashed {
+            let (next, observed) = choose|state: Vec<u8>, observed: Result<(), String>|
+                #[trigger] read.ensures((start, "输出\0new\n", "摘要\0new\n"), (state, observed)) && match observed {
+                    Err(error) => (trace, result) == (state, Err::<(), String>(error)),
+                    Ok(()) => policy::previous_original_result(state, &fields, &read, (trace, result)),
+                };
+            if fail_at != 1 && previous && prior_hash {
+                let (last, prior) = choose|state: Vec<u8>, prior: Result<(), String>|
+                    #[trigger] read.ensures((next, "输出\0old\n", "摘要\0old\n"), (state, prior))
+                        && trace == state && match prior {
+                            Err(error) => result == Err::<(), String>(error),
+                            Ok(()) => result == Ok::<(), String>(()),
+                        };
+            }
+        }
+    }
+    let length = if !named || !hashed { 0usize }
+        else if fail_at == 1 || !previous || !prior_hash { 1usize } else { 2usize };
+    expect(trace.len() == length);
+    if length > 0 { expect(trace[0] == 1); }
+    if length > 1 { expect(trace[1] == 2); }
+    let success = named && hashed && fail_at != 1 && (!previous || (prior_hash && fail_at != 2));
+    match result {
+        Ok(()) => expect(success),
+        Err(error) => {
+            expect(!success);
+            expect(identifiers::equal_text(&error, if !named { "generation output original missing" }
+                else if !hashed { "generation output digest missing" }
+                else if fail_at == 1 { "read\0failed\n" }
+                else if previous && !prior_hash { "generation prior output digest missing" }
+                else { "read\0failed\n" }));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn target_originals_check_new_before_optional_prior_and_stop_at_first_error() {
+    let mut flags = 0u8;
+    while flags < 16 invariant flags <= 16, decreases 16 - flags, {
+        target_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, flags & 8 != 0, 0);
+        target_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, flags & 8 != 0, 1);
+        target_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, flags & 8 != 0, 2);
+        target_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, flags & 8 != 0, 3);
+        flags += 1;
+    }
+}
+
+fn original_rows_case(count: u8, malformed: bool, mode: u8, fail_at: u8)
+    requires count <= 3, mode <= 3, fail_at <= 4,
+{
+    proof {
+        reveal_strlit("chrono-ci-generation-plan/v1"); reveal_strlit("invalid");
+        assert("chrono-ci-generation-plan/v1"@.len() != "invalid"@.len());
+    }
+    let mut rows: Vec<(u64, u64)> = Vec::new();
+    if count > 0 { rows.push((u64::MAX, u64::MAX)); }
+    if count > 1 { rows.push((0, 17)); }
+    if count > 2 { rows.push((u64::MAX - 2, 19)); }
+    let inspect = |mut trace: Vec<(u64, u64)>, item: &(u64, u64)|
+        -> (out: (Vec<(u64, u64)>, Result<(), String>))
+        ensures out.0@ == trace@.push(*item), match out.1 {
+            Err(error) => trace@.len() == fail_at && error@ == "row\0failed\n"@,
+            Ok(()) => trace@.len() != fail_at,
+        },
+    {
+        let failed = trace.len() == fail_at as usize;
+        trace.push((item.0, item.1));
+        (trace, if failed { Err("row\0failed\n".to_owned()) } else { Ok(()) })
+    };
+    let initial: Vec<(u64, u64)> = Vec::new(); let ghost start = initial;
+    let selected = if malformed { None } else { Some(&rows) };
+    let (trace, result) = if mode == 0 {
+        policy::check_original_rows(initial, selected, "generation input originals malformed", inspect)
+    } else {
+        policy::check_plan_original_rows(initial, if mode == 1 { Some("chrono-ci-generation-plan/v1") }
+            else if mode == 2 { Some("invalid") } else { None }, selected, inspect)
+    };
+    proof {
+        if mode <= 1 && !malformed {
+            let states = choose|states: Seq<Vec<(u64, u64)>>|
+                policy::original_rows_prefix(start, &rows, states, inspect) && match result {
+                    Ok(()) => states.len() == rows@.len() + 1 && trace == states.last(),
+                    Err(error) => states.len() <= rows@.len()
+                        && inspect.ensures((states.last(), &rows@[states.len() - 1]), (trace, Err::<(), String>(error))),
+                };
+            assert(states.len() >= 1 && states.len() <= 4);
+            assert(states[0]@ == Seq::<(u64, u64)>::empty());
+            if states.len() > 1 {
+                assert(inspect.ensures((states[0], &rows@[0]), (states[1], Ok::<(), String>(()))));
+                assert(states[1]@ =~= seq![rows@[0]]);
+            }
+            if states.len() > 2 {
+                assert(inspect.ensures((states[1], &rows@[1]), (states[2], Ok::<(), String>(()))));
+                assert(states[2]@ =~= seq![rows@[0], rows@[1]]);
+            }
+            if states.len() > 3 {
+                assert(inspect.ensures((states[2], &rows@[2]), (states[3], Ok::<(), String>(()))));
+                assert(states[3]@ =~= seq![rows@[0], rows@[1], rows@[2]]);
+            }
+        }
+    }
+    let length = if mode > 1 || malformed { 0usize }
+        else if fail_at < count { fail_at as usize + 1 } else { count as usize };
+    expect(trace.len() == length);
+    if length > 0 { expect(trace[0].0 == u64::MAX); expect(trace[0].1 == u64::MAX); }
+    if length > 1 { expect(trace[1].0 == 0); expect(trace[1].1 == 17); }
+    if length > 2 { expect(trace[2].0 == u64::MAX - 2); expect(trace[2].1 == 19); }
+    match result {
+        Ok(()) => expect(mode <= 1 && !malformed && fail_at >= count),
+        Err(error) => {
+            expect(mode > 1 || malformed || fail_at < count);
+            expect(identifiers::equal_text(&error, if mode > 1 { "generation plan schema mismatch" }
+                else if malformed && mode == 0 { "generation input originals malformed" }
+                else if malformed { "generation target originals malformed" } else { "row\0failed\n" }));
+        },
+    }
+}
+
+fn original_rows_failures(count: u8, malformed: bool, mode: u8)
+    requires count <= 3, mode <= 3,
+{
+    original_rows_case(count, malformed, mode, 0); original_rows_case(count, malformed, mode, 1);
+    original_rows_case(count, malformed, mode, 2); original_rows_case(count, malformed, mode, 3);
+    original_rows_case(count, malformed, mode, 4);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_rows_preserve_complete_members_order_and_schema_array_first_error() {
+    let mut count = 0u8;
+    while count < 4 invariant count <= 4, decreases 4 - count, {
+        original_rows_failures(count, false, 0); original_rows_failures(count, true, 0);
+        original_rows_failures(count, false, 1); original_rows_failures(count, true, 1);
+        original_rows_failures(count, false, 2); original_rows_failures(count, true, 2);
+        original_rows_failures(count, false, 3); original_rows_failures(count, true, 3);
+        count += 1;
+    }
+}
+
 type AncestorPath = (u64, u64);
 type AncestorEvent = (u8, u64, u64);
 type AncestorState = (u8, Vec<AncestorEvent>);

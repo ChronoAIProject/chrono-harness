@@ -538,6 +538,275 @@ pub fn read_bound_original<S, E, V, O, M, H, C>(
     out
 }
 
+pub struct InputOriginal<'a> {
+    pub name: Option<&'a str>,
+    pub digest: Option<&'a str>,
+    pub bytes: Option<u64>,
+}
+
+pub open spec fn original_error_is(result: Result<(), String>, message: &str) -> bool {
+    match result { Err(error) => error@ == message@, _ => false }
+}
+
+pub open spec fn input_original_read_result(expected: Option<u64>, observed: Result<Vec<u8>, String>,
+    result: Result<(), String>) -> bool
+{
+    match observed {
+        Err(error) => result == Err::<(), String>(error),
+        Ok(bytes) => if expected == Some(bytes@.len() as u64) { result == Ok::<(), String>(()) }
+            else { original_error_is(result, "generation input original length changed") },
+    }
+}
+
+pub open spec fn input_original_result<S, R>(initial: S, fields: &InputOriginal, read: R,
+    out: (S, Result<(), String>)) -> bool
+    where R: Fn(S, &str, &str) -> (S, Result<Vec<u8>, String>),
+{
+    match fields.name {
+        None => out == (initial, Ok::<(), String>(())),
+        Some(name) => match fields.digest {
+            None => out.0 == initial && original_error_is(out.1, "generation input digest missing"),
+            Some(digest) => exists|state: S, observed: Result<Vec<u8>, String>|
+                #[trigger] read.ensures((initial, name, digest), (state, observed))
+                    && out.0 == state && input_original_read_result(fields.bytes, observed, out.1),
+        },
+    }
+}
+
+/// An unnamed input has no byte original; named inputs require a digest and the original byte length.
+pub fn check_input_original<S, R>(state: S, fields: &InputOriginal, read: R)
+    -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str, &str) -> (S, Result<Vec<u8>, String>),
+    requires forall|state: S, name: &str, digest: &str| #[trigger] read.requires((state, name, digest)),
+    ensures input_original_result(state, fields, read, out),
+{
+    let name = match fields.name { None => return (state, Ok(())), Some(name) => name };
+    let digest = match fields.digest {
+        None => return (state, Err("generation input digest missing".to_owned())), Some(digest) => digest,
+    };
+    let ghost initial = state;
+    let (state, observed) = read(state, name, digest);
+    let ghost after_read = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(bytes) => if fields.bytes == Some(bytes.len() as u64) { (state, Ok(())) }
+            else { (state, Err("generation input original length changed".to_owned())) },
+    };
+    assert(read.ensures((initial, name, digest), (after_read, original)));
+    assert(input_original_result(initial, fields, read, out));
+    out
+}
+
+pub struct TargetOriginal<'a> {
+    pub name: Option<&'a str>,
+    pub digest: Option<&'a str>,
+    pub previous: Option<&'a str>,
+    pub previous_digest: Option<&'a str>,
+}
+
+pub open spec fn previous_original_result<S, R>(initial: S, fields: &TargetOriginal, read: &R,
+    out: (S, Result<(), String>)) -> bool
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+{
+    match fields.previous {
+        None => out == (initial, Ok::<(), String>(())),
+        Some(name) => match fields.previous_digest {
+            None => out.0 == initial && original_error_is(out.1, "generation prior output digest missing"),
+            Some(digest) => read.ensures((initial, name, digest), out),
+        },
+    }
+}
+
+fn check_previous_original<S, R>(state: S, fields: &TargetOriginal, read: &R)
+    -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+    requires forall|state: S, name: &str, digest: &str| #[trigger] read.requires((state, name, digest)),
+    ensures previous_original_result(state, fields, read, out),
+{
+    let name = match fields.previous { None => return (state, Ok(())), Some(name) => name };
+    let digest = match fields.previous_digest {
+        None => return (state, Err("generation prior output digest missing".to_owned())), Some(digest) => digest,
+    };
+    let ghost initial = state;
+    let out = read(state, name, digest);
+    assert(read.ensures((initial, name, digest), out));
+    out
+}
+
+pub open spec fn target_original_result<S, R>(initial: S, fields: &TargetOriginal, read: &R,
+    out: (S, Result<(), String>)) -> bool
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+{
+    match fields.name {
+        None => out.0 == initial && original_error_is(out.1, "generation output original missing"),
+        Some(name) => match fields.digest {
+            None => out.0 == initial && original_error_is(out.1, "generation output digest missing"),
+            Some(digest) => exists|state: S, observed: Result<(), String>|
+                #[trigger] read.ensures((initial, name, digest), (state, observed)) && match observed {
+                    Err(error) => out == (state, Err::<(), String>(error)),
+                    Ok(()) => previous_original_result(state, fields, read, out),
+                },
+        },
+    }
+}
+
+/// Check the new original first and consult an optional previous original only after it succeeds.
+pub fn check_target_original<S, R>(state: S, fields: &TargetOriginal, read: &R)
+    -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+    requires forall|state: S, name: &str, digest: &str| #[trigger] read.requires((state, name, digest)),
+    ensures target_original_result(state, fields, read, out),
+{
+    let name = match fields.name {
+        None => return (state, Err("generation output original missing".to_owned())), Some(name) => name,
+    };
+    let digest = match fields.digest {
+        None => return (state, Err("generation output digest missing".to_owned())), Some(digest) => digest,
+    };
+    let ghost initial = state;
+    let (state, observed) = read(state, name, digest);
+    let ghost after_read = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => { assert(success == ()); check_previous_original(state, fields, read) },
+    };
+    assert(read.ensures((initial, name, digest), (after_read, original)));
+    assert(target_original_result(initial, fields, read, out));
+    out
+}
+
+pub open spec fn original_rows_prefix<S, T, C>(initial: S, rows: &Vec<T>, states: Seq<S>, check: C) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    1 <= states.len() <= rows@.len() + 1 && states.first() == initial
+        && forall|index: int| 0 <= index < states.len() - 1 ==>
+            #[trigger] check.ensures((states[index], &rows@[index]), (states[index + 1], Ok::<(), String>(())))
+}
+
+pub open spec fn original_rows_terminal<S, T, C>(rows: &Vec<T>, states: Seq<S>, check: C,
+    out: (S, Result<(), String>)) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    match out.1 {
+        Ok(()) => states.len() == rows@.len() + 1 && out.0 == states.last(),
+        Err(error) => states.len() <= rows@.len()
+            && check.ensures((states.last(), &rows@[states.len() - 1]), (out.0, Err::<(), String>(error))),
+    }
+}
+
+pub open spec fn original_array_result<S, T, C>(initial: S, rows: &Vec<T>, check: C,
+    out: (S, Result<(), String>)) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    exists|states: Seq<S>| original_rows_prefix(initial, rows, states, check)
+        && original_rows_terminal(rows, states, check, out)
+}
+
+pub open spec fn original_rows_result<S, T, C>(initial: S, rows: Option<&Vec<T>>, malformed: &str, check: C,
+    out: (S, Result<(), String>)) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    match rows {
+        None => out.0 == initial && original_error_is(out.1, malformed),
+        Some(rows) => original_array_result(initial, rows, check, out),
+    }
+}
+
+proof fn original_rows_witness<S, T, C>(initial: S, items: &Vec<T>, states: Seq<S>, check: C,
+    out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires original_rows_prefix(initial, items, states, check),
+        original_rows_terminal(items, states, check, out),
+    ensures original_array_result(initial, items, check, out),
+{
+    assert(exists|history: Seq<S>| original_rows_prefix(initial, items, history, check)
+        && original_rows_terminal(items, history, check, out));
+}
+
+fn check_original_array<S, T, C>(initial: S, items: &Vec<T>, check: C)
+    -> (out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+    ensures original_array_result(initial, items, check, out),
+{
+    let mut state = initial;
+    let mut index = 0usize;
+    let ghost states = seq![initial];
+    while index < items.len()
+        invariant index <= items@.len(), states.len() == index as int + 1,
+            states.last() == state, original_rows_prefix(initial, items, states, check),
+            forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+        decreases items.len() - index,
+    {
+        let ghost before = state;
+        let (next, result) = check(state, &items[index]);
+        let ghost original = result;
+        assert(check.ensures((before, &items@[index as int]), (next, original)));
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(original == out.1);
+                assert(states.len() <= items@.len());
+                assert(check.ensures((states.last(), &items@[states.len() - 1]), out));
+                assert(original_rows_terminal(items, states, check, out));
+                proof { original_rows_witness(initial, items, states, check, out); }
+                return out;
+            },
+            Ok(success) => {
+                assert(success == ());
+                proof {
+                    let old_states = states;
+                    states = states.push(next);
+                    assert forall|position: int| 0 <= position < states.len() - 1 implies
+                        #[trigger] check.ensures((states[position], &items@[position]),
+                            (states[position + 1], Ok::<(), String>(()))) by {
+                        if position < index {
+                            assert(check.ensures((old_states[position], &items@[position]),
+                                (old_states[position + 1], Ok::<(), String>(()))) );
+                        } else { assert(position == index); }
+                    }
+                }
+                state = next;
+                index += 1;
+            },
+        }
+    }
+    let out = (state, Ok(()));
+    assert(original_rows_terminal(items, states, check, out));
+    proof { original_rows_witness(initial, items, states, check, out); }
+    out
+}
+
+/// Reject a malformed array, otherwise inspect each complete borrowed row once and stop at its first error.
+pub fn check_original_rows<S, T, C>(initial: S, rows: Option<&Vec<T>>, malformed: &str, check: C)
+    -> (out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+    ensures original_rows_result(initial, rows, malformed, check, out),
+{
+    match rows {
+        None => (initial, Err(malformed.to_owned())),
+        Some(items) => check_original_array(initial, items, check),
+    }
+}
+
+/// A plan schema must match before its target array or any target original can be accepted.
+pub fn check_plan_original_rows<S, T, C>(initial: S, schema: Option<&str>, rows: Option<&Vec<T>>, check: C)
+    -> (out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+    ensures if !text_is(schema, "chrono-ci-generation-plan/v1") {
+        out.0 == initial && original_error_is(out.1, "generation plan schema mismatch")
+    } else { original_rows_result(initial, rows, "generation target originals malformed", check, out) },
+{
+    if !text_matches(schema, "chrono-ci-generation-plan/v1") {
+        return (initial, Err("generation plan schema mismatch".to_owned()));
+    }
+    check_original_rows(initial, rows, "generation target originals malformed", check)
+}
+
 pub open spec fn directory_steps_finite<S, P, E, N, D>(next: N, sync: D, rank: spec_fn(S) -> nat) -> bool
     where N: Fn(S) -> (S, Option<P>), D: Fn(S, P) -> (S, Result<(), E>),
 {

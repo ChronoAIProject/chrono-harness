@@ -660,48 +660,41 @@ fn originals(root: &Path, path: &str, expected: &Value) -> Result<(Vec<u8>, Vec<
             .as_str()
             .ok_or("generation inputs binding missing")?,
     )?)?;
-    for input in inputs
-        .as_array()
-        .ok_or("generation input originals malformed")?
-    {
-        if let Some(name) = input["original"].as_str() {
-            let bytes = read_bound(
-                name,
-                input["object"]["sha256"]
-                    .as_str()
-                    .ok_or("generation input digest missing")?,
-            )?;
-            if Some(bytes.len() as u64) != input["object"]["bytes"].as_u64() {
-                return Err("generation input original length changed".into());
-            }
-        }
-    }
+    verified::check_original_rows(
+        (),
+        inputs.as_array(),
+        "generation input originals malformed",
+        |state, input| {
+            let fields = verified::InputOriginal {
+                name: input["original"].as_str(),
+                digest: input["object"]["sha256"].as_str(),
+                bytes: input["object"]["bytes"].as_u64(),
+            };
+            verified::check_input_original(state, &fields, |state, name, digest| {
+                (state, read_bound(name, digest))
+            })
+        },
+    )
+    .1?;
     if let Some(hash) = expected["plan_sha256"].as_str() {
         let plan: Value = decode(&read_bound("plan.json", hash)?)?;
-        if plan["schema"] != "chrono-ci-generation-plan/v1" {
-            return Err("generation plan schema mismatch".into());
-        }
-        for target in plan["targets"]
-            .as_array()
-            .ok_or("generation target originals malformed")?
-        {
-            read_bound(
-                target["original"]
-                    .as_str()
-                    .ok_or("generation output original missing")?,
-                target["after_sha256"]
-                    .as_str()
-                    .ok_or("generation output digest missing")?,
-            )?;
-            if let Some(name) = target["previous_original"].as_str() {
-                read_bound(
-                    name,
-                    target["before"]["sha256"]
-                        .as_str()
-                        .ok_or("generation prior output digest missing")?,
-                )?;
-            }
-        }
+        verified::check_plan_original_rows(
+            (),
+            plan["schema"].as_str(),
+            plan["targets"].as_array(),
+            |state, target| {
+                let fields = verified::TargetOriginal {
+                    name: target["original"].as_str(),
+                    digest: target["after_sha256"].as_str(),
+                    previous: target["previous_original"].as_str(),
+                    previous_digest: target["before"]["sha256"].as_str(),
+                };
+                verified::check_target_original(state, &fields, &|state, name, digest| {
+                    (state, read_bound(name, digest).map(|_| ()))
+                })
+            },
+        )
+        .1?;
     }
     Ok((intent, result))
 }
