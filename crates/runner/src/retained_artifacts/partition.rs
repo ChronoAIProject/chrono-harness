@@ -1001,9 +1001,10 @@ impl Inventory {
                         .get(role)
                         .is_some_and(|current| current.as_ref().is_none_or(|r| r.ids.contains(id)))
                 });
-                if protected {
-                    // A finalized current root cannot retire. Its other
-                    // referrers are not required to establish that fact.
+                if verified::retain_finalized_original(protected, record.incoming.len()) {
+                    // A finalized root or referenced original cannot retire.
+                    // The known protection suffices without reading consumers
+                    // and their independent dependencies in this component.
                     retained_dependencies.insert(id.clone());
                 } else {
                     let output = record.output.as_ref().unwrap();
@@ -1074,7 +1075,11 @@ impl Inventory {
             let target_paths: Vec<_> = observed
                 .values()
                 .filter(|r| {
-                    initial.as_ref() == Some(&r.id) || !retained_dependencies.contains(&r.id)
+                    verified::maintenance_path_required(
+                        r.output.is_some(),
+                        initial.as_ref() == Some(&r.id),
+                        retained_dependencies.contains(&r.id),
+                    )
                 })
                 .map(|r| r.path.clone())
                 .collect();

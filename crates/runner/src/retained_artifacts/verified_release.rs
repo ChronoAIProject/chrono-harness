@@ -88,6 +88,16 @@ pub fn domain_recovery(declared: bool, attached: bool) -> (protect: bool)
     ensures protect == (declared && attached),
 { declared && attached }
 
+/// 已封存原件已有根或入向引用时，保留本项即可，无需展开其它原件。
+pub fn retain_finalized_original(rooted: bool, incoming: usize) -> (protect: bool)
+    ensures protect == (rooted || incoming > 0),
+{ rooted || incoming > 0 }
+
+/// 原件仍有登记时才排除其物理路径；已移除记录不进入内容维护。
+pub fn maintenance_path_required(present: bool, initial: bool, retained: bool) -> (required: bool)
+    ensures required == (present && (initial || !retained)),
+{ present && (initial || !retained) }
+
 pub fn terminal_eligible(released: bool, sealed: bool) -> (eligible: bool)
     ensures eligible == (released && sealed),
 { released && sealed }

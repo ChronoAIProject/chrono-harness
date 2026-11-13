@@ -159,6 +159,28 @@ fn pending_domain_and_resumed_seal_remain_distinct_from_terminal_eligibility() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn finalized_original_keeps_each_actual_protection_without_expanding_its_consumers() {
+    expect_true(!policy::retain_finalized_original(false, 0));
+    expect_true(policy::retain_finalized_original(true, 0));
+    expect_true(policy::retain_finalized_original(false, 1));
+    expect_true(policy::retain_finalized_original(true, 1));
+    expect_true(policy::retain_finalized_original(false, usize::MAX));
+    expect_true(policy::retain_finalized_original(true, usize::MAX));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_paths_keep_partial_originals_and_skip_only_records_without_an_original() {
+    expect_true(!policy::maintenance_path_required(false, false, false));
+    expect_true(!policy::maintenance_path_required(false, true, false));
+    expect_true(!policy::maintenance_path_required(false, false, true));
+    expect_true(!policy::maintenance_path_required(false, true, true));
+    expect_true(policy::maintenance_path_required(true, false, false));
+    expect_true(policy::maintenance_path_required(true, true, false));
+    expect_true(!policy::maintenance_path_required(true, false, true));
+    expect_true(policy::maintenance_path_required(true, true, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_limits_keep_equal_bytes_and_reject_count_and_overflow() {
     let first = policy::terminal_budget(0, 0, 10, 1, 10);
     let full_count = policy::terminal_budget(1, 0, 1, 1, 10);
