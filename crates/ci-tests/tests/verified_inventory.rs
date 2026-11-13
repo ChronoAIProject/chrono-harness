@@ -1,6 +1,8 @@
 //! 清单边界的独立预期，同时执行 Verus 证明和 Rust 断言。
 #![allow(unexpected_cfgs)]
 
+use std::collections::{BTreeMap, BTreeSet};
+
 #[cfg(verus_keep_ghost)]
 #[path = "../../ci/src/verified_inventory.rs"]
 mod policy;
@@ -83,6 +85,120 @@ fn suite_and_completion_counts_reject_incomplete_inventory() {
     expect_true(!policy::valid_complete_listing(false, 3, 3));
     expect_true(!policy::valid_complete_listing(true, 2, 3));
     expect_true(!policy::valid_complete_listing(true, 4, 3));
+}
+
+}
+
+verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_set_equality_checks_members_not_only_counts() {
+    let empty: BTreeSet<usize> = BTreeSet::new();
+    let mut first = BTreeSet::new();
+    first.insert(0usize);
+    first.insert(usize::MAX);
+    let mut same = BTreeSet::new();
+    same.insert(usize::MAX);
+    same.insert(0usize);
+    let mut changed = BTreeSet::new();
+    changed.insert(0usize);
+    changed.insert(1usize);
+    proof {
+        assert(first@ =~= set![0usize, usize::MAX]);
+        assert(same@ =~= set![0usize, usize::MAX]);
+        assert(changed@ =~= set![0usize, 1usize]);
+        assert(usize::MAX > 1);
+        assert(first@.contains(usize::MAX));
+        assert(!changed@.contains(usize::MAX));
+        assert(first@ != changed@);
+        assert(first@.contains(0usize) && same@.contains(0usize));
+        assert(!first@.disjoint(same@));
+    }
+    expect_true(policy::inventory_members_empty(&empty));
+    expect_true(!policy::inventory_members_empty(&first));
+    expect_true(policy::same_inventory_members(&empty, &empty));
+    expect_true(policy::same_inventory_members(&first, &same));
+    expect_true(!policy::same_inventory_members(&first, &changed));
+    expect_true(!policy::same_inventory_members(&first, &empty));
+    expect_true(!policy::same_inventory_members(&empty, &first));
+    expect_true(policy::disjoint_inventory_members(&first, &empty));
+    expect_true(!policy::disjoint_inventory_members(&first, &same));
+    let mut separate = BTreeSet::new();
+    separate.insert(1usize);
+    separate.insert(2usize);
+    expect_true(policy::disjoint_inventory_members(&first, &separate));
+    expect_true(policy::disjoint_inventory_members(&separate, &first));
+    separate.insert(usize::MAX);
+    expect_true(!policy::disjoint_inventory_members(&first, &separate));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_requires_complete_and_every_group_to_be_nonempty() {
+    let empty: BTreeSet<usize> = BTreeSet::new();
+    let mut complete = BTreeSet::new();
+    complete.insert(7usize);
+    let mut groups: BTreeMap<usize, BTreeSet<usize>> = BTreeMap::new();
+    expect_true(!policy::inventory_groups_nonempty(&complete, &groups));
+    groups.insert(0, BTreeSet::new());
+    expect_true(!policy::inventory_groups_nonempty(&complete, &groups));
+    let mut first = BTreeSet::new();
+    first.insert(7usize);
+    groups.insert(0, first);
+    expect_true(policy::inventory_groups_nonempty(&complete, &groups));
+    expect_true(!policy::inventory_groups_nonempty(&empty, &groups));
+    groups.insert(usize::MAX, BTreeSet::new());
+    proof {
+        assert(groups@.contains_key(usize::MAX));
+        assert(groups@[usize::MAX]@.is_empty());
+    }
+    expect_true(!policy::inventory_groups_nonempty(&complete, &groups));
+    let mut last = BTreeSet::new();
+    last.insert(8usize);
+    groups.insert(usize::MAX, last);
+    expect_true(policy::inventory_groups_nonempty(&complete, &groups));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn inventory_group_merge_preserves_full_text_and_rejected_state()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let alpha = "a\0\n".to_owned();
+    let beta = "中".to_owned();
+    let gamma = "a".to_owned();
+    proof {
+        reveal_strlit("a\0\n"); reveal_strlit("中"); reveal_strlit("a");
+        assert(alpha@.len() == 3);
+        assert(beta@.len() == 1);
+        assert(gamma@.len() == 1);
+        assert(beta@[0] != gamma@[0]);
+    }
+    let mut union = BTreeSet::new();
+    union.insert(alpha.clone());
+    let empty = BTreeSet::new();
+    expect_true(policy::merge_disjoint_inventory_group(&mut union, &empty));
+    let mut group = BTreeSet::new();
+    group.insert(beta.clone());
+    group.insert(gamma.clone());
+    expect_true(policy::merge_disjoint_inventory_group(&mut union, &group));
+    let mut expected = BTreeSet::new();
+    expected.insert(alpha.clone());
+    expected.insert(beta.clone());
+    expected.insert(gamma.clone());
+    proof {
+        assert(union@ =~= set![alpha, beta, gamma]);
+        assert(expected@ =~= set![alpha, beta, gamma]);
+    }
+    expect_true(policy::same_inventory_members(&union, &expected));
+    let before = union.clone();
+    let mut conflict = BTreeSet::new();
+    conflict.insert(alpha.clone());
+    conflict.insert("unseen".to_owned());
+    expect_true(!policy::merge_disjoint_inventory_group(&mut union, &conflict));
+    expect_true(policy::same_inventory_members(&union, &before));
+    let mut initially_empty = BTreeSet::new();
+    expect_true(policy::merge_disjoint_inventory_group(&mut initially_empty, &group));
+    proof { assert(initially_empty@ =~= group@); }
+    expect_true(policy::same_inventory_members(&initially_empty, &group));
 }
 
 }
