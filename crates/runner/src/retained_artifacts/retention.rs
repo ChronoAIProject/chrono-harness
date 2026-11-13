@@ -3344,9 +3344,17 @@ impl Publication {
             .into_iter()
             .collect::<Vec<_>>();
         roles.extend(reference.map(str::to_owned));
-        let gate =
-            self.inventory
-                .addressed_gate(&[self.id.clone()], &[], &roles, None, false, true)?;
+        // Materializing this producer changes its own fields and the selected
+        // role's membership. Existing members keep their outward dependencies.
+        let gate = self.inventory.addressed_gate_scope(
+            &[self.id.clone()],
+            &[],
+            &roles,
+            None,
+            false,
+            true,
+            true,
+        )?;
         let mut l = self.inventory.load(&gate)?;
         self.materialize_excluded(&mut l, &gate, consumer, reference)
     }

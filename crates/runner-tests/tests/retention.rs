@@ -2875,6 +2875,14 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
     inventory(h.path())
         .dependencies_paths(&parent_path, &paths[32..])
         .unwrap();
+    let owner = "existing-lifecycle-owner";
+    inventory(h.path())
+        .reference_paths(owner, std::slice::from_ref(&parent_path))
+        .unwrap();
+    let pending_path = ".chrono-harness/state/fixtures/next-owner-report.json";
+    let pending = inventory(h.path())
+        .plan("fixture", pending_path, false, json!(null))
+        .unwrap();
     let held: Vec<_> = (0..190)
         .map(|_| fs::File::open("/dev/null").unwrap())
         .collect();
@@ -2888,6 +2896,10 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
         assert!(fs::read(h.path().join(path)).unwrap().len() > 0);
         drop(input);
     }
+    // The owner already references the parent and its 64 inputs. Publishing
+    // one more original must not open every unchanged outward dependency.
+    pending.materialize_for_reference(owner).unwrap();
+    assert_eq!(fs::read(h.path().join(pending_path)).unwrap(), b"");
     parent.complete(json!({"exit": 2})).unwrap();
     let retained = retained_artifacts::retention::read_guard(h.path(), &parent_path)
         .unwrap()
@@ -2923,6 +2935,7 @@ fn parent_publication_accepts_and_settles_many_children_with_256_descriptors() {
         64
     );
     drop(input_caller);
+    pending.complete(json!({"exit": 0})).unwrap();
     inventory(h.path())
         .dependencies_paths(&parent_path, &paths[32..])
         .unwrap();
