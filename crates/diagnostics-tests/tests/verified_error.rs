@@ -141,7 +141,7 @@ fn new_error_node_keeps_empty_text_and_context_without_inventing_a_cause() {
     expect(node.related.is_empty());
 }
 
-open spec fn leaf_expected(node: &policy::ErrorNode<Vec<u8>>, marker: u8) -> bool {
+pub open spec fn leaf_expected(node: &policy::ErrorNode<Vec<u8>>, marker: u8) -> bool {
     node.error_type@ == "Leaf\0λ"@
     && node.code@ == "E_LEAF"@
     && node.message@ == "leaf\nmessage"@
@@ -178,7 +178,7 @@ fn expect_leaf(node: &policy::ErrorNode<Vec<u8>>, marker: u8)
     expect(node.related.is_empty());
 }
 
-open spec fn header_expected(node: &policy::ErrorNode<Vec<u8>>) -> bool {
+pub open spec fn header_expected(node: &policy::ErrorNode<Vec<u8>>) -> bool {
     node.error_type@ == "Outer\0type"@
     && node.code@ == "E_OUTER"@
     && node.message@ == "message\nλ\0"@
