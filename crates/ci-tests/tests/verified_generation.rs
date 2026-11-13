@@ -811,6 +811,153 @@ fn generation_return_preserves_original_result_checkpoints_and_recovery_on_every
     return_failures_for_mode(0); return_failures_for_mode(1); return_failures_for_mode(2);
 }
 
+fn resume_case(mode: u8, present: bool, fail_at: u8)
+    requires mode <= 3, fail_at <= 7,
+{
+    let effects = if mode == 0 { None } else if mode == 1 { Some("unknown") }
+        else if mode == 2 { Some("unknown\0tail") } else { Some("complete") };
+    proof {
+        reveal_strlit("unknown");
+        reveal_strlit("unknown\0tail");
+        reveal_strlit("complete");
+        assert(policy::text_is(effects, "unknown") == (mode == 1));
+    }
+    let expected = (u64::MAX, 17u64);
+    let publication = (u64::MAX - 1, 23u64);
+    let io = policy::ResumeIo {
+        probe: |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<bool, TargetFault>))
+            ensures out.0@ == trace@.push(1),
+                out.1 == if fail_at == 1 { Err::<bool, TargetFault>((1u8, u64::MAX)) }
+                    else { Ok::<bool, TargetFault>(present) },
+        {
+            trace.push(1);
+            (trace, if fail_at == 1 { Err((1, u64::MAX)) } else { Ok(present) })
+        },
+        write: |trace: Vec<u8>, publication: &(u64, u64), expected: &(u64, u64)|
+            -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(2),
+                out.1 == staging_step_result(2, publication.0 == u64::MAX - 1
+                    && publication.1 == 23 && expected.0 == u64::MAX && expected.1 == 17, fail_at),
+        {
+            staging_step(trace, 2, publication.0 == u64::MAX - 1 && publication.1 == 23
+                && expected.0 == u64::MAX && expected.1 == 17, fail_at)
+        },
+        check: |trace: Vec<u8>, expected: &(u64, u64)| -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(3),
+                out.1 == staging_step_result(3, expected.0 == u64::MAX && expected.1 == 17, fail_at),
+        { staging_step(trace, 3, expected.0 == u64::MAX && expected.1 == 17, fail_at) },
+        seal: |trace: Vec<u8>, publication: (u64, u64), expected: &(u64, u64)|
+            -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(4),
+                out.1 == staging_step_result(4, publication.0 == u64::MAX - 1
+                    && publication.1 == 23 && expected.0 == u64::MAX && expected.1 == 17, fail_at),
+        {
+            staging_step(trace, 4, publication.0 == u64::MAX - 1 && publication.1 == 23
+                && expected.0 == u64::MAX && expected.1 == 17, fail_at)
+        },
+        release: |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(5), out.1 == staging_step_result(5, true, fail_at),
+        { staging_step(trace, 5, true, fail_at) },
+        status: |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<(u64, u64), TargetFault>))
+            ensures out.0@ == trace@.push(6),
+                match out.1 {
+                    Err(error) => fail_at == 6 && error == (6u8, u64::MAX),
+                    Ok(value) => fail_at != 6 && value.0 == u64::MAX - 2 && value.1 == 29,
+                },
+        {
+            trace.push(6);
+            (trace, if fail_at == 6 { Err((6, u64::MAX)) } else { Ok((u64::MAX - 2, 29)) })
+        },
+    };
+    let initial: Vec<u8> = Vec::new();
+    let ghost start = initial;
+    let (trace, result) = policy::resume_generation_result(initial, publication, &expected, effects, &io);
+    proof {
+        let (probed_state, probed) = choose|state: Vec<u8>, probed: Result<bool, TargetFault>|
+            #[trigger] io.probe.ensures((start,), (state, probed)) && match probed {
+                Err(error) => (trace, result) == (state, Err::<(u64, u64), TargetFault>(error)),
+                Ok(exists) => policy::resume_published_result(state, publication, &expected, exists,
+                    effects, &io, (trace, result)),
+            };
+        if fail_at != 1 {
+            let checked_start = if present { probed_state } else {
+                let (written_state, written) = choose|state: Vec<u8>, written: Result<(), TargetFault>|
+                    #[trigger] io.write.ensures((probed_state, &publication, &expected), (state, written)) && match written {
+                        Err(error) => (trace, result) == (state, Err::<(u64, u64), TargetFault>(error)),
+                        Ok(()) => policy::resume_checked_result(state, publication, &expected, effects, &io, (trace, result)),
+                    };
+                written_state
+            };
+            if present || fail_at != 2 {
+                let (checked_state, checked) = choose|state: Vec<u8>, checked: Result<(), TargetFault>|
+                    #[trigger] io.check.ensures((checked_start, &expected), (state, checked)) && match checked {
+                        Err(error) => (trace, result) == (state, Err::<(u64, u64), TargetFault>(error)),
+                        Ok(()) => policy::resume_sealed_result(state, publication, &expected, effects, &io, (trace, result)),
+                    };
+                if fail_at != 3 {
+                    let (sealed_state, sealed) = choose|state: Vec<u8>, sealed: Result<(), TargetFault>|
+                        #[trigger] io.seal.ensures((checked_state, publication, &expected), (state, sealed)) && match sealed {
+                            Err(error) => (trace, result) == (state, Err::<(u64, u64), TargetFault>(error)),
+                            Ok(()) => if policy::text_is(effects, "unknown") {
+                                io.status.ensures((state,), (trace, result))
+                            } else {
+                                exists|next: Vec<u8>, released: Result<(), TargetFault>|
+                                    #[trigger] io.release.ensures((state,), (next, released)) && match released {
+                                        Err(error) => (trace, result) == (next, Err::<(u64, u64), TargetFault>(error)),
+                                        Ok(()) => io.status.ensures((next,), (trace, result)),
+                                    }
+                            },
+                        };
+                    if fail_at != 4 && mode != 1 {
+                        let (released_state, released) = choose|state: Vec<u8>, released: Result<(), TargetFault>|
+                            #[trigger] io.release.ensures((sealed_state,), (state, released)) && match released {
+                                Err(error) => (trace, result) == (state, Err::<(u64, u64), TargetFault>(error)),
+                                Ok(()) => io.status.ensures((state,), (trace, result)),
+                            };
+                    }
+                }
+            }
+        }
+    }
+    // Independent oracle: existing results skip write, exact unknown retains the reference.
+    let failure = if 1 <= fail_at && fail_at <= 6
+        && (fail_at != 2 || !present) && (fail_at != 5 || mode != 1) { fail_at } else { 0u8 };
+    let length = if failure != 0 {
+        failure as usize - if present && failure > 2 { 1usize } else { 0usize }
+            - if mode == 1 && failure > 5 { 1usize } else { 0usize }
+    } else { 6usize - if present { 1usize } else { 0usize } - if mode == 1 { 1usize } else { 0usize } };
+    expect(trace.len() == length);
+    expect(trace[0] == 1);
+    if length > 1 { expect(trace[1] == if present { 3u8 } else { 2u8 }); }
+    if length > 2 { expect(trace[2] == if present { 4u8 } else { 3u8 }); }
+    if length > 3 { expect(trace[3] == if present && mode == 1 { 6u8 } else if present { 5u8 } else { 4u8 }); }
+    if length > 4 { expect(trace[4] == if present || mode == 1 { 6u8 } else { 5u8 }); }
+    if length > 5 { expect(trace[5] == 6); }
+    match result {
+        Err(error) => { expect(failure != 0); expect(error.0 == failure); expect(error.1 == u64::MAX); },
+        Ok(value) => { expect(failure == 0); expect(value.0 == u64::MAX - 2); expect(value.1 == 29); },
+    }
+}
+
+fn resume_failures_for_mode(mode: u8)
+    requires mode <= 3,
+{
+    resume_case(mode, false, 0); resume_case(mode, false, 1);
+    resume_case(mode, false, 2); resume_case(mode, false, 3);
+    resume_case(mode, false, 4); resume_case(mode, false, 5);
+    resume_case(mode, false, 6); resume_case(mode, false, 7);
+    resume_case(mode, true, 0); resume_case(mode, true, 1);
+    resume_case(mode, true, 2); resume_case(mode, true, 3);
+    resume_case(mode, true, 4); resume_case(mode, true, 5);
+    resume_case(mode, true, 6); resume_case(mode, true, 7);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn generation_resume_preserves_original_payload_and_first_error_without_replaying_effects() {
+    resume_failures_for_mode(0); resume_failures_for_mode(1);
+    resume_failures_for_mode(2); resume_failures_for_mode(3);
+}
+
 spec fn target_observation_step(length: nat) -> u8 {
     if length == 0 { 1u8 } else if length == 2 { 3u8 } else { 7u8 }
 }

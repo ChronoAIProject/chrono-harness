@@ -741,20 +741,47 @@ pub fn resume(root: &Path, path: &str) -> Result<Value, String> {
     let directory = no_symlink_parents(&root, path)?;
     // This record is reconstructed from the producer's already durable return,
     // never from current workflow contents or an enclosing process exit.
-    if !directory
-        .join("result.json")
-        .try_exists()
-        .map_err(|e| e.to_string())?
-    {
-        record(&publication, &directory, "result.json", &expected)?;
-    }
-    originals(&root, path, &expected)?;
-    publication
-        .complete_sealed(json!({"result":expected,"recovered":"result-publication-only"}))?;
-    if !verified::reported_unknown(expected["effects"].as_str()) {
-        inventory(&root)?.reference_paths(&role, &[])?;
-    }
-    status(&root, path)
+    let io = verified::ResumeIo {
+        probe: |state| {
+            (
+                state,
+                directory
+                    .join("result.json")
+                    .try_exists()
+                    .map_err(|e| e.to_string()),
+            )
+        },
+        write: |state, publication: &Publication, expected: &Value| {
+            (
+                state,
+                record(publication, &directory, "result.json", expected),
+            )
+        },
+        check: |state, expected: &Value| (state, originals(&root, path, expected).map(|_| ())),
+        seal: |state, publication: Publication, expected: &Value| {
+            (
+                state,
+                publication.complete_sealed(
+                    json!({"result":expected,"recovered":"result-publication-only"}),
+                ),
+            )
+        },
+        release: |state| {
+            (
+                state,
+                inventory(&root).and_then(|inventory| inventory.reference_paths(&role, &[])),
+            )
+        },
+        status: |state| (state, status(&root, path)),
+    };
+    verified::resume_generation_result(
+        (),
+        publication,
+        &expected,
+        expected["effects"].as_str(),
+        &io,
+    )
+    .1
 }
 
 pub(super) fn dispatch(args: &[String]) -> Result<String, String> {

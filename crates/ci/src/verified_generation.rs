@@ -1205,6 +1205,247 @@ pub fn finish_generation_return<S, H, T, E, O, P, Z, R, N>(
     out
 }
 
+pub struct ResumeIo<P, W, C, Z, R, Q> {
+    pub probe: P,
+    pub write: W,
+    pub check: C,
+    pub seal: Z,
+    pub release: R,
+    pub status: Q,
+}
+
+pub open spec fn resume_callable<S, H, X, V, E, P, W, C, Z, R, Q>(io: &ResumeIo<P, W, C, Z, R, Q>) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    (forall|state: S| #[trigger] io.probe.requires((state,)))
+        && (forall|state: S, publication: &H, expected: &X| #[trigger] io.write.requires((state, publication, expected)))
+        && (forall|state: S, expected: &X| #[trigger] io.check.requires((state, expected)))
+        && (forall|state: S, publication: H, expected: &X| #[trigger] io.seal.requires((state, publication, expected)))
+        && (forall|state: S| #[trigger] io.release.requires((state,)))
+        && (forall|state: S| #[trigger] io.status.requires((state,)))
+}
+
+pub open spec fn resume_sealed_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    exists|state: S, sealed: Result<(), E>|
+        #[trigger] io.seal.ensures((initial, publication, expected), (state, sealed)) && match sealed {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(()) => if text_is(effects, "unknown") { io.status.ensures((state,), out) }
+                else { exists|next: S, released: Result<(), E>|
+                    #[trigger] io.release.ensures((state,), (next, released)) && match released {
+                        Err(error) => out == (next, Err::<V, E>(error)),
+                        Ok(()) => io.status.ensures((next,), out),
+                    }
+                },
+        }
+}
+
+fn seal_generation_resume<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures resume_sealed_result(state, publication, expected, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    let (state, sealed) = (io.seal)(state, publication, expected);
+    let ghost after_seal = state;
+    let ghost original_seal = sealed;
+    let out = match sealed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            if reported_unknown(effects) {
+                let out = (io.status)(state);
+                assert(io.status.ensures((after_seal,), out));
+                out
+            } else {
+                let (state, released) = (io.release)(state);
+                let ghost after_release = state;
+                let ghost original_release = released;
+                let out = match released {
+                    Err(error) => (state, Err(error)),
+                    Ok(success) => {
+                        assert(success == ());
+                        let out = (io.status)(state);
+                        assert(io.status.ensures((after_release,), out));
+                        out
+                    },
+                };
+                assert(io.release.ensures((after_seal,), (after_release, original_release)));
+                out
+            }
+        },
+    };
+    assert(io.seal.ensures((initial, original_publication, expected), (after_seal, original_seal)));
+    assert(resume_sealed_result(initial, original_publication, expected, effects, io, out));
+    out
+}
+
+pub open spec fn resume_checked_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    exists|state: S, checked: Result<(), E>|
+        #[trigger] io.check.ensures((initial, expected), (state, checked)) && match checked {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(()) => resume_sealed_result(state, publication, expected, effects, io, out),
+        }
+}
+
+fn check_generation_resume<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures resume_checked_result(state, publication, expected, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    let (state, checked) = (io.check)(state, expected);
+    let ghost after_check = state;
+    let ghost original_check = checked;
+    let out = match checked {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            seal_generation_resume(state, publication, expected, effects, io)
+        },
+    };
+    assert(io.check.ensures((initial, expected), (after_check, original_check)));
+    assert(resume_checked_result(initial, original_publication, expected, effects, io, out));
+    out
+}
+
+pub open spec fn resume_published_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, present: bool, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    if present { resume_checked_result(initial, publication, expected, effects, io, out) }
+    else { exists|state: S, written: Result<(), E>|
+        #[trigger] io.write.ensures((initial, &publication, expected), (state, written)) && match written {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(()) => resume_checked_result(state, publication, expected, effects, io, out),
+        }
+    }
+}
+
+fn publish_generation_resume<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, present: bool, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures resume_published_result(state, publication, expected, present, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    if present { check_generation_resume(state, publication, expected, effects, io) }
+    else {
+        let (state, written) = (io.write)(state, &publication, expected);
+        let ghost after_write = state;
+        let ghost original_write = written;
+        let out = match written {
+            Err(error) => (state, Err(error)),
+            Ok(success) => {
+                assert(success == ());
+                check_generation_resume(state, publication, expected, effects, io)
+            },
+        };
+        assert(io.write.ensures((initial, &original_publication, expected), (after_write, original_write)));
+        assert(resume_published_result(initial, original_publication, expected, present, effects, io, out));
+        out
+    }
+}
+
+pub open spec fn generation_resume_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    exists|state: S, probed: Result<bool, E>|
+        #[trigger] io.probe.ensures((initial,), (state, probed)) && match probed {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(present) => resume_published_result(state, publication, expected, present, effects, io, out),
+        }
+}
+
+/// Resume only the original result publication, preserving every first error and original handle.
+pub fn resume_generation_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures generation_resume_result(state, publication, expected, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    let (state, probed) = (io.probe)(state);
+    let ghost after_probe = state;
+    let ghost original_probe = probed;
+    let out = match probed {
+        Err(error) => (state, Err(error)),
+        Ok(present) => publish_generation_resume(state, publication, expected, present, effects, io),
+    };
+    assert(io.probe.ensures((initial,), (after_probe, original_probe)));
+    assert(generation_resume_result(initial, original_publication, expected, effects, io, out));
+    out
+}
+
 pub open spec fn evaluation<S, P, T, E, Prepare, Apply>(
     initial: S, prepare: Prepare, apply: Apply, out: (S, Evaluation<T, E>),
 ) -> bool
