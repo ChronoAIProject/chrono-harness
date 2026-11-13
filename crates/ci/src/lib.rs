@@ -126,6 +126,9 @@ enum Projection {
     Full(full::Config),
     Release(release::Config),
 }
+fn load_projection(path: &Path) -> Result<Projection, String> {
+    decode_projection(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
+}
 fn decode_projection(bytes: &[u8]) -> Result<Projection, String> {
     let value: Value = decode(bytes)?;
     if matches!(

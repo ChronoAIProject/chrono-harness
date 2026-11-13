@@ -415,7 +415,7 @@ fn prepare_scope(
     payload: &Value,
     revision: &str,
 ) -> Result<Value, String> {
-    generate(root, path, c, true)?;
+    verify_projection(root, path, c)?;
     let profile = profile(root, c)?;
     let w = c.workflow(unit)?;
     let detection = super::gating::native_detection(root, path, c, event, payload, revision)?;
