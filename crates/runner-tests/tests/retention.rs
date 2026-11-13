@@ -1026,7 +1026,12 @@ fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
     {
         return;
     }
-    let h = host(256, 16);
+    let mut h = host(256, 16);
+    h.disable_cleanup(true);
+    eprintln!(
+        "retention fixture originals (creation_intent_survives_no_finish_and_admission_creates_nothing): {}",
+        h.path().display()
+    );
     let path = ".chrono-harness/state/fixtures/not-created";
     let publication = inventory(h.path())
         .plan(
@@ -1043,7 +1048,7 @@ fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
     let round = retained_artifacts::retention::maintain_adopted(h.path())
         .unwrap()
         .unwrap();
-    assert_eq!(fixture_remaining(h.path(), &round), 0);
+    assert_eq!(fixture_remaining(h.path(), &round), 0, "{round}");
     assert_eq!(
         ledger(h.path())["summaries"][0]["original_outcome"]["original"]["operation"],
         "create"
@@ -1073,6 +1078,7 @@ fn creation_intent_survives_no_finish_and_admission_creates_nothing() {
     assert!(refused.is_dir());
     independent.complete(json!({"exit":0})).unwrap();
     drop(live);
+    h.disable_cleanup(false);
 }
 
 #[test]
@@ -3086,7 +3092,12 @@ fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs(
     ) {
         return;
     }
-    let h = host(256, 16);
+    let mut h = host(256, 16);
+    h.disable_cleanup(true);
+    eprintln!(
+        "retention fixture originals (published_output_scope_keeps_child_reports_without_accumulating_their_inputs): {}",
+        h.path().display()
+    );
     let mut policy: Value =
         serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
     policy["max_related_outputs"] = json!(8);
@@ -3158,6 +3169,7 @@ fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs(
         .reference_paths("unfinished-domain-owner", &[])
         .unwrap();
     assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+    h.disable_cleanup(false);
 }
 
 #[test]
