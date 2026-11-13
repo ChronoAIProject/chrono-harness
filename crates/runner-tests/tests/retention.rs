@@ -104,7 +104,7 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
     policy["max_metadata_bytes_per_round"] = json!(24 * 1024 * 1024);
     fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
     let mut outputs = std::collections::BTreeMap::new();
-    for n in 0..20 {
+    for n in 0..512 {
         let path = format!(".chrono-harness/state/fixtures/large-metadata-{n}");
         fs::write(h.path().join(&path), b"required original").unwrap();
         let publication = inventory(h.path())
@@ -112,7 +112,7 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
             .unwrap();
         let id = publication.id().to_owned();
         publication
-            .complete(json!({"diagnostic": "x".repeat(1024 * 1024)}))
+            .complete(json!({"diagnostic": "x".repeat(15 * 1024)}))
             .unwrap();
         outputs.insert(id, path);
     }
@@ -126,9 +126,11 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
     .map(|entry| entry.unwrap().file_name().into_string().unwrap())
     .collect();
     let tail = addresses.last().unwrap();
-    inventory(h.path())
-        .reference("current-inputs", &addresses[..addresses.len() - 1])
-        .unwrap();
+    for (n, originals) in addresses[..addresses.len() - 1].chunks(32).enumerate() {
+        inventory(h.path())
+            .reference(&format!("current-inputs-{n}"), originals)
+            .unwrap();
+    }
     for _ in 0..3 {
         let round = inventory(h.path()).maintain_available().unwrap();
         assert_eq!(round["scope"]["complete"], false, "{round}");
