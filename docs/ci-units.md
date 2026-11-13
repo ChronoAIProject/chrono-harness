@@ -34,7 +34,9 @@ worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四�
 
 分页登记迁移的替换检测也使用同一隔离工具：释放原分配者后，迁移必须能够取得 metadata 写锁，才可到达测试注入的登记替换边界。保留替换拒绝、原登记保全和后续迁移仍拒绝的全部断言。
 
-`worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
+`worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。核心组的 `generated_full_native_short_step_preserves_exact_context_bytes` 实际调用 CI 生产 CLI，保留 `build.ci` 和 `check.ci` 缓存。采用组的四个用例只使用测试项目编译的工具，移除该组无使用方的 CI 生产构建和缓存订阅；清单操作继续使用已安装的候选 `chrono-ci`。完整构建、CI、存储和维护净收益未测。
+
+两组继续显式声明共享测试 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。原测试、断言、分组、线程、profile 和时限保留。分组不保证任意宿主在任意外部负载下都满足时限。
 
 本地调度在共享构建就绪后，优先执行 worktree 清单、核心组和采用组，再执行 workflow 清单与各组。这样可让耗时较长的 worktree 链与其他项目检查重叠；现有依赖、cap=2、资源声明、动作、线程和时限均保留。优先级只影响已经就绪的操作，不跳过前置或放宽并发冲突。
 

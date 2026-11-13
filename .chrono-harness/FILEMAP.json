@@ -1537,7 +1537,6 @@
       "operations": [
         "fmt.worktree",
         "fmt.worktree-tests",
-        "build.ci",
         "worktree.inventory",
         "test.worktree.adoption"
       ],
