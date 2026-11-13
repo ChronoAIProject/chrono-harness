@@ -185,12 +185,46 @@ Release 公开、非 draft、prerelease，共 34 个资产。`release.json` 为 
 
 | 下游 | feature → integration PR | integration → dev PR / dev SHA | dev 落地检查（本次观察） |
 | --- | --- | --- | --- |
-| Go | #92 | #93 / `d3fbab3e48a2973260e3ed6ec29c95ec3a3343c0` | collection `43505474427`，运行中 |
-| TypeScript | #87 | #88 / `4e541a833a1145859a4551902e82b52c0f84eb42` | collection `43505506351`，运行中 |
-| 混合语言 | #87 | #88 / `430a686e6c8f39198fbaf14313553d4b43301dc3` | collection `43505517258`，排队中 |
-| 首次接入 | #80 | #81 / `d454fcaaab96d76f25edae19b25c637445ea1980` | 宿主检查 `43505526615`，成功 |
+| Go | #92 | #93 / `d3fbab3e48a2973260e3ed6ec29c95ec3a3343c0` | collection `43505474427`、CodeQL `43505474213`，成功 |
+| TypeScript | #87 | #88 / `4e541a833a1145859a4551902e82b52c0f84eb42` | collection `43505506351`、CodeQL `43505503897`，成功 |
+| 混合语言 | #87 | #88 / `430a686e6c8f39198fbaf14313553d4b43301dc3` | collection `43505517258`、CodeQL `43505516662`，成功 |
+| 首次接入 | #80 | #81 / `d454fcaaab96d76f25edae19b25c637445ea1980` | 宿主检查 `43505526615`、CodeQL `43505525633`，成功 |
 
-尚未完成全部落地检查及必要安全检查的原件核验，不把实际合并写成完整采用验收通过。后续发布 run `43501191193` 已进入 publish，尚无最终结果，实际 source 仍须核对原件；run `43502804440` 的原件确认 source 为 `ebcba42683b8f1f7ed820806ffa37334a5b6e8a8`、landing CI 为 `43499450155`，其中 `linux_verify_runner_tests`（job `132153400864`）已失败：`producer_native_read_failure_keeps_transport_exit` 在 `tests/protocol_v1.rs:3646` 执行 fixture 时得到 `ExecutableFileBusy`／`Text file busy`（OS code `26`），Cargo 原退出码为 `101`。原日志已保留，其他任务继续沿原句柄等待。修复隔离工作树已从同一 `ebcba426…` 建立，但因果和修复尚未验证；不能靠重跑或重试将该失败记为已解决。此前 bootstrap retention migration 的退出码 `2` 和登记检查 `unknown` 继续保留。
+四仓落地原件已收取并核对报告、原 stdout/stderr 摘要、完整性、退出码和候选身份。Go 实际执行 `ci.verify`、`test.bootstrap`、`build.rates`、`test.rates`；TypeScript 执行 `ci.verify`、`test.bootstrap`、两项 labels 类型检查和 `test.labels`；混合仓另执行 invoice、normalize 和 rates 的登记操作；首次接入是无业务单元的宿主检查。上述 collection／宿主检查及 CodeQL 均成功。
+
+后续发布 run `43502804440` 已以 failure 结束：原件确认 source 为 `ebcba42683b8f1f7ed820806ffa37334a5b6e8a8`、landing CI 为 `43499450155`。`linux_verify_runner_tests`（job `132153400864`）的 `producer_native_read_failure_keeps_transport_exit` 在 `tests/protocol_v1.rs:3646` 执行 fixture 时得到 `ExecutableFileBusy`／`Text file busy`（OS code `26`），Cargo 原退出码为 `101`；`linux_package` 随后失败，publish 和两平台 install 均 skipped，不能作为已发布候选。
+
+修复 PR `#1083` 从同基线的 feature／integration 开始，先以 `a3d43482bc971f6945e316087dab55811007b1d8` 去掉 producer 测试的临时可执行文件复制，直接调用 Cargo 已编译的 helper。该初始修复的源码 bootstrap、格式化和未过滤 runner 测试均成功，原读取失败用例通过，既有一个 ignored 用例保持原状。首次本地 canonical 退出 `1`，原件固定 base `ca923e075fcadab90336d70ab8dd64019fe098af`、candidate `a3d43482…`，原因为缺少前移 dev 的验证分类；首次 PR CI `43508508980` 的 detector 又报告两个受影响旧文件未分类，业务单元 skipped。保留两次真实失败后，正常合入所需的 `ca923e…`，补上 producer 模式判断的同源 Verus 实现和独立边界预期，候选为 `a2bcac276bd3db8b4ed2364b006814910d7472f8`。其 PR CI `43510398699` 的 runner job `132180316112` 明确失败：`E_VERUS_COVERAGE: declared file is absent from compiler sources: crates/runner-tests/tests/protocol_v1.rs`，不能将只有登记的根写成真实证明覆盖。
+
+同次本地 canonical 也退出 `1`，并观察到独立的 retention 失败：`explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound` 在原八轮回收后未达到零个剩余 fixture 输出。retention 二进制为 `115 passed / 1 failed`，隔离子测试原退出 `101`；逐轮报告保留 `remaining_outputs: null`、`scope.complete: false`，不能把未知当零。原报告为 `.chrono-harness/state/preparation/check-1d2b5f276150d709bf7b98a61e29a41eca9fc7728ef802c06532add8081aa299.json`，原进程流已解码并核摘要。远端本次只观察到 coverage 失败，不能将本地 retention 失败冒称远端失败。
+
+随后提交并推送 `08e3caf3740667765d1b36348ae968c8e8b17a35`：将 producer 模式的独立边界预期移入实际 `protocol_v1.rs`，并从 `verified_fixture.rs` 真正包含该文件；原协议和 IO 测试保留原生执行，证明范围仍仅覆盖所声明的模式判断。正式格式化、源码 bootstrap 成功；PR CI `43513711712` 沿原生 watch 等待。新本地 canonical 退出 `1`，其实际 base 为前移的 `25c3d192687b1d416ab9fc7efc574c81311aac59`、candidate 为 `08e3caf3…`，报告 `.chrono-harness/ci/check.json` 的既有验证分类缺失；该输入差异与目标仍为旧 integration 基线的远端 PR 分别记录，不将其写成通过，也不为消除状态反复重跑。原报告为 `.chrono-harness/state/preparation/check-7888d4e027745c6ad5c4b6eabb9ce0cb9874347e16bdf53b3418ed9cb1a70ad4.json`。原生自动合并继续启用，Linux 原故障和 retention 失败尚未完成修复复验。
+
+新修复工作树首次 bootstrap 的实际错误是 PATH 中缺少 `rustup`，内层退出 `127`、外层退出 `2`；原始流摘要已核对。仅在本次命令 PATH 中补入现有 `.cargo/bin` 后，正式入口成功。此前原检出的 retention migration 退出 `2` 和登记检查 unknown 继续保留，不能由另一工作树的成功覆盖。
+
+## 第十五轮 `5e8bca29…` preview（2026-11-14）
+
+既有发布 run `43501191193/1` 已成功，其 workflow head 是 `ebcba426…`，实际 source 是 `5e8bca29ed4cb0cb6aea197d5bbdea2079fda790`，tree 为 `aceae9ef1aaf23ec8a648ff4dd93fd5130825e3c`，landing collection 为 `43498572837`，CodeQL 为 `43498571788`，workflow blob 为 `ce38fbe5b0ced74709141b9ee43f26f4865cd124`。公开版本为 `v0.1.5-dev.43498572837.1.g5e8bca29ed4cb0cb6aea197d5bbdea2079fda790`；Release 公开、非 draft、prerelease，共 34 个资产。`release.json` 为 6649 bytes／`d5a08864f04f36c60ba9e89c3de227c8e288ad45a9e178e9883c9b9830ef7152`，`install.sh` 为 5186 bytes／`a5677505c3f9f4a638d6c5a59bc65808e333582426dfb69473852ab8b7cd8aa1`。Linux/macOS installer 分别为 1660576 bytes／`006651f2331bae218bd00b47f2409a1759ca14034e318b75fc6ccdf702cfbd7d` 和 1329600 bytes／`301a6d248c7a08d97bd6401c7a32dfa89f4f49548e04b18808a7d0630271b32a`；已下载核对原字节。两平台 install job `132161959496`、`132161959632` 均成功。
+
+四仓从本轮各自最新 dev 创建同基线 feature／integration，通过候选安装器 `adopt --replace` 更新，仅改变安装声明和生成入口，并逐项核对保留原有 16 个工具。公开安装、适用 SDK bootstrap、CI verify 和本地 canonical 均退出 `0`；原始报告、stdout 摘要、完整性及候选 SHA 已核对。四个 feature PR 和 dev PR 的适用检查均成功，并已匹配固定 head 实际合入；远端 dev SHA、安装声明和落地检查均已核对。
+
+| 下游 | feature head / PR | integration merge / dev PR |
+| --- | --- | --- |
+| Go | `074d8b619fc4e3bd61f650670639c81f4bf5038b` / #94 | `b0a36bfd18a0a0ac10dc647bc5dfa0c7c0567521` / #95 |
+| TypeScript | `0227fcf3c60622d1a97cf65bf84d04d854817a5e` / #89 | `03bc9ace47b726dc744b5b197e5cb6a1b5cf0476` / #90 |
+| 混合语言 | `af5d172ff3d7af28e1666d023863ca1b0c64dce1` / #89 | `1b4277fd658a4980fa95927f42975d4309a5720e` / #90 |
+| 首次接入 | `f03da39c15040f59d9c5e2c2f0e9293a1b682607` / #82 | `6445ad169a0a159a5664cd770cde6939d4042d0b` / #83 |
+
+| 下游 | dev 落地 SHA | dev 业务／宿主检查 | dev CodeQL |
+| --- | --- | --- | --- |
+| Go | `faa92ceb2011e692f8f4f7e3acdc1f02fa4de277` | `43513482160`，成功 | `43513480981`，成功 |
+| TypeScript | `488f2095bd23979964a4e71dab267aaf36e6c51e` | `43513484956`，成功 | `43513483471`，成功 |
+| 混合语言 | `3b8d81afc0c9c876e3f4c9c80806f3500170215b` | `43513486697`，成功 | `43513485678`，成功 |
+| 首次接入 | `1cd609dcf658bcdbcbfdb1663dd2fce535e5ca2e` | `43513491790`，成功 | `43513491410`，成功 |
+
+四仓安装声明锁定本轮 preview、相同 manifest 和两平台 installer 摘要／长度，均保留 16 个工具。落地原始报告、judge stdout/stderr 完整性和摘要、业务进程原流及退出码已核对；报告候选恰为表中 dev SHA。Go 执行 `ci.verify`、bootstrap、rates 构建／测试；TypeScript 执行 bootstrap、labels 两项类型检查及测试；混合仓另执行 invoice、normalize 和 rates；首次接入在 macOS 执行无业务单元的宿主检查，不宣称该宿主已完成 Linux 检查。
+
+本地部分临时检出及 start 原件随后缺失；没有据此判断仍在运行的命令已终止。已核 Git 保留的分支／提交，并将上述固定 feature 和 integration 提交推送保全；远端 PR 使用这些已核对的分支，不重新发布同一候选。缺失原因尚未确定。上游在本候选之后仍有源码改动且 runner 修复未完成发布复验，因此本候选继续保持 preview。
 
 ## 稳定门槛与下一轮
 
