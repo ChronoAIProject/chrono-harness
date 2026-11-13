@@ -511,7 +511,7 @@ impl Client {
         if parsed.outcome == "stale" || parsed.outcome == "closed" {
             return Ok(());
         }
-        if parsed.state != "OPEN" {
+        if !verified_snapshot::pull_request_open(&parsed.state) {
             return Err("PR merged during open; creation result is no longer open".into());
         }
         if args.draft && !parsed.draft {
