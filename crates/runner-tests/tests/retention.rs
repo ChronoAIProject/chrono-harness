@@ -92,6 +92,56 @@ fn output_retired(root: &Path, id: &str) -> bool {
 }
 
 #[test]
+fn explicit_sweep_reports_late_errors_after_metadata_disposal_fills_samples() {
+    if !isolated_capability_test(
+        "explicit_sweep_reports_late_errors_after_metadata_disposal_fills_samples",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let owner = inventory(h.path());
+    let state = h.path().join(".chrono-harness/state/output-retention-v1");
+    // Unattached address gates are valid interrupted transaction fixtures.
+    // Their retirement precedes the object namespace in an explicit sweep.
+    for n in 0..512 {
+        fs::create_dir(state.join(format!("transaction-gates/writer-{n:064x}"))).unwrap();
+    }
+    let damaged = state.join("objects/output-damaged-fixture");
+    fs::create_dir(&damaged).unwrap();
+    let original = b"incomplete declaration";
+    fs::write(damaged.join("record.json"), original).unwrap();
+
+    let sweep = owner.maintain_explicit().unwrap();
+    assert_eq!(sweep["observations"]["disposed"], 512);
+    assert_eq!(sweep["observations"]["accounting_errors"], 1);
+    let samples = sweep["samples"]["items"].as_array().unwrap();
+    for kind in ["disposed", "protected", "accounting_errors"] {
+        assert!(
+            samples.iter().any(|sample| sample["kind"] == kind),
+            "sweep lost the {kind} samples: {sweep}"
+        );
+    }
+    let error = samples
+        .iter()
+        .find(|sample| sample["kind"] == "accounting_errors")
+        .unwrap();
+    assert_eq!(error["address"], "output-damaged-fixture");
+    assert!(
+        error["observation"]["reason"]
+            .as_str()
+            .is_some_and(|reason| !reason.is_empty())
+    );
+    let bytes: usize = samples
+        .iter()
+        .map(|sample| serde_json::to_vec(sample).unwrap().len())
+        .sum();
+    assert_eq!(sweep["samples"]["payload_bytes"], bytes);
+    assert!(bytes <= 65536);
+    assert!(sweep["samples"]["omitted"].as_u64().unwrap() > 0);
+    assert_eq!(fs::read(damaged.join("record.json")).unwrap(), original);
+}
+
+#[test]
 fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
     if !isolated_capability_test(
         "explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix",
