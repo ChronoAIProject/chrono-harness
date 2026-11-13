@@ -2,7 +2,7 @@
 
 ## 受影响文件的分类门控
 
-FILEMAP 已启用 `require_new_file_classification`。当前候选只要影响某个已登记文件，
+本仓 FILEMAP 已启用 `require_new_file_classification: true`。当前候选只要影响某个已登记文件，
 该文件就必须显式声明 `program`、`specification` 或 `data`；缺少声明会由同源 Verus
 计划判定返回 `E_VERUS_COVERAGE`，因此修改旧文件新增仓内逻辑不能继续沿用 unknown
 分类绕过证明计划。未受影响的历史未分类文件仍保持 unknown，`program`／`specification`
@@ -10,7 +10,10 @@ FILEMAP 已启用 `require_new_file_classification`。当前候选只要影响�
 
 本批的生产与独立预期根继续由 `crates/runner/src/verified_verifier.rs` 和
 `crates/runner-tests/tests/verified_verifier.rs` 整 crate 证明；真实 Rust 行为测试
-同时核受影响未分类拒绝和未受影响 `data` 边界。
+同时核受影响未分类拒绝、显式 `data` 准入、未受影响 unknown，以及未采用／明确关闭开关的外部宿主边界。
+分类开关与它约束的文件库存通过同一类型传递，JSON 适配仅按原字段搬运；
+未采用开关的宿主不取得证明资格，已有证明声明仍须核验所选证明计划。
+固定基线已启用时，候选仍不能关闭或移除开关。
 该门控只约束候选 DELTA 的文件计划，不把分类声明、局部证明或普通 CI 绿灯扩大为
 全仓 SPEC 已证明。
 
