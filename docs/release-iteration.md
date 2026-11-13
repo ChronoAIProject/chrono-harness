@@ -160,6 +160,21 @@ stable 正式采用已在四个下游完成：Go feature PR `71`（head `b297569
 
 收口时仍保留 bootstrap `retention policy migration required; original record preserved` 的退出码 `2` 和登记检查 `unknown`，不把它写成通过。
 
+## 第十三轮 `v0.1.5` preview 采用（2026-11-13～14）
+
+第十三轮固定候选为 `v0.1.5-dev.43490624514.1.g00abeb0c559268f8ac762341fbcc00a0c1648071`：source `00abeb0c559268f8ac762341fbcc00a0c1648071`，tree `8b8050dadd81151498dfc481dcf66495febf5976`，landing collection `43490624514`、CodeQL `43490623349`，均为 attempt `1`；发布 workflow 为 `43494090756`，workflow blob `ce38fbe5b0ced74709141b9ee43f26f4865cd124`。Release 公开、非 draft、prerelease，共 34 个资产，`release.json` 为 6649 bytes、SHA-256 `2c07aea6fc10e911eca01d71d227de131d0efaf44a4365cbf437e189d2db590c`；Linux installer 为 1660576 bytes、SHA-256 `006651f2331bae218bd00b47f2409a1759ca14034e318b75fc6ccdf702cfbd7d`，macOS installer 为 1329600 bytes、SHA-256 `301a6d248c7a08d97bd6401c7a32dfa89f4f49548e04b18808a7d0630271b32a`。发布 workflow、Linux/macOS 安装和上游检查均成功。
+
+四个下游均完成该固定候选的 `feature → integration → dev` 晋升，且 feature/integration PR 已实际合入，落地 `dev` 的业务检查、汇总和 CodeQL 均成功：
+
+| 下游 | feature → integration | integration → dev | dev 落地 / collection / CodeQL |
+| --- | --- | --- | --- |
+| Go | PR `90`，merge `091b1b240a8885c2749ee61437e2588e2272c6fd` | PR `91` | `3a285782a50e0465ad7325a05756144b5a975dcd` / `43500356053` / `43500355038` |
+| TypeScript | PR `85`，merge `7b28fbba3247ef2bc86d033a5a4bfa8cfc5be102` | PR `86` | `f1af482f8392dbbced36b58037aa4880aaca6de8` / `43500354447` / `43500354532` |
+| 混合语言 | PR `85`，merge `34216f16455c73e2116399c4c44ececb305b7f1d` | PR `86` | `494c59f961fab280b744c685033044bbcf0c5202` / `43500357757` / `43500357193` |
+| 首次接入 | PR `78`，merge `d56e0eb4af434cfccef1f2f5b38e76d29ad8ce5d` | PR `79` | `fa1576fb4720f2ec9f6cde8153d08cc10dd41152` / `43500355976` / `43500356305` |
+
+四个 `dev` 的声明均锁定上述 preview、manifest 和两平台资产摘要。候选之后上游已继续前进到 `577d82eaf816363e2bd565db4bf789103bc1f512`、`5e8bca29ed4cb0cb6aea197d5bbdea2079fda790`，最新 `dev` 为 `ebcba42683b8f1f7ed820806ffa37334a5b6e8a8`；对应的 landing、CodeQL 和发布任务仍沿原句柄等待。因此本候选完成 preview 采用，但稳定门槛因源码漂移不满足，不能晋升 stable。
+
 ## 稳定门槛与下一轮
 
 下列条件全部满足时，候选才可 stable：上游 preview 公开资产和两平台安装通过；四个下游的 feature、integration、dev 链均落地；dev 上的真实单元、汇总和必要安全检查通过；候选相关失败已经在负责层修复并重新验证；stable Release 的标签、源码、资产和下游稳定版声明一致。任一条件缺失都保持 preview 或 unknown。
