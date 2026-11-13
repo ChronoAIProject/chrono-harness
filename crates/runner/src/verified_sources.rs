@@ -49,14 +49,18 @@ pub fn observe_dependency<I: DependencyRead>(
         },
 {
     if contract.is_none() { return None; }
-    if exit != 0 || process_failed || !super::canonical_verifier_arguments(args) {
+    if exit != 0 || process_failed {
         return Some(Err("E_VERUS_SOURCES: original compiler process was not successful".to_string()));
     }
+    let parsed = match super::parse_verifier_arguments(args) {
+        Some(parsed) => parsed,
+        None => { return Some(Err("E_VERUS_SOURCES: original compiler process was not successful".to_string())); },
+    };
     if limit == 0 || limit > 67_108_864 {
         return Some(Err("E_VERUS_SOURCES: invalid dependency observation bound".to_string()));
     }
     let mut path = Vec::new();
-    append_bytes(&mut path, args[10].as_str().as_bytes());
+    append_bytes(&mut path, args[parsed.output].as_str().as_bytes());
     append_bytes(&mut path, &[46u8, 100u8]);
     let read = io.read(path.as_slice(), limit as u64 + 1);
     match read {
@@ -741,10 +745,10 @@ pub open spec fn regular_mode(mode: Seq<char>) -> bool {
 pub open spec fn admission_matches(
     admission: &SourceAdmission, args: Seq<String>, dependency: Seq<u8>, files: Seq<SourceFile>,
 ) -> bool {
-    super::verifier_arguments(args)
+    super::source_only_invocation(args)
         && source_metadata_admitted(admission.compiled@, admission.candidate@,
-            vstd::utf8::encode_utf8(args[8]@))
-        && dependency_content_matches(dependency, vstd::utf8::encode_utf8(args[10]@), admission.compiled@)
+            vstd::utf8::encode_utf8(args[super::invocation_source(args)]@))
+        && dependency_content_matches(dependency, vstd::utf8::encode_utf8(args[super::invocation_output(args)]@), admission.compiled@)
         && admission.candidate.len() == admission.modes.len()
         && (forall|i: int| 0 <= i < admission.candidate.len() ==>
             registered_source(files, (#[trigger] admission.candidate[i]).path@)
@@ -768,8 +772,14 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
 {
     // 组合入口先核合同与观察的有无；此层不复制合同或按名称推断操作。
     if observed.is_none() { return Ok(None); }
-    if !super::canonical_verifier_arguments(args) {
-        return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string());
+    let parsed = match super::parse_verifier_arguments(args) {
+        Some(parsed) => parsed,
+        None => { return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string()); },
+    };
+    // 当前接口只有候选 blob 与 checksum；不能把库、宏、生成物或 VIR 当成源码。
+    match super::require_registered_input_evidence(args) {
+        Ok(()) => {},
+        Err(error) => { return Err(error); },
     }
     let bytes = match observed {
         Some(Ok(bytes)) => bytes,
@@ -779,7 +789,7 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         Ok(value) => value,
         Err(error) => { return Err(error.clone()); },
     };
-    let output = args[10].as_str();
+    let output = args[parsed.output].as_str();
     let paths = match compiler_dependency_paths(bytes.as_slice(), output.as_bytes()) {
         Some(paths) => paths,
         None => { return Err("E_VERUS_SOURCES: invalid compiler dependency target".to_string()); },
@@ -833,7 +843,7 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         modes.push(mode);
         i += 1;
     }
-    if !admit_source_metadata(&compiled, &candidate, args[8].as_str().as_bytes())
+    if !admit_source_metadata(&compiled, &candidate, args[parsed.source].as_str().as_bytes())
         || !matches_dependency_content(bytes.as_slice(), output.as_bytes(), &compiled) {
         return Err("E_VERUS_SOURCES: fixed source metadata or compiler checksums differ".to_string());
     }
@@ -1291,7 +1301,7 @@ pub open spec fn root_planned(root: &SourceProofRoot, methods: Seq<super::ProofI
         && methods[i].output_contract.is_some()
         && super::valid_contract(methods[i].output_contract)
         && super::verifier_arguments(methods[i].argv@)
-        && methods[i].argv[8]@ == root.path@
+        && methods[i].argv[super::invocation_source(methods[i].argv@)]@ == root.path@
 }
 
 fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -> (planned: bool)
@@ -1307,14 +1317,17 @@ fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -
                 && methods[i].output_contract.is_some()
                 && super::valid_contract(methods[i].output_contract)
                 && super::verifier_arguments(methods[i].argv@)
-                && methods[i].argv[8]@ == root.path@;
+                && methods[i].argv[super::invocation_source(methods[i].argv@)]@ == root.path@;
             assert(witness == index as int);
         }
     }
     let method = &methods[index];
-    if method.output_contract.is_none() || super::validate_contract(method.output_contract).is_err()
-        || !super::canonical_verifier_arguments(method.argv) { return false; }
-    super::equal_text(method.argv[8].as_str(), root.path.as_str())
+    if method.output_contract.is_none() || super::validate_contract(method.output_contract).is_err() { return false; }
+    let parsed = match super::parse_verifier_arguments(method.argv) {
+        Some(parsed) => parsed,
+        None => { return false; },
+    };
+    super::equal_text(method.argv[parsed.source].as_str(), root.path.as_str())
 }
 
 pub open spec fn file_plan_error(

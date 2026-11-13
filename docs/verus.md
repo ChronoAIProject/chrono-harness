@@ -2429,11 +2429,27 @@ FILEMAP 将同源内核和独立预期分别绑定到 `verify.ci-generation`／
 当前固定入口在解析生产模块时报告 `E0432`／`E0433`：未链接 `chrono_harness`、
 `serde`、`serde_json`，并缺少 serde 属性。原报告为整 crate、`success=false`、
 `encountered-error=true`、`verified=0`；尚无本次成功编译库或有效 dep-info 绑定。
-`verified_verifier.rs` 仍只准入十二项严格参数；其源根和编译输出选择也仍限于该形状。
-现役 runner dependency、adapter tests、consumer／missing 分别有 46、25、30／30 项，
-**完整方法／源／产物资格类修复尚未完成**。不能将完整 argv 丢弃 extern、import、环境、
-宏及搜索路径后投影成十二项，再用旧的源与库合同准入。缺少合格依赖的方法继续拒绝，
-原 `ProofAdmission`、整 crate、非零 verified、严格参数及编译器 checksum 要求不变。
+`verified_verifier.rs` 的 J 候选将当前登记语法集中到一个同源解释：保留严格前缀，
+逐项解释 edition、crate-name、unstable、env-set、dependency 搜索范围、named extern/import
+与 direct export，再核对 link／dep-info、源根、`-o` 和 checksum 的完整关系。
+解释结果保留完整原 argv 的 token／值位置；计划选根、源码绑定和产物观察共同使用该所有者，
+不按 12／46／25／30 项分别选择槽位，也不删除扩展参数后套用 basic 合同。
+未知项、重复单值、重复同 namespace 名字、缺值、错误搜索种类和没有 extern 的 import 均拒绝。
+所有实际调用仍须与唯一登记方法的完整 argv、tool、cwd、environment 及原流一致。
+
+**完整方法／源／产物资格类修复尚未完成。** 当前扩展方法仍缺同一成功 producer 的源码、
+库、VIR、必要传递输入与完整工具上下文原件；语法可解释不等于这些输入已获资格。
+J 因此由原准入所有者明确返回 `E_VERUS_QUALIFICATION`，不把扩展依赖交给仅有候选 blob
+和源码 checksum 的接口，也不根据文件存在、名称或普通缓存补出资格。
+原 78 项 basic 方法继续使用原 source／checksum 合同；这不证明其隐含工具输入已完整。
+两个无 output_contract 的普通调查操作即使成功，也只返回无 proof 的普通结果。
+原严格参数、整 crate、非零 verified、完整源码参与和编译器 checksum 义务保留。
+
+J 的 `ProofAdmission` 同时保留解析结果和同一原回执的编译库身份；报告、源码和库的关系
+仍在 runner 所有者判定，routes 观察／比较及 judge-ci 的本地／离线转发继续消费同一实现。
+新增独立预期位于原 Rust／Verus 测试根，与原正向、反向和边界断言共同登记到
+`verify.verus-result`／`verify.verus-result-tests` 及真实消费者的现有 DELTA 计划。
+本次源码尚未在 sealed 候选执行，不能据此声称证明或行为验收通过。
 
 E 仅修正三项 `--export` 登记值：固定 Verus 的 config.rs 原样保存 export，
 import_export.rs 将其直接转为文件路径；`--import` 才使用 `name=path`。
@@ -2444,7 +2460,8 @@ VIR 可在 well-formed／solver 完成前写出，因此存在或摘要匹配仍
 
 完整方法准入还需要同一实际生产者的源、rlib／dep-info、VIR、原报告与工具身份，
 并逐项覆盖 extern、import、必要宏及传递输入。routes 的现役回执只有原进程、
-`compiler_dependency` 和 `compiler_artifact`；原 typed `ProofAdmission` 只有报告和源码。
+`compiler_dependency` 和 `compiler_artifact`；J 的 typed `ProofAdmission` 保留报告、源码、
+调用解释和同回执库身份，但没有可供扩展输入消费的合格 producer／VIR carrier。
 现有 Cargo-Verus／proved-build 绑定仍有用途：`runner-build.json` 绑定 identifiers 库和
 runner 二进制，不能据此授予全部 runner 依赖或其 VIR 证明资格。E 没有新增资格字段、
 受信例外或替代成功路径；完整修复与其独立 Rust／Verus 预期仍须由现有所有者继续完成。

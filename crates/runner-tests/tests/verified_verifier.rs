@@ -271,6 +271,8 @@ fn arguments() -> (out: Vec<String>)
     proof {
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info=");
         reveal_strlit("out"); reveal_strlit(".d"); reveal_strlit("root");
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("out"@)));
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("root"@)));
         reveal_strlit("--emit=link=out,dep-info=out.d");
         assert("--emit=link=out,dep-info=out.d"@ =~=
             "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
@@ -280,6 +282,136 @@ fn arguments() -> (out: Vec<String>)
         "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
         "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()]
+}
+
+// J 的独立预期先于实现登记：扩展值不能改变真实根／输出，语法识别不授予依赖资格。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
+    let args = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--edition=2024".to_string(), "--crate-name".to_string(), "consumer".to_string(),
+        "-Zunstable-options".to_string(), "--env-set".to_string(), "CARGO_PKG_VERSION=0.1.0".to_string(),
+        "-L".to_string(), "dependency=deps".to_string(),
+        "--extern".to_string(), "other=other.rlib".to_string(),
+        "--extern".to_string(), "producer=producer.rlib".to_string(),
+        "--import".to_string(), "producer=producer.vir".to_string(),
+        "--export".to_string(), "consumer.vir".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        reveal_with_fuel(policy::invocation_extensions, 16);
+        reveal_with_fuel(policy::interpreted_option_sequence, 16);
+        reveal_with_fuel(policy::sources::next_byte, 32);
+        reveal_strlit("--edition=2024"); reveal_strlit("--crate-name");
+        reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
+        reveal_strlit("-L"); reveal_strlit("--extern"); reveal_strlit("--import"); reveal_strlit("--export");
+        reveal_strlit("consumer"); reveal_strlit("CARGO_PKG_VERSION=0.1.0");
+        reveal_strlit("dependency=deps"); reveal_strlit("other=other.rlib");
+        reveal_strlit("producer=producer.rlib"); reveal_strlit("producer=producer.vir");
+        reveal_strlit("consumer.vir"); reveal_strlit("root"); reveal_strlit("out");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+    }
+    let parsed = policy::parse_verifier_arguments(&args);
+    expect_verifier_true(parsed.is_some());
+    let parsed = parsed.unwrap();
+    expect_verifier_true(parsed.source == 24 && parsed.output == 26 && parsed.emit == 23);
+    let source = identifiers::equal_text(args[parsed.source].as_str(), "root");
+    let output = identifiers::equal_text(args[parsed.output].as_str(), "out");
+    expect_verifier_true(source && output);
+    expect_verifier_true(parsed.options.len() == 9);
+    expect_verifier_true(matches!(parsed.options[0].kind, policy::InvocationKind::Edition));
+    expect_verifier_true(matches!(parsed.options[1].kind, policy::InvocationKind::CrateName));
+    expect_verifier_true(matches!(parsed.options[2].kind, policy::InvocationKind::Unstable));
+    expect_verifier_true(matches!(parsed.options[3].kind, policy::InvocationKind::Environment));
+    expect_verifier_true(matches!(parsed.options[4].kind, policy::InvocationKind::Search));
+    expect_verifier_true(matches!(parsed.options[5].kind, policy::InvocationKind::Extern));
+    expect_verifier_true(matches!(parsed.options[6].kind, policy::InvocationKind::Extern));
+    expect_verifier_true(matches!(parsed.options[7].kind, policy::InvocationKind::Import));
+    expect_verifier_true(matches!(parsed.options[8].kind, policy::InvocationKind::Export));
+    let export = identifiers::equal_text(args[parsed.options[8].value].as_str(), "consumer.vir");
+    let env = identifiers::equal_text(args[parsed.options[3].value].as_str(), "CARGO_PKG_VERSION=0.1.0");
+    expect_verifier_true(export && env);
+    let admitted = policy::admit_output(&contract(), &report(verification()), &args, 0, false);
+    expect_verifier_true(admitted.is_err());
+    let failed = policy::admit_output(&contract(), &report(verification()), &args, 1, false);
+    expect_verifier_true(failed.is_err());
+    let process_error = identifiers::equal_text(failed.unwrap_err().as_str(),
+        "E_VERUS_RESULT: process or verifier arguments rejected");
+    let qualification_error = identifiers::equal_text(admitted.unwrap_err().as_str(),
+        "E_VERUS_QUALIFICATION: compiler context and dependency/VIR producer evidence unavailable");
+    expect_verifier_true(process_error && qualification_error);
+    let mut conflicting = args;
+    conflicting[18] = "other=wrong.rlib".to_string();
+    let duplicate_name = policy::parse_verifier_arguments(&conflicting);
+    expect_verifier_true(duplicate_name.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
+    let mut unknown = arguments(); unknown[7] = "--unknown".to_string();
+    let rejected = policy::parse_verifier_arguments(&unknown);
+    expect_verifier_true(rejected.is_none());
+    let mut flag_root = arguments(); flag_root[8] = "--extern".to_string();
+    let rejected_root = policy::parse_verifier_arguments(&flag_root);
+    expect_verifier_true(rejected_root.is_none());
+    // 重复单值选项即使取值相同也不能造成两个解释；import 必须点名 extern。
+    proof {
+        reveal_with_fuel(policy::invocation_extensions, 6);
+        reveal_with_fuel(policy::sources::next_byte, 12);
+        reveal_strlit("--crate-name"); reveal_strlit("--import"); reveal_strlit("--extern");
+        reveal_strlit("one"); reveal_strlit("two"); reveal_strlit("missing=producer.vir");
+        reveal_strlit("root"); reveal_strlit("out");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+    }
+    let prefix = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--crate-name".to_string(), "one".to_string(),
+        "--crate-name".to_string(), "two".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    let duplicate = policy::parse_verifier_arguments(&prefix);
+    expect_verifier_true(duplicate.is_none());
+    let orphan = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--import".to_string(), "missing=producer.vir".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    let unpaired = policy::parse_verifier_arguments(&orphan);
+    expect_verifier_true(unpaired.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn named_argument_identity_and_payload_boundaries_are_independent() {
+    proof {
+        reveal_with_fuel(policy::sources::next_byte, 8);
+        reveal_strlit("a=x=y"); reveal_strlit("a=路径"); reveal_strlit("a=");
+        reveal_strlit("=x"); reveal_strlit("a=x"); reveal_strlit("ab=x");
+        reveal_strlit("a=\0x");
+    }
+    let equals_in_payload = policy::valid_named_invocation_value(b"a=x=y");
+    let unicode_payload = policy::valid_named_invocation_value("a=路径".as_bytes());
+    let empty_payload = policy::valid_named_invocation_value(b"a=");
+    let empty_name = policy::valid_named_invocation_value(b"=x");
+    let control_payload = policy::valid_named_invocation_value(b"a=\0x");
+    let same_name = policy::same_invocation_input_name(b"a=x", b"a=x=y");
+    let prefix_name = policy::same_invocation_input_name(b"a=x", b"ab=x");
+    expect_verifier_true(equals_in_payload && unicode_payload && same_name);
+    expect_verifier_true(!empty_payload && !empty_name && !control_payload && !prefix_name);
+}
+
+/// 任何报告、rlib、dep-info（包括失败 producer 遗留的产物）均不能补出未观察的资格。
+fn any_unqualified_explicit_input_rejects_even_a_success_report(
+    args: &Vec<String>, dependency: &Option<Result<Vec<u8>, String>>,
+    artifact: &Option<Result<policy::CompiledArtifact, String>>,
+)
+    requires policy::verifier_arguments(args@), !policy::source_only_invocation(args@),
+{
+    let rejected = policy::admit_observed_output(&contract(), &report(verification()),
+        args, 0, false, dependency, 1024, artifact);
+    expect_verifier_true(rejected.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -475,7 +607,7 @@ fn any_accepted_compiler_receipt_has_the_same_library(
     if accepted.is_ok() {
         assert(exit == 0 && !failed);
         assert(artifact.is_some() && artifact.unwrap().is_ok());
-        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[10]@));
+        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[policy::invocation_output(args@)]@));
         assert(artifact.unwrap().unwrap().length > 0);
         assert(policy::identifiers::digest_format(artifact.unwrap().unwrap().sha256@));
     }
@@ -706,6 +838,10 @@ fn any_unified_proof_has_a_unique_method_and_complete_original_evidence<I>(
         assert(proof.report.verification.verified > 0);
         assert(proof.report.verification.is_verifying_entire_crate);
         assert(proof.sources.candidate.len() > 0);
+        assert(policy::invocation_matches(&proof.invocation, methods[index].argv@));
+        assert(proof.artifact.path@ == original.unwrap().artifact.unwrap().unwrap().path@);
+        assert(proof.artifact.sha256@ == original.unwrap().artifact.unwrap().unwrap().sha256@);
+        assert(proof.artifact.length == original.unwrap().artifact.unwrap().unwrap().length);
     }
 }
 
