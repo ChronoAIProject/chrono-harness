@@ -1,11 +1,12 @@
 //! Each generation owns its original inputs, plan, effects and recovery reference.
+use super::verified_generation::{Object, same_object};
 use chrono_harness::{
     artifact_disposal::identity,
     decode, no_symlink_parents, relative_path,
     retained_artifacts::retention::{Inventory, Publication, unique_path},
     sha256,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -36,12 +37,6 @@ fn checkpoint(_point: &str) {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-struct Object {
-    identity: String,
-    sha256: String,
-    bytes: u64,
-}
 struct Original {
     path: PathBuf,
     object: Option<Object>,
@@ -115,7 +110,7 @@ impl Inputs {
     fn capture(&mut self, key: &str, path: PathBuf) -> Result<Option<Vec<u8>>, String> {
         let (object, bytes) = observe(&path)?;
         if let Some(previous) = self.originals.get(key) {
-            if previous.path != path || previous.object != object {
+            if previous.path != path || !same_object(previous.object.as_ref(), object.as_ref()) {
                 return Err(format!(
                     "generation input changed during preparation: {key}"
                 ));
@@ -142,7 +137,10 @@ impl Inputs {
             if resolved != original.path {
                 return Err(format!("generation input resolution changed: {key}"));
             }
-            if observe(&original.path)?.0 != original.object {
+            if !same_object(
+                observe(&original.path)?.0.as_ref(),
+                original.object.as_ref(),
+            ) {
                 return Err(format!(
                     "generation input changed before publication: {key}"
                 ));
@@ -298,7 +296,7 @@ impl Plan {
     ) -> Result<bool, String> {
         for (index, target) in self.targets.iter().enumerate() {
             let path = no_symlink_parents(root, &target.path)?;
-            if observe(&path)?.0 != target.before {
+            if !same_object(observe(&path)?.0.as_ref(), target.before.as_ref()) {
                 return Err(format!(
                     "generation output changed after preparation: {}",
                     target.path
@@ -320,7 +318,7 @@ impl Plan {
                     sync(ancestor)?;
                 }
                 sync(root)?;
-                if observe(&path)?.0 != target.before {
+                if !same_object(observe(&path)?.0.as_ref(), target.before.as_ref()) {
                     return Err(format!(
                         "generation output changed before rename: {}",
                         target.path

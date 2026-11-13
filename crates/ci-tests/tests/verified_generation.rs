@@ -19,6 +19,37 @@ fn expect(actual: bool)
     if !actual { panic!(); }
 }
 
+fn object(identity: &str, sha256: &str, bytes: u64) -> (out: policy::Object)
+    ensures out.identity@ == identity@, out.sha256@ == sha256@, out.bytes == bytes,
+{
+    policy::Object { identity: identity.to_string(), sha256: sha256.to_string(), bytes }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn generation_objects_preserve_presence_identity_digest_and_length() {
+    let original = object("16777231:42:file", "original-digest", 7);
+    let same = object("16777231:42:file", "original-digest", 7);
+    let replaced = object("16777231:43:file", "original-digest", 7);
+    let changed = object("16777231:42:file", "different-digest", 7);
+    let resized = object("16777231:42:file", "original-digest", 8);
+    expect(policy::same_object(None, None));
+    expect(!policy::same_object(Some(&original), None));
+    expect(!policy::same_object(None, Some(&original)));
+    expect(policy::same_object(Some(&original), Some(&same)));
+    expect(!policy::same_object(Some(&original), Some(&replaced)));
+    expect(!policy::same_object(Some(&original), Some(&changed)));
+    expect(!policy::same_object(Some(&original), Some(&resized)));
+
+    let empty = object("", "", 0);
+    let empty_same = object("", "", 0);
+    let boundary = object("目录\0原件\n", "é\0摘要", u64::MAX);
+    let boundary_same = object("目录\0原件\n", "é\0摘要", u64::MAX);
+    let split_fields = object("目录", "原件\n\0é\0摘要", u64::MAX);
+    expect(policy::same_object(Some(&empty), Some(&empty_same)));
+    expect(policy::same_object(Some(&boundary), Some(&boundary_same)));
+    expect(!policy::same_object(Some(&boundary), Some(&split_fields)));
+}
+
 fn case(prepare_fails: bool, apply_fails: bool) {
     let prepare = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<u64, (u64, u64)>))
         ensures out.0@ == trace@.push(1),
