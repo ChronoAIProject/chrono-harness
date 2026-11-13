@@ -55,6 +55,15 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
     }
     let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
     let (sha256, length) = copy_hashed(file, &mut tmp)?;
+    publish_blob(root, tmp, sha256, length)
+}
+fn publish_blob(
+    root: &Path,
+    tmp: tempfile::NamedTempFile,
+    sha256: String,
+    length: u64,
+) -> Result<Value, String> {
+    let directory = ".chrono-harness/state/inputs/blobs";
     let path = format!("{directory}/{sha256}");
     let target = state(root, &path)?;
     if target.exists() {
@@ -69,15 +78,6 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
         }
     }
     Ok(value!({"blob":path,"sha256":sha256,"length":length}))
-}
-pub fn capture(root: &Path, config: &str, commit: &str, output: &str) -> Result<Value, String> {
-    capture_selected(
-        root,
-        config,
-        commit,
-        output,
-        &chrono_harness::prepared::Selection::All,
-    )
 }
 pub fn capture_selected(
     root: &Path,

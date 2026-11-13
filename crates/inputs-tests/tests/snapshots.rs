@@ -1011,11 +1011,12 @@ fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_
         return;
     }
     let (d, input, mut v, base) = fixture();
-    let captured = chrono_inputs::capture(
+    let captured = chrono_inputs::capture_selected(
         d.path(),
         CONFIG,
         &base,
         ".chrono-harness/state/base-capture.json",
+        &chrono_harness::prepared::Selection::All,
     )
     .unwrap();
     // Historical input bytes remain genuine after the live input and declaration change.
@@ -1028,11 +1029,12 @@ fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_
     }
     write_values(d.path(), &v);
     let candidate = commit(d.path());
-    let current = chrono_inputs::capture(
+    let current = chrono_inputs::capture_selected(
         d.path(),
         CONFIG,
         &candidate,
         ".chrono-harness/state/candidate-capture.json",
+        &chrono_harness::prepared::Selection::All,
     )
     .unwrap();
     let pair = chrono_inputs::pair(

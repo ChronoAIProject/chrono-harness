@@ -67,12 +67,11 @@ fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String>
     let dir = state(root, ".chrono-harness/state/inputs/blobs")?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
-    if retained_artifacts::copy_to(root, a, path, source.transport.as_ref(), &mut tmp)?
-        != (digest.into(), length)
-    {
+    let observed = retained_artifacts::copy_to(root, a, path, source.transport.as_ref(), &mut tmp)?;
+    if observed != (digest.into(), length) {
         return Err("E_COMPOSE_BLOB: original identity differs".into());
     }
-    store(root, tmp.path())
+    publish_blob(root, tmp, observed.0, observed.1)
 }
 fn manifest(root: &Path, path: &str) -> Result<(Vec<u8>, Manifest), String> {
     let raw = bounded(root, path)?;
