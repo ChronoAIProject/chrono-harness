@@ -124,7 +124,16 @@ fn wrapping_and_round_trip_keep_actual_causes_native_code_and_related_error() {
 fn domain_rejection_does_not_invent_a_source_and_wire_version_is_strict() {
     let error = Failure::new("E_USAGE", "invalid argument");
     assert!(error.source().is_none());
-    let mut value = serde_json::to_value(error.record()).unwrap();
+    let record = error.record();
+    assert_eq!(record.error.error_type, std::any::type_name::<Failure>());
+    assert_eq!(record.error.code, "E_USAGE");
+    assert_eq!(record.error.message, "invalid argument");
+    assert!(record.error.context.is_empty());
+    assert!(record.error.source.is_none());
+    assert!(record.error.native_code.is_none());
+    assert!(record.error.traceback.is_none());
+    assert!(record.error.related.is_empty());
+    let mut value = serde_json::to_value(record).unwrap();
     assert_eq!(value["schema"], "chrono-error/v1");
     assert_eq!(value["error"]["source"], Value::Null);
     value["schema"] = json!("chrono-error/v999");
