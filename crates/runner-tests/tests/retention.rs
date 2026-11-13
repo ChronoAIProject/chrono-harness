@@ -1,25 +1,49 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn fixture_recovery_has_room(completed_rounds: usize) -> (room: bool)
+    ensures room == (completed_rounds < 8),
+{
+    completed_rounds < 8
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::retained_artifacts::{
     self,
     retention::{Inventory, POLICY_PATH},
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, path::Path};
 #[path = "support/isolated_capability.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod isolated_capability;
+#[cfg(not(verus_keep_ghost))]
 use isolated_capability::isolated_capability_test;
 #[path = "support/git_fixture.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod git_fixture;
 #[path = "support/native_executable.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod native_executable;
+#[cfg(not(verus_keep_ghost))]
 fn host(nodes: usize, summaries: usize) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
     fs::create_dir_all(d.path().join(".chrono-harness/state/fixtures")).unwrap();
     fs::write(d.path().join(POLICY_PATH),serde_json::to_vec(&json!({"schema":"chrono-output-retention/v2","producers":{"fixture":[".chrono-harness/state/fixtures/"]},"keep_seconds":0,"max_related_outputs":32,"max_summaries":summaries,"max_nodes_per_round":nodes,"max_bytes_per_round":1048576,"max_millis_per_round":1000})).unwrap()).unwrap();
     d
 }
+#[cfg(not(verus_keep_ghost))]
 fn inventory(root: &Path) -> Inventory {
     Inventory::adopted(root).unwrap().unwrap()
 }
+#[cfg(not(verus_keep_ghost))]
 fn maintenance(root: &Path) -> Value {
     let round = inventory(root).maintain().unwrap();
     if !round["accounting_errors"].as_array().unwrap().is_empty() {
@@ -29,6 +53,7 @@ fn maintenance(root: &Path) -> Value {
 }
 // The fixture owns every address below its private root. This count observes
 // those declarations after bounded work; it is never written into a producer report.
+#[cfg(not(verus_keep_ghost))]
 fn fixture_remaining(root: &Path, round: &Value) -> Value {
     let actual = json!(ledger(root)["outputs"].as_array().unwrap().len());
     if round["scope"]["complete"] == true {
@@ -38,10 +63,12 @@ fn fixture_remaining(root: &Path, round: &Value) -> Value {
     }
     actual
 }
+#[cfg(not(verus_keep_ghost))]
 fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
     let rounds = maintain_fixture_rounds_to(root, expected);
     fixture_remaining(root, rounds.last().unwrap())
 }
+#[cfg(not(verus_keep_ghost))]
 fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
     maintain_fixture_rounds_until(
         root,
@@ -49,6 +76,7 @@ fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
         |round| fixture_remaining(root, round) == expected,
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn maintain_fixture_rounds_until(
     root: &Path,
     expected: &str,
@@ -57,7 +85,7 @@ fn maintain_fixture_rounds_until(
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
     let mut maintenance_micros = Vec::new();
-    for _ in 0..8 {
+    while fixture_recovery_has_room(rounds.len()) {
         let began = std::time::Instant::now();
         let round = maintenance(root);
         maintenance_micros.push(began.elapsed().as_micros());
@@ -81,20 +109,32 @@ fn maintain_fixture_rounds_until(
         ledger(root)
     );
 }
+#[cfg(not(verus_keep_ghost))]
 fn tree(root: &Path, name: &str) -> String {
     let path = format!(".chrono-harness/state/fixtures/{name}");
     fs::create_dir(root.join(&path)).unwrap();
     path
 }
 #[path = "support/retention_state.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod retention_state;
+#[cfg(not(verus_keep_ghost))]
 fn ledger(root: &Path) -> Value {
     retention_state::snapshot(root)
 }
+#[cfg(not(verus_keep_ghost))]
 fn output_retired(root: &Path, id: &str) -> bool {
     let state: Value =
         serde_json::from_slice(&fs::read(retention_state::object_path(root, id)).unwrap()).unwrap();
     state["output"].is_null()
+}
+
+#[test]
+fn bounded_fixture_recovery_has_exactly_eight_rounds() {
+    assert!(fixture_recovery_has_room(0));
+    assert!(fixture_recovery_has_room(7));
+    assert!(!fixture_recovery_has_room(8));
+    assert!(!fixture_recovery_has_room(usize::MAX));
 }
 
 #[test]
@@ -2844,6 +2884,7 @@ fn per_relation_capacity_preserves_independent_outputs_and_recovers_pending_reco
     drop(first);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn report_host() -> tempfile::TempDir {
     let h = host(256, 16);
     let mut policy: Value =
@@ -4404,6 +4445,7 @@ fn source_protection_accepts_unborn_outputs_and_preserves_fixture_git_sources() 
     source_protection_boundaries(&git_fixture::program());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn source_protection_boundaries(program: &Path) {
     use chrono_harness::artifact_disposal::source_safe;
     let h = host(256, 16);
@@ -5442,11 +5484,13 @@ fn ordinary_concurrent_publications_admit_against_retained_inventory() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn consumer_input(root: &Path, consumer: &str, originals: Value) -> Value {
     let raw = serde_json::to_vec(&json!({"schema":"chrono-retention-consumer/v1","consumer":consumer,"purpose":"Repair and recheck required original failure inputs; interruption is not release","originals":originals})).unwrap();
     fs::write(root.join("consumer.json"), &raw).unwrap();
     json!({"path":"consumer.json","sha256":chrono_harness::sha256(&raw)})
 }
+#[cfg(not(verus_keep_ghost))]
 fn consumer_call(root: &Path, request: Value) -> chrono_harness::CliOutput {
     fs::write(
         root.join("consumer-request.json"),
@@ -5461,9 +5505,11 @@ fn consumer_call(root: &Path, request: Value) -> chrono_harness::CliOutput {
         "consumer-request.json",
     ])
 }
+#[cfg(not(verus_keep_ghost))]
 fn original_identity(root: &Path, id: &str, path: &str) -> Value {
     json!({"id":id,"path":path,"identity":chrono_harness::artifact_disposal::identity(&root.join(path)).unwrap()})
 }
+#[cfg(not(verus_keep_ghost))]
 fn consumer_release(root: &Path, declaration: &Value, state: &str) -> Value {
     // This fixture's responsible repair consumer produces its actual domain state.
     let raw = serde_json::to_vec(&json!({"repair":{"consumer":serde_json::from_slice::<Value>(&fs::read(root.join("consumer.json")).unwrap()).unwrap()["consumer"],"declaration_sha256":declaration["sha256"],"state":state}})).unwrap();
@@ -5806,6 +5852,7 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
     assert_eq!(retained["roles"], original_before["roles"]);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
     if !isolated_capability_test(test) {
         return;
@@ -7500,6 +7547,7 @@ fn publication_input_handoff_requires_sealed_referenced_unchanged_originals() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn observation_publication(
     root: &Path,
     name: &str,
