@@ -450,7 +450,7 @@ fn original_binding_case(intent_schema: bool, intent_attempt: bool, host: bool, 
             let (identified, actual) = choose|state: Vec<u8>, actual: Result<String, String>|
                 #[trigger] identify.ensures((start,), (state, actual)) && match actual {
                     Err(error) => (trace, result) == (state, Err::<(), String>(error)),
-                    Ok(actual) => if !policy::text_is(fields.intent_host, &actual) {
+                    Ok(actual) => if !policy::original_binding_host(&fields, actual) {
                         trace == state && policy::rejected_original_binding(result)
                     } else {
                         exists|next: Vec<u8>, matched: bool|
@@ -467,7 +467,7 @@ fn original_binding_case(intent_schema: bool, intent_attempt: bool, host: bool, 
                 if result_equal {
                     let (hashed, digest) = choose|state: Vec<u8>, digest: String|
                         #[trigger] hash.ensures((compared, &bytes), (state, digest))
-                            && trace == state && policy::original_binding_digest_result(&fields, "路径\0原件\n", &digest, result);
+                            && trace == state && policy::original_binding_digest_result(&fields, "路径\0原件\n", digest@, result);
                 }
             }
         }

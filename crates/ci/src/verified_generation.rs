@@ -285,11 +285,16 @@ pub open spec fn rejected_original_binding(result: Result<(), String>) -> bool {
     match result { Err(error) => error@ == "generation original result/intent binding mismatch"@, _ => false }
 }
 
-pub open spec fn original_binding_digest_result(fields: &OriginalBinding, path: &str, digest: &str,
+pub open spec fn original_binding_host(fields: &OriginalBinding, actual: String) -> bool {
+    match fields.intent_host { Some(host) => host@ == actual@, None => false }
+}
+
+pub open spec fn original_binding_digest_result(fields: &OriginalBinding, path: &str, digest: Seq<char>,
     result: Result<(), String>) -> bool
 {
     let bound = text_is(fields.result_schema, "chrono-ci-generation-result/v1")
-        && text_is(fields.result_attempt, path) && text_is(fields.result_intent_sha256, digest)
+        && text_is(fields.result_attempt, path)
+        && (match fields.result_intent_sha256 { Some(actual) => actual@ == digest, None => false })
         && fields.result_exit_is_null;
     match result { Ok(()) => bound, Err(_) => !bound && rejected_original_binding(result) }
 }
@@ -304,7 +309,7 @@ pub open spec fn original_binding_equality_result<S, H>(
     else {
         exists|next: S, digest: String|
             #[trigger] hash.ensures((initial, intent), (next, digest))
-                && out.0 == next && original_binding_digest_result(fields, path, &digest, out.1)
+                && out.0 == next && original_binding_digest_result(fields, path, digest@, out.1)
     }
 }
 
@@ -320,7 +325,7 @@ pub open spec fn original_binding_result<S, I, C, H>(
         exists|state: S, actual: Result<String, String>|
             #[trigger] identify.ensures((initial,), (state, actual)) && match actual {
                 Err(error) => out == (state, Err::<(), String>(error)),
-                Ok(actual) => if !text_is(fields.intent_host, &actual) {
+                Ok(actual) => if !original_binding_host(fields, actual) {
                     out.0 == state && rejected_original_binding(out.1)
                 } else {
                     exists|next: S, matched: bool|
