@@ -1,5 +1,6 @@
 mod snapshot;
 mod state;
+pub mod verified_snapshot;
 
 use chrono_harness::{
     CliOutput, CommandSpec, ProcessEvidence, file_identity, resolve_program,

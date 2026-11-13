@@ -1,5 +1,11 @@
 # SPEC 当前覆盖情况
 
+`crates/pr/src/verified_snapshot.rs` 证明 PR 检查的 SUCCESS、pending、失败和未知分类，
+并证明 stale、closed、failed、pending、passed 的优先级；`snapshot.rs` 直接消费同源结果。
+独立 Verus 预期覆盖所有类别、大小写差异及重叠优先级，沿 `pr` 的行为测试共同验收。
+GitHub JSON、分页、URL、Git 状态和 IO 仍是明确外部接口；完整快照事务、实际 provider
+采用与全仓覆盖门仍待后续批次。
+
 输出保留的同步元数据排除采用现有本地目录租约；路径、输出、使用方和事务地址不向
 后代转交元数据所有权。真实 fork 回归核调用中排他和返回后的完整状态读取，并保留
 原件读租约在 fork 后继续保护原字节的断言。外部删除保护继续采用可转交租约；真实

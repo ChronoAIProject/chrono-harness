@@ -200,12 +200,14 @@
     {"path":"crates/pr/src/lib.rs","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/pr/src/main.rs","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"compile","to":"project:pr-tests"},{"kind":"test-execution","to":"test:pr-tests"}]},
     {"path":"crates/pr/src/snapshot.rs","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr/src/verified_snapshot.rs","verification":{"role":"program","roots":[{"path":"crates/pr/src/verified_snapshot.rs","operation":"verify.pr-snapshot"},{"path":"crates/pr-tests/tests/verified_snapshot.rs","operation":"verify.pr-snapshot-tests"}]},"owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"compile","to":"project:pr-tests"},{"kind":"test-execution","to":"test:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/pr/src/state.rs","owner":"pr","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr"},{"kind":"test-execution","to":"test:runner-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/pr-tests/Cargo.toml","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/pr-tests/Cargo.lock","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/pr-tests/tests/lifecycle.rs","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/pr-tests/tests/support/gh.rs","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/pr-tests/tests/fixtures/snapshot.json","owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/pr-tests/tests/verified_snapshot.rs","verification":{"role":"program","roots":[{"path":"crates/pr-tests/tests/verified_snapshot.rs","operation":"verify.pr-snapshot-tests"}]},"owner":"pr-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:pr-tests"},{"kind":"test-execution","to":"test:pr-tests"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":".chrono-harness/pr.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:pr"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"docs/pr.md","owner":"pr","surface":"documentation","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/ci/Cargo.toml","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci"}]},
@@ -1598,6 +1600,8 @@
     },
     "test:pr-tests": {
       "operations": [
+        "verify.pr-snapshot",
+        "verify.pr-snapshot-tests",
         "fmt.pr",
         "fmt.pr-tests",
         "test.pr-tests"
@@ -2287,6 +2291,8 @@
       "verify.judge-workflow-certificate-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.judge-workflow-transition": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.judge-workflow-transition-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.pr-snapshot": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.pr-snapshot-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "fmt.pr":{"resources":[],"outputs":[]},
       "fmt.pr-tests":{"resources":[],"outputs":[]},
       "test.pr-tests":{"resources":["worktree-test-inventory"],"outputs":["crates/pr-tests/target/"]}
