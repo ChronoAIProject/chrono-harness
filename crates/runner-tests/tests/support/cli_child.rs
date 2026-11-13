@@ -2,10 +2,12 @@ use serde_json::{Value, json};
 use std::io::{self, Read, Write};
 
 fn main() {
+    if std::env::var("CHRONO_TEST_PRODUCER").is_ok_and(|value| value == "1") {
+        producer_fixture();
+    }
     let executable = std::env::current_exe().unwrap();
     match executable.file_name().unwrap().to_str().unwrap() {
         "true" => std::process::exit(9),
-        "producer-fixture" => producer_fixture(),
         "git-fixture" => {
             let mut marker = std::fs::OpenOptions::new()
                 .create(true)

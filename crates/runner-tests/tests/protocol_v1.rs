@@ -3514,18 +3514,14 @@ fn producer_host() -> (tempfile::TempDir, wire::Request) {
 }
 
 fn producer_command(root: &std::path::Path, args: &[&str], input: &[u8]) -> std::process::Command {
-    let executable = root.join("producer-fixture");
-    if !executable.exists() {
-        native_executable::install(env!("CARGO_BIN_EXE_chrono-test-cli-child"), &executable)
-            .unwrap();
-    }
     let marker = root.join("producer-evaluated");
     if marker.exists() {
         fs::remove_file(marker).unwrap();
     }
     fs::write(root.join("producer-input"), input).unwrap();
-    let mut command = std::process::Command::new(executable);
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-cli-child"));
     command
+        .env("CHRONO_TEST_PRODUCER", "1")
         .current_dir(root)
         .args(args)
         .stdin(fs::File::open(root.join("producer-input")).unwrap());
