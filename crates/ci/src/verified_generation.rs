@@ -6,7 +6,7 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
-mod identifiers;
+pub(crate) mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
 

@@ -6,6 +6,10 @@ mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_ci::verified_generation as policy;
 #[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+#[cfg(verus_keep_ghost)]
+use policy::identifiers;
+#[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
@@ -139,15 +143,17 @@ fn effect_labels_keep_unknown_distinct_from_no_work_and_completed_work() {
     let untouched = policy::Effects::NotStarted;
     let uncertain = policy::Effects::Unknown;
     let completed = policy::Effects::Complete;
-    expect(untouched.label() == "not-started");
-    expect(uncertain.label() == "unknown");
-    expect(completed.label() == "complete");
+    expect(identifiers::equal_text(untouched.label(), "not-started"));
+    expect(identifiers::equal_text(uncertain.label(), "unknown"));
+    expect(identifiers::equal_text(completed.label(), "complete"));
     expect(untouched.can_release());
     expect(!uncertain.can_release());
     expect(completed.can_release());
     proof {
         reveal_strlit("unknown"); reveal_strlit("UNKNOWN"); reveal_strlit("unknown\0");
         assert("unknown"@[0] != "UNKNOWN"@[0]);
+        assert("unknown"@.len() != "unknown\0"@.len());
+        assert("unknown"@.len() != ""@.len());
     }
     expect(policy::reported_unknown(Some("unknown")));
     expect(!policy::reported_unknown(None));
@@ -161,6 +167,8 @@ fn original_completion_requires_one_released_and_sealed_record() {
     proof {
         reveal_strlit("released"); reveal_strlit("released-extra");
         reveal_strlit("releasing");
+        assert("released"@.len() != "released-extra"@.len());
+        assert("released"@.len() != "releasing"@.len());
     }
     expect(policy::sealed_record(1, Some("released"), Some(true)));
     expect(!policy::sealed_record(0, Some("released"), Some(true)));
@@ -179,6 +187,7 @@ fn recovery_uses_the_complete_original_id_and_path_and_rejects_missing_fields() 
         reveal_strlit("对象\0甲"); reveal_strlit("对象\0乙");
         reveal_strlit("目录/\0原件\n"); reveal_strlit("目录/\0原件");
         assert("对象\0甲"@[3] != "对象\0乙"@[3]);
+        assert("目录/\0原件\n"@.len() != "目录/\0原件"@.len());
     }
     let id = "对象\0甲";
     let path = "目录/\0原件\n";
