@@ -14,7 +14,7 @@ pub fn judge_main(name: &str, version: &str, judge: impl FnOnce(&Request) -> Res
         use std::io::{Read, Write};
         let (state, outcome) = crate::verified_cli::run_judge_entry(
             (),
-            args,
+            crate::verified_cli::judge_owned_mode(args),
             |()| {
                 let mut bytes = vec![];
                 let result = std::io::stdin()

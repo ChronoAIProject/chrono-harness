@@ -22,14 +22,17 @@ pub const JUDGE_READ_LIMIT: u64 = 64 * 1024 * 1024 + 1;
 
 pub enum JudgeMode { Version, Protocol, Usage }
 
-pub open spec fn judge_mode_spec(args: Seq<&str>) -> JudgeMode {
-    if args.len() == 1 && args[0]@ == "--version"@ {
+pub open spec fn judge_mode_fields(count: nat, first: Seq<char>, second: Seq<char>) -> JudgeMode {
+    if count == 1 && first == "--version"@ {
         JudgeMode::Version
-    } else if args.len() == 2
-        && args[0]@ == "--protocol"@
-        && args[1]@ == "chrono-judge/v1"@ {
+    } else if count == 2 && first == "--protocol"@ && second == "chrono-judge/v1"@ {
         JudgeMode::Protocol
     } else { JudgeMode::Usage }
+}
+
+pub open spec fn judge_mode_spec(args: Seq<&str>) -> JudgeMode {
+    judge_mode_fields(args.len(), if args.len() > 0 { args[0]@ } else { Seq::empty() },
+        if args.len() > 1 { args[1]@ } else { Seq::empty() })
 }
 
 pub fn judge_mode(args: &[&str]) -> (mode: JudgeMode)
@@ -42,6 +45,17 @@ pub fn judge_mode(args: &[&str]) -> (mode: JudgeMode)
         && identifiers::equal_text(args[1], "chrono-judge/v1") {
         JudgeMode::Protocol
     } else { JudgeMode::Usage }
+}
+
+/// 实际字符串参数只借用最多两项；原数量参与判定，不复制名称或另建向量。
+pub fn judge_owned_mode(args: &[String]) -> (mode: JudgeMode)
+    ensures mode == judge_mode_fields(args.len() as nat,
+        if args.len() > 0 { args[0]@ } else { Seq::empty() },
+        if args.len() > 1 { args[1]@ } else { Seq::empty() }),
+{
+    if args.len() == 1 { judge_mode(&[args[0].as_str()]) }
+    else if args.len() == 2 { judge_mode(&[args[0].as_str(), args[1].as_str()]) }
+    else { JudgeMode::Usage }
 }
 
 pub fn judge_request_admissible(read_ok: bool, length: usize) -> (allowed: bool)
@@ -127,7 +141,7 @@ pub open spec fn judge_protocol_result<S, Q, P, E, RE, WE, R, D, J, C, O>(
 }
 
 pub fn run_judge_entry<S, Q, P, E, RE, WE, R, D, J, C, O>(
-    state: S, args: &[&str], read: R, decode: D, judge: J, encode: C, publish: O,
+    state: S, mode: JudgeMode, read: R, decode: D, judge: J, encode: C, publish: O,
 ) -> (out: (S, JudgeOutcome<E>))
     where R: FnOnce(S) -> (S, Result<Vec<u8>, RE>),
         D: FnOnce(S, Vec<u8>) -> (S, Result<Q, E>),
@@ -140,13 +154,13 @@ pub fn run_judge_entry<S, Q, P, E, RE, WE, R, D, J, C, O>(
         forall|s: S, request: Q| judge.requires((s, request)),
         forall|s: S, response: P| encode.requires((s, response)),
         forall|s: S, bytes: Vec<u8>| publish.requires((s, bytes)),
-    ensures match judge_mode_spec(args@) {
+    ensures match mode {
         JudgeMode::Version => out == (state, JudgeOutcome::<E>::Version),
         JudgeMode::Usage => out == (state, JudgeOutcome::<E>::Usage),
         JudgeMode::Protocol => judge_protocol_result(state, read, decode, judge, encode, publish, out),
     },
 {
-    match judge_mode(args) {
+    match mode {
         JudgeMode::Version => return (state, JudgeOutcome::Version),
         JudgeMode::Usage => return (state, JudgeOutcome::Usage),
         JudgeMode::Protocol => {},

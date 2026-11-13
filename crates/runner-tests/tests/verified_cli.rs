@@ -134,6 +134,19 @@ fn judge_read_bound_is_inclusive_and_a_native_read_error_always_rejects() {
     expect_true(!policy::judge_request_admissible(false, usize::MAX));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn judge_owned_arguments_keep_the_original_count_and_complete_text() {
+    proof {
+        reveal_strlit("--version"); reveal_strlit("--protocol");
+        assert("--version"@.len() == 9); assert("--protocol"@.len() == 10);
+    }
+    expect_true(matches!(policy::judge_owned_mode(&[]), policy::JudgeMode::Usage));
+    expect_true(matches!(policy::judge_owned_mode(&["--version".to_owned()]), policy::JudgeMode::Version));
+    expect_true(matches!(policy::judge_owned_mode(&["--protocol".to_owned(), "chrono-judge/v1".to_owned()]), policy::JudgeMode::Protocol));
+    expect_true(matches!(policy::judge_owned_mode(&["--version".to_owned(), "".to_owned()]), policy::JudgeMode::Usage));
+    expect_true(matches!(policy::judge_owned_mode(&["--protocol".to_owned(), "chrono-judge/v1".to_owned(), "目录\0\né".to_owned()]), policy::JudgeMode::Usage));
+}
+
 struct Probe {
     stop: u8,
     exit: u8,
@@ -221,7 +234,7 @@ fn run_probe(args: &[&str], stop: u8, exit: u8) -> (out: (Probe, policy::JudgeOu
         let result = if state.stop == 4 { Err(72) } else { Ok(()) };
         (state, result)
     };
-    let out = policy::run_judge_entry(initial, args, read, decode, judge, encode, publish);
+    let out = policy::run_judge_entry(initial, policy::judge_mode(args), read, decode, judge, encode, publish);
     proof {
         if policy::judge_mode_spec(args@) == policy::JudgeMode::Protocol {
             let (s1, input) = choose|s1: Probe, input: Result<Vec<u8>, u8>|
