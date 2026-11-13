@@ -256,8 +256,18 @@ pub(super) struct Profile {
     pub judge: Option<chrono_harness::CommandSpec>,
 }
 pub(super) fn profile(root: &Path, c: &Config) -> Result<Profile, String> {
+    profile_with(root, c, &mut |path| {
+        fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())
+    })
+}
+pub(super) fn profile_with(
+    _root: &Path,
+    c: &Config,
+    read: &mut impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<Profile, String> {
     let profile = if c.schema == FULL_SCHEMA {
-        let raw = chrono_harness::load_selected_config(root, &c.collection.check_config)?;
+        let raw =
+            chrono_harness::load_selected_config_with(&c.collection.check_config, &mut *read)?;
         let block = chrono_harness::units::full_execution_units(&raw)?
             .ok_or("full provider requires registered full units")?;
         Profile {
@@ -269,8 +279,7 @@ pub(super) fn profile(root: &Path, c: &Config) -> Result<Profile, String> {
             judge: None,
         }
     } else {
-        let profile =
-            chrono_harness::load_config(&no_symlink_parents(root, &c.collection.check_config)?)?;
+        let profile = chrono_harness::decode_check_config(&read(&c.collection.check_config)?)?;
         if profile.schema != chrono_harness::units::PROFILE {
             return Err("v1 unit provider requires chrono-ci-check/v3".into());
         }
@@ -328,53 +337,41 @@ pub fn render(c: &Config, config_path: &str) -> Result<BTreeMap<String, String>,
     super::gating::render(c, config_path)
 }
 
-fn projection_changes(
+pub(super) fn projection_plan(
     root: &Path,
     path: &str,
     c: &Config,
     verify: bool,
-) -> Result<Vec<(String, String)>, String> {
-    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
-    let outputs = render(c, path)?;
-    let mut writes = vec![];
-    for (path, bytes) in &outputs {
-        if !output_preflight(root, path, bytes, super::gating::MARKER)? {
-            if verify {
-                return Err(format!("generated unit workflow drift: {path}"));
-            }
-            writes.push((path.clone(), bytes.clone()));
-        }
-    }
-    Ok(writes)
-}
-pub fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
-    profile(root, c)?;
-    let writes = projection_changes(root, path, c, verify)?;
-    // Preflight every output before modifying any of them; I/O failure is reported, never atomicity claimed.
-    for (path, bytes) in &writes {
-        write_file(root, path, bytes.as_bytes())?;
-    }
-    Ok(!writes.is_empty())
-}
-
-pub fn init(root: &Path, incoming: Config) -> Result<bool, String> {
-    let path = ".chrono-harness/ci/units.json";
-    let existing = no_symlink_parents(root, path)?.exists();
-    let c: Config = if existing {
-        decode(&fs::read(root.join(path)).map_err(|e| e.to_string())?)?
-    } else {
-        incoming
-    };
-    if !existing {
-        profile(root, &c)?;
-        projection_changes(root, path, &c, false)?;
-        write_file(
+    inputs: &mut generation::Inputs,
+) -> Result<generation::Plan, String> {
+    profile_with(root, c, &mut |path| inputs.read(path))?;
+    super::cache::validate_registry_with(root, c.persistent_cache.as_ref(), &mut |path| {
+        inputs.read(path)
+    })?;
+    let mut plan = generation::Plan::default();
+    for (path, bytes) in render(c, path)? {
+        plan.workflow(
             root,
-            path,
-            &serde_json::to_vec_pretty(&c).map_err(|e| e.to_string())?,
+            &path,
+            bytes,
+            super::gating::MARKER,
+            verify,
+            "generated unit workflow drift",
         )?;
     }
-    Ok(generate(root, path, &c, false)? || !existing)
+    Ok(plan)
+}
+
+// Internal transport preflight shares projection preparation without starting another operation.
+pub(crate) fn verify_projection(root: &Path, path: &str, c: &Config) -> Result<(), String> {
+    profile(root, c)?;
+    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
+    for (path, bytes) in render(c, path)? {
+        if !output_preflight(root, &path, &bytes, super::gating::MARKER)? {
+            return Err(format!("generated unit workflow drift: {path}"));
+        }
+    }
+    Ok(())
 }
 
 pub fn prepare(

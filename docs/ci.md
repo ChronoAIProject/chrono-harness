@@ -28,6 +28,45 @@
 
 此外，`check` 可通过登记 full profile 使用 `chrono-judge/v1` 及 registration／filemap／routes／projects 判官。schema4 自动产生上下文，旧 full profile 仍要求明确上下文。完整治理尚未完成，实际求值会非零退出；工作流已有[有限认证](workflow.md)，完整自动生命周期仍未实现。[混合修改](mixed.md)已有专属分类／警告判官和真实链测试，成本报告也有专属判官及登记消费者测试。共享操作计划、执行和回执比较见[执行说明](execution.md)。
 
+## 生成操作的原件与接续
+
+`init`、`generate` 和 `verify` 的四种现役投影共用生成所有者。每次调用在
+`.chrono-harness/state/ci-generation-operations/` 分配独立操作，先保存 intent，
+再准备本次实际读取的配置原件和完整输出计划，随后才写工作流。stderr 返回该操作地址。
+普通生成不锁整个操作目录，也不遍历其他尝试。内部采集的只读投影预检不另开嵌套操作。
+
+每个输入保存实际读取的字节、请求／解析路径、物理身份和摘要；单元平台配置由原有
+selector 选择，缓存登记、下载登记和显式文件输入使用同一捕获读取器。
+这不建立完整 Cargo／SDK／执行物输入绑定。每个原件最多 16 MiB；整个操作继续服从
+宿主的输出字节和节点上限。计划保留新旧内容、准确目标和临时发布槽位；已经写入的
+目标另有原始效果记录。文件重命名不构成多文件事务。
+
+沿 stderr 给出的原操作地址查询或接续，使用当前二进制：
+
+```sh
+.chrono-harness/bin/chrono-ci generation-status --host-root . --operation-path <原操作地址>
+.chrono-harness/bin/chrono-ci generation-resume --host-root . --operation-path <原操作地址>
+```
+
+状态把函数求值与外层进程退出分开：未由调用方观察到的 OS 退出保持 null。
+求值返回后先由原保留所有者保存准确结果，再发布结果文件和封存原件；结果文件发布
+中断时，只补完同一操作的结果发布。接续核对 intent、输入、计划和结果的原字节绑定，
+不重新生成工作流，不用当前工作流倒推成功。缺少原求值结果继续保持 unknown；
+已返回失败但效果尚未确认的操作继续保留恢复引用。
+
+宿主若已有 retention，必须先登记 `ci-generation-operation` 的准确目录和有限
+`terminal_limits`，缺少登记会在写工作流前失败。未采用 retention 的独立宿主使用
+产品自带政策：终态保留一天，最多 32 个、64 MiB，退役 metadata 不另行永久保留。
+已确认终态且消费者释放后，由现有保留维护入口或下列生成所有者入口执行有界维护：
+
+```sh
+.chrono-harness/bin/chrono-ci generation-maintain --host-root .
+```
+
+维护不终结 unknown 操作；已回收原件查询为 `unavailable-or-retired`，不能反推成功。
+这些合同仍须通过候选的行为检查、严格 Verus、原生 CI 和实际落地验收；局部证明不证明
+文件系统接口、完整输入或所有产品工具的生命周期均已完成。新增持久 IO 和总成本未测。
+
 <a id="this-repository"></a>
 
 ## 在本仓运行

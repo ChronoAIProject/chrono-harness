@@ -463,7 +463,7 @@ fn inner(
     repository: &str,
     transport: &mut Transport<'_>,
 ) -> Result<Value, String> {
-    units::generate(root, path, c, true)?;
+    units::verify_projection(root, path, c)?;
     let context: Value = decode(
         &fs::read(no_symlink_parents(root, &c.collection.context_path)?)
             .map_err(|e| e.to_string())?,

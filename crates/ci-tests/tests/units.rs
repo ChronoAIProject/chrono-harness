@@ -512,7 +512,10 @@ fn gather_host_config_and_retention(
             .unwrap();
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
-    if let Some(policy) = retention {
+    if let Some(mut policy) = retention {
+        policy["producers"]["ci-generation-operation"] =
+            json!([".chrono-harness/state/ci-generation-operations/"]);
+        policy["terminal_limits"] = json!({"ci-generation-operation":{"keep_seconds":86400,"max_count":32,"max_bytes":67108864,"metadata_keep_seconds":0}});
         // Keep the existing judge's phase and operation events in its original
         // stderr when this fixture exercises retained publication boundaries.
         let path = ".chrono-harness/ci/check.json";

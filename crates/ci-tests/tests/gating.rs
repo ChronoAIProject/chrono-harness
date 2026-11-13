@@ -1484,8 +1484,9 @@ fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
     for name in ["collection.yml"] {
         fs::remove_file(h.root.join(format!(".github/workflows/{name}"))).unwrap();
     }
-    let c = serde_json::from_value(incoming).unwrap();
-    assert!(chrono_ci::units::init(&h.root, c).unwrap());
+    let input = h.root.join("incoming.json");
+    fs::write(&input, serde_json::to_vec(&incoming).unwrap()).unwrap();
+    assert!(chrono_ci::init(&h.root, &input).unwrap());
     let adopted: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
     assert_eq!(adopted["job_gating"]["schema"], "chrono-job-gating/v1");
     assert_eq!(adopted["units"]["alpha"]["runs_on"], "host-custom");

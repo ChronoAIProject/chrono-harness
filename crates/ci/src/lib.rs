@@ -11,12 +11,14 @@ mod event_git;
 pub mod full;
 mod gather;
 pub mod gating;
+pub mod generation;
 pub mod inventory;
 pub mod migrate;
 pub mod release;
 pub mod startup;
 pub mod units;
 pub mod verified_download;
+pub mod verified_generation;
 pub mod verified_literals;
 
 const MARKER: &str = "# chrono-ci: owned github-actions/v1\n";
@@ -123,10 +125,6 @@ enum Projection {
     Check(Config),
     Full(full::Config),
     Release(release::Config),
-}
-fn load_projection(path: &Path) -> Result<Projection, String> {
-    let bytes = fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    decode_projection(&bytes)
 }
 fn decode_projection(bytes: &[u8]) -> Result<Projection, String> {
     let value: Value = decode(bytes)?;
@@ -479,93 +477,87 @@ fn inventory_output(c: &Config) -> Result<Option<(&str, Vec<u8>)>, String> {
         })
         .transpose()
 }
-fn inventory_preflight(
+fn projection_plan(
     root: &Path,
     path: &str,
-    expected: &[u8],
+    projection: &Projection,
+    verify: bool,
     adopting: bool,
-) -> Result<bool, String> {
-    let target = no_symlink_parents(root, path)?;
-    match fs::read(target) {
-        Ok(bytes) if adopting && bytes != expected => {
-            Err(format!("initial inventory adoption collision: {path}"))
-        }
-        Ok(bytes) => Ok(bytes == expected),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
-        Err(e) => Err(e.to_string()),
-    }
-}
-pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, String> {
-    relative_path(config_path)?;
-    let c = match load_projection(&no_symlink_parents(root, config_path)?)? {
-        Projection::Check(c) => c,
-        Projection::Units(c) => return units::generate(root, config_path, &c, verify),
-        Projection::Full(c) => return full::generate(root, config_path, &c, verify),
+    inputs: &mut generation::Inputs,
+) -> Result<generation::Plan, String> {
+    match projection {
+        Projection::Units(c) => units::projection_plan(root, path, c, verify, inputs),
+        Projection::Full(c) => full::projection_plan(root, path, c, verify),
         Projection::Release(c) => {
-            if !config_path.starts_with(".chrono-harness/") {
+            if !path.starts_with(".chrono-harness/") {
                 return Err("release configuration must belong to .chrono-harness".into());
             }
-            return release::generate(root, &c, verify);
+            release::projection_plan(root, c, verify, inputs)
         }
-    };
-    let rendered = render(&c, config_path)?;
-    let same = output_preflight(root, &c.workflow_path, &rendered, MARKER)?;
-    let initial = inventory_output(&c)?;
-    let initial_same = match &initial {
-        Some((path, bytes)) => inventory_preflight(root, path, bytes, false)?,
-        None => true,
-    };
-    if verify && !same {
-        return Err(format!("generated workflow drift: {}", c.workflow_path));
+        Projection::Check(c) => {
+            let mut plan = generation::Plan::default();
+            plan.workflow(
+                root,
+                &c.workflow_path,
+                render(c, path)?,
+                MARKER,
+                verify,
+                "generated workflow drift",
+            )?;
+            if let Some((path, bytes)) = inventory_output(c)? {
+                plan.inventory(root, path, bytes, adopting, verify)?;
+            }
+            Ok(plan)
+        }
     }
-    if verify && !initial_same {
-        return Err(format!(
-            "generated initial inventory drift: {}",
-            initial.as_ref().unwrap().0
-        ));
-    }
-    if !verify && !initial_same {
-        let (path, bytes) = initial.as_ref().unwrap();
-        write_file(root, path, bytes)?;
-    }
-    if !verify && !same {
-        write_file(root, &c.workflow_path, rendered.as_bytes())?
-    }
-    Ok(!same || !initial_same)
+}
+
+pub fn generate(root: &Path, config_path: &str, verify: bool) -> Result<bool, String> {
+    relative_path(config_path)?;
+    generation::run(
+        root,
+        if verify { "verify" } else { "generate" },
+        config_path,
+        |root, inputs| {
+            let projection = decode_projection(&inputs.read(config_path)?)?;
+            projection_plan(root, config_path, &projection, verify, false, inputs)
+        },
+    )
 }
 pub fn init(root: &Path, input: &Path) -> Result<bool, String> {
-    let incoming = match load_projection(input)? {
-        Projection::Check(c) => c,
-        Projection::Units(c) => return units::init(root, c),
-        Projection::Full(c) => return full::init(root, c),
-        Projection::Release(c) => return release::init(root, c),
-    };
-    let path = ".chrono-harness/ci/github.json";
-    let dest = no_symlink_parents(root, path)?;
-    let existing = dest.exists();
-    let c = if existing { load(&dest)? } else { incoming };
-    let rendered = render(&c, path)?;
-    let same = output_preflight(root, &c.workflow_path, &rendered, MARKER)?;
-    let initial = inventory_output(&c)?;
-    let initial_same = match &initial {
-        Some((path, bytes)) => inventory_preflight(root, path, bytes, !existing)?,
-        None => true,
-    };
-    if !initial_same {
-        let (path, bytes) = initial.as_ref().unwrap();
-        write_file(root, path, bytes)?;
-    }
-    if !existing {
-        write_file(
-            root,
-            path,
-            &(serde_json::to_string_pretty(&c).map_err(|e| e.to_string())? + "\n").into_bytes(),
-        )?
-    }
-    if !same {
-        write_file(root, &c.workflow_path, rendered.as_bytes())?
-    }
-    Ok(!existing || !same || !initial_same)
+    let requested = input.to_str().ok_or("generation config path UTF8")?;
+    generation::run(root, "init", requested, |root, inputs| {
+        let incoming = decode_projection(&inputs.external(input)?)?;
+        let path = match &incoming {
+            Projection::Check(_) => ".chrono-harness/ci/github.json",
+            Projection::Units(_) => ".chrono-harness/ci/units.json",
+            Projection::Full(_) => ".chrono-harness/ci/full.json",
+            Projection::Release(_) => ".chrono-harness/ci/release.json",
+        };
+        let adopted = inputs.optional(path)?;
+        let projection = if let Some(bytes) = &adopted {
+            let existing = decode_projection(bytes)?;
+            if std::mem::discriminant(&existing) != std::mem::discriminant(&incoming) {
+                return Err("adopted CI source has a different projection kind".into());
+            }
+            existing
+        } else {
+            incoming
+        };
+        let mut plan = projection_plan(root, path, &projection, false, adopted.is_none(), inputs)?;
+        if adopted.is_none() {
+            let mut bytes = match &projection {
+                Projection::Check(c) => serde_json::to_vec_pretty(c),
+                Projection::Units(c) => serde_json::to_vec_pretty(c),
+                Projection::Full(c) => serde_json::to_vec_pretty(c),
+                Projection::Release(c) => serde_json::to_vec_pretty(c),
+            }
+            .map_err(|e| e.to_string())?;
+            bytes.push(b'\n');
+            plan.adopt(path, bytes)?;
+        }
+        Ok(plan)
+    })
 }
 pub fn prepare(
     root: &Path,
@@ -755,6 +747,14 @@ pub fn dispatch(args: &[String]) -> Result<String, String> {
     }
     if args.first().map(String::as_str) == Some("check-inputs") {
         return check_inputs::dispatch(args);
+    }
+    if args.first().is_some_and(|command| {
+        matches!(
+            command.as_str(),
+            "generation-status" | "generation-resume" | "generation-maintain"
+        )
+    }) {
+        return generation::dispatch(args);
     }
     if args == ["--version"] {
         return Ok(format!("chrono-ci {}\n", env!("CARGO_PKG_VERSION")));

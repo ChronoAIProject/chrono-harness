@@ -18,6 +18,14 @@ mod process_ownership;
 pub fn load_selected_config(root: &Path, path: &str) -> Result<Value, String> {
     facts_configs::load(root, path).map(|(_, _, config, _)| config)
 }
+/// Resolve the same selector using the consumer's original-input reader.
+pub fn load_selected_config_with(
+    path: &str,
+    mut read: impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<Value, String> {
+    let bytes = read(path)?;
+    facts_configs::resolve(path, bytes, read).map(|(_, _, config, _)| config)
+}
 mod facts_inputs;
 pub mod full;
 pub mod initial;
@@ -600,7 +608,11 @@ pub fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, String>
     serde_json::from_value(json(bytes)?).map_err(|e| e.to_string())
 }
 pub fn load_config(path: &Path) -> Result<CheckConfig, String> {
-    let c: CheckConfig = decode(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)?;
+    decode_check_config(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
+}
+/// Decode and validate exactly the bytes already captured by a consumer.
+pub fn decode_check_config(bytes: &[u8]) -> Result<CheckConfig, String> {
+    let c: CheckConfig = decode(bytes)?;
     if !matches!(
         c.schema.as_str(),
         "chrono-ci-check/v1" | "chrono-ci-check/v2" | "chrono-ci-check/v3"

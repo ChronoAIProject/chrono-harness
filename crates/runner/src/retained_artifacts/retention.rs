@@ -4007,28 +4007,34 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let gate = inventory.member_gate(&[], &[path.into()])?;
-    let l = inventory.load(&gate)?;
-    let found = l
-        .outputs
-        .iter()
-        .find(|o| o.path == path || (o.tree && path.starts_with(&format!("{}/", o.path))));
-    let Some(o) = found else { return Ok(None) };
-    if o.phase == "disposing" {
-        return Err("original evidence unavailable: disposal has started".into());
+    inventory.read_guard(path)
+}
+impl Inventory {
+    /// The same addressed read protection also applies to a standalone producer.
+    pub fn read_guard(&self, path: &str) -> Result<Option<Lease>, String> {
+        let gate = self.member_gate(&[], &[path.into()])?;
+        let l = self.load(&gate)?;
+        let found = l
+            .outputs
+            .iter()
+            .find(|o| o.path == path || (o.tree && path.starts_with(&format!("{}/", o.path))));
+        let Some(o) = found else { return Ok(None) };
+        if o.phase == "disposing" {
+            return Err("original evidence unavailable: disposal has started".into());
+        }
+        let lease = Lease::acquire(
+            &self.directory.join(&o.lease),
+            Some(&o.lease_id),
+            false,
+            false,
+            None,
+        )?
+        .ok_or("original evidence disposal busy")?;
+        self.stable(&gate)?;
+        drop(gate);
+        self.remember_input(&lease, &o.id)?;
+        Ok(Some(lease))
     }
-    let lease = Lease::acquire(
-        &inventory.directory.join(&o.lease),
-        Some(&o.lease_id),
-        false,
-        false,
-        None,
-    )?
-    .ok_or("original evidence disposal busy")?;
-    inventory.stable(&gate)?;
-    drop(gate);
-    inventory.remember_input(&lease, &o.id)?;
-    Ok(Some(lease))
 }
 
 /// Publish a newly addressed original under its opted-in natural producer.

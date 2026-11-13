@@ -1,18 +1,16 @@
 //! Explicit native-release workflow projection; commands remain host-owned.
-use super::{action, output_preflight, scalar, shell, write_file};
-use chrono_harness::{decode, no_symlink_parents, relative_path};
+use super::{action, scalar, shell};
+use chrono_harness::{decode, relative_path};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fs,
     path::Path,
 };
 
 pub const SCHEMA: &str = "chrono-github-release/v1";
 pub const UNITS_SCHEMA: &str = "chrono-github-release/v2";
 const MARKER: &str = "# chrono-ci: owned github-release/v1\n";
-const ADOPTED: &str = ".chrono-harness/ci/release.json";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -543,42 +541,23 @@ fn render_unit<'a>(
     Ok(())
 }
 
-pub(crate) fn generate(root: &Path, c: &Config, verify: bool) -> Result<bool, String> {
-    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
-    let output = render(c)?;
-    let same = output_preflight(root, &c.workflow_path, &output, MARKER)?;
-    if verify && !same {
-        return Err(format!(
-            "generated release workflow drift: {}",
-            c.workflow_path
-        ));
-    }
-    if !verify && !same {
-        write_file(root, &c.workflow_path, output.as_bytes())?;
-    }
-    Ok(!same)
-}
-
-pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
-    let target = no_symlink_parents(root, ADOPTED)?;
-    let existing = target.exists();
-    let c = if existing {
-        decode_config(&fs::read(target).map_err(|e| e.to_string())?)?
-    } else {
-        incoming
-    };
-    super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
-    let output = render(&c)?;
-    let same = output_preflight(root, &c.workflow_path, &output, MARKER)?;
-    if !existing {
-        write_file(
-            root,
-            ADOPTED,
-            &(serde_json::to_string_pretty(&c).map_err(|e| e.to_string())? + "\n").into_bytes(),
-        )?;
-    }
-    if !same {
-        write_file(root, &c.workflow_path, output.as_bytes())?;
-    }
-    Ok(!existing || !same)
+pub(super) fn projection_plan(
+    root: &Path,
+    c: &Config,
+    verify: bool,
+    inputs: &mut super::generation::Inputs,
+) -> Result<super::generation::Plan, String> {
+    super::cache::validate_registry_with(root, c.persistent_cache.as_ref(), &mut |path| {
+        inputs.read(path)
+    })?;
+    let mut plan = super::generation::Plan::default();
+    plan.workflow(
+        root,
+        &c.workflow_path,
+        render(c)?,
+        MARKER,
+        verify,
+        "generated release workflow drift",
+    )?;
+    Ok(plan)
 }

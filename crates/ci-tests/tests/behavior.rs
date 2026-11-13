@@ -130,7 +130,7 @@ fn retired_scoped_providers_are_rejected_before_publishing_outputs() {
                 .contains("unsupported CI provider/schema")
         );
         assert!(!host.path().join(".github").exists());
-        assert!(!host.path().join(".chrono-harness").exists());
+        assert!(!host.path().join(".chrono-harness/ci/github.json").exists());
         assert_eq!(fs::read(&input).unwrap(), bytes);
     }
 }
@@ -233,10 +233,194 @@ fn generation_requires_its_adopted_retention_before_workflow_side_effects() {
     .unwrap();
     let result = generate(host.path(), source, false);
     assert!(
-        result.is_err(),
-        "generation wrote a workflow without adopted operation retention: {result:?}"
+        result
+            .unwrap_err()
+            .contains("ci-generation-operation requires explicit finite terminal_limits")
     );
     assert!(!host.path().join(&c.workflow_path).exists());
+}
+
+#[test]
+fn generation_status_checks_the_original_and_never_accepts_modified_result_bytes() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let host = tools::temporary_host("generation-original");
+    let source = ".chrono-harness/ci/github.json";
+    write(&host.path().join(source), &config());
+    assert!(generate(host.path(), source, false).unwrap());
+    let operation = generation_operation(host.path());
+    let path = operation
+        .strip_prefix(host.path())
+        .unwrap()
+        .to_str()
+        .unwrap();
+    let report = chrono_ci::generation::status(host.path(), path).unwrap();
+    assert_eq!(report["completion"], "confirmed-evaluation");
+    assert_eq!(
+        report["original_result"]["producer_evaluation"],
+        json!({"changed":true})
+    );
+    let original = fs::read(operation.join("result.json")).unwrap();
+    let mut altered: Value = serde_json::from_slice(&original).unwrap();
+    altered["producer_evaluation"]["changed"] = json!(false);
+    fs::write(
+        operation.join("result.json"),
+        serde_json::to_vec(&altered).unwrap(),
+    )
+    .unwrap();
+    assert!(chrono_ci::generation::status(host.path(), path).is_err());
+    assert!(chrono_ci::generation::resume(host.path(), path).is_err());
+    assert!(
+        fs::read_to_string(operation.join("result.json"))
+            .unwrap()
+            .contains("false")
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn interrupted_generation_resumes_only_a_returned_evaluation_and_never_replays_effects() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use std::io::{BufRead, BufReader, Read};
+    use std::os::unix::process::ExitStatusExt;
+    use std::process::Stdio;
+    for point in ["intent", "prepared", "effect", "evaluated", "result"] {
+        let host = tools::temporary_host("generation-interruption");
+        let source = ".chrono-harness/ci/github.json";
+        let c = config();
+        write(&host.path().join(source), &c);
+        let mut command = Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"));
+        command
+            .args(["generate", "--host-root"])
+            .arg(host.path())
+            .args(["--config", source])
+            .env("CHRONO_CI_GENERATION_TEST_CHECKPOINT", point)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        host.bind_command(&mut command).unwrap();
+        let mut child = command.spawn().unwrap();
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut first = String::new();
+        stdout.read_line(&mut first).unwrap();
+        // Always join the original child before judging its checkpoint.
+        let kill = child.kill();
+        let status = child.wait().unwrap();
+        let mut stderr = String::new();
+        child
+            .stderr
+            .take()
+            .unwrap()
+            .read_to_string(&mut stderr)
+            .unwrap();
+        assert_eq!(
+            first,
+            format!("generation-checkpoint:{point}\n"),
+            "{status}; {stderr}"
+        );
+        kill.unwrap();
+        assert_eq!(status.signal(), Some(9));
+        let operation = generation_operation(host.path());
+        let path = operation
+            .strip_prefix(host.path())
+            .unwrap()
+            .to_str()
+            .unwrap();
+        let before = fs::read(host.path().join(&c.workflow_path)).ok();
+        let before_identity =
+            chrono_harness::artifact_disposal::identity(&host.path().join(&c.workflow_path)).ok();
+        let result = chrono_ci::generation::resume(host.path(), path).unwrap();
+        assert_eq!(fs::read(host.path().join(&c.workflow_path)).ok(), before);
+        assert_eq!(
+            chrono_harness::artifact_disposal::identity(&host.path().join(&c.workflow_path)).ok(),
+            before_identity
+        );
+        assert_eq!(generation_operation(host.path()), operation);
+        if matches!(point, "intent" | "prepared" | "effect") {
+            assert_eq!(before.is_some(), point == "effect");
+            assert_ne!(result["completion"], "confirmed-evaluation");
+            assert!(!operation.join("result.json").exists());
+        } else {
+            assert!(before.is_some());
+            assert_eq!(result["completion"], "confirmed-evaluation");
+            assert_eq!(
+                result["original_result"]["producer_evaluation"],
+                json!({"changed":true})
+            );
+            assert_eq!(
+                result["original_result"]["original_process_exit"],
+                Value::Null
+            );
+            assert_eq!(
+                chrono_ci::generation::resume(host.path(), path).unwrap()["original_result"],
+                result["original_result"]
+            );
+        }
+    }
+}
+
+#[test]
+fn generation_does_not_take_a_store_wide_lock_or_read_unrelated_history() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let host = tools::temporary_host("generation-independent");
+    let source = ".chrono-harness/ci/github.json";
+    write(&host.path().join(source), &config());
+    assert!(generate(host.path(), source, false).unwrap());
+    let store = host
+        .path()
+        .join(".chrono-harness/state/ci-generation-operations");
+    let unrelated = store.join("unrelated-unknown");
+    fs::create_dir(&unrelated).unwrap();
+    fs::write(unrelated.join("intent.json"), b"incomplete original").unwrap();
+    let held = chrono_harness::ownership::DirectoryLease::acquire_local(&store, true, None)
+        .unwrap()
+        .unwrap();
+    assert!(!generate(host.path(), source, true).unwrap());
+    held.stable().unwrap();
+    assert_eq!(
+        fs::read(unrelated.join("intent.json")).unwrap(),
+        b"incomplete original"
+    );
+}
+
+#[test]
+fn generation_terminal_records_retire_through_the_adopted_finite_policy() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let host = tools::temporary_host("generation-retirement");
+    let source = ".chrono-harness/ci/github.json";
+    write(&host.path().join(source), &config());
+    let mut policy: Value = serde_json::from_slice(include_bytes!(
+        "../../../assets/ci/standalone-retention.json"
+    ))
+    .unwrap();
+    policy["terminal_limits"]["ci-generation-operation"]["max_count"] = json!(1);
+    fs::write(
+        host.path().join(".chrono-harness/retention.json"),
+        serde_json::to_vec_pretty(&policy).unwrap(),
+    )
+    .unwrap();
+    assert!(generate(host.path(), source, false).unwrap());
+    let first = generation_operation(host.path());
+    let first_path = first.strip_prefix(host.path()).unwrap().to_str().unwrap();
+    assert!(!generate(host.path(), source, true).unwrap());
+    let report = chrono_ci::generation::maintain(host.path()).unwrap();
+    assert_eq!(report["quota_scope_complete"], true, "{report}");
+    assert_eq!(report["quota_errors"], json!([]), "{report}");
+    assert!(
+        !first.exists(),
+        "expired original must be physically retired: {report}"
+    );
+    let retired = chrono_ci::generation::status(host.path(), first_path).unwrap();
+    assert_eq!(retired["availability"], "unavailable-or-retired");
+    assert_eq!(retired["success_inferred"], false);
+    assert!(chrono_ci::generation::resume(host.path(), first_path).is_err());
+    assert!(host.path().join(config().workflow_path).exists());
 }
 
 fn git(p: &Path, args: &[&str]) -> String {

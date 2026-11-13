@@ -216,6 +216,10 @@
     {"path":"crates/ci-tests/tests/verified_download.rs","verification":{"role":"program","roots":[{"path":"crates/ci-tests/tests/verified_download.rs","operation":"verify.ci-downloads-tests"}]},"owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"crates/ci/src/verified_download.rs","verification":{"role":"program","roots":[{"path":"crates/ci/src/verified_download.rs","operation":"verify.ci-downloads"},{"path":"crates/ci-tests/tests/verified_download.rs","operation":"verify.ci-downloads-tests"}]},"owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
     {"path":"crates/ci-tests/tests/verified_literals.rs","verification":{"role":"program","roots":[{"path":"crates/ci-tests/tests/verified_literals.rs","operation":"verify.ci-literals-tests"}]},"owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}]},
+    {"path":"crates/ci/src/generation.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"test-execution","to":"test:ci-tests"}],"verification":{"role":"program","roots":[{"path":"crates/ci/src/verified_generation.rs","operation":"verify.ci-generation"},{"path":"crates/ci-tests/tests/verified_generation.rs","operation":"verify.ci-generation-tests"}]}},
+    {"path":"crates/ci/src/verified_generation.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"test-execution","to":"test:ci-tests"}],"verification":{"role":"program","roots":[{"path":"crates/ci/src/verified_generation.rs","operation":"verify.ci-generation"},{"path":"crates/ci-tests/tests/verified_generation.rs","operation":"verify.ci-generation-tests"}]}},
+    {"path":"crates/ci-tests/tests/verified_generation.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"}],"verification":{"role":"program","roots":[{"path":"crates/ci-tests/tests/verified_generation.rs","operation":"verify.ci-generation-tests"}]}},
+    {"path":"assets/ci/standalone-retention.json","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci"},{"kind":"test-execution","to":"test:ci-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":"crates/ci/src/lib.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"crates/ci/src/main.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"},{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"crates/ci-tests/Cargo.toml","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:ci-tests"}]},
@@ -1354,6 +1358,8 @@
       "operations": [
         "verify.ci-literals",
         "verify.ci-literals-tests",
+        "verify.ci-generation",
+        "verify.ci-generation-tests",
         "verify.ci-downloads",
         "verify.ci-downloads-tests",
         "fmt.ci",
@@ -1712,6 +1718,8 @@
       },
       "verify.ci-literals": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-literals-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.ci-generation": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.ci-generation-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-downloads": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-downloads-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "build.ci": {

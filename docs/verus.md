@@ -2265,6 +2265,22 @@ runner 判断仍为线性字节遍历，未增加运行时进程；`CauseSet` �
 构建、验证、CI、存储及完整运行成本未测，不宣称性能收益。
 
 
+## CI 生成的准备与副作用顺序
+
+`crates/ci/src/verified_generation.rs::prepare_then_apply` 是生成器实际调用的
+同源顺序内核：准备失败原样返回该状态和完整错误，不调用写入；准备成功才把
+同一份计划交给写入回调，并原样返回其状态和结果。规格保留两个真实回调的关系，
+不把外层函数退出或几个摘要布尔值当作已经执行过文件操作。
+
+专属 `verified_generation.rs` 用独立预期核对四种成功／失败组合、完整调用轨迹、
+最大整数计划以及错误的两个原字段；同一预期同时在普通 Rust 和严格 Verus 中运行。
+FILEMAP 将两个根和 `verify.ci-generation`／`verify.ci-generation-tests` 绑定到
+生成所有者及其实际编译／测试计划。
+
+这项证明只覆盖准备与派发顺序、首错和原返回值。JSON 字段绑定、输入获取、逐目标
+文件发布、内核租约、目录持久化、跨进程恢复与保留组合仍有独立证明义务；
+生成操作的 Rust IO 测试也不能替代这些完整证明。新增构建、IO 和总验证成本未测。
+
 ## instructions 的恢复、释放和终态选择
 
 当前候选新增 `crates/instructions/src/publication_decision.rs`，真实 transaction 调用
