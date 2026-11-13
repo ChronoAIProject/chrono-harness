@@ -138,6 +138,101 @@ pub fn result_address_matches(
     }
 }
 
+pub open spec fn installed_prefix<S, E, Apply>(
+    initial: S, states: Seq<S>, changed: Seq<bool>, apply: Apply,
+) -> bool
+    where Apply: Fn(S, usize) -> (S, Result<bool, E>),
+{
+    states.len() == changed.len() + 1 && states.first() == initial
+        && forall|index: int| 0 <= index < changed.len() ==>
+            #[trigger] apply.ensures((states[index], index as usize),
+                (states[index + 1], Ok::<bool, E>(changed[index])))
+}
+
+pub open spec fn installation_result<S, E, Apply>(
+    initial: S, count: usize, apply: Apply, out: (S, Result<bool, E>),
+) -> bool
+    where Apply: Fn(S, usize) -> (S, Result<bool, E>),
+{
+    exists|states: Seq<S>, changed: Seq<bool>|
+        installed_prefix(initial, states, changed, apply) && changed.len() <= count
+        && match out.1 {
+            Ok(any_changed) => changed.len() == count && out.0 == states.last()
+                && any_changed == changed.contains(true),
+            Err(error) => changed.len() < count
+                && apply.ensures((states.last(), changed.len() as usize),
+                    (out.0, Err::<bool, E>(error))),
+        }
+}
+
+/// Inspect every target in order, including unchanged ones, and stop at the first error.
+/// Only ghost sequences retain the call history; runtime state is moved through each call.
+pub fn install_targets<S, E, Apply>(initial: S, count: usize, apply: Apply)
+    -> (out: (S, Result<bool, E>))
+    where Apply: Fn(S, usize) -> (S, Result<bool, E>),
+    requires forall|state: S, index: usize| index < count ==>
+        #[trigger] apply.requires((state, index)),
+    ensures installation_result(initial, count, apply, out),
+{
+    let mut state = initial;
+    let mut index = 0usize;
+    let mut any_changed = false;
+    let ghost states = seq![initial];
+    let ghost changed: Seq<bool> = Seq::empty();
+    while index < count
+        invariant index <= count,
+            states.len() == index as int + 1,
+            changed.len() == index,
+            states.last() == state,
+            any_changed == changed.contains(true),
+            installed_prefix(initial, states, changed, apply),
+            forall|state: S, index: usize| index < count ==>
+                #[trigger] apply.requires((state, index)),
+        decreases count - index,
+    {
+        let ghost before = state;
+        let observed = apply(state, index);
+        let ghost original = observed;
+        let (next, result) = observed;
+        assert(apply.ensures((before, index), original));
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(installation_result(initial, count, apply, out));
+                return out;
+            },
+            Ok(wrote) => {
+                assert(original == (next, Ok::<bool, E>(wrote)));
+                proof {
+                    let old_states = states;
+                    let old_changed = changed;
+                    states = states.push(next);
+                    changed = changed.push(wrote);
+                    assert forall|position: int| 0 <= position < changed.len() implies
+                        #[trigger] apply.ensures((states[position], position as usize),
+                            (states[position + 1], Ok::<bool, E>(changed[position]))) by {
+                        if position < old_changed.len() {
+                            assert(apply.ensures((old_states[position], position as usize),
+                                (old_states[position + 1], Ok::<bool, E>(old_changed[position]))));
+                        } else {
+                            assert(position == index);
+                            assert(states[position] == before);
+                            assert(states[position + 1] == next);
+                        }
+                    }
+                    assert(changed.contains(true) == (old_changed.contains(true) || wrote));
+                }
+                any_changed = any_changed || wrote;
+            },
+        }
+        state = next;
+        index += 1;
+    }
+    let out = (state, Ok(any_changed));
+    assert(installation_result(initial, count, apply, out));
+    out
+}
+
 pub open spec fn evaluation<S, P, T, E, Prepare, Apply>(
     initial: S, prepare: Prepare, apply: Apply, out: (S, Evaluation<T, E>),
 ) -> bool

@@ -247,6 +247,101 @@ fn original_records_require_the_exact_schema_attempt_digest_and_null_exit() {
     expect(policy::result_address_matches(result, Some(""), Some(""), "", "", true));
 }
 
+fn installation_case(count: usize, fail_at: usize, write_at: usize)
+    requires count <= 3, fail_at <= count, write_at <= count,
+{
+    let apply = |mut trace: Vec<usize>, index: usize| -> (out: (Vec<usize>, Result<bool, (usize, u64)>))
+        requires index < count,
+        ensures out.0@ == trace@.push(index),
+            out.1 == if index == fail_at {
+                Err::<bool, (usize, u64)>((index, u64::MAX))
+            } else {
+                Ok::<bool, (usize, u64)>(index == write_at)
+            },
+    {
+        trace.push(index);
+        (trace, if index == fail_at { Err((index, u64::MAX)) } else { Ok(index == write_at) })
+    };
+    let initial: Vec<usize> = Vec::new();
+    let ghost before = initial;
+    let (trace, result) = policy::install_targets(initial, count, apply);
+    proof {
+        let (states, changed) = choose|states: Seq<Vec<usize>>, changed: Seq<bool>|
+            policy::installed_prefix(before, states, changed, apply) && changed.len() <= count
+            && match result {
+                Ok(any_changed) => changed.len() == count && trace == states.last()
+                    && any_changed == changed.contains(true),
+                Err(error) => changed.len() < count
+                    && apply.ensures((states.last(), changed.len() as usize),
+                        (trace, Err::<bool, (usize, u64)>(error))),
+            };
+        assert(states[0]@ == Seq::<usize>::empty());
+        assert forall|index: int| 0 <= index < changed.len() implies
+            changed[index] == (index == write_at) && index != fail_at by {
+            assert(apply.ensures((states[index], index as usize),
+                (states[index + 1], Ok::<bool, (usize, u64)>(changed[index]))));
+        }
+        if changed.len() > 0 { assert(states[1]@ == seq![0usize]); }
+        if changed.len() > 1 { assert(states[2]@ == seq![0usize, 1usize]); }
+        if changed.len() > 2 { assert(states[3]@ == seq![0usize, 1usize, 2usize]); }
+        match result {
+            Ok(any_changed) => {
+                if fail_at < count { assert(changed[fail_at as int] == (fail_at == write_at)); }
+                assert(fail_at == count);
+                if write_at < count { assert(changed[write_at as int]); }
+                assert(any_changed == (write_at < count));
+                if count == 0 { assert(trace@ == Seq::<usize>::empty()); }
+                if count == 1 { assert(trace@ == seq![0usize]); }
+                if count == 2 { assert(trace@ == seq![0usize, 1usize]); }
+                if count == 3 { assert(trace@ == seq![0usize, 1usize, 2usize]); }
+            },
+            Err(error) => {
+                assert(apply.ensures((states.last(), changed.len() as usize),
+                    (trace, Err::<bool, (usize, u64)>(error))));
+                assert(changed.len() == fail_at);
+                assert(error == (fail_at, u64::MAX));
+                assert(fail_at < count);
+                if fail_at == 0 { assert(trace@ == seq![0usize]); }
+                if fail_at == 1 { assert(trace@ == seq![0usize, 1usize]); }
+                if fail_at == 2 { assert(trace@ == seq![0usize, 1usize, 2usize]); }
+            },
+        }
+    }
+    expect(trace.len() == if fail_at < count { fail_at + 1 } else { count });
+    if !trace.is_empty() { expect(trace[0] == 0); }
+    if trace.len() > 1 { expect(trace[1] == 1); }
+    if trace.len() > 2 { expect(trace[2] == 2); }
+    match result {
+        Err((index, source)) => {
+            expect(fail_at < count);
+            expect(index == fail_at);
+            expect(source == u64::MAX);
+        },
+        Ok(changed) => {
+            expect(fail_at == count);
+            expect(changed == (write_at < count));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn target_installation_keeps_order_first_error_and_any_change_without_skipping_unchanged_targets() {
+    installation_case(0, 0, 0);
+    installation_case(1, 1, 0);
+    installation_case(1, 1, 1);
+    installation_case(1, 0, 0);
+    installation_case(2, 2, 1);
+    installation_case(3, 3, 0);
+    installation_case(3, 3, 1);
+    installation_case(3, 3, 2);
+    installation_case(3, 3, 3);
+    installation_case(3, 0, 0);
+    installation_case(3, 1, 0);
+    installation_case(3, 1, 2);
+    installation_case(3, 2, 0);
+    installation_case(3, 2, 2);
+}
+
 #[cfg(not(verus_keep_ghost))]
 #[test]
 #[should_panic]
