@@ -392,7 +392,7 @@ fn original_records_require_the_exact_schema_attempt_digest_and_null_exit() {
 
 type TargetFault = (u8, u64);
 
-spec fn target_observation_step(length: int) -> u8 {
+spec fn target_observation_step(length: nat) -> u8 {
     if length == 0 { 1u8 } else if length == 2 { 3u8 } else { 7u8 }
 }
 
