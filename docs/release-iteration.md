@@ -258,7 +258,7 @@ Release 公开、非 draft、prerelease，共 34 个资产。`release.json` 为 
 
 修复 PR #1088 已合入 dev，提交为 `05a9fbee9b140f9d66c5dfc908264783cca0b46a`。PR CI `43515669330/1` 的受验候选为 `ada545eae68fbaa8a7fbab68af5cca687e74e24b`，其 tree 与实际落地同为 `37745aed90d2126f59fd8f8db53c4af37db3c15f`；所选单元原件和进程流已核对。dev collection `43517549958` 与 CodeQL `43517548942` 均成功。原 watch 因网络超时退出 1，随后按同一 run 核到真实成功，不能将传输错误写成 CI 失败。自动发布 `43520283683` 已启动，其实际 source 仍须从原 frontend 核对，Linux 原故障仍待包含修复的新 preview 复验。
 
-技能源与第十四／十五轮证据 PR #1089 已通过 CI `43515995397/1` 并合入 integration `45fe1868904f7f815361551007494ecfd907120d`。受验 `4db267c532d9a6c5ce867c83a2e932d8902194cb` 与合并树同为 `a90f4361bf2afaca4268dec0afa1c2716a5e0507`；六个所选单元的原报告及全部业务进程流已核。继续通过 #1090 交付 dev，已启用原生自动合并；本地 canonical 退出 0。原等待因 401 中断，保留错误后重新连接同一运行 `43518314086`，没有重新派发 CI。
+技能源与第十四／十五轮证据 PR #1089 已通过 CI `43515995397/1` 并合入 integration `45fe1868904f7f815361551007494ecfd907120d`。受验 `4db267c532d9a6c5ce867c83a2e932d8902194cb` 与合并树同为 `a90f4361bf2afaca4268dec0afa1c2716a5e0507`；六个所选单元的原报告及全部业务进程流已核。随后 #1090 已通过 CI `43518314086/1` 并自动合入 dev `3a8c12129e98009b16f66e560772c29f340b661b`。受验 `d307c7d97b809507786d7fd711ec4fab2e363299` 与落地 tree 同为 `d7369029e9f7f2fab4325e01838af80289f1302a`，六个所选单元原件已核。本地 canonical 退出 0，dev collection `43520489128` 已成功，CodeQL `43520488265` 仍沿原句柄等待，个人技能副本待落地验收后同步。原等待因 401 中断，保留错误后重新连接同一运行 `43518314086`，没有重新派发 CI。
 
 retention 原失败进一步核对为：八轮均无 accounting error，四轮完成处置，另四轮是有界部分处置，仍未达到零个剩余 fixture 输出。每轮 `remaining_outputs` 为 null、scope incomplete；这证明有进展，不能证明已经达到验收，也不足以独立归因于时间上限或判定测试要求多余。没有增加预算、轮数或盲重跑。旧失败原因、bootstrap retention migration unknown 及 stable 安装 skipped 继续保留。
 
