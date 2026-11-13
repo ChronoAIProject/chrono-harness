@@ -6,6 +6,7 @@ publish = false
 autotests = false
 
 [dependencies]
+chrono-judge-cost = { path = "../judge-cost" }
 chrono-judge-mixed = { path = "../judge-mixed" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-identifiers = { path = "../identifiers" }
@@ -105,5 +106,11 @@ bench = false
 [[bin]]
 name = "chrono-judge-mixed-test-cli"
 path = "../judge-mixed/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-cost-test-cli"
+path = "../judge-cost/src/main.rs"
 test = false
 bench = false

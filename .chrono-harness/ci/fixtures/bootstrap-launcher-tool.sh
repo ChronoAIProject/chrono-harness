@@ -10,11 +10,22 @@ case "$task_name" in
     chrono-worktree) task_exit=${CHRONO_LAUNCHER_OWNER_EXIT:-0} ;;
     rustup)
         if [ "$#" -ge 3 ] && [ "$1" = run ] && [ "$2" = 1.95.0 ]; then
-            shift 2
-            export RUSTUP_HOME="$CHRONO_LAUNCHER_RUSTUP_HOME"
-            exec "$@"
+            if [ "$3" = cargo ]; then
+                if [ "$#" -eq 4 ] && [ "$4" = --version ]; then
+                    task_exit=${CHRONO_LAUNCHER_PROBE_EXIT:-0}
+                else
+                    task_exit=${CHRONO_LAUNCHER_COMPILER_EXIT:-0}
+                fi
+            else
+                shift 2
+                export RUSTUP_HOME="$CHRONO_LAUNCHER_RUSTUP_HOME"
+                exec "$@"
+            fi
+        elif [ "$#" -ge 2 ] && [ "$1" = toolchain ] && [ "$2" = install ]; then
+            task_exit=${CHRONO_LAUNCHER_INSTALL_EXIT:-0}
+        else
+            task_exit=${CHRONO_LAUNCHER_COMPILER_EXIT:-0}
         fi
-        task_exit=${CHRONO_LAUNCHER_COMPILER_EXIT:-0}
         ;;
     chrono-host-bootstrap)
         test "${RUSTUP_HOME-}" = "$CHRONO_LAUNCHER_RUSTUP_HOME" || {

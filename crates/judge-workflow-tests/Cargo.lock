@@ -77,6 +77,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "chrono-judge-cost"
+version = "0.1.0"
+dependencies = [
+ "chrono-harness",
+ "chrono-judge-filemap",
+ "chrono-judge-registration",
+ "serde_json",
+]
+
+[[package]]
 name = "chrono-judge-filemap"
 version = "0.1.0"
 dependencies = [
@@ -149,6 +159,7 @@ version = "0.1.0"
 dependencies = [
  "chrono-harness",
  "chrono-identifiers",
+ "chrono-judge-cost",
  "chrono-judge-mixed",
  "chrono-judge-registration",
  "chrono-judge-workflow",
