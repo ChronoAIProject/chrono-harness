@@ -2151,12 +2151,11 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         dir.path(),
         &["config", "user.email", "fixture@example.invalid"],
     );
-    // A copied migration candidate can already contain the group adoption;
-    // regeneration can still change only its deliberately drifted workflow.
-    // Bind both producer changes explicitly for the selection assertions below.
+    // 复制的候选可能已经采用分组，重新生成只修复刻意制造的工作流漂移。
+    // 用实际生产证明根制造两个所有者的源码变更，保留下面的选测断言。
     for source_path in [
-        "crates/ci/src/gating.rs",
-        "crates/judge-workflow/src/lib.rs",
+        "crates/ci/src/verified_literals.rs",
+        "crates/judge-workflow/src/verified_execution.rs",
     ] {
         let path = dir.path().join(source_path);
         let mut bytes = fs::read(&path).unwrap();
