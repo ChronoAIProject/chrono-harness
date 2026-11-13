@@ -7,29 +7,8 @@ use std::io;
 
 pub type Context = BTreeMap<String, Value>;
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct ErrorNode {
-    #[serde(rename = "type")]
-    pub error_type: String,
-    pub code: String,
-    pub message: String,
-    pub context: Context,
-    pub source: Option<Box<ErrorNode>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_code: Option<i64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub traceback: Option<String>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related: Vec<RelatedError>,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct RelatedError {
-    pub role: String,
-    pub error: ErrorNode,
-}
+pub type ErrorNode = crate::verified_error::ErrorNode<Context>;
+pub type RelatedError = crate::verified_error::RelatedError<Context>;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub enum ErrorSchema {
@@ -91,32 +70,32 @@ pub(crate) fn io_error_node(error: &io::Error) -> ErrorNode {
     if error.get_ref().is_some() && recorded.is_none() {
         context.insert("custom_source".into(), "not_recorded".into());
     }
-    ErrorNode {
-        error_type: "std::io::Error".into(),
-        code: format!("io::{:?}", error.kind()),
-        message: error.to_string(),
+    ErrorNode::assemble(
+        "std::io::Error".into(),
+        format!("io::{:?}", error.kind()),
+        error.to_string(),
         context,
-        source: recorded.map(|source| Box::new(source.error_node())),
-        native_code: error.raw_os_error().map(i64::from),
-        traceback: None,
-        related: Vec::new(),
-    }
+        recorded.map(|source| Box::new(source.error_node())),
+        error.raw_os_error().map(i64::from),
+        None,
+        Vec::new(),
+    )
 }
 
 impl RecordedError for NativeIoError {
     fn error_node(&self) -> ErrorNode {
-        ErrorNode {
-            error_type: std::any::type_name::<Self>().into(),
-            code: "E_NATIVE_IO".into(),
-            message: self.to_string(),
-            context: [("kind".into(), format!("{:?}", self.source.kind()).into())]
+        ErrorNode::assemble(
+            std::any::type_name::<Self>().into(),
+            "E_NATIVE_IO".into(),
+            self.to_string(),
+            [("kind".into(), format!("{:?}", self.source.kind()).into())]
                 .into_iter()
                 .collect(),
-            source: Some(Box::new(io_error_node(&self.source))),
-            native_code: self.source.raw_os_error().map(i64::from),
-            traceback: None,
-            related: Vec::new(),
-        }
+            Some(Box::new(io_error_node(&self.source))),
+            self.source.raw_os_error().map(i64::from),
+            None,
+            Vec::new(),
+        )
     }
 }
 
@@ -129,16 +108,12 @@ pub struct Failure {
 
 impl Failure {
     pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
-        let node = ErrorNode {
-            error_type: std::any::type_name::<Self>().into(),
-            code: code.into(),
-            message: message.into(),
-            context: Context::new(),
-            source: None,
-            native_code: None,
-            traceback: None,
-            related: Vec::new(),
-        };
+        let node = ErrorNode::new(
+            std::any::type_name::<Self>().into(),
+            code.into(),
+            message.into(),
+            Context::new(),
+        );
         let (node, source, related) = crate::verified_error::initialize(node);
         Self {
             node,
@@ -205,20 +180,17 @@ impl Failure {
 
 impl RecordedError for Failure {
     fn error_node(&self) -> ErrorNode {
-        let mut node = self.node.clone();
-        node.source = self
+        let node = self.node.clone();
+        let source = self
             .source
             .as_ref()
             .map(|source| Box::new(source.error_node()));
-        node.related = self
+        let related = self
             .related
             .iter()
-            .map(|(role, error)| RelatedError {
-                role: role.clone(),
-                error: error.error_node(),
-            })
+            .map(|(role, error)| RelatedError::new(role.clone(), error.error_node()))
             .collect();
-        node
+        node.with_causes(source, related)
     }
 }
 
@@ -250,11 +222,9 @@ impl From<ErrorRecord> for ReceivedError {
 }
 
 impl ReceivedError {
-    fn from_node(mut node: ErrorNode) -> Self {
-        let source = node
-            .source
-            .take()
-            .map(|source| Box::new(Self::from_node(*source)));
+    fn from_node(node: ErrorNode) -> Self {
+        let (node, source) = node.detach_source();
+        let source = source.map(|source| Box::new(Self::from_node(*source)));
         Self { node, source }
     }
 }
@@ -275,11 +245,11 @@ impl StdError for ReceivedError {
 
 impl RecordedError for ReceivedError {
     fn error_node(&self) -> ErrorNode {
-        let mut node = self.node.clone();
-        node.source = self
+        let node = self.node.clone();
+        let source = self
             .source
             .as_ref()
             .map(|source| Box::new(source.error_node()));
-        node
+        node.with_source(source)
     }
 }
