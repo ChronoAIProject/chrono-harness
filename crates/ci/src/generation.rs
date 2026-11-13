@@ -44,7 +44,7 @@ struct Original {
 }
 fn observe(path: &Path) -> Result<(Option<Object>, Option<Vec<u8>>), String> {
     let before = match fs::symlink_metadata(path) {
-        Ok(metadata) if metadata.is_file() => Some(identity(path)?),
+        Ok(metadata) if metadata.is_file() => identity(path)?,
         Ok(_) => {
             return Err(format!(
                 "not a regular generation input/output: {}",
@@ -54,28 +54,37 @@ fn observe(path: &Path) -> Result<(Option<Object>, Option<Vec<u8>>), String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok((None, None)),
         Err(error) => return Err(format!("{}: {error}", path.display())),
     };
-    let file = fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
-    let mut bytes = Vec::new();
-    file.take(LIMIT + 1)
-        .read_to_end(&mut bytes)
-        .map_err(|e| e.to_string())?;
-    if bytes.len() as u64 > LIMIT {
-        return Err("generation original exceeds byte limit".into());
-    }
-    if Some(identity(path)?) != before {
-        return Err(format!(
-            "generation object changed while reading: {}",
-            path.display()
-        ));
-    }
-    Ok((
-        Some(Object {
-            identity: before.unwrap(),
-            sha256: sha256(&bytes),
-            bytes: bytes.len() as u64,
-        }),
-        Some(bytes),
-    ))
+    let (_, observed) = verified::read_present_original(
+        (),
+        before,
+        LIMIT,
+        |state| {
+            (
+                state,
+                (|| {
+                    let file =
+                        fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+                    let mut bytes = Vec::new();
+                    file.take(LIMIT + 1)
+                        .read_to_end(&mut bytes)
+                        .map_err(|e| e.to_string())?;
+                    Ok(bytes)
+                })(),
+            )
+        },
+        |state| (state, identity(path)),
+        |state, bytes: &Vec<u8>| (state, sha256(bytes)),
+        |state| {
+            (
+                state,
+                format!(
+                    "generation object changed while reading: {}",
+                    path.display()
+                ),
+            )
+        },
+    );
+    observed
 }
 
 pub(super) struct Inputs {

@@ -65,6 +65,149 @@ fn generation_objects_preserve_presence_identity_digest_and_length() {
     expect(!policy::same_object(Some(&boundary), Some(&split_fields)));
 }
 
+spec fn original_bytes(empty: bool) -> Seq<u8> {
+    if empty { Seq::empty() } else { seq![0u8, 255u8, 7u8] }
+}
+
+fn original_fixture(empty: bool) -> (bytes: Vec<u8>)
+    ensures bytes@ == original_bytes(empty),
+{
+    let mut bytes = Vec::new();
+    if !empty { bytes.push(0); bytes.push(255); bytes.push(7); }
+    bytes
+}
+
+spec fn original_digest(bytes: Seq<u8>) -> Seq<char> {
+    if bytes.len() == 0 { "empty\0摘要"@ }
+    else if bytes.len() == 3 && bytes[0] == 0 && bytes[1] == 255 && bytes[2] == 7 {
+        "full\0摘要"@
+    } else { "wrong original bytes"@ }
+}
+
+fn original_read_case(empty: bool, read_fails: bool, limit: u64, identity_fails: bool, drift: bool) {
+    proof {
+        reveal_strlit("identity\0原件\n"); reveal_strlit("changed\0原件\n");
+        assert("identity\0原件\n"@[0] != "changed\0原件\n"@[0]);
+    }
+    let read = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<Vec<u8>, String>))
+        ensures out.0@ == trace@.push(1),
+            match out.1 {
+                Err(error) => read_fails && error@ == "read\0error\n"@,
+                Ok(bytes) => !read_fails && bytes@ == original_bytes(empty),
+            },
+    {
+        trace.push(1);
+        (trace, if read_fails { Err("read\0error\n".to_owned()) } else { Ok(original_fixture(empty)) })
+    };
+    let identity = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<String, String>))
+        ensures out.0@ == trace@.push(2),
+            match out.1 {
+                Err(error) => identity_fails && error@ == "identity\0error\n"@,
+                Ok(actual) => !identity_fails
+                    && actual@ == if drift { "changed\0原件\n"@ } else { "identity\0原件\n"@ },
+            },
+    {
+        trace.push(2);
+        (trace, if identity_fails { Err("identity\0error\n".to_owned()) }
+            else { Ok(if drift { "changed\0原件\n".to_owned() } else { "identity\0原件\n".to_owned() }) })
+    };
+    let hash = |mut trace: Vec<u8>, bytes: &Vec<u8>| -> (out: (Vec<u8>, String))
+        ensures out.0@ == trace@.push(3), out.1@ == original_digest(bytes@),
+    {
+        trace.push(3);
+        let digest = if bytes.is_empty() { "empty\0摘要" }
+            else if bytes.len() == 3 && bytes[0] == 0 && bytes[1] == 255 && bytes[2] == 7 {
+                "full\0摘要"
+            } else { "wrong original bytes" };
+        (trace, digest.to_owned())
+    };
+    let changed = |mut trace: Vec<u8>| -> (out: (Vec<u8>, String))
+        ensures out.0@ == trace@.push(4), out.1@ == "changed\0error\n"@,
+    {
+        trace.push(4);
+        (trace, "changed\0error\n".to_owned())
+    };
+    let before = "identity\0原件\n".to_owned();
+    let initial: Vec<u8> = Vec::new();
+    let ghost start = initial;
+    let ghost original_before = before;
+    let (trace, result) = policy::read_present_original(initial, before, limit, read, identity, hash, changed);
+    proof {
+        let (after_read, observed) = choose|state: Vec<u8>, observed: Result<Vec<u8>, String>|
+            #[trigger] read.ensures((start,), (state, observed)) && match observed {
+                Err(error) => (trace, result) == (state, Err::<policy::OriginalBytes, String>(error)),
+                Ok(bytes) => policy::original_bytes_result(state, original_before, bytes, limit,
+                    identity, hash, changed, (trace, result)),
+            };
+        if !read_fails {
+            let bytes = observed->Ok_0;
+            if bytes@.len() <= limit {
+                let (after_identity, actual) = choose|state: Vec<u8>, actual: Result<String, String>|
+                    #[trigger] identity.ensures((after_read,), (state, actual)) && match actual {
+                        Err(error) => (trace, result) == (state, Err::<policy::OriginalBytes, String>(error)),
+                        Ok(current) => if original_before@ != current@ {
+                            match result {
+                                Err(error) => changed.ensures((state,), (trace, error)),
+                                _ => false,
+                            }
+                        } else {
+                            exists|next: Vec<u8>, digest: String|
+                                #[trigger] hash.ensures((state, &bytes), (next, digest))
+                                && trace == next && policy::original_snapshot(original_before, bytes, digest, result)
+                        },
+                    };
+                if !identity_fails && !drift {
+                    let (next, digest) = choose|next: Vec<u8>, digest: String|
+                        #[trigger] hash.ensures((after_identity, &bytes), (next, digest))
+                        && trace == next && policy::original_snapshot(original_before, bytes, digest, result);
+                }
+            }
+        }
+    }
+    expect(trace[0] == 1);
+    if read_fails {
+        expect(trace.len() == 1);
+        match result { Err(error) => expect(identifiers::equal_text(&error, "read\0error\n")), _ => expect(false) }
+    } else if (!empty && limit < 3) {
+        expect(trace.len() == 1);
+        match result { Err(error) => expect(identifiers::equal_text(&error, "generation original exceeds byte limit")), _ => expect(false) }
+    } else if identity_fails {
+        expect(trace.len() == 2); expect(trace[1] == 2);
+        match result { Err(error) => expect(identifiers::equal_text(&error, "identity\0error\n")), _ => expect(false) }
+    } else if drift {
+        expect(trace.len() == 3); expect(trace[1] == 2); expect(trace[2] == 4);
+        match result { Err(error) => expect(identifiers::equal_text(&error, "changed\0error\n")), _ => expect(false) }
+    } else {
+        expect(trace.len() == 3); expect(trace[1] == 2); expect(trace[2] == 3);
+        match result {
+            Ok((Some(object), Some(bytes))) => {
+                expect(identifiers::equal_text(&object.identity, "identity\0原件\n"));
+                expect(object.bytes == if empty { 0 } else { 3 });
+                expect(bytes.len() == if empty { 0 } else { 3 });
+                expect(identifiers::equal_text(&object.sha256, if empty { "empty\0摘要" } else { "full\0摘要" }));
+                if !empty { expect(bytes[0] == 0); expect(bytes[1] == 255); expect(bytes[2] == 7); }
+            },
+            _ => expect(false),
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_reading_keeps_bytes_identity_order_and_first_failure() {
+    original_read_case(false, false, 3, false, false);
+    original_read_case(false, false, u64::MAX, false, false);
+    original_read_case(true, false, 0, false, false);
+    original_read_case(true, false, u64::MAX, false, false);
+    original_read_case(false, true, 0, true, true);
+    original_read_case(false, true, u64::MAX, true, true);
+    original_read_case(false, false, 0, true, true);
+    original_read_case(false, false, 2, true, true);
+    original_read_case(false, false, 3, true, true);
+    original_read_case(false, false, 3, false, true);
+    original_read_case(true, false, 0, true, true);
+    original_read_case(true, false, 0, false, true);
+}
+
 fn case(prepare_fails: bool, apply_fails: bool) {
     let prepare = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<u64, (u64, u64)>))
         ensures out.0@ == trace@.push(1),

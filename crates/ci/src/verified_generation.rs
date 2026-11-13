@@ -39,6 +39,135 @@ pub fn same_object(first: Option<&Object>, second: Option<&Object>) -> (same: bo
     }
 }
 
+pub type OriginalBytes = (Option<Object>, Option<Vec<u8>>);
+
+pub open spec fn original_snapshot(
+    before: String, bytes: Vec<u8>, digest: String, out: Result<OriginalBytes, String>,
+) -> bool {
+    match out {
+        Ok((Some(object), Some(saved))) => object.identity@ == before@
+            && object.sha256@ == digest@ && object.bytes == bytes@.len()
+            && saved@ == bytes@,
+        _ => false,
+    }
+}
+
+pub open spec fn original_bytes_result<S, Identity, Hash, Changed>(
+    initial: S, before: String, bytes: Vec<u8>, limit: u64,
+    identity: Identity, hash: Hash, changed: Changed,
+    out: (S, Result<OriginalBytes, String>),
+) -> bool
+    where Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+{
+    if bytes@.len() > limit {
+        out.0 == initial && match out.1 {
+            Err(error) => error@ == "generation original exceeds byte limit"@,
+            _ => false,
+        }
+    } else {
+        exists|state: S, observed: Result<String, String>|
+            #[trigger] identity.ensures((initial,), (state, observed)) && match observed {
+                Err(error) => out == (state, Err::<OriginalBytes, String>(error)),
+                Ok(actual) => if before@ != actual@ {
+                    match out.1 {
+                        Err(error) => changed.ensures((state,), (out.0, error)),
+                        _ => false,
+                    }
+                } else {
+                    exists|next: S, digest: String|
+                        #[trigger] hash.ensures((state, &bytes), (next, digest))
+                        && out.0 == next && original_snapshot(before, bytes, digest, out.1)
+                },
+            }
+    }
+}
+
+fn finish_original_bytes<S, Identity, Hash, Changed>(
+    state: S, before: String, bytes: Vec<u8>, limit: u64,
+    identity: Identity, hash: Hash, changed: Changed,
+) -> (out: (S, Result<OriginalBytes, String>))
+    where Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+    requires forall|state: S| #[trigger] identity.requires((state,)),
+        forall|state: S, bytes: &Vec<u8>| #[trigger] hash.requires((state, bytes)),
+        forall|state: S| #[trigger] changed.requires((state,)),
+    ensures original_bytes_result(state, before, bytes, limit, identity, hash, changed, out),
+{
+    if bytes.len() as u128 > limit as u128 {
+        return (state, Err("generation original exceeds byte limit".to_owned()));
+    }
+    let ghost initial = state;
+    let ghost original_bytes = bytes;
+    let ghost original_before = before;
+    let (state, observed) = identity(state);
+    let ghost after_identity = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(actual) => {
+            if !identifiers::equal_text(&before, &actual) {
+                let (state, error) = changed(state);
+                (state, Err(error))
+            } else {
+                let (state, digest) = hash(state, &bytes);
+                let object = Object { identity: before, sha256: digest, bytes: bytes.len() as u64 };
+                (state, Ok((Some(object), Some(bytes))))
+            }
+        },
+    };
+    assert(identity.ensures((initial,), (after_identity, original)));
+    assert(original_bytes_result(initial, original_before, original_bytes, limit,
+        identity, hash, changed, out));
+    out
+}
+
+pub open spec fn original_read_result<S, Read, Identity, Hash, Changed>(
+    initial: S, before: String, limit: u64,
+    read: Read, identity: Identity, hash: Hash, changed: Changed,
+    out: (S, Result<OriginalBytes, String>),
+) -> bool
+    where Read: FnOnce(S) -> (S, Result<Vec<u8>, String>),
+          Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+{
+    exists|state: S, observed: Result<Vec<u8>, String>|
+        #[trigger] read.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<OriginalBytes, String>(error)),
+            Ok(bytes) => original_bytes_result(state, before, bytes, limit, identity, hash, changed, out),
+        }
+}
+
+/// Read first, reject oversized bytes before rechecking identity, then hash and retain the exact bytes.
+pub fn read_present_original<S, Read, Identity, Hash, Changed>(
+    state: S, before: String, limit: u64,
+    read: Read, identity: Identity, hash: Hash, changed: Changed,
+) -> (out: (S, Result<OriginalBytes, String>))
+    where Read: FnOnce(S) -> (S, Result<Vec<u8>, String>),
+          Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+    requires read.requires((state,)),
+        forall|state: S| #[trigger] identity.requires((state,)),
+        forall|state: S, bytes: &Vec<u8>| #[trigger] hash.requires((state, bytes)),
+        forall|state: S| #[trigger] changed.requires((state,)),
+    ensures original_read_result(state, before, limit, read, identity, hash, changed, out),
+{
+    let ghost initial = state;
+    let (state, observed) = read(state);
+    let ghost after_read = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(bytes) => finish_original_bytes(state, before, bytes, limit, identity, hash, changed),
+    };
+    assert(read.ensures((initial,), (after_read, original)));
+    out
+}
+
 pub enum Effects { NotStarted, Unknown, Complete }
 
 impl Effects {
