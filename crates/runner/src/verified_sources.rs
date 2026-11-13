@@ -1324,19 +1324,17 @@ pub open spec fn file_plan_error(
     decreases match &file.verification { Some(value) => value.roots.len() - index, None => 0int },
 {
     if !file_plan_affected(file, nodes, scopes) { None }
-    else if !source_declaration_valid(file) {
+    else if file.verification.is_none() {
+        Some(("E_VERUS_COVERAGE: affected file lacks explicit verification classification: "@, file.path@))
+    } else if !source_declaration_valid(file) {
         Some(("E_VERUS_COVERAGE: invalid affected file proof declaration: "@, file.path@))
     } else {
-        match &file.verification {
-            None => None,
-            Some(declaration) => {
-                if index < 0 || index >= declaration.roots.len() { None }
-                else if (file_affected(file, nodes) || root_affected(&declaration.roots[index], nodes, scopes))
-                    && !root_planned(&declaration.roots[index], methods) {
-                    Some(("E_VERUS_COVERAGE: declared root lacks a unique strict Verus invocation in the selected plan: "@, file.path@))
-                } else { file_plan_error(file, nodes, methods, scopes, index + 1) }
-            },
-        }
+        let declaration = file.verification.unwrap();
+        if index < 0 || index >= declaration.roots.len() { None }
+        else if (file_affected(file, nodes) || root_affected(&declaration.roots[index], nodes, scopes))
+            && !root_planned(&declaration.roots[index], methods) {
+            Some(("E_VERUS_COVERAGE: declared root lacks a unique strict Verus invocation in the selected plan: "@, file.path@))
+        } else { file_plan_error(file, nodes, methods, scopes, index + 1) }
     }
 }
 
@@ -1351,11 +1349,19 @@ fn validate_file_plan<'a>(
 {
     reveal_with_fuel(file_plan_error, 2);
     if !affected_file_plan(file, nodes, scopes) { return Ok(()); }
+    let declaration = match &file.verification {
+        None => {
+            return Err(CoverageError {
+                message: "E_VERUS_COVERAGE: affected file lacks explicit verification classification: ",
+                path: file.path.as_str(),
+            });
+        },
+        Some(value) => value,
+    };
     if !valid_source_declaration(file) {
         return Err(CoverageError { message: "E_VERUS_COVERAGE: invalid affected file proof declaration: ",
             path: file.path.as_str() });
     }
-    let declaration = match &file.verification { None => { return Ok(()); }, Some(value) => value };
     let mut i = 0;
     while i < declaration.roots.len()
         invariant 0 <= i <= declaration.roots.len(),
@@ -1391,8 +1397,8 @@ pub open spec fn selected_plan_error(
     }
 }
 
-/// 全局计划在单元拆分前核对每个受影响的已声明根。
-/// 未声明存量文件仍是未知；成功不授予全仓覆盖或原进程执行资格。
+/// 全局计划在单元拆分前核对每个受影响文件的声明根。
+/// 未受影响的存量文件仍可保持未知；受影响文件必须显式分类并由计划证明。
 pub fn validate_selected_roots<'a>(
     files: &'a Vec<SourceFile>, nodes: &Vec<String>, methods: &Vec<super::ProofInvocation>,
     scopes: &Vec<SourceMethodScope>,

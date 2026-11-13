@@ -1200,7 +1200,15 @@ fn proof_plan_preserves_explicit_scope_data_and_unknown_boundaries() {
     let inventory = vec![unknown, data];
     let affected = vec!["file:file".to_string()];
     let no_proof_claim = policy::sources::validate_selected_roots(&inventory, &affected, &Vec::new(), &Vec::new());
-    expect_verifier_true(no_proof_claim.is_ok());
+    expect_verifier_true(no_proof_claim.is_err());
+    let error = no_proof_claim.unwrap_err();
+    expect_verifier_true(identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: affected file lacks explicit verification classification: "));
+    expect_verifier_true(identifiers::equal_text(error.path, "file"));
+    let data_affected = vec!["file:other".to_string()];
+    let data_is_allowed = policy::sources::validate_selected_roots(
+        &inventory, &data_affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(data_is_allowed.is_ok());
     let invalid = source_declaration(SourceRole::Program, Vec::new());
     let bad = vec![invalid];
     let rejected = policy::sources::validate_selected_roots(&bad, &affected, &Vec::new(), &Vec::new());

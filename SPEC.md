@@ -166,6 +166,8 @@ FILEMAP 的文件可显式声明 `verification`：`role` 为 `program`、`specif
 
 FILEMAP schema 2 可显式采用 `require_new_file_classification: true`，由同源 Verus 核对固定基线与候选的文件登记：新增行必须有有效 `verification` 声明，仍存在的行不得删除原有分类；未分类存量继续保持未知。固定基线已启用时，候选不得关闭或移除该字段。不能读取基线时保留原错误并失败；已确认的初始输入没有基线，启用后全部候选行视为新增。此开关选择当前已实现的机器分类检查范围，本节的全部规范义务继续适用。
 
+当前实现已把该范围扩大到受影响存量文件：只要候选 DELTA 影响某个 FILEMAP 文件，该文件就必须在候选计划中显式声明 `program`、`specification` 或 `data`；缺失声明直接返回 `E_VERUS_COVERAGE`，不得以历史存量的 unknown 状态通过。未受影响的历史未分类文件仍保持 unknown，因此这项门控尚未等同于全仓证明覆盖。
+
 ### 2.2 实现与测试使用同一种语言
 
 用什么语言实现，就用什么语言测试。生产单元的行为测试、断言、测试驱动及承载测试逻辑的子进程 helper 必须使用该单元的实现语言：Rust 用 Rust 测，Go 用 Go 测，TypeScript 用 TypeScript 测，Python 用 Python 测。Shell 脚本（包括 sh、bash）允许用 Python 测试。
