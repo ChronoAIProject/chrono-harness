@@ -350,13 +350,14 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
             plan(root.path(), &config, consumer).unwrap_or_else(|e| panic!("{consumer}: {e}"));
         assert_eq!(prepared["consumer_operations"]["status"], "declared");
     }
-    // Reintroduce one real retired routes subscription: fail before transport.
-    config["caches"]["check.judge-registration"]["consumers"]
+    // The routes test plan has no standalone producer build: reject its cache
+    // subscription before transport, using a producer that is still registered.
+    config["caches"]["check.judge-routes"]["consumers"]
         .as_array_mut()
         .unwrap()
         .push(json!("check.unit_judge-routes"));
     let error = plan(root.path(), &config, "check.unit_judge-routes").unwrap_err();
-    assert!(error.contains("build.judge-registration"), "{error}");
+    assert!(error.contains("build.judge-routes"), "{error}");
 }
 
 #[test]
