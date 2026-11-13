@@ -1731,6 +1731,7 @@ impl Inventory {
         if !transfers.is_empty() {
             self.save(&ledger, &gate)?;
         }
+        drop(gate);
         for lease in &leases {
             let input = ledger
                 .outputs
@@ -1937,6 +1938,7 @@ impl Inventory {
         l.outputs[target].references = references.into_iter().collect();
         l.roots.remove(&role);
         self.save(&l, &gate)?;
+        drop(gate);
         for lease in &leases {
             let input = l
                 .outputs
@@ -3295,6 +3297,7 @@ impl Inventory {
         )?
         .ok_or("original evidence disposal busy")?;
         self.stable(&gate)?;
+        drop(gate);
         self.remember_input(&lease, id)?;
         Ok(lease)
     }
@@ -4000,6 +4003,7 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     )?
     .ok_or("original evidence disposal busy")?;
     inventory.stable(&gate)?;
+    drop(gate);
     inventory.remember_input(&lease, &o.id)?;
     Ok(Some(lease))
 }
