@@ -78,21 +78,45 @@ fn case(prepare_fails: bool, apply_fails: bool) {
     };
     let initial: Vec<u8> = Vec::new();
     let ghost before = initial;
-    let (trace, result) = policy::prepare_then_apply(initial, prepare, apply);
+    let (trace, evaluated) = policy::prepare_then_apply(initial, prepare, apply);
     proof {
         let (middle, prepared) = choose|state: Vec<u8>, prepared: Result<u64, (u64, u64)>|
             #[trigger] prepare.ensures((before,), (state, prepared))
             && match prepared {
-                Err(error) => (trace, result) == (state, Err::<u64, (u64, u64)>(error)),
-                Ok(plan) => apply.ensures((state, plan), (trace, result)),
+                Err(error) => trace == state && evaluated.result == Err::<u64, (u64, u64)>(error)
+                    && evaluated.effects is NotStarted,
+                Ok(plan) => exists|next: Vec<u8>, result: Result<u64, (u64, u64)>|
+                    #[trigger] apply.ensures((state, plan), (next, result))
+                    && trace == next && evaluated.result == result
+                    && match result {
+                        Ok(_) => evaluated.effects is Complete,
+                        Err(_) => evaluated.effects is Unknown,
+                    },
             };
         assert(middle@ == seq![1u8]);
-        if !prepare_fails { assert(prepared == Ok::<u64, (u64, u64)>(u64::MAX)); }
+        if !prepare_fails {
+            assert(prepared == Ok::<u64, (u64, u64)>(u64::MAX));
+            let (next, result) = choose|next: Vec<u8>, result: Result<u64, (u64, u64)>|
+                #[trigger] apply.ensures((middle, u64::MAX), (next, result))
+                && trace == next && evaluated.result == result
+                && match result {
+                    Ok(_) => evaluated.effects is Complete,
+                    Err(_) => evaluated.effects is Unknown,
+                };
+        }
     }
     expect(trace.len() == if prepare_fails { 1 } else { 2 });
     expect(trace[0] == 1);
     if !prepare_fails { expect(trace[1] == 2); }
-    match result {
+    if prepare_fails {
+        expect(matches!(evaluated.effects, policy::Effects::NotStarted));
+    } else if apply_fails {
+        expect(matches!(evaluated.effects, policy::Effects::Unknown));
+    } else {
+        expect(matches!(evaluated.effects, policy::Effects::Complete));
+    }
+    expect(evaluated.effects.can_release() == (prepare_fails || !apply_fails));
+    match evaluated.result {
         Err((code, source)) => {
             expect(prepare_fails || apply_fails);
             expect(code == u64::MAX);
@@ -108,6 +132,67 @@ fn preparation_success_and_failure_keep_order_and_original_result() {
     case(false, true);
     case(true, false);
     case(true, true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn effect_labels_keep_unknown_distinct_from_no_work_and_completed_work() {
+    let untouched = policy::Effects::NotStarted;
+    let uncertain = policy::Effects::Unknown;
+    let completed = policy::Effects::Complete;
+    expect(untouched.label() == "not-started");
+    expect(uncertain.label() == "unknown");
+    expect(completed.label() == "complete");
+    expect(untouched.can_release());
+    expect(!uncertain.can_release());
+    expect(completed.can_release());
+    proof {
+        reveal_strlit("unknown"); reveal_strlit("UNKNOWN"); reveal_strlit("unknown\0");
+        assert("unknown"@[0] != "UNKNOWN"@[0]);
+    }
+    expect(policy::reported_unknown(Some("unknown")));
+    expect(!policy::reported_unknown(None));
+    expect(!policy::reported_unknown(Some("")));
+    expect(!policy::reported_unknown(Some("UNKNOWN")));
+    expect(!policy::reported_unknown(Some("unknown\0")));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_completion_requires_one_released_and_sealed_record() {
+    proof {
+        reveal_strlit("released"); reveal_strlit("released-extra");
+        reveal_strlit("releasing");
+    }
+    expect(policy::sealed_record(1, Some("released"), Some(true)));
+    expect(!policy::sealed_record(0, Some("released"), Some(true)));
+    expect(!policy::sealed_record(2, Some("released"), Some(true)));
+    expect(!policy::sealed_record(usize::MAX, Some("released"), Some(true)));
+    expect(!policy::sealed_record(1, Some("released"), Some(false)));
+    expect(!policy::sealed_record(1, Some("released"), None));
+    expect(!policy::sealed_record(1, None, Some(true)));
+    expect(!policy::sealed_record(1, Some("released-extra"), Some(true)));
+    expect(!policy::sealed_record(1, Some("releasing"), Some(true)));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_uses_the_complete_original_id_and_path_and_rejects_missing_fields() {
+    proof {
+        reveal_strlit("对象\0甲"); reveal_strlit("对象\0乙");
+        reveal_strlit("目录/\0原件\n"); reveal_strlit("目录/\0原件");
+        assert("对象\0甲"@[3] != "对象\0乙"@[3]);
+    }
+    let id = "对象\0甲";
+    let path = "目录/\0原件\n";
+    expect(policy::recovery_reference_matches(Some(id), Some(id), Some(path), path));
+    expect(!policy::recovery_reference_matches(Some(id), Some("对象\0乙"), Some(path), path));
+    expect(!policy::recovery_reference_matches(Some(id), Some(id), Some("目录/\0原件"), path));
+    expect(!policy::recovery_reference_matches(None, Some(id), Some(path), path));
+    expect(!policy::recovery_reference_matches(Some(id), None, Some(path), path));
+    expect(!policy::recovery_reference_matches(Some(id), Some(id), None, path));
+    expect(!policy::recovery_reference_matches(None, None, Some(path), path));
+    expect(!policy::recovery_reference_matches(None, Some(id), None, path));
+    expect(!policy::recovery_reference_matches(Some(id), None, None, path));
+    expect(!policy::recovery_reference_matches(None, None, None, path));
+    expect(policy::recovery_reference_matches(Some(""), Some(""), Some(""), ""));
 }
 
 #[cfg(not(verus_keep_ghost))]

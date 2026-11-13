@@ -1,5 +1,5 @@
 //! Each generation owns its original inputs, plan, effects and recovery reference.
-use super::verified_generation::{Object, same_object};
+use super::verified_generation::{self as verified, Object, same_object};
 use chrono_harness::{
     artifact_disposal::identity,
     decode, no_symlink_parents, relative_path,
@@ -432,9 +432,8 @@ pub(super) fn run(
         let prepared = prepare(&root, &mut inputs);
         let originals = inputs.retain(&publication, &directory)?;
         record(&publication, &directory, "inputs.json", &originals)?;
-        let mut effects = "not-started";
         let mut plan_digest = None;
-        let (_, evaluated) = super::verified_generation::prepare_then_apply(
+        let (_, outcome) = verified::prepare_then_apply(
             (),
             |state| {
                 (
@@ -451,18 +450,13 @@ pub(super) fn run(
                     })(),
                 )
             },
-            |state, plan: Plan| {
-                effects = "unknown";
-                let result = plan.install(&root, &publication, &directory);
-                if result.is_ok() {
-                    effects = "complete";
-                }
-                (state, result)
-            },
+            |state, plan: Plan| (state, plan.install(&root, &publication, &directory)),
         );
+        let evaluated = outcome.result;
+        let effects = outcome.effects;
         let result = json!({"schema":"chrono-ci-generation-result/v1","attempt":attempt,
             "intent_sha256":sha256(&serde_json::to_vec_pretty(&intent).map_err(|e| e.to_string())?),
-            "updated":timestamp()?,"original_process_exit":null,"effects":effects,
+            "updated":timestamp()?,"original_process_exit":null,"effects":effects.label(),
             "inputs_sha256":digest(&originals)?,"plan_sha256":plan_digest,
             "producer_evaluation":match &evaluated { Ok(changed)=>json!({"changed":changed}), Err(error)=>json!({"error":error}) }});
         // The evaluation has returned. Bind its exact result before attempting
@@ -482,7 +476,7 @@ pub(super) fn run(
             .map_err(|error| {
                 format!("{evaluated:?}; generation sealing failed: {error}; attempt {attempt}")
             })?;
-        if effects != "unknown" {
+        if effects.can_release() {
             inventory(&root)?.reference_paths(&role, &[]).map_err(|error| {
                 format!("{evaluated:?}; generation recovery release failed: {error}; attempt {attempt}")
             })?;
@@ -500,7 +494,13 @@ pub fn status(root: &Path, path: &str) -> Result<Value, String> {
     let records = report["records"]
         .as_array()
         .ok_or("generation status records")?;
-    if records.len() == 1 && records[0]["phase"] == "released" && records[0]["sealed"] == true {
+    if verified::sealed_record(
+        records.len(),
+        records.first().and_then(|record| record["phase"].as_str()),
+        records
+            .first()
+            .and_then(|record| record["sealed"].as_bool()),
+    ) {
         let _guard = inventory
             .read_guard(path)?
             .ok_or("generation original unavailable")?;
@@ -517,11 +517,13 @@ pub fn status(root: &Path, path: &str) -> Result<Value, String> {
                 return Err(format!("generation {name} is not the sealed original"));
             }
         }
-        report["completion"] = json!(if expected["effects"] == "unknown" {
-            "evaluation-known-effects-unknown"
-        } else {
-            "confirmed-evaluation"
-        });
+        report["completion"] = json!(
+            if verified::reported_unknown(expected["effects"].as_str()) {
+                "evaluation-known-effects-unknown"
+            } else {
+                "confirmed-evaluation"
+            }
+        );
         report["original_result"] = expected;
     }
     Ok(report)
@@ -632,17 +634,23 @@ pub fn resume(root: &Path, path: &str) -> Result<Value, String> {
         return Ok(unknown);
     }
     let attached = state.rooted_original(PRODUCER, &role)?;
-    if original["phase"] == "released" && original["sealed"] == true {
+    if verified::sealed_record(
+        records.len(),
+        original["phase"].as_str(),
+        original["sealed"].as_bool(),
+    ) {
         let verified = status(&root, path)?;
-        if attached.is_some() && expected["effects"] != "unknown" {
+        if attached.is_some() && !verified::reported_unknown(expected["effects"].as_str()) {
             state.reference_paths(&role, &[])?;
         }
         return Ok(verified);
     }
-    if attached
-        .as_ref()
-        .is_none_or(|(id, actual, _, _)| original["id"] != *id || actual != path)
-    {
+    if !verified::recovery_reference_matches(
+        original["id"].as_str(),
+        attached.as_ref().map(|(id, _, _, _)| id.as_str()),
+        attached.as_ref().map(|(_, actual, _, _)| actual.as_str()),
+        path,
+    ) {
         return Err("generation recovery reference does not match the original".into());
     }
     let publication = inventory(&root)?
@@ -661,7 +669,7 @@ pub fn resume(root: &Path, path: &str) -> Result<Value, String> {
     originals(&root, path, &expected)?;
     publication
         .complete_sealed(json!({"result":expected,"recovered":"result-publication-only"}))?;
-    if expected["effects"] != "unknown" {
+    if !verified::reported_unknown(expected["effects"].as_str()) {
         inventory(&root)?.reference_paths(&role, &[])?;
     }
     status(&root, path)

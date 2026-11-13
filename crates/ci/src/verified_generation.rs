@@ -39,8 +39,80 @@ pub fn same_object(first: Option<&Object>, second: Option<&Object>) -> (same: bo
     }
 }
 
+pub enum Effects { NotStarted, Unknown, Complete }
+
+impl Effects {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::NotStarted => out@ == "not-started"@,
+            Self::Unknown => out@ == "unknown"@,
+            Self::Complete => out@ == "complete"@,
+        },
+    {
+        match self {
+            Self::NotStarted => "not-started",
+            Self::Unknown => "unknown",
+            Self::Complete => "complete",
+        }
+    }
+
+    pub fn can_release(&self) -> (release: bool)
+        ensures release == !(self is Unknown),
+    {
+        match self { Self::Unknown => false, _ => true }
+    }
+}
+
+/// The original evaluation and its effect knowledge are produced together.
+pub struct Evaluation<T, E> {
+    pub result: Result<T, E>,
+    pub effects: Effects,
+}
+
+pub open spec fn text_is(actual: Option<&str>, expected: &str) -> bool {
+    match actual { Some(text) => text@ == expected@, None => false }
+}
+
+pub fn reported_unknown(effects: Option<&str>) -> (unknown: bool)
+    ensures unknown == text_is(effects, "unknown"),
+{
+    match effects { Some(text) => identifiers::equal_text(text, "unknown"), None => false }
+}
+
+pub fn sealed_record(count: usize, phase: Option<&str>, sealed: Option<bool>) -> (ready: bool)
+    ensures ready == (count == 1 && text_is(phase, "released") && sealed == Some(true)),
+{
+    if count != 1 { return false; }
+    match phase {
+        Some(text) => identifiers::equal_text(text, "released") && sealed == Some(true),
+        None => false,
+    }
+}
+
+pub open spec fn recovery_reference_spec(
+    recorded_id: Option<&str>, attached_id: Option<&str>, attached_path: Option<&str>, path: &str,
+) -> bool {
+    match (recorded_id, attached_id, attached_path) {
+        (Some(recorded), Some(attached), Some(actual_path)) =>
+            recorded@ == attached@ && actual_path@ == path@,
+        _ => false,
+    }
+}
+
+pub fn recovery_reference_matches(
+    recorded_id: Option<&str>, attached_id: Option<&str>, attached_path: Option<&str>, path: &str,
+) -> (bound: bool)
+    ensures bound == recovery_reference_spec(recorded_id, attached_id, attached_path, path),
+{
+    match (recorded_id, attached_id, attached_path) {
+        (Some(recorded), Some(attached), Some(actual_path)) =>
+            identifiers::equal_text(recorded, attached) && identifiers::equal_text(actual_path, path),
+        _ => false,
+    }
+}
+
 pub open spec fn evaluation<S, P, T, E, Prepare, Apply>(
-    initial: S, prepare: Prepare, apply: Apply, out: (S, Result<T, E>),
+    initial: S, prepare: Prepare, apply: Apply, out: (S, Evaluation<T, E>),
 ) -> bool
     where Prepare: FnOnce(S) -> (S, Result<P, E>),
           Apply: FnOnce(S, P) -> (S, Result<T, E>),
@@ -48,14 +120,21 @@ pub open spec fn evaluation<S, P, T, E, Prepare, Apply>(
     exists|state: S, prepared: Result<P, E>|
         #[trigger] prepare.ensures((initial,), (state, prepared))
         && match prepared {
-            Err(error) => out == (state, Err::<T, E>(error)),
-            Ok(plan) => apply.ensures((state, plan), out),
+            Err(error) => out.0 == state && out.1.result == Err::<T, E>(error)
+                && out.1.effects is NotStarted,
+            Ok(plan) => exists|next: S, result: Result<T, E>|
+                #[trigger] apply.ensures((state, plan), (next, result))
+                && out.0 == next && out.1.result == result
+                && match result {
+                    Ok(_) => out.1.effects is Complete,
+                    Err(_) => out.1.effects is Unknown,
+                },
         }
 }
 
 pub fn prepare_then_apply<S, P, T, E, Prepare, Apply>(
     initial: S, prepare: Prepare, apply: Apply,
-) -> (out: (S, Result<T, E>))
+) -> (out: (S, Evaluation<T, E>))
     where Prepare: FnOnce(S) -> (S, Result<P, E>),
           Apply: FnOnce(S, P) -> (S, Result<T, E>),
     requires prepare.requires((initial,)),
@@ -67,8 +146,15 @@ pub fn prepare_then_apply<S, P, T, E, Prepare, Apply>(
     let ghost middle = state;
     let ghost original = prepared;
     let out = match prepared {
-        Err(error) => (state, Err(error)),
-        Ok(plan) => apply(state, plan),
+        Err(error) => (state, Evaluation { result: Err(error), effects: Effects::NotStarted }),
+        Ok(plan) => {
+            let (next, result) = apply(state, plan);
+            let effects = match &result {
+                Ok(_) => Effects::Complete,
+                Err(_) => Effects::Unknown,
+            };
+            (next, Evaluation { result, effects })
+        },
     };
     assert(prepare.ensures((before,), (middle, original)));
     out
