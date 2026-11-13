@@ -221,22 +221,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.judge-projects": [
-        "inputs",
-        "judge-filemap",
-        "judge-projects",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
-      "build.judge-routes": [
-        "inputs",
-        "judge-filemap",
-        "judge-projects",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
       "fmt.judge-workflow": [
         "judge-workflow",
         "judge-workflow-short",
