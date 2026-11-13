@@ -128,44 +128,58 @@ pub(crate) fn apply(root: &Path, prepared: Prepared, report: &mut Value) -> Resu
             let path = super::path(root, name)?;
             let file =
                 fs::File::open(path).map_err(|e| format!("E_CACHE_FRESHNESS: {name}: {e}"))?;
-            if file
+            let current_newer = file
                 .metadata()
                 .map_err(|e| e.to_string())?
                 .modified()
                 .map_err(|e| e.to_string())?
-                > prepared.latest
-            {
-                return Ok("already-newer");
+                > prepared.latest;
+            match super::verified_planner::freshness_decision(current_newer, false, false, false) {
+                super::verified_planner::FreshnessDecision::AlreadyNewer => {
+                    return Ok("already-newer");
+                }
+                super::verified_planner::FreshnessDecision::Updated
+                | super::verified_planner::FreshnessDecision::Retry
+                | super::verified_planner::FreshnessDecision::Failed => {}
             }
             file.set_modified(after)
                 .map_err(|e| format!("E_CACHE_FRESHNESS: {name}: {e}"))?;
             // Coarse timestamp filesystems may round a nanosecond adjustment away.
-            if file
+            let first_newer = file
                 .metadata()
                 .map_err(|e| e.to_string())?
                 .modified()
                 .map_err(|e| e.to_string())?
-                <= prepared.latest
-            {
-                file.set_modified(
-                    after
-                        .checked_add(Duration::from_secs(1))
-                        .ok_or("E_CACHE_FRESHNESS: timestamp overflow")?,
-                )
-                .map_err(|e| e.to_string())?;
+                > prepared.latest;
+            match super::verified_planner::freshness_decision(false, first_newer, false, false) {
+                super::verified_planner::FreshnessDecision::Updated => {}
+                super::verified_planner::FreshnessDecision::Retry => {
+                    file.set_modified(
+                        after
+                            .checked_add(Duration::from_secs(1))
+                            .ok_or("E_CACHE_FRESHNESS: timestamp overflow")?,
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+                super::verified_planner::FreshnessDecision::AlreadyNewer
+                | super::verified_planner::FreshnessDecision::Failed => {}
             }
-            if file
+            let second_newer = file
                 .metadata()
                 .map_err(|e| e.to_string())?
                 .modified()
                 .map_err(|e| e.to_string())?
-                <= prepared.latest
-            {
-                return Err(format!(
+                > prepared.latest;
+            match super::verified_planner::freshness_decision(false, false, second_newer, true) {
+                super::verified_planner::FreshnessDecision::Updated => Ok("updated"),
+                super::verified_planner::FreshnessDecision::Failed => Err(format!(
                     "E_CACHE_FRESHNESS: input timestamp did not advance past restored outputs: {name}"
-                ));
+                )),
+                super::verified_planner::FreshnessDecision::AlreadyNewer
+                | super::verified_planner::FreshnessDecision::Retry => Err(format!(
+                    "E_CACHE_FRESHNESS: invalid freshness transition: {name}"
+                )),
             }
-            Ok("updated")
         })();
         match &result {
             Ok(status) => row["status"] = json!(status),

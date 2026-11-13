@@ -46,6 +46,12 @@ projects 原件状态由 `verified_state.rs` 与独立 Verus 预期负责：
 正式整 crate 证明、独立预期与真实消费者行为由同次 DELTA 验收；外围原件发布事务和完整执行器
 保持未证明，不能据局部内核声明 `state.rs` 整文件覆盖。范围与登记见 [Verus 实施范围](verus.md)。
 
+缓存 source freshness 的状态转移由 `verified_planner.rs::freshness_decision` 拥有，
+实际 `freshness.rs` 在每次文件时间观察后直接消费同源结果：已有更晚时间立即保留、
+首次调整未超过恢复产物时只允许一次粗粒度重试，重试仍未超过则返回失败。独立 Verus
+预期枚举全部布尔组合，覆盖优先级、重试和最终失败；时间读取、`SystemTime` 算术、
+`set_modified` 和文件系统错误仍是逐项外部接口，不据此声明 freshness 的完整 IO 组合已证明。
+
 Git index 的完整单行解析和 stage／mode／OID 比较由同源 Verus 维护，真实 checkout 直接消费；
 独立预期核完整字段、缺条目、stage 边界及错误文字／优先级。tree／index 共用原错误载体，
 标准 Debug 格式化仍是明确外部边界。实际 stage 键的全文比较、排序定律及集合插入状态
