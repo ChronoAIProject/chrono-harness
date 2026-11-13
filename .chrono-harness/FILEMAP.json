@@ -1600,6 +1600,8 @@
     },
     "test:pr-tests": {
       "operations": [
+        "verify.pr-snapshot",
+        "verify.pr-snapshot-tests",
         "fmt.pr",
         "fmt.pr-tests",
         "test.pr-tests"
