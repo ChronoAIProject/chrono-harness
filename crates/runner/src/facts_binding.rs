@@ -305,6 +305,8 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
 
 verus! {
 
+broadcast use crate::json_value_specs::str_lookup;
+
 #[doc(hidden)]
 pub struct JsonBindingReferences<'a>(pub &'a [Value]);
 

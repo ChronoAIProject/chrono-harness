@@ -12,6 +12,8 @@
     }
   },
   "files": [
+    {"path":"crates/runner/src/json_value_specs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"specification","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
+    {"path":"crates/runner-tests/tests/json_adapters.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner-tests/tests/json_adapters.rs","operation":"verify.runner-json-adapters-tests"}]}},
     {"path":".chrono-harness/experiments/ci-generation-dependencies.md","owner":"ci","surface":"documentation","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/maintenance.launchd.plist","owner":"repository","surface":"membership","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":"crates/judge-registration-tests/tests/fixtures/host-registries.json","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"test-execution","to":"test:judge-registration-tests"}],"verification":{"role":"data","roots":[]}},
@@ -152,7 +154,7 @@
     {"path":".chrono-harness/workflow.json","owner":"repository","surface":"judge-policy","cost":"unmeasured","edges":[{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"judge-trigger","to":"judge:mixed"},{"kind":"judge-trigger","to":"judge:workflow"},{"kind":"test-execution","to":"test:judge-registration-tests"},{"kind":"runtime-input","to":"project:judge-projects-tests"},{"kind":"runtime-input","to":"project:ci-tests"},{"kind":"runtime-input","to":"project:runner-tests"}]},
     {"path":"crates/runner/Cargo.toml","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner/Cargo.lock","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
-    {"path":"crates/runner/src/lib.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/runner/src/lib.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
     {"path":"crates/runner/src/short_console.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/main.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"compile","to":"project:inputs-tests"},{"kind":"compile","to":"project:judge-filemap-tests"},{"kind":"compile","to":"project:judge-projects-tests"},{"kind":"compile","to":"project:judge-registration-tests"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"compile","to":"project:judge-cost-tests"},{"kind":"compile","to":"project:judge-mixed-tests"},{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"compile","to":"project:worktree-tests"},{"kind":"compile","to":"project:runner-tests"},{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/runner/src/publication.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
@@ -391,10 +393,10 @@
     {"path":"crates/worktree-tests/tests/fetch_interruption.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/worktree/src/recovery.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree/src/fetch_recovery.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
-    {"path":"crates/runner/src/facts_binding.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}]},
+    {"path":"crates/runner/src/facts_binding.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
     {"path":"crates/runner/src/input_file.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
-    {"path":"crates/runner/src/facts_configs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
-    {"path":"crates/runner/src/facts_inputs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
+    {"path":"crates/runner/src/facts_configs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
+    {"path":"crates/runner/src/facts_inputs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
     {"path":"crates/judge-registration-tests/tests/git_facts.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/git_inputs.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
     {"path":"crates/judge-registration-tests/tests/input_coverage.rs","owner":"judge-registration-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-registration-tests"}]},
@@ -1319,6 +1321,8 @@
     },
     "test:runner-tests": {
       "operations": [
+        "investigate.ci-generation-dependency.runner",
+        "verify.runner-json-adapters-tests",
         "verify.runner-git-binding",
         "verify.runner-git-binding-tests",
         "verify.retention-release",
@@ -1701,6 +1705,7 @@
       },
       "verify.ci-literals": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-literals-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.runner-json-adapters-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "investigate.ci-generation-dependency.runner": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "investigate.ci-generation-dependency.consumer": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "investigate.ci-generation-dependency.missing": {"resources":[],"outputs":[".chrono-harness/state/"]},

@@ -23,6 +23,11 @@ pub struct ExValue(Value);
 #[verifier::accept_recursive_types(V)]
 pub struct ExJsonMap<K, V>(JsonMap<K, V>);
 
+#[verifier::external_trait_specification]
+pub trait ExJsonIndex {
+    type ExternalTraitSpecificationFor: serde_json::value::Index;
+}
+
 /// 这些观察属于同一个不可变原值；文本借用保留全部 Unicode 字符。
 pub uninterp spec fn text(value: &Value) -> Option<&str>;
 pub uninterp spec fn object(value: &Value) -> Option<&JsonMap<String, Value>>;
@@ -43,6 +48,14 @@ pub open spec fn fields(value: &Value) -> Option<usize> {
     match object(value) { None => None, Some(map) => Some(members(map).len() as usize) }
 }
 
+// 保留外部方法本身的泛型，不为同一方法制造单态重复规格。
+// 本类只解释 &str 索引；其他 Index 实例的观察保持不透明。
+pub uninterp spec fn lookup<'a, I: serde_json::value::Index>(value: &'a Value, index: I)
+    -> Option<&'a Value>;
+
+pub broadcast axiom fn str_lookup(value: &Value, key: &str)
+    ensures #[trigger] lookup(value, key) == field(value, key@);
+
 // serde_json 1.0.151 value/mod.rs::as_str/as_object/get、value/index.rs::index。
 pub assume_specification[ Value::as_str ](value: &Value) -> (out: Option<&str>)
     ensures out == text(value);
@@ -51,21 +64,23 @@ pub assume_specification[ Value::as_object ](value: &Value)
     -> (out: Option<&JsonMap<String, Value>>)
     ensures out == object(value);
 
-pub assume_specification<'a, 'key>[ Value::get::<&'key str> ](
-    value: &'a Value, key: &'key str,
+pub assume_specification<'a, I: serde_json::value::Index>[ Value::get::<I> ](
+    value: &'a Value, index: I,
 ) -> (out: Option<&'a Value>)
-    ensures out == field(value, key@);
+    ensures out == lookup(value, index);
 
-pub assume_specification<'a, 'key>[ <Value as std::ops::Index<&'key str>>::index ](
-    value: &'a Value, key: &'key str,
+pub assume_specification<'a, I: serde_json::value::Index>[ <Value as std::ops::Index<I>>::index ](
+    value: &'a Value, index: I,
 ) -> (out: &'a Value)
     ensures
-        match field(value, key@) {
+        match lookup(value, index) {
             Some(original) => out == original,
             // 缺键／非对象的不可变索引返回 Null；本类只使用其文本观察。
             None => text(out).is_none(),
         },
-        text(out) == field_text(value, key@);
+        text(out) == match lookup(value, index) {
+            None => None, Some(original) => text(original),
+        };
 
 // serde_json 1.0.151 map.rs::len：有限原成员数，不把非对象当作空对象。
 pub assume_specification[ JsonMap::<String, Value>::len ](

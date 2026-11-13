@@ -52,6 +52,8 @@ pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> 
 
 verus! {
 
+broadcast use crate::json_value_specs::str_lookup;
+
 #[doc(hidden)]
 pub struct JsonGuardReferences<'a>(pub &'a [Value]);
 

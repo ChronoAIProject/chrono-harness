@@ -314,6 +314,8 @@ fn render_selector_path_error(error: crate::verified_git_binding::SelectorPathEr
 
 verus! {
 
+broadcast use crate::json_value_specs::str_lookup;
+
 #[doc(hidden)]
 pub struct JsonSelectorRows<'a>(pub &'a [Value]);
 

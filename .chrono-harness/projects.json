@@ -227,13 +227,17 @@
             "--extern",
             "tracing=crates/ci-tests/target/debug/deps/libtracing-add697f9f59934e7.rlib",
             "--export",
-            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner.vir",
-            "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-runner.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-runner.rlib.d",
+            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
+            "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib.d",
             "crates/runner/src/lib.rs",
             "-o",
-            ".chrono-harness/state/libci-generation-dependency-20261114-runner.rlib",
+            ".chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
             "-Zchecksum-hash-algorithm=sha256"
-          ]
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
         },
         "update_lockfile": {
           "operation": "lock.runner",
@@ -476,6 +480,41 @@
       "root": "crates/runner-tests",
       "tests_for": "runner",
       "actions": {
+        "verify_json_adapters": {
+          "operation": "verify.runner-json-adapters-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--edition=2024",
+            "--crate-name",
+            "runner_json_adapters",
+            "-L",
+            "dependency=crates/ci-tests/target/debug/deps",
+            "--extern",
+            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
+            "--extern",
+            "serde_json=crates/ci-tests/target/debug/deps/libserde_json-f23d5e320f77b40e.rlib",
+            "--extern",
+            "verus_builtin_macros=.chrono-harness/bin/verus/libverus_builtin_macros.dylib",
+            "--import",
+            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
+            "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapter-tests.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapter-tests.rlib.d",
+            "crates/runner-tests/tests/json_adapters.rs",
+            "-o",
+            ".chrono-harness/state/libci-generation-dependency-20261114-runner-adapter-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
         "format_check": {
           "operation": "fmt.runner-tests",
           "tool": "cargo",
@@ -1107,13 +1146,13 @@
             "-L",
             "dependency=crates/ci-tests/target/debug/deps",
             "--extern",
-            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner.rlib",
+            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
             "--extern",
             "serde=crates/ci-tests/target/debug/deps/libserde-4a4b19d5de75786c.rlib",
             "--extern",
             "serde_json=crates/ci-tests/target/debug/deps/libserde_json-f23d5e320f77b40e.rlib",
             "--import",
-            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner.vir",
+            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
             "--export",
             "ci_generation_dependency=.chrono-harness/state/libci-generation-dependency-20261114-consumer.vir",
             "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-consumer.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-consumer.rlib.d",
@@ -1143,7 +1182,7 @@
             "-L",
             "dependency=crates/ci-tests/target/debug/deps",
             "--extern",
-            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner.rlib",
+            "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
             "--extern",
             "serde=crates/ci-tests/target/debug/deps/libserde-4a4b19d5de75786c.rlib",
             "--extern",
