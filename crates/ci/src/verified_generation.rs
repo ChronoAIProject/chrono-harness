@@ -381,7 +381,10 @@ pub fn sync_ancestor_directories<S, P, E, N, C, D>(
                 assert(directory_result(initial, root, next, same, sync, out));
                 return out;
             },
-            Ok(()) => { assert(original_sync == (after_sync, Ok::<(), E>(()))); },
+            Ok(success) => {
+                assert(success == ());
+                assert(original_sync == (after_sync, Ok::<(), E>(success)));
+            },
         }
         assert(next.ensures((before,), (step.0, Some(step.1))));
         assert(same.ensures((&step.1, &root), false));
