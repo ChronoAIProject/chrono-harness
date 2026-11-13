@@ -96,6 +96,8 @@ preview 的 34 个公开资产、两平台安装和上游单元已通过。正�
 
 stable 正式采用已在四个下游完成：Go feature PR `71`（head `b29756902c138b5ffe17446d8c43caa1d5ad6134`）→ integration merge `a7ad985e666427824f8a1698428b0c1a59dfdcf2` → dev PR `72`、dev `c0ddc8b2022d7ad0e328cfc5ca14e85ac781a9cf`，collection `43425092561`、CodeQL `43425092278`；TypeScript PR `66`（head `0054aeca21f2044b48e98dc8c1a4b3f937764bec`）→ integration merge `d9996ba54476138613d3726f36bcc80d877dbd43` → dev PR `67`、dev `b87ece774789798d8b32b20883c9396891b89c43`，collection `43425092614`、CodeQL `43425091115`；Mix PR `66`（head `a57edc5e583e5f6776ac61b7cb3abe8103326a7e`）→ integration merge `b8de615b391adfb356de8ea90f4fefc0aafb71e9` → dev PR `67`、dev `6a00ee5a10c283096784a1ec07d145d41e8740c0`，collection `43425092793`、CodeQL `43425092195`；Initial PR `59`（head `a0ef26d05fcd515e749b1d22e2b73cf52083ec07`）→ integration merge `f931b9edc7000b39897ff36a6dc39e80a006f3da` → dev PR `60`、dev `965750bf973395ef221fbca2e0cf042309128708`，宿主检查 `43425093505`、CodeQL `43425093027`。四个 `dev` 的 `distribution.json` 均锁定 `v0.1.4`、stable `release.json` 摘要/长度和两平台 installer 摘要/长度；macOS 本地安装和业务检查通过，Linux 采用由对应 dev CI 实际验证。
 
+收口时按登记入口执行 `/bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json`，退出码为 `2`，原始原因是 `retention policy migration required; original record preserved`。这是宿主生命周期的前置缺口，不是发布或下游采用失败；未重复启动该 bootstrap。由于该前置未完成，FILEMAP／登记 canonical judge 没有有效结果，本轮登记检查保持 `unknown`。不依赖 bootstrap 的文档检查（`git diff --check` 和登记 JSON 解析）已通过。
+
 ## 稳定门槛与下一轮
 
 下列条件全部满足时，候选才可 stable：上游 preview 公开资产和两平台安装通过；四个下游的 feature、integration、dev 链均落地；dev 上的真实单元、汇总和必要安全检查通过；候选相关失败已经在负责层修复并重新验证；stable Release 的标签、源码、资产和下游稳定版声明一致。任一条件缺失都保持 preview 或 unknown。
