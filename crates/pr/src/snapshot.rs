@@ -1,3 +1,4 @@
+use crate::verified_snapshot;
 use serde_json::{Value, json};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -122,11 +123,11 @@ pub(crate) fn parse(
         checks: vec![],
         outcome: "pending",
     };
-    if observed != head {
+    if verified_snapshot::observed_head_is_stale(observed, head) {
         result.outcome = "stale";
         return Ok(result);
     }
-    if state == "CLOSED" {
+    if verified_snapshot::pull_request_closed(state) {
         result.outcome = "closed";
         return Ok(result);
     }
@@ -248,13 +249,13 @@ pub(crate) fn parse(
         }
         result.checks.push(json!({"name":name,"state":state}));
     }
-    result.outcome = if failed {
-        "failed"
-    } else if waiting {
-        "pending"
-    } else {
-        "passed"
-    };
+    result.outcome =
+        verified_snapshot::snapshot_outcome_label(verified_snapshot::snapshot_outcome(
+            verified_snapshot::observed_head_is_stale(observed, head),
+            verified_snapshot::pull_request_closed(state),
+            failed,
+            waiting,
+        ));
     Ok(result)
 }
 
@@ -270,13 +271,9 @@ fn complete(value: &Value) -> Result<(), String> {
 }
 
 fn classify(state: &str) -> Result<&'static str, String> {
-    match state {
-        "SUCCESS" => Ok("passed"),
-        "MISSING" | "QUEUED" | "IN_PROGRESS" | "WAITING" | "REQUESTED" | "PENDING" | "EXPECTED" => {
-            Ok("pending")
-        }
-        "FAILURE" | "ERROR" | "CANCELLED" | "TIMED_OUT" | "ACTION_REQUIRED" | "STARTUP_FAILURE"
-        | "STALE" | "NEUTRAL" | "SKIPPED" => Ok("failed"),
-        _ => Err(format!("unknown check conclusion {state}")),
+    let class = verified_snapshot::classify_check(state);
+    match class {
+        verified_snapshot::CheckClass::Unknown => Err(format!("unknown check conclusion {state}")),
+        _ => Ok(verified_snapshot::check_class_label(class)),
     }
 }

@@ -1,5 +1,23 @@
 # Verus 实施范围
 
+## PR 快照检查终态
+
+`crates/pr/src/verified_snapshot.rs` 是 PR 快照分类的同源 Verus 所有者。它证明
+`SUCCESS`、缺失／排队／运行中等 pending、失败终态和未知值的分类，并证明快照
+终态优先级为 stale → closed → failed → pending → passed。`snapshot.rs` 的 GitHub
+JSON 与字符串读取仅作为明确适配器，直接把真实观察交给这些函数；未知分类仍保留
+原错误。
+
+独立 `verified_snapshot.rs` 预期同时作为 Rust 测试运行，覆盖全部状态类别、大小写
+差异、未知值以及所有优先级重叠。生产和预期各有固定版本 Verus 整 crate 操作，
+FILEMAP 绑定证明根、真实 `pr-tests` 消费和原 lifecycle 行为测试。JSON、GitHub
+provider、URL、分页和 IO 仍是外部接口；其准入与错误／状态分类不因此获得豁免。
+
+**产品与宿主登记同时修改：**新增 PR 生产／独立预期证明操作、显式源码关系和
+`pr-tests` 的固定宏开发依赖；原行为测试、观察顺序、资源边界和失败保留不变。
+本批只覆盖检查终态分类及 stale／closed 优先级，完整快照 JSON／GitHub 事务和
+全仓 `E_VERUS_COVERAGE` 仍待后续批次。
+
 diagnostics 的 `verified_error.rs` 维护实际 `Failure` 的完整字段元组：
 初始化保留原节点并建立空原因／关联表，设置原因时保留节点与原关联表，追加时
 保留原节点、原因、全部关联值及原顺序，再精确追加本次完整角色和错误。

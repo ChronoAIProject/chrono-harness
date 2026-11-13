@@ -1,5 +1,11 @@
 # SPEC 当前覆盖情况
 
+`crates/pr/src/verified_snapshot.rs` 证明 PR 检查的 SUCCESS、pending、失败和未知分类，
+并证明 stale、closed、failed、pending、passed 的优先级；`snapshot.rs` 直接消费同源结果。
+独立 Verus 预期覆盖所有类别、大小写差异及重叠优先级，沿 `pr` 的行为测试共同验收。
+GitHub JSON、分页、URL、Git 状态和 IO 仍是明确外部接口；完整快照事务、实际 provider
+采用与全仓覆盖门仍待后续批次。
+
 `Failure` 的初始化、原因设置及关联错误追加接入 `verified_error.rs`，
 完整节点、动态错误和有序关联值直接搬入、取回同一所有者；独立 Verus 预期同时
 普通运行。两项严格整 crate 证明和原真实错误链／双输出测试须同次 DELTA 验收。
