@@ -96,6 +96,35 @@ preview 的 34 个公开资产、两平台安装和上游单元已通过。正�
 
 stable 正式采用已在四个下游完成：Go feature PR `71`（head `b29756902c138b5ffe17446d8c43caa1d5ad6134`）→ integration merge `a7ad985e666427824f8a1698428b0c1a59dfdcf2` → dev PR `72`、dev `c0ddc8b2022d7ad0e328cfc5ca14e85ac781a9cf`，collection `43425092561`、CodeQL `43425092278`；TypeScript PR `66`（head `0054aeca21f2044b48e98dc8c1a4b3f937764bec`）→ integration merge `d9996ba54476138613d3726f36bcc80d877dbd43` → dev PR `67`、dev `b87ece774789798d8b32b20883c9396891b89c43`，collection `43425092614`、CodeQL `43425091115`；Mix PR `66`（head `a57edc5e583e5f6776ac61b7cb3abe8103326a7e`）→ integration merge `b8de615b391adfb356de8ea90f4fefc0aafb71e9` → dev PR `67`、dev `6a00ee5a10c283096784a1ec07d145d41e8740c0`，collection `43425092793`、CodeQL `43425092195`；Initial PR `59`（head `a0ef26d05fcd515e749b1d22e2b73cf52083ec07`）→ integration merge `f931b9edc7000b39897ff36a6dc39e80a006f3da` → dev PR `60`、dev `965750bf973395ef221fbca2e0cf042309128708`，宿主检查 `43425093505`、CodeQL `43425093027`。四个 `dev` 的 `distribution.json` 均锁定 `v0.1.4`、stable `release.json` 摘要/长度和两平台 installer 摘要/长度；macOS 本地安装和业务检查通过，Linux 采用由对应 dev CI 实际验证。
 
+## 第十一轮 preview 采用（2026-11-13）
+
+正式版 `v0.1.4` 之后审计发现上游存在真实净改动，固定源码为 `7c20c55c12e26f31c1afefecbc75ef045dd70d6f`，tree 为 `d9b0fb3b81d6187b570ae8085619794891a74865`。本轮先发布测试版并完成四仓真实采用：
+
+| 项目 | 身份 |
+| --- | --- |
+| preview 版本 | `v0.1.4-dev.43435181626.1.g7c20c55c12e26f31c1afefecbc75ef045dd70d6f` |
+| landing collection / CodeQL | `43435181626` / `43435180637`，均 attempt `1` |
+| 发布 workflow | `43439682171`，attempt `1`；workflow blob `1e81d8754bd39a18d5132b94bda2d152ed3692dc` |
+| Release | 公开、非 draft、prerelease，标签目标为 `7c20c55c12e26f31c1afefecbc75ef045dd70d6f` |
+| release.json | 6649 bytes，SHA-256 `9e73203ccd52d2a6632cd9b7b2a78ffbf28f363fd5fbbb8454a75d885da0cf4f` |
+| install.sh | 5186 bytes，SHA-256 `65a139a703977b47488b124f263d22f5af250afe6dcbf6d32ef7e64efdcef819` |
+| Linux installer | 1656384 bytes，SHA-256 `be972775a6e7dab0e114007a3ca939dff431c61294c423b4c278fa3bae8ac686` |
+| macOS installer | 1329600 bytes，SHA-256 `4df3d850358f12a1a76cea2bf69a0a31bc56a3e3c995479ca6768094c74fd795` |
+| 安装 jobs | Linux `131947220782`、macOS `131947220668`，均成功 |
+
+自动发布 run `43438440412` 的 Release 身份错配原件继续保留：它的标签为 `v0.1.4-dev.43434383969.1.g9591e93b2f73bc57fab812237aec9335083615d1`、标签目标为 `9591e93b2f73bc57fab812237aec9335083615d1`，而本轮 workflow head 为 `7c20c55c…`，与 landing run/source 不一致，因此不能用于下游迁移或补作本轮证据。
+
+四个下游均从最新 `dev` 建立新的 feature 分支，采用上述固定 preview，并按 `feature → integration → dev` 实际合入。feature collection、integration collection、dev 落地 collection 和 CodeQL 如下；本地业务单元也均通过。
+
+| 下游 | feature → integration | integration → dev | dev 落地 / collection / CodeQL | 本地单元 |
+| --- | --- | --- | --- | --- |
+| Go | PR `76`，head `7f95f246`，run `43445356522`；merge `72ea2f8f` | PR `77` | `1d77a4e6` / `43445898852` / `43445898916` | `harness`, `rates` |
+| TypeScript | PR `71`，head `3ce8a5b0`，run `43445354737`；merge `de217b9c` | PR `72` | `62ce2234` / `43445899388` / `43445898591` | `harness`, `labels` |
+| 混合语言 | PR `71`，head `bfa44f7a`，run `43445354017`；merge `1b9ba922` | PR `72` | `49ed1373` / `43445912876` / `43445913304` | `harness`, `labels`, `normalize`, `rates` |
+| 首次接入 | PR `64`，head `4ec94ce0`，run `43445355617`；merge `1eaa2ce8` | PR `65` | `34a1ade4` / `43445901060` / `43445901084` | 宿主 canonical check |
+
+四个 `dev` 的 `distribution.json` 已核对为同一 preview、manifest 摘要和两平台 installer 摘要；Go、TS、Mix 本地业务检查以及首次接入本地检查均为 `check: passed (exit 0)`。当前候选已完成 preview 采用，但正式晋升仍需先处理版本合同：上游 stable 已存在 `v0.1.4`，而该候选的 release plan core 仍为 `v0.1.4`，不能再次创建同名 stable。下一步在上游负责层将正式版本计划明确推进到 `v0.1.5`，随后重新产生唯一 preview、重新走四仓迁移，满足新版本的稳定门槛后再发布正式版。
+
 收口时按登记入口执行 `/bin/bash .chrono-harness/ci/bootstrap-native.sh . .chrono-harness/ci/bootstrap-core.json`，退出码为 `2`，原始原因是 `retention policy migration required; original record preserved`。这是宿主生命周期的前置缺口，不是发布或下游采用失败；未重复启动该 bootstrap。由于该前置未完成，FILEMAP／登记 canonical judge 没有有效结果，本轮登记检查保持 `unknown`。不依赖 bootstrap 的文档检查（`git diff --check` 和登记 JSON 解析）已通过。
 
 ## 稳定门槛与下一轮
