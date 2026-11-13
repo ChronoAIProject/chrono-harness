@@ -56,8 +56,11 @@ fn maintain_fixture_rounds_until(
 ) -> Vec<Value> {
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
+    let mut maintenance_micros = Vec::new();
     for _ in 0..8 {
+        let began = std::time::Instant::now();
         let round = maintenance(root);
+        maintenance_micros.push(began.elapsed().as_micros());
         assert!(
             round["nodes"].as_u64().unwrap() <= policy["max_nodes_per_round"].as_u64().unwrap(),
             "{round}"
@@ -73,7 +76,10 @@ fn maintain_fixture_rounds_until(
             return rounds;
         }
     }
-    panic!("bounded fixture recovery did not reach {expected}; rounds: {rounds:?}");
+    panic!(
+        "bounded fixture recovery did not reach {expected}; rounds: {rounds:?}; maintenance_micros: {maintenance_micros:?}; policy: {policy}; remaining fixture state: {}",
+        ledger(root)
+    );
 }
 fn tree(root: &Path, name: &str) -> String {
     let path = format!(".chrono-harness/state/fixtures/{name}");
