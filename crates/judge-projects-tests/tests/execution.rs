@@ -1,3 +1,4 @@
+use chrono_harness::retained_artifacts::retention::Inventory;
 use chrono_judge_projects::execute;
 use chrono_judge_registration::execution::{Method, Plan};
 use chrono_judge_routes::prepare;
@@ -230,7 +231,39 @@ fn completed_operations_have_independent_durable_originals() {
         &[("test:a", vec!["a"]), ("test:z", vec!["z"])],
     );
     let plan = retain_operations(plan);
+    std::fs::write(
+        directory.path().join(".chrono-harness/retention.json"),
+        serde_json::to_vec(&json!({
+            "schema":"chrono-output-retention/v2",
+            "producers":{"check-original":[".chrono-harness/state/"]},
+            "keep_seconds":0,"diagnostic_keep_seconds":86400,
+            "max_related_outputs":512,"max_summaries":128,"max_nodes_per_round":256,
+            "max_bytes_per_round":67108864,"max_millis_per_round":25
+        }))
+        .unwrap(),
+    )
+    .unwrap();
     let results = execute(&plan).unwrap();
+    let inventory = Inventory::adopted(directory.path()).unwrap().unwrap();
+    let status = inventory.producer_status("check-original", None).unwrap();
+    assert_eq!(status["scope_complete"], true, "{status}");
+    assert_eq!(status["errors"], json!([]), "{status}");
+    let mut retained: Vec<_> = status["records"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|record| record["path"].as_str().unwrap())
+        .collect();
+    retained.sort_unstable();
+    assert_eq!(
+        retained,
+        [
+            ".chrono-harness/state/projects-run",
+            ".chrono-harness/state/projects-run.operation-0",
+            ".chrono-harness/state/projects-run.operation-1",
+        ],
+        "each operation directory owns its streams and launch original"
+    );
     let returned = serde_json::to_value(&results).unwrap();
     let original = &returned["operation_state"];
     assert!(
@@ -256,10 +289,26 @@ fn completed_operations_have_independent_durable_originals() {
         assert_eq!(reference["sha256"], chrono_harness::sha256(&bytes));
         let saved: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(saved["operation"], name);
-        let process = chrono_harness::full::expand_process(&saved["receipt"]["process"]).unwrap();
-        assert_eq!(process["exit_code"], code);
-        assert_eq!(process["stdout_bytes"], json!(output));
-        assert_eq!(process["stderr_bytes"], json!(error));
+        let retained = &saved["receipt"]["process"];
+        for stream in ["stdout", "stderr", "launch"] {
+            let path = retained[format!("{stream}_original")]["path"]
+                .as_str()
+                .unwrap();
+            assert_eq!(
+                std::path::Path::new(path).parent(),
+                std::path::Path::new(reference["path"].as_str().unwrap()).parent()
+            );
+            assert!(retained.get(stream).is_none());
+            assert!(retained.get(format!("{stream}_bytes")).is_none());
+            assert!(retained.get(format!("{stream}_zlib_hex")).is_none());
+        }
+        let process = chrono_harness::scoped_report::restore_process(retained, |original| {
+            chrono_harness::prepared::read_original(directory.path(), original, None)
+        })
+        .unwrap();
+        assert_eq!(process.exit_code, code);
+        assert_eq!(process.stdout_bytes, output);
+        assert_eq!(process.stderr_bytes, error);
     }
     // Reusing the same operation identity cannot dispatch a second attempt.
     assert!(execute(&plan).is_err());
@@ -347,8 +396,16 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
             .join(".chrono-harness/state/projects-run.operation-0/result.json");
         let mut saved: serde_json::Value =
             serde_json::from_slice(&std::fs::read(original).unwrap()).unwrap();
-        saved["receipt"]["process"] =
-            chrono_harness::full::expand_process(&saved["receipt"]["process"]).unwrap();
+        saved["receipt"]["process"] = serde_json::to_value(
+            chrono_harness::scoped_report::restore_process(
+                &saved["receipt"]["process"],
+                |original| {
+                    chrono_harness::prepared::read_original(directory.path(), original, None)
+                },
+            )
+            .unwrap(),
+        )
+        .unwrap();
         let receipt: chrono_judge_routes::Receipt =
             serde_json::from_value(saved["receipt"].clone()).unwrap();
         chrono_judge_routes::compare(&plan, &plan.operations[0], Some(&receipt)).unwrap();
@@ -357,21 +414,13 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         let partial = directory
             .path()
             .join(".chrono-harness/state/projects-run.operation-1");
-        let launch: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(format!("{}.launch.json", partial.display())).unwrap(),
-        )
-        .unwrap();
+        let launch: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(partial.join("launch.json")).unwrap()).unwrap();
         assert!(!partial.join("result.json").exists());
         // A child's socket arrival only orders its pipe writes. This handshake
         // instead holds the producer after both original readers have joined.
-        assert_eq!(
-            std::fs::read(format!("{}.stdout", partial.display())).unwrap(),
-            [254, 1]
-        );
-        assert_eq!(
-            std::fs::read(format!("{}.stderr", partial.display())).unwrap(),
-            [253]
-        );
+        assert_eq!(std::fs::read(partial.join("stdout")).unwrap(), [254, 1]);
+        assert_eq!(std::fs::read(partial.join("stderr")).unwrap(), [253]);
         let launcher = i32::try_from(launch["launcher_pid"].as_u64().unwrap()).unwrap();
         // An enclosing timeout cooperatively cancels nested operations, allowing
         // this producer to publish their terminal results. Interrupt the actual
@@ -396,19 +445,11 @@ fn interrupted_execution_keeps_completed_originals_and_unknown_partial_operation
         !partial.join("result.json").exists(),
         "no native result was returned to this producer"
     );
-    let launch: serde_json::Value = serde_json::from_slice(
-        &std::fs::read(format!("{}.launch.json", partial.display())).unwrap(),
-    )
-    .unwrap();
+    let launch: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(partial.join("launch.json")).unwrap()).unwrap();
     assert!(launch["child_pid"].as_u64().unwrap() > 0);
-    assert_eq!(
-        std::fs::read(format!("{}.stdout", partial.display())).unwrap(),
-        [254, 1]
-    );
-    assert_eq!(
-        std::fs::read(format!("{}.stderr", partial.display())).unwrap(),
-        [253]
-    );
+    assert_eq!(std::fs::read(partial.join("stdout")).unwrap(), [254, 1]);
+    assert_eq!(std::fs::read(partial.join("stderr")).unwrap(), [253]);
     assert!(
         execute(&plan).is_err(),
         "unknown execution cannot dispatch the same work again"

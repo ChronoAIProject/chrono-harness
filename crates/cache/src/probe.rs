@@ -67,6 +67,7 @@ pub fn observe(
             &[],
             &executable_sha256,
             &ProcessEvidence {
+                root,
                 stdout: &directory.join("stdout"),
                 stderr: &directory.join("stderr"),
                 launch: &directory.join("launch.json"),

@@ -2,7 +2,7 @@
 use crate::verified_state::{self, OperationObservation};
 use crate::{OperationResult, Results};
 use chrono_harness::retained_artifacts::retention::{self, Inventory, Publication};
-use chrono_harness::{ProcessEvidence, file_identity, no_symlink_parents, sha256};
+use chrono_harness::{ProcessEvidence, no_symlink_parents, sha256};
 use chrono_judge_routes::Execution;
 use serde_json::{Value, json};
 use std::{fs, path::PathBuf, time::SystemTime};
@@ -106,19 +106,22 @@ fn observation(row: &OperationResult) -> OperationObservation<'_> {
     OperationObservation {
         status: &row.status,
         process_terminal: row.receipt.as_ref().map(|receipt| {
-            chrono_harness::verified_release::process_exit_known(
+            chrono_harness::verified_release::process_completion_known(
                 receipt.process.exit_code,
                 receipt.process.exit_signal,
+                receipt.process.owned_work_joined,
             )
         }),
     }
 }
 
-fn encoded(row: &OperationResult) -> Result<Value, String> {
+fn encoded(row: &OperationResult, retained_process: Option<Value>) -> Result<Value, String> {
     let mut value = serde_json::to_value(row).map_err(|e| e.to_string())?;
     if row.receipt.is_some() {
-        value["receipt"]["process"] =
-            chrono_harness::full::compact_process(&value["receipt"]["process"])?;
+        value["receipt"]["process"] = match retained_process {
+            Some(process) => process,
+            None => chrono_harness::full::compact_process(&value["receipt"]["process"])?,
+        };
     }
     value["schema"] = json!("chrono-project-operation-result/v1");
     value["updated_at_unix_millis"] = json!(now()?);
@@ -162,7 +165,7 @@ impl Run {
                 Some(original) => original.clone(),
                 None => self
                     .original
-                    .write(&format!("undelivered-{index}.json"), &encoded(row)?)?,
+                    .write(&format!("undelivered-{index}.json"), &encoded(row, None)?)?,
             };
             if row.original.is_some() {
                 inputs.push(
@@ -213,8 +216,8 @@ impl Operation {
         plan_original: &Value,
     ) -> Result<Self, String> {
         let path = format!("{}.operation-{index}", address(plan)?);
-        let streams = ["stdout", "stderr", "launch.json"]
-            .map(|suffix| plan.root.join(format!("{path}.{suffix}")));
+        let streams =
+            ["stdout", "stderr", "launch.json"].map(|suffix| plan.root.join(&path).join(suffix));
         let op = &plan.operations[index];
         let original = Original::begin(
             plan,
@@ -232,69 +235,75 @@ impl Operation {
 
     pub(crate) fn evidence(&self) -> ProcessEvidence<'_> {
         ProcessEvidence {
+            root: &self.original.root,
             stdout: &self.streams[0],
             stderr: &self.streams[1],
             launch: &self.streams[2],
-            publication: None,
+            publication: self.original.publication.as_ref(),
         }
     }
 
     pub(crate) fn finish(self, row: &OperationResult) -> Result<Value, String> {
-        let mut inputs = Vec::new();
-        if let Some(receipt) = &row.receipt {
-            chrono_harness::validate_launch_evidence(&self.streams[2], &receipt.process)?;
-            for (path, expected) in self.streams.iter().zip([
-                Some((
-                    &receipt.process.stdout_sha256,
-                    receipt.process.stdout_bytes.len() as u64,
-                )),
-                Some((
-                    &receipt.process.stderr_sha256,
-                    receipt.process.stderr_bytes.len() as u64,
-                )),
-                None,
-            ]) {
-                let identity = file_identity(path)?;
-                verified_state::validate_original(
-                    &identity.0,
-                    identity.1,
-                    expected.map(|(digest, length)| (digest.as_str(), length)),
-                )?;
-                inputs.push(
+        let retained_process = if let Some(receipt) = &row.receipt {
+            let paths = self
+                .streams
+                .iter()
+                .map(|path| {
                     path.strip_prefix(&self.original.root)
                         .map_err(|e| e.to_string())?
                         .to_str()
-                        .ok_or("operation original UTF-8")?
-                        .to_owned(),
-                );
-            }
-        }
-        let reference = self.original.write("result.json", &encoded(row)?)?;
-        let root = self.original.root.clone();
-        let path = self.original.path.clone();
-        // The sealed lossless result takes custody before temporary live streams
-        // are released. Unknown results keep both originals and their recovery root.
-        let known = verified_state::terminal(&observation(row));
-        self.original.finish(
-            false,
-            json!({"kind":"project-operation", "operation":row.operation, "terminal":known}),
-            &inputs,
-        )?;
-        if let Some(inventory) = Inventory::adopted(&root)? {
-            let release = verified_state::release_plan(known, inputs.len());
-            if release.settle_inputs {
-                inventory.settle_publication_inputs(&path, &inputs)?;
-            }
-            if release.release_dependencies {
-                inventory.dependencies_paths(&path, &[])?;
-            }
-            if release.release_recovery {
-                inventory.reference_paths(
-                    &format!("projects-recovery:{}", sha256(path.as_bytes())),
-                    &[],
+                        .ok_or("operation original UTF-8".into())
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            let process = chrono_harness::scoped_report::retain_process_evidence(
+                &self.original.root,
+                &receipt.process,
+                paths[0],
+                paths[1],
+                paths[2],
+            )?;
+            for (index, (stream, expected_digest, expected_length)) in [
+                (
+                    "stdout",
+                    &receipt.process.stdout_sha256,
+                    receipt.process.stdout_bytes.len() as u64,
+                ),
+                (
+                    "stderr",
+                    &receipt.process.stderr_sha256,
+                    receipt.process.stderr_bytes.len() as u64,
+                ),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let digest = process[format!("{stream}_original")]["sha256"]
+                    .as_str()
+                    .ok_or("operation stream original digest")?;
+                let length = fs::symlink_metadata(&self.streams[index])
+                    .map_err(|e| e.to_string())?
+                    .len();
+                verified_state::validate_original(
+                    digest,
+                    length,
+                    Some((expected_digest, expected_length)),
                 )?;
             }
-        }
+            Some(process)
+        } else {
+            None
+        };
+        let reference = self
+            .original
+            .write("result.json", &encoded(row, retained_process)?)?;
+        // The operation directory owns both its result and the exact streams it
+        // references. Unknown results keep that directory's recovery protection.
+        let known = verified_state::terminal(&observation(row));
+        self.original.finish(
+            known,
+            json!({"kind":"project-operation", "operation":row.operation, "terminal":known}),
+            &[],
+        )?;
         Ok(reference)
     }
 }

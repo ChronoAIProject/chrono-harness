@@ -43,6 +43,17 @@ fn maintain_fixture_to(root: &Path, expected: u64) -> Value {
     fixture_remaining(root, rounds.last().unwrap())
 }
 fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
+    maintain_fixture_rounds_until(
+        root,
+        &format!("{expected} remaining fixture outputs"),
+        |round| fixture_remaining(root, round) == expected,
+    )
+}
+fn maintain_fixture_rounds_until(
+    root: &Path,
+    expected: &str,
+    mut complete: impl FnMut(&Value) -> bool,
+) -> Vec<Value> {
     let policy: Value = serde_json::from_slice(&fs::read(root.join(POLICY_PATH)).unwrap()).unwrap();
     let mut rounds = Vec::new();
     for _ in 0..8 {
@@ -56,16 +67,13 @@ fn maintain_fixture_rounds_to(root: &Path, expected: u64) -> Vec<Value> {
                 <= policy["max_bytes_per_round"].as_u64().unwrap(),
             "{round}"
         );
-        let remaining = fixture_remaining(root, &round);
+        let completed = complete(&round);
         rounds.push(round);
-        if remaining == expected {
+        if completed {
             return rounds;
         }
     }
-    panic!(
-        "bounded fixture recovery did not reach {expected}; rounds: {rounds:?}; actual declarations: {}",
-        ledger(root)
-    );
+    panic!("bounded fixture recovery did not reach {expected}; rounds: {rounds:?}");
 }
 fn tree(root: &Path, name: &str) -> String {
     let path = format!(".chrono-harness/state/fixtures/{name}");
@@ -674,11 +682,13 @@ fn materialized_originals_extend_the_owners_reference_before_content_and_release
         "returning caller still consumes the released original"
     );
     drop(activity);
-    let released = inventory(h.path()).maintain().unwrap();
+    // Disposal can stop at the policy's round limit; the remaining rooted
+    // original must stay protected throughout ordinary continuation rounds.
+    let released = maintain_fixture_to(h.path(), 1);
     assert!(!h.path().join(first).exists(), "{released}");
     assert!(h.path().join(second).is_file());
     inventory(h.path()).reference_paths(role, &[]).unwrap();
-    let unreferenced = inventory(h.path()).maintain().unwrap();
+    let unreferenced = maintain_fixture_to(h.path(), 0);
     assert!(!h.path().join(second).exists(), "{unreferenced}");
 }
 
@@ -772,15 +782,27 @@ fn busy_or_damaged_output_metadata_does_not_block_an_independent_publisher() {
         };
         let second_path = tree(h.path(), "independent-b");
         let began = std::time::Instant::now();
-        let second = inventory(h.path())
+        let publisher = inventory(h.path());
+        let adopted = began.elapsed();
+        let second = publisher
             .begin("fixture", &second_path, json!(null))
             .unwrap();
+        let reserved = began.elapsed();
         second.complete(json!({"exit": 101})).unwrap();
-        assert!(began.elapsed() < std::time::Duration::from_secs(5));
-        let round = maintenance(h.path());
+        let completed = began.elapsed();
+        assert!(
+            completed < std::time::Duration::from_secs(5),
+            "damaged={damaged}; adopt={adopted:?}; reserve={:?}; complete={:?}; total={completed:?}",
+            reserved - adopted,
+            completed - reserved
+        );
+        let rounds =
+            maintain_fixture_rounds_until(h.path(), "independent physical disposal", |_| {
+                !h.path().join(&second_path).exists()
+            });
         assert!(
             !h.path().join(&second_path).exists(),
-            "independent disposal must progress: {round}"
+            "independent disposal must progress: {rounds:?}"
         );
         assert_eq!(
             fs::read(h.path().join(&first_path).join("body")).unwrap(),
@@ -1161,6 +1183,94 @@ fn released_original_larger_than_verification_round_is_not_permanently_blocked()
         ledger(h.path())["summaries"][0]["large_original_recheck"],
         "sealed-identity-and-content-stamp; digest-not-reread"
     );
+}
+
+#[test]
+fn returned_metadata_exclusion_is_released_while_an_unrelated_fork_waits_for_exec() {
+    if !isolated_capability_test(
+        "returned_metadata_exclusion_is_released_while_an_unrelated_fork_waits_for_exec",
+    ) {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::{fd::AsRawFd, unix::net::UnixStream, unix::process::CommandExt},
+    };
+    let h = host(256, 16);
+    let path = tree(h.path(), "synchronous-metadata");
+    let owner = inventory(h.path());
+    let publication = inventory(h.path())
+        .begin("fixture", &path, json!(null))
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit":7})).unwrap();
+    let role = "current-synchronous-metadata";
+    owner.reference(role, &[id.clone()]).unwrap();
+    let role_record = retention_state::role_path(h.path(), role);
+    let (mut parent, child) = UnixStream::pair().unwrap();
+    let parent_fd = parent.as_raw_fd();
+    let child_fd = child.as_raw_fd();
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"));
+    command.arg("exit-success");
+    unsafe {
+        command.pre_exec(move || {
+            libc::close(parent_fd);
+            let mut byte = 1u8;
+            if libc::write(child_fd, (&byte as *const u8).cast(), 1) != 1
+                || libc::read(child_fd, (&mut byte as *mut u8).cast(), 1) != 1
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    let (excluded, signaled, during, snapshot, exact, role_available, resumed, joined) =
+        std::thread::scope(|scope| {
+            let mut launched = None;
+            let mut signaled = None;
+            let mut during = None;
+            let excluded = owner.metadata_observed(&path, &[role.into()], || {
+                launched = Some(scope.spawn(|| command.output()));
+                signaled = Some(parent.read_exact(&mut [0]));
+                during = Some(owner.producer_status("fixture", Some(&path)));
+            });
+            // Keep the unrelated child before exec until all observations have
+            // returned. No retry, process probe or sleep can close its fd copies.
+            let snapshot = owner.producer_status("fixture", None);
+            let exact = owner.producer_status("fixture", Some(&path));
+            let role_available = chrono_harness::ownership::DirectoryLease::acquire(
+                role_record.parent().unwrap(),
+                true,
+                None,
+            )
+            .map(|lease| lease.is_some());
+            let resumed = parent.write_all(&[1]);
+            let joined = launched.map(|child| child.join());
+            (
+                excluded,
+                signaled,
+                during,
+                snapshot,
+                exact,
+                role_available,
+                resumed,
+                joined,
+            )
+        });
+    excluded.unwrap();
+    signaled.unwrap().unwrap();
+    resumed.unwrap();
+    assert!(joined.unwrap().unwrap().unwrap().status.success());
+    assert!(during.unwrap().unwrap_err().contains("busy"));
+    let snapshot = snapshot.unwrap();
+    assert_eq!(snapshot["scope_complete"], true, "{snapshot}");
+    assert_eq!(snapshot["errors"], json!([]), "{snapshot}");
+    assert_eq!(snapshot["records"].as_array().unwrap().len(), 1);
+    assert_eq!(snapshot["records"][0]["id"], id);
+    let exact = exact.unwrap();
+    assert_eq!(exact["scope_complete"], true, "{exact}");
+    assert_eq!(exact["records"][0]["path"], path);
+    assert!(role_available.unwrap());
 }
 
 #[test]
@@ -2439,8 +2549,10 @@ fn per_relation_capacity_preserves_independent_outputs_and_recovers_pending_reco
     fs::write(&pending, b"interrupted record replacement").unwrap();
     second.complete(json!({"exit":7})).unwrap();
     assert!(!pending.exists());
-    let round = maintenance(h.path());
-    assert_eq!(round["related_output_capacity"], 1);
+    let rounds = maintain_fixture_rounds_to(h.path(), 1);
+    for round in &rounds {
+        assert_eq!(round["related_output_capacity"], 1);
+    }
     assert!(h.path().join(&first_path).exists());
     assert!(!h.path().join(&second_path).exists());
     drop(first);
@@ -4218,8 +4330,7 @@ fn explicit_small_reservations_admit_concurrent_outputs_and_enforce_each_bound()
     .unwrap();
     assert!(ninth.is_dir());
     independent.complete(json!({"exit":9})).unwrap();
-    let round = maintenance(h.path());
-    assert_eq!(fixture_remaining(h.path(), &round), 8);
+    assert_eq!(maintain_fixture_to(h.path(), 8), 8);
     assert!(!ninth.exists());
     for (n, p) in live.into_iter().enumerate() {
         p.complete(json!({"exit":n})).unwrap();
@@ -6109,6 +6220,65 @@ fn failed_final_original_rolls_after_diagnostics_and_a_real_exact_consumer() {
 }
 
 #[test]
+fn external_removal_exclusion_survives_handoff_to_its_native_child() {
+    if !isolated_capability_test("external_removal_exclusion_survives_handoff_to_its_native_child")
+    {
+        return;
+    }
+    use std::{
+        io::{Read, Write},
+        os::{fd::AsRawFd, unix::net::UnixStream, unix::process::CommandExt},
+    };
+    let h = host(256, 16);
+    let path = tree(h.path(), "external-removal-effect");
+    let guard = retained_artifacts::retention::external_removal_guard(h.path(), &path)
+        .unwrap()
+        .unwrap();
+    let (mut parent, child) = UnixStream::pair().unwrap();
+    let parent_fd = parent.as_raw_fd();
+    let child_fd = child.as_raw_fd();
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_chrono-test-retention-child"));
+    command.arg("exit-success");
+    chrono_harness::process_fds::forward_command(&mut command, &[]).unwrap();
+    unsafe {
+        command.pre_exec(move || {
+            libc::close(parent_fd);
+            let mut byte = 1u8;
+            if libc::write(child_fd, (&byte as *const u8).cast(), 1) != 1
+                || libc::read(child_fd, (&mut byte as *mut u8).cast(), 1) != 1
+            {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
+    // This is an explicit native handoff, unlike an unrelated fork of a
+    // synchronous metadata operation. The prepared command owns the copies.
+    drop(guard);
+    let (signaled, conflicting, resumed, joined) = std::thread::scope(|scope| {
+        let launched = scope.spawn(move || command.output());
+        let signaled = parent.read_exact(&mut [0]);
+        let conflicting = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .and_then(|publication| publication.complete(json!({"exit": 0})));
+        let resumed = parent.write_all(&[1]);
+        let joined = launched.join();
+        (signaled, conflicting, resumed, joined)
+    });
+    signaled.unwrap();
+    resumed.unwrap();
+    assert!(joined.unwrap().unwrap().status.success());
+    assert!(
+        conflicting.is_err(),
+        "an explicitly forwarded removal capability must exclude overlapping publication"
+    );
+    let publication = inventory(h.path())
+        .begin("fixture", &path, json!(null))
+        .expect("the joined child releases its removal capability");
+    publication.complete(json!({"exit": 0})).unwrap();
+}
+
+#[test]
 fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retirement() {
     if !isolated_capability_test(
         "fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retirement",
@@ -6200,6 +6370,7 @@ fn adopted_process_streams_and_launch_keep_original_bytes_and_joined_failure() {
         b"exact stdin\0",
         &chrono_harness::file_identity(program).unwrap().0,
         &chrono_harness::ProcessEvidence {
+            root: h.path(),
             stdout: &stdout,
             stderr: &stderr,
             launch: &launch,
