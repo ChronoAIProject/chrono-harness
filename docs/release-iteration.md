@@ -226,6 +226,42 @@ Release 公开、非 draft、prerelease，共 34 个资产。`release.json` 为 
 
 本地部分临时检出及 start 原件随后缺失；没有据此判断仍在运行的命令已终止。已核 Git 保留的分支／提交，并将上述固定 feature 和 integration 提交推送保全；远端 PR 使用这些已核对的分支，不重新发布同一候选。缺失原因尚未确定。上游在本候选之后仍有源码改动且 runner 修复未完成发布复验，因此本候选继续保持 preview。
 
+## 第十六轮 `ca923e…` preview（2026-11-14）
+
+本轮复用既有成功发布 `43508963099/1`，没有重复派发。固定版本为 `v0.1.5-dev.43505956443.1.gca923e075fcadab90336d70ab8dd64019fe098af`，source 为 `ca923e075fcadab90336d70ab8dd64019fe098af`，tree 为 `c9ee3784e05428c1846f36d6c1a4e680395fc86e`；landing collection 为 `43505956443`，CodeQL 为 `43505955870`。workflow head 同 source，workflow blob 为 `ce38fbe5b0ced74709141b9ee43f26f4865cd124`。Release 公开、非 draft、prerelease，共 34 个资产。
+
+`release.json` 为 6649 bytes／`aeb51e70836edb0e4e3162eeb4b388ddfdb5355c19bfdd7c9c624e64c72f4cda`，`install.sh` 为 5186 bytes／`4461d01ff457234d70d58c7be9f0c8e034eab13f06e38ad6ace4dab5991b2ebf`。Linux/macOS installer 分别为 1660576 bytes／`006651f2331bae218bd00b47f2409a1759ca14034e318b75fc6ccdf702cfbd7d` 和 1329600 bytes／`301a6d248c7a08d97bd6401c7a32dfa89f4f49548e04b18808a7d0630271b32a`；公开原字节已下载核对。Linux/macOS 安装 job `132185118263`、`132185118486` 成功，原安装 JSON 的版本、平台、源码、manifest 及全部 16 个工具摘要／长度已核对。本候选不含后续 runner 修复，不能证明旧 `ETXTBSY` 已解决。
+
+四仓通过正式 start 从各自最新 dev 创建同基线 feature／integration，在持久目录中采用候选安装器 `adopt --replace`，逐项保留原声明的 16 个工具；macOS 实际安装文件的长度、摘要及完整映射已核对。适用 SDK bootstrap、正式指南生成、CI verify、本地 canonical 均退出 0，且原报告的候选、基线、原 stdout/stderr、摘要、完整性及业务进程退出码已核对。首次接入保留英语指南，并通过其正式 CI 生成入口。
+
+本轮发现四仓 README 和前三仓 host_context 仍引用早先 `f007c8e…` preview。README 的版本和固定合同链接已改为实际候选；host_context 改为引用 `distribution.json` 中的版本权威，保留宿主选择和业务登记。没有为文字变更添加重复形状测试。
+
+| 下游 | feature head / PR | integration merge / dev PR |
+| --- | --- | --- |
+| Go | `4d6737d03986cd8c5a95e7f2a5ef4a6a22686a66` / #96 | `e5aaa2444a1ea7a48e0f94194c82cf14c338bc6d` / #97 |
+| TypeScript | `677d5e2ed8c9c5950836cd6ed41aef16f63ec042` / #91 | `183915b98f99ad76b1260cc8d56c2629f758920a` / #92 |
+| 混合语言 | `e51eb784f36d7f2175c73546a3b673447ff8e112` / #91 | `d81e8dd1f15831c848778a3ebf2a2e49f9ec4711` / #92 |
+| 首次接入 | `1684d83251ff269cb1c39a44957e4f2045c16859` / #84 | `368c79ccd0edc19ac1a9921fd93a19131d1ec7c1` / #85 |
+
+| 下游 | dev SHA | dev 业务／宿主检查 | dev CodeQL |
+| --- | --- | --- | --- |
+| Go | `94ef8cef834788cbaa28655c06062081f7039d84` | `43519657526`，成功 | `43519655286`，成功 |
+| TypeScript | `64ce459a1cb8f295a7d147bfd8fcca9f8d0ed30f` | `43519667274`，成功 | `43519665563`，成功 |
+| 混合语言 | `00d8d5870a194335cbad9d8c57d779300ec71428` | `43519745626`，成功 | `43519744779`，成功 |
+| 首次接入 | `419c2b320c0244a4c5e1a3c60202c5d3d02f3859` | `43519293888`，成功 | `43519293110`，成功 |
+
+两段 PR 的适用检查及原始结果已核对并实际合并；逐仓核对了受验候选和实际合并提交的 tree 相同、远端 dev SHA 以及固定安装声明。四个 dev 原报告与全部所选单元的原始流、完整性、摘要、业务退出码及候选身份均已核验。Go 实际执行 rates 构建／测试和 bootstrap；TypeScript 执行 labels 两项类型检查、测试和 bootstrap；混合仓另执行 normalize、invoice 和 rates；三仓也都执行 `ci.verify`。前三仓 dev 原生日志中的 Linux 安装回执逐项匹配本轮 manifest、源码及全部 16 个工具。首次接入是 macOS 的无业务单元宿主检查，不宣称它完成 Linux 检查。
+
+原件入口为 `/tmp/chrono-43505956443-KIND-landing-originals/`，固定声明为 `/tmp/chrono-43505956443-KIND-landing-distribution.json`，前三仓实际安装日志为 `/tmp/chrono-43505956443-KIND-landing.log`；对应 GitHub run 和产物是远端原始来源。旧部分 `/tmp` 原件当前不可读取，原因尚未确定；本轮没有因此删除、重置原分支或重复发布。
+
+### runner 与技能源交付的后续观察
+
+修复 PR #1088 已合入 dev，提交为 `05a9fbee9b140f9d66c5dfc908264783cca0b46a`。PR CI `43515669330/1` 的受验候选为 `ada545eae68fbaa8a7fbab68af5cca687e74e24b`，其 tree 与实际落地同为 `37745aed90d2126f59fd8f8db53c4af37db3c15f`；所选单元原件和进程流已核对。dev collection `43517549958` 与 CodeQL `43517548942` 均成功。原 watch 因网络超时退出 1，随后按同一 run 核到真实成功，不能将传输错误写成 CI 失败。自动发布 `43520283683` 已启动，其实际 source 仍须从原 frontend 核对，Linux 原故障仍待包含修复的新 preview 复验。
+
+技能源与第十四／十五轮证据 PR #1089 已通过 CI `43515995397/1` 并合入 integration `45fe1868904f7f815361551007494ecfd907120d`。受验 `4db267c532d9a6c5ce867c83a2e932d8902194cb` 与合并树同为 `a90f4361bf2afaca4268dec0afa1c2716a5e0507`；六个所选单元的原报告及全部业务进程流已核。继续通过 #1090 交付 dev，已启用原生自动合并；本地 canonical 退出 0。原等待因 401 中断，保留错误后重新连接同一运行 `43518314086`，没有重新派发 CI。
+
+retention 原失败进一步核对为：八轮均无 accounting error，四轮完成处置，另四轮是有界部分处置，仍未达到零个剩余 fixture 输出。每轮 `remaining_outputs` 为 null、scope incomplete；这证明有进展，不能证明已经达到验收，也不足以独立归因于时间上限或判定测试要求多余。没有增加预算、轮数或盲重跑。旧失败原因、bootstrap retention migration unknown 及 stable 安装 skipped 继续保留。
+
 ## 稳定门槛与下一轮
 
 下列条件全部满足时，候选才可 stable：上游 preview 公开资产和两平台安装通过；四个下游的 feature、integration、dev 链均落地；dev 上的真实单元、汇总和必要安全检查通过；候选相关失败已经在负责层修复并重新验证；stable Release 的标签、源码、资产和下游稳定版声明一致。任一条件缺失都保持 preview 或 unknown。
