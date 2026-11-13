@@ -209,7 +209,7 @@ pub open spec fn text_is(actual: Option<&str>, expected: &str) -> bool {
 pub fn reported_unknown(effects: Option<&str>) -> (unknown: bool)
     ensures unknown == text_is(effects, "unknown"),
 {
-    match effects { Some(text) => identifiers::equal_text(text, "unknown"), None => false }
+    text_matches(effects, "unknown")
 }
 
 pub fn sealed_record(count: usize, phase: Option<&str>, sealed: Option<bool>) -> (ready: bool)
@@ -269,6 +269,120 @@ pub fn result_address_matches(
                 && identifiers::equal_text(intent_sha256, digest) && exit_is_null,
         _ => false,
     }
+}
+
+pub struct OriginalBinding<'a> {
+    pub intent_schema: Option<&'a str>,
+    pub intent_attempt: Option<&'a str>,
+    pub intent_host: Option<&'a str>,
+    pub result_schema: Option<&'a str>,
+    pub result_attempt: Option<&'a str>,
+    pub result_intent_sha256: Option<&'a str>,
+    pub result_exit_is_null: bool,
+}
+
+pub open spec fn rejected_original_binding(result: Result<(), String>) -> bool {
+    match result { Err(error) => error@ == "generation original result/intent binding mismatch"@, _ => false }
+}
+
+pub open spec fn original_binding_digest_result(fields: &OriginalBinding, path: &str, digest: &str,
+    result: Result<(), String>) -> bool
+{
+    let bound = text_is(fields.result_schema, "chrono-ci-generation-result/v1")
+        && text_is(fields.result_attempt, path) && text_is(fields.result_intent_sha256, digest)
+        && fields.result_exit_is_null;
+    match result { Ok(()) => bound, Err(_) => !bound && rejected_original_binding(result) }
+}
+
+pub open spec fn original_binding_equality_result<S, H>(
+    initial: S, fields: &OriginalBinding, path: &str, intent: &Vec<u8>, equal: bool, hash: H,
+    out: (S, Result<(), String>),
+) -> bool
+    where H: Fn(S, &Vec<u8>) -> (S, String),
+{
+    if !equal { out.0 == initial && rejected_original_binding(out.1) }
+    else {
+        exists|next: S, digest: String|
+            #[trigger] hash.ensures((initial, intent), (next, digest))
+                && out.0 == next && original_binding_digest_result(fields, path, &digest, out.1)
+    }
+}
+
+pub open spec fn original_binding_result<S, I, C, H>(
+    initial: S, fields: &OriginalBinding, path: &str, intent: &Vec<u8>, identify: I, equal: C, hash: H,
+    out: (S, Result<(), String>),
+) -> bool
+    where I: Fn(S) -> (S, Result<String, String>), C: Fn(S) -> (S, bool), H: Fn(S, &Vec<u8>) -> (S, String),
+{
+    if !text_is(fields.intent_schema, "chrono-ci-generation-intent/v1") || !text_is(fields.intent_attempt, path) {
+        out.0 == initial && rejected_original_binding(out.1)
+    } else {
+        exists|state: S, actual: Result<String, String>|
+            #[trigger] identify.ensures((initial,), (state, actual)) && match actual {
+                Err(error) => out == (state, Err::<(), String>(error)),
+                Ok(actual) => if !text_is(fields.intent_host, &actual) {
+                    out.0 == state && rejected_original_binding(out.1)
+                } else {
+                    exists|next: S, matched: bool|
+                        #[trigger] equal.ensures((state,), (next, matched))
+                            && original_binding_equality_result(next, fields, path, intent, matched, hash, out)
+                },
+            }
+    }
+}
+
+/// Validate the original address before identity IO, and hash the actual intent only after host/result binding.
+pub fn bind_generation_originals<S, I, C, H>(
+    state: S, fields: &OriginalBinding, path: &str, intent: &Vec<u8>, identify: I, equal: C, hash: H,
+) -> (out: (S, Result<(), String>))
+    where I: Fn(S) -> (S, Result<String, String>), C: Fn(S) -> (S, bool), H: Fn(S, &Vec<u8>) -> (S, String),
+    requires (forall|state: S| #[trigger] identify.requires((state,))),
+        (forall|state: S| #[trigger] equal.requires((state,))),
+        (forall|state: S, bytes: &Vec<u8>| #[trigger] hash.requires((state, bytes))),
+    ensures original_binding_result(state, fields, path, intent, identify, equal, hash, out),
+{
+    if !intent_address_matches(fields.intent_schema, fields.intent_attempt, path) {
+        return (state, Err("generation original result/intent binding mismatch".to_owned()));
+    }
+    let ghost initial = state;
+    let (state, actual) = identify(state);
+    let ghost after_identify = state;
+    let ghost original_identity = actual;
+    let out = match actual {
+        Err(error) => (state, Err(error)),
+        Ok(actual) => {
+            if !text_matches(fields.intent_host, &actual) {
+                (state, Err("generation original result/intent binding mismatch".to_owned()))
+            } else {
+                let (state, matched) = equal(state);
+                let ghost after_equal = state;
+                let out = if !matched {
+                    (state, Err("generation original result/intent binding mismatch".to_owned()))
+                } else {
+                    let (state, digest) = hash(state, intent);
+                    let ghost after_hash = state;
+                    let ghost original_digest = digest;
+                    let out = if result_address_matches(fields.result_schema, fields.result_attempt,
+                        fields.result_intent_sha256, path, &digest, fields.result_exit_is_null) {
+                        (state, Ok(()))
+                    } else { (state, Err("generation original result/intent binding mismatch".to_owned())) };
+                    assert(hash.ensures((after_equal, intent), (after_hash, original_digest)));
+                    out
+                };
+                assert(equal.ensures((after_identify,), (after_equal, matched)));
+                out
+            }
+        },
+    };
+    assert(identify.ensures((initial,), (after_identify, original_identity)));
+    assert(original_binding_result(initial, fields, path, intent, identify, equal, hash, out));
+    out
+}
+
+fn text_matches(actual: Option<&str>, expected: &str) -> (same: bool)
+    ensures same == text_is(actual, expected),
+{
+    match actual { Some(text) => identifiers::equal_text(text, expected), None => false }
 }
 
 pub open spec fn directory_steps_finite<S, P, E, N, D>(next: N, sync: D, rank: spec_fn(S) -> nat) -> bool

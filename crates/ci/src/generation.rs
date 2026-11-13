@@ -618,23 +618,25 @@ fn originals(root: &Path, path: &str, expected: &Value) -> Result<(Vec<u8>, Vec<
         .ok_or("generation result unavailable")?;
     let intent_value: Value = decode(&intent)?;
     let result_value: Value = decode(&result)?;
-    if !verified::intent_address_matches(
-        intent_value["schema"].as_str(),
-        intent_value["attempt"].as_str(),
+    let fields = verified::OriginalBinding {
+        intent_schema: intent_value["schema"].as_str(),
+        intent_attempt: intent_value["attempt"].as_str(),
+        intent_host: intent_value["host_identity"].as_str(),
+        result_schema: result_value["schema"].as_str(),
+        result_attempt: result_value["attempt"].as_str(),
+        result_intent_sha256: result_value["intent_sha256"].as_str(),
+        result_exit_is_null: result_value["original_process_exit"].is_null(),
+    };
+    verified::bind_generation_originals(
+        (),
+        &fields,
         path,
-    ) || intent_value["host_identity"] != identity(root)?
-        || result_value != *expected
-        || !verified::result_address_matches(
-            result_value["schema"].as_str(),
-            result_value["attempt"].as_str(),
-            result_value["intent_sha256"].as_str(),
-            path,
-            &sha256(&intent),
-            result_value["original_process_exit"].is_null(),
-        )
-    {
-        return Err("generation original result/intent binding mismatch".into());
-    }
+        &intent,
+        |state| (state, identity(root)),
+        |state| (state, result_value == *expected),
+        |state, bytes| (state, sha256(bytes)),
+    )
+    .1?;
     let read_bound = |name: &str, expected: &str| -> Result<Vec<u8>, String> {
         relative_path(name)?;
         let bytes = observe(&no_symlink_parents(root, &format!("{path}/{name}"))?)?

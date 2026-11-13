@@ -390,7 +390,238 @@ fn original_records_require_the_exact_schema_attempt_digest_and_null_exit() {
     expect(policy::result_address_matches(result, Some(""), Some(""), "", "", true));
 }
 
+fn original_binding_case(intent_schema: bool, intent_attempt: bool, host: bool, result_equal: bool,
+    result_schema: bool, result_attempt: bool, result_digest: bool, null_exit: bool,
+    identity_fails: bool, missing_host: bool)
+{
+    proof {
+        reveal_strlit("chrono-ci-generation-intent/v1");
+        reveal_strlit("chrono-ci-generation-result/v1");
+        reveal_strlit("invalid"); reveal_strlit("路径\0原件\n"); reveal_strlit("路径");
+        reveal_strlit("host\0原件\n"); reveal_strlit("host");
+        reveal_strlit("digest\0原件\n"); reveal_strlit("wrong");
+        assert("chrono-ci-generation-intent/v1"@.len() != "invalid"@.len());
+        assert("chrono-ci-generation-result/v1"@.len() != "invalid"@.len());
+        assert("路径\0原件\n"@.len() != "路径"@.len());
+        assert("host\0原件\n"@.len() != "host"@.len());
+        assert("digest\0原件\n"@.len() != "wrong"@.len());
+    }
+    let fields = policy::OriginalBinding {
+        intent_schema: Some(if intent_schema { "chrono-ci-generation-intent/v1" } else { "invalid" }),
+        intent_attempt: Some(if intent_attempt { "路径\0原件\n" } else { "路径" }),
+        intent_host: if missing_host { None } else { Some(if host { "host\0原件\n" } else { "host" }) },
+        result_schema: Some(if result_schema { "chrono-ci-generation-result/v1" } else { "invalid" }),
+        result_attempt: Some(if result_attempt { "路径\0原件\n" } else { "路径" }),
+        result_intent_sha256: Some(if result_digest { "digest\0原件\n" } else { "wrong" }),
+        result_exit_is_null: null_exit,
+    };
+    let identify = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<String, String>))
+        ensures out.0@ == trace@.push(1), match out.1 {
+            Err(error) => identity_fails && error@ == "identity\0failure\n"@,
+            Ok(actual) => !identity_fails && actual@ == "host\0原件\n"@,
+        },
+    {
+        trace.push(1);
+        (trace, if identity_fails { Err("identity\0failure\n".to_owned()) }
+            else { Ok("host\0原件\n".to_owned()) })
+    };
+    let equal = |mut trace: Vec<u8>| -> (out: (Vec<u8>, bool))
+        ensures out.0@ == trace@.push(2), out.1 == result_equal,
+    {
+        trace.push(2);
+        (trace, result_equal)
+    };
+    let hash = |mut trace: Vec<u8>, bytes: &Vec<u8>| -> (out: (Vec<u8>, String))
+        ensures out.0@ == trace@.push(3), out.1@ == if bytes@.len() == 3
+            && bytes@[0] == 0 && bytes@[1] == 255 && bytes@[2] == 7 {
+            "digest\0原件\n"@
+        } else { "wrong"@ },
+    {
+        let valid = bytes.len() == 3 && bytes[0] == 0 && bytes[1] == 255 && bytes[2] == 7;
+        trace.push(3);
+        (trace, if valid { "digest\0原件\n".to_owned() } else { "wrong".to_owned() })
+    };
+    let bytes = original_fixture(false);
+    let initial: Vec<u8> = Vec::new();
+    let ghost start = initial;
+    let (trace, result) = policy::bind_generation_originals(initial, &fields, "路径\0原件\n", &bytes, identify, equal, hash);
+    proof {
+        if intent_schema && intent_attempt {
+            let (identified, actual) = choose|state: Vec<u8>, actual: Result<String, String>|
+                #[trigger] identify.ensures((start,), (state, actual)) && match actual {
+                    Err(error) => (trace, result) == (state, Err::<(), String>(error)),
+                    Ok(actual) => if !policy::text_is(fields.intent_host, &actual) {
+                        trace == state && policy::rejected_original_binding(result)
+                    } else {
+                        exists|next: Vec<u8>, matched: bool|
+                            #[trigger] equal.ensures((state,), (next, matched))
+                                && policy::original_binding_equality_result(next, &fields, "路径\0原件\n", &bytes,
+                                    matched, hash, (trace, result))
+                    },
+                };
+            if !identity_fails && !missing_host && host {
+                let (compared, matched) = choose|state: Vec<u8>, matched: bool|
+                    #[trigger] equal.ensures((identified,), (state, matched))
+                        && policy::original_binding_equality_result(state, &fields, "路径\0原件\n", &bytes,
+                            matched, hash, (trace, result));
+                if result_equal {
+                    let (hashed, digest) = choose|state: Vec<u8>, digest: String|
+                        #[trigger] hash.ensures((compared, &bytes), (state, digest))
+                            && trace == state && policy::original_binding_digest_result(&fields, "路径\0原件\n", &digest, result);
+                }
+            }
+        }
+    }
+    // Independent oracle: address, identity, host/result, then digest; every later check is excluded on failure.
+    let length = if !intent_schema || !intent_attempt { 0usize }
+        else if identity_fails || missing_host || !host { 1usize }
+        else if !result_equal { 2usize } else { 3usize };
+    expect(trace.len() == length);
+    if length > 0 { expect(trace[0] == 1); }
+    if length > 1 { expect(trace[1] == 2); }
+    if length > 2 { expect(trace[2] == 3); }
+    let success = intent_schema && intent_attempt && !identity_fails && !missing_host && host
+        && result_equal && result_schema && result_attempt && result_digest && null_exit;
+    match result {
+        Ok(()) => expect(success),
+        Err(error) => {
+            expect(!success);
+            expect(identifiers::equal_text(&error, if intent_schema && intent_attempt && identity_fails {
+                "identity\0failure\n"
+            } else { "generation original result/intent binding mismatch" }));
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_binding_preserves_short_circuit_order_original_bytes_and_identity_failures() {
+    let mut flags = 0u16;
+    while flags < 256
+        invariant flags <= 256,
+        decreases 256 - flags,
+    {
+        original_binding_case(flags & 1 == 0, flags & 2 == 0, flags & 4 == 0, flags & 8 == 0,
+            flags & 16 == 0, flags & 32 == 0, flags & 64 == 0, flags & 128 == 0, false, false);
+        original_binding_case(flags & 1 == 0, flags & 2 == 0, flags & 4 == 0, flags & 8 == 0,
+            flags & 16 == 0, flags & 32 == 0, flags & 64 == 0, flags & 128 == 0, true, false);
+        original_binding_case(flags & 1 == 0, flags & 2 == 0, flags & 4 == 0, flags & 8 == 0,
+            flags & 16 == 0, flags & 32 == 0, flags & 64 == 0, flags & 128 == 0, false, true);
+        original_binding_case(flags & 1 == 0, flags & 2 == 0, flags & 4 == 0, flags & 8 == 0,
+            flags & 16 == 0, flags & 32 == 0, flags & 64 == 0, flags & 128 == 0, true, true);
+        flags += 1;
+    }
+}
+
 type TargetFault = (u8, u64);
+
+spec fn bound_payload(bytes: Seq<u8>, empty: bool) -> bool {
+    if empty { bytes.len() == 0 }
+    else { bytes.len() == 3 && bytes[0] == 0 && bytes[1] == 255 && bytes[2] == 7 }
+}
+
+fn bound_original_case(empty: bool, missing: bool, corrupt: bool, fail_at: u8)
+    requires fail_at <= 3,
+{
+    proof {
+        reveal_strlit("hash\0原件\n"); reveal_strlit("wrong");
+        assert("hash\0原件\n"@.len() != "wrong"@.len());
+    }
+    let io = policy::BoundOriginalIo {
+        validate: |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(1), out.1 == staging_step_result(1, true, fail_at),
+        { staging_step(trace, 1, true, fail_at) },
+        observe: |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<Option<Vec<u8>>, TargetFault>))
+            ensures out.0@ == trace@.push(2), match out.1 {
+                Err(error) => fail_at == 2 && error == (2u8, u64::MAX),
+                Ok(None) => fail_at != 2 && missing,
+                Ok(Some(bytes)) => fail_at != 2 && !missing && bytes@ == original_bytes(empty),
+            },
+        {
+            trace.push(2);
+            (trace, if fail_at == 2 { Err((2, u64::MAX)) }
+                else if missing { Ok(None) } else { Ok(Some(original_fixture(empty))) })
+        },
+        missing: |mut trace: Vec<u8>| -> (out: (Vec<u8>, TargetFault))
+            ensures out.0@ == trace@.push(3), out.1 == (3u8, u64::MAX),
+        { trace.push(3); (trace, (3, u64::MAX)) },
+        hash: |mut trace: Vec<u8>, bytes: &Vec<u8>| -> (out: (Vec<u8>, String))
+            ensures out.0@ == trace@.push(4), out.1@ == if bound_payload(bytes@, empty) && !corrupt {
+                "hash\0原件\n"@
+            } else { "wrong"@ },
+        {
+            let valid = if empty { bytes.is_empty() }
+                else { bytes.len() == 3 && bytes[0] == 0 && bytes[1] == 255 && bytes[2] == 7 };
+            trace.push(4);
+            (trace, if valid && !corrupt { "hash\0原件\n".to_owned() } else { "wrong".to_owned() })
+        },
+        changed: |mut trace: Vec<u8>| -> (out: (Vec<u8>, TargetFault))
+            ensures out.0@ == trace@.push(5), out.1 == (5u8, u64::MAX),
+        { trace.push(5); (trace, (5, u64::MAX)) },
+    };
+    let initial: Vec<u8> = Vec::new();
+    let ghost start = initial;
+    let (trace, result) = policy::read_bound_original(initial, "hash\0原件\n", &io);
+    proof {
+        let (validated_state, validated) = choose|state: Vec<u8>, validated: Result<(), TargetFault>|
+            #[trigger] io.validate.ensures((start,), (state, validated)) && match validated {
+                Err(error) => (trace, result) == (state, Err::<Vec<u8>, TargetFault>(error)),
+                Ok(()) => policy::bound_observed_result(state, "hash\0原件\n", &io, (trace, result)),
+            };
+        if fail_at != 1 {
+            let (observed_state, observed) = choose|state: Vec<u8>, observed: Result<Option<Vec<u8>>, TargetFault>|
+                #[trigger] io.observe.ensures((validated_state,), (state, observed)) && match observed {
+                    Err(error) => (trace, result) == (state, Err::<Vec<u8>, TargetFault>(error)),
+                    Ok(None) => match result {
+                        Err(error) => io.missing.ensures((state,), (trace, error)),
+                        _ => false,
+                    },
+                    Ok(Some(bytes)) => policy::bound_hashed_result(state, bytes, "hash\0原件\n", &io, (trace, result)),
+                };
+            if fail_at != 2 && !missing {
+                let bytes = observed->Ok_0->Some_0;
+                let (hashed_state, digest) = choose|state: Vec<u8>, digest: String|
+                    #[trigger] io.hash.ensures((observed_state, &bytes), (state, digest)) && if digest@ == "hash\0原件\n"@ {
+                        (trace, result) == (state, Ok::<Vec<u8>, TargetFault>(bytes))
+                    } else { match result {
+                        Err(error) => io.changed.ensures((state,), (trace, error)),
+                        _ => false,
+                    } };
+            }
+        }
+    }
+    // Independent oracle: validate, observe, then missing or hash; changed bytes stop after hash.
+    let failure = if fail_at == 1 { 1u8 } else if fail_at == 2 { 2u8 }
+        else if missing { 3u8 } else if corrupt { 5u8 } else { 0u8 };
+    let length = if failure == 1 { 1usize } else if failure == 2 { 2usize }
+        else if failure == 5 { 4usize } else { 3usize };
+    expect(trace.len() == length);
+    expect(trace[0] == 1);
+    if length > 1 { expect(trace[1] == 2); }
+    if length > 2 { expect(trace[2] == if missing { 3u8 } else { 4u8 }); }
+    if length > 3 { expect(trace[3] == 5); }
+    match result {
+        Err(error) => { expect(failure != 0); expect(error.0 == failure); expect(error.1 == u64::MAX); },
+        Ok(bytes) => {
+            expect(failure == 0); expect(bytes.len() == if empty { 0usize } else { 3usize });
+            if !empty { expect(bytes[0] == 0); expect(bytes[1] == 255); expect(bytes[2] == 7); }
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn bound_original_reading_preserves_complete_bytes_and_first_error() {
+    let mut flags = 0u8;
+    while flags < 8
+        invariant flags <= 8,
+        decreases 8 - flags,
+    {
+        bound_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, 0);
+        bound_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, 1);
+        bound_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, 2);
+        bound_original_case(flags & 1 != 0, flags & 2 != 0, flags & 4 != 0, 3);
+        flags += 1;
+    }
+}
 
 type AncestorPath = (u64, u64);
 type AncestorEvent = (u8, u64, u64);
