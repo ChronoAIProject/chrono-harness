@@ -1,5 +1,29 @@
 # Verus 实施范围
 
+## 受影响文件的分类门控
+
+本仓 FILEMAP 已启用 `require_new_file_classification: true`。当前候选只要影响某个已登记文件，
+该文件就必须显式声明 `program`、`specification` 或 `data`；缺少声明会由同源 Verus
+计划判定返回 `E_VERUS_COVERAGE`，因此修改旧文件新增仓内逻辑不能继续沿用 unknown
+分类绕过证明计划。未受影响的历史未分类文件仍保持 unknown，`program`／`specification`
+的完整证明根、真实生产调用绑定和全仓覆盖门仍分别按下文及 SPEC 保留未完成状态。
+
+本批的生产与独立预期根继续由 `crates/runner/src/verified_verifier.rs` 和
+`crates/runner-tests/tests/verified_verifier.rs` 整 crate 证明；真实 Rust 行为测试
+同时核受影响未分类拒绝、显式 `data` 准入、未受影响 unknown，以及未采用／明确关闭开关的外部宿主边界。
+分类开关与它约束的文件库存通过同一类型传递，JSON 适配仅按原字段搬运；
+未采用开关的宿主不取得证明资格，已有证明声明仍须核验所选证明计划。
+这里明确采用各使用方 lockfile 固定的 Serde `Deserialize`、`serde(from)` 和
+`serde_json::from_slice::<SourceRegistry>` 外部解码合同：完整文件数组和可选布尔字段
+交给已证明的 `source_registry` 构造函数；缺少开关保留 `None`，显式值须为布尔，
+null 或其他类型拒绝。适配器不选择分类政策，也不产生计划准入状态。
+固定基线已启用时，候选仍不能关闭或移除开关。
+`crates/ci/src/gating.rs` 和 `crates/judge-workflow/src/lib.rs` 虽然调用已证明的辅助函数，
+自身没有进入那些证明根的编译依赖，因此仍保持未知覆盖，不登记不实文件级证明。
+选测回归制造源码变更时须使用实际已绑定的生产证明根，并保留原选测和失败断言。
+该门控只约束候选 DELTA 的文件计划，不把分类声明、局部证明或普通 CI 绿灯扩大为
+全仓 SPEC 已证明。
+
 ## libtest 清单判断
 
 `crates/ci/src/verified_inventory.rs` 拥有 Cargo 二进制小写十六进制后缀、
