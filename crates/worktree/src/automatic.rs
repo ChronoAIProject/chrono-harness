@@ -3365,7 +3365,11 @@ impl Manager {
     ) -> Result<Vec<String>, String> {
         // Selection and execution must use this checkout's committed choices;
         // the coordinator's thresholds can differ or be absent.
-        self.adopt_live_policy(r)?;
+        // A failed admission can leave an owned metadata address without an
+        // enrolled checkout. Its existing directory is not a policy consumer.
+        if !self.ledger.entries.is_empty() {
+            self.adopt_live_policy(r)?;
+        }
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
         failures.extend(self.rotate_cache_history(r, report)?);
