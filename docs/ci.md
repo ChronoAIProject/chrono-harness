@@ -40,7 +40,7 @@ CI fixture 用已有 `resolve_program` 从继承的 PATH 解析 Git，不在仓�
 
 从仓库根运行。core、缓存、detector、单元准备、共享启动、Verus 准备和所有者阶段构建由 Rust 执行，统一通过薄 shell 入口启动。首次前端编译需要 Git、rustup 和固定 Rust 1.95.0；已有工具后按 profile 选择并核验 SDK，独立确保 rustfmt 存在。所有者资格读取和构建也由该 Rust 实现维护。发布编排同样使用 Rust 与薄 shell；Python 解释器只由独立 Python 业务示例及其测试按自身登记使用。
 
-没有现役 profile 使用的私有工具链安装分支及专属测试已退役。bootstrap 沿当前工具链选择：Cargo 不可用时安装指定版本的 minimal 加 rustfmt，缺格式化组件时只补该组件；可写构建目录仍由 `host_environment` 的缓存路径声明。工具身份、编译器选择及失败原件继续由原入口核验和保留，不为主机盘点另装完整 SDK。
+没有现役 profile 使用的私有工具链安装分支及专属测试已退役。bootstrap 沿当前工具链选择：Cargo 不可用时安装指定版本的 minimal 加 rustfmt，缺格式化组件时只补该组件。薄入口在首次编译 Rust 前端前也采用这个明确安装选择；已有 Cargo 时直接复用，不让 `rustup run --install` 按默认 profile 下载没有使用方的 rust-docs，安装失败保留原退出且不继续编译。可写构建目录仍由 `host_environment` 的缓存路径声明。工具身份、编译器选择及失败原件继续由原入口核验和保留，不为主机盘点另装完整 SDK。
 
 FILEMAP 按实际读取者登记这些源配置：Rust 前端读取工具链登记、阶段 profile 和升级声明；worktree 在前端启动和阶段原件核验中读取相应 profile、工具链登记与 projects。关系分别指向生产项目，已有 shell／测试边不能替代它们；每次构建的观察和原件仍归 state／线上 artifact。
 

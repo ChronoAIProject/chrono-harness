@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+chrono-judge-cost = { path = "../judge-cost" }
 chrono-judge-mixed = { path = "../judge-mixed" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-identifiers = { path = "../identifiers" }
@@ -18,7 +19,6 @@ serde_json = "1"
 [dev-dependencies]
 chrono-judge-filemap = { path = "../judge-filemap" }
 tempfile = "3"
-chrono-judge-cost = { path = "../judge-cost" }
 
 [[bin]]
 name = "chrono-mixed-test-cost"
@@ -50,5 +50,11 @@ bench = false
 [[bin]]
 name = "chrono-judge-mixed-test-cli"
 path = "../judge-mixed/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-cost-test-cli"
+path = "../judge-cost/src/main.rs"
 test = false
 bench = false

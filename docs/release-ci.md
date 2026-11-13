@@ -67,11 +67,13 @@ CI、inputs、registration、filemap、projects、workflow 六项验证也改用
 
 distribution 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，再经真实安装入口核对字节、权限和回执。两平台的 `verify_distribution_tests` 不再依赖、下载或暂存 distribution 发布资产，原未过滤操作与断言保留。生产 `build_distribution`、最终打包和实际安装仍消费发布资产；完整发布成本收益未测。
 
-inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI。两平台的 `verify_inputs_tests` 移除 inputs 发布资产的依赖、下载和消费声明，registration 与 mixed 按下文采用测试 CLI，其余五个生产判官仍供真实调用消费，执行原未过滤操作。生产 `build_inputs`、其他真实使用方和最终打包保留；完整发布成本收益未测。
+inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI。两平台的 `verify_inputs_tests` 移除 inputs 发布资产的依赖、下载和消费声明，registration、mixed 与 cost 按下文采用测试 CLI，其余四个生产判官仍供真实调用消费，执行原未过滤操作。生产 `build_inputs`、其他真实使用方和最终打包保留；完整发布成本收益未测。
 
 CI、registration、cost、mixed、filemap、projects、inputs、workflow 八项验证均由各自测试项目从 registration 唯一生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实协议调用。两平台删除这些验证的 registration 发布资产依赖、下载和暂存声明，其余实际消费的资产保留。生产 `build_judge_registration`、最终打包和安装继续消费发布资产。原未过滤操作、断言、锁、开发配置、线程、分组和时限保留；测试构建不证明发布字节相同，两平台完整发布与安装另行验收，完整成本收益未测。
 
 inputs、workflow 和 mixed 三项验证也各自从 mixed 唯一生产 `main.rs` 编译测试 CLI。两平台删除这三项验证的 mixed 发布资产依赖、下载和消费声明；生产 `build_judge_mixed`、最终打包及安装继续消费该资产。原未过滤操作、锁、开发配置、断言、线程、分组和时限保留；测试构建不证明发布字节或性能相同，完整原生发布与安装另行验收，完整成本收益未测。
+
+cost、mixed、inputs 和 workflow 四项验证也各自从 cost 唯一生产 `main.rs` 编译测试 CLI。两平台删除这四项验证的 cost 发布资产依赖、下载和消费声明；生产 `build_judge_cost`、最终打包与安装继续消费该资产。原未过滤操作、锁、开发配置、断言、线程、分组和时限保留；测试构建不证明发布字节或性能相同，两平台完整发布与安装另行验收，完整成本收益未测。
 
 每个验证只登记实际消费的构建子集。instructions、routes、diagnostics 不消费发布二进制，`needs` 为空且 `rust_toolchain=true`，可独立启动。原生输入准备的行为验证归 Rust `ci-tests`，随原始未过滤 `test.ci-tests` 执行，复用其既有构建和发布资产依赖，不再单独启动 Python 验证 job。原 IO、执行物解析、凭据省略、纳秒时间顺序和有界失败回执均在 Rust 配对测试中核对；完整种子和转发链仍由 workflow 测试验证。新增验证／传输成本未测，原生两平台验收和公开发行须核对应候选的实际结果。
 

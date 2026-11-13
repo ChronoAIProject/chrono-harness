@@ -23,4 +23,7 @@ else
     fi
     test "$task_anchor" = "$task_root" || { echo 'linked bootstrap requires its deployed coordinator' >&2; exit 2; }
 fi
-exec rustup run --install 1.95.0 cargo run --locked --manifest-path "$task_root/.chrono-harness/ci/native/Cargo.toml" --target-dir "$task_root/.chrono-harness/cache/host-bootstrap-native/target" --bin chrono-host-bootstrap -- "$@"
+if ! rustup run 1.95.0 cargo --version >/dev/null 2>&1; then
+    rustup toolchain install 1.95.0 --profile minimal --component rustfmt
+fi
+exec rustup run 1.95.0 cargo run --locked --manifest-path "$task_root/.chrono-harness/ci/native/Cargo.toml" --target-dir "$task_root/.chrono-harness/cache/host-bootstrap-native/target" --bin chrono-host-bootstrap -- "$@"

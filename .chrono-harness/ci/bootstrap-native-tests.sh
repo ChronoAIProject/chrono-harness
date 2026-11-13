@@ -27,17 +27,33 @@ invoke() {
 }
 reset_calls() { : > "$CHRONO_LAUNCHER_CALLS"; }
 
-# 首次独立主检出可以初始化；编译器的原退出不能变成成功。
+# 已有固定 Cargo 时不安装组件；首次独立主检出仍保留编译器原退出。
 export CHRONO_LAUNCHER_COMPILER_EXIT=17
 invoke "$task_main" .chrono-harness/ci/bootstrap-core.json
 test "$task_status" -eq 17 || fail 'initial compiler exit was lost'
-task_calls=$(cat "$CHRONO_LAUNCHER_CALLS")
-case "$task_calls" in 'rustup
-<run>
-<--install>
-<1.95.0>
-'*) ;; *) fail 'initial compiler selection differs' ;; esac
-unset CHRONO_LAUNCHER_COMPILER_EXIT
+task_probe=$(printf '%s\n' rustup '<run>' '<1.95.0>' '<cargo>' '<--version>')
+task_compile=$(printf '%s\n' rustup '<run>' '<1.95.0>' '<cargo>' '<run>' '<--locked>' '<--manifest-path>' "<$task_main/.chrono-harness/ci/native/Cargo.toml>" '<--target-dir>' "<$task_main/.chrono-harness/cache/host-bootstrap-native/target>" '<--bin>' '<chrono-host-bootstrap>' '<-->' "<$task_main>" '<.chrono-harness/ci/bootstrap-core.json>')
+test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_probe
+$task_compile" || fail 'available toolchain installed components or changed compiler selection'
+
+# 缺 Cargo 时只安装 minimal 加 rustfmt；不采用包含 rust-docs 的默认 profile。
+reset_calls
+export CHRONO_LAUNCHER_PROBE_EXIT=1
+invoke "$task_main" .chrono-harness/ci/bootstrap-core.json
+test "$task_status" -eq 17 || fail 'cold compiler exit was lost'
+task_install=$(printf '%s\n' rustup '<toolchain>' '<install>' '<1.95.0>' '<--profile>' '<minimal>' '<--component>' '<rustfmt>')
+test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_probe
+$task_install
+$task_compile" || fail 'cold toolchain did not select minimal and rustfmt before compiling'
+
+# 安装失败沿用原退出，不能继续编译或隐式重装。
+reset_calls
+export CHRONO_LAUNCHER_INSTALL_EXIT=13
+invoke "$task_main" .chrono-harness/ci/bootstrap-core.json
+test "$task_status" -eq 13 || fail 'toolchain installation exit was lost'
+test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_probe
+$task_install" || fail 'toolchain installation failure continued compiling'
+unset CHRONO_LAUNCHER_PROBE_EXIT CHRONO_LAUNCHER_INSTALL_EXIT CHRONO_LAUNCHER_COMPILER_EXIT
 
 # 关联检出没有协调工具时，必须在编译前拒绝。
 reset_calls
