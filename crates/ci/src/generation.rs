@@ -649,7 +649,7 @@ fn originals(root: &Path, path: &str, expected: &Value) -> Result<(Vec<u8>, Vec<
                 )
             },
             missing: |state| (state, format!("generation original unavailable: {name}")),
-            hash: |state, bytes| (state, sha256(bytes)),
+            hash: |state, bytes: &Vec<u8>| (state, sha256(bytes)),
             changed: |state| (state, format!("generation original bytes changed: {name}")),
         };
         verified::read_bound_original((), expected, &io).1
