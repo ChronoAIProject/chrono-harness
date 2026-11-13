@@ -239,13 +239,6 @@
         "judge-workflow-short",
         "judge-workflow-units"
       ],
-      "build.judge-mixed": [
-        "inputs",
-        "judge-mixed",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
       "build.judge-projects": [
         "inputs",
         "judge-filemap",
