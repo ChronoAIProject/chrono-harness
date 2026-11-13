@@ -53,10 +53,7 @@ pub(crate) fn repository(value: &Value, expected: &str) -> Result<(), String> {
 }
 
 pub(crate) fn sha(value: &str) -> bool {
-    value.len() == 40
-        && value
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+    verified_snapshot::valid_sha_text(value)
 }
 
 pub(crate) struct Snapshot {
@@ -88,11 +85,11 @@ pub(crate) fn parse(
         return Err("PR number, base or head repository mismatch".into());
     }
     let observed = field(pr, "/headRefOid")?;
-    if !sha(observed) {
+    if !verified_snapshot::valid_sha_text(observed) {
         return Err("invalid PR head SHA".into());
     }
     let state = field(pr, "/state")?;
-    if !["OPEN", "CLOSED", "MERGED"].contains(&state) {
+    if !verified_snapshot::valid_pr_state(state) {
         return Err("unknown PR state".into());
     }
     let url = field(pr, "/url")?;
@@ -100,9 +97,9 @@ pub(crate) fn parse(
     if url != expected_url {
         return Err("PR URL mismatch (only github.com is supported)".into());
     }
-    let merge_commit = if state == "MERGED" {
+    let merge_commit = if verified_snapshot::pull_request_merged(state) {
         let oid = field(pr, "/mergeCommit/oid")?;
-        if !sha(oid) {
+        if !verified_snapshot::valid_sha_text(oid) {
             return Err("invalid actual merge commit".into());
         }
         Some(oid.to_owned())

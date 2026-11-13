@@ -5,6 +5,8 @@
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
@@ -92,6 +94,58 @@ pub fn check_class_label(class: CheckClass) -> (label: &'static str)
     }
 }
 
+/// PR 快照只接受 provider 返回的完整小写 40 位提交 SHA。
+#[verifier::inline]
+pub open spec fn sha_byte(byte: u8) -> bool {
+    48 <= byte <= 57 || 97 <= byte <= 102
+}
+
+pub open spec fn sha_format(bytes: Seq<u8>) -> bool {
+    bytes.len() == 40
+        && forall|i: int| 0 <= i < bytes.len() ==> sha_byte(#[trigger] bytes[i])
+}
+
+pub fn valid_sha(bytes: &[u8]) -> (valid: bool)
+    ensures valid == sha_format(bytes@),
+{
+    if bytes.len() != 40 {
+        return false;
+    }
+    let mut i = 0;
+    while i < bytes.len()
+        invariant
+            0 <= i <= bytes.len(),
+            bytes.len() == 40,
+            forall|j: int| 0 <= j < i ==> sha_byte(#[trigger] bytes[j]),
+        decreases bytes.len() - i,
+    {
+        let byte = bytes[i];
+        if !((48 <= byte && byte <= 57) || (97 <= byte && byte <= 102)) {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+pub fn valid_sha_text(text: &str) -> (valid: bool)
+    ensures valid == sha_format(text.spec_bytes()),
+{
+    valid_sha(text.as_bytes())
+}
+
+pub open spec fn pr_state_spec(state: Seq<char>) -> bool {
+    state == "OPEN"@ || state == "CLOSED"@ || state == "MERGED"@
+}
+
+pub fn valid_pr_state(state: &str) -> (valid: bool)
+    ensures valid == pr_state_spec(state@),
+{
+    identifiers::equal_text(state, "OPEN")
+        || identifiers::equal_text(state, "CLOSED")
+        || identifiers::equal_text(state, "MERGED")
+}
+
 pub open spec fn snapshot_outcome_spec(
     stale: bool, closed: bool, failed: bool, pending: bool,
 ) -> SnapshotOutcome {
@@ -115,6 +169,14 @@ pub fn observed_head_is_stale(observed: &str, expected: &str) -> (stale: bool)
 pub fn pull_request_closed(state: &str) -> (closed: bool)
     ensures closed == (state@ == "CLOSED"@),
 { identifiers::equal_text(state, "CLOSED") }
+
+pub fn pull_request_open(state: &str) -> (open: bool)
+    ensures open == (state@ == "OPEN"@),
+{ identifiers::equal_text(state, "OPEN") }
+
+pub fn pull_request_merged(state: &str) -> (merged: bool)
+    ensures merged == (state@ == "MERGED"@),
+{ identifiers::equal_text(state, "MERGED") }
 
 pub fn snapshot_outcome(stale: bool, closed: bool, failed: bool, pending: bool)
     -> (outcome: SnapshotOutcome)

@@ -1,8 +1,9 @@
 # SPEC 当前覆盖情况
 
 `crates/pr/src/verified_snapshot.rs` 证明 PR 检查的 SUCCESS、pending、失败和未知分类，
-并证明 stale、closed、failed、pending、passed 的优先级；`snapshot.rs` 直接消费同源结果。
-独立 Verus 预期覆盖所有类别、大小写差异及重叠优先级，沿 `pr` 的行为测试共同验收。
+并证明 stale、closed、failed、pending、passed 的优先级；同时证明完整 40 位小写十六进制
+SHA 和 `OPEN`／`CLOSED`／`MERGED` 状态准入；`snapshot.rs` 直接消费同源结果。
+独立 Verus 预期覆盖所有类别、大小写差异、输入边界及重叠优先级，沿 `pr` 的行为测试共同验收。
 GitHub JSON、分页、URL、Git 状态和 IO 仍是明确外部接口；完整快照事务、实际 provider
 采用与全仓覆盖门仍待后续批次。
 
