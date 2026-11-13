@@ -144,8 +144,8 @@ pub open spec fn installed_prefix<S, E, Apply>(
     where Apply: Fn(S, usize) -> (S, Result<bool, E>),
 {
     states.len() == changed.len() + 1 && states.first() == initial
-        && forall|index: int| 0 <= index < changed.len() ==>
-            #[trigger] apply.ensures((states[index], index as usize),
+        && forall|index: int| #![trigger changed[index]] 0 <= index < changed.len() ==>
+            apply.ensures((states[index], index as usize),
                 (states[index + 1], Ok::<bool, E>(changed[index])))
 }
 
