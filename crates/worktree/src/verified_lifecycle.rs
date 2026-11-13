@@ -12,6 +12,13 @@ use identifiers::equal_text;
 
 verus! {
 
+/// An address left by failed admission has no checkout policy consumer.
+pub fn enrolled_policy_required(entries: usize) -> (required: bool)
+    ensures required <==> entries > 0,
+{
+    entries > 0
+}
+
 pub enum ProducerNamespaceMember { Owner, Records, Metadata, Disposals, Unknown }
 
 pub fn producer_namespace_member(name: &str) -> (member: ProducerNamespaceMember)

@@ -3367,7 +3367,7 @@ impl Manager {
         // the coordinator's thresholds can differ or be absent.
         // A failed admission can leave an owned metadata address without an
         // enrolled checkout. Its existing directory is not a policy consumer.
-        if !self.ledger.entries.is_empty() {
+        if crate::verified_lifecycle::enrolled_policy_required(self.ledger.entries.len()) {
             self.adopt_live_policy(r)?;
         }
         self.reconcile_published_results()?;
