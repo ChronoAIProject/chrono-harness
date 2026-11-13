@@ -165,6 +165,23 @@ fn published_rfc8785_vectors() {
         b"[0,0.000001,1e+21]"
     );
 }
+fn fixture_request(root: &std::path::Path) -> wire::Request {
+    let mut r: wire::Request = serde_json::from_value(value!({
+        "protocol":"chrono-judge/v1", "request_id":"", "judge_id":"fixture", "mode":"evaluate",
+        "base":{"commit":"a".repeat(40),"tree":"c".repeat(40),"root":root},
+        "candidate":{"commit":"b".repeat(40),"tree":"d".repeat(40),"root":root},
+        "delta":[],"registries":{"base":root,"candidate":root,"digest":"e".repeat(64)},
+        "context":{"path":root.join("context.json"),"sha256":"f".repeat(64)},
+        "impact":{"seeds":[],"edges":[],"tests":[],"retired_tests":[]},"prior_results":[],
+        "config_path":".chrono-harness/config.json",
+        "checkout":{"head":"b".repeat(40),"tracked":[],"untracked":[],"index_flags":[]},
+        "runner":{"path":"runner","sha256":"e".repeat(64),"version":"0.1.0"}
+    }))
+    .unwrap();
+    r.seal().unwrap();
+    r
+}
+
 fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::Binding) {
     let dir = tempfile::Builder::new()
         .prefix("v1 host spaces ")
@@ -179,19 +196,7 @@ fn fixture(case: serde_json::Value) -> (tempfile::TempDir, wire::Request, wire::
         serde_json::to_vec(&case).unwrap(),
     )
     .unwrap();
-    let mut r: wire::Request = serde_json::from_value(value!({
-        "protocol":"chrono-judge/v1", "request_id":"", "judge_id":"fixture", "mode":"evaluate",
-        "base":{"commit":"a".repeat(40),"tree":"c".repeat(40),"root":dir.path()},
-        "candidate":{"commit":"b".repeat(40),"tree":"d".repeat(40),"root":dir.path()},
-        "delta":[],"registries":{"base":dir.path(),"candidate":dir.path(),"digest":"e".repeat(64)},
-        "context":{"path":dir.path().join("context.json"),"sha256":"f".repeat(64)},
-        "impact":{"seeds":[],"edges":[],"tests":[],"retired_tests":[]},"prior_results":[],
-        "config_path":".chrono-harness/config.json",
-        "checkout":{"head":"b".repeat(40),"tracked":[],"untracked":[],"index_flags":[]},
-        "runner":{"path":"runner","sha256":"e".repeat(64),"version":"0.1.0"}
-    }))
-    .unwrap();
-    r.seal().unwrap();
+    let r = fixture_request(dir.path());
     let binding = wire::Binding {
         id: "fixture".into(),
         executable: "judge".into(),
@@ -3499,5 +3504,214 @@ fn failed_handoff_receive_child_helper() {
     assert!(
         error.split(';').next().unwrap().contains("os error 22"),
         "observer diagnostics must preserve the actual spawn errno: {error}"
+    );
+}
+
+fn producer_host() -> (tempfile::TempDir, wire::Request) {
+    let root = tempfile::tempdir().unwrap();
+    let request = fixture_request(root.path());
+    (root, request)
+}
+
+fn producer_command(root: &std::path::Path, args: &[&str], input: &[u8]) -> std::process::Command {
+    let executable = root.join("producer-fixture");
+    if !executable.exists() {
+        native_executable::install(env!("CARGO_BIN_EXE_chrono-test-cli-child"), &executable)
+            .unwrap();
+    }
+    let marker = root.join("producer-evaluated");
+    if marker.exists() {
+        fs::remove_file(marker).unwrap();
+    }
+    fs::write(root.join("producer-input"), input).unwrap();
+    let mut command = std::process::Command::new(executable);
+    command
+        .current_dir(root)
+        .args(args)
+        .stdin(fs::File::open(root.join("producer-input")).unwrap());
+    command
+}
+
+#[test]
+fn producer_arguments_and_strict_decode_prevent_evaluation() {
+    let (root, request) = producer_host();
+    let output = producer_command(root.path(), &["--version"], b"invalid input")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(output.stdout, b"chrono-test-producer fixture.1\n");
+    assert!(output.stderr.is_empty());
+    assert!(!root.path().join("producer-evaluated").exists());
+    for args in [
+        vec![],
+        vec!["--protocol"],
+        vec!["--protocol", "wrong"],
+        vec!["--version", "extra"],
+        vec!["--protocol", "chrono-judge/v1", "extra"],
+    ] {
+        let output = producer_command(root.path(), &args, &request.canonical().unwrap())
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert_eq!(output.stderr, b"E_USAGE: --protocol chrono-judge/v1\n");
+        assert!(!root.path().join("producer-evaluated").exists());
+    }
+    let valid = request.canonical().unwrap();
+    let mut duplicate = b"{\"protocol\":\"chrono-judge/v1\",".to_vec();
+    duplicate.extend_from_slice(&valid[1..]);
+    let mut unknown = b"{\"unexpected\":true,".to_vec();
+    unknown.extend_from_slice(&valid[1..]);
+    let mut trailing = valid.clone();
+    trailing.extend_from_slice(b"{}");
+    for input in [
+        vec![],
+        vec![255],
+        b"{invalid".to_vec(),
+        duplicate,
+        unknown,
+        trailing,
+    ] {
+        let output = producer_command(root.path(), &["--protocol", "chrono-judge/v1"], &input)
+            .output()
+            .unwrap();
+        assert_eq!(output.status.code(), Some(2));
+        assert!(output.stdout.is_empty());
+        assert!(output.stderr.starts_with(b"E_PROTOCOL: "));
+        assert!(!root.path().join("producer-evaluated").exists());
+    }
+}
+
+#[test]
+fn producer_canonical_response_preserves_all_domain_exit_codes() {
+    let (root, mut request) = producer_host();
+    for (mode, exit) in [("pass", 0), ("warn", 0), ("fail", 1), ("error", 2)] {
+        request.mode = mode.into();
+        request.seal().unwrap();
+        let output = producer_command(
+            root.path(),
+            &["--protocol", "chrono-judge/v1"],
+            &request.canonical().unwrap(),
+        )
+        .output()
+        .unwrap();
+        assert_eq!(output.status.code(), Some(exit));
+        assert!(output.stderr.is_empty());
+        // 直接核对独立定义的字段顺序和原字节。
+        let expected = format!(
+            "{{\"evidence\":[],\"findings\":[],\"judge_id\":\"fixture\",\"outputs\":{{\"a\":\"é\",\"z\":2}},\"protocol\":\"chrono-judge/v1\",\"request_id\":\"{}\",\"status\":\"{mode}\"}}",
+            request.request_id
+        );
+        assert_eq!(output.stdout, expected.as_bytes());
+        assert_eq!(
+            fs::read(root.path().join("producer-evaluated")).unwrap(),
+            b"call\n"
+        );
+    }
+}
+
+#[test]
+fn producer_real_input_bound_accepts_exact_limit_and_rejects_one_more_byte() {
+    let (root, request) = producer_host();
+    let mut input = request.canonical().unwrap();
+    input.resize(64 * 1024 * 1024, b' ');
+    let accepted = producer_command(root.path(), &["--protocol", "chrono-judge/v1"], &input)
+        .output()
+        .unwrap();
+    assert_eq!(accepted.status.code(), Some(0));
+    assert!(accepted.stderr.is_empty());
+    assert_eq!(
+        fs::read(root.path().join("producer-evaluated")).unwrap(),
+        b"call\n"
+    );
+    input.push(b' ');
+    let refused = producer_command(root.path(), &["--protocol", "chrono-judge/v1"], &input)
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(2));
+    assert!(refused.stdout.is_empty());
+    assert_eq!(refused.stderr, b"E_PROTOCOL: request read/bound\n");
+    assert!(!root.path().join("producer-evaluated").exists());
+}
+
+#[test]
+#[cfg(unix)]
+fn producer_native_read_and_write_failures_keep_transport_exit() {
+    use std::os::fd::OwnedFd;
+    use std::process::Stdio;
+    let (root, request) = producer_host();
+    let mut command = producer_command(root.path(), &["--protocol", "chrono-judge/v1"], b"");
+    command.stdin(
+        fs::OpenOptions::new()
+            .write(true)
+            .open(root.path().join("producer-input"))
+            .unwrap(),
+    );
+    let output = command.output().unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert_eq!(output.stderr, b"E_PROTOCOL: request read/bound\n");
+    assert!(!root.path().join("producer-evaluated").exists());
+    let (writer, reader) = std::os::unix::net::UnixStream::pair().unwrap();
+    drop(reader);
+    let output = producer_command(
+        root.path(),
+        &["--protocol", "chrono-judge/v1"],
+        &request.canonical().unwrap(),
+    )
+    .stdout(Stdio::from(OwnedFd::from(writer)))
+    .output()
+    .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    assert!(output.stderr.is_empty());
+    assert_eq!(
+        fs::read(root.path().join("producer-evaluated")).unwrap(),
+        b"call\n"
+    );
+}
+
+#[test]
+#[cfg(unix)]
+fn producer_logging_and_invalid_os_argument_keep_existing_text_boundary() {
+    use std::os::unix::ffi::OsStringExt;
+    let (root, _) = producer_host();
+    fs::create_dir(root.path().join(".chrono-harness")).unwrap();
+    fs::write(root.path().join(".chrono-harness/logging.json"), br#"{"schema":"chrono-runtime-logging/v1","level":"info","directory":".chrono-harness/state/logs/","max_bytes":8192,"max_files":3,"stderr":false}"#).unwrap();
+    let output = producer_command(root.path(), &["--version"], b"")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(0));
+    assert_eq!(output.stdout, b"chrono-test-producer fixture.1\n");
+    assert!(output.stderr.is_empty());
+    let output = producer_command(root.path(), &[], b"")
+        .arg(std::ffi::OsString::from_vec(vec![255]))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let error: serde_json::Value = serde_json::from_slice(&output.stderr).unwrap();
+    assert_eq!(error["event"], "cli.invalid_argument");
+    assert!(!root.path().join("producer-evaluated").exists());
+    let rows: Vec<serde_json::Value> = fs::read_dir(root.path().join(".chrono-harness/state/logs"))
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .filter(|path| path.extension().is_some_and(|ext| ext == "jsonl"))
+        .flat_map(|path| {
+            fs::read_to_string(path)
+                .unwrap()
+                .lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert!(rows.iter().any(|row| row["event"] == "cli.started"));
+    assert!(
+        rows.iter()
+            .any(|row| row["event"] == "cli.finished" && row["fields"]["exit_code"] == 0)
+    );
+    assert!(
+        rows.iter()
+            .any(|row| row["event"] == "cli.invalid_argument")
     );
 }
