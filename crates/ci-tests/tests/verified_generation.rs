@@ -396,6 +396,14 @@ type AncestorPath = (u64, u64);
 type AncestorEvent = (u8, u64, u64);
 type AncestorState = (u8, Vec<AncestorEvent>);
 
+fn expect_ancestor_event(actual: AncestorEvent, expected: AncestorEvent)
+    requires actual == expected,
+{
+    expect(actual.0 == expected.0);
+    expect(actual.1 == expected.1);
+    expect(actual.2 == expected.2);
+}
+
 fn ancestor_case(count: u8, root: AncestorPath, fail: bool, fail_at: u64)
     requires count <= 3,
 {
@@ -463,18 +471,20 @@ fn ancestor_case(count: u8, root: AncestorPath, fail: bool, fail_at: u64)
     let length = 2 * visited + if ancestor_error { 0usize } else { 2usize };
     let (remaining, trace) = state;
     expect(trace.len() == length);
-    if visited > 0 { expect(trace[0] == (1u8, u64::MAX, count as u64)); expect(trace[1] == (2u8, u64::MAX, count as u64)); }
-    if visited > 1 { expect(trace[2] == (1u8, u64::MAX, count as u64 - 1)); expect(trace[3] == (2u8, u64::MAX, count as u64 - 1)); }
-    if visited > 2 { expect(trace[4] == (1u8, u64::MAX, count as u64 - 2)); expect(trace[5] == (2u8, u64::MAX, count as u64 - 2)); }
+    if visited > 0 { expect_ancestor_event(trace[0], (1u8, u64::MAX, count as u64)); expect_ancestor_event(trace[1], (2u8, u64::MAX, count as u64)); }
+    if visited > 1 { expect_ancestor_event(trace[2], (1u8, u64::MAX, count as u64 - 1)); expect_ancestor_event(trace[3], (2u8, u64::MAX, count as u64 - 1)); }
+    if visited > 2 { expect_ancestor_event(trace[4], (1u8, u64::MAX, count as u64 - 2)); expect_ancestor_event(trace[5], (2u8, u64::MAX, count as u64 - 2)); }
     if !ancestor_error {
-        expect(trace[2 * visited] == (1u8, u64::MAX, stop as u64));
-        expect(trace[2 * visited + 1] == (2u8, root.0, root.1));
+        expect_ancestor_event(trace[2 * visited], (1u8, u64::MAX, stop as u64));
+        expect_ancestor_event(trace[2 * visited + 1], (2u8, root.0, root.1));
     }
     expect(remaining as u64 == if ancestor_error { fail_at - 1 } else if stop > 0 { stop as u64 - 1 } else { 0u64 });
     match result {
         Err(path) => {
             expect(ancestor_error || (fail && root.1 == fail_at));
-            expect(path == if ancestor_error { (u64::MAX, fail_at) } else { root });
+            let expected = if ancestor_error { (u64::MAX, fail_at) } else { root };
+            expect(path.0 == expected.0);
+            expect(path.1 == expected.1);
         },
         Ok(()) => { expect(!ancestor_error && !(fail && root.1 == fail_at)); },
     }
