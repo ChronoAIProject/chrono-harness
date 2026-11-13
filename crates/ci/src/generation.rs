@@ -309,60 +309,75 @@ impl Plan {
                 (|| {
                     let target = &self.targets[index];
                     let path = no_symlink_parents(root, &target.path)?;
-                    if !same_object(observe(&path)?.0.as_ref(), target.before.as_ref()) {
-                        return Err(format!(
-                            "generation output changed after preparation: {}",
-                            target.path
-                        ));
-                    }
-                    if target.write {
-                        // The original plan survives any interruption between a rename and its receipt.
-                        let stage = directory.join(&target.staging);
-                        publication.write_file(&stage, &target.bytes)?;
-                        record(
-                            publication,
-                            directory,
-                            &format!("staging-{index}.json"),
-                            &json!({"path":target.staging,"identity":identity(&stage)?,"target":target.path}),
-                        )?;
-                        let parent = path.parent().ok_or("generation output parent")?;
-                        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-                        for ancestor in parent.ancestors().take_while(|ancestor| *ancestor != root)
-                        {
-                            sync(ancestor)?;
-                        }
-                        sync(root)?;
-                        if !same_object(observe(&path)?.0.as_ref(), target.before.as_ref()) {
-                            return Err(format!(
-                                "generation output changed before rename: {}",
-                                target.path
-                            ));
-                        }
-                        if target.before.is_none() {
-                            chrono_harness::artifact_disposal::publish_entry(&stage, &path)?;
-                        } else {
-                            fs::rename(&stage, &path).map_err(|e| e.to_string())?;
-                        }
-                        sync(parent)?;
-                        sync(directory)?;
-                        let (object, _) = observe(&path)?;
-                        if object.as_ref().map(|object| object.sha256.as_str())
-                            != Some(target.after_sha256.as_str())
-                        {
-                            return Err(format!(
-                                "generation output differs after publication: {}",
-                                target.path
-                            ));
-                        }
-                        record(
-                            publication,
-                            directory,
-                            &format!("effect-{index}.json"),
-                            &json!({"path":target.path,"object":object,"updated":timestamp()?}),
-                        )?;
-                        checkpoint("effect");
-                    }
-                    Ok(target.write)
+                    let io = verified::TargetIo {
+                        observe: |state| (state, observe(&path).map(|(object, _)| object)),
+                        stage: |state| {
+                            (
+                                state,
+                                (|| {
+                                    // The original plan survives any interruption between a rename and its receipt.
+                                    let stage = directory.join(&target.staging);
+                                    publication.write_file(&stage, &target.bytes)?;
+                                    record(
+                                        publication,
+                                        directory,
+                                        &format!("staging-{index}.json"),
+                                        &json!({"path":target.staging,"identity":identity(&stage)?,"target":target.path}),
+                                    )?;
+                                    let parent = path.parent().ok_or("generation output parent")?;
+                                    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                                    for ancestor in
+                                        parent.ancestors().take_while(|ancestor| *ancestor != root)
+                                    {
+                                        sync(ancestor)?;
+                                    }
+                                    sync(root)?;
+                                    Ok((stage, parent))
+                                })(),
+                            )
+                        },
+                        create: |state, handles: &(PathBuf, &Path)| {
+                            (
+                                state,
+                                chrono_harness::artifact_disposal::publish_entry(&handles.0, &path),
+                            )
+                        },
+                        replace: |state, handles: &(PathBuf, &Path)| {
+                            (
+                                state,
+                                fs::rename(&handles.0, &path).map_err(|e| e.to_string()),
+                            )
+                        },
+                        sync: |state, handles: (PathBuf, &Path)| {
+                            (state, sync(handles.1).and_then(|()| sync(directory)))
+                        },
+                        effect: |state, object: Option<Object>| {
+                            (
+                                state,
+                                (|| {
+                                    record(
+                                        publication,
+                                        directory,
+                                        &format!("effect-{index}.json"),
+                                        &json!({"path":target.path,"object":object,"updated":timestamp()?}),
+                                    )?;
+                                    checkpoint("effect");
+                                    Ok(())
+                                })(),
+                            )
+                        },
+                        mismatch: |state, reason: verified::TargetMismatch| {
+                            (state, format!("{}: {}", reason.label(), target.path))
+                        },
+                    };
+                    verified::install_target(
+                        (),
+                        target.before.as_ref(),
+                        target.write,
+                        &target.after_sha256,
+                        &io,
+                    )
+                    .1
                 })(),
             )
         });

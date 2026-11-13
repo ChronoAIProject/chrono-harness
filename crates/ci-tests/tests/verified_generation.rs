@@ -390,6 +390,271 @@ fn original_records_require_the_exact_schema_attempt_digest_and_null_exit() {
     expect(policy::result_address_matches(result, Some(""), Some(""), "", "", true));
 }
 
+type TargetFault = (u8, u64);
+
+spec fn target_observation_step(length: int) -> u8 {
+    if length == 0 { 1u8 } else if length == 2 { 3u8 } else { 7u8 }
+}
+
+spec fn target_object(missing: bool, step: u8, bad_at: u8, field: u8, value: Option<policy::Object>) -> bool {
+    if (step == bad_at && field == 1 && (step == 7 || !missing))
+        || (step != 7 && step != bad_at && missing) {
+        value is None
+    } else {
+        match value {
+            None => false,
+            Some(object) => if step == 7 {
+                object.identity@ == "published\0id"@ && object.bytes == u64::MAX
+                    && object.sha256@ == if step == bad_at { "other\0hash"@ } else { "after\0hash"@ }
+            } else {
+                object.identity@ == if step == bad_at && field == 2 { "other\0id"@ } else { "prior\0id"@ }
+                    && object.sha256@ == if step == bad_at && field == 3 { "other\0hash"@ } else { "prior\0hash"@ }
+                    && object.bytes == if step == bad_at && field == 4 { 8u64 } else { 7u64 }
+            },
+        }
+    }
+}
+
+fn target_object_fixture(missing: bool, step: u8, bad_at: u8, field: u8) -> (out: Option<policy::Object>)
+    ensures target_object(missing, step, bad_at, field, out),
+{
+    if (step == bad_at && field == 1 && (step == 7 || !missing))
+        || (step != 7 && step != bad_at && missing) { return None; }
+    if step == 7 {
+        Some(object("published\0id", if step == bad_at { "other\0hash" } else { "after\0hash" }, u64::MAX))
+    } else {
+        Some(object(if step == bad_at && field == 2 { "other\0id" } else { "prior\0id" },
+            if step == bad_at && field == 3 { "other\0hash" } else { "prior\0hash" },
+            if step == bad_at && field == 4 { 8 } else { 7 }))
+    }
+}
+
+fn target_step(mut trace: Vec<u8>, step: u8, fail_at: u8) -> (out: (Vec<u8>, Result<(), TargetFault>))
+    ensures out.0@ == trace@.push(step),
+        out.1 == if step == fail_at { Err::<(), TargetFault>((step, u64::MAX)) } else { Ok::<(), TargetFault>(()) },
+{
+    trace.push(step);
+    (trace, if step == fail_at { Err((step, u64::MAX)) } else { Ok(()) })
+}
+
+fn target_parent_step(mut trace: Vec<u8>, parent: (u64, u64), step: u8, fail_at: u8)
+    -> (out: (Vec<u8>, Result<(), TargetFault>))
+    ensures out.0@ == trace@.push(step),
+        out.1 == if parent.0 != u64::MAX || parent.1 != 17 {
+            Err::<(), TargetFault>((9u8, u64::MAX))
+        } else if step == fail_at { Err::<(), TargetFault>((step, u64::MAX)) } else { Ok::<(), TargetFault>(()) },
+{
+    if parent.0 != u64::MAX || parent.1 != 17 {
+        trace.push(step);
+        (trace, Err((9, u64::MAX)))
+    } else { target_step(trace, step, fail_at) }
+}
+
+spec fn target_effect_object(value: Option<policy::Object>) -> bool {
+    match value {
+        Some(object) => object.identity@ == "published\0id"@ && object.sha256@ == "after\0hash"@
+            && object.bytes == u64::MAX,
+        None => false,
+    }
+}
+
+spec fn target_mismatch_step(reason: policy::TargetMismatch) -> u8 {
+    match reason { policy::TargetMismatch::Prepared => 11u8,
+        policy::TargetMismatch::Rename => 12u8, policy::TargetMismatch::Published => 13u8 }
+}
+
+fn target_case(missing: bool, write: bool, fail_at: u8, bad_at: u8, field: u8)
+    requires bad_at == 0 || bad_at == 1 || bad_at == 3 || bad_at == 7,
+        1 <= field <= 4,
+{
+    proof {
+        reveal_strlit("prior\0id"); reveal_strlit("other\0id");
+        reveal_strlit("prior\0hash"); reveal_strlit("other\0hash"); reveal_strlit("after\0hash");
+        assert("prior\0id"@[0] != "other\0id"@[0]);
+        assert("prior\0hash"@[0] != "other\0hash"@[0]);
+        assert("after\0hash"@[0] != "other\0hash"@[0]);
+    }
+    let io = policy::TargetIo {
+        observe: |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<Option<policy::Object>, TargetFault>))
+            ensures out.0@ == trace@.push(target_observation_step(trace@.len())),
+                match out.1 {
+                    Err(error) => fail_at == target_observation_step(trace@.len())
+                        && error == (target_observation_step(trace@.len()), u64::MAX),
+                    Ok(value) => fail_at != target_observation_step(trace@.len())
+                        && target_object(missing, target_observation_step(trace@.len()), bad_at, field, value),
+                },
+        {
+            let step = if trace.is_empty() { 1u8 } else if trace.len() == 2 { 3u8 } else { 7u8 };
+            trace.push(step);
+            (trace, if step == fail_at { Err((step, u64::MAX)) }
+                else { Ok(target_object_fixture(missing, step, bad_at, field)) })
+        },
+        stage: |trace: Vec<u8>| -> (out: (Vec<u8>, Result<(u64, u64), TargetFault>))
+            ensures out.0@ == trace@.push(2),
+                out.1 == if fail_at == 2 { Err::<(u64, u64), TargetFault>((2u8, u64::MAX)) }
+                    else { Ok::<(u64, u64), TargetFault>((u64::MAX, 17u64)) },
+        {
+            let (trace, result) = target_step(trace, 2, fail_at);
+            (trace, match result { Err(error) => Err(error), Ok(()) => Ok((u64::MAX, 17)) })
+        },
+        create: |trace: Vec<u8>, parent: &(u64, u64)| -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(4),
+                out.1 == if parent.0 != u64::MAX || parent.1 != 17 { Err::<(), TargetFault>((9u8, u64::MAX)) }
+                    else if fail_at == 4 { Err::<(), TargetFault>((4u8, u64::MAX)) } else { Ok::<(), TargetFault>(()) },
+        { target_parent_step(trace, *parent, 4, fail_at) },
+        replace: |trace: Vec<u8>, parent: &(u64, u64)| -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(5),
+                out.1 == if parent.0 != u64::MAX || parent.1 != 17 { Err::<(), TargetFault>((9u8, u64::MAX)) }
+                    else if fail_at == 5 { Err::<(), TargetFault>((5u8, u64::MAX)) } else { Ok::<(), TargetFault>(()) },
+        { target_parent_step(trace, *parent, 5, fail_at) },
+        sync: |trace: Vec<u8>, parent: (u64, u64)| -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(6),
+                out.1 == if parent.0 != u64::MAX || parent.1 != 17 { Err::<(), TargetFault>((9u8, u64::MAX)) }
+                    else if fail_at == 6 { Err::<(), TargetFault>((6u8, u64::MAX)) } else { Ok::<(), TargetFault>(()) },
+        { target_parent_step(trace, parent, 6, fail_at) },
+        effect: |mut trace: Vec<u8>, value: Option<policy::Object>| -> (out: (Vec<u8>, Result<(), TargetFault>))
+            ensures out.0@ == trace@.push(8),
+                out.1 == if !target_effect_object(value) { Err::<(), TargetFault>((9u8, u64::MAX)) }
+                    else if fail_at == 8 { Err::<(), TargetFault>((8u8, u64::MAX)) } else { Ok::<(), TargetFault>(()) },
+        {
+            let valid = match value.as_ref() {
+                Some(value) => identifiers::equal_text(&value.identity, "published\0id")
+                    && identifiers::equal_text(&value.sha256, "after\0hash") && value.bytes == u64::MAX,
+                None => false,
+            };
+            if !valid { trace.push(8); (trace, Err((9, u64::MAX))) }
+            else { target_step(trace, 8, fail_at) }
+        },
+        mismatch: |mut trace: Vec<u8>, reason: policy::TargetMismatch| -> (out: (Vec<u8>, TargetFault))
+            ensures out.0@ == trace@.push(target_mismatch_step(reason)),
+                out.1 == (target_mismatch_step(reason), u64::MAX),
+        {
+            let step = match reason { policy::TargetMismatch::Prepared => 11u8,
+                policy::TargetMismatch::Rename => 12u8, policy::TargetMismatch::Published => 13u8 };
+            trace.push(step);
+            (trace, (step, u64::MAX))
+        },
+    };
+    let before = if missing { None } else { Some(object("prior\0id", "prior\0hash", 7)) };
+    let initial: Vec<u8> = Vec::new();
+    let ghost start = initial;
+    let (trace, result) = policy::install_target(initial, before.as_ref(), write, "after\0hash", &io);
+    proof {
+        let (first, observed) = choose|state: Vec<u8>, observed: Result<Option<policy::Object>, TargetFault>|
+            #[trigger] io.observe.ensures((start,), (state, observed)) && match observed {
+                Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
+                Ok(value) => if !policy::same_object_spec(value.as_ref(), before.as_ref()) {
+                    match result { Err(error) => io.mismatch.ensures((state, policy::TargetMismatch::Prepared), (trace, error)), _ => false }
+                } else if !write { (trace, result) == (state, Ok::<bool, TargetFault>(false)) }
+                else { exists|next: Vec<u8>, staged: Result<(u64, u64), TargetFault>|
+                    #[trigger] io.stage.ensures((state,), (next, staged)) && match staged {
+                        Err(error) => (trace, result) == (next, Err::<bool, TargetFault>(error)),
+                        Ok(parent) => policy::target_staged_result(next, parent, before.as_ref(), "after\0hash", &io, (trace, result)),
+                    }
+                },
+            };
+        if fail_at != 1 && bad_at != 1 && write {
+            let (staged_state, staged) = choose|next: Vec<u8>, staged: Result<(u64, u64), TargetFault>|
+                #[trigger] io.stage.ensures((first,), (next, staged)) && match staged {
+                    Err(error) => (trace, result) == (next, Err::<bool, TargetFault>(error)),
+                    Ok(parent) => policy::target_staged_result(next, parent, before.as_ref(), "after\0hash", &io, (trace, result)),
+                };
+            if fail_at != 2 {
+                let parent = staged->Ok_0;
+                let (checked, observed) = choose|state: Vec<u8>, observed: Result<Option<policy::Object>, TargetFault>|
+                    #[trigger] io.observe.ensures((staged_state,), (state, observed)) && match observed {
+                        Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
+                        Ok(value) => if !policy::same_object_spec(value.as_ref(), before.as_ref()) {
+                            match result { Err(error) => io.mismatch.ensures((state, policy::TargetMismatch::Rename), (trace, error)), _ => false }
+                        } else { policy::target_publish_result(state, parent, missing, "after\0hash", &io, (trace, result)) },
+                    };
+                if fail_at != 3 && bad_at != 3 {
+                    let (published_state, published) = choose|state: Vec<u8>, published: Result<(), TargetFault>|
+                        (if missing { #[trigger] io.create.ensures((checked, &parent), (state, published)) }
+                            else { #[trigger] io.replace.ensures((checked, &parent), (state, published)) })
+                        && match published {
+                            Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
+                            Ok(()) => exists|next: Vec<u8>, synced: Result<(), TargetFault>|
+                                #[trigger] io.sync.ensures((state, parent), (next, synced)) && match synced {
+                                    Err(error) => (trace, result) == (next, Err::<bool, TargetFault>(error)),
+                                    Ok(()) => policy::target_final_result(next, "after\0hash", &io, (trace, result)),
+                                },
+                        };
+                    if fail_at != (if missing { 4u8 } else { 5u8 }) {
+                        let (synced_state, synced) = choose|next: Vec<u8>, synced: Result<(), TargetFault>|
+                            #[trigger] io.sync.ensures((published_state, parent), (next, synced)) && match synced {
+                                Err(error) => (trace, result) == (next, Err::<bool, TargetFault>(error)),
+                                Ok(()) => policy::target_final_result(next, "after\0hash", &io, (trace, result)),
+                            };
+                        if fail_at != 6 {
+                            let (last, observed) = choose|state: Vec<u8>, observed: Result<Option<policy::Object>, TargetFault>|
+                                #[trigger] io.observe.ensures((synced_state,), (state, observed)) && match observed {
+                                    Err(error) => (trace, result) == (state, Err::<bool, TargetFault>(error)),
+                                    Ok(value) => if !policy::published_digest(value.as_ref(), "after\0hash") {
+                                        match result { Err(error) => io.mismatch.ensures((state, policy::TargetMismatch::Published), (trace, error)), _ => false }
+                                    } else { exists|effect: (Vec<u8>, Result<(), TargetFault>)|
+                                        #[trigger] io.effect.ensures((state, value), effect) && policy::target_effect_result(effect, (trace, result)) },
+                                };
+                            if fail_at != 7 && bad_at != 7 {
+                                let value = observed->Ok_0;
+                                let effect = choose|effect: (Vec<u8>, Result<(), TargetFault>)|
+                                    #[trigger] io.effect.ensures((last, value), effect) && policy::target_effect_result(effect, (trace, result));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    let publish_step = if missing { 4u8 } else { 5u8 };
+    let expected_error = if fail_at == 1 { 1u8 } else if bad_at == 1 { 11u8 }
+        else if !write { 0u8 } else if fail_at == 2 { 2u8 }
+        else if fail_at == 3 { 3u8 } else if bad_at == 3 { 12u8 }
+        else if fail_at == publish_step { publish_step } else if fail_at == 6 { 6u8 }
+        else if fail_at == 7 { 7u8 } else if bad_at == 7 { 13u8 }
+        else if fail_at == 8 { 8u8 } else { 0u8 };
+    let length = if expected_error == 1 || (expected_error == 0 && !write) { 1usize }
+        else if expected_error == 11 || expected_error == 2 { 2usize }
+        else if expected_error == 3 { 3usize }
+        else if expected_error == 12 || expected_error == publish_step { 4usize }
+        else if expected_error == 6 { 5usize } else if expected_error == 7 { 6usize } else { 7usize };
+    expect(trace.len() == length); expect(trace[0] == 1);
+    if length > 1 { expect(trace[1] == if expected_error == 11 { 11u8 } else { 2u8 }); }
+    if length > 2 { expect(trace[2] == 3); }
+    if length > 3 { expect(trace[3] == if expected_error == 12 { 12u8 } else { publish_step }); }
+    if length > 4 { expect(trace[4] == 6); }
+    if length > 5 { expect(trace[5] == 7); }
+    if length > 6 { expect(trace[6] == if expected_error == 13 { 13u8 } else { 8u8 }); }
+    match result {
+        Err((step, original)) => { expect(expected_error != 0); expect(step == expected_error); expect(original == u64::MAX); },
+        Ok(changed) => { expect(expected_error == 0); expect(changed == write); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn single_target_publication_checks_before_effects_and_keeps_complete_first_failure() {
+    expect(identifiers::equal_text(policy::TargetMismatch::Prepared.label(), "generation output changed after preparation"));
+    expect(identifiers::equal_text(policy::TargetMismatch::Rename.label(), "generation output changed before rename"));
+    expect(identifiers::equal_text(policy::TargetMismatch::Published.label(), "generation output differs after publication"));
+    target_case(true, true, 0, 0, 1); target_case(false, true, 0, 0, 1);
+    target_case(true, false, 2, 7, 1); target_case(false, false, 2, 7, 1);
+    target_case(false, false, 1, 1, 2); target_case(false, false, 0, 1, 2);
+    target_case(true, true, 1, 1, 1); target_case(false, true, 2, 3, 1);
+    target_case(true, true, 3, 3, 1); target_case(false, true, 3, 3, 2);
+    target_case(true, true, 4, 0, 1); target_case(false, true, 5, 0, 1);
+    target_case(true, true, 5, 0, 1); target_case(false, true, 4, 0, 1);
+    target_case(true, true, 6, 7, 1); target_case(false, true, 6, 7, 3);
+    target_case(true, true, 7, 7, 1); target_case(false, true, 7, 7, 3);
+    target_case(true, true, 8, 0, 1); target_case(false, true, 8, 0, 1);
+    target_case(true, true, 0, 1, 1); target_case(true, true, 0, 3, 1);
+    target_case(false, true, 0, 1, 1); target_case(false, true, 0, 1, 2);
+    target_case(false, true, 0, 1, 3); target_case(false, true, 0, 1, 4);
+    target_case(false, true, 0, 3, 1); target_case(false, true, 0, 3, 2);
+    target_case(false, true, 0, 3, 3); target_case(false, true, 0, 3, 4);
+    target_case(true, true, 0, 7, 1); target_case(true, true, 0, 7, 3);
+    target_case(false, true, 0, 7, 1); target_case(false, true, 0, 7, 3);
+}
+
 fn installation_case(count: usize, fail_at: usize, write_at: usize)
     requires count <= 3, fail_at <= count, write_at <= count,
 {

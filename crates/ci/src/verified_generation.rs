@@ -267,6 +267,291 @@ pub fn result_address_matches(
     }
 }
 
+pub enum TargetMismatch { Prepared, Rename, Published }
+
+impl TargetMismatch {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::Prepared => out@ == "generation output changed after preparation"@,
+            Self::Rename => out@ == "generation output changed before rename"@,
+            Self::Published => out@ == "generation output differs after publication"@,
+        },
+    {
+        match self {
+            Self::Prepared => "generation output changed after preparation",
+            Self::Rename => "generation output changed before rename",
+            Self::Published => "generation output differs after publication",
+        }
+    }
+}
+
+pub struct TargetIo<O, W, N, R, D, F, M> {
+    pub observe: O,
+    pub stage: W,
+    pub create: N,
+    pub replace: R,
+    pub sync: D,
+    pub effect: F,
+    pub mismatch: M,
+}
+
+pub open spec fn target_callable<S, P, E, O, W, N, R, D, F, M>(io: &TargetIo<O, W, N, R, D, F, M>) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    (forall|s: S| #[trigger] io.observe.requires((s,)))
+        && (forall|s: S| #[trigger] io.stage.requires((s,)))
+        && (forall|s: S, parent: &P| #[trigger] io.create.requires((s, parent)))
+        && (forall|s: S, parent: &P| #[trigger] io.replace.requires((s, parent)))
+        && (forall|s: S, parent: P| #[trigger] io.sync.requires((s, parent)))
+        && (forall|s: S, object: Option<Object>| #[trigger] io.effect.requires((s, object)))
+        && (forall|s: S, reason: TargetMismatch| #[trigger] io.mismatch.requires((s, reason)))
+}
+
+pub open spec fn published_digest(object: Option<&Object>, digest: &str) -> bool {
+    match object { Some(object) => object.sha256@ == digest@, None => false }
+}
+
+pub open spec fn target_effect_result<S, E>(observed: (S, Result<(), E>), out: (S, Result<bool, E>)) -> bool {
+    out.0 == observed.0 && match observed.1 {
+        Err(error) => out.1 == Err::<bool, E>(error),
+        Ok(()) => out.1 == Ok::<bool, E>(true),
+    }
+}
+
+pub open spec fn target_final_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>, out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Object>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(object) => if !published_digest(object.as_ref(), digest) {
+                match out.1 {
+                    Err(error) => io.mismatch.ensures((state, TargetMismatch::Published), (out.0, error)),
+                    _ => false,
+                }
+            } else {
+                exists|effect: (S, Result<(), E>)|
+                    #[trigger] io.effect.ensures((state, object), effect) && target_effect_result(effect, out)
+            },
+        }
+}
+
+fn finish_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_final_result(state, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(object) => {
+            let valid = match object.as_ref() {
+                Some(object) => identifiers::equal_text(&object.sha256, digest),
+                None => false,
+            };
+            if !valid {
+                let (state, error) = (io.mismatch)(state, TargetMismatch::Published);
+                (state, Err(error))
+            } else {
+                let effect = (io.effect)(state, object);
+                let ghost original_effect = effect;
+                let (state, result) = effect;
+                let out = (state, match result { Err(error) => Err(error), Ok(()) => Ok(true) });
+                assert(target_effect_result(original_effect, out));
+                out
+            }
+        },
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    out
+}
+
+pub open spec fn target_publish_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, parent: P, missing: bool, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+    out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, published: Result<(), E>|
+        (if missing { #[trigger] io.create.ensures((initial, &parent), (state, published)) }
+            else { #[trigger] io.replace.ensures((initial, &parent), (state, published)) })
+        && match published {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(()) => exists|next: S, synced: Result<(), E>|
+                #[trigger] io.sync.ensures((state, parent), (next, synced)) && match synced {
+                    Err(error) => out == (next, Err::<bool, E>(error)),
+                    Ok(()) => target_final_result(next, digest, io, out),
+                },
+        }
+}
+
+fn publish_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, parent: P, missing: bool, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_publish_result(state, parent, missing, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, published) = if missing { (io.create)(state, &parent) } else { (io.replace)(state, &parent) };
+    let ghost after_publish = state;
+    let ghost original_publish = published;
+    let out = match published {
+        Err(error) => (state, Err(error)),
+        Ok(()) => {
+            let (state, synced) = (io.sync)(state, parent);
+            let ghost after_sync = state;
+            let ghost original_sync = synced;
+            let out = match synced {
+                Err(error) => (state, Err(error)),
+                Ok(()) => finish_target(state, digest, io),
+            };
+            assert(io.sync.ensures((after_publish, parent), (after_sync, original_sync)));
+            out
+        },
+    };
+    assert(if missing { io.create.ensures((initial, &parent), (after_publish, original_publish)) }
+        else { io.replace.ensures((initial, &parent), (after_publish, original_publish)) });
+    out
+}
+
+pub open spec fn target_staged_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, parent: P, before: Option<&Object>, digest: &str,
+    io: &TargetIo<O, W, N, R, D, F, M>, out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Object>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(object) => if !same_object_spec(object.as_ref(), before) {
+                match out.1 {
+                    Err(error) => io.mismatch.ensures((state, TargetMismatch::Rename), (out.0, error)),
+                    _ => false,
+                }
+            } else { target_publish_result(state, parent, before.is_none(), digest, io, out) },
+        }
+}
+
+fn install_staged_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, parent: P, before: Option<&Object>, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_staged_result(state, parent, before, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(object) => {
+            if !same_object(object.as_ref(), before) {
+                let (state, error) = (io.mismatch)(state, TargetMismatch::Rename);
+                (state, Err(error))
+            } else { publish_target(state, parent, before.is_none(), digest, io) }
+        },
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    out
+}
+
+pub open spec fn target_installation_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, before: Option<&Object>, write: bool, digest: &str,
+    io: &TargetIo<O, W, N, R, D, F, M>, out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Object>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(object) => if !same_object_spec(object.as_ref(), before) {
+                match out.1 {
+                    Err(error) => io.mismatch.ensures((state, TargetMismatch::Prepared), (out.0, error)),
+                    _ => false,
+                }
+            } else if !write { out == (state, Ok::<bool, E>(false)) }
+            else {
+                exists|next: S, staged: Result<P, E>|
+                    #[trigger] io.stage.ensures((state,), (next, staged)) && match staged {
+                        Err(error) => out == (next, Err::<bool, E>(error)),
+                        Ok(parent) => target_staged_result(next, parent, before, digest, io, out),
+                    }
+            },
+        }
+}
+
+/// Recheck even unchanged targets; stage, recheck, publish, sync and record in that order.
+pub fn install_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, before: Option<&Object>, write: bool, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_installation_result(state, before, write, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(object) => {
+            if !same_object(object.as_ref(), before) {
+                let (state, error) = (io.mismatch)(state, TargetMismatch::Prepared);
+                (state, Err(error))
+            } else if !write { (state, Ok(false)) }
+            else {
+                let (state, staged) = (io.stage)(state);
+                let ghost after_stage = state;
+                let ghost original_stage = staged;
+                let out = match staged {
+                    Err(error) => (state, Err(error)),
+                    Ok(parent) => install_staged_target(state, parent, before, digest, io),
+                };
+                assert(io.stage.ensures((after_observe,), (after_stage, original_stage)));
+                out
+            }
+        },
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    out
+}
+
 pub open spec fn installed_prefix<S, E, Apply>(
     initial: S, states: Seq<S>, changed: Seq<bool>, apply: Apply,
 ) -> bool
