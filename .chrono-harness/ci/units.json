@@ -781,9 +781,7 @@
         ],
         "consumer": "check.unit_judge-filemap",
         "caches": [
-          "check.judge-filemap-tests",
-          "check.judge-projects",
-          "check.judge-routes"
+          "check.judge-filemap-tests"
         ],
         "save_caches": [
           "check.judge-filemap-tests"
@@ -821,12 +819,9 @@
         ],
         "consumer": "check.unit_judge-projects",
         "caches": [
-          "check.judge-projects",
-          "check.judge-projects-tests",
-          "check.judge-routes"
+          "check.judge-projects-tests"
         ],
         "save_caches": [
-          "check.judge-projects",
           "check.judge-projects-tests"
         ]
       },
@@ -883,8 +878,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-projects",
-          "check.judge-routes",
           "check.judge-workflow-tests"
         ],
         "save_caches": [
@@ -905,8 +898,6 @@
         "consumer": "check.unit_inputs",
         "caches": [
           "check.inputs-tests",
-          "check.judge-projects",
-          "check.judge-routes",
           "check.judge-workflow"
         ],
         "save_caches": [
@@ -968,8 +959,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-projects",
-          "check.judge-routes",
           "check.judge-workflow-tests.judge-workflow-units"
         ],
         "save_caches": [
@@ -991,8 +980,6 @@
         "caches": [
           "check.ci",
           "check.inputs",
-          "check.judge-projects",
-          "check.judge-routes",
           "check.judge-workflow-tests.judge-workflow-short"
         ],
         "save_caches": [

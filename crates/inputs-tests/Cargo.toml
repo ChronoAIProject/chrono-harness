@@ -6,6 +6,8 @@ publish = false
 autotests = false
 
 [dependencies]
+chrono-judge-projects = { path = "../judge-projects" }
+chrono-judge-routes = { path = "../judge-routes" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 chrono-judge-cost = { path = "../judge-cost" }
 chrono-judge-mixed = { path = "../judge-mixed" }
@@ -119,5 +121,17 @@ bench = false
 [[bin]]
 name = "chrono-judge-filemap-test-cli"
 path = "../judge-filemap/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-routes-test-cli"
+path = "../judge-routes/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-projects-test-cli"
+path = "../judge-projects/src/main.rs"
 test = false
 bench = false

@@ -31,6 +31,10 @@ pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureP
         env!("CARGO_BIN_EXE_chrono-judge-registration-test-cli").into()
     } else if (project, binary) == ("judge-filemap", "chrono-judge-filemap") {
         env!("CARGO_BIN_EXE_chrono-judge-filemap-test-cli").into()
+    } else if (project, binary) == ("judge-routes", "chrono-judge-routes") {
+        env!("CARGO_BIN_EXE_chrono-judge-routes-test-cli").into()
+    } else if (project, binary) == ("judge-projects", "chrono-judge-projects") {
+        env!("CARGO_BIN_EXE_chrono-judge-projects-test-cli").into()
     } else {
         source().join(format!("crates/{project}/target/debug/{binary}"))
     };
