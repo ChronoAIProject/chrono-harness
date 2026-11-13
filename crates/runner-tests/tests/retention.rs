@@ -4226,6 +4226,7 @@ fn source_protection_boundaries(program: &Path) {
             "--name-only",
             "-z",
             "--no-renames",
+            "--ignore-submodules=none",
             "--diff-filter=D",
             "--",
             output
@@ -4261,6 +4262,7 @@ fn source_protection_boundaries(program: &Path) {
             "--name-only",
             "-z",
             "--no-renames",
+            "--ignore-submodules=none",
             "--diff-filter=D",
             "--",
             output
@@ -4292,6 +4294,27 @@ fn source_protection_boundaries(program: &Path) {
         "unrelated path must not match literal output",
     ]);
     source_safe(h.path(), output).expect("committed deletions leave only the generated output");
+    let commit = String::from_utf8(git(&["rev-parse", "HEAD"])).unwrap();
+    fs::create_dir(h.path().join("module-output")).unwrap();
+    git(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        &format!("160000,{},module-output", commit.trim()),
+    ]);
+    git(&["commit", "-qm", "tracked gitlink"]);
+    assert!(
+        source_safe(h.path(), "module-output")
+            .unwrap_err()
+            .contains("committed/index source")
+    );
+    git(&["config", "diff.ignoreSubmodules", "all"]);
+    git(&["update-index", "--force-remove", "--", "module-output"]);
+    assert!(
+        source_safe(h.path(), "module-output")
+            .unwrap_err()
+            .contains("committed/index source")
+    );
     assert_eq!(
         fs::read(h.path().join(output).join("untracked")).unwrap(),
         b"generated"

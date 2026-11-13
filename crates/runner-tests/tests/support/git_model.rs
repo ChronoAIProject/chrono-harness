@@ -1150,6 +1150,9 @@ mod runtime {
             "update-index" => {
                 let args: Vec<_> = a[1..].iter().filter(|v| **v != "--").copied().collect();
                 match args.as_slice() {
+                    ["--force-remove", path] => {
+                        repo.index.remove(*path);
+                    }
                     [flag, path]
                         if matches!(
                             *flag,
@@ -2053,6 +2056,35 @@ mod runtime {
                 save(root, repo)?;
             }
             "diff" => {
+                if a.len() == 9
+                    && a[1..8]
+                        == [
+                            "--cached",
+                            "--name-only",
+                            "-z",
+                            "--no-renames",
+                            "--ignore-submodules=none",
+                            "--diff-filter=D",
+                            "--",
+                        ]
+                {
+                    let empty = Tree::new();
+                    let before = if repo.head.is_empty() {
+                        &empty
+                    } else {
+                        tree(repo, "HEAD")?
+                    };
+                    for path in before.keys() {
+                        if !repo.index.contains_key(path)
+                            && (path == a[8]
+                                || path.starts_with(&format!("{}/", a[8].trim_end_matches('/'))))
+                        {
+                            out.extend_from_slice(path.as_bytes());
+                            out.push(0);
+                        }
+                    }
+                    return Ok(out);
+                }
                 let stop = a.iter().position(|v| *v == "--").unwrap_or(a.len());
                 let revisions: Vec<_> = a[1..stop]
                     .iter()

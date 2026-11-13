@@ -117,18 +117,28 @@ pub fn source_safe(root: &Path, relative: &str) -> Result<(), String> {
         root,
         &["--literal-pathspecs", "ls-files", "-z", "--", relative],
     )?;
-    let tree = reader.git(
-        root,
-        &[
-            "--literal-pathspecs",
-            "ls-tree",
-            "-rz",
-            "HEAD",
-            "--",
-            relative,
-        ],
-    )?;
-    if !index.is_empty() || !tree.is_empty() {
+    // The index contains every HEAD path except staged deletions (including
+    // rename sources). Git compares an unborn index against the empty tree;
+    // a named HEAD tree would reject legitimate pre-first-commit outputs.
+    if !index.is_empty()
+        || !reader
+            .git(
+                root,
+                &[
+                    "--literal-pathspecs",
+                    "diff",
+                    "--cached",
+                    "--name-only",
+                    "-z",
+                    "--no-renames",
+                    "--ignore-submodules=none",
+                    "--diff-filter=D",
+                    "--",
+                    relative,
+                ],
+            )?
+            .is_empty()
+    {
         return Err(format!(
             "retained output contains committed/index source: {relative}"
         ));
