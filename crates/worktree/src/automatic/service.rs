@@ -11,6 +11,173 @@ pub fn maintenance_idle_exit(event_pending: bool, timer_due: bool, idle_due: boo
 {
     !event_pending && !timer_due && idle_due
 }
+
+pub open spec fn activation_error<S>(source: S, message: Seq<char>,
+    out: (S, Result<(), String>)) -> bool
+{
+    out.0 == source && match out.1 {
+        Err(error) => error@ == message,
+        Ok(()) => false,
+    }
+}
+
+pub open spec fn activation_binding_result<S, T, B, D>(source: S, named: bool,
+    address: T, binding: B, describe: D, out: (S, Result<(), String>)) -> bool
+    where B: FnOnce(S, &T) -> (S, bool), D: FnOnce(S, T) -> (S, String),
+{
+    if named { out == (source, Ok::<(), String>(())) }
+    else {
+        exists|bound: S, matches: bool|
+            #[trigger] binding.ensures((source, &address), (bound, matches))
+            && if matches { out == (bound, Ok::<(), String>(())) }
+            else { out.1.is_err()
+                && describe.ensures((bound, address), (out.0, out.1->Err_0)) }
+    }
+}
+
+fn check_activation_binding<S, T, B, D>(source: S, named: bool,
+    address: T, binding: B, describe: D) -> (out: (S, Result<(), String>))
+    where B: FnOnce(S, &T) -> (S, bool), D: FnOnce(S, T) -> (S, String),
+    requires forall|state: S, address: &T| binding.requires((state, address)),
+        forall|state: S, address: T| describe.requires((state, address)),
+    ensures activation_binding_result(source, named, address, binding, describe, out),
+{
+    if named { return (source, Ok(())); }
+    let ghost original_address = address;
+    let (state, matches) = binding(source, &address);
+    let ghost bound = state;
+    assert(binding.ensures((source, &original_address), (bound, matches)));
+    if matches { (state, Ok(())) }
+    else {
+        let (state, error) = describe(state, address);
+        assert(describe.ensures((bound, original_address), (state, error)));
+        (state, Err(error))
+    }
+}
+
+pub open spec fn activation_path_result<S, T, M, U, B, D>(source: S, named: bool,
+    address: T, metadata: M, user: U, binding: B, describe: D,
+    out: (S, Result<(), String>)) -> bool
+    where M: FnOnce(S) -> (S, Result<(bool, u32), String>),
+        U: FnOnce(S) -> (S, u32), B: FnOnce(S, &T) -> (S, bool),
+        D: FnOnce(S, T) -> (S, String),
+{
+    exists|observed: S, result: Result<(bool, u32), String>|
+        #[trigger] metadata.ensures((source,), (observed, result))
+        && match result {
+            Err(error) => out == (observed, Err::<(), String>(error)),
+            Ok(fields) => if !fields.0 {
+                activation_error(observed, "adopted activation path is not an owned socket"@, out)
+            } else {
+                exists|identified: S, uid: u32|
+                    #[trigger] user.ensures((observed,), (identified, uid))
+                    && if fields.1 != uid {
+                        activation_error(identified,
+                            "adopted activation path is not an owned socket"@, out)
+                    } else {
+                        activation_binding_result(identified, named, address, binding, describe, out)
+                    }
+            },
+        }
+}
+
+fn check_activation_path<S, T, M, U, B, D>(source: S, named: bool,
+    address: T, metadata: M, user: U, binding: B, describe: D)
+    -> (out: (S, Result<(), String>))
+    where M: FnOnce(S) -> (S, Result<(bool, u32), String>),
+        U: FnOnce(S) -> (S, u32), B: FnOnce(S, &T) -> (S, bool),
+        D: FnOnce(S, T) -> (S, String),
+    requires metadata.requires((source,)), forall|state: S| user.requires((state,)),
+        forall|state: S, address: &T| binding.requires((state, address)),
+        forall|state: S, address: T| describe.requires((state, address)),
+    ensures activation_path_result(source, named, address, metadata, user, binding, describe, out),
+{
+    let (state, result) = metadata(source);
+    let ghost observed = state;
+    let ghost observation = result;
+    assert(metadata.ensures((source,), (observed, observation)));
+    let fields = match result {
+        Err(error) => return (state, Err(error)),
+        Ok(fields) => fields,
+    };
+    if !fields.0 {
+        return (state, Err("adopted activation path is not an owned socket".to_string()));
+    }
+    let (state, uid) = user(state);
+    let ghost identified = state;
+    assert(user.ensures((observed,), (identified, uid)));
+    if fields.1 != uid {
+        return (state, Err("adopted activation path is not an owned socket".to_string()));
+    }
+    check_activation_binding(state, named, address, binding, describe)
+}
+
+pub open spec fn activation_sequence_result<S, T, Q, E, A, M, U, B, D>(source: S,
+    named: bool, datagram: i32, query: Q, last_error: E, address: A,
+    metadata: M, user: U, binding: B, describe: D, out: (S, Result<(), String>)) -> bool
+    where Q: FnOnce(S) -> (S, (i32, i32)), E: FnOnce(S) -> (S, String),
+        A: FnOnce(S) -> (S, Result<T, String>),
+        M: FnOnce(S) -> (S, Result<(bool, u32), String>),
+        U: FnOnce(S) -> (S, u32), B: FnOnce(S, &T) -> (S, bool),
+        D: FnOnce(S, T) -> (S, String),
+{
+    exists|queried: S, raw: (i32, i32)|
+        #[trigger] query.ensures((source,), (queried, raw))
+        && if raw.0 != 0 {
+            out.1.is_err() && last_error.ensures((queried,), (out.0, out.1->Err_0))
+        } else if raw.1 != datagram {
+            activation_error(queried, "OS activation requires a Unix datagram socket"@, out)
+        } else {
+            exists|observed: S, result: Result<T, String>|
+                #[trigger] address.ensures((queried,), (observed, result))
+                && match result {
+                    Err(error) => out == (observed, Err::<(), String>(error)),
+                    Ok(value) => activation_path_result(
+                        observed, named, value, metadata, user, binding, describe, out),
+                }
+        }
+}
+
+/// 先核描述符类型，再观察地址和路径；首错保留原状态，命名激活也须核路径所有者。
+pub fn validate_activation_sequence<S, T, Q, E, A, M, U, B, D>(source: S,
+    named: bool, datagram: i32, query: Q, last_error: E, address: A,
+    metadata: M, user: U, binding: B, describe: D) -> (out: (S, Result<(), String>))
+    where Q: FnOnce(S) -> (S, (i32, i32)), E: FnOnce(S) -> (S, String),
+        A: FnOnce(S) -> (S, Result<T, String>),
+        M: FnOnce(S) -> (S, Result<(bool, u32), String>),
+        U: FnOnce(S) -> (S, u32), B: FnOnce(S, &T) -> (S, bool),
+        D: FnOnce(S, T) -> (S, String),
+    requires query.requires((source,)),
+        forall|state: S| last_error.requires((state,)),
+        forall|state: S| address.requires((state,)),
+        forall|state: S| metadata.requires((state,)),
+        forall|state: S| user.requires((state,)),
+        forall|state: S, address: &T| binding.requires((state, address)),
+        forall|state: S, address: T| describe.requires((state, address)),
+    ensures activation_sequence_result(source, named, datagram, query, last_error,
+        address, metadata, user, binding, describe, out),
+{
+    let (state, raw) = query(source);
+    let ghost queried = state;
+    assert(query.ensures((source,), (queried, raw)));
+    if raw.0 != 0 {
+        let (state, error) = last_error(state);
+        assert(last_error.ensures((queried,), (state, error)));
+        return (state, Err(error));
+    }
+    if raw.1 != datagram {
+        return (state, Err("OS activation requires a Unix datagram socket".to_string()));
+    }
+    let (state, result) = address(state);
+    let ghost observed = state;
+    let ghost observation = result;
+    assert(address.ensures((queried,), (observed, observation)));
+    let value = match result {
+        Err(error) => return (state, Err(error)),
+        Ok(value) => value,
+    };
+    check_activation_path(state, named, value, metadata, user, binding, describe)
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -590,35 +757,43 @@ pub fn validate_activation(
     named_activation: bool,
 ) -> Result<(), String> {
     use std::os::unix::fs::{FileTypeExt, MetadataExt};
-    let mut kind: libc::c_int = 0;
-    let mut length = std::mem::size_of_val(&kind) as libc::socklen_t;
-    if unsafe {
-        libc::getsockopt(
-            socket.as_raw_fd(),
-            libc::SOL_SOCKET,
-            libc::SO_TYPE,
-            (&mut kind as *mut libc::c_int).cast(),
-            &mut length,
-        )
-    } != 0
-    {
-        return Err(std::io::Error::last_os_error().to_string());
-    }
-    if kind != libc::SOCK_DGRAM {
-        return Err("OS activation requires a Unix datagram socket".into());
-    }
-    let address = socket.local_addr().map_err(|error| error.to_string())?;
-    let metadata = fs::symlink_metadata(expected).map_err(|error| error.to_string())?;
-    if !metadata.file_type().is_socket() || metadata.uid() != unsafe { libc::geteuid() } {
-        return Err("adopted activation path is not an owned socket".into());
-    }
-    if !named_activation && address.as_pathname() != Some(expected) {
-        return Err(format!(
-            "OS activation socket differs from adopted coordinator: {address:?}; expected {}",
-            expected.display()
-        ));
-    }
-    Ok(())
+    let (_, result) = validate_activation_sequence(
+        (),
+        named_activation,
+        libc::SOCK_DGRAM,
+        |()| {
+            let mut kind: libc::c_int = 0;
+            let mut length = std::mem::size_of_val(&kind) as libc::socklen_t;
+            let status = unsafe {
+                libc::getsockopt(
+                    socket.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    libc::SO_TYPE,
+                    (&mut kind as *mut libc::c_int).cast(),
+                    &mut length,
+                )
+            };
+            ((), (status, kind))
+        },
+        |()| ((), std::io::Error::last_os_error().to_string()),
+        |()| ((), socket.local_addr().map_err(|error| error.to_string())),
+        |()| {
+            ((), fs::symlink_metadata(expected)
+                .map(|metadata| (metadata.file_type().is_socket(), metadata.uid()))
+                .map_err(|error| error.to_string()))
+        },
+        |()| ((), unsafe { libc::geteuid() }),
+        |(), address: &std::os::unix::net::SocketAddr| {
+            ((), address.as_pathname() == Some(expected))
+        },
+        |(), address: std::os::unix::net::SocketAddr| {
+            ((), format!(
+                "OS activation socket differs from adopted coordinator: {address:?}; expected {}",
+                expected.display()
+            ))
+        },
+    );
+    result
 }
 
 /// Rust OS-provider mock exercises the production singleton and round path.

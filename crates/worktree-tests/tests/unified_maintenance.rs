@@ -24,6 +24,35 @@ fn maintenance_pending_work_wins_every_idle_boundary() {
     expect(!policy::maintenance_idle_exit(true, true, true));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn activation_rejects_stream_before_observing_paths() {
+    let kind = |_state: u8| -> (out: (u8, (i32, i32)))
+        ensures out == (1u8, (0i32, 1i32)),
+    { (1, (0, 1)) };
+    let last_error = |_state: u8| -> (out: (u8, String))
+        ensures out.0 == 2u8,
+    { (2, "query error".to_string()) };
+    let address = |_state: u8| -> (out: (u8, Result<u64, String>))
+        ensures out == (3u8, Ok::<u64, String>(91u64)),
+    { (3, Ok(91)) };
+    let metadata = |_state: u8| -> (out: (u8, Result<(bool, u32), String>))
+        ensures out == (4u8, Ok::<(bool, u32), String>((true, 7u32))),
+    { (4, Ok((true, 7))) };
+    let user = |_state: u8| -> (out: (u8, u32))
+        ensures out == (5u8, 7u32),
+    { (5, 7) };
+    let binding = |_state: u8, _address: &u64| -> (out: (u8, bool))
+        ensures out == (6u8, true),
+    { (6, true) };
+    let describe = |_state: u8, _address: u64| -> (out: (u8, String))
+        ensures out.0 == 7u8,
+    { (7, "binding error".to_string()) };
+    let (state, result) = policy::validate_activation_sequence(
+        0u8, true, 2i32, kind, last_error, address, metadata, user, binding, describe);
+    expect(state == 1);
+    expect(result.is_err());
+}
+
 }
 
 #[cfg(not(verus_keep_ghost))]

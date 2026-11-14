@@ -43,11 +43,11 @@ pub use automatic_verification::age::reusable_release;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::inventory::append_action_index;
 #[cfg(not(verus_keep_ghost))]
-pub use crate::automatic::service::maintenance_idle_exit;
+pub use crate::automatic::service::{maintenance_idle_exit, validate_activation_sequence};
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::inventory::append_action_index;
 #[cfg(verus_keep_ghost)]
-pub use automatic_verification::service::maintenance_idle_exit;
+pub use automatic_verification::service::{maintenance_idle_exit, validate_activation_sequence};
 
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::producer::rolling::{rolling_disposal, rolling_keep};
