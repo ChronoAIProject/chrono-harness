@@ -310,7 +310,7 @@ proof fn invocation_token_literals()
     assert("--extern"@[2] != "--import"@[2]);
     assert("--extern"@[4] != "--export"@[4]);
     assert("--import"@[2] != "--export"@[2]);
-    reveal_with_fuel(policy::invocation_kind, 2);
+    reveal(policy::invocation_kind);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
