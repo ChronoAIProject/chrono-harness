@@ -694,8 +694,12 @@ fn timeout_and_output_limits_preserve_the_original_local_receipt() {
         c["watch_timeout_seconds"] = json!(1);
         h.write_config(c);
         let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
-        let receipts = r["receipts"].as_array().unwrap();
-        let first = &receipts[0];
+        let receipts = r["receipts"].as_array().unwrap_or_else(|| {
+            panic!("PR watch receipts are not an array: initial_timeout={initial_timeout}, exit={code}, result={r}")
+        });
+        let first = receipts.first().unwrap_or_else(|| {
+            panic!("PR watch returned no call receipt: initial_timeout={initial_timeout}, exit={code}, result={r}")
+        });
         assert_eq!(r["expected_head"], HEAD, "{r}");
         assert_eq!(
             &first["argv"].as_array().unwrap()[1..3],
