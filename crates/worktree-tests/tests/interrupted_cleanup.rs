@@ -2176,7 +2176,13 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
             .find(|row| row["path"] == value!(target))
             .expect("interrupted target remains explicitly protected");
         assert_eq!(preserved["status"], "preserved");
-        assert_eq!(preserved["preserved_reason"], "enrollment metadata is busy");
+        assert!(
+            preserved["error"]
+                .as_str()
+                .unwrap()
+                .contains("metadata is busy"),
+            "{preserved}"
+        );
         assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
         assert!(!h.parent.join(release).exists());
         fs::write(h.parent.join(release), "join original mutation/hook").unwrap();

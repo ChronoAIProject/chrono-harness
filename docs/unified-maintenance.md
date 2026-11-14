@@ -23,7 +23,7 @@
 
 ## 判定与登记
 
-Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部执行边界用既有 Rust mock，不真实调用 OS 命令、Git 或编译器。idle 退出的布尔判定放入现有 verified_lifecycle 与其独立 Verus 预期，正式入口复用 verify.worktree-lifecycle／verify.worktree-lifecycle-tests；这只证明该判定，不覆盖 IPC、IO、锁或完整进程。FILEMAP 登记每个新增源、测试、数据和依赖，成本未知。后续仅按固定基线与候选两端 DELTA 运行登记的 bootstrap、generation、证明、专属测试和 canonical；本轮禁止执行这些操作。
+Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部执行边界用既有 Rust mock，不真实调用 OS 命令、Git 或编译器。idle 退出的布尔判定放入现有 verified_lifecycle 与其独立 Verus 预期，正式入口复用 verify.worktree-lifecycle／verify.worktree-lifecycle-tests；这只证明该判定，不覆盖 IPC、IO、锁或完整进程。FILEMAP 登记每个新增源、测试、数据和依赖，成本未知。后续按固定基线与候选两端 DELTA 运行登记的 bootstrap、generation、证明、专属测试和 canonical；实际结果由各阶段原报告负责。
 
 ## 工程选择与真实采用
 
@@ -81,3 +81,10 @@ socket 必须是协调者已登记 state 下的准确物理路径；默认 `.chr
 完整 footprint 用例在同一生产观察器的首个实际完整计量调用处暂停，维持原五秒准备期限。
 暂停期间 main 和另一已登记 linked 目标必须达到原业务终点、保留原输入输出与退出；
 解除后仍须验最终清理。该用例修正准备边界，不据旧超时修改产品锁或性能机制。
+
+本批完整行为运行进一步暴露 finish 交接报告漏绑自身 terminal 原件：旧同步处置曾由
+子清理补上该输入，异步交接必须自己登记同一 retained_input，并复用 bind_report_inputs。
+仍由原 retention 引用维护寿命；原消费、释放和最终回收断言保留，没有第二份状态。
+正式本地入口采用固定新上游时，还需保留其已采用的 PR 测试分类。直接复用固定
+83ef6518 的 lifecycle／verified_snapshot 两份测试源及其既有根声明；没有追平分支，
+没有删除分类门，也没有虚指编译源。相关原登记证明、格式与 mock 行为仍须实际验收。

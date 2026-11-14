@@ -1384,7 +1384,6 @@ fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() 
     let target = h.parent.join("inventory-failure");
     assert_eq!(h.invoke("feature", "inventory-failure", &target).0, 0);
     output(&target);
-    let ledger = h.ledger();
     fs::write(h.parent.join("fail-inventory"), "fail").unwrap();
     for command in ["maintain", "use"] {
         let extra = if command == "use" {
@@ -1397,6 +1396,7 @@ fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() 
         } else {
             vec![]
         };
+        let ledger = h.ledger();
         let (code, report, error) = h.auto(command, &extra);
         assert_eq!(code, 2, "{report} {error}");
         assert!(
@@ -1434,7 +1434,14 @@ fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() 
                     .unwrap()
                     .contains("original inventory failure")
             );
-            after["entries"][0]["cleanup"] = ledger["entries"][0]["cleanup"].clone();
+            if let Some(cleanup) = ledger["entries"][0].get("cleanup") {
+                after["entries"][0]["cleanup"] = cleanup.clone();
+            } else {
+                after["entries"][0]
+                    .as_object_mut()
+                    .unwrap()
+                    .remove("cleanup");
+            }
         }
         assert_eq!(after, ledger);
         assert!(target.join("output λ/data").exists());
@@ -2212,7 +2219,7 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
     let (code, finished, error) =
         invoke("finish", &["--path", a.to_str().unwrap()], Some("agent-B"));
     assert_eq!(code, 0, "{finished} {error}");
-    assert!(!a.exists());
+    assert!(a.exists(), "finish hands off without physical cleanup");
     let a_entry = h.ledger()["entries"]
         .as_array()
         .unwrap()
@@ -2223,6 +2230,7 @@ fn creator_agent_and_pending_reminders_follow_the_original_creator() {
     assert_eq!(a_entry["creator_agent"]["id"], "agent-A");
     let (code, maintained, error) = invoke("maintain", &[], Some("agent-A"));
     assert_eq!(code, 0, "{maintained} {error}");
+    assert!(!a.exists());
     assert!(
         maintained["worktree_status"]["worktrees"]
             .as_array()
@@ -4474,7 +4482,7 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
         );
         if fault == "staged-source" {
             assert_eq!(code, 0, "{fault}: {r} {e}");
-            assert_eq!(r["disposal"], "not-attempted");
+            assert_eq!(r["maintenance_request"]["disposal"], "not-attempted");
             let (code, cleanup, error) = h.auto("maintain", &[]);
             assert_ne!(code, 0, "{fault}: {cleanup} {error}");
         } else {
