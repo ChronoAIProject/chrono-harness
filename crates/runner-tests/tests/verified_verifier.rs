@@ -978,6 +978,7 @@ impl policy::CompilerReportRead for UnavailableSources {
 
 fn producer_receipt() -> (out: &'static str)
     ensures policy::identifiers::digest_format(vstd::utf8::encode_utf8(out@)),
+        out@ == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"@,
 {
     let value = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     proof {
@@ -995,6 +996,8 @@ fn producer_receipt() -> (out: &'static str)
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn nested_producer_requires_unique_original_identity_and_exact_arguments() {
     proof { reveal_strlit("producer"); reveal_strlit("proof");
+        reveal_strlit("different"); reveal_strlit("");
+        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
         assert("producer"@.len() != "proof"@.len()); }
     let args = vec!["action".to_string()];
     let argv = vec!["native".to_string(), "action".to_string()];
@@ -1113,8 +1116,10 @@ fn any_nested_admission_preserves_the_original_child_contract<I>(
             && policy::proof_bound(&proof, &methods[i], &original.unwrap(), &registry.unwrap()));
         assert(original.unwrap().exit == 0 && !original.unwrap().failed);
     }
-    if original.is_some() && original.unwrap().exit != 0 {
-        assert(admitted.is_err());
+    proof {
+        if original.is_some() && original.unwrap().exit != 0 {
+            assert(admitted.is_err());
+        }
     }
 }
 

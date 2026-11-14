@@ -480,6 +480,7 @@
           "tool": "cargo",
           "argv": [
             "test",
+            "--no-fail-fast",
             "--locked",
             "--manifest-path",
             "crates/runner-tests/Cargo.toml"
