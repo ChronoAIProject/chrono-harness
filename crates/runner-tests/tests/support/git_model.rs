@@ -66,26 +66,30 @@ mod runtime {
             format!("{:x}", Sha1::digest(&framed))
         }
     }
-    fn walk(root: &Path, path: &Path, out: &mut Vec<String>) -> io::Result<()> {
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
+    fn traversal_error(path: &Path, error: io::Error) -> io::Error {
+        io::Error::new(
+            error.kind(),
+            format!("Git fixture traversal {}: {error}", path.display()),
+        )
+    }
+    fn walk(root: &Path, path: &Path, out: &mut Vec<String>, skip_ignored: bool) -> io::Result<()> {
+        for entry in fs::read_dir(path).map_err(|error| traversal_error(path, error))? {
+            let entry = entry.map_err(|error| traversal_error(path, error))?;
             if entry.file_name() == ".git" || (path == root && entry.file_name() == "fixture.json")
             {
                 continue;
             }
-            let metadata = fs::symlink_metadata(entry.path())?;
+            let physical = entry.path();
+            let relative = physical.strip_prefix(root).unwrap().to_str().unwrap();
+            if skip_ignored && ignored(root, relative) {
+                continue;
+            }
+            let metadata = fs::symlink_metadata(&physical)
+                .map_err(|error| traversal_error(&physical, error))?;
             if metadata.is_dir() {
-                walk(root, &entry.path(), out)?;
+                walk(root, &physical, out, skip_ignored)?;
             } else {
-                out.push(
-                    entry
-                        .path()
-                        .strip_prefix(root)
-                        .unwrap()
-                        .to_str()
-                        .unwrap()
-                        .into(),
-                );
+                out.push(relative.into());
             }
         }
         Ok(())
@@ -744,7 +748,7 @@ mod runtime {
                         || a.contains(&"--all")
                         || a.contains(&"-A"));
                 let mut files = Vec::new();
-                walk(&root, &root, &mut files).map_err(|e| e.to_string())?;
+                walk(&root, &root, &mut files, false).map_err(|e| e.to_string())?;
                 if all || a.contains(&"--all") || a.contains(&"-A") {
                     repo.index.retain(|p, _| {
                         !(all
@@ -1031,7 +1035,7 @@ mod runtime {
                 let mut files = Vec::new();
                 let other = a.contains(&"--others");
                 if other {
-                    walk(&root, &root, &mut files).map_err(|e| e.to_string())?;
+                    walk(&root, &root, &mut files, false).map_err(|e| e.to_string())?;
                 } else {
                     files.extend(repo.index.keys().cloned());
                 }
@@ -1348,7 +1352,8 @@ mod runtime {
                     tree(&repo, "HEAD")?
                 };
                 let mut files = Vec::new();
-                walk(&root, &root, &mut files).map_err(|e| e.to_string())?;
+                walk(&root, &root, &mut files, !a.contains(&"--ignored"))
+                    .map_err(|e| e.to_string())?;
                 let paths: std::collections::BTreeSet<_> =
                     snapshot.keys().chain(repo.index.keys()).cloned().collect();
                 for path in paths {
@@ -1358,7 +1363,20 @@ mod runtime {
                         (Some(x), Some(y)) if x.oid != y.oid || x.mode != y.mode => 'M',
                         _ => ' ',
                     };
-                    let actual = entry(&root, &path, repo.width).ok();
+                    let actual = match entry(&root, &path, repo.width) {
+                        Ok(actual) => Some(actual),
+                        Err(error)
+                            if matches!(
+                                error.kind(),
+                                io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+                            ) =>
+                        {
+                            None
+                        }
+                        Err(error) => {
+                            return Err(traversal_error(&root.join(&path), error).to_string());
+                        }
+                    };
                     let working = match (repo.index.get(&path), actual) {
                         (Some(_), None) => 'D',
                         (Some(x), Some((y, _)))
@@ -1378,7 +1396,7 @@ mod runtime {
                 }
                 for path in files {
                     if !snapshot.contains_key(&path) && !repo.index.contains_key(&path) {
-                        let ignored = ignored(&root, &path);
+                        let ignored = a.contains(&"--ignored") && ignored(&root, &path);
                         if !ignored || a.contains(&"--ignored") {
                             out.extend_from_slice(
                                 format!("{} {path}", if ignored { "!!" } else { "??" }).as_bytes(),

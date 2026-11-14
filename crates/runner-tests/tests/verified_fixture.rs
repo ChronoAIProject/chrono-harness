@@ -221,7 +221,7 @@ mod git_status_io {
 
     #[test]
     fn selected_git_mock_status_skips_ignored_subtrees_but_checks_tracked_files() {
-        use std::os::unix::ffi::OsStringExt;
+        use std::os::unix::fs::PermissionsExt;
 
         if !git_fixture::isolated(
             "git_status_io::selected_git_mock_status_skips_ignored_subtrees_but_checks_tracked_files",
@@ -254,20 +254,29 @@ mod git_status_io {
         fs::write(root.join("ignored/tracked"), b"after").unwrap();
         fs::write(root.join("visible"), b"new").unwrap();
         fs::create_dir(root.join("excluded")).unwrap();
-        // These unsupported names make an unwanted traversal fail deterministically;
-        // status without --ignored has no consumer for either subtree's contents.
-        let name = std::ffi::OsString::from_vec(b"private-\xff".to_vec());
         for subtree in ["ignored", "excluded"] {
-            fs::write(root.join(subtree).join(&name), b"private").unwrap();
+            let private = root.join(subtree).join("private");
+            fs::create_dir(&private).unwrap();
+            fs::write(private.join("payload"), b"private").unwrap();
+            fs::set_permissions(private, fs::Permissions::from_mode(0o000)).unwrap();
         }
+        let ordinary = call(&["status", "--porcelain", "-z"]);
+        for subtree in ["ignored", "excluded"] {
+            fs::set_permissions(
+                root.join(subtree).join("private"),
+                fs::Permissions::from_mode(0o700),
+            )
+            .unwrap();
+        }
+        assert!(ordinary.status.success(), "{ordinary:?}");
+        assert!(ordinary.stderr.is_empty(), "{ordinary:?}");
+        assert_eq!(ordinary.stdout, b" M ignored/tracked\0?? visible\0");
+        fs::remove_file(root.join("ignored/tracked")).unwrap();
         assert_eq!(
             ok(&["status", "--porcelain", "-z"]),
-            b" M ignored/tracked\0?? visible\0"
+            b" D ignored/tracked\0?? visible\0"
         );
-        for subtree in ["ignored", "excluded"] {
-            fs::remove_file(root.join(subtree).join(&name)).unwrap();
-            fs::write(root.join(subtree).join("untracked"), b"private").unwrap();
-        }
+        fs::write(root.join("ignored/tracked"), b"after").unwrap();
         let output = ok(&["status", "--porcelain", "--ignored", "-z"]);
         let mut records: Vec<_> = output.split(|byte| *byte == 0).collect();
         records.sort();
@@ -276,8 +285,8 @@ mod git_status_io {
             [
                 b"".as_slice(),
                 b" M ignored/tracked",
-                b"!! excluded/untracked",
-                b"!! ignored/untracked",
+                b"!! excluded/private/payload",
+                b"!! ignored/private/payload",
                 b"?? visible",
             ]
         );
@@ -335,5 +344,21 @@ mod git_status_io {
             assert!(error.contains(blocked.to_str().unwrap()), "{error}");
             assert!(error.contains(&denial.to_string()), "{error}");
         }
+        fs::write(root.join(".gitignore"), "blocked/\n").unwrap();
+        for args in [
+            vec!["add", "-f", "blocked/payload"],
+            vec!["commit", "-qm", "tracked ignored payload"],
+        ] {
+            let output = call(&args);
+            assert!(output.status.success(), "{args:?}: {output:?}");
+        }
+        fs::set_permissions(&blocked, fs::Permissions::from_mode(0o000)).unwrap();
+        let tracked = call(&["status", "--porcelain", "-z"]);
+        fs::set_permissions(&blocked, fs::Permissions::from_mode(0o700)).unwrap();
+        assert_eq!(tracked.status.code(), Some(93), "{tracked:?}");
+        assert!(tracked.stdout.is_empty(), "{tracked:?}");
+        let error = String::from_utf8(tracked.stderr).unwrap();
+        assert!(error.contains("blocked/payload"), "{error}");
+        assert!(error.contains(&denial.to_string()), "{error}");
     }
 }
