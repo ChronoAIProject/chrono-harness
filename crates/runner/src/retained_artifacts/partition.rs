@@ -1745,7 +1745,19 @@ impl Inventory {
         gate.stable()?;
         let mut objects = gate.objects.borrow_mut();
         let mut roles = gate.roles.borrow_mut();
-        let before = objects.clone();
+        // Only output presence and outbound references are read from the old state.
+        let before: BTreeMap<_, _> = objects
+            .iter()
+            .map(|(id, record)| {
+                (
+                    id.clone(),
+                    record
+                        .output
+                        .as_ref()
+                        .map(|output| output.references.clone()),
+                )
+            })
+            .collect();
         // partition_load reads the first addressed declaration's cursor. Keep
         // that single owner rather than synchronously rewriting every related
         // original whenever bounded disposal advances the component cursor.
@@ -1794,7 +1806,7 @@ impl Inventory {
         // Publish the path's reservation before any output/source attachment.
         // An interrupted birth remains discoverable by the next same-path user.
         for output in &ledger.outputs {
-            if before.get(&output.id).is_some_and(|r| r.output.is_none()) {
+            if before.get(&output.id).is_some_and(Option::is_none) {
                 let directory = gate
                     .paths
                     .get(&output.path)
@@ -1822,11 +1834,11 @@ impl Inventory {
         // edge or consumer-root change. An interruption can retain extra work;
         // it cannot expose a still-referenced original to disposal.
         for output in &ledger.outputs {
-            let previous = before.get(&output.id).and_then(|r| r.output.as_ref());
+            let previous = before.get(&output.id).and_then(Option::as_ref);
             for target in output
                 .references
                 .iter()
-                .filter(|id| previous.is_none_or(|o| !o.references.contains(id)))
+                .filter(|id| previous.is_none_or(|references| !references.contains(id)))
             {
                 let record = objects
                     .get_mut(target)
