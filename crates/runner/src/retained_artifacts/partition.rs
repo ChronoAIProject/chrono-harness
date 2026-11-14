@@ -687,6 +687,7 @@ impl Inventory {
             objects: RefCell::new(BTreeMap::new()),
             roles: RefCell::new(BTreeMap::new()),
             paths: directories,
+            exclusive_paths: paths.iter().cloned().collect(),
             maintenance: false,
             retiring_report: None,
             retained_dependencies: BTreeSet::new(),
