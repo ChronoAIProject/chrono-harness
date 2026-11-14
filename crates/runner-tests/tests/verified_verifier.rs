@@ -287,6 +287,23 @@ fn arguments() -> (out: Vec<String>)
 }
 
 // J 的独立预期先于实现登记：扩展值不能改变真实根／输出，语法识别不授予依赖资格。
+proof fn invocation_token_literals()
+    ensures
+        policy::invocation_kind("--edition=2024"@) == policy::InvocationKind::Edition,
+        policy::invocation_kind("--crate-name"@) == policy::InvocationKind::CrateName,
+        policy::invocation_kind("-Zunstable-options"@) == policy::InvocationKind::Unstable,
+        policy::invocation_kind("--env-set"@) == policy::InvocationKind::Environment,
+        policy::invocation_kind("-L"@) == policy::InvocationKind::Search,
+        policy::invocation_kind("--extern"@) == policy::InvocationKind::Extern,
+        policy::invocation_kind("--import"@) == policy::InvocationKind::Import,
+        policy::invocation_kind("--export"@) == policy::InvocationKind::Export,
+{
+    reveal_strlit("--edition=2024"); reveal_strlit("--crate-name");
+    reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
+    reveal_strlit("-L"); reveal_strlit("--extern");
+    reveal_strlit("--import"); reveal_strlit("--export");
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
     let args = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
@@ -302,6 +319,7 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
         "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
     proof {
+        invocation_token_literals();
         reveal_with_fuel(policy::invocation_extensions, 16);
         reveal_with_fuel(policy::interpreted_option_sequence, 16);
         reveal_with_fuel(policy::sources::next_byte, 32);
@@ -328,6 +346,11 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
         assert("--emit=link=out,dep-info=out.d"@ =~=
             "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
         assert(policy::invocation_kind(args[10]@) == policy::InvocationKind::Unstable);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("CARGO_PKG_VERSION=0.1.0"@), 0, 61) == 17);
+        assert(vstd::utf8::encode_utf8("CARGO_PKG_VERSION=0.1.0"@).take(17)
+            =~= seq![67u8,65,82,71,79,95,80,75,71,95,86,69,82,83,73,79,78]);
+        assert(vstd::utf8::encode_utf8("CARGO_PKG_VERSION=0.1.0"@).skip(18)
+            =~= seq![48u8,46,49,46,48]);
         assert(vstd::utf8::encode_utf8("dependency=deps"@).subrange(0, 11)
             =~= vstd::utf8::encode_utf8("dependency="@));
         assert(vstd::utf8::encode_utf8("dependency=deps"@).skip(11)
@@ -410,6 +433,7 @@ fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
     expect_verifier_true(rejected_root.is_none());
     // 重复单值选项即使取值相同也不能造成两个解释；import 必须点名 extern。
     proof {
+        invocation_token_literals();
         reveal_with_fuel(policy::invocation_extensions, 6);
         reveal_with_fuel(policy::sources::next_byte, 12);
         reveal_strlit("--crate-name"); reveal_strlit("--import"); reveal_strlit("--extern");
@@ -448,7 +472,12 @@ fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
     proof {
         reveal_strlit("--import"); reveal_strlit("--extern");
         reveal_strlit("missing=producer.vir");
-        assert(forall|j: int| 7 <= j < 9 ==> orphan[j]@ != "--extern"@);
+        assert(forall|j: int| 7 <= j < 9 ==> orphan[j]@ != "--extern"@) by {
+            assert forall|j: int| 7 <= j < 9 implies orphan[j]@ != "--extern"@ by {
+                if j == 7 { assert(orphan[j]@ == "--import"@); }
+                else { assert(j == 8); assert(orphan[j]@ == "missing=producer.vir"@); }
+            }
+        }
         assert(!policy::import_has_extern(orphan@, 7, 9));
         assert(!policy::invocation_extensions(orphan@, 7, 9));
         assert(!policy::verifier_arguments(orphan@));
