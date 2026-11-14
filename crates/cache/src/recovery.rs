@@ -642,6 +642,133 @@ pub fn collect_recovery_artifacts<S, V, A>(source: S, artifacts: Option<&[Option
     out
 }
 
+pub open spec fn recovery_refresh_step<S, K, T, F, C>(source: S, row: (K, T),
+    apply: &F, complete: &C, out: (S, Result<(), String>)) -> bool
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+{
+    exists|applied: S, result: Result<(), String>|
+        #[trigger] apply.ensures((source, &row.0, row.1), (applied, result))
+        && match result {
+            Err(error) => out == (applied, Err::<(), String>(error)),
+            Ok(()) => complete.ensures((applied, &row.0, "source-times-refreshed"), out.0)
+                && out.1 == Ok::<(), String>(()),
+        }
+}
+
+fn refresh_recovery_source<S, K, T, F, C>(source: S, row: (K, T), apply: &F, complete: &C)
+    -> (out: (S, Result<(), String>))
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+    requires forall|state: S, key: &K, value: T| apply.requires((state, key, value)),
+        forall|state: S, key: &K, status: &'static str| complete.requires((state, key, status)),
+    ensures recovery_refresh_step(source, row, apply, complete, out),
+{
+    let (key, value) = row;
+    let ghost original = value;
+    let (state, result) = apply(source, &key, value);
+    let ghost applied = state;
+    let ghost observed = result;
+    let out = match result {
+        Err(error) => (state, Err(error)),
+        Ok(()) => (complete(state, &key, "source-times-refreshed"), Ok(())),
+    };
+    assert(apply.ensures((source, &key, original), (applied, observed)));
+    out
+}
+
+pub open spec fn recovery_refresh_prefix<S, K, T, F, C>(rows: Seq<(K, T)>,
+    states: Seq<S>, source: S, apply: &F, complete: &C) -> bool
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+{
+    0 < states.len() <= rows.len() + 1 && states[0] == source
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] recovery_refresh_step(states[i], rows[i], apply, complete,
+                (states[i + 1], Ok::<(), String>(())))
+}
+
+/// 消费原准备项，成功后登记缓存终态；首错不登记成功或执行后续项。
+pub fn run_recovery_refreshes<S, K, T, F, C>(source: S, rows: Vec<(K, T)>,
+    apply: &F, complete: &C) -> (out: (S, Result<(), String>))
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+    requires forall|state: S, key: &K, value: T| apply.requires((state, key, value)),
+        forall|state: S, key: &K, status: &'static str| complete.requires((state, key, status)),
+    ensures exists|states: Seq<S>|
+        #[trigger] recovery_refresh_prefix(rows@, states, source, apply, complete)
+        && match out.1 {
+            Ok(()) => states.len() == rows.len() + 1 && out.0 == states.last(),
+            Err(error) => states.len() <= rows.len()
+                && recovery_refresh_step(states.last(), rows@[states.len() - 1], apply, complete,
+                    (out.0, Err::<(), String>(error))),
+        },
+{
+    let ghost entries = rows@;
+    let count = rows.len();
+    let mut remaining = rows.into_iter();
+    let mut state = source;
+    let ghost states = seq![source];
+    let mut i = 0;
+    while i < count
+        invariant i <= count, count == entries.len(), entries == rows@,
+            remaining@.0 == i, remaining@.1 == entries,
+            states.len() == i + 1, states.last() == state,
+            recovery_refresh_prefix(entries, states, source, apply, complete),
+            forall|state: S, key: &K, value: T| apply.requires((state, key, value)),
+            forall|state: S, key: &K, status: &'static str| complete.requires((state, key, status)),
+        decreases count - i,
+    {
+        let row = remaining.next().unwrap();
+        let (next, result) = refresh_recovery_source(state, row, apply, complete);
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(out.1 == Err::<(), String>(error));
+                assert(recovery_refresh_prefix(rows@, states, source, apply, complete));
+                assert(states.len() <= rows.len());
+                assert(recovery_refresh_step(states.last(), entries[states.len() - 1],
+                    apply, complete, (out.0, Err::<(), String>(error))));
+                assert(exists|history: Seq<S>|
+                    #[trigger] recovery_refresh_prefix(entries, history, source, apply, complete)
+                    && match out.1 {
+                        Ok(()) => history.len() == count + 1 && out.0 == history.last(),
+                        Err(error) => history.len() <= count
+                            && recovery_refresh_step(history.last(), entries[history.len() - 1],
+                                apply, complete, (out.0, Err::<(), String>(error))),
+                    });
+                return out;
+            },
+            Ok(()) => {
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] recovery_refresh_step(states[j], entries[j], apply, complete,
+                            (states[j + 1], Ok::<(), String>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(recovery_refresh_step(previous[j], entries[j], apply, complete,
+                                (previous[j + 1], Ok::<(), String>(()))) );
+                        }
+                    }
+                }
+                state = next;
+            },
+        }
+        i += 1;
+    }
+    let out = (state, Ok(()));
+    assert(exists|history: Seq<S>|
+        #[trigger] recovery_refresh_prefix(entries, history, source, apply, complete)
+        && match out.1 {
+            Ok(()) => history.len() == count + 1 && out.0 == history.last(),
+            Err(error) => history.len() <= count
+                && recovery_refresh_step(history.last(), entries[history.len() - 1],
+                    apply, complete, (out.0, Err::<(), String>(error))),
+        });
+    out
+}
+
 pub type RecoveryRemovalError = (&'static str, String, &'static str, String);
 
 pub open spec fn recovery_removal_step<S, R, C, F>(
@@ -1741,14 +1868,24 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 cache["status"] = json!(status);
             }
         }
-        for (id, refresh) in refreshes {
-            super::freshness::apply(
-                &root,
-                refresh,
-                &mut report["caches"][&id]["source_freshness"],
-            )?;
-            report["caches"][&id]["status"] = json!("source-times-refreshed");
-        }
+        let (updated, refreshed) = run_recovery_refreshes(
+            std::mem::take(&mut report),
+            refreshes,
+            &|mut report: Value, id: &String, refresh| {
+                let refreshed = super::freshness::apply(
+                    &root,
+                    refresh,
+                    &mut report["caches"][id]["source_freshness"],
+                );
+                (report, refreshed)
+            },
+            &|mut report: Value, id: &String, status| {
+                report["caches"][id]["status"] = json!(status);
+                report
+            },
+        );
+        report = updated;
+        refreshed?;
         Ok(())
     })();
     let caches: Vec<_> = report["caches"]
