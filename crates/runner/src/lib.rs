@@ -2016,29 +2016,29 @@ fn run_process_inner_with_stdout(
         };
         if let Some(paths) = evidence.as_ref() {
             let validate_launch = !launch_publication_failed;
-            if let Err(error) = validate_launch_evidence_detailed(paths.launch, &process)
-                && validate_launch
-            {
-                process.failure = Some(match process.failure.take() {
-                    Some(original) => format!("{original}; {error}"),
-                    None => error.to_string(),
-                });
-                let detail = match process.failure_cause.take() {
-                    Some(original) => Failure::wrap(
-                        "E_PROCESS",
-                        original.message.clone(),
-                        SharedProcessFailure(original),
-                    )
-                    .with_related("launch_evidence", error),
-                    None => {
-                        Failure::wrap("E_PROCESS_LAUNCH_EVIDENCE", error.message.clone(), error)
-                    }
-                };
-                process.failure_record = Some(detail.record());
-                process.failure_cause = Some(Arc::new(ProcessFailure {
-                    message: detail.to_string(),
-                    error: detail,
-                }));
+            if let Err(error) = validate_launch_evidence_detailed(paths.launch, &process) {
+                if validate_launch {
+                    process.failure = Some(match process.failure.take() {
+                        Some(original) => format!("{original}; {error}"),
+                        None => error.to_string(),
+                    });
+                    let detail = match process.failure_cause.take() {
+                        Some(original) => Failure::wrap(
+                            "E_PROCESS",
+                            original.message.clone(),
+                            SharedProcessFailure(original),
+                        )
+                        .with_related("launch_evidence", error),
+                        None => {
+                            Failure::wrap("E_PROCESS_LAUNCH_EVIDENCE", error.message.clone(), error)
+                        }
+                    };
+                    process.failure_record = Some(detail.record());
+                    process.failure_cause = Some(Arc::new(ProcessFailure {
+                        message: detail.to_string(),
+                        error: detail,
+                    }));
+                }
             }
             process.launch_original = launch_descriptor(paths.root, paths.launch);
         }
