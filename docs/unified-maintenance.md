@@ -59,6 +59,16 @@ Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部�
 
 socket 必须是协调者已登记 state 下的准确物理路径；默认 `.chrono-harness/state/maintenance.sock` 避免附加长 namespace 名，绑定仍受原 OS Unix 路径上限约束。路径太长／未采用／队列满如实 wake-failed，不放大 OS 限制或建立临时路径别名。实际 OS activation 初次启动可能来自加载、事件或 timer，产品只报 `os-activation`（已读事件时报 event）；不能凭它冒充真实 timer 来源，宿主须以原生定时证据核对。常驻期间已到期 timer 优先标记为 timer，并保留错过机会；周期按原时间基准推进，长轮次不会重设并掩盖机会。
 
+真实 macOS 采用发现，`launch_activate_socket("Maintenance")` 交付的 datagram
+可以绑定在 launchd 私有 `/var/run/com.apple.launchd.*/Maintenance` 地址，由 OS
+转发已配置的 SockPathName。原先逐字比较 getsockname 与配置路径使服务在首轮前退出 2。
+macOS 现在采用该命名提供方的交付合同，核单一 Unix datagram 描述符和已采用路径确为
+当前用户拥有的 socket；具体外部路径仍由固定 plist、launchctl 的实际配置及真实事件
+验收绑定。直接交付和 Linux 继续核地址相同。Rust 的 OS 提供方替身覆盖转发、直接
+绑定、缺失、普通文件、符号链接和 stream 描述符；不调用真实 launchctl。
+这项 IO 绑定尚未形式证明，原 idle 局部证明不扩大保证。真实服务切换与连续运行另验，
+没有新增握手、消息队列、调度器或永久诊断进程。
+
 `maintenance_request` 的 handoff 表示既有所有者状态已经承担责任，不表示 OS 接受。发送后的实际激活收据单独出现在 stderr 或 release 返回值，`accepted:true` 只证明 OS socket 接收提示，`round_completion` 仍为 not-established。`maintain` 竞争成功仅返回 maintenance-requested、round_started=false；实际轮次才有完整清单与原报告。必要当前输出 publication 和父消费者交接继续同步；内部报告的成功不代替业务、维护或宿主持续稳定验收。
 
 每次轮次开始前只合并有限批 OS 提示，剩余提示继续留在 OS socket，不产生应用任务队列。提示数量不决定成员选择；每个实际轮次仍展开全部原权威声明。内部 publication 不制造新提示；受保护、繁忙或延迟对象不会被自身报告反复唤醒。

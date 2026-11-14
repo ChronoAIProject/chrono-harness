@@ -1,7 +1,28 @@
 //! Creation-age eligibility belongs to the existing addressed lifecycle owner.
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn reusable_release(terminal_handoff: bool, expired_source_preserved: bool, generation: u64,
+    requested_generation: Option<u64>) -> (release: bool)
+    ensures release <==> (terminal_handoff || expired_source_preserved || (requested_generation.is_some()
+        && requested_generation.unwrap() == generation)),
+{
+    terminal_handoff || expired_source_preserved || match requested_generation {
+        Some(requested) => requested == generation,
+        None => false,
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use std::time::{Duration, SystemTime};
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct AgePolicy {
@@ -9,6 +30,7 @@ pub(super) struct AgePolicy {
     delete_after_seconds: u64,
     preserved_branch_prefix: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl AgePolicy {
     pub(super) fn validate(&self, kernel: bool) -> Result<(), String> {
         if !kernel
@@ -31,6 +53,7 @@ impl AgePolicy {
         })
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
     pub(super) fn age_eligible(&self, e: &Entry, deleting: bool) -> Result<bool, String> {
         let Some(policy) = &self.inputs.policy.age_policy else {

@@ -49,8 +49,11 @@ pub fn missing_cache_observation() -> (observation: MissingCacheObservation)
 
 }
 
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/age.rs"]
+pub(crate) mod age;
 #[cfg(not(verus_keep_ghost))]
-mod age;
+pub(crate) mod age;
 #[cfg(not(verus_keep_ghost))]
 mod cache_adoption;
 #[cfg(verus_keep_ghost)]

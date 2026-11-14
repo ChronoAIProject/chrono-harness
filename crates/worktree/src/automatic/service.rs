@@ -527,7 +527,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     #[cfg(unix)]
     {
-        run_service(&root, &config_path, activated_socket)
+        run_service(
+            &root,
+            &config_path,
+            cfg!(target_os = "macos"),
+            activated_socket,
+        )
     }
     #[cfg(not(unix))]
     {
@@ -540,6 +545,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
 fn run_service(
     root: &Path,
     config_path: &str,
+    named_activation: bool,
     activate: impl FnOnce() -> Result<UnixDatagram, String>,
 ) -> Result<Value, String> {
     let (policy, _) = signal::adopted(&root)?.ok_or("maintenance service policy is not adopted")?;
@@ -551,14 +557,7 @@ fn run_service(
         );
     };
     let socket = activate()?;
-    if socket
-        .local_addr()
-        .map_err(|e| e.to_string())?
-        .as_pathname()
-        != Some(policy.socket_path(&root)?.as_path())
-    {
-        return Err("OS activation socket differs from adopted coordinator".into());
-    }
+    validate_activation(&socket, &policy.socket_path(&root)?, named_activation)?;
     serve(&socket, &policy, |trigger, missed| {
         let report = round(
             &root,
@@ -581,6 +580,47 @@ fn run_service(
     Ok(value!({"status":"maintenance-idle-exit","owned_work_joined":true}))
 }
 
+/// launchd may forward a named socket from a private address. Its returned
+/// descriptor is selected by the job's Maintenance entry, not getsockname text.
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
+pub fn validate_activation(
+    socket: &UnixDatagram,
+    expected: &Path,
+    named_activation: bool,
+) -> Result<(), String> {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    let mut kind: libc::c_int = 0;
+    let mut length = std::mem::size_of_val(&kind) as libc::socklen_t;
+    if unsafe {
+        libc::getsockopt(
+            socket.as_raw_fd(),
+            libc::SOL_SOCKET,
+            libc::SO_TYPE,
+            (&mut kind as *mut libc::c_int).cast(),
+            &mut length,
+        )
+    } != 0
+    {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    if kind != libc::SOCK_DGRAM {
+        return Err("OS activation requires a Unix datagram socket".into());
+    }
+    let address = socket.local_addr().map_err(|error| error.to_string())?;
+    let metadata = fs::symlink_metadata(expected).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_socket() || metadata.uid() != unsafe { libc::geteuid() } {
+        return Err("adopted activation path is not an owned socket".into());
+    }
+    if !named_activation && address.as_pathname() != Some(expected) {
+        return Err(format!(
+            "OS activation socket differs from adopted coordinator: {address:?}; expected {}",
+            expected.display()
+        ));
+    }
+    Ok(())
+}
+
 /// Rust OS-provider mock exercises the production singleton and round path.
 #[cfg(all(unix, feature = "producer-birth-test"))]
 #[cfg(not(verus_keep_ghost))]
@@ -590,7 +630,7 @@ pub fn run_with_socket(
     socket: UnixDatagram,
 ) -> Result<Value, String> {
     let root = fs::canonicalize(root).map_err(|error| error.to_string())?;
-    run_service(&root, config_path, || Ok(socket))
+    run_service(&root, config_path, false, || Ok(socket))
 }
 
 #[cfg(feature = "producer-birth-test")]
