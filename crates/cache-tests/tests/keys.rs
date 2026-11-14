@@ -62,23 +62,22 @@ pub fn check_named_probe<S, I, C, R>(source: S, inspect: I, clear: C, reject: R)
     let (state, rejected) = reject(state);
     assert(clear.ensures((observed,), cleared));
     assert(reject.ensures((cleared,), (state, rejected)));
-    let out = (state, if rejected { Ok(()) }
-        else { Err("missing declared PATH fell back to ambient tools".to_string()) });
-    assert(inspect.ensures((source,), (observed, original)));
-    assert(clear.ensures((observed,), cleared));
-    assert(reject.ensures((cleared,), (out.0, rejected)));
-    assert(if rejected { out.1 == Ok::<(), String>(()) } else { match out.1 {
-        Err(error) => error@ == "missing declared PATH fell back to ambient tools"@,
-        _ => false,
-    } });
-    assert(exists|cleared_state: S, rejected_value: bool|
-        clear.ensures((observed,), cleared_state)
-        && #[trigger] reject.ensures((cleared_state,), (out.0, rejected_value))
-        && if rejected_value { out.1 == Ok::<(), String>(()) } else { match out.1 {
-            Err(error) => error@ == "missing declared PATH fell back to ambient tools"@,
-            _ => false,
-        } });
-    out
+    if rejected {
+        let out = (state, Ok(()));
+        assert(inspect.ensures((source,), (observed, original)));
+        assert(clear.ensures((observed,), cleared));
+        assert(reject.ensures((cleared,), (out.0, true)));
+        assert(named_probe_result(source, inspect, clear, reject, out));
+        out
+    } else {
+        let error = "missing declared PATH fell back to ambient tools".to_string();
+        let out = (state, Err(error));
+        assert(inspect.ensures((source,), (observed, original)));
+        assert(clear.ensures((observed,), cleared));
+        assert(reject.ensures((cleared,), (out.0, false)));
+        assert(named_probe_result(source, inspect, clear, reject, out));
+        out
+    }
 }
 
 fn named_probe_expect(actual: bool)
