@@ -217,9 +217,17 @@ fn present_import_restoration_requires_explicit_maintenance_and_managed_original
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_linked_work_releases_reusable_outputs_without_a_main_release_request() {
-    expect(policy::reusable_release(true, 0, None));
-    expect(policy::reusable_release(true, 7, None));
-    expect(policy::reusable_release(true, u64::MAX, None));
+    expect(policy::reusable_release(true, false, 0, None));
+    expect(policy::reusable_release(true, false, 7, None));
+    expect(policy::reusable_release(true, false, u64::MAX, None));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn qualified_expiry_releases_reusable_outputs_without_finishing_work() {
+    expect(policy::reusable_release(false, true, 0, None));
+    expect(policy::reusable_release(false, true, 7, None));
+    expect(policy::reusable_release(false, true, 8, Some(7)));
+    expect(policy::reusable_release(false, true, u64::MAX, None));
 }
 
 pub(crate) fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)
