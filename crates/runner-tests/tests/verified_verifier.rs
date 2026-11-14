@@ -345,6 +345,7 @@ fn test_harness_and_extern_search_preserve_the_full_input_gate() {
 proof fn invocation_token_literals()
     ensures
         policy::invocation_kind("--edition=2024"@) == policy::InvocationKind::Edition,
+        policy::invocation_kind("--edition=2021"@) == policy::InvocationKind::Edition,
         policy::invocation_kind("--test"@) == policy::InvocationKind::TestHarness,
         policy::invocation_kind("--crate-name"@) == policy::InvocationKind::CrateName,
         policy::invocation_kind("-Zunstable-options"@) == policy::InvocationKind::Unstable,
@@ -355,7 +356,7 @@ proof fn invocation_token_literals()
         policy::invocation_kind("--export"@) == policy::InvocationKind::Export,
 {
     reveal_strlit("--test");
-    reveal_strlit("--edition=2024"); reveal_strlit("--crate-name");
+    reveal_strlit("--edition=2024"); reveal_strlit("--edition=2021"); reveal_strlit("--crate-name");
     reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
     reveal_strlit("-L"); reveal_strlit("--extern");
     reveal_strlit("--import"); reveal_strlit("--export");
