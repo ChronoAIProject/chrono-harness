@@ -6,6 +6,8 @@
 
 基线为干净 `ff006c4e08b7585ac484e583299d65a60d36c35e`。候选保留三处原源码所有者、真实调用、借用和顺序；不改 CAPACITY、lifetime、cfg、program 分类、错误优先级或生产选择。源码库存仍是下面七个具体实现块和 `verified_git_binding` 内两个既有泛型选择适配器，没有发现另外的直接实现或本地实现生成宏。这不是全部 proc-macro／cfg 宇宙的证明。
 
+最近一次原登记 runner 严格整 crate 操作在 `f6014b489acb20cf10fb03fc932f7cda5214011f` 上退出 1：`verified_verifier.rs:486、499` 的 `matches!` 参数含 `@`，报解析错误；原报告保存在协调宿主的 `.chrono-harness/state/worktrees/use-99323-1794641849909207000-0.json` 及其 `.json.process/`。结果为 success false、0 verified，未生成 runner rlib／VIR，旧 dep-info 不可用，adapter 后继未派发。当前只把这两处规格分类判断等价改成枚举不等／等值表达式，保留全部条件、断言、错误优先级和资格门；未执行修后验证。AC 的 1,557 verified、AE 的 11 verified 及严格 reject 原件不重跑、不重建；runner 整 crate、实际编译绑定、独立 adapter 预期、正式资格、DELTA 与 integration／dev 落地仍未完成。
+
 | 具体实现及实际使用方 | 候选规格不变量 |
 | --- | --- |
 | `facts_binding::JsonBindingReferences` → `declaration` 的唯一 tool/input 引用 | count 是原切片长度；每个有效槽位的 id 是该行完整可选文本；规格的越界位置为 None，执行索引仍须证明界限。 |

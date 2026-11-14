@@ -483,7 +483,7 @@ pub fn extension_is_fresh(args: &Vec<String>, i: usize) -> (fresh: bool)
 }
 
 pub open spec fn import_has_extern(args: Seq<String>, i: int, end: int) -> bool {
-    !matches!(invocation_kind(args[i]@), InvocationKind::Import)
+    invocation_kind(args[i]@) != InvocationKind::Import
         || exists|j: int| 7 <= j < end && args[j]@ == "--extern"@
             && j + 1 < end && same_input_name(vstd::utf8::encode_utf8(args[j + 1]@), vstd::utf8::encode_utf8(args[i + 1]@))
 }
@@ -496,7 +496,7 @@ pub fn paired_import(args: &Vec<String>, i: usize, end: usize) -> (paired: bool)
     let mut j = 7;
     while j < end
         invariant 7 <= j <= end < args.len(), i + 1 < args.len(),
-            matches!(invocation_kind(args[i]@), InvocationKind::Import),
+            invocation_kind(args[i]@) == InvocationKind::Import,
             forall|k: int| 7 <= k < j && args[k]@ == "--extern"@ && k + 1 < end ==>
                 !same_input_name(vstd::utf8::encode_utf8(args[k + 1]@), vstd::utf8::encode_utf8(args[i + 1]@)),
         decreases end - j,
