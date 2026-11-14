@@ -577,3 +577,12 @@ AC 另有可复核的输入缺口：固定成功报告 `use-53527-17946336134117
 调用方先核源码 diff／身份／whitespace，固定候选并封存。后续唯一生产入口仍是本树 `chrono-worktree use --operation <已登记ID> --path /Users/macstudio2/chrono-spec-current-dev`：首先 `prepare.ci-generation-dependency.runner`，由现役薄 launcher 的 frontend profile 从候选安装本树前端，再执行专属准备，不部署共享 owner；其后消费者直接复用同一本树前端和生产原件。当前准备预期非零且闭包不合格，故不能派发 runner／adapter。只有来源缺口补齐并另获阶段授权后，才按原 runner → adapter → generation consumer／missing 顺序执行，每项一次，前置失败停止明确后继。原 raw 调查预算仍为 2,400 秒／每流 67,108,864 字节、两线程；正式 native 配对原 900 秒／1 MiB 未抬高，新增全 crate 证明与 fixture 均未执行。Linux 仍缺 AC 组件采用及新 Cargo-Verus 工具登记，不能声称跨平台成功。
 
 本阶段没有 Cargo、Verus、构建、测试、格式化检查、bootstrap、判官、业务 use、生命周期、Git／GitHub 写、共享部署或 worker。新增编译／证明／IO／CI／存储／维护成本均 unknown；复用现有缓存不是已测节省。全部自有源码命令均同步终结，没有后台任务；AN 历史 join 不追认。CAPACITY 家族仍无合格 runner 结果；完整仓内逻辑与独立预期证明、typed compiler／source／context／report／rlib／dep-info／VIR／macro／transitive 资格、真实 CI prepare／generation／effect／recovery、正式 DELTA／三评审、feature→integration→dev 两段交付与落地，以及完整 SPEC 其余目标仍未完成，goal 保持 active。
+
+
+## AQ：当前依赖观察与正式资格分界
+
+**产品和宿主政策同时修改。** runner 的实际 Cargo JSON／dep-info、根库发布别名、host 宏输入由原 `proved_build::dependencies` 负责；组件生产仍使用已校验 Verus 归档、同一外部 JSON 合同源码、现役 tar／patch／Verus 与原执行器。`runner-build.json` 只记录可移植配方；原 AC 报告、本机路径与一次运行的摘要不再充当跟踪政策。新组件另建受保护 state 槽位，原 AC／AE 不覆盖。当前组件原件由 `check-original` 的逐对象使用方保护，调用方在最后实际消费和诊断结束后释放，七日内复核；可重建 target 仍复用 finish-dispose。
+
+prepare 的成功只表示已完成登记的依赖观察和当前输入组件生产；fresh、host 无 checksum、构建脚本、native、backend／SDK 等资格缺口如实留在 observation，不授予正式资格。四项登记 raw 调查消费同一原件及实际依赖字节，缺失、漂移、歧义或错绑继续失败。raw 不要求尚未实现的 typed 资格作为永久启动门；`verified_verifier` 的 source-only guard、`ProofAdmission`、整 crate、严格 flags、lifetime、全部仓内证明义务保留。正式 DELTA 仍会拒绝缺失资格，raw 退出 0 不能代替它。
+
+新增承重逻辑和独立预期仍归原 Rust 源／配对测试及已登记的整 crate Verus 根，登记不等于已证明。适用入口为候选 bootstrap、正式 DELTA，以及现役 `chrono-worktree use` 的 prepare、raw 消费和独立验证操作；全部保留原线程、时限、输出限制及未过滤测试。新增构建、证明、IO、存储及维护成本 unknown；实际结果归 ignored 原件，不在本文手填通过。

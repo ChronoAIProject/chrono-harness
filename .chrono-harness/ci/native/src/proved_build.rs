@@ -194,7 +194,9 @@ fn bind_dependency(
         };
         let observed = identity(&absolute)?;
         for (index, expected) in required.iter().enumerate() {
-            if &absolute == expected {
+            if fs::canonicalize(&absolute).map_err(|e| e.to_string())?
+                == fs::canonicalize(expected).map_err(|e| e.to_string())?
+            {
                 seen[index] = true;
             }
         }
@@ -249,7 +251,15 @@ pub fn dependencies(
     stdout: &mut (impl Write + Send),
     stderr: &mut (impl Write + Send),
 ) -> Result<(), BuildFailure> {
-    build_attempt(root, declaration, inherited, stdout, stderr, false, Some(consumer))
+    build_attempt(
+        root,
+        declaration,
+        inherited,
+        stdout,
+        stderr,
+        false,
+        Some(consumer),
+    )
 }
 
 fn build_attempt(
@@ -272,16 +282,26 @@ fn build_attempt(
         .tempdir_in(parent)
         .map_err(|e| e.to_string())?;
     let result = if let Some(consumer) = dependency_consumer {
-        dependencies::run(root, declaration, consumer, inherited, stdout, stderr, temporary.path())
-    } else { run_attempt(
-        root,
-        declaration,
-        inherited,
-        stdout,
-        stderr,
-        can_recover,
-        temporary.path(),
-    ) };
+        dependencies::run(
+            root,
+            declaration,
+            consumer,
+            inherited,
+            stdout,
+            stderr,
+            temporary.path(),
+        )
+    } else {
+        run_attempt(
+            root,
+            declaration,
+            inherited,
+            stdout,
+            stderr,
+            can_recover,
+            temporary.path(),
+        )
+    };
     let rejected = temporary
         .path()
         .join("cache-rejected.json")
@@ -295,9 +315,14 @@ fn build_attempt(
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("non UTF-8 original directory")?;
-            let consumer = format!("{}:{relative}", if dependency_consumer.is_some() {
-                "runner-dependencies"
-            } else { "proved-build-repair" });
+            let consumer = format!(
+                "{}:{relative}",
+                if dependency_consumer.is_some() {
+                    "runner-dependencies"
+                } else {
+                    "proved-build-repair"
+                }
+            );
             let outcome = serde_json::json!({"owner":"registered build caller", "consumer":consumer,
                 "status":if result.is_ok() { if dependency_consumer.is_some() {"observed"} else {"recovered"} } else {"failed"},
                 "retention":"release after diagnosis/acceptance; rebuildable originals reclaimed within seven days after consumers end"});
