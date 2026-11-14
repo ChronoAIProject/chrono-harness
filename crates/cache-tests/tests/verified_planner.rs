@@ -50,6 +50,244 @@ struct RecoveryContentObservation {
 
 type RecoveryTrace = Vec<(u8, usize, String, String)>;
 
+fn planning_event(mut trace: RecoveryTrace, event: u8, index: usize, id: &str, text: &str)
+    -> (out: RecoveryTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == event, out@.last().1 == index,
+        out@.last().2@ == id@, out@.last().3@ == text@,
+{
+    let ghost previous = trace@;
+    trace.push((event, index, id.to_string(), text.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn planning_case(action: u8, verified: bool, failure: u8, id: &str,
+    payload: &str, raw_error: &str)
+    requires action <= 2, failure <= 3,
+{
+    let decide = |trace: RecoveryTrace, index: usize, row: &&str|
+        -> (out: (RecoveryTrace, &'static str,
+            Result<(policy::RecoveryAction, Option<String>), String>))
+        ensures planning_event.ensures((trace, 0, index, *row, ""), out.0),
+            out.1@ == "reason"@,
+            if failure == 1 { match out.2 { Err(error) => error@ == raw_error@, _ => false } }
+            else { match out.2 {
+                Ok((selected, value)) => (match selected {
+                    policy::RecoveryAction::Keep => action == 0,
+                    policy::RecoveryAction::Refresh => action == 1,
+                    policy::RecoveryAction::Discard => action == 2,
+                }) && match value {
+                    Some(value) => verified && value@ == payload@,
+                    None => !verified,
+                },
+                _ => false,
+            } },
+    {
+        let trace = planning_event(trace, 0, index, *row, "");
+        let selected = if action == 0 { policy::RecoveryAction::Keep }
+            else if action == 1 { policy::RecoveryAction::Refresh }
+            else { policy::RecoveryAction::Discard };
+        let value = if verified { Some(payload.to_string()) } else { None };
+        let result = if failure == 1 { Err(raw_error.to_string()) }
+            else { Ok((selected, value)) };
+        (trace, "reason", result)
+    };
+    let initialize = |trace: RecoveryTrace, index: usize, row: &&str,
+        reason: &'static str, status: &'static str| -> (out: RecoveryTrace)
+        ensures planning_event.ensures((trace, 1, index, *row, status), out),
+    { planning_event(trace, 1, index, *row, status) };
+    let attach = |trace: RecoveryTrace, row: &&str, value: String| -> (out: RecoveryTrace)
+        ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+            out@.last().0 == 2, out@.last().1 == 17,
+            out@.last().2@ == row@, out@.last().3@ == value@,
+    { planning_event(trace, 2, 17, *row, value.as_str()) };
+    let prepare = |trace: RecoveryTrace, row: &&str|
+        -> (out: (RecoveryTrace, Result<String, String>))
+        ensures planning_event.ensures((trace, 3, 17, *row, ""), out.0),
+            if failure == 2 { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+            else { match out.1 { Ok(value) => value@ == payload@, _ => false } },
+    {
+        let trace = planning_event(trace, 3, 17, *row, "");
+        (trace, if failure == 2 { Err(raw_error.to_string()) } else { Ok(payload.to_string()) })
+    };
+    let queue = |trace: RecoveryTrace, row: &&str, value: String, status: &'static str|
+        -> (out: RecoveryTrace)
+        ensures exists|pending: RecoveryTrace|
+            planning_event.ensures((trace, 4, 17, *row, status), pending)
+            && out@.len() == pending@.len() + 1 && out@.drop_last() == pending@
+            && out@.last().0 == 5 && out@.last().1 == 17
+            && out@.last().2@ == row@ && out@.last().3@ == value@,
+    {
+        let trace = planning_event(trace, 4, 17, *row, status);
+        planning_event(trace, 5, 17, *row, value.as_str())
+    };
+    let collect = |trace: RecoveryTrace, row: &&str|
+        -> (out: (RecoveryTrace, Result<(), String>))
+        ensures planning_event.ensures((trace, 6, 17, *row, payload), out.0),
+            if failure == 3 { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+            else { out.1 == Ok::<(), String>(()) },
+    {
+        let trace = planning_event(trace, 6, 17, *row, payload);
+        (trace, if failure == 3 { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let initial = RecoveryTrace::new();
+    let (trace, result) = policy::plan_recovery_cache(initial, 17, &id, &decide,
+        &initialize, &attach, &prepare, &queue, &collect);
+    let base = if verified { 3usize } else { 2usize };
+    let count = if failure == 1 { 1usize } else if action == 0 { base }
+        else if action == 2 || failure == 2 { base + 1 } else { base + 3 };
+    expect_cache_true(trace.len() == count);
+    expect_cache_true(trace[0].0 == 0 && trace[0].1 == 17);
+    expect_restore_text(trace[0].2.as_str(), id);
+    expect_restore_text(trace[0].3.as_str(), "");
+    if failure == 1 {
+        match result {
+            Err(error) => expect_restore_text(error.as_str(), raw_error),
+            Ok(()) => expect_cache_true(false),
+        }
+        return;
+    }
+    expect_cache_true(trace[1].0 == 1 && trace[1].1 == 17);
+    expect_restore_text(trace[1].2.as_str(), id);
+    expect_restore_text(trace[1].3.as_str(), if action == 2 { "pending" } else { "not-required" });
+    if verified {
+        expect_cache_true(trace[2].0 == 2 && trace[2].1 == 17);
+        expect_restore_text(trace[2].2.as_str(), id);
+        expect_restore_text(trace[2].3.as_str(), payload);
+    }
+    if action == 1 {
+        expect_cache_true(trace[base].0 == 3 && trace[base].1 == 17);
+        expect_restore_text(trace[base].2.as_str(), id);
+        if failure != 2 {
+            expect_cache_true(trace[base + 1].0 == 4 && trace[base + 1].1 == 17);
+            expect_restore_text(trace[base + 1].2.as_str(), id);
+            expect_restore_text(trace[base + 1].3.as_str(), "pending");
+            expect_cache_true(trace[base + 2].0 == 5 && trace[base + 2].1 == 17);
+            expect_restore_text(trace[base + 2].2.as_str(), id);
+            expect_restore_text(trace[base + 2].3.as_str(), payload);
+        }
+    } else if action == 2 {
+        expect_cache_true(trace[base].0 == 6 && trace[base].1 == 17);
+        expect_restore_text(trace[base].2.as_str(), id);
+        expect_restore_text(trace[base].3.as_str(), payload);
+    }
+    if (action == 1 && failure == 2) || (action == 2 && failure == 3) {
+        match result {
+            Err(error) => expect_restore_text(error.as_str(), raw_error),
+            Ok(()) => expect_cache_true(false),
+        }
+    } else { expect_cache_true(result.is_ok()); }
+}
+
+#[test]
+fn recovery_planning_keeps_optional_verification_and_only_runs_selected_action() {
+    planning_case(0, false, 0, "", "", "unused");
+    planning_case(0, true, 2, "cache/λ\0\n", "verification/λ\0\n", "unused");
+    planning_case(1, false, 3, "cache", "refresh/λ\0\n", "unused");
+    planning_case(1, true, 0, "cache/λ\0\n", "", "unused");
+    planning_case(2, false, 2, "cache", "path/λ\0\n", "unused");
+    planning_case(2, true, 0, "cache/λ\0\n", "payload", "unused");
+}
+
+#[test]
+fn recovery_planning_preserves_failure_state_and_does_not_queue_failed_refresh() {
+    planning_case(0, false, 1, "cache", "unused", "");
+    planning_case(1, true, 1, "cache/λ\0\n", "unused", "decision/λ\0\n");
+    planning_case(2, true, 1, "", "unused", "decision error");
+    planning_case(1, false, 2, "", "unused", "");
+    planning_case(1, true, 2, "cache/λ\0\n", "verified", "prepare/λ\0\n");
+    planning_case(2, false, 3, "cache", "path", "collection error");
+    planning_case(2, true, 3, "cache/λ\0\n", "path/λ\0\n", "collect/λ\0\n");
+}
+
+fn planning_sequence_case(ids: &[&str], stop: usize, raw_error: &str)
+    requires ids.len() <= 3, stop <= ids.len(),
+{
+    let prepare = |trace: RecoveryTrace, index: usize, id: &&str|
+        -> (out: (RecoveryTrace, Result<(), String>))
+        ensures planning_event.ensures((trace, 7, index, *id, ""), out.0),
+            if index == stop { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+            else { out.1 == Ok::<(), String>(()) },
+    {
+        let trace = planning_event(trace, 7, index, *id, "");
+        (trace, if index == stop { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let initial = RecoveryTrace::new();
+    let ghost source = initial;
+    let (trace, result) = policy::plan_recovery_caches(initial, ids, &prepare);
+    proof {
+        let states = choose|states: Seq<RecoveryTrace>|
+            #[trigger] policy::recovery_plan_prefix(ids@, states, source, &prepare)
+            && match result {
+                Ok(()) => states.len() == ids.len() + 1 && trace == states.last(),
+                Err(error) => states.len() <= ids.len()
+                    && prepare.ensures((states.last(), (states.len() - 1) as usize,
+                        &ids@[states.len() - 1]), (trace, Err::<(), String>(error))),
+            };
+        assert forall|i: int| 0 <= i < states.len() - 1 implies
+            states[i + 1]@.len() == states[i]@.len() + 1 && i != stop
+            && states[i + 1]@.drop_last() == #[trigger] states[i]@
+            && states[i + 1]@.last().0 == 7 && states[i + 1]@.last().1 == i
+            && states[i + 1]@.last().2@ == ids@[i]@ by {
+            assert(prepare.ensures((states[i], i as usize, &ids@[i]),
+                (states[i + 1], Ok::<(), String>(()))) );
+        }
+        let count = states.len() - 1;
+        if count > 0 { assert(states[1]@.len() == 1); }
+        if count > 1 { assert(states[2]@.len() == 2); }
+        if count > 2 { assert(states[3]@.len() == 3); }
+        assert(states.last()@.len() == count);
+        if count > stop { assert(false); }
+        match &result {
+            Ok(()) => { assert(count == stop && stop == ids.len()); },
+            Err(error) => {
+                if count < stop { assert(false); }
+                assert(count == stop && stop < ids.len());
+                assert(trace@.drop_last() == states.last()@);
+            },
+        }
+        assert forall|j: int| 0 <= j < trace.len() implies
+            #[trigger] trace@[j].0 == 7 && trace@[j].1 == j
+            && trace@[j].2@ == ids@[j]@ by {
+            if j < count {
+                assert(states[j + 1]@.last().0 == 7);
+                assert(states[j + 1]@.last().1 == j);
+                assert(states[j + 1]@.last().2@ == ids@[j]@);
+                if j + 2 <= count { assert(states[j + 2]@.drop_last() == states[j + 1]@); }
+                if j + 3 <= count { assert(states[j + 3]@.drop_last() == states[j + 2]@); }
+            }
+        }
+    }
+    expect_cache_true(trace.len() == stop + if stop < ids.len() { 1 } else { 0 });
+    if stop == ids.len() { expect_cache_true(result.is_ok()); }
+    else { match result {
+        Err(error) => expect_restore_text(error.as_str(), raw_error),
+        Ok(()) => expect_cache_true(false),
+    } }
+    let mut i = 0;
+    while i < trace.len()
+        invariant i <= trace.len(), trace.len() <= ids.len(),
+            forall|j: int| 0 <= j < trace.len() ==> #[trigger] trace@[j].0 == 7
+                && trace@[j].1 == j && trace@[j].2@ == ids@[j]@,
+        decreases trace.len() - i,
+    {
+        expect_cache_true(trace[i].0 == 7 && trace[i].1 == i);
+        expect_restore_text(trace[i].2.as_str(), ids[i]);
+        i += 1;
+    }
+}
+
+#[test]
+fn recovery_planning_sequence_preserves_indices_duplicates_and_stops_at_first_error() {
+    planning_sequence_case(&[], 0, "unused");
+    planning_sequence_case(&[""], 1, "unused");
+    planning_sequence_case(&["cache/λ\0\n", "", "cache/λ\0\n"], 3, "unused");
+    planning_sequence_case(&["first", "later", "last"], 0, "");
+    planning_sequence_case(&["first", "cache/λ\0\n", "later"], 1, "error/λ\0\n");
+    planning_sequence_case(&["first", "second", ""], 2, "last error");
+}
+
 fn source_refresh_apply(mut trace: RecoveryTrace, id: &String, index: usize,
     stop: usize, raw_error: &str) -> (out: (RecoveryTrace, Result<(), String>))
     ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
