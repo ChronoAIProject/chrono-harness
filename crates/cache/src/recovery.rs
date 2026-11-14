@@ -97,6 +97,12 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
 {
     reveal(recovery_cache_decision_result);
     reveal(recovery_cache_final_result);
+    proof {
+        reveal_strlit("exact"); reveal_strlit("compatible");
+        reveal_strlit("miss-or-unavailable"); reveal_strlit("error");
+        reveal_strlit("not-attempted"); reveal_strlit("unavailable");
+    }
+    let ghost initial_state = state;
     let reason = planner::restore_status(outcome, requested, matched, prefixes);
     let base = match planner::recovery_action(outcome, reason, unconfirmed,
         outputs_valid, key_valid, None, None, false) {
@@ -134,6 +140,9 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
                 return (state, reason, Err(message));
             },
         };
+        assert(recovery_cache_decision_result(initial_state, outcome, reason, matched,
+            unconfirmed, outputs_valid, key_valid, method, refresh, id,
+            verify, read_status, render_error, (state, result)));
         (state, reason, result)
     } else {
         let action = planner::recovery_action(outcome, reason, unconfirmed,
@@ -147,6 +156,9 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
                 return (state, reason, Err(message));
             },
         };
+        assert(recovery_cache_decision_result(initial_state, outcome, reason, matched,
+            unconfirmed, outputs_valid, key_valid, method, refresh, id,
+            verify, read_status, render_error, (state, result)));
         (state, reason, result)
     }
 }
