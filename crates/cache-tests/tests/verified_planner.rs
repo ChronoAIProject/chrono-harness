@@ -25,6 +25,144 @@ mod probe;
 
 verus! {
 
+fn recovery_preflight_case(enabled: bool, consumer: Option<&str>, prepare_error: Option<&str>,
+    differs: bool, attempt_error: Option<&str>, decode_error: Option<&str>,
+    object: bool, payload: &str)
+{
+    let prepare = |mut trace: Vec<(u8, String)>, actual: &str|
+        -> (out: (Vec<(u8, String)>, Result<bool, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 0u8, out.0@.last().1@ == actual@,
+            match out.1 {
+                Ok(value) => prepare_error is None && value == differs,
+                Err(error) => match prepare_error {
+                    Some(original) => error@ == original@, None => false,
+                },
+            },
+    {
+        trace.push((0, actual.to_string()));
+        (trace, match prepare_error {
+            Some(error) => Err(error.to_string()), None => Ok(differs),
+        })
+    };
+    let attempt = |mut trace: Vec<(u8, String)>|
+        -> (out: (Vec<(u8, String)>, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 1u8,
+            match out.1 {
+                Ok(()) => attempt_error is None,
+                Err(error) => match attempt_error {
+                    Some(original) => error@ == original@, None => false,
+                },
+            },
+    {
+        trace.push((1, "".to_string()));
+        (trace, match attempt_error {
+            Some(error) => Err(error.to_string()), None => Ok(()),
+        })
+    };
+    let decode = |mut trace: Vec<(u8, String)>|
+        -> (out: (Vec<(u8, String)>, Result<String, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 2u8,
+            match out.1 {
+                Ok(value) => decode_error is None && value@ == payload@,
+                Err(error) => match decode_error {
+                    Some(original) => error@ == original@, None => false,
+                },
+            },
+    {
+        trace.push((2, "".to_string()));
+        (trace, match decode_error {
+            Some(error) => Err(error.to_string()), None => Ok(payload.to_string()),
+        })
+    };
+    let is_object = |mut trace: Vec<(u8, String)>, value: &String|
+        -> (out: (Vec<(u8, String)>, bool))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 3u8, out.0@.last().1@ == value@, out.1 == object,
+    {
+        trace.push((3, value.clone()));
+        (trace, object)
+    };
+    let (trace, result) = policy::preflight_recovery(Vec::new(), enabled, consumer,
+        prepare, attempt, decode, is_object);
+    let calls = if !enabled || consumer.is_none() { 0usize }
+        else if prepare_error.is_some() || differs { 1usize }
+        else if attempt_error.is_some() { 2usize }
+        else if decode_error.is_some() { 3usize } else { 4usize };
+    expect_cache_true(trace.len() == calls);
+    if calls > 0 {
+        expect_cache_true(trace[0].0 == 0);
+        match consumer {
+            Some(expected) => expect_restore_text(trace[0].1.as_str(), expected),
+            None => expect_cache_true(false),
+        }
+    }
+    if calls > 1 { expect_cache_true(trace[1].0 == 1); }
+    if calls > 2 { expect_cache_true(trace[2].0 == 2); }
+    if calls > 3 {
+        expect_cache_true(trace[3].0 == 3);
+        expect_restore_text(trace[3].1.as_str(), payload);
+    }
+    let failure = if !enabled {
+        Some("E_CACHE_RECOVERY: recovery is not registered")
+    } else if consumer.is_none() {
+        Some("E_CACHE_RECOVERY: consumer missing")
+    } else if prepare_error.is_some() { prepare_error }
+    else if differs {
+        Some("E_CACHE_RECOVERY: original plan differs from current registration or host")
+    } else if attempt_error.is_some() { attempt_error }
+    else if decode_error.is_some() { decode_error }
+    else if !object { Some("E_CACHE_RECOVERY: native step observations missing") }
+    else { None };
+    match result {
+        Ok(value) => {
+            expect_cache_true(failure.is_none());
+            expect_restore_text(value.as_str(), payload);
+        },
+        Err(error) => match failure {
+            Some(expected) => expect_restore_text(error.as_str(), expected),
+            None => expect_cache_true(false),
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_rejects_disabled_or_missing_consumer_without_calls() {
+    recovery_preflight_case(false, None, Some("prepare"), true,
+        Some("attempt"), Some("decode"), false, "unused");
+    recovery_preflight_case(false, Some(""), None, false, None, None, true, "");
+    recovery_preflight_case(true, None, Some("prepare"), true,
+        Some("attempt"), Some("decode"), false, "unused");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_preserves_prepare_failure_and_plan_mismatch_priority() {
+    recovery_preflight_case(true, Some("check/λ\0\n"), Some("prepare/λ\0\n"), true,
+        Some("attempt"), Some("decode"), false, "unused");
+    recovery_preflight_case(true, Some(""), Some(""), false, None, None, true, "");
+    recovery_preflight_case(true, Some("check.one"), None, true,
+        Some("attempt"), Some("decode"), false, "unused");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_preserves_attempt_and_decode_failure_before_later_calls() {
+    recovery_preflight_case(true, Some("check.one"), None, false,
+        Some("attempt/λ\0\n"), Some("decode"), false, "unused");
+    recovery_preflight_case(true, Some("check.one"), None, false,
+        None, Some("decode/λ\0\n"), false, "unused");
+    recovery_preflight_case(true, Some(""), None, false, None, Some(""), true, "");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_checks_decoded_value_and_returns_it_unchanged() {
+    recovery_preflight_case(true, Some("check.one"), None, false, None, None, false, "");
+    recovery_preflight_case(true, Some("check/λ\0\n"), None, false,
+        None, None, true, "steps/λ\0\n");
+    recovery_preflight_case(true, Some(""), None, false, None, None, true, "");
+}
+
 enum ExpectedFinalError {
     Publication(Option<String>, String),
     Recovery(String, String),
