@@ -2,7 +2,7 @@
 
 `chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner 或 Git。核心记录和 tracing 层不依赖宿主目录；`runtime` 适配器从明确宿主根读取日志选择。宿主登记它的构建、测试计划、输入、输出和 CI 单元。
 
-测试计划直接由 `test.diagnostics-tests` 编译生产库和测试自己的日志子进程，只使用测试项目的独立 target；该单元也只恢复、保存这份编译缓存。日常 `build.diagnostics` 仍可独立构建生产库，其 target 没有测试使用方，因此不加入测试前置或单元缓存。
+测试计划直接由 `test.diagnostics-tests` 编译生产库和测试自己的日志子进程，只使用测试项目的独立 target；该单元也只恢复、保存这份编译缓存。生产使用方通过自己的 Cargo 构建编译该库；没有独立使用方的 `build.diagnostics` 登记已删除。
 
 ## 保留原错误及其原因
 
