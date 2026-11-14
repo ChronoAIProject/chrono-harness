@@ -1236,11 +1236,11 @@ impl Inventory {
                 // reference component, not every independent output sharing
                 // that consumer. Keep its full declaration under exclusion;
                 // load/save below project only the visited members.
-                if let Some(record) = &record
-                    && !maintenance
-                {
-                    selected.extend(record.ids.iter().cloned());
-                    selected.extend(record.attached.iter().cloned());
+                if !maintenance {
+                    if let Some(record) = &record {
+                        selected.extend(record.ids.iter().cloned());
+                        selected.extend(record.attached.iter().cloned());
+                    }
                 }
                 observed_roles.insert(role, record);
                 continue;
