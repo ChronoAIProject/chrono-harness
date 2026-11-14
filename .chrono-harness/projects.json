@@ -4633,64 +4633,6 @@
             "|^verus-arm64-macos|.chrono-harness/bin/verus|",
             "--no-same-owner"
           ]
-        },
-        "verus-contract-extract": {
-          "operation": "investigate.verus-tool-contract.extract",
-          "tool": "tar",
-          "argv": [
-            "-x",
-            "-f",
-            ".chrono-harness/bin/verus.zip",
-            "-s",
-            "|^verus-arm64-macos|.chrono-harness/state/verus-tool-contract-20261114|",
-            "--no-same-owner"
-          ]
-        },
-        "verus-contract-patch": {
-          "operation": "investigate.verus-tool-contract.patch",
-          "tool": "bash",
-          "argv": [
-            "-c",
-            "exec /usr/bin/patch -f -F 0 -p1 -d .chrono-harness/state/verus-tool-contract-20261114 < .chrono-harness/experiments/verus-tool-contract/vstd.patch"
-          ]
-        },
-        "verus-contract-repair-self-alias": {
-          "operation": "investigate.verus-tool-contract.repair-self-alias",
-          "tool": "bash",
-          "argv": [
-            "-c",
-            "exec /usr/bin/patch -f -F 0 -b -V simple -z .pre-e0254 -p1 -d .chrono-harness/state/verus-tool-contract-20261114 < .chrono-harness/experiments/verus-tool-contract/vstd-repair-self-alias.patch"
-          ]
-        },
-        "verus-contract-build": {
-          "operation": "investigate.verus-tool-contract.build",
-          "tool": "verus",
-          "argv": [
-            "--crate-type=lib",
-            "--crate-name",
-            "vstd",
-            "--is-vstd",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--edition=2021",
-            "--cfg",
-            "feature=\"std\"",
-            "--cfg",
-            "feature=\"alloc\"",
-            "-L",
-            "dependency=crates/ci-tests/target/debug/deps",
-            "--extern",
-            "serde_json=crates/ci-tests/target/debug/deps/libserde_json-f23d5e320f77b40e.rlib",
-            "--export",
-            ".chrono-harness/state/verus-tool-contract-20261114/vstd.vir",
-            "--emit=link=.chrono-harness/state/verus-tool-contract-20261114/libvstd.rlib,dep-info=.chrono-harness/state/verus-tool-contract-20261114/libvstd.rlib.d",
-            ".chrono-harness/state/verus-tool-contract-20261114/vstd/vstd.rs",
-            "-o",
-            ".chrono-harness/state/verus-tool-contract-20261114/libvstd.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
-          ]
         }
       }
     },
