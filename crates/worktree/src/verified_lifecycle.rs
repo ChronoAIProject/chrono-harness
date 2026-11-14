@@ -8,7 +8,7 @@ use vstd::prelude::*;
 mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verified_identifiers as identifiers;
-use identifiers::equal_text;
+pub use identifiers::equal_text;
 
 #[cfg(verus_keep_ghost)]
 #[path = "start.rs"]

@@ -1,5 +1,39 @@
 # Verus 实施范围
 
+## 维护激活 socket 的完整准入顺序
+
+`automatic/service.rs::validate_activation` 直接消费同源 Verus
+`validate_activation_sequence`：先观察描述符的 `SO_TYPE`，调用失败时才读取原 errno，
+成功时要求精确 datagram 类型；随后观察原 socket 地址和预期路径的非跟随链接元数据。
+路径必须是 socket，才观察当前有效 UID 并核对路径所有者。命名激活仍须通过全部前置
+检查；直接激活另核原地址的完整路径相等，只有不匹配时才格式化原地址和预期路径。
+任一失败立即保留该次完整状态和原错误，停止后续调用。阶段关系绑定真实回调的
+输入、返回状态、原地址和完整错误，不增加仓内受信函数。
+
+独立 Verus 预期同时作为普通 Rust 测试运行，逐项核调用前后阶段、地址原值、首错及
+失败后无后续观察，覆盖正负查询失败、i32 端点、类型不符、地址／元数据错误、非 socket、
+UID 的 0／u32::MAX、命名成功、直接匹配／不匹配，以及空串／Unicode／NUL／换行错误。
+沿用 `verify.worktree-lifecycle`、`verify.worktree-lifecycle-tests` 两项严格整 crate 证明
+和原未过滤 worktree 行为入口。现有真实 socket 回归保留命名转发、直接绑定、缺失路径、
+普通文件、符号链接、stream 描述符拒绝及原文件／socket 保全断言。
+
+本范围明确采用下列外部接口合同，不把仓内准入判断归入外部假设：
+
+| 外部接口 | 本范围采用的合同 |
+| --- | --- |
+| `AsRawFd::as_raw_fd`、`libc::getsockopt(SOL_SOCKET, SO_TYPE)`、`SOCK_DGRAM` | 查询原 socket 的描述符；使用原 c_int 缓冲区及其实际长度，保留调用返回码和类型值，datagram 常量来自当前 libc。 |
+| `Error::last_os_error`、`Error::to_string` | 仅查询失败后读取当前 OS 错误，并完整转发标准库诊断文字；不在适配器中重分类。 |
+| `UnixDatagram::local_addr` | 返回同一 socket 的原地址或实际 IO 错误，交给已证明的后续顺序。 |
+| `fs::symlink_metadata`、`Metadata::file_type`、`FileTypeExt::is_socket`、`MetadataExt::uid` | 观察同一预期路径且不跟随符号链接；从原元数据投影 socket 类型和所有者 UID，保留原 IO 错误。 |
+| `libc::geteuid` | 返回调用时当前进程的有效 UID；是否及何时读取由 Verus 决定。 |
+| `SocketAddr::as_pathname`、`<Option<&Path> as PartialEq>::eq` | 原地址的完整可选路径与 `Some(expected)` 按固定 Rust 标准库的 Path 相等合同比较；不增加本仓路径归一化或兼容判断。 |
+| `SocketAddr` 的 Debug、`Path::display`、`format!` | 在直接绑定不匹配后格式化同一原地址和预期路径，原诊断由回调完整交还，不作为准入依据。 |
+| `Result::map`、`Result::map_err`、`str::to_string`、`String::as_str` | 转发原值、完整错误或原字符串借用；独立预期的全文比较复用现役已证明的 `equal_text`。 |
+
+接口按现役 Rust／libc 工具链与 lockfile 绑定；上述 OS 观察不是原子文件系统快照，
+本项不证明完整服务启动、描述符激活来源、线程抑制或整个维护事务。没有新增依赖、
+证明入口、过滤、线程、预算、运行时容器或 IO；完整构建、证明、运行、CI 和存储成本未测。
+
 ## 维护政策的完整准入顺序
 
 `Policy::validate` 直接消费同源 Verus `validate_policy`：先核原目录的相对路径，成功后

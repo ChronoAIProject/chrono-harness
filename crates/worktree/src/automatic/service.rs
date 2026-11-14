@@ -778,19 +778,25 @@ pub fn validate_activation(
         |()| ((), std::io::Error::last_os_error().to_string()),
         |()| ((), socket.local_addr().map_err(|error| error.to_string())),
         |()| {
-            ((), fs::symlink_metadata(expected)
-                .map(|metadata| (metadata.file_type().is_socket(), metadata.uid()))
-                .map_err(|error| error.to_string()))
+            (
+                (),
+                fs::symlink_metadata(expected)
+                    .map(|metadata| (metadata.file_type().is_socket(), metadata.uid()))
+                    .map_err(|error| error.to_string()),
+            )
         },
         |()| ((), unsafe { libc::geteuid() }),
         |(), address: &std::os::unix::net::SocketAddr| {
             ((), address.as_pathname() == Some(expected))
         },
         |(), address: std::os::unix::net::SocketAddr| {
-            ((), format!(
-                "OS activation socket differs from adopted coordinator: {address:?}; expected {}",
-                expected.display()
-            ))
+            (
+                (),
+                format!(
+                    "OS activation socket differs from adopted coordinator: {address:?}; expected {}",
+                    expected.display()
+                ),
+            )
         },
     );
     result
