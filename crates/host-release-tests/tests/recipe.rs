@@ -152,7 +152,7 @@ fn fixture_commands_isolate_parent_release_context_and_preserve_explicit_inputs(
 #[test]
 fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumers() {
     use std::{collections::BTreeSet, path::Path};
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let loaded = Loaded::load(&root).unwrap();
     let read = |name: &str| -> Value {
         serde_json::from_slice(&fs::read(root.join(name)).unwrap()).unwrap()

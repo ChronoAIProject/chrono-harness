@@ -17,7 +17,7 @@ pub struct Fixture {
 impl Fixture {
     pub fn new() -> Self {
         let state = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../.chrono-harness/state/release-test-failures");
+            .join("../../.chrono-harness/state/release-test-failures");
         fs::create_dir_all(&state).unwrap();
         let case = tempfile::Builder::new()
             .prefix("rust-release-frontend-")
@@ -248,7 +248,7 @@ impl Fixture {
         let mut command = context::command(env!("CARGO_BIN_EXE_chrono-test-release-tool"));
         command
             .arg("--consume-launcher")
-            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../consume.sh"))
+            .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.chrono-harness/release/consume.sh"))
             .arg(self.host.root())
             .arg(directory)
             .arg(self.host.root().join("handoffs/none"))

@@ -1,7 +1,7 @@
 //! 当前工具选择合同的独立边界；原生适配器仍须验证真实进程和文件。
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
-#[path = "../../native/src/verified_bindings.rs"]
+#[path = "../../host-bootstrap/src/verified_bindings.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;

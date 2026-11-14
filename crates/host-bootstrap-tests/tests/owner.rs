@@ -139,7 +139,7 @@ impl Staged {
         fs::rename(&selected, parent.join("previous-owner")).unwrap();
         fs::copy(&staged, &selected).unwrap();
         let mut layout: Value =
-            serde_json::from_slice(include_bytes!("../../fixtures/owner-publication.json"))
+            serde_json::from_slice(include_bytes!("../../../.chrono-harness/ci/fixtures/owner-publication.json"))
                 .unwrap();
         let installed = serde_json::to_value(owner::file_binding(&selected).unwrap()).unwrap();
         layout["intent"]["stage"] = self.report["owner_stage"].clone();
@@ -163,7 +163,7 @@ impl Staged {
 #[test]
 fn stage_directory_follows_its_actual_report_then_expires_as_a_whole() {
     use chrono_harness::retained_artifacts::retention::{self, Inventory};
-    #[path = "../../../../crates/runner-tests/tests/support/isolated_capability.rs"]
+    #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
     mod isolated_capability;
     if !isolated_capability::isolated_capability_test(
         "stage_directory_follows_its_actual_report_then_expires_as_a_whole",

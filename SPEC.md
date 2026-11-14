@@ -74,6 +74,10 @@ Git 差异是输入事实；是否允许脏目录、怎样选测试、分支是�
 SPEC.md                         产品合同
 README.md                       使用、目录导航和实现状态
 crates/                         独立 Cargo 项目的目录分组
+  host-bootstrap/               本仓源码构建、共享启动与所有者升级工具
+  host-bootstrap-tests/         宿主启动工具专属测试
+  host-release/                 本仓发布配方的执行工具
+  host-release-tests/           宿主发布工具专属测试
   diagnostics/                  标准日志和显式错误链，独立于 runner
   diagnostics-tests/            诊断库专属测试
   runner/                       运输、协议与统一 check 入口
@@ -128,6 +132,8 @@ AGENTS.md -> CLAUDE.md           根指南的相对链接与受管正文
 以后新增独立生产项目必须同时登记一个专属测试项目；不能以共享巨型测试项目替代。
 
 宿主的所有生效 harness 约束、脚本配置、安装绑定和指令 canonical 材料都在宿主 `.chrono-harness/` 内。根 CLAUDE.md 的受管块直接呈现所选方法，默认是短流程；AGENTS.md 是指向 CLAUDE.md 的字面相对符号链接；块外原有文字属于宿主；方法在 canonical 源编辑后生成，不独立维护副本。宿主可以使用其他仓库构建的二进制，但须在此显式绑定路径、版本与摘要。
+
+本仓的 Rust 实现、专属测试及 Cargo manifest／lock 统一放在 `crates/` 下的独立项目中，包括不公开分发的宿主启动和发布工具。`.chrono-harness/` 保留宿主政策、构建与发布配方、显式登记、必要的薄 shell 入口，以及已登记的安装产物、缓存和状态；不存放 Rust 源码项目。源码位置不改变职责：`host-bootstrap`／`host-release` 继续只执行本仓登记的操作，不把本仓政策写入通用产品。
 
 自举时 `crates/runner/src/*` 仍然是 **product**，不能因产品是判官引擎便改称宿主 policy。其稳定性需求由 workflow 的 `stability` 路径登记表达，不通过重新归类源码表达。产品构建不会自动启用宿主规则、安装 hook、修改全局配置或访问参考仓库。
 

@@ -1,5 +1,5 @@
 //! 正式生产者的命令边界验收；外部编译器全部由 Rust mock 提供。
-#[path = "../../../../crates/runner-tests/tests/support/isolated_capability.rs"]
+#[path = "../../runner-tests/tests/support/isolated_capability.rs"]
 mod isolated_capability;
 use chrono_host_bootstrap::{bindings::Environment, proved_build};
 use serde_json::{Value, json};

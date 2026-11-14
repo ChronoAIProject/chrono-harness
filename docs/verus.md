@@ -1129,7 +1129,7 @@ Verus 版本与整 crate 参数；Rust workflow 核心测试同时核真实 cons
 Verus 版本与整 crate 参数；workflow 核心测试和 inventory 同次验收真实测试消费者。
 JSON 解码和集合构造仍是明确登记的适配器输入，本批不把外部接口假设当作仓内证明。
 
-本批继续补齐宿主原生边界的既有证明根：`.chrono-harness/ci/native-tests/tests/verified_cargo.rs`
+本批继续补齐宿主原生边界的既有证明根：`crates/host-bootstrap-tests/tests/verified_cargo.rs`
 登记 `verify.bootstrap-cargo-tests`，release 原生实现及独立预期登记
 `verify.release-recipe`／`verify.release-recipe-tests`。三项操作均已存在于 execution plan，
 FILEMAP 现在把源码、证明根和实际 Rust 测试消费者绑定到同一登记；本批不新增证明源、工具或
@@ -1158,7 +1158,7 @@ Python 迁移。整 crate 证明和对应原生行为测试仍须由同次 DELTA
 
 ## 发布交付字段判断
 
-发布交付的字段判断由 `release/native/src/verified_delivery.rs` 负责，接入现有
+发布交付的字段判断由 `crates/host-release/src/verified_delivery.rs` 负责，接入现有
 `verify.release-recipe`／`verify.release-recipe-tests` 整 crate 根。
 身份适配器把完整环境文本交给规范十进制、版本分量、channel 和显式版本判断；
 发布适配器把原 GitHub JSON 的可选文本、整数和布尔值直接交给逐字段判断，
@@ -2597,7 +2597,7 @@ projects 原生单元同步选择现有 Verus bootstrap，先核共享 core 再�
 每项证明增加一份有界原观察；每次源码绑定按实际编译依赖读取固定候选字节，复用现役 Reader，
 完整运行、构建、验证、CI 和存储成本未知。
 **产品与宿主政策同改：**FILEMAP 移除 `ci/src/release.rs`、`ci/src/gating.rs`，以及
-`release/native/src/publication.rs`、`release/native/src/identity.rs` 的不实文件级证明声明。
+`crates/host-release/src/publication.rs`、`crates/host-release/src/identity.rs` 的不实文件级证明声明。
 它们调用了已证明辅助函数，自身未进入所声明根的编译依赖；调用辅助函数不能证明整个调用文件。
 原编译／测试依赖、辅助函数证明和行为测试保留，四个文件恢复未知覆盖，外围逻辑仍须迁移和验收。
 没有把它们改成 data，也没有据此宣称完整覆盖。新绑定沿现有证明、组合入口和 DELTA 检查验收；
@@ -2718,7 +2718,7 @@ registration 专属计划的必需前置，独立预期和 Rust 测试编译同�
 
 宿主 bootstrap 的 core、Verus 准备及所有者阶段已采用薄 shell 入口和 Rust 生产者；
 共享安装的编排也使用 Rust；实际生产、安装和后续使用仍须分别验收。
-`.chrono-harness/ci/native/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
+`crates/host-bootstrap/src/verified_bindings.rs` 拥有工具绑定来源、摘要形状、
 字节与版本比较、可重定位路径、重复旧路径退役、继承编译器和两个 wrapper 的判断，
 以及环境名／值、宿主路径、共享目录排斥、工具探测分支和进程退出状态。
 版本前缀另要求完整空格分隔；Cargo 可接受精确版本字符串，rustc 必须保留版本后的空格。

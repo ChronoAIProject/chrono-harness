@@ -8,6 +8,8 @@
 
 本仓维护 Rust harness 产品，以及独立的宿主采用数据。[SPEC](../../SPEC.md) 是产品合同，尚未全部实现；当前结果和缺口见[覆盖表](../../docs/spec-coverage.md)。每个生产项目及其专属测试项目都有独立的 manifest、lock 和 target，没有根 workspace。Python 业务示例及其测试由示例宿主独立登记配对。
 
+Rust 实现和专属测试统一放在 `crates/`，本仓启动与发布工具分别归 `host-bootstrap`／`host-release` 及其 `-tests` 项目。项目 ID、二进制名和现有缓存路径沿用登记；`.chrono-harness/` 维护宿主政策、配方、依赖登记、薄 shell 入口及运行产物，不存放 Rust 源码项目。工具仍只消费本仓的显式配方，不因搬迁而成为通用产品接口。
+
 产品默认数据归 `assets/instructions/catalog.json` 和 `assets/instructions/default-manifest.json` 维护。本宿主的选择归本目录的 [catalog](catalog.json)、[manifest](manifest.json) 和本文件维护。产品资产用于编译和测试；宿主数据及现有生成副本用于运行。升级二进制或重复 init 不会覆盖宿主选择。采用新默认时，要比较所选产品版本的 catalog／default-manifest，保留定制，再编辑宿主源并 generate；步骤见[新默认的宿主采用边界](../../docs/instructions.md#新默认的宿主采用边界)，没有自动更新。CLAUDE.md 是生成的中文根指南；AGENTS.md 是目标字面值为 `CLAUDE.md` 的相对符号链接，不手改生成内容。
 
 [FILEMAP](../FILEMAP.json) 是唯一执行计划来源，逐文件登记负责方、输入、使用方、依赖边和成本。不得根据路径、语言或调用关系猜测测试选择。routes 负责规划和绑定工具，projects 核对配对、隔离和真实回执，限定范围的 CI 复用这条链。只按 DELTA 及前后两端的明确依赖选择检查；漏登就修登记，不改跑全测。
