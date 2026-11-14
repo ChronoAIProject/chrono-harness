@@ -342,6 +342,43 @@ fn test_harness_and_extern_search_preserve_the_full_input_gate() {
 }
 
 // J 的独立预期先于实现登记：扩展值不能改变真实根／输出，语法识别不授予依赖资格。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cargo_binary_environment_keys_allow_hyphens_without_changing_import_names() {
+    let mut args = vec!["".to_string(), "".to_string(), "".to_string(),
+        "".to_string(), "".to_string(), "".to_string(), "".to_string(),
+        "--env-set".to_string(), "A-b=x".to_string()];
+    proof {
+        invocation_token_literals();
+        reveal_strlit("A-b=x");
+        vstd::utf8::is_ascii_chars_encode_utf8("A-b=x"@);
+        reveal_with_fuel(policy::sources::next_byte, 8);
+        assert(vstd::utf8::encode_utf8("A-b=x"@).take(3) =~= seq![65u8,45,98]);
+        assert(vstd::utf8::encode_utf8("A-b=x"@).skip(4) =~= seq![120u8]);
+    }
+    let environment = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(environment);
+    args[7] = "--import".to_string();
+    let import = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(!import);
+    args[7] = "--env-set".to_string();
+    args[8] = "-A=x".to_string();
+    proof {
+        reveal_strlit("-A=x");
+        vstd::utf8::is_ascii_chars_encode_utf8("-A=x"@);
+        assert(vstd::utf8::encode_utf8("-A=x"@).take(2) =~= seq![45u8,65]);
+    }
+    let flag_name = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(!flag_name);
+    args[8] = "A=".to_string();
+    proof {
+        reveal_strlit("A=");
+        vstd::utf8::is_ascii_chars_encode_utf8("A="@);
+        assert(vstd::utf8::encode_utf8("A="@).skip(2) =~= Seq::<u8>::empty());
+    }
+    let missing_value = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(!missing_value);
+}
+
 proof fn invocation_token_literals()
     ensures
         policy::invocation_kind("--edition=2024"@) == policy::InvocationKind::Edition,

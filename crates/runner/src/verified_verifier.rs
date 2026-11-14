@@ -355,6 +355,36 @@ pub fn valid_named_invocation_value(value: &[u8]) -> (valid: bool)
     valid_invocation_identifier(name.as_slice()) && valid_invocation_value(path.as_slice())
 }
 
+pub open spec fn environment_invocation_value(value: Seq<u8>) -> bool {
+    let split = sources::next_byte(value, 0, 61);
+    0 < split < value.len()
+        && (forall|i: int| 0 <= i < split ==>
+            identifier_byte(#[trigger] value[i], i == 0) || (i > 0 && value[i] == 45))
+        && invocation_value(value.skip(split + 1))
+}
+
+pub fn valid_environment_invocation_value(value: &[u8]) -> (valid: bool)
+    ensures valid == environment_invocation_value(value@),
+{
+    let split = sources::find_byte(value, 0, 61);
+    if split == 0 || split == value.len() { return false; }
+    let mut i = 0;
+    while i < split
+        invariant 0 <= i <= split < value.len(), split > 0,
+            split == sources::next_byte(value@, 0, 61),
+            forall|j: int| 0 <= j < i ==>
+                identifier_byte(#[trigger] value[j], j == 0) || (j > 0 && value[j] == 45),
+        decreases split - i,
+    {
+        let byte = value[i];
+        if !(byte == 95 || 65 <= byte && byte <= 90 || 97 <= byte && byte <= 122
+            || i != 0 && (48 <= byte && byte <= 57 || byte == 45)) { return false; }
+        i += 1;
+    }
+    let path = sources::copy_range(value, split + 1, value.len());
+    valid_invocation_value(path.as_slice())
+}
+
 pub open spec fn same_input_name(first: Seq<u8>, second: Seq<u8>) -> bool {
     first.take(sources::next_byte(first, 0, 61)) == second.take(sources::next_byte(second, 0, 61))
 }
@@ -376,7 +406,9 @@ pub open spec fn extension_value_valid(args: Seq<String>, i: int, end: int) -> b
             && match kind {
                 InvocationKind::Edition | InvocationKind::Unstable | InvocationKind::TestHarness => true,
                 InvocationKind::CrateName => invocation_identifier(vstd::utf8::encode_utf8(args[i + 1]@)),
-                InvocationKind::Environment | InvocationKind::Import =>
+                InvocationKind::Environment =>
+                    environment_invocation_value(vstd::utf8::encode_utf8(args[i + 1]@)),
+                InvocationKind::Import =>
                     named_invocation_value(vstd::utf8::encode_utf8(args[i + 1]@)),
                 InvocationKind::Extern => named_invocation_value(vstd::utf8::encode_utf8(args[i + 1]@))
                     || invocation_identifier(vstd::utf8::encode_utf8(args[i + 1]@)),
@@ -403,7 +435,9 @@ pub fn valid_extension_value(args: &Vec<String>, i: usize, end: usize) -> (valid
     match kind {
         InvocationKind::Edition | InvocationKind::Unstable | InvocationKind::TestHarness => true,
         InvocationKind::CrateName => valid_invocation_identifier(args[i + 1].as_str().as_bytes()),
-        InvocationKind::Environment | InvocationKind::Import =>
+        InvocationKind::Environment =>
+            valid_environment_invocation_value(args[i + 1].as_str().as_bytes()),
+        InvocationKind::Import =>
             valid_named_invocation_value(args[i + 1].as_str().as_bytes()),
         InvocationKind::Extern => valid_named_invocation_value(args[i + 1].as_str().as_bytes())
             || valid_invocation_identifier(args[i + 1].as_str().as_bytes()),
