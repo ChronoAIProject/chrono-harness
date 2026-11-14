@@ -14,6 +14,86 @@ use vstd::prelude::*;
 
 verus! {
 
+/// 文件系统仅提供原 metadata、错误种类及原错误文本。
+pub open spec fn recovery_removal_result<S, M, D, F>(
+    initial: S, not_found: u32, metadata: M, directory: D, file: F,
+    out: (S, Result<&'static str, String>),
+) -> bool
+    where M: FnOnce(S) -> (S, Result<(bool, bool), (u32, String)>),
+        D: FnOnce(S) -> (S, Result<(), String>),
+        F: FnOnce(S) -> (S, Result<(), String>),
+{
+    exists|observed: S, observation: Result<(bool, bool), (u32, String)>|
+        #[trigger] metadata.ensures((initial,), (observed, observation))
+        && match observation {
+            Err((kind, error)) => out.0 == observed && if kind == not_found {
+                out.1 == Ok::<&'static str, String>("absent")
+            } else {
+                out.1 == Err::<&'static str, String>(error)
+            },
+            Ok((is_directory, is_file)) => if !is_directory && !is_file {
+                out.0 == observed && match out.1 {
+                    Err(error) => error@ ==
+                        "cache artifact is neither a regular file nor a directory"@,
+                    Ok(_) => false,
+                }
+            } else {
+                exists|removed: Result<(), String>|
+                    (if is_directory {
+                        directory.ensures((observed,), (out.0, removed))
+                    } else {
+                        file.ensures((observed,), (out.0, removed))
+                    }) && match removed {
+                        Ok(()) => out.1 == Ok::<&'static str, String>("removed"),
+                        Err(error) => out.1 == Err::<&'static str, String>(error),
+                    }
+            },
+        }
+}
+
+/// 先观察一次；仅删除真实目录或普通文件，完整保留首个原错误。
+pub fn remove_recovery_output<S, M, D, F>(
+    state: S, not_found: u32, metadata: M, directory: D, file: F,
+) -> (out: (S, Result<&'static str, String>))
+    where M: FnOnce(S) -> (S, Result<(bool, bool), (u32, String)>),
+        D: FnOnce(S) -> (S, Result<(), String>),
+        F: FnOnce(S) -> (S, Result<(), String>),
+    requires metadata.requires((state,)),
+        forall|state: S| directory.requires((state,)),
+        forall|state: S| file.requires((state,)),
+    ensures recovery_removal_result(state, not_found, metadata, directory, file, out),
+{
+    let ghost initial = state;
+    let (state, observation) = metadata(state);
+    let ghost observed = state;
+    let ghost original = observation;
+    let out = match observation {
+        Err((kind, error)) => if kind == not_found {
+            (state, Ok("absent"))
+        } else {
+            (state, Err(error))
+        },
+        Ok((is_directory, is_file)) => if !is_directory && !is_file {
+            (state, Err("cache artifact is neither a regular file nor a directory".to_string()))
+        } else {
+            let (state, removed) = if is_directory { directory(state) } else { file(state) };
+            let ghost removal_result = removed;
+            let out = match removed {
+                Ok(()) => (state, Ok("removed")),
+                Err(error) => (state, Err(error)),
+            };
+            assert(if is_directory {
+                directory.ensures((observed,), (out.0, removal_result))
+            } else {
+                file.ensures((observed,), (out.0, removal_result))
+            });
+            out
+        },
+    };
+    assert(metadata.ensures((initial,), (observed, original)));
+    out
+}
+
 pub enum RecoveryOption {
     HostRoot,
     Config,
@@ -672,19 +752,25 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         for (id, position, path) in paths {
             let removed = (|| -> Result<&str, String> {
                 let target = super::path(&root, &path)?;
-                match fs::symlink_metadata(&target) {
-                    Ok(metadata) if metadata.is_dir() => fs::remove_dir_all(target),
-                    Ok(metadata) if metadata.is_file() => fs::remove_file(target),
-                    Ok(_) => {
-                        return Err(
-                            "cache artifact is neither a regular file nor a directory".into()
-                        );
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok("absent"),
-                    Err(e) => return Err(e.to_string()),
-                }
-                .map_err(|e| e.to_string())?;
-                Ok("removed")
+                remove_recovery_output(
+                    target,
+                    std::io::ErrorKind::NotFound as u32,
+                    |target| {
+                        let result = fs::symlink_metadata(&target)
+                            .map(|metadata| (metadata.is_dir(), metadata.is_file()))
+                            .map_err(|error| (error.kind() as u32, error.to_string()));
+                        (target, result)
+                    },
+                    |target| {
+                        let result = fs::remove_dir_all(&target).map_err(|error| error.to_string());
+                        (target, result)
+                    },
+                    |target| {
+                        let result = fs::remove_file(&target).map_err(|error| error.to_string());
+                        (target, result)
+                    },
+                )
+                .1
             })();
             let row = &mut report["caches"][&id]["artifacts"][position];
             match removed {

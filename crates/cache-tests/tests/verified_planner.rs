@@ -25,6 +25,110 @@ mod probe;
 
 verus! {
 
+fn recovery_removal_case(
+    observation: Result<(bool, bool), (u32, String)>, not_found: u32,
+    directory_result: Result<(), String>, file_result: Result<(), String>,
+    wanted_call: u8, wanted: Result<&str, &str>,
+)
+    requires match observation {
+        Err((kind, error)) => wanted_call == 0 && if kind == not_found {
+            wanted == Ok::<&str, &str>("absent")
+        } else { match wanted { Err(text) => text@ == error@, _ => false } },
+        Ok((is_directory, is_file)) => if !is_directory && !is_file {
+            wanted_call == 0 && wanted == Err::<&str, &str>(
+                "cache artifact is neither a regular file nor a directory")
+        } else {
+            wanted_call == (if is_directory { 1u8 } else { 2u8 })
+                && match if is_directory { directory_result } else { file_result } {
+                    Ok(()) => wanted == Ok::<&str, &str>("removed"),
+                    Err(error) => match wanted { Err(text) => text@ == error@, _ => false },
+                }
+        },
+    },
+{
+    let trace = Vec::<u8>::new();
+    let ghost initial = trace;
+    let metadata = |mut trace: Vec<u8>|
+        -> (out: (Vec<u8>, Result<(bool, bool), (u32, String)>))
+        ensures out.0@ == trace@.push(0u8), out.1 == observation,
+    { trace.push(0); (trace, observation) };
+    let directory = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(1u8), out.1 == directory_result,
+    { trace.push(1); (trace, directory_result) };
+    let file = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(2u8), out.1 == file_result,
+    { trace.push(2); (trace, file_result) };
+    let (trace, result) = policy::remove_recovery_output(
+        trace, not_found, metadata, directory, file);
+    proof {
+        let (observed, original) = choose|observed: Vec<u8>,
+            original: Result<(bool, bool), (u32, String)>|
+            #[trigger] metadata.ensures((initial,), (observed, original))
+                && match original {
+                    Err((kind, error)) => trace == observed && if kind == not_found {
+                        result == Ok::<&'static str, String>("absent")
+                    } else { result == Err::<&'static str, String>(error) },
+                    Ok((is_directory, is_file)) => if !is_directory && !is_file {
+                        trace == observed && match result {
+                            Err(error) => error@ ==
+                                "cache artifact is neither a regular file nor a directory"@,
+                            Ok(_) => false,
+                        }
+                    } else {
+                        exists|removed: Result<(), String>|
+                            (if is_directory {
+                                directory.ensures((observed,), (trace, removed))
+                            } else { file.ensures((observed,), (trace, removed)) })
+                            && match removed {
+                                Ok(()) => result == Ok::<&'static str, String>("removed"),
+                                Err(error) => result == Err::<&'static str, String>(error),
+                            }
+                    },
+                };
+        assert(original == observation);
+    }
+    expect_cache_true(trace.len() == if wanted_call == 0 { 1 } else { 2 });
+    expect_cache_true(trace[0] == 0);
+    if wanted_call != 0 { expect_cache_true(trace[1] == wanted_call); }
+    match (result, wanted) {
+        (Ok(actual), Ok(expected)) => expect_restore_text(actual, expected),
+        (Err(actual), Err(expected)) => expect_restore_text(actual.as_str(), expected),
+        _ => expect_cache_true(false),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_removal_observes_before_selecting_one_operation() {
+    recovery_removal_case(Ok((true, false)), 7, Ok(()), Err("unused file".to_string()),
+        1, Ok("removed"));
+    recovery_removal_case(Ok((false, true)), 7, Err("unused directory".to_string()), Ok(()),
+        2, Ok("removed"));
+    recovery_removal_case(Ok((true, true)), 7, Ok(()), Err("unused file".to_string()),
+        1, Ok("removed"));
+    recovery_removal_case(Ok((false, false)), 7, Ok(()), Ok(()), 0,
+        Err("cache artifact is neither a regular file nor a directory"));
+    recovery_removal_case(Err((7, "missing original".to_string())), 7,
+        Err("unused directory".to_string()), Err("unused file".to_string()), 0, Ok("absent"));
+    recovery_removal_case(Err((u32::MAX, "missing original".to_string())), u32::MAX,
+        Ok(()), Ok(()), 0, Ok("absent"));
+}
+
+fn recovery_removal_preserves_the_complete_first_error(error: &str) {
+    recovery_removal_case(Err((8, error.to_string())), 7, Ok(()), Ok(()), 0, Err(error));
+    recovery_removal_case(Err((0, error.to_string())), u32::MAX,
+        Err("unused directory".to_string()), Err("unused file".to_string()), 0, Err(error));
+    recovery_removal_case(Ok((true, false)), 7, Err(error.to_string()), Ok(()), 1, Err(error));
+    recovery_removal_case(Ok((false, true)), 7, Ok(()), Err(error.to_string()), 2, Err(error));
+    recovery_removal_case(Ok((true, true)), 7,
+        Err(error.to_string()), Ok(()), 1, Err(error));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_removal_keeps_empty_unicode_and_control_error_payloads() {
+    recovery_removal_preserves_the_complete_first_error("");
+    recovery_removal_preserves_the_complete_first_error("恢复/λ\0\n: 原错误");
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn recovery_actions_keep_discard_and_refresh_have_distinct_effects() {
     let keep = policy::RecoveryAction::Keep;
