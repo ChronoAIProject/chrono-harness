@@ -2417,6 +2417,8 @@ impl Inventory {
         Ok(json!({"scope_complete":complete,"errors":errors,"expired":expired}))
     }
 
+    /// Ordinary entries coalesce concurrent reclamation without waiting behind
+    /// another bounded pass. Publication still acquires authoritative admission.
     pub fn maintain(&self) -> Result<Value, String> {
         self.maintain_at(now()?)
     }
@@ -2474,11 +2476,6 @@ impl Inventory {
     ) -> Result<Value, String> {
         self.validate_originals(originals)?;
         self.maintain_round(observed, Some(originals))
-    }
-    /// Ordinary entries coalesce concurrent reclamation without waiting behind
-    /// another bounded pass. Publication still acquires authoritative admission.
-    pub fn maintain_available(&self) -> Result<Value, String> {
-        self.maintain()
     }
     fn maintain_round(&self, observed: u64, originals: Option<&[String]>) -> Result<Value, String> {
         self.with_round_budget(|| self.partition_round(observed, originals))
@@ -3917,7 +3914,7 @@ impl Publication {
 #[cfg(not(verus_keep_ghost))]
 pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
     Inventory::adopted(root)?
-        .map(|i| i.maintain_available())
+        .map(|i| i.maintain())
         .transpose()
 }
 
