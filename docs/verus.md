@@ -3050,6 +3050,14 @@ VIR 可在 well-formed／solver 完成前写出，因此存在或摘要匹配仍
 现有 Cargo-Verus／proved-build 绑定仍有用途：`runner-build.json` 绑定 identifiers 库和
 runner 二进制，不能据此授予全部 runner 依赖或其 VIR 证明资格。E 没有新增资格字段、
 受信例外或替代成功路径；完整修复与其独立 Rust／Verus 预期仍须由现有所有者继续完成。
+
+CI generation 与 workflow execution 的生产／独立预期根现在也由现有
+`runner-dependencies` 入口提供实际 Serde 库和宏输入，不再以缺少依赖的裸 Verus
+调用验收包含真实派生的源码。generation 还明确消费同次计划中的 runner 严格根及
+其 rlib／VIR；workflow execution 只需要已有依赖准备。四个操作保留原源码、输出、
+严格参数、线程和预算，嵌套原件继续由现有结果使用方核验。runner 的 erasure
+内部错误、扩展输入资格和完整生产绑定仍须修复；依赖准备成功或原编译错误消失
+不产生证明通过结论。此处只修改现有宿主方法及显式计划，不新增执行器或证明例外。
 具体缺口、现役调用、F 的预期和保留边界见
 [CI generation 依赖候选](../.chrono-harness/experiments/ci-generation-dependencies.md#e-输出登记修复与未完成的方法类)。
 现有 `Object` 的 serde 派生仅在普通 Rust 下启用；真实 Serde 编解码如何在严格编译中绑定，

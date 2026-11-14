@@ -1433,6 +1433,8 @@
       "operations": [
         "verify.ci-literals",
         "verify.ci-literals-tests",
+        "prepare.ci-generation-dependency.runner",
+        "investigate.ci-generation-dependency.runner",
         "verify.ci-generation",
         "verify.ci-generation-tests",
         "verify.ci-downloads",
@@ -1539,6 +1541,7 @@
       "operations": [
         "verify.judge-workflow",
         "verify.judge-workflow-evidence",
+        "prepare.ci-generation-dependency.runner",
         "verify.judge-workflow-execution",
         "verify.judge-workflow-certificate",
         "verify.judge-workflow-transition",
