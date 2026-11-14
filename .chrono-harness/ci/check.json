@@ -242,6 +242,7 @@
         "worktree-adoption"
       ],
       "investigate.ci-generation-dependency.runner": [
+        "ci",
         "host-bootstrap",
         "judge-ci",
         "judge-projects",
@@ -250,11 +251,13 @@
         "runner"
       ],
       "prepare.ci-generation-dependency.runner": [
+        "ci",
         "host-bootstrap",
         "judge-ci",
         "judge-projects",
         "judge-registration",
         "judge-routes",
+        "judge-workflow",
         "runner",
         "worktree"
       ]

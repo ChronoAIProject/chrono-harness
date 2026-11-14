@@ -3011,9 +3011,10 @@ FILEMAP 将同源内核和独立预期分别绑定到 `verify.ci-generation`／
 其 JSON、文件系统、具体回调及外层组合须继续证明，不能删除 program 分类或改成 data
 取得通过，也不能给仓内依赖 external_body 豁免。
 
-当前固定入口在解析生产模块时报告 `E0432`／`E0433`：未链接 `chrono_harness`、
-`serde`、`serde_json`，并缺少 serde 属性。原报告为整 crate、`success=false`、
-`encountered-error=true`、`verified=0`；尚无本次成功编译库或有效 dep-info 绑定。
+generation 的现役证明入口通过实际依赖准备链接 `chrono_harness`、`serde` 和
+`serde_json`；runner 生产根必须先成功，不能消费失败根留下的库或 VIR。
+workflow execution 的同类依赖缺失已消除，但实际严格调用在 Serde 派生生成项上
+触发 Verus erasure context 初始化错误，仍未取得成功证明、编译库或有效 dep-info 绑定。
 `verified_verifier.rs` 的 J 候选将当前登记语法集中到一个同源解释：保留严格前缀，
 逐项解释 edition、crate-name、unstable、env-set、dependency 搜索范围、named extern/import
 与 direct export，再核对 link／dep-info、源根、`-o` 和 checksum 的完整关系。
@@ -3058,10 +3059,12 @@ CI generation 与 workflow execution 的生产／独立预期根现在也由现�
 严格参数、线程和预算，嵌套原件继续由现有结果使用方核验。runner 的 erasure
 内部错误、扩展输入资格和完整生产绑定仍须修复；依赖准备成功或原编译错误消失
 不产生证明通过结论。此处只修改现有宿主方法及显式计划，不新增执行器或证明例外。
+共享操作的单元成员随显式计划同步登记：runner 根增加 CI 使用方，依赖准备增加
+CI 与 workflow 使用方，不改变既有使用方、操作顺序或隔离要求。
 具体缺口、现役调用、F 的预期和保留边界见
 [CI generation 依赖候选](../.chrono-harness/experiments/ci-generation-dependencies.md#e-输出登记修复与未完成的方法类)。
 现有 `Object` 的 serde 派生仅在普通 Rust 下启用；真实 Serde 编解码如何在严格编译中绑定，
-也尚未验收。未链接之前，后续类型、外部接口及函数证明的工具支持均保持未知。
+也尚未验收。依赖链接之后的类型、外部接口及函数证明仍须由实际严格调用验收。
 
 | 生产调用的依赖 | 负责位置与剩余义务 |
 | --- | --- |
