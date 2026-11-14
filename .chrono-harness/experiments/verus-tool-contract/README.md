@@ -56,6 +56,12 @@ native 原报告保存固定宿主提交、配置、完整操作、实际工具�
 
 ## 采用前验收
 
+`investigate.verus-source.check` 继续委托现有 native bootstrap，消费
+`bootstrap-verus-source-check.json`。先用同一 Rust 1.99.1、当前 runner manifest／lock
+和已有下载缓存离线构建真实 runner 库；独立编译目录留在本次固定源码缓存槽位中。
+原 Cargo JSON 决定实际 Serde 等依赖的产物路径，不能从目录扫描或猜测 hash 选择。
+这份生产记录供原 workflow 严格根的修复实验使用，不授予正式证明资格。
+
 源码构建应复用上游 Cargo 构建方法和固定 lock，不另造编译器构建框架。
 其编译器、后端、库、宏、vstd、Z3 及生产原件必须与实际构建实例匹配。
 当前 Rust 1.95.0 生成的依赖不能充当 Rust 1.99.1 的输入。

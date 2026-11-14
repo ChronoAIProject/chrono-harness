@@ -5275,6 +5275,30 @@
       "path": ".chrono-harness/ci/bootstrap-native.sh",
       "test_script": "host-bootstrap-launcher-tests",
       "actions": {
+        "verus-source-check": {
+          "operation": "investigate.verus-source.check",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus-source-check.json"
+          ]
+        },
+        "verus-source-dependencies": {
+          "operation": "investigate.verus-source.dependencies",
+          "tool": "cargo",
+          "argv": [
+            "build",
+            "--locked",
+            "--offline",
+            "--lib",
+            "--manifest-path",
+            "crates/runner/Cargo.toml",
+            "--target-dir",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/runner-dependencies",
+            "--message-format=json-render-diagnostics"
+          ]
+        },
         "verus-source-vstd-lock": {
           "operation": "investigate.verus-source.vstd-lock",
           "tool": "rustup",
