@@ -1,10 +1,100 @@
+#[cfg(verus_keep_ghost)]
+use super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+
+pub open spec fn report_input_scope_result<S, T, R, E, O, P, C>(
+    initial: S, operation: Seq<char>, publication: Option<T>,
+    outputs: O, inputs: P, caller: C, out: (S, Result<Option<R>, E>),
+) -> bool
+    where O: FnOnce(S, T) -> (S, Result<R, E>),
+        P: FnOnce(S, T) -> (S, Result<R, E>),
+        C: FnOnce(S) -> (S, Result<R, E>),
+{
+    let selected = match out.1 {
+        Ok(Some(scope)) => Some((out.0, Ok::<R, E>(scope))),
+        Err(error) => Some((out.0, Err::<R, E>(error))),
+        Ok(None) => None,
+    };
+    match selected {
+        None => operation == "maintain"@ && publication.is_none() && out.0 == initial,
+        Some(selected) => match publication {
+            Some(publication) => if operation == "maintain"@ {
+                outputs.ensures((initial, publication), selected)
+            } else {
+                inputs.ensures((initial, publication), selected)
+            },
+            None => operation != "maintain"@ && caller.ensures((initial,), selected),
+        },
+    }
+}
+
+/// 维护只保管子输出；普通活动保管实际发布方或调用方读取的输入。
+pub fn select_report_input_scope<S, T, R, E, O, P, C>(
+    state: S, operation: &str, publication: Option<T>, outputs: O, inputs: P, caller: C,
+) -> (out: (S, Result<Option<R>, E>))
+    where O: FnOnce(S, T) -> (S, Result<R, E>),
+        P: FnOnce(S, T) -> (S, Result<R, E>),
+        C: FnOnce(S) -> (S, Result<R, E>),
+    requires forall|state: S, publication: T| outputs.requires((state, publication)),
+        forall|state: S, publication: T| inputs.requires((state, publication)),
+        forall|state: S| caller.requires((state,)),
+    ensures report_input_scope_result(state, operation@, publication, outputs, inputs, caller, out),
+{
+    let ghost initial = state;
+    let ghost original = publication;
+    let maintenance = identifiers::equal_text(operation, "maintain");
+    let selected = match publication {
+        Some(publication) => if maintenance {
+            outputs(state, publication)
+        } else {
+            inputs(state, publication)
+        },
+        None => if maintenance {
+            return (state, Ok(None));
+        } else {
+            caller(state)
+        },
+    };
+    let ghost completed = selected;
+    let (state, result) = selected;
+    let out = (state, match result {
+        Ok(scope) => Ok(Some(scope)),
+        Err(error) => Err(error),
+    });
+    proof {
+        match original {
+            Some(publication) => if maintenance {
+                assert(outputs.ensures((initial, publication), completed));
+            } else {
+                assert(inputs.ensures((initial, publication), completed));
+            },
+            None => { assert(caller.ensures((initial,), completed)); },
+        }
+    }
+    out
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{Config, Start};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     CommandSpec, ProcessResult, facts, no_symlink_parents, observation, run_process_observed,
     sha256,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::Registrations;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -12,8 +102,10 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
+#[cfg(not(verus_keep_ghost))]
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct Runner {
     pub(crate) config: Config,
     pub(crate) birth_lease: Option<crate::ownership::Lease>,
@@ -24,6 +116,7 @@ pub(crate) struct Runner {
     immutable_blobs: BTreeMap<(PathBuf, String, String), Vec<u8>>,
     immutable_trees: BTreeMap<(PathBuf, String), Arc<facts::Tree>>,
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct CheckoutIdentity {
     pub(crate) top: PathBuf,
     pub(crate) common: PathBuf,
@@ -31,6 +124,7 @@ pub(crate) struct CheckoutIdentity {
     pub(crate) head: String,
     pub(crate) branch: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Runner {
     pub(crate) fn command(&mut self, root: &Path, args: &[&str]) -> Result<ProcessResult, String> {
         self.input(root, args, &[])
@@ -277,6 +371,7 @@ impl Runner {
         Ok(rows)
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn destination(path: &Path) -> Result<PathBuf, String> {
     let parent = path.parent().ok_or("destination has no parent")?;
     let name = path.file_name().ok_or("destination has no name")?;
@@ -289,6 +384,7 @@ fn destination(path: &Path) -> Result<PathBuf, String> {
         Err(e) => Err(e.to_string()),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn ensure_identity(
     r: &mut Runner,
     source: &Path,
@@ -323,6 +419,7 @@ pub(crate) fn ensure_identity(
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn paths(bytes: Vec<u8>) -> Result<BTreeSet<String>, String> {
     let text = String::from_utf8(bytes).map_err(|_| "Git path is not UTF-8")?;
     if !text.is_empty() && !text.ends_with('\0') {
@@ -337,10 +434,12 @@ pub(crate) fn paths(bytes: Vec<u8>) -> Result<BTreeSet<String>, String> {
     }
     Ok(paths)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn cleanliness(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let head = r.oid(target, "HEAD")?;
     cleanliness_at(r, target, &head, config)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn cleanliness_at(
     r: &mut Runner,
     target: &Path,
@@ -350,6 +449,7 @@ pub(crate) fn cleanliness_at(
     exact_checkout(r, target, candidate)?;
     untracked(r, target, config)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Result<(), String> {
     let expected = r.tree(target, tree)?;
     let index = r.git(target, &["ls-files", "--stage", "-z"])?;
@@ -360,6 +460,7 @@ pub(crate) fn exact_checkout(r: &mut Runner, target: &Path, tree: &str) -> Resul
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result<(), String> {
     let artifacts = facts::artifact_directories(config)?;
     let exclusions = facts::artifact_exclusions(&artifacts);
@@ -384,6 +485,7 @@ pub(crate) fn untracked(r: &mut Runner, target: &Path, config: &Value) -> Result
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn execute(
     r: &mut Runner,
     o: &Start,
@@ -519,6 +621,7 @@ pub(crate) fn execute(
     }
     unlock(r, source, path, &branch_ref, &base)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn registered_policy(
     registrations: &Registrations,
     policy: &str,
@@ -547,6 +650,7 @@ pub(crate) fn registered_policy(
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn unlock(
     r: &mut Runner,
     source: &Path,
@@ -566,6 +670,7 @@ pub(crate) fn unlock(
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn create(
     o: Start,
     config: Config,
@@ -609,6 +714,7 @@ pub(super) fn create(
     }
     Ok(report)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn with_report(
     root: &Path,
     config_path: &str,
@@ -631,6 +737,7 @@ pub(crate) fn with_report(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn with_report_for_consumer<T>(
     root: &Path,
     config_path: &str,
@@ -784,21 +891,30 @@ pub(crate) fn with_report_for_consumer<T>(
     // The publication capability and durable recovery root protect this output.
     // This caller retains only its actual inputs and child-produced originals
     // through their handoff to the completed report.
-    let _read_scope = if operation == "maintain" {
-        // Enrollment consumers protect existing originals before this command
-        // permits cross-object retention. Keep child reports for our handoff,
-        // without also retaining every child's independently owned inputs.
-        report_publication
-            .as_ref()
-            .map(chrono_harness::retained_artifacts::retention::published_output_scope)
-            .transpose()?
-    } else if let Some(publication) = &report_publication {
-        Some(chrono_harness::retained_artifacts::retention::publication_read_scope(publication)?)
-    } else {
-        Some(chrono_harness::retained_artifacts::retention::read_scope(
-            root,
-        )?)
-    };
+    let (_, read_scope) = select_report_input_scope(
+        (),
+        operation,
+        report_publication.as_ref(),
+        |(), publication| {
+            (
+                (),
+                chrono_harness::retained_artifacts::retention::published_output_scope(publication),
+            )
+        },
+        |(), publication| {
+            (
+                (),
+                chrono_harness::retained_artifacts::retention::publication_read_scope(publication),
+            )
+        },
+        |()| {
+            (
+                (),
+                chrono_harness::retained_artifacts::retention::read_scope(root),
+            )
+        },
+    );
+    let _read_scope = read_scope?;
     let mut output = fs::OpenOptions::new()
         .write(true)
         .open(&output_path)
@@ -840,6 +956,7 @@ pub(crate) fn with_report_for_consumer<T>(
     Ok(report)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn registrations(
     r: &mut Runner,
     root: &Path,

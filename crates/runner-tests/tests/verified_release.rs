@@ -27,6 +27,18 @@ fn recovery_accounting_never_substitutes_for_domain_completion() {
     expect_true(accounting::accounting_releases(true, true));
 }
 
+#[cfg(verus_keep_ghost)]
+fn bounded_inputs_accept_the_limit_and_reject_the_next_byte() {
+    expect_true(policy::commands::within_bound(0, 0));
+    expect_true(!policy::commands::within_bound(1, 0));
+    expect_true(policy::commands::within_bound(65536, 65536));
+    expect_true(!policy::commands::within_bound(65537, 65536));
+    expect_true(policy::commands::within_bound(1048576, 1048576));
+    expect_true(!policy::commands::within_bound(1048577, 1048576));
+    expect_true(policy::commands::within_bound(u64::MAX, u64::MAX));
+    expect_true(!policy::commands::within_bound(u64::MAX, u64::MAX - 1));
+}
+
 fn expect_retirement_id(actual: &String, expected: &str)
     requires actual@ == expected@,
 {
@@ -282,6 +294,17 @@ fn maintenance_paths_keep_partial_originals_and_skip_only_records_without_an_ori
     expect_true(policy::maintenance_path_required(true, true, false));
     expect_true(!policy::maintenance_path_required(true, false, true));
     expect_true(policy::maintenance_path_required(true, true, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_empty_retiring_reports_with_pending_edges_can_skip_path_exclusion() {
+    expect_true(policy::metadata_only_retirement(true, true, true, true, true));
+    expect_true(!policy::metadata_only_retirement(false, true, true, true, true));
+    expect_true(!policy::metadata_only_retirement(true, false, true, true, true));
+    expect_true(!policy::metadata_only_retirement(true, true, false, true, true));
+    expect_true(!policy::metadata_only_retirement(true, true, true, false, true));
+    expect_true(!policy::metadata_only_retirement(true, true, true, true, false));
+    expect_true(!policy::metadata_only_retirement(false, false, false, false, false));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

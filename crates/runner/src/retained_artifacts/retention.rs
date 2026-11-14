@@ -32,6 +32,8 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 
 #[path = "manifest.rs"]
 #[cfg(not(verus_keep_ghost))]
@@ -39,8 +41,7 @@ mod manifest;
 #[cfg(not(verus_keep_ghost))]
 use manifest::Manifest;
 #[path = "partition.rs"]
-#[cfg(not(verus_keep_ghost))]
-mod partition;
+pub(crate) mod partition;
 #[cfg(not(verus_keep_ghost))]
 use partition::Gate;
 #[cfg(not(verus_keep_ghost))]
@@ -123,8 +124,6 @@ pub struct Policy {
     pub max_manifest_nodes: usize,
     #[serde(default = "default_metadata_bytes")]
     pub max_metadata_bytes_per_round: u64,
-    #[serde(default)]
-    historical: BTreeMap<String, super::retention_command::Historical>,
 }
 /// Maintenance targets for resolved terminal originals of an explicitly named
 /// producer. Roots, live capabilities and unknown outcomes still take priority.
@@ -138,26 +137,34 @@ pub struct TerminalLimits {
     pub max_bytes: u64,
 }
 
-#[cfg(not(verus_keep_ghost))]
-fn default_metadata_bytes() -> u64 {
+verus! {
+fn default_metadata_bytes() -> (value: u64)
+    ensures value == 67108864,
+{
     64 * 1024 * 1024
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_output_bytes() -> u64 {
+fn default_output_bytes() -> (value: u64)
+    ensures value == 1073741824,
+{
     1024 * 1024 * 1024
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_metadata_seconds() -> u64 {
+fn default_metadata_seconds() -> (value: u64)
+    ensures value == 86400,
+{
     86400
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_diagnostic_seconds() -> u64 {
+fn default_diagnostic_seconds() -> (value: u64)
+    ensures value == 86400,
+{
     86400
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_manifest_nodes() -> usize {
+fn default_manifest_nodes() -> (value: usize)
+    ensures value == 16384,
+{
     16384
 }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
@@ -2596,7 +2603,9 @@ impl Inventory {
     }
     fn maintain_locked(&self, observed: u64, gate: &Gate) -> Result<Value, String> {
         let began = self.round_began.get().unwrap_or_else(Instant::now);
+        let entered_micros = began.elapsed().as_micros() as u64;
         let mut l = self.load(&gate)?;
+        let loaded_micros = began.elapsed().as_micros() as u64;
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
@@ -2824,6 +2833,7 @@ impl Inventory {
             })
             .collect();
         order.sort_by_key(|(_, priority)| *priority);
+        let prepared_micros = began.elapsed().as_micros() as u64;
         for (id, _) in order {
             if !self.metadata_room()
                 || nodes
@@ -2882,6 +2892,9 @@ impl Inventory {
                     }
                     Err(e) => return Err(e.to_string()),
                     Ok(_) => (),
+                }
+                if !gate.excludes_path(&o.path) {
+                    return Err("retiring report path reappeared; preserve replacement".into());
                 }
                 if identity(&root)? != o.identity {
                     return Err("output identity changed; preserve replacement".into());
@@ -3167,6 +3180,11 @@ impl Inventory {
                             protected.push(json!({"id":id,"reason":"report bytes absent; bounded reference detachment resumes on ordinary entry"}));
                             continue;
                         }
+                        if !gate.excludes_path(&o.path) {
+                            self.save(&l, &gate)?;
+                            protected.push(json!({"id":id,"reason":"report edges detached; final retirement requires path exclusion"}));
+                            continue;
+                        }
                     }
                     let o = Arc::unwrap_or_clone(l.outputs.remove(i).value);
                     let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"observed_return":o.observed_return,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
@@ -3209,7 +3227,9 @@ impl Inventory {
                 Err(error) => protected.push(json!({"id":id,"reason":error})),
             }
         }
+        let disposal_finished_micros = began.elapsed().as_micros() as u64;
         self.save(&l, &gate)?;
+        let saved_micros = began.elapsed().as_micros() as u64;
         let mut measurements = [0u64; 8];
         for output in &l.outputs {
             for (total, value) in measurements.iter_mut().zip(retained_measurements(
@@ -3225,6 +3245,22 @@ impl Inventory {
         for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(measurements) {
             result[*key] = json!(value);
         }
+        // Emit after bounded work: sink IO must not consume its disposal window.
+        // Every checkpoint uses the same owning round's start, including gates.
+        tracing::debug!(
+            event_id = "retention.round.component",
+            host = %self.root.display(),
+            entered_micros,
+            loaded_micros,
+            prepared_micros,
+            disposal_finished_micros,
+            saved_micros,
+            outputs = count,
+            nodes,
+            removed_logical_bytes = bytes,
+            max_millis_per_round = self.policy.max_millis_per_round,
+            "bounded retention component returned"
+        );
         Ok(result)
     }
 
@@ -3289,45 +3325,6 @@ impl Inventory {
         output.phase = "sealing".into();
         output.creation = None;
         Ok(())
-    }
-    pub(super) fn historical(
-        &self,
-        key: &str,
-    ) -> Result<&super::retention_command::Historical, String> {
-        self.policy
-            .historical
-            .get(key)
-            .ok_or("historical owner enrollment is not registered".into())
-    }
-    pub(super) fn release_historical(&self, key: &str, roles: &[String]) -> Result<(), String> {
-        let gate = self.addressed_gate(
-            &[],
-            &[self.historical(key)?.path.clone()],
-            roles,
-            None,
-            false,
-            true,
-        )?;
-        let mut l = self.load(&gate)?;
-        let ids: BTreeSet<_> = l
-            .outputs
-            .iter()
-            .filter(|o| o.outcome["enrollment"] == key)
-            .map(|o| o.id.clone())
-            .collect();
-        if ids.is_empty() {
-            return Err("historical enrollment missing".into());
-        }
-        for role in roles {
-            if l.roots
-                .get(role)
-                .is_some_and(|refs| refs.iter().any(|id| !ids.contains(id)))
-            {
-                return Err("historical root belongs to another output".into());
-            }
-            l.roots.remove(role);
-        }
-        self.save(&l, &gate)
     }
     pub fn acknowledge_delivery(
         &self,
