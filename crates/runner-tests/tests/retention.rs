@@ -6034,9 +6034,7 @@ fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
             .unwrap();
     let mut rounds = Vec::new();
     for _ in 0..4 {
-        let round = inventory(h.path())
-            .maintain_originals(&[report_id.clone()])
-            .unwrap();
+        let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
@@ -6048,7 +6046,14 @@ fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
             break;
         }
     }
-    assert!(!h.path().join(report).exists(), "{rounds:?}");
+    let report_state: Value = serde_json::from_slice(
+        &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !h.path().join(report).exists(),
+        "consumer metadata exclusion: {consumer}; rounds: {rounds:?}; policy: {policy}; report declaration: {report_state}"
+    );
     assert_eq!(
         fs::read(h.path().join(original)).unwrap(),
         b"original still required by its consumer"
