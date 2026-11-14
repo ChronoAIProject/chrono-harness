@@ -496,7 +496,7 @@ pub fn paired_import(args: &Vec<String>, i: usize, end: usize) -> (paired: bool)
     let mut j = 7;
     while j < end
         invariant 7 <= j <= end < args.len(), i + 1 < args.len(),
-            invocation_kind(args[i]@) == InvocationKind::Import,
+            invocation_kind(args[i as int]@) == InvocationKind::Import,
             forall|k: int| 7 <= k < j && args[k]@ == "--extern"@ && k + 1 < end ==>
                 !same_input_name(vstd::utf8::encode_utf8(args[k + 1]@), vstd::utf8::encode_utf8(args[i + 1]@)),
         decreases end - j,
@@ -594,9 +594,9 @@ pub fn parse_verifier_arguments(args: &Vec<String>) -> (parsed: Option<VerifierI
     let outputs = compiler_outputs(args[output].as_str());
     let outputs_match = equal_bytes(args[emit].as_str().as_bytes(), outputs.as_slice());
     proof {
-        vstd::utf8::encode_utf8_decode_utf8(args[emit]@);
+        vstd::utf8::encode_utf8_decode_utf8(args[emit as int]@);
         vstd::utf8::encode_utf8_decode_utf8(
-            "--emit=link="@ + args[output]@ + ",dep-info="@ + args[output]@ + ".d"@);
+            "--emit=link="@ + args[output as int]@ + ",dep-info="@ + args[output as int]@ + ".d"@);
     }
     if !equal_text(args[0].as_str(), "--crate-type=lib")
         || !equal_text(args[1].as_str(), "--no-cheating")
