@@ -281,6 +281,27 @@ fn build_attempt(
         .prefix("build-")
         .tempdir_in(parent)
         .map_err(|e| e.to_string())?;
+    // 子进程原流属于同一目录生产者，启动前建立保护，完成后只封存一次。
+    let early_publication = if dependency_consumer.is_some() {
+        let publication = retention::begin_adopted(
+            root,
+            "check-original",
+            temporary.path(),
+            serde_json::json!({"owner":"runner dependency producer","status":"in-progress"}),
+        )?;
+        if let Some(publication) = &publication {
+            let relative = temporary
+                .path()
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("non UTF-8 original directory")?;
+            publication.protect_consumer(&format!("runner-dependencies:{relative}"))?;
+        }
+        publication
+    } else {
+        None
+    };
     let result = if let Some(consumer) = dependency_consumer {
         dependencies::run(
             root,
@@ -290,6 +311,7 @@ fn build_attempt(
             stdout,
             stderr,
             temporary.path(),
+            early_publication.as_ref(),
         )
     } else {
         run_attempt(
@@ -326,9 +348,13 @@ fn build_attempt(
             let outcome = serde_json::json!({"owner":"registered build caller", "consumer":consumer,
                 "status":if result.is_ok() { if dependency_consumer.is_some() {"observed"} else {"recovered"} } else {"failed"},
                 "retention":"release after diagnosis/acceptance; rebuildable originals reclaimed within seven days after consumers end"});
-            let declaration = if let Some(publication) =
-                retention::begin_adopted(root, "check-original", &directory, outcome.clone())?
-            {
+            let publication = match early_publication {
+                Some(publication) => Some(publication),
+                None => {
+                    retention::begin_adopted(root, "check-original", &directory, outcome.clone())?
+                }
+            };
+            let declaration = if let Some(publication) = publication {
                 let original = publication.protect_consumer(&consumer)?;
                 let declaration = retention::Consumer {
                     schema: "chrono-retention-consumer/v1".into(),

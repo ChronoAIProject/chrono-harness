@@ -750,3 +750,140 @@ fn scheduling_binds_identity_and_collection_reconstructs_without_processes() {
     let bad = serde_json::from_value(json!({"max_running":2,"resources":[],"claims":{}})).unwrap();
     assert!(legacy.with_scheduling(Some(bad)).is_err());
 }
+
+/// Mocked compiler and parent observations exercise the actual selected-plan consumer.
+#[test]
+fn nested_child_result_is_required_even_when_the_parent_succeeds() {
+    use chrono_harness::{nested_proof, verified_verifier as verifier};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::create_dir(root.join("component")).unwrap();
+    fs::copy(TOOL, root.join("component/verus")).unwrap();
+    fs::write(root.join("library.fixture"), b"compiled fixture library").unwrap();
+    let args: Vec<String> = [
+        "--crate-type=lib",
+        "--no-cheating",
+        "--no-external-by-default",
+        "--num-threads",
+        "2",
+        "--output-json",
+        "--compile",
+        "--emit=link=out,dep-info=out.d",
+        "root.rs",
+        "-o",
+        "out",
+        "-Zchecksum-hash-algorithm=sha256",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    let declaration = nested_proof::Declaration {
+        tool: "routes-helper".into(),
+        executable: "$COMPONENT/verus".into(),
+        argv: args.clone(),
+        output_contract: Some(verifier::OutputContract {
+            version: "fixture".into(),
+            commit: "fixture".into(),
+        }),
+        timeout_seconds: 10,
+        output_limit_bytes: 4096,
+    };
+    let mut parent = method("nested", vec!["observe".into()]);
+    parent.nested_proof = Some(declaration.clone());
+    let plans = BTreeMap::from([("test:nested".into(), p(&["nested"]))]);
+    let methods = BTreeMap::from([("nested".into(), vec![parent])]);
+    let exec = BTreeMap::from([("test:nested".into(), "nested".into())]);
+    let plan = prepare(
+        root,
+        json!({}),
+        &plans.keys().cloned().collect(),
+        &plans,
+        &methods,
+        &exec,
+        &declarations(),
+        BTreeMap::new(),
+        &BTreeMap::new(),
+    )
+    .unwrap();
+    let op = &plan.operations[0];
+    let tool = &plan.tools["routes-helper"];
+    let run = |program: &std::path::Path, args| {
+        run_process_observed(
+            root,
+            &CommandSpec {
+                program: program.to_str().unwrap().into(),
+                args,
+                env: plan.environment.clone(),
+                timeout_seconds: 10,
+                output_limit_bytes: 4096,
+            },
+            &[],
+            &tool.sha256,
+        )
+        .unwrap()
+    };
+    let child = run(&root.join("component/verus"), args.clone());
+    let original = nested_proof::Original::capture(
+        root,
+        "nested",
+        declaration.clone(),
+        args,
+        root.join("component/verus").to_str().unwrap().into(),
+        tool.sha256.clone(),
+        "component".into(),
+        child,
+    );
+    let mut receipt = Receipt::new(&plan, op, run(&tool.path, op.method.argv.clone())).unwrap();
+    assert_eq!(receipt.process.exit_code, 0);
+    assert!(
+        compare(&plan, op, Some(&receipt))
+            .unwrap_err()
+            .contains("missing original reference")
+    );
+    let seal = |r: &mut Receipt| {
+        let mut value = serde_json::to_value(&*r).unwrap();
+        value.as_object_mut().unwrap().remove("digest");
+        r.digest = wire::digest(&value).unwrap();
+    };
+    receipt.nested_proof = Some(Ok(original));
+    seal(&mut receipt);
+    compare(&plan, op, Some(&receipt)).unwrap();
+    let projected = chrono_judge_routes::proof_invocations(&plan.operations);
+    assert_eq!(projected.len(), 1);
+    assert_eq!(projected[0].argv, &declaration.argv);
+    for mutation in [
+        "failed",
+        "missing",
+        "producer",
+        "root",
+        "output",
+        "parameter",
+    ] {
+        let mut changed = receipt.clone();
+        if mutation == "missing" {
+            changed.nested_proof = None;
+        } else {
+            let child = changed.nested_proof.as_mut().unwrap().as_mut().unwrap();
+            match mutation {
+                "failed" => child.process.exit_code = 1,
+                "producer" => child.declaration.tool = "other".into(),
+                "root" => {
+                    child.resolved_argv[8] = "other".into();
+                    child.process.argv[9] = "other".into();
+                }
+                "output" => child.compiler_artifact = None,
+                "parameter" => {
+                    child.resolved_argv[2] = "--external-by-default".into();
+                    child.process.argv[3] = "--external-by-default".into();
+                }
+                _ => unreachable!(),
+            }
+        }
+        seal(&mut changed);
+        let error = compare(&plan, op, Some(&changed)).unwrap_err();
+        assert!(
+            !error.starts_with("E_RECEIPT_MISMATCH"),
+            "{mutation}: {error}"
+        );
+    }
+}

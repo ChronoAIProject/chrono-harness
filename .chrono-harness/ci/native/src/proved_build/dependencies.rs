@@ -504,6 +504,7 @@ pub fn execute_consumer(
     environment: &bindings::Environment,
     proof: Option<&chrono_harness::nested_proof::Declaration>,
     component_directory: &str,
+    publication: Option<&retention::Publication>,
     stdout: &mut (impl Write + Send),
     stderr: &mut (impl Write + Send),
 ) -> Result<(), BuildFailure> {
@@ -517,7 +518,10 @@ pub fn execute_consumer(
     };
     let executable = profile::path(root, &consumer.executable, b".chrono-harness/state/")?;
     if let Some(proof) = proof {
-        chrono_harness::verified_verifier::nested::validate_resolution(&proof.argv, &method.argv)?;
+        chrono_harness::verified_verifier::nested::validate_resolution(
+            &proof.component_arguments(component_directory),
+            &method.argv,
+        )?;
         let environment = environment
             .iter()
             .map(|(name, value)| {
@@ -552,7 +556,7 @@ pub fn execute_consumer(
                 stdout: &directory.join("nested.stdout"),
                 stderr: &directory.join("nested.stderr"),
                 launch: &directory.join("nested.launch.json"),
-                publication: None,
+                publication,
             },
         )?;
         stdout
@@ -873,6 +877,7 @@ pub(super) fn run(
     stdout: &mut (impl Write + Send),
     stderr: &mut (impl Write + Send),
     directory: &Path,
+    publication: Option<&retention::Publication>,
 ) -> Result<(), BuildFailure> {
     let raw = profile::read(root, declaration, b".chrono-harness/ci/")?;
     let build: BuildConfig =
@@ -1158,6 +1163,7 @@ pub(super) fn run(
         &environment,
         proof,
         &observation.component.directory,
+        publication,
         stdout,
         stderr,
     )

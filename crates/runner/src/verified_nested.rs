@@ -11,12 +11,12 @@ pub open spec fn option_resolved(
     declared: Seq<String>, resolved: Seq<String>,
     before: &super::InvocationOption, after: &super::InvocationOption,
 ) -> bool {
-    before.kind == after.kind && match before.kind {
-        InvocationKind::Extern | InvocationKind::Import =>
-            super::same_input_name(vstd::utf8::encode_utf8(declared[before.value as int]@),
-                vstd::utf8::encode_utf8(resolved[after.value as int]@)),
-        _ => declared[before.value as int]@ == resolved[after.value as int]@,
-    }
+    before.kind == after.kind && (
+        declared[before.value as int]@ == resolved[after.value as int]@
+        || before.kind == InvocationKind::Extern
+            && super::invocation_identifier(vstd::utf8::encode_utf8(declared[before.value as int]@))
+            && super::same_input_name(vstd::utf8::encode_utf8(declared[before.value as int]@),
+                vstd::utf8::encode_utf8(resolved[after.value as int]@)))
 }
 
 fn resolved_option(
@@ -27,11 +27,13 @@ fn resolved_option(
     ensures same == option_resolved(declared@, resolved@, before, after),
 {
     if !super::same_invocation_kind(&before.kind, &after.kind) { return false; }
+    if equal_text(declared[before.value].as_str(), resolved[after.value].as_str()) { return true; }
     match before.kind {
-        InvocationKind::Extern | InvocationKind::Import =>
-            super::same_invocation_input_name(declared[before.value].as_str().as_bytes(),
-                resolved[after.value].as_str().as_bytes()),
-        _ => equal_text(declared[before.value].as_str(), resolved[after.value].as_str()),
+        InvocationKind::Extern =>
+            super::valid_invocation_identifier(declared[before.value].as_str().as_bytes())
+                && super::same_invocation_input_name(declared[before.value].as_str().as_bytes(),
+                    resolved[after.value].as_str().as_bytes()),
+        _ => false,
     }
 }
 

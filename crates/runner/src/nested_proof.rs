@@ -16,6 +16,15 @@ pub struct Declaration {
     pub output_limit_bytes: usize,
 }
 
+impl Declaration {
+    pub fn component_arguments(&self, directory: &str) -> Vec<String> {
+        self.argv
+            .iter()
+            .map(|s| s.replace("$COMPONENT", directory))
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Original {
@@ -27,9 +36,31 @@ pub struct Original {
     pub executable: String,
     pub executable_sha256: String,
     pub component_directory: String,
+    #[serde(
+        serialize_with = "serialize_process",
+        deserialize_with = "deserialize_process"
+    )]
     pub process: ProcessResult,
     pub compiler_dependency: Option<Result<Vec<u8>, String>>,
     pub compiler_artifact: Option<Result<verifier::CompiledArtifact, String>>,
+}
+
+// 复用现役无损进程编码；双流各保存一次，展开时仍核完整原字节及摘要。
+fn serialize_process<S: serde::Serializer>(
+    process: &ProcessResult,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    let value = serde_json::to_value(process).map_err(serde::ser::Error::custom)?;
+    crate::full::compact_process(&value)
+        .map_err(serde::ser::Error::custom)?
+        .serialize(serializer)
+}
+fn deserialize_process<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<ProcessResult, D::Error> {
+    let value = serde_json::Value::deserialize(deserializer)?;
+    let expanded = crate::full::expand_process(&value).map_err(serde::de::Error::custom)?;
+    serde_json::from_value(expanded).map_err(serde::de::Error::custom)
 }
 
 pub struct CompilerIo<'a>(pub &'a Path);
@@ -138,7 +169,10 @@ impl Original {
                     .into(),
             );
         }
-        verifier::nested::validate_resolution(&selected.argv, &self.resolved_argv)
+        verifier::nested::validate_resolution(
+            &selected.component_arguments(&self.component_directory),
+            &self.resolved_argv,
+        )
     }
 }
 

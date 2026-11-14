@@ -7,7 +7,7 @@ AT 将证明入口迁移到现有 routes／projects 的直接 Verus 操作。nat
 所选计划直接启动 Verus，原
 Receipt 同时保留真实 argv、stdout／stderr、退出、编译产物和 dep-info。judge-ci 的
 本地消费及离线 collection 继续使用原 `bind_operation_output` 和 `SourceAdmission`，
-没有根据 Cargo artifact、自报子记录或包装器退出补造证明的方法。
+没有根据 Cargo artifact 或包装器退出补造证明的方法。
 
 native 计划先运行原未过滤行为操作，由它生产专属测试与 mock 可执行文件，再运行
 这些直接证明；最终计划状态仍要求全部操作成功。原 native Cargo-Verus 整目标动作以 `-cargo` 操作保留在同一计划，参数、严格选项、
@@ -28,7 +28,7 @@ Verus 参数。生产者在启动前从声明和当前依赖实例解析完整�
 核原字节和声明，保存原子证明进程、编译产物及 dep-info；本地和离线汇总消费同一
 原回执。缺失、歧义、错操作、错根、错输出、参数或流漂移及子证明失败都拒绝。
 
-参数关系的同源 Verus 判法只允许 extern／import 输入位置在保留原名字后解析，
+参数关系的同源 Verus 判法只允许无路径 extern 在保留原名字后解析，显式 extern／import 路径保持原值；动态组件占位符由同一声明展开，
 以及追加实际依赖搜索；根、输出、严格前缀和其他选项保持原值。这不授予动态依赖、
 宏、VIR、编译器上下文或 SDK 来源资格。完整 `SourceAdmission`、`root_planned`
 和 source-only 输入域保持；现役 runner 根仍须真实完成严格证明，存在输入资格缺口
@@ -41,6 +41,11 @@ retention.rs 与 partition.rs 的实际状态维护同时保留整个 runner 库
 也不借局部辅助根声称整文件已证明。独立预期保留严格参数、整 crate、缺失／歧义／
 错绑定、原失败和输入域拒绝；实际成本由本次正式操作原件报告，完整成本仍未知。
 当前验收状态见实际报告，不把声明、编译或 mock 成功解释为全部 SPEC 已完成。
+
+子流和启动记录由已有目录 Publication 在启动前持有，结束并 join 后封存同一目录，
+不再分别认领目录及其子文件。原件复用 `chrono-retained-process/v2`，保留一次无损双流；
+实际失败曾因重复字节数组与文本超过固定读取上限，且子流登记使外层封存冲突。
+原失败保留，读取上限和业务输出预算不变。修复的验收仍要求真实生产者封存和原结果消费。
 
 无路径 extern 使用 rustc 的 `-L all=`，同时搜索直接和传递依赖；既有
 `-L dependency=` 仍只用于传递依赖。两种搜索都不授予来源资格。严格 native

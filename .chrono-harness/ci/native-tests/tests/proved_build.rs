@@ -1051,6 +1051,7 @@ fn strict_consumer_command_boundary_preserves_exact_arguments_streams_and_exit()
             &f.environment,
             None,
             "",
+            None,
             &mut stdout,
             &mut stderr,
         );
@@ -1071,12 +1072,24 @@ fn strict_consumer_command_boundary_preserves_exact_arguments_streams_and_exit()
 
 #[test]
 fn selected_nested_proof_consumes_the_original_child_even_if_a_parent_would_succeed() {
-    use chrono_harness::{nested_proof, verified_verifier as verifier};
+    use chrono_harness::{
+        nested_proof, retained_artifacts::retention, verified_verifier as verifier,
+    };
     use std::collections::BTreeMap;
+    if !isolated_capability::isolated_capability_test(
+        "selected_nested_proof_consumes_the_original_child_even_if_a_parent_would_succeed",
+    ) {
+        return;
+    }
     let mut f = Fixture::new();
     f.environment
         .insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
     f.environment.insert("RUSTC_BOOTSTRAP".into(), "1".into());
+    write(&f.root.join(".chrono-harness/retention.json"), &serde_json::to_vec(&json!({
+        "schema":"chrono-output-retention/v2", "producers":{"check-original":[".chrono-harness/state/"]},
+        "keep_seconds":0, "max_related_outputs":512, "max_summaries":128, "max_nodes_per_round":256,
+        "max_bytes_per_round":67108864, "max_millis_per_round":25
+    })).unwrap());
     let executable = ".chrono-harness/state/mock-component/verus";
     let destination = f.root.join(executable);
     fs::create_dir_all(destination.parent().unwrap()).unwrap();
@@ -1124,6 +1137,14 @@ fn selected_nested_proof_consumes_the_original_child_even_if_a_parent_would_succ
         if calls.exists() {
             fs::remove_file(calls).unwrap();
         }
+        let publication = retention::begin_adopted(
+            &f.root,
+            "check-original",
+            &directory,
+            json!({"status":"in-progress"}),
+        )
+        .unwrap()
+        .unwrap();
         let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
         let result = proved_build::dependencies::execute_consumer(
             &f.root,
@@ -1135,6 +1156,7 @@ fn selected_nested_proof_consumes_the_original_child_even_if_a_parent_would_succ
             &f.environment,
             Some(&declaration),
             ".chrono-harness/state/mock-component",
+            Some(&publication),
             &mut stdout,
             &mut stderr,
         );
@@ -1206,7 +1228,75 @@ fn selected_nested_proof_consumes_the_original_child_even_if_a_parent_would_succ
                 .is_err()
             );
         }
-        write(&directory.join("nested-proof-original.json"), b"{}");
+        let original_path = directory.join("nested-proof-original.json");
+        let original_bytes = fs::read(&original_path).unwrap();
+        let wire: Value = serde_json::from_slice(&original_bytes).unwrap();
+        assert_eq!(wire["process"]["encoding"], "chrono-retained-process/v2");
+        assert!(wire["process"].get("stderr_bytes").is_none());
+        write(&original_path, b"{}");
         assert!(nested_proof::read_original(&f.root, "strict.fixture", &stdout, 1048576).is_err());
+        write(&original_path, &original_bytes);
+        publication.complete(json!({"status":"observed"})).unwrap();
+        let tree = directory.strip_prefix(&f.root).unwrap().to_str().unwrap();
+        let member = original_path
+            .strip_prefix(&f.root)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(
+            retention::Inventory::adopted(&f.root)
+                .unwrap()
+                .unwrap()
+                .published_tree_member(
+                    "check-original",
+                    tree,
+                    member,
+                    &chrono_harness::sha256(&original_bytes),
+                    original_bytes.len() as u64,
+                )
+                .unwrap()
+        );
+    }
+}
+
+#[test]
+fn selected_nested_proof_cannot_substitute_an_explicit_compiler_input() {
+    let strict = [
+        "--crate-type=lib",
+        "--no-cheating",
+        "--no-external-by-default",
+        "--num-threads",
+        "2",
+        "--output-json",
+        "--compile",
+    ];
+    for option in ["--extern", "--import"] {
+        let mut declared: Vec<String> = strict.into_iter().map(str::to_owned).collect();
+        declared.extend(["--extern".into(), "producer=expected".into()]);
+        if option == "--import" {
+            declared.extend(["--import".into(), "producer=expected".into()]);
+        }
+        let changed = declared.len() - 1;
+        declared.extend(
+            [
+                "--emit=link=out,dep-info=out.d",
+                "root",
+                "-o",
+                "out",
+                "-Zchecksum-hash-algorithm=sha256",
+            ]
+            .map(str::to_owned),
+        );
+        assert!(
+            chrono_harness::verified_verifier::nested::validate_resolution(&declared, &declared)
+                .is_ok()
+        );
+        let mut resolved = declared.clone();
+        resolved[changed] = "producer=different".into();
+        assert!(
+            chrono_harness::verified_verifier::nested::validate_resolution(&declared, &resolved)
+                .is_err(),
+            "{option}"
+        );
     }
 }
