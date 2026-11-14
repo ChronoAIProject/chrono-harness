@@ -434,62 +434,6 @@
             "runner-dependencies",
             "prepare"
           ]
-        },
-        "verify_generation_direct": {
-          "operation": "verify.ci-generation-dependency.runner",
-          "tool": "verus",
-          "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--edition=2024",
-            "--crate-name",
-            "chrono_harness",
-            "-Zunstable-options",
-            "--env-set",
-            "CARGO_PKG_VERSION=0.1.0",
-            "--extern",
-            "verus_builtin_macros=.chrono-harness/bin/verus/libverus_builtin_macros.dylib",
-            "--extern",
-            "chrono_identifiers",
-            "--extern",
-            "serde_json",
-            "--extern",
-            "serde",
-            "--extern",
-            "serde_jcs",
-            "--extern",
-            "miniz_oxide",
-            "--extern",
-            "tempfile",
-            "--extern",
-            "sha2",
-            "--extern",
-            "libc",
-            "--extern",
-            "sha1",
-            "--extern",
-            "chrono_diagnostics",
-            "--extern",
-            "tracing",
-            "--export",
-            ".chrono-harness/state/verify.ci-generation-dependency.runner.vir",
-            "-L",
-            "all=.chrono-harness/cache/host-bootstrap-native/target/debug/deps",
-            "--emit=link=.chrono-harness/state/verify.ci-generation-dependency.runner.rlib,dep-info=.chrono-harness/state/verify.ci-generation-dependency.runner.rlib.d",
-            "crates/runner/src/lib.rs",
-            "-o",
-            ".chrono-harness/state/verify.ci-generation-dependency.runner.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
         }
       },
       "language": "rust"
@@ -765,41 +709,6 @@
             "runner-dependencies",
             "investigate.verus-tool-contract.reject"
           ]
-        },
-        "verify_generation_direct": {
-          "operation": "verify.ci-generation-dependency.runner-tests",
-          "tool": "verus",
-          "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--edition=2024",
-            "--crate-name",
-            "runner_json_adapters",
-            "--extern",
-            "chrono_harness=.chrono-harness/state/verify.ci-generation-dependency.runner.rlib",
-            "--extern",
-            "serde_json",
-            "--extern",
-            "verus_builtin_macros=.chrono-harness/bin/verus/libverus_builtin_macros.dylib",
-            "--import",
-            "chrono_harness=.chrono-harness/state/verify.ci-generation-dependency.runner.vir",
-            "-L",
-            "all=.chrono-harness/cache/host-bootstrap-native/target/debug/deps",
-            "--emit=link=.chrono-harness/state/verify.ci-generation-dependency.runner-tests.rlib,dep-info=.chrono-harness/state/verify.ci-generation-dependency.runner-tests.rlib.d",
-            "crates/runner-tests/tests/json_adapters.rs",
-            "-o",
-            ".chrono-harness/state/verify.ci-generation-dependency.runner-tests.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
-          ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
-          }
         }
       },
       "language": "rust",

@@ -3,8 +3,8 @@
 ## CI generation 的现役证明入口
 
 AT 将证明入口迁移到现有 routes／projects 的直接 Verus 操作。native 库、native
-主程序和 proved_build 测试根分别有唯一操作；runner 库与 JSON 独立预期也有具名
-直接操作。FILEMAP 的现役源码根指向这些实际方法，所选计划直接启动 Verus，原
+主程序和 proved_build 测试根分别有直接操作。FILEMAP 的这些源码根指向实际方法，
+所选计划直接启动 Verus，原
 Receipt 同时保留真实 argv、stdout／stderr、退出、编译产物和 dep-info。judge-ci 的
 本地消费及离线 collection 继续使用原 `bind_operation_output` 和 `SourceAdmission`，
 没有根据 Cargo artifact、自报子记录或包装器退出补造证明的方法。
@@ -21,11 +21,11 @@ harness 及原 mock 可执行文件的环境输入，不通过 cfg 隐藏测试�
 规划及记录原调用，扩展上下文、extern 搜索、VIR、宏和传递输入尚未具备完整资格时，
 原 source-only 判法仍拒绝授予 ProofAdmission。这些缺口不因迁移而消失。
 
-直接 runner 操作当前读取 native bootstrap 的依赖目录；原 JSON 调查读取
-runner Cargo 实例及其匹配的动态组件。二者不是同一个编译上下文，不能互相替代
-来源证明。直接调用尚未完成原 JSON 生产链的迁移、完整来源资格或成功消费；
-不得用它的计划声明宣称上述义务已完成。retention.rs 与 partition.rs 的实际
-状态维护同时登记整个 runner 库根，原 release 辅助根只证明其自身覆盖的逻辑。
+runner 与 JSON 独立预期继续使用现有动态组件生产者。native bootstrap 的依赖
+实例和标准 vstd 不提供该生产者的 JSON 合同，不能替代它的来源证明；不保留
+不相容的直接 runner 操作。该链的嵌套计划、真实结果消费和完整来源资格仍未接通。
+retention.rs 与 partition.rs 的实际状态维护同时保留整个 runner 库根义务，
+原 release 辅助根只证明其自身覆盖的逻辑。
 
 无路径 extern 使用 rustc 的 `-L all=`，同时搜索直接和传递依赖；既有
 `-L dependency=` 仍只用于传递依赖。两种搜索都不授予来源资格。严格 native
