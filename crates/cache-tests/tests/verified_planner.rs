@@ -48,11 +48,176 @@ struct RecoveryContentObservation {
     status: String,
 }
 
-type ArtifactPlanTrace = Vec<(u8, usize, String, String)>;
+type RecoveryTrace = Vec<(u8, usize, String, String)>;
 
-fn artifact_plan_validate(mut trace: ArtifactPlanTrace, path: &str,
+fn source_refresh_apply(mut trace: RecoveryTrace, id: &String, index: usize,
+    stop: usize, raw_error: &str) -> (out: (RecoveryTrace, Result<(), String>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 0, out.0@.last().1 == index,
+        out.0@.last().2@ == id@, out.0@.last().3@ == ""@,
+        if index == stop { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+        else { out.1 == Ok::<(), String>(()) },
+{
+    let ghost previous = trace@;
+    trace.push((0, index, id.clone(), "".to_string()));
+    assert(trace@.drop_last() =~= previous);
+    let result = if index == stop { Err(raw_error.to_string()) } else { Ok(()) };
+    (trace, result)
+}
+
+fn source_refresh_complete(mut trace: RecoveryTrace, id: &String, status: &'static str)
+    -> (out: RecoveryTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == 1, out@.last().1 == trace@.len() / 2,
+        out@.last().2@ == id@, out@.last().3@ == status@,
+{
+    let index = trace.len() / 2;
+    let ghost previous = trace@;
+    trace.push((1, index, id.clone(), status.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn source_refresh_case(ids: &[&str], stop: usize, raw_error: &str)
+    requires ids.len() <= 3, stop <= ids.len(),
+{
+    let mut rows = Vec::<(String, usize)>::new();
+    let mut n = 0;
+    while n < ids.len()
+        invariant n <= ids.len(), rows.len() == n,
+            forall|j: int| 0 <= j < n ==> (#[trigger] rows@[j]).0@ == ids@[j]@
+                && rows@[j].1 == j,
+        decreases ids.len() - n,
+    {
+        rows.push((ids[n].to_string(), n));
+        n += 1;
+    }
+    let ghost entries = rows@;
+    let apply = |trace, id: &String, index: usize|
+        -> (out: (RecoveryTrace, Result<(), String>))
+        ensures source_refresh_apply.ensures((trace, id, index, stop, raw_error), out),
+    { source_refresh_apply(trace, id, index, stop, raw_error) };
+    let initial = RecoveryTrace::new();
+    let ghost source = initial;
+    let (trace, result) = policy::run_recovery_refreshes(initial, rows, &apply, &source_refresh_complete);
+    proof {
+        let states = choose|states: Seq<RecoveryTrace>|
+            #[trigger] policy::recovery_refresh_prefix(entries, states, source,
+                &apply, &source_refresh_complete)
+            && match result {
+                Ok(()) => states.len() == entries.len() + 1 && trace == states.last(),
+                Err(error) => states.len() <= entries.len()
+                    && policy::recovery_refresh_step(states.last(), entries[states.len() - 1],
+                        &apply, &source_refresh_complete, (trace, Err::<(), String>(error))),
+            };
+        assert forall|i: int| 0 <= i < states.len() - 1 implies
+            states[i + 1]@.len() == states[i]@.len() + 2 && i != stop
+            && states[i + 1]@.drop_last().drop_last() == #[trigger] states[i]@
+            && states[i + 1]@[states[i]@.len() as int].0 == 0
+            && states[i + 1]@[states[i]@.len() as int].1 == i
+            && states[i + 1]@[states[i]@.len() as int].2@ == ids@[i]@
+            && states[i + 1]@[states[i]@.len() as int + 1].0 == 1
+            && states[i + 1]@[states[i]@.len() as int + 1].1 == (states[i]@.len() + 1) / 2
+            && states[i + 1]@[states[i]@.len() as int + 1].2@ == ids@[i]@
+            && states[i + 1]@[states[i]@.len() as int + 1].3@ == "source-times-refreshed"@ by {
+            assert(policy::recovery_refresh_step(states[i], entries[i], &apply,
+                &source_refresh_complete, (states[i + 1], Ok::<(), String>(()))));
+            let observed = choose|observed: RecoveryTrace|
+                #[trigger] apply.ensures((states[i], &entries[i].0, entries[i].1),
+                    (observed, Ok::<(), String>(())))
+                && source_refresh_complete.ensures((observed, &entries[i].0,
+                    "source-times-refreshed"), states[i + 1]);
+        }
+        let count = states.len() - 1;
+        if count > 0 { assert(states[1]@.len() == 2); }
+        if count > 1 { assert(states[2]@.len() == 4); }
+        if count > 2 { assert(states[3]@.len() == 6); }
+        assert(states.last()@.len() == 2 * count);
+        if count > stop {
+            assert(stop < count);
+            assert(false);
+        }
+        assert(count <= stop);
+        match &result {
+            Ok(()) => {
+                assert(count == entries.len());
+                assert(stop == ids.len());
+                assert(trace@.len() == 2 * stop);
+            },
+            Err(error) => {
+                if count < stop { assert(false); }
+                assert(count == stop && stop < ids.len());
+                assert(trace@.len() == 2 * stop + 1);
+                assert(trace@.drop_last() == states.last()@);
+                assert(trace@.last().0 == 0 && trace@.last().1 == stop);
+                assert(trace@.last().2@ == ids@[stop as int]@);
+                assert(error@ == raw_error@);
+            },
+        }
+        assert forall|j: int| 0 <= j < stop implies
+            #[trigger] trace@[2 * j].0 == 0 && trace@[2 * j].1 == j
+            && trace@[2 * j].2@ == ids@[j]@
+            && trace@[2 * j + 1].0 == 1 && trace@[2 * j + 1].1 == j
+            && trace@[2 * j + 1].2@ == ids@[j]@
+            && trace@[2 * j + 1].3@ == "source-times-refreshed"@ by {
+            assert(states[j]@.len() == 2 * j);
+            assert(states[j + 1]@[2 * j].0 == 0);
+            assert(states[j + 1]@[2 * j + 1].0 == 1);
+            if j + 2 <= count {
+                assert(states[j + 2]@.drop_last().drop_last() == states[j + 1]@);
+            }
+            if j + 3 <= count {
+                assert(states[j + 3]@.drop_last().drop_last() == states[j + 2]@);
+            }
+        }
+    }
+    expect_cache_true(trace.len() == 2 * stop + if stop < ids.len() { 1 } else { 0 });
+    if stop == ids.len() {
+        expect_cache_true(result.is_ok());
+    } else {
+        match result {
+            Err(error) => expect_restore_text(error.as_str(), raw_error),
+            Ok(()) => expect_cache_true(false),
+        }
+        expect_cache_true(trace[2 * stop].0 == 0 && trace[2 * stop].1 == stop);
+        expect_restore_text(trace[2 * stop].2.as_str(), ids[stop]);
+    }
+    let mut i = 0;
+    while i < stop
+        invariant i <= stop, stop <= 3, stop <= ids.len(), 2 * stop <= trace.len(),
+            forall|j: int| 0 <= j < stop ==> #[trigger] trace@[2 * j].0 == 0
+                && trace@[2 * j].1 == j && trace@[2 * j].2@ == ids@[j]@
+                && trace@[2 * j + 1].0 == 1 && trace@[2 * j + 1].1 == j
+                && trace@[2 * j + 1].2@ == ids@[j]@
+                && trace@[2 * j + 1].3@ == "source-times-refreshed"@,
+        decreases stop - i,
+    {
+        expect_cache_true(trace[2 * i].0 == 0 && trace[2 * i].1 == i);
+        expect_cache_true(trace[2 * i + 1].0 == 1 && trace[2 * i + 1].1 == i);
+        expect_restore_text(trace[2 * i].2.as_str(), ids[i]);
+        expect_restore_text(trace[2 * i + 1].2.as_str(), ids[i]);
+        expect_restore_text(trace[2 * i + 1].3.as_str(), "source-times-refreshed");
+        i += 1;
+    }
+}
+
+#[test]
+fn recovery_source_refresh_preserves_consumption_order_keys_and_success_status() {
+    source_refresh_case(&[], 0, "unused");
+    source_refresh_case(&[""], 1, "unused");
+    source_refresh_case(&["id/λ\0\n", "", "id/λ\0\n"], 3, "unused");
+}
+
+#[test]
+fn recovery_source_refresh_preserves_first_error_and_skips_success_and_later_calls() {
+    source_refresh_case(&["first", "later", "last"], 0, "");
+    source_refresh_case(&["first", "id/λ\0\n", "later"], 1, "error/λ\0\n");
+    source_refresh_case(&["first", "second", ""], 2, "last error");
+}
+
+fn artifact_plan_validate(mut trace: RecoveryTrace, path: &str,
     fail_at: usize, io_error: bool, raw_error: &str)
-    -> (out: (ArtifactPlanTrace, Result<bool, String>))
+    -> (out: (RecoveryTrace, Result<bool, String>))
     ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
         out.0@.last().0 == 0, out.0@.last().1 == trace@.len() / 2,
         out.0@.last().2@ == path@, out.0@.last().3@ == ""@,
@@ -71,8 +236,8 @@ fn artifact_plan_validate(mut trace: ArtifactPlanTrace, path: &str,
     (trace, result)
 }
 
-fn artifact_plan_append(mut trace: ArtifactPlanTrace, index: usize,
-    path: &str, status: &'static str) -> (out: ArtifactPlanTrace)
+fn artifact_plan_append(mut trace: RecoveryTrace, index: usize,
+    path: &str, status: &'static str) -> (out: RecoveryTrace)
     ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
         out@.last().0 == 1, out@.last().1 == index,
         out@.last().2@ == path@, out@.last().3@ == status@,
@@ -89,15 +254,15 @@ fn recovery_artifact_plan_case(paths: &[Option<&str>], stop: usize,
         forall|i: int| 0 <= i < stop ==> paths[i] is Some,
 {
     let validate = |trace, path: &str|
-        -> (out: (ArtifactPlanTrace, Result<bool, String>))
+        -> (out: (RecoveryTrace, Result<bool, String>))
         ensures artifact_plan_validate.ensures((trace, path, stop, io_error, raw_error), out),
     { artifact_plan_validate(trace, path, stop, io_error, raw_error) };
-    let initial = ArtifactPlanTrace::new();
+    let initial = RecoveryTrace::new();
     let ghost source = initial;
     let (trace, result) = policy::collect_recovery_artifacts(initial, Some(paths),
         &validate, &artifact_plan_append);
     proof {
-        let states = choose|states: Seq<ArtifactPlanTrace>|
+        let states = choose|states: Seq<RecoveryTrace>|
             #[trigger] policy::recovery_artifact_prefix(paths@, states, source,
                 &validate, &artifact_plan_append)
             && match result {
@@ -122,7 +287,7 @@ fn recovery_artifact_plan_case(paths: &[Option<&str>], stop: usize,
             assert(policy::recovery_artifact_step(states[i], i as usize, paths@[i],
                 &validate, &artifact_plan_append, (states[i + 1], Ok::<(), String>(()))));
             let path = paths@[i].unwrap();
-            let (observed, valid) = choose|observed: ArtifactPlanTrace, valid: Result<bool, String>|
+            let (observed, valid) = choose|observed: RecoveryTrace, valid: Result<bool, String>|
                 #[trigger] validate.ensures((states[i], path), (observed, valid))
                 && valid == Ok::<bool, String>(true)
                 && artifact_plan_append.ensures((observed, i as usize, path, "pending"), states[i + 1]);
@@ -240,7 +405,7 @@ fn recovery_artifact_collection_preserves_first_io_error_without_appending_it() 
 #[test]
 fn recovery_artifact_collection_rejects_missing_object_without_callbacks() {
     let validate = |trace, path: &str| artifact_plan_validate(trace, path, 0, true, "unused");
-    let (trace, result) = policy::collect_recovery_artifacts(ArtifactPlanTrace::new(), None,
+    let (trace, result) = policy::collect_recovery_artifacts(RecoveryTrace::new(), None,
         &validate, &artifact_plan_append);
     expect_cache_true(trace.is_empty());
     match result {
