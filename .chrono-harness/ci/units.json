@@ -560,7 +560,7 @@
         },
         "unit_release-build": {
           "need": "Run the current candidate canonical check and its registered preparation.",
-          "output_use": "Verify and install the detector startup outputs before cache preparation and the unchanged check.",
+          "output_use": "Install the detector core startup outputs for the release checks; the staging regression consumes build.cache directly.",
           "install": [
             "/bin/bash",
             ".chrono-harness/ci/bootstrap-native.sh",
