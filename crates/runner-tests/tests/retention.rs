@@ -190,7 +190,7 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
             .unwrap();
     }
     for _ in 0..3 {
-        let round = inventory(h.path()).maintain_available().unwrap();
+        let round = inventory(h.path()).maintain().unwrap();
         assert_eq!(round["scope"]["complete"], false, "{round}");
         assert!(h.path().join(&outputs[tail]).exists(), "{round}");
     }
@@ -5216,14 +5216,14 @@ fn ordinary_maintenance_defers_only_busy_metadata_without_spending_another_round
         .unwrap()
         .unwrap();
     let began = std::time::Instant::now();
-    let round = inventory(h.path()).maintain_available().unwrap();
+    let round = inventory(h.path()).maintain().unwrap();
     assert_eq!(round["remaining_outputs"], Value::Null);
     assert!(!round["accounting_errors"].as_array().unwrap().is_empty());
     assert!(began.elapsed() < std::time::Duration::from_secs(1));
     assert!(h.path().join(&path).exists());
     drop(gate);
     assert_eq!(
-        inventory(h.path()).maintain_available().unwrap()["remaining_outputs"],
+        inventory(h.path()).maintain().unwrap()["remaining_outputs"],
         0
     );
 }
