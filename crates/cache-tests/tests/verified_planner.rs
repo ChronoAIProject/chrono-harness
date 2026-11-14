@@ -25,6 +25,155 @@ mod probe;
 
 verus! {
 
+fn recovery_entry_case(
+    output_probe: policy::RecoveryProbe, intent_probe: policy::RecoveryProbe,
+    replay_result: Result<u64, String>, not_found: u32, intent_path: &str,
+    wanted_call: u8, wanted: Result<Option<u64>, (&str, &str, &str)>,
+)
+    requires match output_probe {
+        Err(error) => wanted_call == 0 && match wanted {
+            Err(parts) => parts.0@ == ""@ && parts.1@ == error@ && parts.2@ == ""@,
+            _ => false,
+        },
+        Ok(Ok(())) => wanted_call == 2 && match replay_result {
+            Ok(value) => wanted == Ok::<Option<u64>, (&str, &str, &str)>(Some(value)),
+            Err(error) => match wanted {
+                Err(parts) => parts.0@ == ""@ && parts.1@ == error@ && parts.2@ == ""@,
+                _ => false,
+            },
+        },
+        Ok(Err((kind, error))) => if kind != not_found {
+            wanted_call == 0 && match wanted {
+                Err(parts) => parts.0@ == "E_CACHE_RECOVERY: result metadata: "@
+                    && parts.1@ == error@ && parts.2@ == ""@,
+                _ => false,
+            }
+        } else {
+            wanted_call == 1 && match intent_probe {
+                Err(error) => match wanted {
+                    Err(parts) => parts.0@ == ""@ && parts.1@ == error@ && parts.2@ == ""@,
+                    _ => false,
+                },
+                Ok(Ok(())) => match wanted {
+                    Err(parts) => parts.0@ == "E_CACHE_RECOVERY: unfinished original intent "@
+                        && parts.1@ == intent_path@ && parts.2@ == "; no automatic repeat"@,
+                    _ => false,
+                },
+                Ok(Err((kind, error))) => if kind == not_found {
+                    wanted == Ok::<Option<u64>, (&str, &str, &str)>(None)
+                } else { match wanted {
+                    Err(parts) => parts.0@ == "E_CACHE_RECOVERY: intent metadata: "@
+                        && parts.1@ == error@ && parts.2@ == ""@,
+                    _ => false,
+                } },
+            }
+        },
+    },
+{
+    let trace = Vec::<u8>::new();
+    let ghost initial = trace;
+    let output = |mut trace: Vec<u8>| -> (out: (Vec<u8>, policy::RecoveryProbe))
+        ensures out.0@ == trace@.push(0u8), out.1 == output_probe,
+    { trace.push(0); (trace, output_probe) };
+    let intent = |mut trace: Vec<u8>| -> (out: (Vec<u8>, policy::RecoveryProbe))
+        ensures out.0@ == trace@.push(1u8), out.1 == intent_probe,
+    { trace.push(1); (trace, intent_probe) };
+    let replay = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<u64, String>))
+        ensures out.0@ == trace@.push(2u8), out.1 == replay_result,
+    { trace.push(2); (trace, replay_result) };
+    let (trace, result) = policy::select_recovery_entry(
+        trace, not_found, intent_path, output, intent, replay);
+    proof {
+        let (observed, observation, checked) = choose|observed: Vec<u8>,
+            observation: policy::RecoveryProbe, checked: Result<bool, policy::RecoveryEntryError>|
+            #[trigger] output.ensures((initial,), (observed, observation))
+            && #[trigger] policy::recovery_probe_matches(observation, not_found,
+                "E_CACHE_RECOVERY: result metadata: ", checked)
+            && match checked {
+                Err(error) => trace == observed
+                    && result == Err::<Option<u64>, policy::RecoveryEntryError>(error),
+                Ok(true) => exists|replayed: Result<u64, String>|
+                    #[trigger] replay.ensures((observed,), (trace, replayed))
+                    && match replayed {
+                        Ok(value) => result == Ok::<Option<u64>, policy::RecoveryEntryError>(Some(value)),
+                        Err(error) => result == Err::<Option<u64>, policy::RecoveryEntryError>(("", error, "")),
+                    },
+                Ok(false) => exists|probed: Vec<u8>, probe: policy::RecoveryProbe,
+                    checked: Result<bool, policy::RecoveryEntryError>|
+                    #[trigger] intent.ensures((observed,), (probed, probe))
+                    && trace == probed && #[trigger] policy::recovery_probe_matches(probe, not_found,
+                        "E_CACHE_RECOVERY: intent metadata: ", checked)
+                    && match checked {
+                        Err(error) => result == Err::<Option<u64>, policy::RecoveryEntryError>(error),
+                        Ok(false) => result == Ok::<Option<u64>, policy::RecoveryEntryError>(None),
+                        Ok(true) => match result {
+                            Err(parts) => parts.0@ == "E_CACHE_RECOVERY: unfinished original intent "@
+                                && parts.1@ == intent_path@
+                                && parts.2@ == "; no automatic repeat"@,
+                            _ => false,
+                        },
+                    },
+            };
+        assert(observation == output_probe);
+    }
+    expect_cache_true(trace.len() == if wanted_call == 0 { 1 } else { 2 });
+    expect_cache_true(trace[0] == 0);
+    if wanted_call != 0 { expect_cache_true(trace[1] == wanted_call); }
+    match (result, wanted) {
+        (Ok(actual), Ok(expected)) => expect_cache_true(actual == expected),
+        (Err(actual), Err(expected)) => {
+            expect_restore_text(actual.0, expected.0);
+            expect_restore_text(actual.1.as_str(), expected.1);
+            expect_restore_text(actual.2, expected.2);
+        },
+        _ => expect_cache_true(false),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_entry_replays_before_reading_any_intent() {
+    recovery_entry_case(Ok(Ok(())), Ok(Ok(())), Ok(0), 7, "intent", 2, Ok(Some(0)));
+    recovery_entry_case(Ok(Ok(())), Err("unreadable intent".to_string()),
+        Ok(u64::MAX), 7, "intent", 2, Ok(Some(u64::MAX)));
+    recovery_entry_case(Ok(Ok(())), Ok(Err((8, "intent metadata".to_string()))),
+        Err("replay/λ\0\n".to_string()), 7, "intent", 2, Err(("", "replay/λ\0\n", "")));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_entry_requires_both_original_paths_to_be_absent() {
+    recovery_entry_case(Ok(Err((7, "output absent".to_string()))),
+        Ok(Err((7, "intent absent".to_string()))), Ok(42), 7, "intent", 1, Ok(None));
+    recovery_entry_case(Ok(Err((u32::MAX, "".to_string()))),
+        Ok(Err((u32::MAX, "".to_string()))), Err("unused replay".to_string()),
+        u32::MAX, "", 1, Ok(None));
+    recovery_entry_case(Ok(Err((7, "absent".to_string()))), Ok(Ok(())), Ok(42),
+        7, "意图/λ\0\n", 1, Err(("E_CACHE_RECOVERY: unfinished original intent ",
+            "意图/λ\0\n", "; no automatic repeat")));
+    recovery_entry_case(Ok(Err((7, "absent".to_string()))), Ok(Ok(())), Ok(42),
+        7, "", 1, Err(("E_CACHE_RECOVERY: unfinished original intent ",
+            "", "; no automatic repeat")));
+}
+
+fn recovery_entry_preserves_original_errors(error: &str) {
+    recovery_entry_case(Err(error.to_string()), Ok(Ok(())), Ok(42), 7, "intent", 0,
+        Err(("", error, "")));
+    recovery_entry_case(Ok(Err((0, error.to_string()))), Ok(Ok(())), Ok(42),
+        u32::MAX, "intent", 0, Err(("E_CACHE_RECOVERY: result metadata: ", error, "")));
+    recovery_entry_case(Ok(Err((7, "absent".to_string()))), Err(error.to_string()),
+        Ok(42), 7, "intent", 1, Err(("", error, "")));
+    recovery_entry_case(Ok(Err((7, "absent".to_string()))),
+        Ok(Err((u32::MAX, error.to_string()))), Ok(42), 7, "intent", 1,
+        Err(("E_CACHE_RECOVERY: intent metadata: ", error, "")));
+    recovery_entry_case(Ok(Ok(())), Ok(Ok(())), Err(error.to_string()),
+        7, "intent", 2, Err(("", error, "")));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_entry_preserves_empty_unicode_nul_and_newline_errors() {
+    recovery_entry_preserves_original_errors("");
+    recovery_entry_preserves_original_errors("原始错误/λ\0\n");
+}
+
 fn recovery_removal_case(
     observation: Result<(bool, bool), (u32, String)>, not_found: u32,
     directory_result: Result<(), String>, file_result: Result<(), String>,
