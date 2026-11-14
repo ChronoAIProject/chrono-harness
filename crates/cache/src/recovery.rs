@@ -95,7 +95,7 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
             outputs_valid, key_valid, method, refresh, id, verify, read_status, render_error,
             (out.0, out.2)),
 {
-    reveal(recovery_cache_decision_result);
+    reveal_with_fuel(recovery_cache_decision_result, 3);
     reveal(recovery_cache_final_result);
     proof {
         reveal_strlit("exact"); reveal_strlit("compatible");
@@ -163,6 +163,7 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
             && #[trigger] read_status.ensures((observed_state, &value), (state, observed))
             && recovery_cache_final_result(outcome, reason, unconfirmed,
                 outputs_valid, key_valid, method, observed, refresh, Some(value), result));
+        assert(planner::content_verification_applies_spec(method, reason));
         assert(recovery_cache_decision_result(initial_state, outcome, reason, matched,
             unconfirmed, outputs_valid, key_valid, method, refresh, id,
             verify, read_status, render_error, (state, result)));
