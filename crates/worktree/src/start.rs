@@ -924,7 +924,13 @@ pub(crate) fn with_report_for_consumer<T>(
     report["lock_reason"] = value!(name);
     let result = prepared.and_then(|(_, inputs)| execute(&mut runner, &name, &mut report, inputs));
     match result {
-        Ok(()) => report["status"] = value!(success),
+        Ok(()) => {
+            report["status"] = if operation == "maintain" && report["round_started"] == false {
+                value!("maintenance-requested")
+            } else {
+                value!(success)
+            }
+        }
         Err(e) => report["error"] = value!(e),
     }
     if matches!(operation, "start" | "reconstruct") && report["status"] == success {
@@ -953,6 +959,12 @@ pub(crate) fn with_report_for_consumer<T>(
         publication.complete(crate::recovery::publication_outcome(&report, &data))?;
     }
     crate::recovery::settle_report(&publication_root, &report)?;
+    if matches!(operation, "start" | "reconstruct" | "producer-finish") {
+        chrono_harness::maintenance_signal::announce_adopted(
+            &publication_root,
+            "published-handoff",
+        );
+    }
     Ok(report)
 }
 

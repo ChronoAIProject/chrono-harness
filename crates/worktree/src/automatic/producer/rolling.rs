@@ -1,8 +1,34 @@
 //! 已声明的临时目录按整个分配回收；目录内的测试输入与捕获共用寿命。
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn rolling_disposal(owned: bool, expired: bool, released: bool, exclusive: bool) -> (allowed: bool)
+    ensures allowed <==> (owned && expired && released && exclusive),
+{
+    owned && expired && released && exclusive
+}
+
+pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
+    success: u64, failure: u64, interrupted: u64) -> (seconds: u64)
+    ensures
+        !finished ==> seconds == interrupted,
+        finished && (failed || diagnostics) ==> seconds == failure,
+        finished && !failed && !diagnostics ==> seconds == success,
+{
+    if !finished { interrupted } else if failed || diagnostics { failure } else { success }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Policy {
     success_keep_seconds: u64,
     failure_keep_seconds: u64,
@@ -12,6 +38,7 @@ pub(super) struct Policy {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Terminal {
     observed_at: u64,
     failed: bool,
@@ -19,6 +46,7 @@ pub(super) struct Terminal {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Directory {
     pub(super) metadata: String,
     pub(super) metadata_identity: String,
@@ -31,12 +59,14 @@ pub(super) struct Directory {
 }
 
 #[derive(Clone)]
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Owner {
     root: PathBuf,
     config_path: String,
     producer: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn now() -> Result<u64, String> {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -44,6 +74,7 @@ pub(super) fn now() -> Result<u64, String> {
         .map_err(|e| e.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn physical_stable(directory: &Path, object: &Object) -> Result<(), String> {
     let path = no_symlink_parents(directory, &object.path)?;
     if let Some(rolling) = &object.rolling {
@@ -81,6 +112,7 @@ pub(super) fn physical_stable(directory: &Path, object: &Object) -> Result<(), S
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl TemporaryHost {
     /// Read the existing producer's retirement state for its private test owner.
     /// The caller must first join all allocators. This neither retires an object
@@ -255,7 +287,10 @@ impl TemporaryHost {
                 drop(store);
                 drop(self.lease.take());
                 report["producer_objects"] = value!([]);
-                declaration.drain_selected(&inputs, r, report, Some(&path))
+                report["maintenance_request"] =
+                    super::super::service::handoff(&inputs, "producer-finish");
+                report["disposal"] = value!("not-attempted");
+                Ok(())
             },
         )
     }
@@ -308,6 +343,7 @@ impl TemporaryHost {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn drain(
     policy: &ProducerPolicy,
     inputs: &PolicyInputs,
@@ -423,6 +459,7 @@ pub(super) fn drain(
 
 // A constant owner declaration gives this staging directory one narrow purpose:
 // complete removal of already retired producer metadata. No per-file catalogue.
+#[cfg(not(verus_keep_ghost))]
 fn trash(store: &Store) -> Result<(PathBuf, Vec<u8>), String> {
     let path = no_symlink_parents(&store.directory, "rolling-disposals")?;
     let fresh = match fs::create_dir(&path) {
@@ -444,6 +481,7 @@ fn trash(store: &Store) -> Result<(PathBuf, Vec<u8>), String> {
     Ok((path, bytes))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn empty_trash(store: &Store, inputs: &PolicyInputs, r: &mut Runner) -> Result<usize, String> {
     let (path, owner) = trash(store)?;
     let Some(gate) = DirectoryGate::available(&path)? else {
@@ -481,6 +519,7 @@ fn empty_trash(store: &Store, inputs: &PolicyInputs, r: &mut Runner) -> Result<u
     Ok(count)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn retire(
     policy: &ProducerPolicy,
     inputs: &PolicyInputs,
@@ -556,6 +595,7 @@ fn retire(
     Ok(value!({"status":"disposed","physical_absence":"verified"}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn recover(
     policy: &ProducerPolicy,
     inputs: &PolicyInputs,

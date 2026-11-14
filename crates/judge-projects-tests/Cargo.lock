@@ -188,6 +188,7 @@ dependencies = [
  "chrono-harness",
  "chrono-judge-registration",
  "chrono-judge-workflow",
+ "libc",
  "serde",
  "serde_json",
  "tempfile",

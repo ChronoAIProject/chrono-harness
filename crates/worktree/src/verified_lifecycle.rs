@@ -35,6 +35,52 @@ pub use automatic_verification::{
     known_absent_enrollment, missing_cache_observation,
 };
 
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::inventory::append_action_index;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::service::maintenance_idle_exit;
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::inventory::append_action_index;
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::service::maintenance_idle_exit;
+
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::producer::rolling::{rolling_disposal, rolling_keep};
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::producer::{
+    ProducerNamespaceMember, producer_namespace_member, producer_namespace_retired,
+};
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::producer::rolling::{rolling_disposal, rolling_keep};
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::producer::{
+    ProducerNamespaceMember, producer_namespace_member, producer_namespace_retired,
+};
+
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::retirement::{retire_cache_history, retire_history};
+#[cfg(not(verus_keep_ghost))]
+pub use crate::recovery::{ImportedPolicyReceipt, imported_policy_receipt_valid};
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::retirement::{retire_cache_history, retire_history};
+#[cfg(verus_keep_ghost)]
+#[path = "recovery.rs"]
+#[rustfmt::skip]
+mod recovery_verification;
+#[cfg(verus_keep_ghost)]
+pub use recovery_verification::{
+    ImportedPolicyReceipt, imported_policy_receipt_valid, required_text,
+};
+
+#[cfg(not(verus_keep_ghost))]
+pub use crate::successful_report_status;
+#[cfg(verus_keep_ghost)]
+#[path = "lib.rs"]
+#[rustfmt::skip]
+mod cli_status_owner;
+#[cfg(verus_keep_ghost)]
+pub use cli_status_owner::successful_report_status;
+
 verus! {
 
 /// An address left by failed admission has no checkout policy consumer.
@@ -42,35 +88,6 @@ pub fn enrolled_policy_required(entries: usize) -> (required: bool)
     ensures required <==> entries > 0,
 {
     entries > 0
-}
-
-pub enum ProducerNamespaceMember { Owner, Records, Metadata, Disposals, Unknown }
-
-pub fn producer_namespace_member(name: &str) -> (member: ProducerNamespaceMember)
-    ensures match member {
-        ProducerNamespaceMember::Owner => name@ == "objects.json"@,
-        ProducerNamespaceMember::Records => name@ == "producer-records"@,
-        ProducerNamespaceMember::Metadata => name@ == "rolling-metadata"@,
-        ProducerNamespaceMember::Disposals => name@ == "rolling-disposals"@,
-        ProducerNamespaceMember::Unknown => name@ != "objects.json"@
-            && name@ != "producer-records"@ && name@ != "rolling-metadata"@
-            && name@ != "rolling-disposals"@,
-    },
-{
-    if equal_text(name, "objects.json") { ProducerNamespaceMember::Owner }
-    else if equal_text(name, "producer-records") { ProducerNamespaceMember::Records }
-    else if equal_text(name, "rolling-metadata") { ProducerNamespaceMember::Metadata }
-    else if equal_text(name, "rolling-disposals") { ProducerNamespaceMember::Disposals }
-    else { ProducerNamespaceMember::Unknown }
-}
-
-/// An enclosing fixture may retire only after the producer has retired every
-/// object and metadata handoff, with no unowned member in its namespace.
-pub fn producer_namespace_retired(objects_empty: bool, metadata_empty: bool,
-    members_known: bool) -> (retired: bool)
-    ensures retired == (objects_empty && metadata_empty && members_known),
-{
-    objects_empty && metadata_empty && members_known
 }
 
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, PartialEq, Eq, serde::Deserialize))]
@@ -156,22 +173,6 @@ pub fn retain_evidence(disposal_authorized: bool, evidence_present: bool) -> (re
     !disposal_authorized && evidence_present
 }
 
-pub fn rolling_disposal(owned: bool, expired: bool, released: bool, exclusive: bool) -> (allowed: bool)
-    ensures allowed <==> (owned && expired && released && exclusive),
-{
-    owned && expired && released && exclusive
-}
-
-pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
-    success: u64, failure: u64, interrupted: u64) -> (seconds: u64)
-    ensures
-        !finished ==> seconds == interrupted,
-        finished && (failed || diagnostics) ==> seconds == failure,
-        finished && !failed && !diagnostics ==> seconds == success,
-{
-    if !finished { interrupted } else if failed || diagnostics { failure } else { success }
-}
-
 pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: bool)
     ensures accepted <==> (kind@ == "import"@
         || (kind@ == "birth"@ && registered)),
@@ -233,68 +234,9 @@ pub fn adopted_policy_source(kind: &str, migrated: bool, head: &str, current_hea
     } else { AdoptedPolicySource::RetainedTarget }
 }
 
-pub struct ImportedPolicyReceipt<'a> {
-    pub schema: Option<&'a str>,
-    pub operation: Option<&'a str>,
-    pub status: Option<&'a str>,
-    pub source_root: Option<&'a str>,
-    pub report_path: Option<&'a str>,
-    pub config_path: Option<&'a str>,
-}
-
-pub open spec fn required_text(observed: Option<&str>, expected: &str) -> bool {
-    match observed { Some(text) => text@ == expected@, None => false }
-}
-
-fn matches_required(observed: Option<&str>, expected: &str) -> (valid: bool)
-    ensures valid == required_text(observed, expected),
-{
-    match observed { Some(text) => equal_text(text, expected), None => false }
-}
-
-pub fn imported_policy_receipt_valid(receipt: &ImportedPolicyReceipt, published: bool,
-    root: &str, path: &str, config: &str) -> (valid: bool)
-    ensures valid <==> (published
-        && required_text(receipt.schema, "chrono-worktree-report/v1")
-        && required_text(receipt.operation, "import")
-        && required_text(receipt.status, "imported")
-        && required_text(receipt.source_root, root)
-        && required_text(receipt.report_path, path)
-        && required_text(receipt.config_path, config)),
-{
-    published
-        && matches_required(receipt.schema, "chrono-worktree-report/v1")
-        && matches_required(receipt.operation, "import")
-        && matches_required(receipt.status, "imported")
-        && matches_required(receipt.source_root, root)
-        && matches_required(receipt.report_path, path)
-        && matches_required(receipt.config_path, config)
-}
 
 
-pub fn retire_history(disposed: bool, consumers_released: bool,
-    confirmed_at: Option<u64>, observed: u64, keep_seconds: u64, over_limit: bool) -> (retire: bool)
-    ensures retire <==> (disposed && consumers_released
-        && confirmed_at.is_some()
-        && confirmed_at.unwrap() <= observed
-        && (over_limit || observed - confirmed_at.unwrap() >= keep_seconds)),
-{
-    match confirmed_at {
-        Some(confirmed) => disposed && consumers_released
-            && confirmed <= observed && (over_limit || observed - confirmed >= keep_seconds),
-        None => false,
-    }
-}
 
-pub fn retire_cache_history(completed: bool, generation: u64, current_generation: u64,
-    consumers_released: bool, confirmed_at: Option<u64>, observed: u64,
-    keep_seconds: u64, over_limit: bool) -> (retire: bool)
-    ensures retire <==> (completed && generation < current_generation && consumers_released
-        && confirmed_at.is_some() && confirmed_at.unwrap() <= observed
-        && (over_limit || observed - confirmed_at.unwrap() >= keep_seconds)),
-{
-    retire_history(completed && generation < current_generation, consumers_released,
-        confirmed_at, observed, keep_seconds, over_limit)
-}
+
 
 }

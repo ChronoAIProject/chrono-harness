@@ -1823,7 +1823,10 @@ impl Inventory {
         let gate = self.addressed_gate(ids, &[], &[consumer.into()], None, false, true)?;
         let mut l = self.load(&gate)?;
         self.reference_locked(&mut l, consumer, ids)?;
-        self.save(&l, &gate)
+        self.save(&l, &gate)?;
+        drop(gate);
+        crate::maintenance_signal::announce_adopted(&self.root, "retention-reference");
+        Ok(())
     }
     fn reference_locked(
         &self,
@@ -2051,6 +2054,10 @@ impl Inventory {
                 .ok_or("consumer protection/release receipt unavailable")?
                 .clone();
             self.stable(&gate)?;
+            drop(gate);
+            let mut receipt = receipt;
+            receipt["maintenance_request"] =
+                crate::maintenance_signal::request_adopted(&self.root, "retention-release");
             return Ok(receipt);
         }
         if l.roots.get(&role) != Some(&ids) {
@@ -2063,6 +2070,11 @@ impl Inventory {
         let excess = l.summaries.len().saturating_sub(self.policy.max_summaries);
         l.summaries.drain(..excess);
         self.save(&l, &gate)?;
+        drop(_leases);
+        drop(gate);
+        let mut receipt = receipt;
+        receipt["maintenance_request"] =
+            crate::maintenance_signal::request_adopted(&self.root, "retention-release");
         Ok(receipt)
     }
     /// A terminal caller preserves an exact original outside the retired host.
@@ -3756,6 +3768,9 @@ impl Publication {
         // root left after success, while its parent still needs its exact result.
         self.inventory.remember_output(&self.lease, &self.id)?;
         self.account_rounds(Some(outcome), consumer, seal_all, observe, exhausted)?;
+        let root = self.inventory.root.clone();
+        drop(self);
+        crate::maintenance_signal::announce_adopted(&root, "retention-complete");
         Ok(())
     }
     /// The same capability and manifest cursor account either a real completion
