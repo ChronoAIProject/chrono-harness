@@ -572,8 +572,56 @@ pub open spec fn registry_batch_spec<V>(
     else { registry_batch_fold(expected, rows, 0, bytes, values, model) }
 }
 
-/// 固定批量观察的完整校验、首错及双 map 组装；失败不发布部分状态。
+/// 回调的原完整合同；模型只描述实际可调用前缀及解码结果，不赋予回调证明。
+pub open spec fn registry_decoder_admissible<V, P>(
+    expected: Seq<String>, originals: Seq<(String, Vec<u8>)>, decode: P,
+    model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>,
+) -> bool
+    where P: Fn(&[u8]) -> Result<V, String>,
+{
+    (forall|i: int, raw: &[u8]| 0 <= i < originals.len()
+        && registry_batch_prefix(expected, originals, model, i)
+        && expected[i]@ == originals[i].0@ && raw@ == originals[i].1@
+        ==> decode.requires((raw,)))
+    && (forall|raw: &[u8], result: Result<V, String>|
+        decode.requires((raw,)) && decode.ensures((raw,), result)
+        ==> registry_decoded_view(result) == model(raw@))
+}
+
+pub open spec fn registry_parser_model<V, P>(
+    expected: Seq<String>, originals: Seq<(String, Vec<u8>)>, decode: P,
+) -> spec_fn(Seq<u8>) -> Result<V, Seq<char>>
+    where P: Fn(&[u8]) -> Result<V, String>,
+{
+    choose|model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>|
+        registry_decoder_admissible(expected, originals, decode, model)
+}
+
+/// 实际调用不携带证明 ABI。存在原模型是调用前提，不能由选择见证凭空取得。
 pub fn registry_parse_batch<V, P>(
+    expected: &[String], originals: Vec<(String, Vec<u8>)>,
+    bytes: BTreeMap<String, Vec<u8>>, values: BTreeMap<String, V>, decode: P,
+) -> (out: Result<(BTreeMap<String, Vec<u8>>, BTreeMap<String, V>), String>)
+    where P: Fn(&[u8]) -> Result<V, String>,
+    requires
+        vstd::laws_cmp::obeys_cmp::<String>(),
+        exists|model: spec_fn(Seq<u8>) -> Result<V, Seq<char>>|
+            registry_decoder_admissible(expected@, originals@, decode, model),
+    ensures registry_batch_view(out) == registry_batch_spec(
+        expected@, originals@, bytes@, values@,
+        registry_parser_model(expected@, originals@, decode)),
+{
+    let ghost model = registry_parser_model(expected@, originals@, decode);
+    #[cfg(verus_keep_ghost)]
+    let out = registry_parse_batch_with_model(expected, originals, bytes, values, decode, Ghost(model));
+    #[cfg(not(verus_keep_ghost))]
+    let out = registry_parse_batch_with_model(expected, originals, bytes, values, decode);
+    out
+}
+
+/// 固定批量观察的完整校验、首错及双 map 组装；失败不发布部分状态。
+/// 独立预期显式提供同一合同的模型，生产入口只转交原五个运行时参数。
+pub fn registry_parse_batch_with_model<V, P>(
     expected: &[String], originals: Vec<(String, Vec<u8>)>,
     bytes: BTreeMap<String, Vec<u8>>, values: BTreeMap<String, V>, decode: P,
     #[cfg(verus_keep_ghost)] Ghost(model): Ghost<spec_fn(Seq<u8>) -> Result<V, Seq<char>>>,
@@ -581,13 +629,7 @@ pub fn registry_parse_batch<V, P>(
     where P: Fn(&[u8]) -> Result<V, String>,
     requires
         vstd::laws_cmp::obeys_cmp::<String>(),
-        forall|i: int, raw: &[u8]| 0 <= i < originals.len()
-            && registry_batch_prefix(expected@, originals@, model, i)
-            && expected@[i]@ == originals@[i].0@ && raw@ == originals@[i].1@
-            ==> decode.requires((raw,)),
-        forall|raw: &[u8], result: Result<V, String>|
-            decode.requires((raw,)) && decode.ensures((raw,), result)
-            ==> registry_decoded_view(result) == model(raw@),
+        registry_decoder_admissible(expected@, originals@, decode, model),
     ensures registry_batch_view(out)
         == registry_batch_spec(expected@, originals@, bytes@, values@, model),
 {

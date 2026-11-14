@@ -323,30 +323,43 @@
         },
         "verify_status": {
           "operation": "verify.runner-status",
-          "tool": "verus",
+          "tool": "bootstrap-native",
           "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--extern",
-            "serde",
-            "--extern",
-            "serde_json",
-            "-L",
-            "all=crates/runner/target/debug/deps",
-            "--emit=link=.chrono-harness/state/verify.runner-status.rlib,dep-info=.chrono-harness/state/verify.runner-status.rlib.d",
-            "crates/runner/src/verified_status.rs",
-            "-o",
-            ".chrono-harness/state/verify.runner-status.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
+            ".",
+            ".chrono-harness/ci/runner-build.json",
+            "runner-dependencies",
+            "verify.runner-status"
           ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2024",
+              "--extern",
+              "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
+              "--extern",
+              "serde",
+              "--extern",
+              "serde_json",
+              "--emit=link=.chrono-harness/state/verify.runner-status.rlib,dep-info=.chrono-harness/state/verify.runner-status.rlib.d",
+              "crates/runner/src/verified_status.rs",
+              "-o",
+              ".chrono-harness/state/verify.runner-status.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.04.24.f8e1704",
+              "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
           }
         },
         "verify_limits": {
@@ -373,30 +386,43 @@
         },
         "verify_verifier": {
           "operation": "verify.verus-result",
-          "tool": "verus",
+          "tool": "bootstrap-native",
           "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--extern",
-            "serde",
-            "--extern",
-            "serde_json",
-            "-L",
-            "all=crates/runner/target/debug/deps",
-            "--emit=link=.chrono-harness/state/verify.verus-result.rlib,dep-info=.chrono-harness/state/verify.verus-result.rlib.d",
-            "crates/runner/src/verified_verifier.rs",
-            "-o",
-            ".chrono-harness/state/verify.verus-result.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
+            ".",
+            ".chrono-harness/ci/runner-build.json",
+            "runner-dependencies",
+            "verify.verus-result"
           ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2024",
+              "--extern",
+              "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
+              "--extern",
+              "serde",
+              "--extern",
+              "serde_json",
+              "--emit=link=.chrono-harness/state/verify.verus-result.rlib,dep-info=.chrono-harness/state/verify.verus-result.rlib.d",
+              "crates/runner/src/verified_verifier.rs",
+              "-o",
+              ".chrono-harness/state/verify.verus-result.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.04.24.f8e1704",
+              "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
           }
         },
         "verify_release": {
@@ -658,30 +684,43 @@
         },
         "verify_status": {
           "operation": "verify.runner-status-tests",
-          "tool": "verus",
+          "tool": "bootstrap-native",
           "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--extern",
-            "serde",
-            "--extern",
-            "serde_json",
-            "-L",
-            "all=crates/runner/target/debug/deps",
-            "--emit=link=.chrono-harness/state/verify.runner-status-tests.rlib,dep-info=.chrono-harness/state/verify.runner-status-tests.rlib.d",
-            "crates/runner-tests/tests/verified_status.rs",
-            "-o",
-            ".chrono-harness/state/verify.runner-status-tests.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
+            ".",
+            ".chrono-harness/ci/runner-build.json",
+            "runner-dependencies",
+            "verify.runner-status-tests"
           ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2024",
+              "--extern",
+              "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
+              "--extern",
+              "serde",
+              "--extern",
+              "serde_json",
+              "--emit=link=.chrono-harness/state/verify.runner-status-tests.rlib,dep-info=.chrono-harness/state/verify.runner-status-tests.rlib.d",
+              "crates/runner-tests/tests/verified_status.rs",
+              "-o",
+              ".chrono-harness/state/verify.runner-status-tests.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.04.24.f8e1704",
+              "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
           }
         },
         "verify_limits": {
@@ -708,30 +747,43 @@
         },
         "verify_verifier": {
           "operation": "verify.verus-result-tests",
-          "tool": "verus",
+          "tool": "bootstrap-native",
           "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--extern",
-            "serde",
-            "--extern",
-            "serde_json",
-            "-L",
-            "all=crates/runner/target/debug/deps",
-            "--emit=link=.chrono-harness/state/verify.verus-result-tests.rlib,dep-info=.chrono-harness/state/verify.verus-result-tests.rlib.d",
-            "crates/runner-tests/tests/verified_verifier.rs",
-            "-o",
-            ".chrono-harness/state/verify.verus-result-tests.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
+            ".",
+            ".chrono-harness/ci/runner-build.json",
+            "runner-dependencies",
+            "verify.verus-result-tests"
           ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2024",
+              "--extern",
+              "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
+              "--extern",
+              "serde",
+              "--extern",
+              "serde_json",
+              "--emit=link=.chrono-harness/state/verify.verus-result-tests.rlib,dep-info=.chrono-harness/state/verify.verus-result-tests.rlib.d",
+              "crates/runner-tests/tests/verified_verifier.rs",
+              "-o",
+              ".chrono-harness/state/verify.verus-result-tests.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.04.24.f8e1704",
+              "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
           }
         },
         "verify_release": {
@@ -4606,30 +4658,43 @@
         },
         "verify_cargo": {
           "operation": "verify.bootstrap-cargo-tests",
-          "tool": "verus",
+          "tool": "bootstrap-native",
           "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--extern",
-            "serde",
-            "--extern",
-            "serde_json",
-            "-L",
-            "all=crates/runner/target/debug/deps",
-            "--emit=link=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib.d",
-            ".chrono-harness/ci/native-tests/tests/verified_cargo.rs",
-            "-o",
-            ".chrono-harness/state/verify.bootstrap-cargo-tests.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
+            ".",
+            ".chrono-harness/ci/runner-build.json",
+            "runner-dependencies",
+            "verify.bootstrap-cargo-tests"
           ],
-          "output_contract": {
-            "version": "0.2026.04.24.f8e1704",
-            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2024",
+              "--extern",
+              "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
+              "--extern",
+              "serde",
+              "--extern",
+              "serde_json",
+              "--emit=link=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib,dep-info=.chrono-harness/state/verify.bootstrap-cargo-tests.rlib.d",
+              ".chrono-harness/ci/native-tests/tests/verified_cargo.rs",
+              "-o",
+              ".chrono-harness/state/verify.bootstrap-cargo-tests.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.04.24.f8e1704",
+              "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
           }
         },
         "verify_dependency_owner": {

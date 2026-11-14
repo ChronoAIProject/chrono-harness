@@ -7403,10 +7403,10 @@ fn registry_fixture_batch<P>(
         expected@, originals@, bytes@, values@, |raw: Seq<u8>| registry_decode_model(raw)),
 {
     #[cfg(verus_keep_ghost)]
-    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode,
+    let out = policy::registry_parse_batch_with_model(expected, originals, bytes, values, decode,
         Ghost(|raw: Seq<u8>| registry_decode_model(raw)));
     #[cfg(not(verus_keep_ghost))]
-    let out = policy::registry_parse_batch(expected, originals, bytes, values, decode);
+    let out = policy::registry_parse_batch_with_model(expected, originals, bytes, values, decode);
     out
 }
 
@@ -7452,7 +7452,12 @@ fn registry_parse_batch_empty_preserves_both_existing_maps()
     let mut values = std::collections::BTreeMap::new();
     bytes.insert(key.clone(), vec![0u8, 255, 10]);
     values.insert(key.clone(), u64::MAX);
-    let result = registry_fixture_batch(&[], Vec::new(), bytes, values,
+    proof {
+        assert(policy::registry_decoder_admissible(Seq::<String>::empty(),
+            Seq::<(String, Vec<u8>)>::empty(), never_decode_registry,
+            |raw: Seq<u8>| registry_decode_model(raw)));
+    }
+    let result = policy::registry_parse_batch(&[], Vec::new(), bytes, values,
         never_decode_registry);
     match result {
         Ok((bytes, values)) => {
@@ -7468,7 +7473,12 @@ fn registry_parse_batch_missing_rows_rejects_before_decoding()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     let expected = vec!["a".to_owned()];
-    let result = registry_fixture_batch(&expected, Vec::new(),
+    proof {
+        assert(policy::registry_decoder_admissible(expected@,
+            Seq::<(String, Vec<u8>)>::empty(), never_decode_registry,
+            |raw: Seq<u8>| registry_decode_model(raw)));
+    }
+    let result = policy::registry_parse_batch(&expected, Vec::new(),
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition count mismatch");
@@ -7479,7 +7489,12 @@ fn registry_parse_batch_extra_rows_rejects_before_path_or_decode()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     let originals = vec![("unexpected".to_owned(), Vec::new())];
-    let result = registry_fixture_batch(&[], originals,
+    proof {
+        assert(policy::registry_decoder_admissible(Seq::<String>::empty(),
+            originals@, never_decode_registry,
+            |raw: Seq<u8>| registry_decode_model(raw)));
+    }
+    let result = policy::registry_parse_batch(&[], originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition count mismatch");
