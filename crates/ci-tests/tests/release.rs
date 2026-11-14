@@ -1,11 +1,32 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn expected_post_publish_prefix(diagnostics: bool) -> (out: &'static str)
+    ensures
+        diagnostics ==> out@ == "${{ always() && "@,
+        !diagnostics ==> out@ == "${{ always() && needs.consumer.result == 'success' && needs.frontend.result == 'success' && "@,
+{
+    if diagnostics { "${{ always() && " }
+    else { "${{ always() && needs.consumer.result == 'success' && needs.frontend.result == 'success' && " }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_ci::{generate, init, release};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
 };
 
+#[cfg(not(verus_keep_ghost))]
 fn config() -> Value {
     json!({
         "schema":"chrono-github-release/v1",
@@ -23,6 +44,7 @@ fn config() -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_render_consumes_literal_argument_policy() {
     for value in ["", "普通文本", "$", "${", "$HOME `literal`", "${x{", "{{"] {
         let mut c = config();
@@ -49,11 +71,13 @@ fn release_render_consumes_literal_argument_policy() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn write(root: &Path, path: &str, value: &Value) {
     let target = root.join(path);
     fs::create_dir_all(target.parent().unwrap()).unwrap();
     fs::write(target, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
+#[cfg(not(verus_keep_ghost))]
 fn cli(root: &Path, args: &[&str]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_chrono-ci-test-cli"))
         .args(args)
@@ -61,6 +85,7 @@ fn cli(root: &Path, args: &[&str]) -> std::process::Output {
         .output()
         .unwrap()
 }
+#[cfg(not(verus_keep_ghost))]
 fn recording_program(root: &Path) -> PathBuf {
     let program = root.join("$CHRONO_BASE");
     std::os::unix::fs::symlink(
@@ -70,6 +95,7 @@ fn recording_program(root: &Path) -> PathBuf {
     .unwrap();
     program
 }
+#[cfg(not(verus_keep_ghost))]
 fn script(rendered: &str) -> String {
     rendered
         .split("        run: |\n")
@@ -83,6 +109,7 @@ fn script(rendered: &str) -> String {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn generated_command_preserves_literal_argv_and_original_failure() {
     let d = tempfile::Builder::new()
         .prefix("release host ")
@@ -138,6 +165,7 @@ fn generated_command_preserves_literal_argv_and_original_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_adoption_preserves_customization_and_verify_does_not_repair() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
@@ -195,6 +223,7 @@ fn release_adoption_preserves_customization_and_verify_does_not_repair() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn invalid_release_declarations_fail_before_adoption() {
     let mut bad = Vec::new();
     for (key, value) in [
@@ -260,6 +289,7 @@ fn invalid_release_declarations_fail_before_adoption() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
     for text in ["host-owned\n", "# chrono-ci: owned github-actions/v1\n"] {
         let d = tempfile::tempdir().unwrap();
@@ -293,6 +323,7 @@ fn release_ownership_refuses_old_check_marker_unowned_and_symlink_outputs() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn units_config() -> Value {
     let mut c = config();
     c["schema"] = json!("chrono-github-release/v2");
@@ -311,6 +342,7 @@ fn units_config() -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn delivery_binds_landing_source_and_limits_write_permission_to_the_publisher() {
     let mut c = units_config();
     c["push_branches"] = json!([]);
@@ -354,6 +386,7 @@ fn delivery_binds_landing_source_and_limits_write_permission_to_the_publisher() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn delivery_rejects_unregistered_publishers_push_bypasses_and_unsuccessful_dependencies() {
     for case in 0..5 {
         let mut c = units_config();
@@ -376,6 +409,7 @@ fn delivery_rejects_unregistered_publishers_push_bypasses_and_unsuccessful_depen
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() {
     let mut c = units_config();
     c["push_branches"] = json!([]);
@@ -419,13 +453,13 @@ fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() 
     // Installation must check its actual dependencies without implicit success().
     let installation = yaml["jobs"]["installation"]["if"].as_str().unwrap();
     assert!(
-        installation.starts_with("${{ always() && needs.consumer.result == 'success' && needs.frontend.result == 'success' && "),
+        installation.starts_with(expected_post_publish_prefix(false)),
         "{installation}"
     );
     assert!(!installation.contains("success()"), "{installation}");
     // Explicit always jobs retain their failure-diagnostic behavior.
     let diagnostics = yaml["jobs"]["diagnostics"]["if"].as_str().unwrap();
-    assert!(diagnostics.starts_with("${{ always() && "));
+    assert!(diagnostics.starts_with(expected_post_publish_prefix(true)));
     assert!(!diagnostics.contains("needs."), "{diagnostics}");
     assert_eq!(
         yaml["jobs"]["native"]["timeout-minutes"],
@@ -465,6 +499,7 @@ fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_metadata() {
     let c: release::Config = serde_json::from_value(units_config()).unwrap();
     let yaml = release::render(&c).unwrap();
@@ -479,6 +514,7 @@ fn release_units_render_literal_edges_exact_artifact_ids_and_current_dependency_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn shared_downloads_preserve_each_jobs_expanded_dependencies_and_destinations() {
     let mut value = units_config();
     for (id, directory) in [("same", "inputs/native/"), ("different", "other/native/")] {
@@ -527,6 +563,7 @@ fn shared_downloads_preserve_each_jobs_expanded_dependencies_and_destinations() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn oversized_workflows_reject_adoption_and_generation_without_writes() {
     let d = tempfile::tempdir().unwrap();
     let root = d.path();
@@ -556,6 +593,7 @@ fn oversized_workflows_reject_adoption_and_generation_without_writes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
     for case in 0..7 {
         let mut c = units_config();
@@ -578,6 +616,7 @@ fn release_units_reject_undeclared_edges_cycles_and_overlapping_downloads() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_units_cli_runs_literal_command_and_writes_original_dependency_data() {
     let d = tempfile::Builder::new()
         .prefix("units host λ ")
@@ -617,6 +656,7 @@ fn release_units_cli_runs_literal_command_and_writes_original_dependency_data() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_v1_rejects_even_empty_opt_in_fields() {
     for (key, value) in [
         ("needs", json!([])),
@@ -633,6 +673,7 @@ fn release_v1_rejects_even_empty_opt_in_fields() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
     for (key, value) in [
         ("needs", json!([])),
@@ -670,6 +711,7 @@ fn release_readoption_rejects_v2_fields_in_existing_v1_without_writes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn generated_command_mock_rejects_unknown_shell_domain_and_preserves_literal_bytes() {
     let sample: Value =
         serde_json::from_str(include_str!("fixtures/generated-command.json")).unwrap();
