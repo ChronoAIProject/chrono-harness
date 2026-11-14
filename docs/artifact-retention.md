@@ -251,7 +251,7 @@ bootstrap 的恢复原件回归分别核对消费者释放和后续维护：释�
 .chrono-harness/bin/chrono-harness retention --host-root H --request P
 ```
 
-`P` 是相对根目录的精确 JSON 请求，最多 64 KiB。操作有 `maintain`、`migrate-policy`、`enroll`、`release`、`protect-consumer`、`release-consumer`、`acknowledge-delivery`。程序产生结果后退出 `0`；输入无效、身份改变、使用凭据不可取得或政策拒绝时退出 `2`。结果不宣称历史工程工作已经完成。
+`P` 是相对根目录的精确 JSON 请求，最多 64 KiB。操作有 `maintain`、`migrate-policy`、`protect-consumer`、`release-consumer`、`release-preserved`、`acknowledge-delivery`、`recover-report`。程序产生结果后退出 `0`；输入无效、身份改变、使用凭据不可取得或政策拒绝时退出 `2`。结果不宣称历史工程工作已经完成。
 
 退役工作树时，调用方可用同一入口的 `release-preserved` 交接一份已保全的普通原件。请求逐项声明 `original`（id／path／identity）、完整当前 `roles`、独立物理 `survivor_root` 及其相对 `survivor_path`、`sha256`、`length`、`current_consumers_released:true` 和实际 `reason`。调用方先等待全部旧使用方，负责保留副本的用途、期限及旧路径映射。程序核原件独占使用凭据、完整角色集合、原件和副本的实际字节；副本必须位于退役宿主之外。只释放该原件在所声明角色中的成员，保留同角色的其他成员、原结果和到期时间。目录、活跃读写者、角色漂移、缺失或变化的副本均拒绝。后续仍由原 `maintain` 负责实际删除，再走 worktree 的正式清理入口；释放回执不表示删除或历史任务成功。中断重进须核同一副本及原回执。此路径复用现有逐对象租约及摘要，不增加总锁或历史兼容。真实宿主交接和整体成本在实际验收前未知。
 
