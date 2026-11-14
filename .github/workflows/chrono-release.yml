@@ -7284,7 +7284,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   linux_install:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ always() && needs.publish.result == 'success' && needs.linux_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["publish","linux_release_frontend"]
     runs-on: "ubuntu-24.04"
     timeout-minutes: 45
@@ -7341,7 +7341,7 @@ jobs:
           if-no-files-found: error
           include-hidden-files: true
   macos_install:
-    if: ${{ github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
+    if: ${{ always() && needs.publish.result == 'success' && needs.macos_release_frontend.result == 'success' && github.event.deleted != true && (github.event_name != 'workflow_run' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')) }}
     needs: ["publish","macos_release_frontend"]
     runs-on: "macos-26"
     timeout-minutes: 45
