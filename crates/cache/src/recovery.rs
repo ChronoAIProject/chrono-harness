@@ -14,69 +14,45 @@ use vstd::prelude::*;
 
 verus! {
 
-pub open spec fn recovery_decision_message_spec(error: planner::RecoveryDecisionError,
-    id: &str) -> Seq<char>
+pub open spec fn recovery_decision_parts<'a>(error: planner::RecoveryDecisionError,
+    id: &'a str) -> [&'a str; 2]
 {
-    (match error {
+    [match error {
         planner::RecoveryDecisionError::MalformedOutputs =>
-            "E_CACHE_RECOVERY: malformed restore outputs for "@,
+            "E_CACHE_RECOVERY: malformed restore outputs for ",
         planner::RecoveryDecisionError::UnknownOutcome =>
-            "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for "@,
-    }) + id@
-}
-
-fn recovery_cache_action(outcome: Option<&str>, reason: &str, unconfirmed: bool,
-    outputs_valid: bool, key_valid: bool, method: Option<&str>, status: Option<&str>,
-    refresh: bool, id: &str) -> (out: Result<planner::RecoveryAction, String>)
-    ensures match planner::recovery_action_spec(outcome, reason, unconfirmed,
-        outputs_valid, key_valid, method, status, refresh) {
-        Ok(action) => out == Ok::<planner::RecoveryAction, String>(action),
-        Err(error) => match out {
-            Err(message) => message@ == recovery_decision_message_spec(error, id),
-            _ => false,
-        },
-    },
-{
-    match planner::recovery_action(outcome, reason, unconfirmed,
-        outputs_valid, key_valid, method, status, refresh) {
-        Ok(action) => Ok(action),
-        Err(error) => {
-            let parts = recovery_decision_error(&error, id);
-            let mut message = parts[0].to_string();
-            message.push_str(parts[1]);
-            Err(message)
-        },
-    }
+            "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for ",
+    }, id]
 }
 
 pub open spec fn recovery_cache_final_result<T>(outcome: Option<&str>, reason: &str,
     unconfirmed: bool, outputs_valid: bool, key_valid: bool,
-    method: Option<&str>, status: Option<&str>, refresh: bool, id: &str,
+    method: Option<&str>, status: Option<&str>, refresh: bool,
     verification: Option<T>, out: Result<(planner::RecoveryAction, Option<T>), String>) -> bool
 {
     match planner::recovery_action_spec(outcome, reason, unconfirmed,
         outputs_valid, key_valid, method, status, refresh) {
         Ok(action) => out == Ok::<(planner::RecoveryAction, Option<T>), String>(
             (action, verification)),
-        Err(error) => match out {
-            Err(message) => message@ == recovery_decision_message_spec(error, id),
-            _ => false,
-        },
+        Err(_) => false,
     }
 }
 
-pub open spec fn recovery_cache_decision_result<S, T, V, R>(initial: S,
+pub open spec fn recovery_cache_decision_result<S, T, V, R, E>(initial: S,
     outcome: Option<&str>, reason: &str, matched: Option<&str>, unconfirmed: bool,
     outputs_valid: bool, key_valid: bool, method: Option<&str>, refresh: bool, id: &str,
-    verify: V, read_status: R, out: (S, Result<(planner::RecoveryAction, Option<T>), String>))
+    verify: V, read_status: R, render_error: E,
+    out: (S, Result<(planner::RecoveryAction, Option<T>), String>))
     -> bool
     where V: FnOnce(S, &str) -> (S, Result<T, String>),
         R: FnOnce(S, &T) -> (S, Option<&str>),
+        E: FnOnce(S, [&str; 2]) -> (S, String),
 {
     match planner::recovery_action_spec(outcome, reason, unconfirmed,
         outputs_valid, key_valid, None, None, false) {
-        Err(error) => out.0 == initial && match out.1 {
-            Err(message) => message@ == recovery_decision_message_spec(error, id),
+        Err(error) => match out.1 {
+            Err(message) => render_error.ensures(
+                (initial, recovery_decision_parts(error, id)), (out.0, message)),
             _ => false,
         },
         Ok(base) => if matches!(base, planner::RecoveryAction::Keep)
@@ -91,36 +67,43 @@ pub open spec fn recovery_cache_decision_result<S, T, V, R>(initial: S,
                         Ok(value) => exists|status: Option<&str>|
                             #[trigger] read_status.ensures((verified, &value), (out.0, status))
                             && recovery_cache_final_result(outcome, reason, unconfirmed,
-                                outputs_valid, key_valid, method, status, refresh, id,
+                                outputs_valid, key_valid, method, status, refresh,
                                 Some(value), out.1),
                     },
             }
         } else {
             out.0 == initial && recovery_cache_final_result(outcome, reason, unconfirmed,
-                outputs_valid, key_valid, method, None, refresh, id, None::<T>, out.1)
+                outputs_valid, key_valid, method, None, refresh, None::<T>, out.1)
         },
     }
 }
 
 /// 从同一原生观察计算原因、按需核验及最终动作，保留原核验值和首错。
-pub fn decide_recovery_cache<S, T, V, R>(state: S, outcome: Option<&str>,
+pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
     requested: Option<&str>, matched: Option<&str>, prefixes: &[Option<&str>],
     unconfirmed: bool, outputs_valid: bool, key_valid: bool,
-    method: Option<&str>, refresh: bool, id: &str, verify: V, read_status: R,
+    method: Option<&str>, refresh: bool, id: &str, verify: V, read_status: R, render_error: E,
 ) -> (out: (S, &'static str, Result<(planner::RecoveryAction, Option<T>), String>))
     where V: FnOnce(S, &str) -> (S, Result<T, String>),
         R: FnOnce(S, &T) -> (S, Option<&str>),
+        E: FnOnce(S, [&str; 2]) -> (S, String),
     requires forall|state: S, key: &str| verify.requires((state, key)),
         forall|state: S, value: &T| read_status.requires((state, value)),
+        forall|state: S, parts: [&str; 2]| render_error.requires((state, parts)),
     ensures out.1@ == planner::restore_status_spec(outcome, requested, matched, prefixes@),
         recovery_cache_decision_result(state, outcome, out.1, matched, unconfirmed,
-            outputs_valid, key_valid, method, refresh, id, verify, read_status, (out.0, out.2)),
+            outputs_valid, key_valid, method, refresh, id, verify, read_status, render_error,
+            (out.0, out.2)),
 {
     let reason = planner::restore_status(outcome, requested, matched, prefixes);
-    let base = match recovery_cache_action(outcome, reason, unconfirmed,
-        outputs_valid, key_valid, None, None, false, id) {
+    let base = match planner::recovery_action(outcome, reason, unconfirmed,
+        outputs_valid, key_valid, None, None, false) {
         Ok(action) => action,
-        Err(error) => return (state, reason, Err(error)),
+        Err(error) => {
+            let parts = recovery_decision_error(&error, id);
+            let (state, message) = render_error(state, parts);
+            return (state, reason, Err(message));
+        },
     };
     if base.requires_content_verification(method, reason) {
         assert(matched.is_some());
@@ -136,19 +119,31 @@ pub fn decide_recovery_cache<S, T, V, R>(state: S, outcome: Option<&str>,
         };
         let (state, status) = read_status(state, &value);
         assert(read_status.ensures((verified, &value), (state, status)));
-        let action = recovery_cache_action(outcome, reason, unconfirmed,
-            outputs_valid, key_valid, method, status, refresh, id);
-        (state, reason, match action {
+        let action = planner::recovery_action(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, status, refresh);
+        let result = match action {
             Ok(action) => Ok((action, Some(value))),
-            Err(error) => Err(error),
-        })
+            Err(error) => {
+                assert(false);
+                let parts = recovery_decision_error(&error, id);
+                let (state, message) = render_error(state, parts);
+                return (state, reason, Err(message));
+            },
+        };
+        (state, reason, result)
     } else {
-        let action = recovery_cache_action(outcome, reason, unconfirmed,
-            outputs_valid, key_valid, method, None, refresh, id);
-        (state, reason, match action {
+        let action = planner::recovery_action(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, None, refresh);
+        let result = match action {
             Ok(action) => Ok((action, None)),
-            Err(error) => Err(error),
-        })
+            Err(error) => {
+                assert(false);
+                let parts = recovery_decision_error(&error, id);
+                let (state, message) = render_error(state, parts);
+                return (state, reason, Err(message));
+            },
+        };
+        (state, reason, result)
     }
 }
 
@@ -683,7 +678,7 @@ pub open spec fn recovery_text(value: Option<&str>) -> Option<Seq<char>> {
 /// 恢复决策的错误分类与完整缓存身份；适配器只按顺序拼接两段原文。
 pub fn recovery_decision_error<'a>(error: &planner::RecoveryDecisionError, id: &'a str)
     -> (parts: [&'a str; 2])
-    ensures parts[1]@ == id@,
+    ensures parts == recovery_decision_parts(*error, id), parts[1]@ == id@,
         parts[0]@ == match error {
             planner::RecoveryDecisionError::MalformedOutputs =>
                 "E_CACHE_RECOVERY: malformed restore outputs for "@,
@@ -1455,6 +1450,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                     )
                 },
                 |(), value: &Value| ((), value["status"].as_str()),
+                |(), parts| ((), parts.concat()),
             );
             let (action, verification) = decision?;
             let discard = action.discards_outputs();
