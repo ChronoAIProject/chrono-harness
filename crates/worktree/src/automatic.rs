@@ -1249,17 +1249,6 @@ impl Manager {
             scope: &self.scope,
         }
     }
-    fn observe_inventory(
-        &self,
-        r: &mut Runner,
-        exclude: &[PathBuf],
-        report: &mut Value,
-        all: bool,
-        selected: &BTreeSet<PathBuf>,
-    ) -> Result<BTreeSet<PathBuf>, String> {
-        self.observation()
-            .observe_inventory(r, exclude, report, all, selected)
-    }
     fn enrollment_paths(&self) -> Result<Vec<PathBuf>, String> {
         self.observation().enrollment_paths()
     }
