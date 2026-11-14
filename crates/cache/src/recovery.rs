@@ -267,6 +267,66 @@ pub fn admit_recovery_paths(config: &str, plan: &str) -> (out: Result<(), &'stat
     Ok(())
 }
 
+/// 仅完成原 pending 状态，其余原 JSON 值由适配器保留。
+pub fn complete_recovery_cache(status: Option<&str>) -> (out: Option<&'static str>)
+    ensures match out {
+        Some(next) => recovery_text(status) == Some("pending"@) && next@ == "discarded"@,
+        None => recovery_text(status) != Some("pending"@),
+    },
+{
+    if planner::same_attempt("pending", status) { Some("discarded") } else { None }
+}
+
+pub struct RecoverySummary {
+    changed: bool,
+    warning_effect: bool,
+}
+
+impl RecoverySummary {
+    pub closed spec fn changed(&self) -> bool { self.changed }
+    pub closed spec fn warning_effect(&self) -> bool { self.warning_effect }
+
+    pub fn new() -> (out: Self)
+        ensures !out.changed(), !out.warning_effect(),
+    { Self { changed: false, warning_effect: false } }
+
+    pub fn observe_cache(self, status: Option<&str>, outcome: Option<&str>) -> (out: Self)
+        ensures out.changed() == (self.changed()
+            || recovery_text(status) == Some("discarded"@)
+            || recovery_text(status) == Some("source-times-refreshed"@)),
+            out.warning_effect() == (self.warning_effect()
+                || recovery_text(outcome) == Some("failure"@)),
+    {
+        Self {
+            changed: self.changed || planner::same_attempt("discarded", status)
+                || planner::same_attempt("source-times-refreshed", status),
+            warning_effect: self.warning_effect || planner::same_attempt("failure", outcome),
+        }
+    }
+
+    pub fn observe_artifact(self, status: Option<&str>) -> (out: Self)
+        ensures out.changed() == self.changed(),
+            out.warning_effect() == (self.warning_effect()
+                || recovery_text(status) == Some("removed"@)),
+    {
+        Self {
+            changed: self.changed,
+            warning_effect: self.warning_effect || planner::same_attempt("removed", status),
+        }
+    }
+
+    pub fn status(&self, failed: bool) -> (out: &'static str)
+        ensures out@ == if failed { "failed"@ }
+            else if self.changed() { "recovered"@ } else { "not-required"@ },
+    {
+        if failed { "failed" } else if self.changed { "recovered" } else { "not-required" }
+    }
+
+    pub fn warning(&self, status: Option<&str>) -> (out: bool)
+        ensures out == (recovery_text(status) == Some("recovered"@) && self.warning_effect()),
+    { planner::same_attempt("recovered", status) && self.warning_effect }
+}
+
 pub struct RecoveryReplay<'a> {
     pub schema: Option<&'a str>,
     pub plan_fields: Option<usize>,
@@ -459,7 +519,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let steps_original =
         super::retain_original(&root, &directory, "restore-steps", steps_raw.as_bytes())?;
     let mut report = json!({"schema":"chrono-cache-recovery/v1","plan":binding,"native_steps":steps_original,
-        "status":"not-required","caches":{},"error":null,
+        "status":RecoverySummary::new().status(false),"caches":{},"error":null,
         "limits":["isolated provider restore phase, before producers", "registered native observations only; no archive integrity or build verdict", "missing matched keys do not distinguish miss from backend or extraction failure", "linked worktree recovery unsupported"]});
     let result = (|| -> Result<(), String> {
         let config: super::Config =
@@ -645,8 +705,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             }
         }
         for cache in report["caches"].as_object_mut().unwrap().values_mut() {
-            if cache["status"] == "pending" {
-                cache["status"] = json!("discarded");
+            if let Some(status) = complete_recovery_cache(cache["status"].as_str()) {
+                cache["status"] = json!(status);
             }
         }
         for (id, refresh) in refreshes {
@@ -657,18 +717,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             )?;
             report["caches"][&id]["status"] = json!("source-times-refreshed");
         }
-        if report["caches"]
-            .as_object()
-            .unwrap()
-            .values()
-            .any(|v| v["status"] == "discarded" || v["status"] == "source-times-refreshed")
-        {
-            report["status"] = json!("recovered");
-        }
         Ok(())
     })();
+    let summary = report["caches"].as_object().unwrap().values().fold(
+        RecoverySummary::new(),
+        |summary, cache| {
+            cache["artifacts"].as_array().unwrap().iter().fold(
+                summary.observe_cache(
+                    cache["status"].as_str(),
+                    cache["restore"]["outcome"].as_str(),
+                ),
+                |summary, artifact| summary.observe_artifact(artifact["status"].as_str()),
+            )
+        },
+    );
+    report["status"] = json!(summary.status(result.is_err()));
     if let Err(error) = &result {
-        report["status"] = json!("failed");
         report["error"] = json!(error);
     }
     let raw = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
@@ -690,15 +754,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     if let Err(error) = result {
         return Err(format!("{error}; original {}", original.path));
     }
-    let changed_or_failed = report["caches"].as_object().unwrap().values().any(|cache| {
-        cache["restore"]["outcome"] == "failure"
-            || cache["artifacts"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .any(|artifact| artifact["status"] == "removed")
-    });
-    if report["status"] == "recovered" && changed_or_failed {
+    if summary.warning(report["status"].as_str()) {
         eprintln!(
             "W_CACHE_RESTORE_RECOVERED: unusable restore outputs cleared before registered build; original {}",
             original.path

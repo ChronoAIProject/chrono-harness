@@ -24,6 +24,22 @@ null 或其他类型拒绝。适配器不选择分类政策，也不产生计划
 该门控只约束候选 DELTA 的文件计划，不把分类声明、局部证明或普通 CI 绿灯扩大为
 全仓 SPEC 已证明。
 
+## 缓存与发布的完整参数预期
+
+缓存测试的真实 Cargo mock 在 `tests/support/probe.rs` 用同源 Verus 常量函数定义
+完整四项参数；原完整参数断言消费该结果。
+该文件接入现有 `verify.cache-planner-tests` 整 crate 根，不放宽为忽略任意尾参。
+
+发布配方测试在 `tests/recipe.rs` 用 Verus 按完整 owner 身份选择线程参数：
+worktree-tests 为 8，judge-workflow-tests、pr-tests 为 2，其余不加参数。
+原未过滤操作验收直接消费此判断，保留其完整参数、原测试和断言。独立 Verus
+预期同时普通运行，核三个已登记身份、cache-tests 的无尾参，以及空、大小写、Unicode 和 NUL 边界；该文件
+接入原 `verify.release-recipe-tests` 根。字符串比较复用已证明的 `equal_text`，
+没有新增依赖、受信接口、证明操作或过滤。
+
+这里只证明新参数预期与选择。两个文件的其余存量 IO、进程、解析和断言尚未完成
+迁移，不能把文件登记或局部证明当作完整文件已证明。构建、证明、CI 和存储总成本未测。
+
 ## 缓存恢复选项解析
 
 `crates/cache/src/recovery.rs` 直接拥有四个恢复选项的完整键分类、按对解析、
@@ -69,6 +85,28 @@ Option 的合同沿用固定 vstd。错误前缀、原路径和两段顺序均�
 `assume_specification`。运行时仅增加借用观测和保留一次原有计划摘要，
 完整构建、证明、CI 与存储成本未测；JSON 解码、恢复事务、其余决策和完整编译／调用
 绑定仍未完成，不把整个文件或全仓列为已证明。
+
+## 缓存恢复终态汇总
+
+`complete_recovery_cache` 只把全文为 `pending` 的缓存状态完成为 `discarded`，
+其余原 JSON 值保留。`RecoverySummary` 用两个私有布尔字段累计真实报告的观察：
+任一缓存的状态为 `discarded`／`source-times-refreshed` 时记录恢复效果，任一原
+restore outcome 为 `failure` 或任一 artifact status 为 `removed` 时记录告警效果。
+每一步都证明旧效果保留及新效果的精确条件；不存放报告引用或复制记录。
+
+初始报告及最后总终态直接消费该类型：失败优先产生 `failed`，成功且有恢复效果
+产生 `recovered`，其余产生 `not-required`。告警仅在总状态全文为 `recovered` 且
+已记录告警效果时产生。真实恢复流程直接消费这些结果，独立 Verus 预期同时普通
+运行，核空状态、顺序与重复观察、失败优先级、两类恢复／告警效果，以及缺失、
+未知、大小写、Unicode 和 NUL 文本边界。
+
+JSON 适配只沿固定 serde_json 的 `Map::values`、数组迭代和两层标准
+`Iterator::fold` 转交每条原观察；字段索引、`as_str`、现役报告对象／数组形状及
+标准折叠的逐项调用是明确外部接口边界。仓内状态累积、终态和告警判断都在
+Verus 内。复用原生产／独立根、严格整 crate 操作和未过滤缓存测试，没有新增
+受信仓内实现、依赖、证明进程或预算。每次汇总访问 C 个缓存与 A 个 artifact，
+额外状态为两个布尔字段；完整构建、验证、CI、存储及运行成本未测。其余字段的
+创建、恢复准入、IO／保留事务和完整编译／调用绑定仍未全部证明。
 
 ## libtest 清单判断
 
