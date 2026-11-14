@@ -287,6 +287,8 @@ pub open spec fn recovery_removal_result<S, M, D, F>(
                 }
             } else {
                 exists|removed: Result<(), String>|
+                    #![trigger directory.ensures((observed,), (out.0, removed))]
+                    #![trigger file.ensures((observed,), (out.0, removed))]
                     (if is_directory {
                         directory.ensures((observed,), (out.0, removed))
                     } else {

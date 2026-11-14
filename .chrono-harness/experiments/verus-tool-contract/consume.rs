@@ -74,7 +74,7 @@ pub fn borrowed_fulltext(map: &BTreeMap<String, Value>, key: &str) -> (out: bool
 // 本实验自己证明插入的结果；没有把状态更新当成工具假设。
 pub fn fulltext_insert<'a>(set: &mut BTreeSet<&'a str>, text: &'a str) -> (fresh: bool)
     ensures
-        set@ == old(set)@.insert(text),
+        final(set)@ == old(set)@.insert(text),
         fresh == !old(set)@.map(|stored: &str| stored@).contains(text@),
 {
     broadcast use json::standard_str_key_order;

@@ -80,9 +80,9 @@ pub fn record_subject_presence(
         Err(error) => !before && !after
             && error.message@ == "E_COST_REFERENCE: no declaration at either endpoint for "@
             && error.subject@ == subject@
-            && removed@ == old(removed)@,
+            && final(removed)@ == old(removed)@,
         Ok(()) => (before || after)
-            && removed@ == if before && !after { old(removed)@.push(subject) } else { old(removed)@ },
+            && final(removed)@ == if before && !after { old(removed)@.push(subject) } else { old(removed)@ },
     },
 {
     if !before && !after {
