@@ -79,6 +79,16 @@ fn recovery_content_status<'a>(mut trace: Vec<(u8, String)>, value: &'a Recovery
     (trace, Some(value.status.as_str()))
 }
 
+fn recovery_content_missing_status<'a>(trace: Vec<(u8, String)>, value: &'a RecoveryContentObservation)
+    -> (out: (Vec<(u8, String)>, Option<&'a str>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 1, out.0@.last().1@ == value.payload@,
+        out.1 is None,
+{
+    let (trace, _) = recovery_content_status(trace, value);
+    (trace, None)
+}
+
 fn recovery_content_error(mut trace: Vec<(u8, String)>, parts: [&str; 2], message: &str)
     -> (out: (Vec<(u8, String)>, String))
     ensures out.0@.len() == trace@.len() + 2,
@@ -332,13 +342,9 @@ fn recovery_decision_missing_key_discards_and_unregistered_method_keeps_without_
     }
     let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
         "original/λ\0\n", "ignored", None);
-    let read = |trace, value: &RecoveryContentObservation| {
-        let (trace, _) = recovery_content_status(trace, value);
-        (trace, None::<&str>)
-    };
     let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
         Some("key"), Some("key"), &[], true, true, true, Some("producer-manifest/v1"),
-        true, "id", verify, read,
+        true, "id", verify, recovery_content_missing_status,
         |trace, parts| recovery_content_error(trace, parts, "unexpected error"));
     expect_cache_true(trace.len() == 2);
     expect_restore_text(reason, "exact");
