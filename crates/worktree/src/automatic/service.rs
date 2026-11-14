@@ -294,7 +294,7 @@ pub fn serve(socket: &UnixDatagram, policy: &ServicePolicy,
     }
 }
 
-pub(super) fn dispatch(args: &[String]) -> Result<Value, String> {
+pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     let mut root = PathBuf::from(".");
     let mut config_path = ".chrono-harness/worktree.json".to_string();
     let mut seen = BTreeSet::new();
