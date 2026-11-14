@@ -1,7 +1,28 @@
 //! Creation-age eligibility belongs to the existing addressed lifecycle owner.
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn reusable_release(terminal_handoff: bool, expired_source_preserved: bool, generation: u64,
+    requested_generation: Option<u64>) -> (release: bool)
+    ensures release <==> (terminal_handoff || expired_source_preserved || (requested_generation.is_some()
+        && requested_generation.unwrap() == generation)),
+{
+    terminal_handoff || expired_source_preserved || match requested_generation {
+        Some(requested) => requested == generation,
+        None => false,
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use std::time::{Duration, SystemTime};
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct AgePolicy {
@@ -9,6 +30,7 @@ pub(super) struct AgePolicy {
     delete_after_seconds: u64,
     preserved_branch_prefix: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl AgePolicy {
     pub(super) fn validate(&self, kernel: bool) -> Result<(), String> {
         if !kernel
@@ -31,6 +53,7 @@ impl AgePolicy {
         })
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
     pub(super) fn age_eligible(&self, e: &Entry, deleting: bool) -> Result<bool, String> {
         let Some(policy) = &self.inputs.policy.age_policy else {
@@ -247,7 +270,8 @@ impl Manager {
         report["age_policy"] = value!({"reuse_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().reuse_after_seconds,
             "delete_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().delete_after_seconds,
             "clock":"physical-checkout-creation","task_completion":"not-claimed"});
-        if self.age_eligible(&e, true)? {
+        let expired_source_preserved = self.age_eligible(&e, true)?;
+        if expired_source_preserved {
             let names: Vec<_> = self
                 .inputs
                 .policy
@@ -300,7 +324,7 @@ impl Manager {
             .ok_or("age cache generation overflow")?;
         owner.cache_pending = true;
         self.save()?;
-        self.execute_cache(r, i, token, report)?;
+        self.execute_cache(r, i, token, report, expired_source_preserved)?;
         report["age_outcome"] = value!("reusable-source-preserved");
         Ok(())
     }

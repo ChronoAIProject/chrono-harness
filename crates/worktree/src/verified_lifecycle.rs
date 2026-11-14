@@ -36,6 +36,11 @@ pub use automatic_verification::{
 };
 
 #[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::age::reusable_release;
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::age::reusable_release;
+
+#[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::inventory::append_action_index;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::service::maintenance_idle_exit;
@@ -113,17 +118,6 @@ pub fn select_artifact(disposition: &Disposition, release_reusable: bool,
         Disposition::FinishDispose => release_reusable,
         Disposition::Retain => false,
         Disposition::EvidenceRetain => release_evidence,
-    }
-}
-
-pub fn reusable_release(terminal_handoff: bool, generation: u64,
-    requested_generation: Option<u64>) -> (release: bool)
-    ensures release <==> (terminal_handoff || (requested_generation.is_some()
-        && requested_generation.unwrap() == generation)),
-{
-    terminal_handoff || match requested_generation {
-        Some(requested) => requested == generation,
-        None => false,
     }
 }
 

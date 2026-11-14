@@ -400,3 +400,8 @@ pub use automatic::service::with_observer as with_maintenance_observer;
 #[cfg(all(unix, feature = "producer-birth-test"))]
 #[cfg(not(verus_keep_ghost))]
 pub use automatic::service::run_with_socket as run_maintenance_service_socket;
+
+#[doc(hidden)]
+#[cfg(all(unix, feature = "producer-birth-test"))]
+#[cfg(not(verus_keep_ghost))]
+pub use automatic::service::validate_activation as validate_maintenance_activation;

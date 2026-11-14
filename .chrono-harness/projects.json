@@ -890,6 +890,17 @@
             "runner-dependencies",
             "investigate.verus-tool-contract.reject"
           ]
+        },
+        "clean_cache": {
+          "operation": "clean.runner-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--target-dir",
+            "crates/runner-tests/target"
+          ]
         }
       },
       "language": "rust",
@@ -1604,6 +1615,17 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "clean_cache": {
+          "operation": "clean.ci-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/ci/Cargo.toml",
+            "--target-dir",
+            "crates/ci/target"
+          ]
         }
       },
       "language": "rust"
@@ -1974,6 +1996,17 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "clean_cache": {
+          "operation": "clean.ci-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml",
+            "--target-dir",
+            "crates/ci-tests/target"
+          ]
         }
       },
       "language": "rust"
@@ -2411,6 +2444,17 @@
       "root": "crates/judge-filemap-tests",
       "tests_for": "judge-filemap",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.judge-filemap-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml",
+            "--target-dir",
+            "crates/judge-filemap-tests/target"
+          ]
+        },
         "format_check": {
           "operation": "fmt.judge-filemap-tests",
           "tool": "cargo",
@@ -3537,6 +3581,17 @@
       "lockfile": "crates/inputs-tests/Cargo.lock",
       "root": "crates/inputs-tests",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.inputs-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml",
+            "--target-dir",
+            "crates/inputs-tests/target"
+          ]
+        },
         "format_check": {
           "operation": "fmt.inputs-tests",
           "tool": "cargo",
@@ -3798,6 +3853,17 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "clean_cache": {
+          "operation": "clean.worktree-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml",
+            "--target-dir",
+            "crates/worktree/target"
+          ]
         }
       },
       "test_project": "worktree-tests",
@@ -3972,6 +4038,17 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "clean_cache": {
+          "operation": "clean.worktree-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--target-dir",
+            "crates/worktree-tests/target"
+          ]
         }
       },
       "tests_for": "worktree",

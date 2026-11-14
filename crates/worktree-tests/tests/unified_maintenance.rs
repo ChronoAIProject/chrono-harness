@@ -39,6 +39,50 @@ use std::sync::mpsc;
 #[cfg(not(verus_keep_ghost))]
 use std::time::Duration;
 
+#[test]
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
+fn named_os_activation_accepts_forwarding_without_weakening_direct_binding() {
+    let directory = tempfile::tempdir_in("/tmp").unwrap();
+    let adopted = directory.path().join("adopted.sock");
+    let forwarded = directory.path().join("forwarded.sock");
+    let _os_path = UnixDatagram::bind(&adopted).unwrap();
+    let descriptor = UnixDatagram::bind(&forwarded).unwrap();
+    assert!(chrono_worktree::validate_maintenance_activation(&descriptor, &adopted, true).is_ok());
+    assert!(
+        chrono_worktree::validate_maintenance_activation(&descriptor, &adopted, false).is_err()
+    );
+    assert!(
+        chrono_worktree::validate_maintenance_activation(&descriptor, &forwarded, false).is_ok()
+    );
+    let missing = directory.path().join("missing.sock");
+    assert!(chrono_worktree::validate_maintenance_activation(&descriptor, &missing, true).is_err());
+    let regular = directory.path().join("ordinary");
+    fs::write(&regular, b"retain").unwrap();
+    assert!(chrono_worktree::validate_maintenance_activation(&descriptor, &regular, true).is_err());
+    let link = directory.path().join("alias");
+    std::os::unix::fs::symlink(&adopted, &link).unwrap();
+    assert!(chrono_worktree::validate_maintenance_activation(&descriptor, &link, true).is_err());
+    assert_eq!(fs::read(&regular).unwrap(), b"retain");
+    assert!(adopted.exists() && forwarded.exists());
+}
+
+#[test]
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
+fn named_activation_rejects_a_stream_descriptor() {
+    use std::os::fd::{FromRawFd, IntoRawFd};
+    let directory = tempfile::tempdir_in("/tmp").unwrap();
+    let adopted = directory.path().join("adopted.sock");
+    let _os_path = UnixDatagram::bind(&adopted).unwrap();
+    let (stream, _peer) = std::os::unix::net::UnixStream::pair().unwrap();
+    let descriptor = unsafe { UnixDatagram::from_raw_fd(stream.into_raw_fd()) };
+    let error =
+        chrono_worktree::validate_maintenance_activation(&descriptor, &adopted, true).unwrap_err();
+    assert!(error.contains("datagram"), "{error}");
+    assert!(adopted.exists());
+}
+
 #[cfg(not(verus_keep_ghost))]
 fn blocked_round_keeps_business_progress(boundary: &str) {
     if !chrono_git_boundary::isolated_git() {
