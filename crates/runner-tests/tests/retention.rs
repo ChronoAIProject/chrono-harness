@@ -814,6 +814,162 @@ fn unfinished_directory_resumes_after_accounting_and_seals_only_after_actual_pub
 }
 
 #[test]
+fn unfinished_directory_recovery_accounts_beyond_one_round_without_publishing_completion() {
+    if !isolated_capability_test(
+        "unfinished_directory_recovery_accounts_beyond_one_round_without_publishing_completion",
+    ) {
+        return;
+    }
+    let h = host(2, 16);
+    let path = ".chrono-harness/state/fixtures/recovered-rounds";
+    let publication = inventory(h.path())
+        .plan_rooted(
+            "fixture",
+            path,
+            json!({"completion":"not-established"}),
+            "domain-recovery",
+        )
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.materialize().unwrap();
+    for name in ["first", "second", "third"] {
+        publication
+            .write_file(&h.path().join(path).join(name), name.as_bytes())
+            .unwrap();
+    }
+    drop(publication);
+    let repaired = std::cell::Cell::new(0);
+    let result = inventory(h.path()).recover_unfinished_directory("fixture", path, || {
+        repaired.set(repaired.get() + 1);
+        fs::write(h.path().join(path).join("recovery-result"), b"repaired")
+            .map_err(|error| error.to_string())
+    });
+    let publication = match result {
+        Ok(Some(publication)) => publication,
+        Ok(None) => panic!("the original publication must remain adopted"),
+        Err(error) => {
+            let original = h.keep();
+            panic!("bounded recovery must continue accounting: {error}; originals: {original:?}");
+        }
+    };
+    assert_eq!(publication.id(), id);
+    assert_eq!(
+        repaired.get(),
+        1,
+        "accounting must not repeat domain repair"
+    );
+    let before = ledger(h.path());
+    let original = before["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == id)
+        .unwrap();
+    assert_eq!(original["phase"], "publishing");
+    assert_eq!(original["outcome"]["completion"], "not-established");
+    assert_eq!(
+        inventory(h.path())
+            .rooted_original("fixture", "domain-recovery")
+            .unwrap()
+            .unwrap()
+            .0,
+        id
+    );
+    publication
+        .write_file(&h.path().join(path).join("final"), b"published")
+        .unwrap();
+    publication
+        .complete_sealed(json!({"publication":"committed"}))
+        .unwrap();
+    for (name, expected) in [
+        ("first", b"first".as_slice()),
+        ("second", b"second".as_slice()),
+        ("third", b"third".as_slice()),
+        ("recovery-result", b"repaired".as_slice()),
+        ("final", b"published".as_slice()),
+    ] {
+        assert_eq!(fs::read(h.path().join(path).join(name)).unwrap(), expected);
+    }
+    let after = ledger(h.path());
+    let original = after["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == id)
+        .unwrap();
+    assert_eq!(original["phase"], "released");
+    assert_eq!(original["manifest"]["sealed"], true);
+    assert_eq!(original["outcome"]["publication"], "committed");
+}
+
+#[test]
+fn unfinished_directory_recovery_keeps_original_byte_and_manifest_bounds() {
+    if !isolated_capability_test(
+        "unfinished_directory_recovery_keeps_original_byte_and_manifest_bounds",
+    ) {
+        return;
+    }
+    for (kind, byte_limit, node_limit, expected_error) in [
+        ("bytes", 4, 16, "output byte capacity exceeded"),
+        ("nodes", 1024, 2, "capacity; preserve original"),
+    ] {
+        let h = host(2, 16);
+        let policy_path = h.path().join(POLICY_PATH);
+        let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+        policy["max_output_bytes"] = json!(byte_limit);
+        policy["max_manifest_nodes"] = json!(node_limit);
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        let path = format!(".chrono-harness/state/fixtures/recovery-{kind}");
+        let publication = inventory(h.path())
+            .plan_rooted(
+                "fixture",
+                &path,
+                json!({"completion":"not-established"}),
+                "domain-recovery",
+            )
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.materialize().unwrap();
+        drop(publication);
+        let result = inventory(h.path()).recover_unfinished_directory("fixture", &path, || {
+            fs::write(h.path().join(&path).join("first"), b"12345")
+                .and_then(|()| fs::write(h.path().join(&path).join("second"), b"second"))
+                .map_err(|error| error.to_string())
+        });
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("recovery must preserve the original {kind} bound"),
+        };
+        assert!(error.contains(expected_error), "{kind}: {error}");
+        assert_eq!(
+            fs::read(h.path().join(&path).join("first")).unwrap(),
+            b"12345"
+        );
+        assert_eq!(
+            fs::read(h.path().join(&path).join("second")).unwrap(),
+            b"second"
+        );
+        let after = ledger(h.path());
+        let original = after["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["id"] == id)
+            .unwrap();
+        assert_eq!(original["phase"], "publishing");
+        assert_eq!(original["outcome"]["completion"], "not-established");
+        assert_eq!(
+            inventory(h.path())
+                .rooted_original("fixture", "domain-recovery")
+                .unwrap()
+                .unwrap()
+                .0,
+            id
+        );
+    }
+}
+
+#[test]
 fn unfinished_directory_resume_preserves_live_readers_replacements_and_completed_originals() {
     if !isolated_capability_test(
         "unfinished_directory_resume_preserves_live_readers_replacements_and_completed_originals",

@@ -12,7 +12,20 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::retained_artifacts::retention as accounting;
+#[cfg(verus_keep_ghost)]
+use policy::accounting;
+
 verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_accounting_never_substitutes_for_domain_completion() {
+    expect_true(!accounting::accounting_releases(false, false));
+    expect_true(!accounting::accounting_releases(false, true));
+    expect_true(!accounting::accounting_releases(true, false));
+    expect_true(accounting::accounting_releases(true, true));
+}
 
 fn expect_retirement_id(actual: &String, expected: &str)
     requires actual@ == expected@,
