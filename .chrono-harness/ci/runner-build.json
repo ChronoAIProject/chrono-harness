@@ -10,8 +10,8 @@
   "verus_directory": ".chrono-harness/bin/verus",
   "rust_toolchain": "1.95.0",
   "output_contract": {
-    "version": "0.2026.04.24.f8e1704",
-    "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+    "version": "0.2026.05.05.d03e906",
+    "commit": "d03e9063f15af2b5d1668be45bb7ccd5e8544f4c"
   },
   "library": {
     "manifest": "crates/identifiers/Cargo.toml",

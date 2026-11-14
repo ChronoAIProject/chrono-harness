@@ -2878,8 +2878,13 @@ FILEMAP 显式连接证明源码、工具、启动配置和测试所有者，变
 独立根直接读取生产源码，声明成功、失败和边界预期；
 Rust 测试另外验证真实消费者，不替代证明。
 
-官方 Verus 固定为 `0.2026.04.24.f8e1704`／Rust 1.95.0，强制
+候选采用官方 Verus `0.2026.05.05.d03e906`／Rust 1.95.0，强制
 `--no-cheating --no-external-by-default`，没有函数过滤或新增证明预算。
+此次工具和宿主证明政策同步调整：完整 runner 根在保留生产实现后触发旧工具的
+erasure context 内部错误；该正式版本包含上游 [嵌套项修复 #2364](https://github.com/verus-lang/verus/pull/2364)。
+归档摘要、实际工具版本及所有现役证明结果合同一同迁移，继续使用原单槽下载缓存。
+工具升级不证明完整根或全部证明通过，须重新执行受影响证明、行为、bootstrap、
+canonical 及两段交付；原失败保留，完整验证成本尚未测量。
 现有通用 bootstrap 通过下载动作校验并准备归档，成功后解包。
 `host.verus-download` 委托当前 Rust 启动程序，先按 `verus-macos-arm64.sha256`
 核对本地包；匹配时输出 `cache-hit`，不启动 curl。包缺失或内容不符时才从 projects.json
