@@ -110,8 +110,6 @@ v5 的 `verification_consumers` 为验证登记 `need`（实际调用位置、�
 
 缓存传输的 bootstrap 安装路径和发布验证的 staging 路径用途不同。`chrono-cache` 发布资产只暂存到 `crates/cache/target/debug/chrono-cache`，原 cache-tests 在那里调用；`.chrono-harness/bin/chrono-cache` 归 bootstrap，供外层 plan／recover 使用，发布 staging 不再替换它。源资产、摘要、生产者及前后观察仍按 v5 核验。
 
-普通 CI 的 `unit_release-build` 只安装共享 core 启动工具；它没有外层 cache plan／recover 订阅。真实缓存回归由 `build.cache` 提供源执行物，再在自己的隔离宿主中安装和调用 CLI。共享工件的下载和完整验证保持原合同。
-
 Rust `test.host-release-native-tests` 运行全部发布行为测试。真实 distribution pack 使用测试 crate 自行编译的 distribution alias；真实 cache 回归消费暂存到 `crates/cache/target/debug/chrono-cache` 的选中发布资产，并执行 plan→recover→stage→consumer→plan。因此发布验证只依赖 `build_cache`，不依赖发布版 distribution。本地 FILEMAP、shared_operations 和两平台 needs／downloads 同步登记；原两组 Python 验证由这一未过滤 Rust 操作替代。回归核传输摘要、恢复原件及重新规划的执行物身份，不能代替不同编译配置或完整外围 workflow 的验收。失败时将逐进程原 stdout／stderr／argv／退出及配置保留到登记 release-test-failures，collector 仍要求全部真实单元成功。
 
 发布行为测试在创建临时宿主的 CLI／launcher 子进程时，统一移除外层发布的十个控制变量及四个 GitHub 工作流变量，再显式设置该样本的运行、依赖等输入。否则真实 preview 的源码 SHA 或工作流上下文会污染临时仓库，触发正确的身份拒绝。普通 CI 中的 Rust 命令替身回归模拟 build／preview／stable 父环境，核对清除继承值、保留显式输入与其他环境；它不调用 Git 或编译器，也不代替两平台原始未过滤测试与公开发布验收。
