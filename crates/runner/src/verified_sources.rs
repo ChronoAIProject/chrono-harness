@@ -830,8 +830,8 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         invariant 0 <= i <= paths.len(),
             compiled.len() == i, candidate.len() == i, modes.len() == i,
             forall|j: int| 0 <= j < i ==>
-                registered_source(registry.files.entries@, (#[trigger] candidate[j]).path@)
-                    && regular_mode(modes[j]@),
+                #[trigger] registered_source(registry.files.entries@, candidate@[j].path@),
+            forall|j: int| 0 <= j < i ==> regular_mode((#[trigger] modes[j])@),
         decreases paths.len() - i,
     {
         let path = &paths[i];
@@ -875,10 +875,14 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         modes.push(mode);
         proof {
             assert forall|j: int| 0 <= j < i + 1 implies
-                registered_source(registry.files.entries@, (#[trigger] candidate[j]).path@)
-                    && regular_mode(modes[j]@) by {
+                #[trigger] registered_source(registry.files.entries@, candidate@[j].path@) by {
                 if j < i {
                     assert(candidate@[j] == previous_candidate[j]);
+                }
+            }
+            assert forall|j: int| 0 <= j < i + 1 implies
+                regular_mode((#[trigger] modes[j])@) by {
+                if j < i {
                     assert(modes@[j] == previous_modes[j]);
                 }
             }

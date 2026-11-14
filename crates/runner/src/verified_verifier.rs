@@ -905,9 +905,9 @@ pub proof fn invocation_extensions_congruent(
         }
         assert(fresh_extension(first, i) == fresh_extension(second, i));
         assert forall|j: int| 7 <= j < end && j + 1 < end implies
-            (first[j]@ == "--extern"@ && same_input_name(vstd::utf8::encode_utf8(first[j + 1]@),
+            (first[j]@ == "--extern"@ && #[trigger] same_input_name(vstd::utf8::encode_utf8(first[j + 1]@),
                 vstd::utf8::encode_utf8(first[i + 1]@)))
-            == (second[j]@ == "--extern"@ && same_input_name(vstd::utf8::encode_utf8(second[j + 1]@),
+            == (second[j]@ == "--extern"@ && #[trigger] same_input_name(vstd::utf8::encode_utf8(second[j + 1]@),
                 vstd::utf8::encode_utf8(second[i + 1]@))) by {
             assert(first[j]@ == second[j]@);
             assert(first[j + 1]@ == second[j + 1]@);
