@@ -527,7 +527,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     );
     assert_eq!(code, 0, "{used} {error}");
     assert!(used["age_reuse"].is_null(), "{used}");
-    assert!(target.join("output λ/cache").is_file());
+    assert_eq!(cache_identity(&target), cache);
     assert!(target.exists());
     assert_eq!(
         fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
@@ -536,7 +536,11 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     assert!(target.exists());
-    assert_eq!(cache_identity(&target), cache);
+    assert!(!target.join("output λ").exists(), "{maintained}");
+    let current = entry(&h, &target);
+    assert_eq!(current["status"], "active", "{current}");
+    assert!(current["terminal"].is_null(), "{current}");
+    assert_eq!(fs::read_to_string(target.join("payload")).unwrap(), "fresh work");
     assert_eq!(
         fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
         b"needed original\0\xff"
@@ -548,6 +552,15 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
             .map(drain_report)
             .any(|r| !r["age_deletion_deferred"].is_null())
     );
+    // A later operation can rebuild this cache without reopening or finishing work.
+    output(&target);
+    let rebuilt = cache_identity(&target);
+    let (code, used, error) = h.auto(
+        "use",
+        &["--path", target.to_str().unwrap(), "--operation", "use.consumer"],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(cache_identity(&target), rebuilt);
     let (code, finished, error) = h.auto(
         "finish",
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
