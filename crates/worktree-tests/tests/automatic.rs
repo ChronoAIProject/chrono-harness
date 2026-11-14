@@ -2044,13 +2044,6 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
     output(&target);
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
-    // The real consumer must be registered before a zero-retention round can
-    // release the unconsumed finish report and its terminal dependency.
-    let finished_path = finished["report_path"].as_str().unwrap();
-    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-    inventory
-        .reference_paths("fixture-finish-consumer", &[finished_path.into()])
-        .unwrap();
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
     assert_eq!(
@@ -2637,6 +2630,13 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
     );
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
+    // The real consumer must be registered before a zero-retention round can
+    // release the unconsumed finish report and its terminal dependency.
+    let finished_path = finished["report_path"].as_str().unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths("fixture-finish-consumer", &[finished_path.into()])
+        .unwrap();
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
     assert_eq!(
