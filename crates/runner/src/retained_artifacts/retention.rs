@@ -2596,7 +2596,9 @@ impl Inventory {
     }
     fn maintain_locked(&self, observed: u64, gate: &Gate) -> Result<Value, String> {
         let began = self.round_began.get().unwrap_or_else(Instant::now);
+        let entered_micros = began.elapsed().as_micros() as u64;
         let mut l = self.load(&gate)?;
+        let loaded_micros = began.elapsed().as_micros() as u64;
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
@@ -2824,6 +2826,7 @@ impl Inventory {
             })
             .collect();
         order.sort_by_key(|(_, priority)| *priority);
+        let prepared_micros = began.elapsed().as_micros() as u64;
         for (id, _) in order {
             if !self.metadata_room()
                 || nodes
@@ -3209,7 +3212,9 @@ impl Inventory {
                 Err(error) => protected.push(json!({"id":id,"reason":error})),
             }
         }
+        let disposal_finished_micros = began.elapsed().as_micros() as u64;
         self.save(&l, &gate)?;
+        let saved_micros = began.elapsed().as_micros() as u64;
         let mut measurements = [0u64; 8];
         for output in &l.outputs {
             for (total, value) in measurements.iter_mut().zip(retained_measurements(
@@ -3225,6 +3230,22 @@ impl Inventory {
         for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(measurements) {
             result[*key] = json!(value);
         }
+        // Emit after bounded work: sink IO must not consume its disposal window.
+        // Every checkpoint uses the same owning round's start, including gates.
+        tracing::debug!(
+            event_id = "retention.round.component",
+            host = %self.root.display(),
+            entered_micros,
+            loaded_micros,
+            prepared_micros,
+            disposal_finished_micros,
+            saved_micros,
+            outputs = count,
+            nodes,
+            removed_logical_bytes = bytes,
+            max_millis_per_round = self.policy.max_millis_per_round,
+            "bounded retention component returned"
+        );
         Ok(result)
     }
 

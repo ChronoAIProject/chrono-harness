@@ -51,6 +51,18 @@ fn maintenance(root: &Path) -> Value {
     }
     round
 }
+#[cfg(not(verus_keep_ghost))]
+fn diagnosed_maintenance_originals(root: &Path, id: &str) -> Value {
+    use chrono_diagnostics::logging::{Level, Logger};
+    // The existing operation owns and bounds stderr; no extra log family or
+    // subscriber is installed in the parent test process.
+    let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
+    let round = logger.run(|| inventory(root).maintain_originals(&[id.to_owned()]));
+    logger
+        .finish()
+        .expect("original retention stage diagnostics");
+    round.unwrap()
+}
 // The fixture owns every address below its private root. This count observes
 // those declarations after bounded work; it is never written into a producer report.
 #[cfg(not(verus_keep_ghost))]
@@ -5864,9 +5876,7 @@ fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisit
         .collect();
     let mut rounds = Vec::new();
     for _ in 0..4 {
-        let round = inventory(h.path())
-            .maintain_originals(&[report_id.clone()])
-            .unwrap();
+        let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
@@ -5878,7 +5888,12 @@ fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisit
             break;
         }
     }
-    assert!(!h.path().join(report).exists(), "{rounds:?}");
+    assert!(
+        !h.path().join(report).exists(),
+        "{rounds:?}; policy: {policy}; report declaration: {}; original declaration: {}",
+        fs::read_to_string(retention_state::object_path(h.path(), &report_id)).unwrap(),
+        fs::read_to_string(retention_state::object_path(h.path(), &ids[0])).unwrap()
+    );
     assert_eq!(fs::read(role_path).unwrap(), role_before);
     for (path, bytes) in untouched {
         assert_eq!(fs::read(path).unwrap(), bytes);
@@ -6158,9 +6173,7 @@ fn released_report_detaches_many_originals_with_bounded_durable_progress() {
     let mut checked_replacement = false;
     for _ in 0..ids.len() + 8 {
         // Reopen the owner on every call: progress must survive process loss.
-        let round = inventory(h.path())
-            .maintain_originals(&[report_id.clone()])
-            .unwrap();
+        let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
@@ -6221,7 +6234,10 @@ fn released_report_detaches_many_originals_with_bounded_durable_progress() {
         rounds.push(round);
     }
     let final_state: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
-    assert!(final_state["output"].is_null(), "{rounds:?}; {final_state}");
+    assert!(
+        final_state["output"].is_null(),
+        "{rounds:?}; policy: {policy}; report declaration: {final_state}"
+    );
     assert!(checked_replacement);
     assert_eq!(removed, bytes.len() as u64, "{rounds:?}");
     assert!(!h.path().join(report).exists());
