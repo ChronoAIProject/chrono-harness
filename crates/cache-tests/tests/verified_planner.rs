@@ -40,7 +40,9 @@ fn recovery_preflight_case(enabled: bool, consumer: Option<&str>, prepare_error:
                 },
             },
     {
+        let ghost previous = trace@;
         trace.push((0, actual.to_string()));
+        assert(trace@.drop_last() =~= previous);
         (trace, match prepare_error {
             Some(error) => Err(error.to_string()), None => Ok(differs),
         })
@@ -56,7 +58,9 @@ fn recovery_preflight_case(enabled: bool, consumer: Option<&str>, prepare_error:
                 },
             },
     {
+        let ghost previous = trace@;
         trace.push((1, "".to_string()));
+        assert(trace@.drop_last() =~= previous);
         (trace, match attempt_error {
             Some(error) => Err(error.to_string()), None => Ok(()),
         })
@@ -72,7 +76,9 @@ fn recovery_preflight_case(enabled: bool, consumer: Option<&str>, prepare_error:
                 },
             },
     {
+        let ghost previous = trace@;
         trace.push((2, "".to_string()));
+        assert(trace@.drop_last() =~= previous);
         (trace, match decode_error {
             Some(error) => Err(error.to_string()), None => Ok(payload.to_string()),
         })
@@ -82,7 +88,9 @@ fn recovery_preflight_case(enabled: bool, consumer: Option<&str>, prepare_error:
         ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
             out.0@.last().0 == 3u8, out.0@.last().1@ == value@, out.1 == object,
     {
+        let ghost previous = trace@;
         trace.push((3, value.clone()));
+        assert(trace@.drop_last() =~= previous);
         (trace, object)
     };
     let (trace, result) = policy::preflight_recovery(Vec::new(), enabled, consumer,
