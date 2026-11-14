@@ -3784,8 +3784,11 @@
         },
         "verify_dependency_owner": {
           "operation": "verify.bootstrap-dependency-owner",
-          "tool": "cargo-verus",
+          "tool": "bash",
           "argv": [
+            "-c",
+            "RUSTC_BOOTSTRAP=1 exec .chrono-harness/bin/verus/cargo-verus \"$@\" --config \"build.rustflags=[\\\"-Zbinary-dep-depinfo\\\",\\\"-Zchecksum-hash-algorithm=sha256\\\",\\\"--extern\\\",\\\"vstd=$PWD/.chrono-harness/bin/verus/libvstd.rlib\\\",\\\"-L\\\",\\\"dependency=$PWD/.chrono-harness/bin/verus\\\"]\" -- --import \"vstd=$PWD/.chrono-harness/bin/verus/vstd.vir\" --no-cheating --no-external-by-default --num-threads 2 --output-json -Zchecksum-hash-algorithm=sha256",
+            "verify.bootstrap-dependency-owner",
             "build",
             "-v",
             "--fwd-verus-args-to",
@@ -3798,14 +3801,7 @@
             "--all-targets",
             "--message-format=json",
             "--jobs",
-            "1",
-            "--",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "-Zchecksum-hash-algorithm=sha256"
+            "1"
           ]
         }
       },
@@ -3907,8 +3903,11 @@
         },
         "verify_dependency_owner": {
           "operation": "verify.bootstrap-dependency-owner-tests",
-          "tool": "cargo-verus",
+          "tool": "bash",
           "argv": [
+            "-c",
+            "RUSTC_BOOTSTRAP=1 exec .chrono-harness/bin/verus/cargo-verus \"$@\" --config \"build.rustflags=[\\\"-Zbinary-dep-depinfo\\\",\\\"-Zchecksum-hash-algorithm=sha256\\\",\\\"--extern\\\",\\\"vstd=$PWD/.chrono-harness/bin/verus/libvstd.rlib\\\",\\\"-L\\\",\\\"dependency=$PWD/.chrono-harness/bin/verus\\\"]\" -- --import \"vstd=$PWD/.chrono-harness/bin/verus/vstd.vir\" --no-cheating --no-external-by-default --num-threads 2 --output-json -Zchecksum-hash-algorithm=sha256",
+            "verify.bootstrap-dependency-owner-tests",
             "build",
             "-v",
             "--fwd-verus-args-to",
@@ -3922,14 +3921,7 @@
             "proved_build",
             "--message-format=json",
             "--jobs",
-            "1",
-            "--",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "-Zchecksum-hash-algorithm=sha256"
+            "1"
           ]
         }
       },
