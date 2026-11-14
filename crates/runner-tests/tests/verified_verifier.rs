@@ -312,6 +312,7 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
         reveal_strlit("dependency=deps"); reveal_strlit("other=other.rlib");
         reveal_strlit("producer=producer.rlib"); reveal_strlit("producer=producer.vir");
         reveal_strlit("consumer.vir"); reveal_strlit("root"); reveal_strlit("out");
+        reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
         reveal_strlit("--emit=link=out,dep-info=out.d");
         reveal_strlit("dependency=");
         vstd::utf8::is_ascii_chars_encode_utf8("consumer"@);
@@ -368,6 +369,7 @@ fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
     proof {
         reveal_strlit("--unknown"); reveal_strlit("--extern");
         reveal_strlit("--emit=link=out,dep-info=out.d");
+        reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
         vstd::utf8::is_ascii_chars_encode_utf8("--extern"@);
     }
     let mut unknown = arguments(); unknown[7] = "--unknown".to_string();
@@ -397,6 +399,8 @@ fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
         "--crate-name".to_string(), "two".to_string(),
         "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    assert(policy::conflicting_extension(prefix@, 7, 9));
+    assert(!policy::fresh_extension(prefix@, 9));
     let duplicate = policy::parse_verifier_arguments(&prefix);
     expect_verifier_true(duplicate.is_none());
     let orphan = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
@@ -429,6 +433,12 @@ fn named_argument_identity_and_payload_boundaries_are_independent() {
         assert(vstd::utf8::encode_scalar(24452) == seq![229u8,190,132]) by (compute);
         reveal_with_fuel(vstd::utf8::encode_utf8, 5);
         assert(vstd::utf8::encode_utf8("a=路径"@) =~= seq![97u8,61,232,183,175,229,190,132]);
+        assert(vstd::utf8::encode_utf8("a=x=y"@) =~= seq![97u8,61,120,61,121]);
+        assert(vstd::utf8::encode_utf8("a="@) =~= seq![97u8,61]);
+        assert(vstd::utf8::encode_utf8("=x"@) =~= seq![61u8,120]);
+        assert(vstd::utf8::encode_utf8("a=x"@) =~= seq![97u8,61,120]);
+        assert(vstd::utf8::encode_utf8("ab=x"@) =~= seq![97u8,98,61,120]);
+        assert(vstd::utf8::encode_utf8("a=\0x"@) =~= seq![97u8,61,0,120]);
     }
     let equals_in_payload = policy::valid_named_invocation_value("a=x=y".as_bytes());
     let unicode_payload = policy::valid_named_invocation_value("a=路径".as_bytes());
