@@ -94,6 +94,135 @@ pub fn remove_recovery_output<S, M, D, F>(
     out
 }
 
+/// 外层错误是路径读取失败；内层保留 metadata 的原种类和原文本。
+pub type RecoveryProbe = Result<Result<(), (u32, String)>, String>;
+pub type RecoveryEntryError = (&'static str, String, &'static str);
+
+pub open spec fn recovery_probe_matches(
+    observation: RecoveryProbe, not_found: u32, prefix: &str,
+    out: Result<bool, RecoveryEntryError>,
+) -> bool {
+    match observation {
+        Err(error) => match out {
+            Err(parts) => parts.0@ == ""@ && parts.1 == error && parts.2@ == ""@,
+            _ => false,
+        },
+        Ok(Ok(())) => out == Ok::<bool, RecoveryEntryError>(true),
+        Ok(Err((kind, error))) => if kind == not_found {
+            out == Ok::<bool, RecoveryEntryError>(false)
+        } else { match out {
+            Err(parts) => parts.0@ == prefix@ && parts.1 == error && parts.2@ == ""@,
+            _ => false,
+        } },
+    }
+}
+
+fn classify_recovery_probe(observation: RecoveryProbe, not_found: u32,
+    prefix: &'static str) -> (out: Result<bool, RecoveryEntryError>)
+    ensures recovery_probe_matches(observation, not_found, prefix, out),
+{
+    match observation {
+        Err(error) => Err(("", error, "")),
+        Ok(Ok(())) => Ok(true),
+        Ok(Err((kind, error))) => if kind == not_found { Ok(false) }
+            else { Err((prefix, error, "")) },
+    }
+}
+
+pub open spec fn recovery_entry_result<S, T, O, I, R>(
+    initial: S, not_found: u32, intent_path: &str,
+    output: O, intent: I, replay: R, out: (S, Result<Option<T>, RecoveryEntryError>),
+) -> bool
+    where O: FnOnce(S) -> (S, RecoveryProbe),
+        I: FnOnce(S) -> (S, RecoveryProbe),
+        R: FnOnce(S) -> (S, Result<T, String>),
+{
+    exists|observed: S, observation: RecoveryProbe, checked: Result<bool, RecoveryEntryError>|
+        #[trigger] output.ensures((initial,), (observed, observation))
+        && #[trigger] recovery_probe_matches(observation, not_found,
+            "E_CACHE_RECOVERY: result metadata: ", checked)
+        && match checked {
+            Err(error) => out.0 == observed && out.1 == Err::<Option<T>, RecoveryEntryError>(error),
+            Ok(true) => exists|result: Result<T, String>|
+                #[trigger] replay.ensures((observed,), (out.0, result))
+                && match result {
+                    Ok(value) => out.1 == Ok::<Option<T>, RecoveryEntryError>(Some(value)),
+                    Err(error) => out.1 == Err::<Option<T>, RecoveryEntryError>(("", error, "")),
+                },
+            Ok(false) => exists|probed: S, probe: RecoveryProbe,
+                checked: Result<bool, RecoveryEntryError>|
+                #[trigger] intent.ensures((observed,), (probed, probe))
+                && out.0 == probed && #[trigger] recovery_probe_matches(probe, not_found,
+                    "E_CACHE_RECOVERY: intent metadata: ", checked)
+                && match checked {
+                    Err(error) => out.1 == Err::<Option<T>, RecoveryEntryError>(error),
+                    Ok(false) => out.1 == Ok::<Option<T>, RecoveryEntryError>(None),
+                    Ok(true) => match out.1 {
+                        Err(parts) => parts.0@ == "E_CACHE_RECOVERY: unfinished original intent "@
+                            && parts.1@ == intent_path@
+                            && parts.2@ == "; no automatic repeat"@,
+                        _ => false,
+                    },
+                },
+        }
+}
+
+/// 已有结果只复用；只有结果和意图均缺失才允许新的恢复操作。
+pub fn select_recovery_entry<S, T, O, I, R>(
+    state: S, not_found: u32, intent_path: &str, output: O, intent: I, replay: R,
+) -> (out: (S, Result<Option<T>, RecoveryEntryError>))
+    where O: FnOnce(S) -> (S, RecoveryProbe),
+        I: FnOnce(S) -> (S, RecoveryProbe),
+        R: FnOnce(S) -> (S, Result<T, String>),
+    requires output.requires((state,)),
+        forall|state: S| intent.requires((state,)),
+        forall|state: S| replay.requires((state,)),
+    ensures recovery_entry_result(state, not_found, intent_path, output, intent, replay, out),
+{
+    let ghost initial = state;
+    let (state, observation) = output(state);
+    let ghost observed = state;
+    let ghost original = observation;
+    let checked = classify_recovery_probe(observation, not_found,
+        "E_CACHE_RECOVERY: result metadata: ");
+    let ghost output_checked = checked;
+    let out = match checked {
+        Err(error) => (state, Err(error)),
+        Ok(true) => {
+            let (state, result) = replay(state);
+            let ghost replayed = result;
+            let out = (state, match result {
+                Ok(value) => Ok(Some(value)),
+                Err(error) => Err(("", error, "")),
+            });
+            assert(replay.ensures((observed,), (out.0, replayed)));
+            out
+        },
+        Ok(false) => {
+            let (state, observation) = intent(state);
+            let ghost probed = state;
+            let ghost original_intent = observation;
+            let checked = classify_recovery_probe(observation, not_found,
+                "E_CACHE_RECOVERY: intent metadata: ");
+            let ghost intent_checked = checked;
+            let out = (state, match checked {
+                Err(error) => Err(error),
+                Ok(false) => Ok(None),
+                Ok(true) => Err(("E_CACHE_RECOVERY: unfinished original intent ",
+                    intent_path.to_string(), "; no automatic repeat")),
+            });
+            assert(intent.ensures((observed,), (probed, original_intent)));
+            assert(recovery_probe_matches(original_intent, not_found,
+                "E_CACHE_RECOVERY: intent metadata: ", intent_checked));
+            out
+        },
+    };
+    assert(output.ensures((initial,), (observed, original)));
+    assert(recovery_probe_matches(original, not_found,
+        "E_CACHE_RECOVERY: result metadata: ", output_checked));
+    out
+}
+
 pub enum RecoveryOption {
     HostRoot,
     Config,
@@ -559,43 +688,57 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let binding = json!({"path":plan_path,"sha256":&plan_hash});
     let steps_hash = sha256(steps_raw.as_bytes());
     let output_file = no_symlink_parents(&root, &output)?;
-    match fs::symlink_metadata(&output_file) {
-        Ok(_) => {
-            let (original, report) = retained(&root, plan_path)?;
-            admit_recovery_replay(
-                &RecoveryReplay {
-                    schema: report["schema"].as_str(),
-                    plan_fields: report["plan"].as_object().map(serde_json::Map::len),
-                    plan_path: report["plan"]["path"].as_str(),
-                    plan_sha256: report["plan"]["sha256"].as_str(),
-                    steps_sha256: report["native_steps"]["sha256"].as_str(),
-                    status: report["status"].as_str(),
-                },
-                plan_path,
-                &plan_hash,
-                &steps_hash,
-                &original.path,
-            )
-            .map_err(|parts| parts.concat())?;
-            // This is the previous operation's result, never a second deletion of
-            // outputs that a later producer may already have rebuilt.
-            return Ok(serde_json::to_string(
-                &json!({"report":original,"observation":report,"replayed":true}),
-            )
-            .map_err(|e| e.to_string())?
-                + "\n");
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("E_CACHE_RECOVERY: result metadata: {e}")),
-    }
-    match fs::symlink_metadata(no_symlink_parents(&root, &intent_path)?) {
-        Ok(_) => {
-            return Err(format!(
-                "E_CACHE_RECOVERY: unfinished original intent {intent_path}; no automatic repeat"
-            ));
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => return Err(format!("E_CACHE_RECOVERY: intent metadata: {e}")),
+    let previous = select_recovery_entry(
+        (),
+        std::io::ErrorKind::NotFound as u32,
+        &intent_path,
+        |()| {
+            let observation = fs::symlink_metadata(&output_file)
+                .map(|_| ())
+                .map_err(|error| (error.kind() as u32, error.to_string()));
+            ((), Ok(observation))
+        },
+        |()| {
+            let observation = no_symlink_parents(&root, &intent_path).map(|path| {
+                fs::symlink_metadata(path)
+                    .map(|_| ())
+                    .map_err(|error| (error.kind() as u32, error.to_string()))
+            });
+            ((), observation)
+        },
+        |()| {
+            let result = (|| {
+                let (original, report) = retained(&root, plan_path)?;
+                admit_recovery_replay(
+                    &RecoveryReplay {
+                        schema: report["schema"].as_str(),
+                        plan_fields: report["plan"].as_object().map(serde_json::Map::len),
+                        plan_path: report["plan"]["path"].as_str(),
+                        plan_sha256: report["plan"]["sha256"].as_str(),
+                        steps_sha256: report["native_steps"]["sha256"].as_str(),
+                        status: report["status"].as_str(),
+                    },
+                    plan_path,
+                    &plan_hash,
+                    &steps_hash,
+                    &original.path,
+                )
+                .map_err(|parts| parts.concat())?;
+                // This is the previous operation's result, never a second deletion of
+                // outputs that a later producer may already have rebuilt.
+                Ok(serde_json::to_string(
+                    &json!({"report":original,"observation":report,"replayed":true}),
+                )
+                .map_err(|e| e.to_string())?
+                    + "\n")
+            })();
+            ((), result)
+        },
+    )
+    .1
+    .map_err(|(prefix, original, suffix)| [prefix, original.as_str(), suffix].concat())?;
+    if let Some(previous) = previous {
+        return Ok(previous);
     }
     let steps_original =
         super::retain_original(&root, &directory, "restore-steps", steps_raw.as_bytes())?;
