@@ -25,6 +25,64 @@ mod probe;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_actions_keep_discard_and_refresh_have_distinct_effects() {
+    let keep = policy::RecoveryAction::Keep;
+    expect_cache_true(!keep.discards_outputs());
+    expect_cache_true(!keep.refreshes_sources());
+    expect_restore_text(keep.initial_status(), "not-required");
+    let discard = policy::RecoveryAction::Discard;
+    expect_cache_true(discard.discards_outputs());
+    expect_cache_true(!discard.refreshes_sources());
+    expect_restore_text(discard.initial_status(), "pending");
+    let refresh = policy::RecoveryAction::Refresh;
+    expect_cache_true(!refresh.discards_outputs());
+    expect_cache_true(refresh.refreshes_sources());
+    expect_restore_text(refresh.initial_status(), "not-required");
+}
+
+fn recovery_non_kept_actions_never_verify_content(method: Option<&str>, reason: &str) {
+    let discard = policy::RecoveryAction::Discard;
+    expect_cache_true(!discard.requires_content_verification(method, reason));
+    let refresh = policy::RecoveryAction::Refresh;
+    expect_cache_true(!refresh.requires_content_verification(method, reason));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_content_verification_requires_a_kept_registered_hit() {
+    proof {
+        reveal_strlit("producer-manifest/v1"); reveal_strlit("Producer-manifest/v1");
+        reveal_strlit("producer-manifest/v1\0"); reveal_strlit("");
+        reveal_strlit("exact"); reveal_strlit("compatible"); reveal_strlit("Exact");
+        reveal_strlit("exact\0"); reveal_strlit("compatible\n");
+        reveal_strlit("状态/λ\0\n");
+        assert("producer-manifest/v1"@.len() == 20);
+        assert(""@.len() == 0);
+        assert("Producer-manifest/v1"@.len() == 20);
+        assert("producer-manifest/v1"@[0] != "Producer-manifest/v1"@[0]);
+        assert("producer-manifest/v1\0"@.len() == 21);
+        assert("exact"@.len() == 5); assert("compatible"@.len() == 10);
+        assert("Exact"@.len() == 5); assert("exact"@[0] != "Exact"@[0]);
+        assert("exact\0"@.len() == 6); assert("compatible\n"@.len() == 11);
+        assert("状态/λ\0\n"@.len() == 6);
+    }
+    let keep = policy::RecoveryAction::Keep;
+    expect_cache_true(keep.requires_content_verification(Some("producer-manifest/v1"), "exact"));
+    expect_cache_true(keep.requires_content_verification(Some("producer-manifest/v1"), "compatible"));
+    expect_cache_true(!keep.requires_content_verification(None, "exact"));
+    expect_cache_true(!keep.requires_content_verification(Some(""), "compatible"));
+    expect_cache_true(!keep.requires_content_verification(Some("Producer-manifest/v1"), "exact"));
+    expect_cache_true(!keep.requires_content_verification(Some("producer-manifest/v1\0"), "compatible"));
+    expect_cache_true(!keep.requires_content_verification(Some("producer-manifest/v1"), "Exact"));
+    expect_cache_true(!keep.requires_content_verification(Some("producer-manifest/v1"), "exact\0"));
+    expect_cache_true(!keep.requires_content_verification(Some("producer-manifest/v1"), "compatible\n"));
+    expect_cache_true(!keep.requires_content_verification(Some("producer-manifest/v1"), "状态/λ\0\n"));
+    recovery_non_kept_actions_never_verify_content(None, "");
+    recovery_non_kept_actions_never_verify_content(Some("producer-manifest/v1"), "exact");
+    recovery_non_kept_actions_never_verify_content(Some("producer-manifest/v1"), "compatible");
+    recovery_non_kept_actions_never_verify_content(Some("状态/λ\0\n"), "状态/λ\0\n");
+}
+
 fn recovery_decision_errors_keep_the_complete_id(id: &str) {
     let malformed = policy::recovery_decision_error(
         &policy::RecoveryDecisionError::MalformedOutputs, id);

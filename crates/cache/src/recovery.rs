@@ -596,9 +596,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 base_action.map_err(|error| recovery_decision_error(&error, id).concat())?;
             let content_method = cache["content_verification"].as_str();
             let mut verification = None;
-            if matches!(base_action, super::verified_planner::RecoveryAction::Keep)
-                && super::verified_planner::content_verification_applies(content_method, reason)
-            {
+            if base_action.requires_content_verification(content_method, reason) {
                 let verified = super::content::verify(
                     &root,
                     &directory,
@@ -622,16 +620,13 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 config.caches[id].refresh_sources,
             );
             let action = action.map_err(|error| recovery_decision_error(&error, id).concat())?;
-            let discard = matches!(action, super::verified_planner::RecoveryAction::Discard);
-            report["caches"][id] = json!({"restore":restore,"reason":reason,"status":if discard {"pending"} else {"not-required"},"artifacts":[]});
+            let discard = action.discards_outputs();
+            report["caches"][id] = json!({"restore":restore,"reason":reason,"status":action.initial_status(),"artifacts":[]});
             if let Some(verification) = verification {
                 report["caches"][id]["verification"] = verification;
-                if discard {
-                    report["caches"][id]["status"] = json!("pending");
-                }
             }
             if !discard {
-                if matches!(action, super::verified_planner::RecoveryAction::Refresh) {
+                if action.refreshes_sources() {
                     let refresh = super::freshness::prepare(
                         &root,
                         &config.caches[id],

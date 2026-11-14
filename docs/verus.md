@@ -40,6 +40,25 @@ worktree-tests 为 8，judge-workflow-tests、pr-tests 为 2，其余不加参�
 这里只证明新参数预期与选择。两个文件的其余存量 IO、进程、解析和断言尚未完成
 迁移，不能把文件登记或局部证明当作完整文件已证明。构建、证明、CI 和存储总成本未测。
 
+## 缓存恢复动作与初始状态
+
+`verified_planner.rs` 的 `RecoveryAction` 同源方法直接决定是否核验内容、是否丢弃输出、
+是否刷新源，以及报告的初始状态。`Keep` 和 `Refresh` 的初始状态为 `not-required`，
+只有 `Discard` 为 `pending`；只有 `Keep` 且登记 `producer-manifest/v1`、命中类型为
+`exact` 或 `compatible` 时核验内容。实际恢复循环直接消费这些结果，不再自行匹配动作
+或选择状态，也不在附加 verification 后重复写同一个 `pending`。
+
+内容核验条件由同一 `content_verification_applies_spec` 维护，既有恢复决策规范、
+可执行判断和新的动作方法共用它；实际可执行判断也复用现有已证明函数。
+独立 Verus 预期列出三个动作各自的丢弃、刷新和初始状态，并核任意输入下非 Keep
+动作从不核验，以及缺方法、大小写、Unicode、NUL 和换行边界。同一预期也普通运行，
+现有未过滤恢复测试继续核真实内容与源刷新行为。
+
+沿用现有 FILEMAP 根、`verify.cache-planner`／`verify.cache-planner-tests` 和严格整 crate
+参数，不新增依赖、外部接口假设、仓内受信函数、证明操作或预算。JSON／标准库编码
+继续使用既有接口；完整恢复 IO／保留事务、外围字段解释及全部编译调用绑定仍未完成。
+本批只完成这些动作判断，构建、证明、CI 和完整生命周期成本未测。
+
 ## 缓存恢复错误文本
 
 `recovery.rs` 的 `recovery_decision_error` 用同源 Verus 为两个恢复错误选择完整前缀，
