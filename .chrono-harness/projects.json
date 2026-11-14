@@ -185,7 +185,7 @@
       "actions": {
         "investigate_generation_dependency": {
           "operation": "investigate.ci-generation-dependency.runner",
-          "tool": "verus",
+          "tool": "verus-json-contract",
           "argv": [
             "--crate-type=lib",
             "--no-cheating",
@@ -203,7 +203,7 @@
             "-L",
             "dependency=crates/ci-tests/target/debug/deps",
             "--extern",
-            "verus_builtin_macros=.chrono-harness/bin/verus/libverus_builtin_macros.dylib",
+            "verus_builtin_macros=.chrono-harness/state/verus-tool-contract-20261114/libverus_builtin_macros.dylib",
             "--extern",
             "chrono_identifiers=crates/ci-tests/target/debug/deps/libchrono_identifiers-cf6a9639509b2b9f.rlib",
             "--extern",
@@ -482,7 +482,7 @@
       "actions": {
         "verify_json_adapters": {
           "operation": "verify.runner-json-adapters-tests",
-          "tool": "verus",
+          "tool": "verus-json-contract",
           "argv": [
             "--crate-type=lib",
             "--no-cheating",
@@ -501,7 +501,7 @@
             "--extern",
             "serde_json=crates/ci-tests/target/debug/deps/libserde_json-f23d5e320f77b40e.rlib",
             "--extern",
-            "verus_builtin_macros=.chrono-harness/bin/verus/libverus_builtin_macros.dylib",
+            "verus_builtin_macros=.chrono-harness/state/verus-tool-contract-20261114/libverus_builtin_macros.dylib",
             "--import",
             "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
             "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapter-tests.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapter-tests.rlib.d",

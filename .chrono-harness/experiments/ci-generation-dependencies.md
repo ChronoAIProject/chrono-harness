@@ -504,3 +504,19 @@ reject 的原诊断为 `assume/admit not allowed with --no-cheating`，明确定
 详细输入／工具／组件、原报告／intent／launch／result／双流摘要、joined 与环境绑定由本次 runner attempt `6af7f6a6079db12198010da3/attempt-1/result.json` 引用。AC 原成功 build 与失败 consume 的报告、双流和必要诊断仍按既有 check-original／evidence-retain 保留，已核旧身份且诊断消费完成的失败临时 VIR／dep-info 由原生产者正常替换；没有另建永久备份或总账。原件供工程、调用方和 review 使用，2026-11-21 复核，调试／验收义务结束且无活使用方后才由调用方释放。
 
 下一差异回到既有生产所有者：完整 typed compiler／source／context／report／rlib／dep-info／VIR／宏／传递输入资格、warehouse 迁移、全部仓内 adapter／generation／独立预期证明与实际编译绑定、适用行为验收、正式 DELTA、原生 integration→dev 和落地仍须完成。特别是本轮未执行 `facts_configs` 的 runner 整 crate 证明与其行为操作，不能把严格实验根成功推广为这些范围成功。全 SPEC goal 保持 active；本 chunk 不触发 formalreview，有限批次及适用实际工作完成后仍需 mandatory review triplet。
+
+## AG：唯一工具合同接入真实 runner（源码准备，未执行）
+
+本轮基于调用方封存的 `9feb4e84a703d9dd07cfb11ded8cbf921e9045e6`／tree `d357bb0695452c8cf805bc1706b889712ce528b4`，只准备实际合同归属和工具消费接线。`runner/src/lib.rs` 在 `verus_keep_ghost` 下重导出 `vstd::json_value_specs`，普通 Rust 仍从原地址擦除同一合同源的 ghost 声明。这个条件只选择外部合同所有者；`json_fields`、七个实际 trait 实现及独立 `json_adapters` 的程序、断言和状态维护全部保留，不新增仓内 `external_body`、假设或副本。
+
+**产品与宿主政策同时修改：**macos-27 的工具表增加仅供本轮调查消费的 `verus-json-contract`，直接指向本工作树 `.chrono-harness/state/verus-tool-contract-20261114/verus`；默认正式 `verus` 不变。原 `investigate.ci-generation-dependency.runner` 与 `verify.runner-json-adapters-tests` 选用此工具，并从同目录选用 `libverus_builtin_macros.dylib`。原生 wrapper 按自身位置取得已成功构建的相邻 `libvstd.rlib`／`vstd.vir`；不经 bash 隐藏 compiler 身份，不新增 recipe、安装或构建入口。固定版本字符串只用于既有版本观察，不证明这个扩展组件已具正式资格。
+
+FILEMAP 只为该 macOS 工具选择增加 runner、runner-tests 的明确输入边及原 runner-tests 的执行边。`projects.json` 和 `macos-27.json` 补登记为声明数据：它们提供操作／工具选择，不包含程序实现或准入算法；没有把任何 Rust program／specification 改成 data。全部已有程序根、计划、顺序、输出占用、两线程、strict flags、whole crate、compile、checksum、正式 900 秒／1 MiB 和 raw 调查 2400 秒／每流 64 MiB 原样保留。Linux 尚未登记这个本地 macOS 工具；共享 actions 在该配置下会触发现有 `E_REFERENCE`，是正式跨平台验收前必须解决的缺口。本轮不宣称跨平台采用，也不能在那里用旧默认库替代本组件。
+
+复用前提仍是 AC 三个成功产物、105 条构建源码校验和、唯一合同及原固定缓存依赖不变；本次静态读取全部匹配。合同源仍为 3,768 字节／`49cbbc1615e471987d61a563b560a40d257ab5f07c30a88960ae06eafa594b33`，共享 helper、七个实现和独立预期均未改。成功 AC build 和 AE consume／reject 不重跑；不 extract／patch／repair／下载或重建，不写 installed／shared 工具。保留原行为套件、全部断言、失败原件与现有缓存／retention 所有者。
+
+调用方封存并核干净候选后，下一 assignment 沿上文唯一 `chrono-worktree use` 入口，先执行 `investigate.ci-generation-dependency.runner`，取得原 stdout／stderr／退出、全部自有进程 joined、严格整 crate 成功以及同次 rlib／dep-info／VIR，核对实际工具、宏和依赖身份后，才执行 `verify.runner-json-adapters-tests`。后者必须导入前者同次库／VIR，完整保留全文、Unicode、借用、对象和集合状态预期。新失败保留原件，仅停止其明确后继，不重跑成功前置、不换缓存 runner 或放宽预期。后续 generation 的 consumer／missing 仍选旧工具，本轮不执行；迁移并绑定同一组件前不得消费新 runner 库。
+
+**正式资格仍未建立。**现有 source-only guard 继续拒绝扩展参数；两个 action 原 `output_contract` 不授予 `ProofAdmission`。合同源在 FILEMAP 的 runner 根登记目前只是尚未满足的证明义务：ghost runner 改为导入工具合同后，不能声称该源出现在 runner 的源码 dep-info；其实际生产者是 AC 的完整 vstd 根及原 105 条 checksum。现役格式不能承载这条完整工具来源关系，本轮不虚改证明根、不把成功 build 加回计划迫使重建，也不改准入逻辑。typed compiler／source／context／report／rlib／dep-info／VIR／宏及传递资格仍由原所有者后续完成。
+
+本轮仅作编辑及静态字节核对；没有运行构建、证明、探针、格式化、bootstrap、check 或 Git／GitHub，没有委派或生命周期变更。纯转发接线不新增镜像测试；候选须另验 runner 整 crate、独立预期、原未过滤 Rust 行为及按两端登记选择的正式 DELTA。新增工具选择观察、构建／证明／CI／存储及完整维护成本未测，不能由旧实验耗时推算。generation 四个真实生产分支、原生 integration→dev／落地及全部 SPEC 仍未完成，goal 保持 active，不触发 chunk formalreview。沿用 AE 的原件使用方、2026-11-21 用途复核及释放条件，活动工作树、`report_handoff_pending` 和旧 cleanup 失败继续保护，由调用方交接。
