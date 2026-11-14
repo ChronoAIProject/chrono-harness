@@ -722,7 +722,8 @@ fn ci_impact(
                         || ops.iter().any(|op| {
                             s.operations
                                 .get(op)
-                                .is_some_and(|(_, tool, _, _)| changed_tools.contains(tool))
+                                .is_some_and(|(_, tool, _, _, proof)| changed_tools.contains(tool)
+                                    || proof.as_ref().is_some_and(|p| changed_tools.contains(&p.tool)))
                         })
                     {
                         let reasons = extras.entry(test.clone()).or_default();
