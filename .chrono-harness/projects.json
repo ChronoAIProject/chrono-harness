@@ -412,6 +412,17 @@
       "root": "crates/runner-tests",
       "tests_for": "runner",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.runner-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/runner-tests/Cargo.toml",
+            "--target-dir",
+            "crates/runner-tests/target"
+          ]
+        },
         "format_check": {
           "operation": "fmt.runner-tests",
           "tool": "cargo",
@@ -1013,6 +1024,17 @@
       "root": "crates/ci",
       "test_project": "ci-tests",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.ci-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/ci/Cargo.toml",
+            "--target-dir",
+            "crates/ci/target"
+          ]
+        },
         "update_lockfile": {
           "operation": "lock.ci",
           "tool": "cargo",
@@ -1229,6 +1251,17 @@
       "root": "crates/ci-tests",
       "tests_for": "ci",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.ci-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/ci-tests/Cargo.toml",
+            "--target-dir",
+            "crates/ci-tests/target"
+          ]
+        },
         "update_lockfile": {
           "operation": "lock.ci-tests",
           "tool": "cargo",
@@ -1724,6 +1757,17 @@
       "root": "crates/judge-filemap-tests",
       "tests_for": "judge-filemap",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.judge-filemap-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/judge-filemap-tests/Cargo.toml",
+            "--target-dir",
+            "crates/judge-filemap-tests/target"
+          ]
+        },
         "format_check": {
           "operation": "fmt.judge-filemap-tests",
           "tool": "cargo",
@@ -2699,6 +2743,17 @@
       "lockfile": "crates/inputs-tests/Cargo.lock",
       "root": "crates/inputs-tests",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.inputs-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/inputs-tests/Cargo.toml",
+            "--target-dir",
+            "crates/inputs-tests/target"
+          ]
+        },
         "format_check": {
           "operation": "fmt.inputs-tests",
           "tool": "cargo",
@@ -2827,6 +2882,17 @@
       "lockfile": "crates/worktree/Cargo.lock",
       "root": "crates/worktree",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.worktree-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/worktree/Cargo.toml",
+            "--target-dir",
+            "crates/worktree/target"
+          ]
+        },
         "update_lockfile": {
           "operation": "lock.worktree",
           "tool": "cargo",
@@ -2955,6 +3021,17 @@
       "lockfile": "crates/worktree-tests/Cargo.lock",
       "root": "crates/worktree-tests",
       "actions": {
+        "clean_cache": {
+          "operation": "clean.worktree-tests-cache",
+          "tool": "cargo",
+          "argv": [
+            "clean",
+            "--manifest-path",
+            "crates/worktree-tests/Cargo.toml",
+            "--target-dir",
+            "crates/worktree-tests/target"
+          ]
+        },
         "format_check": {
           "operation": "fmt.worktree-tests",
           "tool": "cargo",

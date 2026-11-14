@@ -1708,6 +1708,13 @@
           ".chrono-harness/state/"
         ]
       },
+      "clean.runner-tests-cache": {"resources":[],"outputs":["crates/runner-tests/target/"]},
+      "clean.ci-tests-cache": {"resources":[],"outputs":["crates/ci-tests/target/"]},
+      "clean.inputs-tests-cache": {"resources":[],"outputs":["crates/inputs-tests/target/"]},
+      "clean.worktree-cache": {"resources":[],"outputs":["crates/worktree/target/"]},
+      "clean.ci-cache": {"resources":[],"outputs":["crates/ci/target/"]},
+      "clean.worktree-tests-cache": {"resources":[],"outputs":["crates/worktree-tests/target/"]},
+      "clean.judge-filemap-tests-cache": {"resources":[],"outputs":["crates/judge-filemap-tests/target/"]},
       "clean.runner-output": {
         "resources": [],
         "outputs": [
