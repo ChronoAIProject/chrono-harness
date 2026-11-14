@@ -902,17 +902,17 @@ fn enrollment_originals_changed_identity_still_defers_global_maintenance() {
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 2, "{report}");
     assert_eq!(report["output_retention"]["status"], "preserved");
+    assert_eq!(report["output_retention"]["namespace_complete"], false);
     assert!(
-        report["output_retention"]["unprotected_enrollments"]
+        report["complete_inventory"]["errors"]
             .as_array()
             .unwrap()
-            .contains(&value!(h.target))
+            .iter()
+            .any(|error| error
+                .as_str()
+                .unwrap()
+                .contains("enrollment declaration address differs from its namespace"))
     );
-    assert!(report["drain"].as_array().unwrap().iter().any(|row| {
-        row["path"] == value!(h.target)
-            && row["status"] == "failed"
-            && row["original_protection"]["status"] == "unknown"
-    }));
     assert_eq!(fs::read(&owner_path).unwrap(), owner_bytes);
     assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
     assert_eq!(

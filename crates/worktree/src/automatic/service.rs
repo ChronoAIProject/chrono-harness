@@ -251,14 +251,36 @@ fn run_round(
         match result {
             Ok(errors) => failures.extend(errors),
             Err(error) => {
-                unprotected.push(path.clone());
+                // Reopen CURRENT durable metadata under its own lease. This
+                // validates identity and protects every declared original before
+                // returning, without interpreting the checkout's cleanup policy.
+                // A pre-drain ledger or footprint snapshot cannot establish that.
+                let protection = Manager::open_metadata(
+                    r,
+                    root,
+                    &inputs.config_path,
+                    &inputs.anchor_config_bytes,
+                    token,
+                    &path,
+                    false,
+                    false,
+                )
+                .and_then(|owner| owner.ok_or("cleanup policy disappeared".into()));
+                let original_protection = match protection {
+                    Ok(_) => value!({"status":"protected","source":"current-enrollment-ledger"}),
+                    Err(protection_error) => {
+                        unprotected.push(path.clone());
+                        value!({"status":"unknown","error":protection_error})
+                    }
+                };
                 let busy =
                     error.contains("metadata is busy") || error.contains("metadata remains busy");
                 report["drain"]
                     .as_array_mut()
                     .unwrap()
                     .push(value!({"path":path,
-                    "status":if busy {"preserved"} else {"failed"},"error":error}));
+                    "status":if busy {"preserved"} else {"failed"},"error":error,
+                    "original_protection":original_protection}));
                 if !busy {
                     failures.push(format!("{}: {error}", path.display()));
                 }
