@@ -12,6 +12,16 @@ pub fn maintenance_idle_exit(event_pending: bool, timer_due: bool, idle_due: boo
     !event_pending && !timer_due && idle_due
 }
 
+/// Preserve both actual roots, including their order and a repeated root.
+pub fn maintenance_exclusions<P>(coordinator: P, invoking: P) -> (excluded: Vec<P>)
+    ensures excluded@ == seq![coordinator, invoking],
+{
+    let mut excluded = Vec::new();
+    excluded.push(coordinator);
+    excluded.push(invoking);
+    excluded
+}
+
 pub open spec fn activation_error<S>(source: S, message: Seq<char>,
     out: (S, Result<(), String>)) -> bool
 {
@@ -311,7 +321,7 @@ fn round(
                 return Ok(());
             }
             report["round_started"] = value!(true);
-            run_round(r, token, report, &inputs)
+            run_round(r, token, report, &inputs, root)
         },
     )
 }
@@ -322,8 +332,10 @@ fn run_round(
     token: &str,
     report: &mut Value,
     inputs: &PolicyInputs,
+    invoking_root: &Path,
 ) -> Result<(), String> {
     let root = &inputs.policy.coordinator_root;
+    let exclude = maintenance_exclusions(root.clone(), invoking_root.to_path_buf());
     let directory = no_symlink_parents(root, inputs.policy.state_directory.trim_end_matches('/'))?;
     // Shared deployment custody protects executable/policy identity, never business metadata.
     let namespace = open_namespace(inputs, &directory, false, None)?;
@@ -337,9 +349,7 @@ fn run_round(
     report["producer_drains"] = value!([]);
     report["maintenance_scope"] = value!({"kind":"declared-enrollments"});
     let mut inventory = inventory::Report::begin(root, report)?;
-    if let Err(error) =
-        observation.observe_inventory(r, &[root.clone()], report, true, &BTreeSet::new())
-    {
+    if let Err(error) = observation.observe_inventory(r, &exclude, report, true, &BTreeSet::new()) {
         inventory.error("git-inventory", error);
     }
     inventory.worktrees(&observation, r, report, "before");
@@ -411,7 +421,7 @@ fn run_round(
             .ok_or("cleanup policy disappeared")?;
             owner.restore_absent_policy(r)?;
             observe_boundary("disposition", &path);
-            let errors = owner.drain_entries(r, &[root.clone()], report, true)?;
+            let errors = owner.drain_entries(r, &exclude, report, true)?;
             owner.retire_empty_address(r, report)?;
             Ok::<_, String>(errors)
         })();

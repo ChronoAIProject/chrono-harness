@@ -24,6 +24,30 @@ fn maintenance_pending_work_wins_every_idle_boundary() {
     expect(!policy::maintenance_idle_exit(true, true, true));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_keeps_coordinator_and_invoking_roots_in_order() {
+    let roots = policy::maintenance_exclusions(17u64, u64::MAX);
+    expect(roots.len() == 2);
+    expect(roots[0] == 17);
+    expect(roots[1] == u64::MAX);
+    let same = policy::maintenance_exclusions(0u64, 0u64);
+    expect(same.len() == 2);
+    expect(same[0] == 0 && same[1] == 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_keeps_complete_root_text_and_repeated_values() {
+    let roots = policy::maintenance_exclusions(
+        "/coordinator λ/source\n".to_string(), "/caller λ/source\0\n".to_string());
+    expect(roots.len() == 2);
+    expect(policy::equal_text(roots[0].as_str(), "/coordinator λ/source\n"));
+    expect(policy::equal_text(roots[1].as_str(), "/caller λ/source\0\n"));
+    let same = policy::maintenance_exclusions("".to_string(), "".to_string());
+    expect(same.len() == 2);
+    expect(policy::equal_text(same[0].as_str(), ""));
+    expect(policy::equal_text(same[1].as_str(), ""));
+}
+
 // Each row specifies its own final observation, independent of the production predicates.
 // Stages also record that every observation received its exact predecessor and address.
 fn activation_case(query_result: (i32, i32), path: (bool, bool, bool, u32, u32),
