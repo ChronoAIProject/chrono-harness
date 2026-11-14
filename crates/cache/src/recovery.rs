@@ -95,6 +95,8 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
             outputs_valid, key_valid, method, refresh, id, verify, read_status, render_error,
             (out.0, out.2)),
 {
+    reveal(recovery_cache_decision_result);
+    reveal(recovery_cache_final_result);
     let reason = planner::restore_status(outcome, requested, matched, prefixes);
     let base = match planner::recovery_action(outcome, reason, unconfirmed,
         outputs_valid, key_valid, None, None, false) {
@@ -106,6 +108,8 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
         },
     };
     if base.requires_content_verification(method, reason) {
+        assert(reason@ == "exact"@ || reason@ == "compatible"@);
+        reveal(planner::restore_status_spec);
         assert(matched.is_some());
         let key = matched.unwrap();
         let ghost initial = state;
