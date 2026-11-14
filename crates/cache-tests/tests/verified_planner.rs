@@ -820,6 +820,151 @@ fn recovery_failure_precedes_cache_effects(summary: &policy::RecoverySummary) {
     expect_restore_text(summary.status(true), "failed");
 }
 
+fn recovery_observed_artifact<'a>(status: &'a Option<&'a str>) -> (out: Option<&'a str>)
+    ensures out == *status,
+{ *status }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_handles_no_caches_and_failed_cache_without_artifacts() {
+    proof {
+        reveal_strlit("failed"); reveal_strlit("recovered");
+        assert("failed"@.len() == 6); assert("recovered"@.len() == 9);
+    }
+    let caches: [policy::RecoveryCacheObservation<Option<&str>>; 0] = [];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    expect_restore_text(summary.status(false), "not-required");
+    recovery_failure_precedes_cache_effects(&summary);
+    if summary.warning(Some("recovered")) { panic!("empty recovery warned"); }
+
+    let artifacts: [Option<&str>; 0] = [];
+    let caches = [policy::RecoveryCacheObservation {
+        status: Some("discarded"), outcome: Some("failure"), artifacts: &artifacts,
+    }];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    proof {
+        assert(policy::recovery_cache_changed(caches@[0]));
+        assert(policy::recovery_cache_warns(caches@[0],
+            |status: Option<&str>| policy::recovery_text(status)));
+    }
+    expect_restore_text(summary.status(false), "recovered");
+    recovery_failure_precedes_cache_effects(&summary);
+    if !summary.warning(Some("recovered")) { panic!("failed empty cache did not warn"); }
+    if summary.warning(Some("failed")) { panic!("failed recovery warned"); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_combines_first_cache_change_and_last_artifact_removal() {
+    let ghost model = |status: Option<&str>| policy::recovery_text(status);
+    let first = [None, Some("absent")];
+    let middle: [Option<&str>; 0] = [];
+    let last = [Some("absent"), None, Some("removed")];
+    let caches = [
+        policy::RecoveryCacheObservation {
+            status: Some("source-times-refreshed"), outcome: None, artifacts: &first,
+        },
+        policy::RecoveryCacheObservation {
+            status: None, outcome: Some("success"), artifacts: &middle,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("pending"), outcome: None, artifacts: &last,
+        },
+    ];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(model));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    proof {
+        assert(policy::recovery_cache_changed(caches@[0]));
+        assert(model(caches@[2].artifacts@[2]) == Some("removed"@));
+        assert(policy::recovery_cache_warns(caches@[2], model));
+    }
+    expect_restore_text(summary.status(false), "recovered");
+    recovery_failure_precedes_cache_effects(&summary);
+    if !summary.warning(Some("recovered")) { panic!("late artifact removal was lost"); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_combines_first_artifact_removal_and_last_cache_change() {
+    let ghost model = |status: Option<&str>| policy::recovery_text(status);
+    let first = [Some("removed"), Some("absent")];
+    let empty: [Option<&str>; 0] = [];
+    let caches = [
+        policy::RecoveryCacheObservation {
+            status: None, outcome: None, artifacts: &first,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("unknown"), outcome: None, artifacts: &empty,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("discarded"), outcome: Some("success"), artifacts: &empty,
+        },
+    ];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(model));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    proof {
+        assert(policy::recovery_cache_changed(caches@[2]));
+        assert(model(caches@[0].artifacts@[0]) == Some("removed"@));
+        assert(policy::recovery_cache_warns(caches@[0], model));
+    }
+    expect_restore_text(summary.status(false), "recovered");
+    if !summary.warning(Some("recovered")) { panic!("early artifact removal was lost"); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_keeps_unknown_case_nul_and_unicode_text_exact() {
+    proof {
+        reveal_strlit("discarded"); reveal_strlit("Discarded"); reveal_strlit("discarded\0");
+        reveal_strlit("source-times-refreshed"); reveal_strlit(""); reveal_strlit("状态/λ");
+        reveal_strlit("failure"); reveal_strlit("Failure"); reveal_strlit("failure\0");
+        reveal_strlit("removed"); reveal_strlit("Removed"); reveal_strlit("removed\0");
+        assert("discarded"@.len() == 9); assert("discarded\0"@.len() == 10);
+        assert("Discarded"@.len() == 9); assert("discarded"@[0] != "Discarded"@[0]);
+        assert("source-times-refreshed"@.len() == 22); assert(""@.len() == 0);
+        assert("状态/λ"@.len() == 4); assert("failure"@.len() == 7);
+        assert("Failure"@.len() == 7); assert("failure\0"@.len() == 8);
+        assert("failure"@[0] != "Failure"@[0]);
+        assert("removed"@.len() == 7); assert("Removed"@.len() == 7);
+        assert("removed\0"@.len() == 8); assert("removed"@[0] != "Removed"@[0]);
+    }
+    let artifacts = [None, Some(""), Some("Removed"), Some("removed\0"), Some("状态/λ")];
+    let empty: [Option<&str>; 0] = [];
+    let caches = [
+        policy::RecoveryCacheObservation {
+            status: Some("Discarded"), outcome: Some("Failure"), artifacts: &artifacts,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("discarded\0"), outcome: Some("failure\0"), artifacts: &empty,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("状态/λ"), outcome: Some(""), artifacts: &empty,
+        },
+    ];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    expect_restore_text(summary.status(false), "not-required");
+    if summary.warning(Some("recovered")) { panic!("inexact recovery text counted as an effect"); }
+}
+
 fn recovery_changed_cache_recovers(status: &str)
     requires status@ == "discarded"@ || status@ == "source-times-refreshed"@,
 {
