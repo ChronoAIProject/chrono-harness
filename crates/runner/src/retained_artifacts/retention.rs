@@ -3689,7 +3689,7 @@ impl Publication {
     }
     /// Keep producer status distinct from storage status; no synthetic success on interruption.
     pub fn complete(self, outcome: Value) -> Result<(), String> {
-        self.complete_with_release(outcome, None)
+        self.complete_mode(outcome, None, false, || {})
     }
     /// Finish the caller's exact publication before a synchronous domain handoff.
     /// Persist each bounded sealing round under the original capability; do not
@@ -3711,25 +3711,14 @@ impl Publication {
     /// actual caller has taken custody. Unsettled or interrupted publication
     /// uses complete and preserves the repair handoff.
     pub fn complete_releasing_consumer(self, outcome: Value, consumer: &str) -> Result<(), String> {
-        self.complete_with_release(outcome, Some(consumer))
+        self.complete_mode(outcome, Some(consumer), false, || {})
     }
     /// Deterministic observation at the content-IO boundary for the dedicated
     /// regression consumer; it does not change the publication method.
     #[cfg(feature = "retention-test")]
     #[doc(hidden)]
     pub fn complete_observed(self, outcome: Value, observe: impl FnOnce()) -> Result<(), String> {
-        self.complete_with_release_observed(outcome, None, observe)
-    }
-    fn complete_with_release(self, outcome: Value, consumer: Option<&str>) -> Result<(), String> {
-        self.complete_with_release_observed(outcome, consumer, || {})
-    }
-    fn complete_with_release_observed(
-        self,
-        outcome: Value,
-        consumer: Option<&str>,
-        observe: impl FnOnce(),
-    ) -> Result<(), String> {
-        self.complete_mode(outcome, consumer, false, observe)
+        self.complete_mode(outcome, None, false, observe)
     }
     fn complete_mode(
         self,
