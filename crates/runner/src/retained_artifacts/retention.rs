@@ -32,6 +32,8 @@ use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 
 #[path = "manifest.rs"]
 #[cfg(not(verus_keep_ghost))]
@@ -123,8 +125,6 @@ pub struct Policy {
     pub max_manifest_nodes: usize,
     #[serde(default = "default_metadata_bytes")]
     pub max_metadata_bytes_per_round: u64,
-    #[serde(default)]
-    historical: BTreeMap<String, super::retention_command::Historical>,
 }
 /// Maintenance targets for resolved terminal originals of an explicitly named
 /// producer. Roots, live capabilities and unknown outcomes still take priority.
@@ -138,26 +138,34 @@ pub struct TerminalLimits {
     pub max_bytes: u64,
 }
 
-#[cfg(not(verus_keep_ghost))]
-fn default_metadata_bytes() -> u64 {
+verus! {
+fn default_metadata_bytes() -> (value: u64)
+    ensures value == 67108864,
+{
     64 * 1024 * 1024
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_output_bytes() -> u64 {
+fn default_output_bytes() -> (value: u64)
+    ensures value == 1073741824,
+{
     1024 * 1024 * 1024
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_metadata_seconds() -> u64 {
+fn default_metadata_seconds() -> (value: u64)
+    ensures value == 86400,
+{
     86400
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_diagnostic_seconds() -> u64 {
+fn default_diagnostic_seconds() -> (value: u64)
+    ensures value == 86400,
+{
     86400
 }
-#[cfg(not(verus_keep_ghost))]
-fn default_manifest_nodes() -> usize {
+fn default_manifest_nodes() -> (value: usize)
+    ensures value == 16384,
+{
     16384
 }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
@@ -3310,45 +3318,6 @@ impl Inventory {
         output.phase = "sealing".into();
         output.creation = None;
         Ok(())
-    }
-    pub(super) fn historical(
-        &self,
-        key: &str,
-    ) -> Result<&super::retention_command::Historical, String> {
-        self.policy
-            .historical
-            .get(key)
-            .ok_or("historical owner enrollment is not registered".into())
-    }
-    pub(super) fn release_historical(&self, key: &str, roles: &[String]) -> Result<(), String> {
-        let gate = self.addressed_gate(
-            &[],
-            &[self.historical(key)?.path.clone()],
-            roles,
-            None,
-            false,
-            true,
-        )?;
-        let mut l = self.load(&gate)?;
-        let ids: BTreeSet<_> = l
-            .outputs
-            .iter()
-            .filter(|o| o.outcome["enrollment"] == key)
-            .map(|o| o.id.clone())
-            .collect();
-        if ids.is_empty() {
-            return Err("historical enrollment missing".into());
-        }
-        for role in roles {
-            if l.roots
-                .get(role)
-                .is_some_and(|refs| refs.iter().any(|id| !ids.contains(id)))
-            {
-                return Err("historical root belongs to another output".into());
-            }
-            l.roots.remove(role);
-        }
-        self.save(&l, &gate)
     }
     pub fn acknowledge_delivery(
         &self,
