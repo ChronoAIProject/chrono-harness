@@ -294,7 +294,13 @@ fn test_harness_and_extern_search_preserve_the_full_input_gate() {
         reveal_strlit("out"); reveal_strlit("root");
         reveal_strlit("--emit=link=out,dep-info=out.d");
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
+        reveal_strlit("all=deps"); reveal_strlit("all=");
         vstd::utf8::is_ascii_chars_encode_utf8("dep"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("all=deps"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("all="@);
+        assert(vstd::utf8::encode_utf8("all=deps"@).subrange(0, 4)
+            =~= vstd::utf8::encode_utf8("all="@));
+        assert(vstd::utf8::encode_utf8("all=deps"@).skip(4) =~= seq![100u8,101,112,115]);
         vstd::utf8::is_ascii_chars_encode_utf8("out"@);
         vstd::utf8::is_ascii_chars_encode_utf8("root"@);
         assert(policy::invocation_identifier(vstd::utf8::encode_utf8("dep"@)));
@@ -307,23 +313,26 @@ fn test_harness_and_extern_search_preserve_the_full_input_gate() {
         "--no-external-by-default".to_string(), "--num-threads".to_string(),
         "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
         "--test".to_string(), "--extern".to_string(), "dep".to_string(),
+        "-L".to_string(), "all=deps".to_string(),
         "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
     proof {
         invocation_token_literals();
         assert(policy::invocation_kind("--test"@) == policy::InvocationKind::TestHarness);
-        assert(policy::extension_value_valid(args@, 7, 10));
-        assert(policy::extension_value_valid(args@, 8, 10));
+        assert(policy::extension_value_valid(args@, 7, 12));
+        assert(policy::extension_value_valid(args@, 8, 12));
+        assert(policy::extension_value_valid(args@, 10, 12));
         assert(policy::fresh_extension(args@, 7));
         assert(policy::fresh_extension(args@, 8));
-        reveal_with_fuel(policy::invocation_extensions, 4);
-        reveal_with_fuel(policy::interpreted_option_sequence, 4);
+        assert(policy::fresh_extension(args@, 10));
+        reveal_with_fuel(policy::invocation_extensions, 5);
+        reveal_with_fuel(policy::interpreted_option_sequence, 5);
         assert(policy::verifier_arguments(args@));
     }
     let parsed = policy::parse_verifier_arguments(&args);
     expect_verifier_true(parsed.is_some());
     let parsed = parsed.unwrap();
-    expect_verifier_true(parsed.source == 11 && parsed.output == 13 && parsed.options.len() == 2);
+    expect_verifier_true(parsed.source == 13 && parsed.output == 15 && parsed.options.len() == 3);
     let unqualified = policy::require_registered_input_evidence(&args);
     expect_verifier_true(unqualified.is_err());
     let failed = policy::admit_output(&contract(), &report(verification()), &args, 7, false);

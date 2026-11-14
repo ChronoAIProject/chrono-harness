@@ -27,6 +27,12 @@ runner Cargo 实例及其匹配的动态组件。二者不是同一个编译上�
 不得用它的计划声明宣称上述义务已完成。retention.rs 与 partition.rs 的实际
 状态维护同时登记整个 runner 库根，原 release 辅助根只证明其自身覆盖的逻辑。
 
+无路径 extern 使用 rustc 的 `-L all=`，同时搜索直接和传递依赖；既有
+`-L dependency=` 仍只用于传递依赖。两种搜索都不授予来源资格。严格 native
+测试根实际暴露的既有隔离驱动 cfg 缺口保留为失败，不能把缺少驱动的编译计作
+整 crate 成功。正式本地方法基线前移时，保留其中八项 Cargo 数据文件的显式
+data 登记；这不改变任何 program 或 specification 的分类。
+
 验收覆盖同源 verifier 及独立预期、native cargo 独立预期、retention 的现役证明根、
 原未过滤 runner／native 操作、候选 bootstrap 和 canonical；两端明确依赖继续由
 FILEMAP 选取。不能把局部原件或语法通过扩大为完整 SPEC 证明；实际失败及尚未

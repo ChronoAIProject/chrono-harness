@@ -390,8 +390,10 @@ pub open spec fn extension_value_valid(args: Seq<String>, i: int, end: int) -> b
                     || invocation_identifier(vstd::utf8::encode_utf8(args[i + 1]@)),
                 InvocationKind::Search => {
                     let value = vstd::utf8::encode_utf8(args[i + 1]@);
-                    sources::prefix_at(value, 0, vstd::utf8::encode_utf8("dependency="@))
-                        && invocation_value(value.skip(11))
+                    (sources::prefix_at(value, 0, vstd::utf8::encode_utf8("dependency="@))
+                        && invocation_value(value.skip(11)))
+                        || (sources::prefix_at(value, 0, vstd::utf8::encode_utf8("all="@))
+                            && invocation_value(value.skip(4)))
                 },
                 InvocationKind::Export => invocation_value(vstd::utf8::encode_utf8(args[i + 1]@)),
                 InvocationKind::Unknown => false,
@@ -416,11 +418,15 @@ pub fn valid_extension_value(args: &Vec<String>, i: usize, end: usize) -> (valid
         InvocationKind::Search => {
             proof {
                 reveal_strlit("dependency=");
+                reveal_strlit("all=");
                 vstd::utf8::is_ascii_chars_encode_utf8("dependency="@);
+                vstd::utf8::is_ascii_chars_encode_utf8("all="@);
             }
             let value = args[i + 1].as_str().as_bytes();
-            if !sources::matches_at(value, 0, "dependency=".as_bytes()) { return false; }
-            let path = sources::copy_range(value, 11, value.len());
+            let start = if sources::matches_at(value, 0, "dependency=".as_bytes()) { 11 }
+                else if sources::matches_at(value, 0, "all=".as_bytes()) { 4 }
+                else { return false; };
+            let path = sources::copy_range(value, start, value.len());
             valid_invocation_value(path.as_slice())
         },
         InvocationKind::Export => valid_invocation_value(args[i + 1].as_str().as_bytes()),
