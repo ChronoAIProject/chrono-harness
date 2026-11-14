@@ -4,6 +4,8 @@
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
 fn initial_query_requires_unknown(deliberate_timeout: bool, actual_timeout: bool) -> (unknown: bool)
@@ -18,10 +20,18 @@ fn timeout_requires_a_successful_initial_observation() {
     let actual = initial_query_requires_unknown(false, true);
     let both = initial_query_requires_unknown(true, true);
     let neither = initial_query_requires_unknown(false, false);
-    assert(deliberate);
-    assert(actual);
-    assert(both);
-    assert(!neither);
+    expect_timeout_boundary(deliberate);
+    expect_timeout_boundary(actual);
+    expect_timeout_boundary(both);
+    expect_timeout_boundary(!neither);
+}
+
+fn expect_timeout_boundary(actual: bool)
+    requires actual,
+{
+    if !actual {
+        panic!();
+    }
 }
 }
 
