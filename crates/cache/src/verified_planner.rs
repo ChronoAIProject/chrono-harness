@@ -30,6 +30,7 @@ pub use crate::attempt::{
 pub use crate::recovery::{
     RecoveryOption, RecoveryOptions, RecoveryReplay, RecoverySummary, admit_recovery_paths,
     admit_recovery_replay, complete_recovery_cache, parse_recovery_options,
+    recovery_decision_error,
 };
 #[cfg(verus_keep_ghost)]
 pub use attempt::{
