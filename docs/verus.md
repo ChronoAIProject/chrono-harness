@@ -1,32 +1,36 @@
 # Verus 实施范围
 
-## 嵌套证明原件关系的在研边界
+## CI generation 的现役证明入口
 
-`verified_verifier::admit_nested_origin` 检查父操作的唯一方法、原参数、真实成功终态、
-无证明产物的普通操作身份，以及子记录点名的父回执摘要。摘要必须完整且相同，父子
-操作必须不同。`bind_nested_operation_output` 随后直接消费原有子证明准入结果；子操作
-必须实际返回 `ProofAdmission`，普通成功、缺失原件、子进程失败或输入资格不足均不能
-由父进程退出零替代。原严格参数、完整报告、源码、库和 source-only 判法保留。
+AT 将证明入口迁移到现有 routes／projects 的直接 Verus 操作。native 库、native
+主程序和 proved_build 测试根分别有唯一操作；runner 库与 JSON 独立预期也有具名
+直接操作。FILEMAP 的现役源码根指向这些实际方法，所选计划直接启动 Verus，原
+Receipt 同时保留真实 argv、stdout／stderr、退出、编译产物和 dep-info。judge-ci 的
+本地消费及离线 collection 继续使用原 `bind_operation_output` 和 `SourceAdmission`，
+没有根据 Cargo artifact、自报子记录或包装器退出补造证明的方法。
 
-**这只是条件性的消费内核，AS 尚未完成生产接入。** 当前 selected-plan 投影没有嵌套
-声明，native 的 Cargo-Verus 操作也尚未提供逐子调用原件及真实父回执关系。因此这个
-内核不能证明父子关系实际发生，不能把传入的摘要相等解释为因果证据，也没有被用来
-放行现役 Cargo 包装器。`root_planned` 不变，原“无唯一严格调用”的正式阻断仍有效。
-接入必须由现有生产者记录实际子调用，再由所选计划及原件读取器提供这些输入；不能
-在消费端从成功状态、Cargo artifact 或自报的摘要补造 `ProofInvocation`。
+native 计划先运行原未过滤行为操作，由它生产专属测试与 mock 可执行文件，再运行
+这些直接证明；最终计划状态仍要求全部操作成功。原 native Cargo-Verus 整目标动作以 `-cargo` 操作保留在同一计划，参数、严格选项、
+目标、线程和预算不变；runner 的依赖准备与原调查也继续执行。原调查是观察操作，
+不再把 bash 参数误标为直接 Verus 输出合同。AS 的条件性 NestedProofOrigin 层及
+仅用于该层的独立预期已移除；历史字节和原失败由 Git 与保留原件维护。
 
-**产品与宿主登记同时修改。** 内核和独立预期仍归原生产／测试 Verus 根；FILEMAP
-补齐现有 native Cargo 独立根实际包含该源码的证明根及编译／测试边，不改变操作、
-并发、线程或预算。验收沿用 `verify.verus-result`、`verify.verus-result-tests`、
-`verify.bootstrap-cargo-tests`、原未过滤 Rust 操作、候选 bootstrap 和 canonical。
-条件性证明、真实生产接入和正式 DELTA 分别核实；运行结果由原件提供，完整构建、
-验证、CI、存储和维护成本仍未知。现有失败及完整 SPEC 义务保留。
+**产品与宿主登记同时修改。** 参数语法所有者增加实际 rustc 的 `--test` 和无路径
+`--extern name` 表示，仍核完整严格前缀、唯一扩展、实际根和输出。测试根显式保留
+harness 及原 mock 可执行文件的环境输入，不通过 cfg 隐藏测试驱动。语法识别只允许
+规划及记录原调用，扩展上下文、extern 搜索、VIR、宏和传递输入尚未具备完整资格时，
+原 source-only 判法仍拒绝授予 ProofAdmission。这些缺口不因迁移而消失。
 
-runner 原未过滤 Cargo 测试采用 `--no-fail-fast`：任一独立测试二进制失败仍使
-操作失败，但 Cargo 继续等待并执行其余测试二进制。AS 首次原运行在 retention 的
-三项真实失败后停止，尚未执行后续 Verus 独立预期的普通 Rust 行为测试。这里修正
-原登记方法，保留原断言、线程和预算；不修复或掩盖 retention 失败，也不把后续
-独立测试通过报告为整项通过。额外执行成本由实际结果记录，当前总成本未知。
+验收覆盖同源 verifier 及独立预期、native cargo 独立预期、retention 的现役证明根、
+原未过滤 runner／native 操作、候选 bootstrap 和 canonical；两端明确依赖继续由
+FILEMAP 选取。不能把局部原件或语法通过扩大为完整 SPEC 证明；实际失败及尚未
+执行的检查分别报告。新增直接编译的完整 CI、IO、存储和维护成本仍待实测。
+
+retention 的有界退役只让实际可修改的候选推进持久游标。已保护的 frontier 原件
+不再在报告释放引用后改变该游标，避免同轮再次同步同一份报告状态。原 52 原件
+回归的断言、重开所有者、25 ms、节点、字节及轮数上限保持不变；原失败保留至
+验收完成。runner 继续采用原未过滤 `cargo test --no-fail-fast`，失败不会隐藏后续
+独立测试，也不会被报告为整项成功。
 
 ## 受影响文件的分类门控
 

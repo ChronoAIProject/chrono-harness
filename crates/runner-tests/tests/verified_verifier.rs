@@ -286,6 +286,48 @@ fn arguments() -> (out: Vec<String>)
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()]
 }
 
+// AT 的实际测试根必须保留 test harness；extern 搜索语法不提供来源资格。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn test_harness_and_extern_search_preserve_the_full_input_gate() {
+    proof {
+        reveal_strlit("--test"); reveal_strlit("--extern"); reveal_strlit("dep");
+        reveal_strlit("out"); reveal_strlit("root");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+        reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
+        vstd::utf8::is_ascii_chars_encode_utf8("dep"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        assert(policy::invocation_identifier(vstd::utf8::encode_utf8("dep"@)));
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("out"@)));
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("root"@)));
+        assert("--emit=link=out,dep-info=out.d"@ =~=
+            "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
+    }
+    let args = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--test".to_string(), "--extern".to_string(), "dep".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        assert(policy::extension_value_valid(args@, 7, 10));
+        assert(policy::extension_value_valid(args@, 8, 10));
+        assert(policy::fresh_extension(args@, 7));
+        assert(policy::fresh_extension(args@, 8));
+        assert(policy::verifier_arguments(args@));
+    }
+    let parsed = policy::parse_verifier_arguments(&args);
+    expect_verifier_true(parsed.is_some());
+    let parsed = parsed.unwrap();
+    expect_verifier_true(parsed.source == 11 && parsed.output == 13 && parsed.options.len() == 2);
+    let unqualified = policy::require_registered_input_evidence(&args);
+    expect_verifier_true(unqualified.is_err());
+    let failed = policy::admit_output(&contract(), &report(verification()), &args, 7, false);
+    expect_verifier_true(failed.is_err());
+    let parent_zero = policy::admit_output(&contract(), &report(verification()), &args, 0, false);
+    expect_verifier_true(parent_zero.is_err());
+}
+
 // J 的独立预期先于实现登记：扩展值不能改变真实根／输出，语法识别不授予依赖资格。
 proof fn invocation_token_literals()
     ensures
@@ -974,153 +1016,6 @@ fn unified_ordinary_success_has_no_proof_and_failed_process_is_rejected() {
 impl policy::CompilerReportRead for UnavailableSources {
     open spec fn decoded(&self, bytes: Seq<u8>) -> Option<CompilerReport> { None }
     fn decode(&self, bytes: &[u8]) -> Option<CompilerReport> { None }
-}
-
-fn producer_receipt() -> (out: &'static str)
-    ensures policy::identifiers::digest_format(vstd::utf8::encode_utf8(out@)),
-        out@ == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"@,
-{
-    let value = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-    proof {
-        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        vstd::utf8::is_ascii_chars_encode_utf8(value@);
-        assert forall|i: int| 0 <= i < value@.len() implies
-            policy::identifiers::oid_byte(#[trigger] vstd::utf8::encode_utf8(value@)[i]) by {
-            assert(value@[i] == 'a');
-        }
-    }
-    value
-}
-
-/// 原件关系的成功与各个拒绝条件独立于子证明的内容。
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn nested_producer_requires_unique_original_identity_and_exact_arguments() {
-    proof { reveal_strlit("producer"); reveal_strlit("proof");
-        reveal_strlit("different"); reveal_strlit("");
-        reveal_strlit("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
-        assert("producer"@.len() != "proof"@.len()); }
-    let args = vec!["action".to_string()];
-    let argv = vec!["native".to_string(), "action".to_string()];
-    let none = None;
-    let methods = vec![policy::ProofInvocation { operation: "producer", argv: &args,
-        output_contract: &none, output_limit_bytes: 1024 }];
-    let dependency = None;
-    let artifact = None;
-    let digest = producer_receipt();
-    let mut origin = policy::NestedProofOrigin { producer: "producer", producer_receipt: digest,
-        recorded_producer_receipt: digest,
-        original: Some(policy::ProofProcess { operation: "producer", argv: &argv, stdout: &[],
-            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }) };
-    assert(policy::same_arguments(argv@.skip(1), args@));
-    assert(policy::unique_proof_invocation(methods@, "producer"@, 0));
-    assert(policy::ordinary_process_bound(&methods[0], &origin.original.unwrap()));
-    let accepted = policy::admit_nested_origin(&origin, "proof", &methods);
-    expect_verifier_true(accepted.is_ok());
-    let same_operation = policy::admit_nested_origin(&origin, "producer", &methods);
-    expect_verifier_true(same_operation.is_err());
-    origin.recorded_producer_receipt = "different";
-    let wrong_identity = policy::admit_nested_origin(&origin, "proof", &methods);
-    expect_verifier_true(wrong_identity.is_err());
-    origin.recorded_producer_receipt = digest;
-    origin.producer_receipt = "";
-    let missing_identity = policy::admit_nested_origin(&origin, "proof", &methods);
-    expect_verifier_true(missing_identity.is_err());
-    origin.producer_receipt = digest;
-    origin.original = None;
-    let missing = policy::admit_nested_origin(&origin, "proof", &methods);
-    expect_verifier_true(missing.is_err());
-    let wrong_argv = vec!["native".to_string()];
-    origin.original = Some(policy::ProofProcess { operation: "producer", argv: &wrong_argv,
-        stdout: &[], exit: 0, failed: false, dependency: &dependency, artifact: &artifact });
-    let wrong_arguments = policy::admit_nested_origin(&origin, "proof", &methods);
-    expect_verifier_true(wrong_arguments.is_err());
-    origin.original = Some(policy::ProofProcess { operation: "producer", argv: &argv,
-        stdout: &[], exit: 0, failed: true, dependency: &dependency, artifact: &artifact });
-    let failed = policy::admit_nested_origin(&origin, "proof", &methods);
-    expect_verifier_true(failed.is_err());
-    origin.original = Some(policy::ProofProcess { operation: "producer", argv: &argv,
-        stdout: &[], exit: 7, failed: false, dependency: &dependency, artifact: &artifact });
-    let nonzero = policy::admit_nested_origin(&origin, "proof", &methods);
-    expect_verifier_true(nonzero.is_err());
-    let duplicates = vec![
-        policy::ProofInvocation { operation: "producer", argv: &args,
-            output_contract: &none, output_limit_bytes: 1024 },
-        policy::ProofInvocation { operation: "producer", argv: &args,
-            output_contract: &none, output_limit_bytes: 1024 }];
-    let ambiguous = policy::admit_nested_origin(&origin, "proof", &duplicates);
-    expect_verifier_true(ambiguous.is_err());
-}
-
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn zero_exit_wrapper_cannot_supply_missing_failed_or_ordinary_child_proof() {
-    proof { reveal_strlit("producer"); reveal_strlit("proof");
-        assert("producer"@.len() != "proof"@.len()); }
-    let args = Vec::new();
-    let argv = vec!["native".to_string()];
-    let none = None;
-    let proof_args = arguments();
-    let output = contract();
-    let methods = vec![
-        policy::ProofInvocation { operation: "producer", argv: &args,
-            output_contract: &none, output_limit_bytes: 1024 },
-        policy::ProofInvocation { operation: "proof", argv: &proof_args,
-            output_contract: &output, output_limit_bytes: 1024 }];
-    let dependency = None;
-    let artifact = None;
-    let digest = producer_receipt();
-    let origin = policy::NestedProofOrigin { producer: "producer", producer_receipt: digest,
-        recorded_producer_receipt: digest,
-        original: Some(policy::ProofProcess { operation: "producer", argv: &argv, stdout: &[],
-            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }) };
-    let registry = Err("original input qualification unavailable".to_string());
-    let missing = policy::bind_nested_operation_output("passed", "proof", &methods, &origin,
-        None, &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
-    expect_verifier_true(missing.is_err());
-    let mut child_argv = vec!["verus".to_string()];
-    let mut i = 0;
-    while i < proof_args.len()
-        invariant 0 <= i <= proof_args.len(), child_argv.len() == i + 1,
-            forall|j: int| 0 <= j < i ==> (#[trigger] child_argv[j + 1])@ == proof_args[j]@,
-        decreases proof_args.len() - i,
-    { child_argv.push(proof_args[i].clone()); i += 1; }
-    let failed = policy::bind_nested_operation_output("passed", "proof", &methods, &origin,
-        Some(policy::ProofProcess { operation: "proof", argv: &child_argv, stdout: &[],
-            exit: 9, failed: false, dependency: &dependency, artifact: &artifact }),
-        &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
-    expect_verifier_true(failed.is_err());
-    let ordinary = vec![
-        policy::ProofInvocation { operation: "producer", argv: &args,
-            output_contract: &none, output_limit_bytes: 1024 },
-        policy::ProofInvocation { operation: "proof", argv: &args,
-            output_contract: &none, output_limit_bytes: 1024 }];
-    let ordinary_child = policy::bind_nested_operation_output("passed", "proof", &ordinary, &origin,
-        Some(policy::ProofProcess { operation: "proof", argv: &argv, stdout: &[],
-            exit: 0, failed: false, dependency: &dependency, artifact: &artifact }),
-        &registry, &UnavailableSources, |message: &str, _path: &str| message.to_string());
-    expect_verifier_true(ordinary_child.is_err());
-}
-
-/// 任意成功的嵌套消费仍包含原有严格子证明合同；没有包装器成功替代分支。
-fn any_nested_admission_preserves_the_original_child_contract<I>(
-    operation: &str, methods: &Vec<policy::ProofInvocation>,
-    origin: &policy::NestedProofOrigin, original: Option<policy::ProofProcess>,
-    registry: &Result<policy::sources::SourceRegistry, String>, io: &I,
-)
-    where I: policy::sources::CandidateSourceRead + policy::CompilerReportRead,
-{
-    let admitted = policy::bind_nested_operation_output("passed", operation, methods, origin,
-        original, registry, io, |message: &str, _path: &str| message.to_string());
-    if let Ok(Some(proof)) = admitted {
-        assert(policy::nested_origin_bound(origin, operation@, methods@));
-        assert(exists|i: int| policy::unique_proof_invocation(methods@, operation@, i)
-            && policy::proof_bound(&proof, &methods[i], &original.unwrap(), &registry.unwrap()));
-        assert(original.unwrap().exit == 0 && !original.unwrap().failed);
-    }
-    proof {
-        if original.is_some() && original.unwrap().exit != 0 {
-            assert(admitted.is_err());
-        }
-    }
 }
 
 /// 对任意原件，任何实际返回的证明都包含同一份报告、源码和库的准入关系。

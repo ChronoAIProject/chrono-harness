@@ -260,10 +260,11 @@ pub fn compiler_outputs(output: &str) -> (argument: Vec<u8>)
 }
 
 /// 当前登记语法的选项种类；不解释任意 rustc／Verus flag。
-pub enum InvocationKind { Edition, CrateName, Unstable, Environment, Search, Extern, Import, Export, Unknown }
+pub enum InvocationKind { Edition, CrateName, Unstable, TestHarness, Environment, Search, Extern, Import, Export, Unknown }
 
 pub open spec fn invocation_kind(token: Seq<char>) -> InvocationKind {
     if token == "--edition=2024"@ { InvocationKind::Edition }
+    else if token == "--test"@ { InvocationKind::TestHarness }
     else if token == "--crate-name"@ { InvocationKind::CrateName }
     else if token == "-Zunstable-options"@ { InvocationKind::Unstable }
     else if token == "--env-set"@ { InvocationKind::Environment }
@@ -278,6 +279,7 @@ pub fn classify_invocation_token(token: &str) -> (kind: InvocationKind)
     ensures kind == invocation_kind(token@),
 {
     if equal_text(token, "--edition=2024") { InvocationKind::Edition }
+    else if equal_text(token, "--test") { InvocationKind::TestHarness }
     else if equal_text(token, "--crate-name") { InvocationKind::CrateName }
     else if equal_text(token, "-Zunstable-options") { InvocationKind::Unstable }
     else if equal_text(token, "--env-set") { InvocationKind::Environment }
@@ -289,13 +291,13 @@ pub fn classify_invocation_token(token: &str) -> (kind: InvocationKind)
 }
 
 pub open spec fn option_width(kind: InvocationKind) -> nat {
-    if matches!(kind, InvocationKind::Edition | InvocationKind::Unstable) { 1 } else { 2 }
+    if matches!(kind, InvocationKind::Edition | InvocationKind::Unstable | InvocationKind::TestHarness) { 1 } else { 2 }
 }
 
 pub fn invocation_option_width(kind: &InvocationKind) -> (width: usize)
     ensures width == option_width(*kind),
 {
-    if matches!(kind, InvocationKind::Edition | InvocationKind::Unstable) { 1 } else { 2 }
+    if matches!(kind, InvocationKind::Edition | InvocationKind::Unstable | InvocationKind::TestHarness) { 1 } else { 2 }
 }
 
 pub open spec fn identifier_byte(byte: u8, first: bool) -> bool {
@@ -380,10 +382,12 @@ pub open spec fn extension_value_valid(args: Seq<String>, i: int, end: int) -> b
         let kind = invocation_kind(args[i]@);
         !matches!(kind, InvocationKind::Unknown) && i + option_width(kind) <= end
             && match kind {
-                InvocationKind::Edition | InvocationKind::Unstable => true,
+                InvocationKind::Edition | InvocationKind::Unstable | InvocationKind::TestHarness => true,
                 InvocationKind::CrateName => invocation_identifier(vstd::utf8::encode_utf8(args[i + 1]@)),
-                InvocationKind::Environment | InvocationKind::Extern | InvocationKind::Import =>
+                InvocationKind::Environment | InvocationKind::Import =>
                     named_invocation_value(vstd::utf8::encode_utf8(args[i + 1]@)),
+                InvocationKind::Extern => named_invocation_value(vstd::utf8::encode_utf8(args[i + 1]@))
+                    || invocation_identifier(vstd::utf8::encode_utf8(args[i + 1]@)),
                 InvocationKind::Search => {
                     let value = vstd::utf8::encode_utf8(args[i + 1]@);
                     sources::prefix_at(value, 0, vstd::utf8::encode_utf8("dependency="@))
@@ -403,10 +407,12 @@ pub fn valid_extension_value(args: &Vec<String>, i: usize, end: usize) -> (valid
     let width = invocation_option_width(&kind);
     if width > end - i { return false; }
     match kind {
-        InvocationKind::Edition | InvocationKind::Unstable => true,
+        InvocationKind::Edition | InvocationKind::Unstable | InvocationKind::TestHarness => true,
         InvocationKind::CrateName => valid_invocation_identifier(args[i + 1].as_str().as_bytes()),
-        InvocationKind::Environment | InvocationKind::Extern | InvocationKind::Import =>
+        InvocationKind::Environment | InvocationKind::Import =>
             valid_named_invocation_value(args[i + 1].as_str().as_bytes()),
+        InvocationKind::Extern => valid_named_invocation_value(args[i + 1].as_str().as_bytes())
+            || valid_invocation_identifier(args[i + 1].as_str().as_bytes()),
         InvocationKind::Search => {
             proof {
                 reveal_strlit("dependency=");
@@ -425,7 +431,7 @@ pub fn valid_extension_value(args: &Vec<String>, i: usize, end: usize) -> (valid
 pub open spec fn conflicting_extension(args: Seq<String>, first: int, second: int) -> bool {
     let kind = invocation_kind(args[first]@);
     kind == invocation_kind(args[second]@) && match kind {
-        InvocationKind::Edition | InvocationKind::CrateName | InvocationKind::Unstable | InvocationKind::Export => true,
+        InvocationKind::Edition | InvocationKind::CrateName | InvocationKind::Unstable | InvocationKind::TestHarness | InvocationKind::Export => true,
         InvocationKind::Environment | InvocationKind::Extern | InvocationKind::Import =>
             same_input_name(vstd::utf8::encode_utf8(args[first + 1]@), vstd::utf8::encode_utf8(args[second + 1]@)),
         InvocationKind::Search => args[first + 1]@ == args[second + 1]@,
@@ -441,7 +447,7 @@ pub fn extensions_conflict(args: &Vec<String>, first: usize, second: usize) -> (
     let other = classify_invocation_token(args[second].as_str());
     if !same_invocation_kind(&kind, &other) { return false; }
     match kind {
-        InvocationKind::Edition | InvocationKind::CrateName | InvocationKind::Unstable | InvocationKind::Export => true,
+        InvocationKind::Edition | InvocationKind::CrateName | InvocationKind::Unstable | InvocationKind::TestHarness | InvocationKind::Export => true,
         InvocationKind::Environment | InvocationKind::Extern | InvocationKind::Import =>
             same_invocation_input_name(args[first + 1].as_str().as_bytes(), args[second + 1].as_str().as_bytes()),
         InvocationKind::Search => equal_text(args[first + 1].as_str(), args[second + 1].as_str()),
@@ -456,6 +462,7 @@ fn same_invocation_kind(first: &InvocationKind, second: &InvocationKind) -> (sam
         (InvocationKind::Edition, InvocationKind::Edition)
         | (InvocationKind::CrateName, InvocationKind::CrateName)
         | (InvocationKind::Unstable, InvocationKind::Unstable)
+        | (InvocationKind::TestHarness, InvocationKind::TestHarness)
         | (InvocationKind::Environment, InvocationKind::Environment)
         | (InvocationKind::Search, InvocationKind::Search)
         | (InvocationKind::Extern, InvocationKind::Extern)
@@ -799,15 +806,6 @@ pub struct ProofProcess<'a> {
     pub artifact: &'a Option<Result<CompiledArtifact, String>>,
 }
 
-/// 原生产者回执与子调用记录之间的关系；两份摘要必须来自原件读取器。
-/// 此类型不从包装器的退出状态推断子调用结果，也不签发调用资格。
-pub struct NestedProofOrigin<'a> {
-    pub producer: &'a str,
-    pub producer_receipt: &'a str,
-    pub recorded_producer_receipt: &'a str,
-    pub original: Option<ProofProcess<'a>>,
-}
-
 /// 只负责原字节的标准 JSON 类型化解码；报告准入仍由本证明根负责。
 pub trait CompilerReportRead {
     spec fn decoded(&self, bytes: Seq<u8>) -> Option<CompilerReport>;
@@ -1007,85 +1005,6 @@ pub open spec fn ordinary_output_accepted(
         Some(process) => exists|i: int| unique_proof_invocation(methods, operation, i)
             && ordinary_process_bound(&methods[i], process),
         None => false,
-    }
-}
-
-pub open spec fn nested_origin_bound(
-    origin: &NestedProofOrigin, operation: Seq<char>, methods: Seq<ProofInvocation>,
-) -> bool {
-    origin.producer@ != operation
-        && identifiers::digest_format(vstd::utf8::encode_utf8(origin.producer_receipt@))
-        && origin.producer_receipt@ == origin.recorded_producer_receipt@
-        && ordinary_output_accepted(origin.producer@, methods, &origin.original)
-}
-
-/// 父进程的成功仅准入父原件；子证明仍须使用自己的原报告、参数、库与源码。
-pub fn admit_nested_origin(
-    origin: &NestedProofOrigin, operation: &str, methods: &Vec<ProofInvocation>,
-) -> (out: Result<(), String>)
-    ensures out.is_ok() == nested_origin_bound(origin, operation@, methods@),
-{
-    if equal_text(origin.producer, operation)
-        || !identifiers::valid_digest(origin.producer_receipt.as_bytes())
-        || !equal_text(origin.producer_receipt, origin.recorded_producer_receipt) {
-        return Err("E_VERUS_RESULT: nested producer identity differs from its original receipt".to_string());
-    }
-    let index = match find_proof_invocation(methods, origin.producer) {
-        Ok(index) => index,
-        Err(error) => { return Err(error); },
-    };
-    let method = &methods[index];
-    let process = match &origin.original {
-        Some(process) => process,
-        None => { return Err("E_VERUS_RESULT: nested producer has no original receipt".to_string()); },
-    };
-    proof {
-        if ordinary_output_accepted(origin.producer@, methods@, &origin.original) {
-            let witness = choose|i: int| unique_proof_invocation(methods@, origin.producer@, i)
-                && ordinary_process_bound(&methods[i], process);
-            assert(witness == index as int);
-        }
-    }
-    let args = match sources::process_arguments(process.argv) {
-        Ok(args) => args,
-        Err(error) => { return Err(error); },
-    };
-    if method.output_contract.is_some() || !equal_text(process.operation, origin.producer)
-        || !equal_arguments(&args, method.argv) || process.exit != 0 || process.failed
-        || process.dependency.is_some() || process.artifact.is_some() {
-        return Err("E_VERUS_RESULT: nested producer original rejected".to_string());
-    }
-    Ok(())
-}
-
-/// 已登记父子关系的消费端。这里不补造缺失的子调用、不转换 Cargo 输出，
-/// 不改变 source-only 或完整输入资格；包装器退出零不能覆盖子进程失败。
-pub fn bind_nested_operation_output<I: sources::CandidateSourceRead + CompilerReportRead,
-    F: Fn(&str, &str) -> String>(
-    state: &str, operation: &str, methods: &Vec<ProofInvocation>,
-    origin: &NestedProofOrigin, original: Option<ProofProcess>,
-    registry: &Result<sources::SourceRegistry, String>, io: &I, format_error: F,
-) -> (out: Result<Option<ProofAdmission>, String>)
-    requires forall|message: &str, path: &str| format_error.requires((message, path)),
-    ensures state@ != "passed"@ ==> out.is_ok() && out.unwrap().is_none(),
-        state@ == "passed"@ && out.is_ok() ==> out.unwrap().is_some()
-            && nested_origin_bound(origin, operation@, methods@),
-        match out {
-            Ok(Some(proof)) => state@ == "passed"@ && original.is_some() && registry.is_ok()
-                && exists|i: int| unique_proof_invocation(methods@, operation@, i)
-                    && proof_bound(&proof, &methods[i], &original.unwrap(), &registry.unwrap())
-                    && io.decoded(original.unwrap().stdout@) == Some(proof.report),
-            _ => true,
-        },
-{
-    if !equal_text(state, "passed") { return Ok(None); }
-    match admit_nested_origin(origin, operation, methods) {
-        Err(error) => { return Err(error); },
-        Ok(()) => {},
-    }
-    match bind_operation_output(state, operation, methods, original, registry, io, format_error) {
-        Ok(None) => Err("E_VERUS_RESULT: nested child is not a strict proof invocation".to_string()),
-        result => result,
     }
 }
 

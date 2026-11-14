@@ -2774,13 +2774,16 @@ impl Inventory {
                 .iter()
                 .position(|o| o.id == id)
                 .ok_or("output disappeared")?;
-            l.cursor = (i + 1) % count.max(1);
             if rooted.contains(&id) {
                 protected.push(
                     json!({"id":id,"reason":protection_reasons.get(&id).map(String::as_str).unwrap_or("current consumer/reference closure")}),
                 );
                 continue;
             }
+            // Only a mutable retirement candidate advances the durable cursor.
+            // A protected frontier member must not rewrite the report after its
+            // source edge and reverse reference were already persisted.
+            l.cursor = (i + 1) % count.max(1);
             nodes += 1;
             let o = l.outputs[i].clone();
             let lease_path = self.directory.join(&o.lease);
