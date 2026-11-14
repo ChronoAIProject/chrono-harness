@@ -408,7 +408,10 @@ pub fn valid_extension_value(args: &Vec<String>, i: usize, end: usize) -> (valid
         InvocationKind::Environment | InvocationKind::Extern | InvocationKind::Import =>
             valid_named_invocation_value(args[i + 1].as_str().as_bytes()),
         InvocationKind::Search => {
-            proof { reveal_strlit("dependency="); }
+            proof {
+                reveal_strlit("dependency=");
+                vstd::utf8::is_ascii_chars_encode_utf8("dependency="@);
+            }
             let value = args[i + 1].as_str().as_bytes();
             if !sources::matches_at(value, 0, "dependency=".as_bytes()) { return false; }
             let path = sources::copy_range(value, 11, value.len());
@@ -652,6 +655,10 @@ pub open spec fn source_only_invocation(args: Seq<String>) -> bool {
 
 pub fn require_registered_input_evidence(args: &Vec<String>) -> (out: Result<(), String>)
     ensures out.is_ok() == source_only_invocation(args@),
+        out.is_err() ==> out.unwrap_err()@ ==
+            if verifier_arguments(args@) {
+                "E_VERUS_QUALIFICATION: compiler context and dependency/VIR producer evidence unavailable"@
+            } else { "E_VERUS_RESULT: process or verifier arguments rejected"@ },
 {
     let parsed = match parse_verifier_arguments(args) {
         Some(parsed) => parsed,
@@ -904,13 +911,29 @@ pub proof fn invocation_extensions_congruent(
             assert(first[j + 1]@ == second[j + 1]@);
         }
         assert(fresh_extension(first, i) == fresh_extension(second, i));
-        assert forall|j: int| 7 <= j < end && j + 1 < end implies
-            (first[j]@ == "--extern"@ && #[trigger] same_input_name(vstd::utf8::encode_utf8(first[j + 1]@),
-                vstd::utf8::encode_utf8(first[i + 1]@)))
-            == (second[j]@ == "--extern"@ && #[trigger] same_input_name(vstd::utf8::encode_utf8(second[j + 1]@),
-                vstd::utf8::encode_utf8(second[i + 1]@))) by {
-            assert(first[j]@ == second[j]@);
-            assert(first[j + 1]@ == second[j + 1]@);
+        if invocation_kind(first[i]@) == InvocationKind::Import {
+            if import_has_extern(first, i, end) {
+                let j = choose|j: int| 7 <= j < end && first[j]@ == "--extern"@
+                    && j + 1 < end && same_input_name(vstd::utf8::encode_utf8(first[j + 1]@),
+                        vstd::utf8::encode_utf8(first[i + 1]@));
+                assert(first[j]@ == second[j]@);
+                assert(first[j + 1]@ == second[j + 1]@);
+                assert(7 <= j < end && second[j]@ == "--extern"@ && j + 1 < end
+                    && same_input_name(vstd::utf8::encode_utf8(second[j + 1]@),
+                        vstd::utf8::encode_utf8(second[i + 1]@)));
+                assert(import_has_extern(second, i, end));
+            }
+            if import_has_extern(second, i, end) {
+                let j = choose|j: int| 7 <= j < end && second[j]@ == "--extern"@
+                    && j + 1 < end && same_input_name(vstd::utf8::encode_utf8(second[j + 1]@),
+                        vstd::utf8::encode_utf8(second[i + 1]@));
+                assert(first[j]@ == second[j]@);
+                assert(first[j + 1]@ == second[j + 1]@);
+                assert(7 <= j < end && first[j]@ == "--extern"@ && j + 1 < end
+                    && same_input_name(vstd::utf8::encode_utf8(first[j + 1]@),
+                        vstd::utf8::encode_utf8(first[i + 1]@)));
+                assert(import_has_extern(first, i, end));
+            }
         }
         assert(import_has_extern(first, i, end) == import_has_extern(second, i, end));
         if extension_value_valid(first, i, end) {
