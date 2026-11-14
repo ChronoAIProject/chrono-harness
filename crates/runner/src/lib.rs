@@ -27,6 +27,9 @@ pub fn load_selected_config_with(
     facts_configs::resolve(path, bytes, read).map(|(_, _, config, _)| config)
 }
 mod facts_inputs;
+// 同一外部合同模块通过 crate::vstd 绑定当前证明库，普通 Rust 擦除编译不引入它。
+#[cfg(verus_keep_ghost)]
+use ::vstd;
 pub mod json_value_specs;
 // 独立预期直接消费这些生产适配器；不复制实现或创建测试专用替身。
 #[doc(hidden)]

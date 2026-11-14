@@ -1,13 +1,12 @@
 //! 借用 JSON 和完整文本树集合的外部接口合同；不包含仓内选择或状态逻辑。
 #![allow(unexpected_cfgs)]
 
+#[cfg(verus_keep_ghost)]
+use crate::vstd::{self, prelude::*};
 use serde_json::{Map as JsonMap, Value};
 #[cfg(verus_keep_ghost)]
 use std::collections::{BTreeMap, BTreeSet};
-#[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
 
 verus! {
 
