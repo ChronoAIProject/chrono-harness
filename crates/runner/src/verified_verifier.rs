@@ -799,6 +799,15 @@ pub struct ProofProcess<'a> {
     pub artifact: &'a Option<Result<CompiledArtifact, String>>,
 }
 
+/// 原生产者回执与子调用记录之间的关系；两份摘要必须来自原件读取器。
+/// 此类型不从包装器的退出状态推断子调用结果，也不签发调用资格。
+pub struct NestedProofOrigin<'a> {
+    pub producer: &'a str,
+    pub producer_receipt: &'a str,
+    pub recorded_producer_receipt: &'a str,
+    pub original: Option<ProofProcess<'a>>,
+}
+
 /// 只负责原字节的标准 JSON 类型化解码；报告准入仍由本证明根负责。
 pub trait CompilerReportRead {
     spec fn decoded(&self, bytes: Seq<u8>) -> Option<CompilerReport>;
@@ -998,6 +1007,85 @@ pub open spec fn ordinary_output_accepted(
         Some(process) => exists|i: int| unique_proof_invocation(methods, operation, i)
             && ordinary_process_bound(&methods[i], process),
         None => false,
+    }
+}
+
+pub open spec fn nested_origin_bound(
+    origin: &NestedProofOrigin, operation: Seq<char>, methods: Seq<ProofInvocation>,
+) -> bool {
+    origin.producer@ != operation
+        && identifiers::digest_format(vstd::utf8::encode_utf8(origin.producer_receipt@))
+        && origin.producer_receipt@ == origin.recorded_producer_receipt@
+        && ordinary_output_accepted(origin.producer@, methods, &origin.original)
+}
+
+/// 父进程的成功仅准入父原件；子证明仍须使用自己的原报告、参数、库与源码。
+pub fn admit_nested_origin(
+    origin: &NestedProofOrigin, operation: &str, methods: &Vec<ProofInvocation>,
+) -> (out: Result<(), String>)
+    ensures out.is_ok() == nested_origin_bound(origin, operation@, methods@),
+{
+    if equal_text(origin.producer, operation)
+        || !identifiers::valid_digest(origin.producer_receipt.as_bytes())
+        || !equal_text(origin.producer_receipt, origin.recorded_producer_receipt) {
+        return Err("E_VERUS_RESULT: nested producer identity differs from its original receipt".to_string());
+    }
+    let index = match find_proof_invocation(methods, origin.producer) {
+        Ok(index) => index,
+        Err(error) => { return Err(error); },
+    };
+    let method = &methods[index];
+    let process = match &origin.original {
+        Some(process) => process,
+        None => { return Err("E_VERUS_RESULT: nested producer has no original receipt".to_string()); },
+    };
+    proof {
+        if ordinary_output_accepted(origin.producer@, methods@, &origin.original) {
+            let witness = choose|i: int| unique_proof_invocation(methods@, origin.producer@, i)
+                && ordinary_process_bound(&methods[i], process);
+            assert(witness == index as int);
+        }
+    }
+    let args = match sources::process_arguments(process.argv) {
+        Ok(args) => args,
+        Err(error) => { return Err(error); },
+    };
+    if method.output_contract.is_some() || !equal_text(process.operation, origin.producer)
+        || !equal_arguments(&args, method.argv) || process.exit != 0 || process.failed
+        || process.dependency.is_some() || process.artifact.is_some() {
+        return Err("E_VERUS_RESULT: nested producer original rejected".to_string());
+    }
+    Ok(())
+}
+
+/// 已登记父子关系的消费端。这里不补造缺失的子调用、不转换 Cargo 输出，
+/// 不改变 source-only 或完整输入资格；包装器退出零不能覆盖子进程失败。
+pub fn bind_nested_operation_output<I: sources::CandidateSourceRead + CompilerReportRead,
+    F: Fn(&str, &str) -> String>(
+    state: &str, operation: &str, methods: &Vec<ProofInvocation>,
+    origin: &NestedProofOrigin, original: Option<ProofProcess>,
+    registry: &Result<sources::SourceRegistry, String>, io: &I, format_error: F,
+) -> (out: Result<Option<ProofAdmission>, String>)
+    requires forall|message: &str, path: &str| format_error.requires((message, path)),
+    ensures state@ != "passed"@ ==> out.is_ok() && out.unwrap().is_none(),
+        state@ == "passed"@ && out.is_ok() ==> out.unwrap().is_some()
+            && nested_origin_bound(origin, operation@, methods@),
+        match out {
+            Ok(Some(proof)) => state@ == "passed"@ && original.is_some() && registry.is_ok()
+                && exists|i: int| unique_proof_invocation(methods@, operation@, i)
+                    && proof_bound(&proof, &methods[i], &original.unwrap(), &registry.unwrap())
+                    && io.decoded(original.unwrap().stdout@) == Some(proof.report),
+            _ => true,
+        },
+{
+    if !equal_text(state, "passed") { return Ok(None); }
+    match admit_nested_origin(origin, operation, methods) {
+        Err(error) => { return Err(error); },
+        Ok(()) => {},
+    }
+    match bind_operation_output(state, operation, methods, original, registry, io, format_error) {
+        Ok(None) => Err("E_VERUS_RESULT: nested child is not a strict proof invocation".to_string()),
+        result => result,
     }
 }
 

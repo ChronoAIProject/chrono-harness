@@ -1,5 +1,27 @@
 # Verus 实施范围
 
+## 嵌套证明原件关系的在研边界
+
+`verified_verifier::admit_nested_origin` 检查父操作的唯一方法、原参数、真实成功终态、
+无证明产物的普通操作身份，以及子记录点名的父回执摘要。摘要必须完整且相同，父子
+操作必须不同。`bind_nested_operation_output` 随后直接消费原有子证明准入结果；子操作
+必须实际返回 `ProofAdmission`，普通成功、缺失原件、子进程失败或输入资格不足均不能
+由父进程退出零替代。原严格参数、完整报告、源码、库和 source-only 判法保留。
+
+**这只是条件性的消费内核，AS 尚未完成生产接入。** 当前 selected-plan 投影没有嵌套
+声明，native 的 Cargo-Verus 操作也尚未提供逐子调用原件及真实父回执关系。因此这个
+内核不能证明父子关系实际发生，不能把传入的摘要相等解释为因果证据，也没有被用来
+放行现役 Cargo 包装器。`root_planned` 不变，原“无唯一严格调用”的正式阻断仍有效。
+接入必须由现有生产者记录实际子调用，再由所选计划及原件读取器提供这些输入；不能
+在消费端从成功状态、Cargo artifact 或自报的摘要补造 `ProofInvocation`。
+
+**产品与宿主登记同时修改。** 内核和独立预期仍归原生产／测试 Verus 根；FILEMAP
+补齐现有 native Cargo 独立根实际包含该源码的证明根及编译／测试边，不改变操作、
+并发、线程或预算。验收沿用 `verify.verus-result`、`verify.verus-result-tests`、
+`verify.bootstrap-cargo-tests`、原未过滤 Rust 操作、候选 bootstrap 和 canonical。
+条件性证明、真实生产接入和正式 DELTA 分别核实；运行结果由原件提供，完整构建、
+验证、CI、存储和维护成本仍未知。现有失败及完整 SPEC 义务保留。
+
 ## 受影响文件的分类门控
 
 本仓 FILEMAP 已启用 `require_new_file_classification: true`。当前候选只要影响某个已登记文件，
