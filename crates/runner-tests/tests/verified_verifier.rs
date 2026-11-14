@@ -327,6 +327,11 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
         vstd::utf8::is_ascii_chars_encode_utf8("out"@);
         assert("--emit=link=out,dep-info=out.d"@ =~=
             "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
+        assert(policy::invocation_kind(args[10]@) == policy::InvocationKind::Unstable);
+        assert(vstd::utf8::encode_utf8("dependency=deps"@).subrange(0, 11)
+            =~= vstd::utf8::encode_utf8("dependency="@));
+        assert(vstd::utf8::encode_utf8("dependency=deps"@).skip(11)
+            =~= seq![100u8, 101, 112, 115]);
         assert(policy::extension_value_valid(args@, 7, 23));
         assert(policy::extension_value_valid(args@, 8, 23));
         assert(policy::extension_value_valid(args@, 10, 23));
@@ -428,6 +433,8 @@ fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
         reveal_with_fuel(policy::invocation_extensions, 6);
         assert(policy::conflicting_extension(prefix@, 7, 9));
         assert(!policy::fresh_extension(prefix@, 9));
+        assert(!policy::invocation_extensions(prefix@, 9, 11));
+        assert(!policy::invocation_extensions(prefix@, 7, 11));
         assert(!policy::verifier_arguments(prefix@));
     }
     let duplicate = policy::parse_verifier_arguments(&prefix);
@@ -438,6 +445,14 @@ fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
         "--import".to_string(), "missing=producer.vir".to_string(),
         "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        reveal_strlit("--import"); reveal_strlit("--extern");
+        reveal_strlit("missing=producer.vir");
+        assert(forall|j: int| 7 <= j < 9 ==> orphan[j]@ != "--extern"@);
+        assert(!policy::import_has_extern(orphan@, 7, 9));
+        assert(!policy::invocation_extensions(orphan@, 7, 9));
+        assert(!policy::verifier_arguments(orphan@));
+    }
     let unpaired = policy::parse_verifier_arguments(&orphan);
     expect_verifier_true(unpaired.is_none());
 }
@@ -473,6 +488,12 @@ fn named_argument_identity_and_payload_boundaries_are_independent() {
         assert(!policy::named_invocation_value(vstd::utf8::encode_utf8("a="@)));
         assert(!policy::named_invocation_value(vstd::utf8::encode_utf8("=x"@)));
         assert(!policy::named_invocation_value(vstd::utf8::encode_utf8("a=\0x"@)));
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("a=x"@), 0, 61) == 1);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("a=x=y"@), 0, 61) == 1);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("ab=x"@), 0, 61) == 2);
+        assert(vstd::utf8::encode_utf8("a=x"@).take(1) =~= seq![97u8]);
+        assert(vstd::utf8::encode_utf8("a=x=y"@).take(1) =~= seq![97u8]);
+        assert(vstd::utf8::encode_utf8("ab=x"@).take(2) =~= seq![97u8, 98]);
         assert(policy::same_input_name(vstd::utf8::encode_utf8("a=x"@), vstd::utf8::encode_utf8("a=x=y"@)));
         assert(!policy::same_input_name(vstd::utf8::encode_utf8("a=x"@), vstd::utf8::encode_utf8("ab=x"@)));
     }
