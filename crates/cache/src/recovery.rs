@@ -777,10 +777,12 @@ pub fn summarize_recovery<'a, A, R>(
         decreases caches.len() - index,
     {
         let cache = &caches[index];
-        summary = summarize_recovery_artifacts(
-            summary.observe_cache(cache.status, cache.outcome), cache.artifacts, &read,
-            #[cfg(verus_keep_ghost)] Ghost(model),
-        );
+        let observed = summary.observe_cache(cache.status, cache.outcome);
+        #[cfg(verus_keep_ghost)]
+        let next = summarize_recovery_artifacts(observed, cache.artifacts, &read, Ghost(model));
+        #[cfg(not(verus_keep_ghost))]
+        let next = summarize_recovery_artifacts(observed, cache.artifacts, &read);
+        summary = next;
         proof {
             recovery_any_prefix_step(caches@, index as int,
                 |cache: RecoveryCacheObservation<A>| recovery_cache_changed(cache));
