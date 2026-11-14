@@ -1,6 +1,8 @@
 //! Explicit producer output lifetimes. No directory discovery or inferred consumers.
 //! Uses the lifecycle kernel capability owner for publication, use and disposal exclusion.
 #![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::identifiers;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -3070,14 +3072,8 @@ impl Inventory {
                     .manifest
                     .bytes
                     .saturating_sub(l.outputs[i].removed_logical_bytes);
-                let entered_disposal = l.outputs[i].phase != "disposing";
+                let mut entered_disposal = l.outputs[i].phase != "disposing";
                 l.outputs[i].phase = "disposing".into();
-                // Resumed disposal already has a durable phase and manifest.
-                // Save its cursor with the next physical step or final save;
-                // tree entries still persist every step below.
-                if entered_disposal {
-                    self.save(&l, &gate)?;
-                }
                 while self.metadata_room()
                     && nodes
                         < self
@@ -3090,6 +3086,12 @@ impl Inventory {
                         return Ok(true);
                     };
                     nodes += 1;
+                    // 先在预算内接纳这一步，再持久保存意图并执行同一步。
+                    // 保存本身耗尽时间片时，不能让已接纳的动作永远只有意图。
+                    if entered_disposal {
+                        self.save(&l, &gate)?;
+                        entered_disposal = false;
+                    }
                     let path = crate::artifact_disposal::entry_path(&self.root, &entry.path)?;
                     match fs::symlink_metadata(&path) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {

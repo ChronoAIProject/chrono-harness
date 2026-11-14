@@ -17,6 +17,10 @@ use chrono_harness::retained_artifacts::retention as accounting;
 #[cfg(verus_keep_ghost)]
 use policy::accounting;
 
+#[cfg(verus_keep_ghost)]
+#[path = "support/retention_frontier.rs"]
+mod retention_frontier;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -250,9 +254,9 @@ fn only_actual_roots_stop_expansion_and_rootless_cycles_remain_related() {
     expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 1, 0), 3);
     expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", usize::MAX, 0), 3);
     expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 1), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "parent", 0, 0), 3);
+    expect_expansion(policy::finalized_expansion(false, Some("initial"), "parent", 0, 0), 2);
     expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial\0", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(false, Some("é"), "e\u{301}", 0, 0), 3);
+    expect_expansion(policy::finalized_expansion(false, Some("é"), "e\u{301}", 0, 0), 2);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -285,15 +289,23 @@ fn discovered_frontier_keeps_actual_members_dependencies_and_retiring_originals(
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
-fn maintenance_paths_keep_partial_originals_and_skip_only_records_without_an_original() {
-    expect_true(!policy::maintenance_path_required(false, false, false));
-    expect_true(!policy::maintenance_path_required(false, true, false));
-    expect_true(!policy::maintenance_path_required(false, false, true));
-    expect_true(!policy::maintenance_path_required(false, true, true));
-    expect_true(policy::maintenance_path_required(true, false, false));
-    expect_true(policy::maintenance_path_required(true, true, false));
-    expect_true(!policy::maintenance_path_required(true, false, true));
-    expect_true(policy::maintenance_path_required(true, true, true));
+fn maintenance_paths_preserve_initial_roots_and_exclude_only_the_retiring_report() {
+    expect_true(!policy::maintenance_path_required(false, false, false, false));
+    expect_true(!policy::maintenance_path_required(false, true, false, false));
+    expect_true(!policy::maintenance_path_required(false, false, true, false));
+    expect_true(!policy::maintenance_path_required(false, true, true, false));
+    expect_true(policy::maintenance_path_required(true, false, false, false));
+    expect_true(policy::maintenance_path_required(true, true, false, false));
+    expect_true(!policy::maintenance_path_required(true, false, true, false));
+    expect_true(policy::maintenance_path_required(true, true, true, false));
+    expect_true(!policy::maintenance_path_required(false, false, false, true));
+    expect_true(!policy::maintenance_path_required(false, true, false, true));
+    expect_true(!policy::maintenance_path_required(false, false, true, true));
+    expect_true(!policy::maintenance_path_required(false, true, true, true));
+    expect_true(policy::maintenance_path_required(true, false, false, true));
+    expect_true(policy::maintenance_path_required(true, true, false, true));
+    expect_true(!policy::maintenance_path_required(true, false, true, true));
+    expect_true(!policy::maintenance_path_required(true, true, true, true));
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

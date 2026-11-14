@@ -3,12 +3,23 @@
 //! These synchronous mutations have no descendant owner. Their local leases
 //! end on return even while an unrelated fork holds incidental fd copies.
 #![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::identifiers;
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_identifiers as identifiers;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
 verus! {
+/// 选择父报告退役时，已观察的其他原件继续受保护。
+pub fn preserve_frontier_original(id: &str, retiring: &str) -> (retain: bool)
+    ensures retain == (id@ != retiring@),
+{
+    !identifiers::equal_text(id, retiring)
+}
+
 /// Only pending metadata edges of an already empty retiring report can advance
 /// without physical path exclusion. Final address retirement still needs it.
 pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
@@ -864,6 +875,7 @@ impl Inventory {
             }
         }
         let mut seen = BTreeSet::new();
+        let mut processed = BTreeSet::new();
         let mut unvisited_relations = BTreeSet::new();
         let mut measurements = BTreeMap::new();
         let addresses: Box<dyn Iterator<Item = Result<String, String>> + '_> = match originals {
@@ -882,7 +894,7 @@ impl Inventory {
         };
         for id in addresses {
             let id = id?;
-            if seen.contains(&id) {
+            if processed.contains(&id) {
                 continue;
             }
             if nodes >= self.policy.max_nodes_per_round
@@ -919,6 +931,13 @@ impl Inventory {
                     vec![]
                 };
                 seen.extend(owned.iter().cloned());
+                // 保留的叶原件只被观察，本轮尚未维护它自己的输出。
+                processed.extend(
+                    owned
+                        .iter()
+                        .filter(|id| !gate.retained_dependencies.contains(*id))
+                        .cloned(),
+                );
                 self.maintain_locked(observed, &gate).map(|round| {
                     let observations = gate.measurements(self.policy.max_output_bytes);
                     (
@@ -1418,6 +1437,13 @@ impl Inventory {
                         // Retire this consumer before releasing its originals.
                         // The source keeps all other edges durably.
                         retiring_report = Some(id.clone());
+                        // 从叶进入时，反向路径上的原件已先于父报告被读到。
+                        // 将它们与后续读到的原件一起保留，只退役选中的报告。
+                        for previous in observed.keys() {
+                            if preserve_frontier_original(previous.as_str(), id.as_str()) {
+                                retained_dependencies.insert(previous.clone());
+                            }
+                        }
                         selected.extend(output.references.first().cloned());
                         report_frontier = true;
                     }
@@ -1480,6 +1506,7 @@ impl Inventory {
                         r.output.is_some(),
                         initial.as_ref() == Some(&r.id),
                         retained_dependencies.contains(&r.id),
+                        retiring_report.is_some(),
                     ) && !r.output.as_ref().is_some_and(|output| {
                         metadata_only_retirement(
                             retiring_report.as_ref() == Some(&r.id),
