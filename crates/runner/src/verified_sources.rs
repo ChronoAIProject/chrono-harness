@@ -7,7 +7,6 @@ use vstd::prelude::*;
 use super::{append_bytes, equal_bytes};
 
 /// 只解码实际存在的布尔字段；缺失由 Serde 保留为 None，启用选择归 Verus。
-#[cfg(not(verus_keep_ghost))]
 fn deserialize_classification_policy<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -16,7 +15,6 @@ where
 }
 
 /// JSON 适配只保留原数组和可选布尔值，不选择是否启用分类。
-#[cfg(not(verus_keep_ghost))]
 #[derive(serde::Deserialize)]
 struct DecodedSourceRegistry {
     files: Vec<SourceFile>,
@@ -24,7 +22,6 @@ struct DecodedSourceRegistry {
     require_new_file_classification: Option<bool>,
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl From<DecodedSourceRegistry> for SourceRegistry {
     fn from(decoded: DecodedSourceRegistry) -> Self {
         source_registry(decoded.files, decoded.require_new_file_classification)
@@ -581,14 +578,14 @@ pub struct SourceBinding {
     pub length: u64,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(from = "DecodedSourceRegistry"))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(from = "DecodedSourceRegistry")]
 pub struct SourceRegistry {
     pub files: SourceFiles,
 }
 
 /// 分类开关与它约束的库存一同交给证明计划，调用方不能只转交文件数组而丢失政策。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct SourceFiles {
     pub entries: Vec<SourceFile>,
     pub require_new_file_classification: Option<bool>,
@@ -600,31 +597,31 @@ pub fn source_registry(entries: Vec<SourceFile>, policy: Option<bool>) -> (regis
     SourceRegistry { files: SourceFiles { entries, require_new_file_classification: policy } }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[derive(Debug, serde::Deserialize)]
 pub struct SourceFile {
     pub path: String,
-    #[cfg_attr(not(verus_keep_ghost), serde(default))]
+    #[serde(default)]
     pub verification: Option<SourceVerification>,
 }
 
 /// 缺少声明仍是未知覆盖；数据声明不授予任何仓内函数受信例外。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum SourceRole {
     Program,
     Specification,
     Data,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceVerification {
     pub role: SourceRole,
     pub roots: Vec<SourceProofRoot>,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceProofRoot {
     pub path: String,
     pub operation: String,

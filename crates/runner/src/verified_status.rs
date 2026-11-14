@@ -804,8 +804,8 @@ pub fn registry_read_sequence<S, V, R, P>(
     }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct IndexFlag {
     pub path: String,
     pub tag: String,
@@ -837,8 +837,8 @@ impl PartialEq for IndexFlag {
 }
 impl Eq for IndexFlag {}
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Checkout {
     pub head: String,
     pub r#tracked: Vec<String>,
@@ -1386,8 +1386,8 @@ pub fn parse_git_text_rows(decoded: Vec<Option<String>>) -> (out: Result<Vec<Str
     }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Status {
     Passed,
     Failed,
@@ -1395,8 +1395,8 @@ pub enum Status {
     Blocked,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "lowercase"))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum WireStatus {
     Pass,
     Warn,
@@ -1519,7 +1519,7 @@ impl PartialOrd for WireStatus {
 }
 
 /// 实际树键按完整 UTF-8 内容比较；不归一化路径。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct TreePath {
     pub text: String,
 }
@@ -1730,7 +1730,7 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
     }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct TreeEntry {
     pub mode: String,
     pub oid: String,
@@ -1793,8 +1793,8 @@ pub open spec fn entry_mode(entry: Option<&TreeEntry>) -> Option<Seq<char>> {
     match entry { None => None, Some(entry) => Some(entry.mode@) }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Delta {
     pub kind: String,
     pub path: String,
@@ -4867,8 +4867,8 @@ impl PartialEq for Delta {
 
 impl Eq for Delta {}
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Finding {
     pub code: String,
     pub level: String,
@@ -4982,8 +4982,8 @@ pub fn valid_finding_references(finding: &Finding, delta: Option<&[Delta]>) -> (
     true
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Evidence {
     pub path: String,
     pub sha256: String,
@@ -5497,8 +5497,8 @@ impl PartialEq for Status {
 
 impl Eq for Status {}
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CheckResult {
     pub id: String,
     pub status: Status,

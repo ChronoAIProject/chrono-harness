@@ -1,5 +1,28 @@
 # Verus 实施范围
 
+## 严格根的实际类型与完整库存
+
+runner 的状态、scope、证明回执、Cargo 观察及源码库存类型，在普通编译和严格
+Verus 编译中使用相同的 Debug／Serde 派生及 Serde 字段属性。源码库存的三个
+解码适配器也保留在严格输入中。不能通过关闭 trait 实现来避开真实调用方的
+类型义务；派生宏产生的仓内实现仍属于待证明代码，恢复其可见性不代表已经证明。
+五个原有辅助证明操作显式接入这些实际 Serde 依赖，严格参数、线程与预算不变。
+
+**产品与宿主登记同时修改。** FILEMAP 为 runner/native 库成员追加真实完整库根，
+保留原有局部生产与独立预期根。CI 的完整库以及 behavior、git_facts、cache 三个
+实际 Cargo 测试根另有直接严格操作；units／short／gating、full／full_scope、startup
+分别属于这些原测试根，不单独编造可执行测试项目。原未过滤行为操作先生产相同的
+依赖和 mock 执行物，再执行新增证明。新的根、依赖搜索及实际 Cargo 环境值均由
+projects 的现役方法与 FILEMAP 计划、输出占用显式登记，不靠扫描选择检查。
+
+本批同时补齐固定开发 DELTA 的全部显式分类；JSON、文档与 Cargo 锁文件仍按其
+真实数据合同登记，仓内程序及测试保持 program。完整根只是必须执行的义务，
+不是文件已获证明的声明。Serde 展开、常量／tracing 的工具兼容、严格 JSON 解码与
+批量读取的 Ghost 模型、完整测试驱动及传递依赖的证明仍须由实际原结果核实。
+现有 SourceAdmission 继续拒绝缺少编译器、Backend、linker、SDK、宏、build script、
+VIR 或源文件生产对应证据的输入；普通 Cargo 编译和工具摘要不能补足这些资格。
+新增完整根的运行、IO、CI、存储及维护总成本尚未测定。
+
 ## CI generation 的现役证明入口
 
 AT 将证明入口迁移到现有 routes／projects 的直接 Verus 操作。native 库、native

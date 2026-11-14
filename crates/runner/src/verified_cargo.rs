@@ -7,33 +7,33 @@ use vstd::prelude::*;
 
 verus! {
 
-#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(untagged))]
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
 pub enum Record { Proof(super::CompilerReport), Cargo(Cargo) }
 
-#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(tag = "reason"))]
+#[derive(serde::Deserialize)]
+#[serde(tag = "reason")]
 pub enum Cargo {
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "compiler-artifact"))]
+    #[serde(rename = "compiler-artifact")]
     Artifact(Artifact),
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "compiler-message"))]
+    #[serde(rename = "compiler-message")]
     Message { message: Message },
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "build-script-executed"))]
+    #[serde(rename = "build-script-executed")]
     Script { package_id: String, linked_libs: Vec<String>, linked_paths: Vec<String>,
         cfgs: Vec<String>, env: Vec<(String, String)>, out_dir: String },
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "build-finished"))]
+    #[serde(rename = "build-finished")]
     Finished { success: bool },
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
+#[derive(serde::Deserialize)]
 pub struct Message { pub level: String }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, serde::Deserialize, serde::Serialize))]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct Target {
     pub name: String, pub src_path: String, pub kind: Vec<String>, pub crate_types: Vec<String>,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, serde::Deserialize, serde::Serialize))]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct Artifact {
     pub package_id: String,
     pub manifest_path: String,
@@ -43,7 +43,7 @@ pub struct Artifact {
     pub fresh: bool,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, serde::Deserialize, serde::Serialize))]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct Identity { pub path: String, pub sha256: String, pub length: u64 }
 
 pub fn bounded_original(regular: bool, bytes: u64) -> (valid: bool)

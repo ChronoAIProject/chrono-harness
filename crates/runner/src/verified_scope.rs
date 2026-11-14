@@ -7,8 +7,8 @@ use vstd::prelude::*;
 
 verus! {
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum Scope {
     Unit { unit: String },
     Collect { manifest: String },

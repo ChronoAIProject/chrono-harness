@@ -20,8 +20,8 @@ pub mod sources;
 
 verus! {
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct OutputContract {
     pub version: String,
     pub commit: String,
@@ -55,21 +55,21 @@ impl PartialEq for OutputContract {
 impl Eq for OutputContract {}
 
 /// 字段名和必需字段由外部 Serde 解码；这些真实类型也由证明根拥有。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[derive(Debug, serde::Deserialize)]
 pub struct CompilerReport {
     pub verus: CompilerVersion,
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "verification-results"))]
+    #[serde(rename = "verification-results")]
     pub verification: Verification,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[derive(Debug, serde::Deserialize)]
 pub struct CompilerVersion {
     pub version: String,
     pub commit: String,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Verification {
     pub encountered_error: bool,
     pub encountered_vir_error: bool,
@@ -80,8 +80,8 @@ pub struct Verification {
 }
 
 /// 原编译进程结束后取得的库文件身份；不在回执中复制库内容。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CompiledArtifact {
     pub path: Vec<u8>,
     pub sha256: Vec<u8>,
