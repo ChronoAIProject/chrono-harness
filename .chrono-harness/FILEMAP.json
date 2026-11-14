@@ -507,7 +507,7 @@
     {"path":"docs/diagnostics.md","verification":{"role":"data","roots":[]},"owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/ci-tests/tests/support/tools.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"},{"kind":"test-execution","to":"test:ci-tests"},{"kind":"compile","to":"project:judge-ci-tests"},{"kind":"test-execution","to":"test:judge-ci-tests"}]},
     {"path":".chrono-harness/ci/fixtures/owner-publication.json","owner":"host-bootstrap-native-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:host-bootstrap-native-tests"}]},
-    {"path":"docs/ci-cache.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
+    {"path":"docs/ci-cache.md","verification":{"role":"data","roots":[]},"owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/cache/Cargo.toml","verification":{"role":"data","roots":[]},"owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:cache"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/cache/Cargo.lock","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:cache"},{"kind":"judge-trigger","to":"judge:filemap"}]},
     {"path":"crates/cache/src/lib.rs","owner":"cache","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:cache"},{"kind":"judge-trigger","to":"judge:filemap"}]},
