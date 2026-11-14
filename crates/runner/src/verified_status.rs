@@ -1953,9 +1953,9 @@ pub fn insert_git_tree_entry(
     tree: &mut Tree, path: TreePath, mode: &str, oid: &str, kind: &str,
 ) -> (out: Result<(), String>)
     ensures
-        tree@.contains_key(path),
-        tree@ == old(tree)@.insert(path, tree@[path]),
-        tree_entry_fields(&tree@[path]) == (mode@, oid@, kind@),
+        final(tree)@.contains_key(path),
+        final(tree)@ == old(tree)@.insert(path, final(tree)@[path]),
+        tree_entry_fields(&final(tree)@[path]) == (mode@, oid@, kind@),
         out.is_ok() == !old(tree)@.contains_key(path),
         out.is_ok() == !(exists|key: TreePath| (#[trigger] old(tree)@.contains_key(key)) && key@ == path@),
         match out {
@@ -2305,12 +2305,12 @@ fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
 pub fn record_git_index_stage<'a>(stages: &mut GitIndexStages<'a>, path: &'a str, stage: &'a str)
     -> (out: Result<(), String>)
     ensures
-        stages@ == old(stages)@.insert(GitIndexStage { path, stage }, ()),
+        final(stages)@ == old(stages)@.insert(GitIndexStage { path, stage }, ()),
         out.is_ok() == !old(stages)@.contains_key(GitIndexStage { path, stage }),
         out.is_ok() == !(exists|key: GitIndexStage| (#[trigger] old(stages)@.contains_key(key))
             && key.path.spec_bytes() == path.spec_bytes()
             && key.stage.spec_bytes() == stage.spec_bytes()),
-        out.is_err() ==> stages@ == old(stages)@,
+        out.is_err() ==> final(stages)@ == old(stages)@,
         match out { Ok(()) => true, Err(message) => message@ == "duplicate Git index stage"@ },
 {
     proof { git_index_stage_obeys_cmp(); }
@@ -2735,9 +2735,9 @@ pub open spec fn checkout_index_prefix_changed(
 
 /// 只保存完整路径；重复标记不增加成员，原有路径始终保留。
 pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
-    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
-        changes@.len() == old(changes)@.len()
+        final(changes)@.len() == old(changes)@.len()
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     proof { tree_path_obeys_cmp(); }
@@ -2771,9 +2771,9 @@ pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
 }
 
 pub fn record_checkout_change(changes: &mut CheckoutChanges, path: &str)
-    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
+    ensures forall|text: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, text)
         == (checkout_change_has_path(old(changes)@, text) || text == path@),
-        changes@.len() == old(changes)@.len()
+        final(changes)@.len() == old(changes)@.len()
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     record_checkout_owned_change(changes, path.to_owned());
@@ -3030,7 +3030,7 @@ pub fn checkout_physical_targets<'a>(
         targets.len() == tree_rows_view(targets@).to_set().len(),
         tree_rows_view(targets@).to_set() == tree@.kv_pairs().filter(
             |row: (TreePath, TreeEntry)| checkout_stage_zero(stages@, row.0.bytes())),
-        forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+        forall|path: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, path)
             == (checkout_change_has_path(old(changes)@, path)
                 || exists|row: (TreePath, TreeEntry)| (#[trigger] tree@.kv_pairs().contains(row))
                     && row.0@ == path && !checkout_stage_zero(stages@, row.0.bytes())),
@@ -3154,7 +3154,7 @@ pub open spec fn checkout_failed_physical_prefix(
 pub fn record_checkout_physical_observations(
     changes: &mut CheckoutChanges, observations: &[CheckoutPhysicalObservation],
 )
-    ensures forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
+    ensures forall|path: Seq<char>| #[trigger] checkout_change_has_path(final(changes)@, path)
         == (checkout_change_has_path(old(changes)@, path)
             || checkout_failed_physical_prefix(observations@, observations.len() as int, path)),
 {
@@ -4724,7 +4724,7 @@ proof fn tree_merge_ordered(a: Seq<(&TreePath, &TreeEntry)>,
 
 fn push_tree_change(out: &mut Vec<Delta>, path: &str,
     old_entry: Option<&TreeEntry>, new_entry: Option<&TreeEntry>)
-    ensures delta_records_view(out@) == delta_records_view(old(out)@)
+    ensures delta_records_view(final(out)@) == delta_records_view(old(out)@)
         + entry_delta_fields(path@, old_entry, new_entry),
 {
     match delta_for_entry(path, old_entry, new_entry) {
@@ -4942,8 +4942,8 @@ pub fn append_finding(
     status: &mut WireStatus, findings: &mut Vec<Finding>, severity: WireStatus, finding: Finding,
 )
     ensures
-        *status == (if old(status).rank_spec() >= severity.rank_spec() { *old(status) } else { severity }),
-        findings@ == old(findings)@.push(finding),
+        *final(status) == (if old(status).rank_spec() >= severity.rank_spec() { *old(status) } else { severity }),
+        final(findings)@ == old(findings)@.push(finding),
 {
     *status = status.clone().maximum(severity);
     findings.push(finding);
