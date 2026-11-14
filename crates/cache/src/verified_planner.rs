@@ -28,8 +28,8 @@ pub use crate::attempt::{
 };
 #[cfg(not(verus_keep_ghost))]
 pub use crate::recovery::{
-    RecoveryOption, RecoveryOptions, RecoveryReplay, admit_recovery_paths, admit_recovery_replay,
-    parse_recovery_options,
+    RecoveryOption, RecoveryOptions, RecoveryReplay, RecoverySummary, admit_recovery_paths,
+    admit_recovery_replay, complete_recovery_cache, parse_recovery_options,
 };
 #[cfg(verus_keep_ghost)]
 pub use attempt::{
