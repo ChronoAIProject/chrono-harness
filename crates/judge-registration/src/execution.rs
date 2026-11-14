@@ -286,19 +286,13 @@ pub fn test_bindings(projects: &Value) -> Result<BTreeMap<String, Vec<TestBindin
 }
 /// Decode one current action identically for planning and immutable snapshots.
 pub fn method(owner: String, action: &Value) -> Result<Method, String> {
-    let method = Method {
-        owner,
-        operation: action["operation"]
-            .as_str()
-            .ok_or("operation missing")?
-            .into(),
-        tool: action["tool"].as_str().ok_or("tool missing")?.into(),
-        argv: serde_json::from_value(action["argv"].clone()).map_err(|e| e.to_string())?,
-        output_contract: serde_json::from_value(action["output_contract"].clone())
-            .map_err(|e| e.to_string())?,
-        nested_proof: serde_json::from_value(action["nested_proof"].clone())
-            .map_err(|e| e.to_string())?,
-    };
+    let mut fields = action.as_object().ok_or("action object required")?.clone();
+    if fields.contains_key("owner") {
+        return Err("action owner belongs to its containing registration".into());
+    }
+    fields.insert("owner".into(), Value::String(owner));
+    let method: Method =
+        serde_json::from_value(Value::Object(fields)).map_err(|e| e.to_string())?;
     chrono_harness::verified_verifier::validate_contract(&method.output_contract)?;
     if let Some(proof) = &method.nested_proof {
         if method.output_contract.is_some()

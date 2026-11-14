@@ -107,3 +107,22 @@ fn native_bootstrap_reuses_the_current_registration_reader_and_keeps_ambiguity_v
     assert_eq!(methods["registered"][0].owner, "project:p");
     assert_eq!(methods["registered"][1].owner, "script:s");
 }
+
+#[test]
+fn current_action_decoder_rejects_unknown_fields_and_forged_container_owner() {
+    let action = json!({"operation":"registered","tool":"native","argv":["--version"]});
+    for field in ["unknown", "owner"] {
+        let mut changed = action.clone();
+        changed[field] = json!("forged");
+        assert!(
+            methods(&json!({"projects":[{"id":"p","actions":{"build":changed}}],"scripts":[]}))
+                .is_err()
+        );
+    }
+    let decoded =
+        methods(&json!({"projects":[{"id":"p","actions":{"build":action}}],"scripts":[]})).unwrap()
+            ["registered"][0]
+            .clone();
+    assert_eq!(decoded.owner, "project:p");
+    assert_eq!(decoded.operation, "registered");
+}
