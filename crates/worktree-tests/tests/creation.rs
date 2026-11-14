@@ -32,8 +32,23 @@ fn cli_success_requires_an_original_success_status_and_includes_service_handoffs
     expect(policy::successful_report_status(Some("owner-deployed")));
     expect(policy::successful_report_status(Some("used")));
     expect(!policy::successful_report_status(None));
+    proof {
+        assert("failed"@.len() == 6);
+        assert(""@.len() == 0);
+    }
     expect(!policy::successful_report_status(Some("failed")));
     expect(!policy::successful_report_status(Some("")));
+    proof {
+        assert("Created"@.len() == 7);
+        assert("Created"@[0] != "created"@[0]);
+        assert("Created"@[0] != "cleaned"@[0]);
+        assert("Created"@[0] != "rebound"@[0]);
+        assert("created\0"@.len() == 8);
+        assert("created\0"@[0] != "observed"@[0]);
+        assert("created\0"@[0] != "finished"@[0]);
+        assert("created\0"@[0] != "imported"@[0]);
+        assert("created\0"@[0] != "migrated"@[0]);
+    }
     expect(!policy::successful_report_status(Some("Created")));
     expect(!policy::successful_report_status(Some("created\0")));
 }
