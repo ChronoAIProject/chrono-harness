@@ -1,11 +1,13 @@
 #![cfg(unix)]
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
-use super::policy::artifact_disposal as disposal;
+use super::policy as footprint_policy;
 #[cfg(verus_keep_ghost)]
-use super::policy::maintenance_signal as signal;
+use super::policy::maintenance_signal as send_policy;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::artifact_disposal as disposal;
+use chrono_harness::maintenance_signal::verified_send as send_policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_limits as footprint_policy;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -15,17 +17,17 @@ use vstd::vpanic as panic;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn observing_a_socket_requires_both_the_observer_and_socket_kind() {
-    if !disposal::observable_socket(true, true)
-        || disposal::observable_socket(false, true)
-        || disposal::observable_socket(true, false)
-        || disposal::observable_socket(false, false) { panic!(); }
+    if !footprint_policy::observable_socket(true, true)
+        || footprint_policy::observable_socket(false, true)
+        || footprint_policy::observable_socket(true, false)
+        || footprint_policy::observable_socket(false, false) { panic!(); }
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn hint_length_keeps_the_original_nonempty_64_byte_boundary() {
-    if signal::valid_hint_length(0) || !signal::valid_hint_length(1)
-        || !signal::valid_hint_length(64) || signal::valid_hint_length(65)
-        || signal::valid_hint_length(usize::MAX) { panic!(); }
+    if send_policy::valid_hint_length(0) || !send_policy::valid_hint_length(1)
+        || !send_policy::valid_hint_length(64) || send_policy::valid_hint_length(65)
+        || send_policy::valid_hint_length(usize::MAX) { panic!(); }
 }
 
 fn expect_hint(actual: bool)
@@ -71,7 +73,7 @@ fn hint_send_case<'a>(payload: &'a str, bytes: usize, failure: u8, sent: usize) 
         trace.push((2, socket, false));
         (trace, if failure == 3 { Err(payload.to_string()) } else { Ok(sent) })
     };
-    let (trace, result) = signal::send_hint(Vec::new(), bytes, open, nonblocking, send);
+    let (trace, result) = send_policy::send_hint(Vec::new(), bytes, open, nonblocking, send);
     if bytes == 0 || bytes > 64 {
         expect_hint(trace.len() == 0);
         match result {

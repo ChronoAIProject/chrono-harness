@@ -136,7 +136,8 @@ CI 的原完整 behavior 驱动根同时编译 release 测试源码，保留生�
 FILEMAP 同步登记实际编译关系，不新增证明入口或放宽参数。完整候选证明、行为、
 canonical、原生和交付仍须实际验收；外部输入资格及完整成本保持未完成／unknown。
 
-`maintenance_signal.rs` 的真实 Unix `send` 直接调用同源 Verus `send_hint`：
+`maintenance_signal/verified_send.rs` 拥有同源 Verus `send_hint`；
+`maintenance_signal.rs` 的真实 Unix `send` 直接调用该实现：
 消息长度必须在 1–64 字节内，才创建临时 socket；先成功启用非阻塞模式，再发送一次。
 创建、配置或发送失败都立即保留原错误全文，后续阶段不再调用；实际发送长度必须
 精确等于原消息长度，否则拒绝。回调关系同时绑定原 socket、阶段输入和完整状态。
@@ -153,6 +154,13 @@ canonical、原生和交付仍须实际验收；外部输入资格及完整成�
 政策准入、线程抑制、激活收据及服务状态仍有自身证明义务，本范围不表示整文件或
 全仓已证明。没有新增依赖、仓内受信函数、证明入口、线程或预算，也没有新增运行时
 容器、消息副本或 IO；完整构建、验证、运行、CI 和存储成本未测。
+
+局部资源证明根只编译上述发送逻辑，不再反向包含整个 IO 文件。
+socket 观察资格的 `observable_socket` 由既有 `verified_limits.rs` 拥有，
+真实 footprint 直接消费，独立预期继续核全部四种组合。
+`maintenance_signal.rs` 与 `artifact_disposal.rs` 的正常生产实现不再被 Verus 条件编译
+排除；两文件的完整义务登记到现有 runner 库根，不以局部内核证明冒充整文件证明。
+这是源码所有权和证明登记的同步调整，完整根、原行为、canonical 与交付仍须分别验收。
 
 ## 缓存恢复的完整准备流程
 

@@ -5,15 +5,15 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
-#[path = "maintenance_signal.rs"]
+#[path = "maintenance_signal/verified_send.rs"]
 pub mod maintenance_signal;
 
-#[cfg(verus_keep_ghost)]
-#[path = "artifact_disposal.rs"]
-#[rustfmt::skip]
-pub mod artifact_disposal;
-
 verus! {
+
+/// Socket observation does not authorize a strict footprint or any effect.
+pub fn observable_socket(observe_sockets: bool, is_socket: bool) -> (allowed: bool)
+    ensures allowed == (observe_sockets && is_socket),
+{ observe_sockets && is_socket }
 
 pub const MAX_OUTPUT_BYTES: usize = 67_108_864;
 
