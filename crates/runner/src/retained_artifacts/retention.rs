@@ -2,7 +2,19 @@
 //! Uses the lifecycle kernel capability owner for publication, use and disposal exclusion.
 #![allow(unexpected_cfgs)]
 #[cfg(not(verus_keep_ghost))]
-use crate::verus;
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Sealed recovery accounting alone never establishes domain completion.
+pub fn accounting_releases(completing: bool, sealed: bool) -> (released: bool)
+    ensures released == (completing && sealed),
+{
+    completing && sealed
+}
+}
+
 #[cfg(not(verus_keep_ghost))]
 use crate::{decode, no_symlink_parents, ownership::Lease, sha256};
 #[cfg(not(verus_keep_ghost))]
@@ -29,8 +41,7 @@ mod manifest;
 #[cfg(not(verus_keep_ghost))]
 use manifest::Manifest;
 #[path = "partition.rs"]
-#[cfg(not(verus_keep_ghost))]
-mod partition;
+pub(crate) mod partition;
 #[cfg(not(verus_keep_ghost))]
 use partition::Gate;
 #[cfg(not(verus_keep_ghost))]
@@ -1453,24 +1464,6 @@ impl Inventory {
         }
         repair()?;
         let byte_limit = output.byte_limit.unwrap_or(self.policy.max_output_bytes);
-        let mut observed = Manifest::default();
-        let began = Instant::now();
-        for _ in 0..self.policy.max_nodes_per_round {
-            if observed.sealed
-                || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
-            {
-                break;
-            }
-            observed.step(&self.root, path, self.policy.max_manifest_nodes)?;
-        }
-        if !observed.sealed || observed.bytes > byte_limit {
-            return Err(
-                "unfinished directory exceeds bounded resumption accounting; preserve originals"
-                    .into(),
-            );
-        }
-        let written = observed.bytes;
-        let written_nodes = observed.entries.len();
         // Resumption can add domain publication records. Do not reuse a
         // snapshot taken before those writes, or erase the original outcome.
         output.manifest = Manifest::default();
@@ -1479,7 +1472,7 @@ impl Inventory {
         let initial = Arc::clone(&output.value);
         self.save(&ledger, &gate)?;
         drop((gate, ledger));
-        Ok(Some(Publication {
+        let publication = Publication {
             id: initial.id.clone(),
             path: path.into(),
             identity: RefCell::new(initial.identity.clone()),
@@ -1487,10 +1480,22 @@ impl Inventory {
             initial,
             lease,
             byte_limit,
-            written: Cell::new(written),
-            written_nodes: Cell::new(written_nodes),
+            written: Cell::new(0),
+            written_nodes: Cell::new(0),
             inventory: self,
-        }))
+        };
+        let nodes = publication.inventory.policy.max_nodes_per_round;
+        let millis = publication.inventory.policy.max_millis_per_round;
+        let (written, written_nodes) = publication.account_rounds(
+            None,
+            None,
+            true,
+            || {},
+            |began, steps| steps >= nodes || began.elapsed().as_millis() >= millis as u128,
+        )?;
+        publication.written.set(written);
+        publication.written_nodes.set(written_nodes);
+        Ok(Some(publication))
     }
     /// A producer selects a finite diagnostic window, including interruption
     /// before completion. Actual caller
@@ -2598,7 +2603,9 @@ impl Inventory {
     }
     fn maintain_locked(&self, observed: u64, gate: &Gate) -> Result<Value, String> {
         let began = self.round_began.get().unwrap_or_else(Instant::now);
+        let entered_micros = began.elapsed().as_micros() as u64;
         let mut l = self.load(&gate)?;
+        let loaded_micros = began.elapsed().as_micros() as u64;
         let mut metadata_steps = 0usize;
         let mut accounting_errors = Vec::new();
         // Recover only explicit reservations; never discover unknown files by scanning.
@@ -2826,6 +2833,7 @@ impl Inventory {
             })
             .collect();
         order.sort_by_key(|(_, priority)| *priority);
+        let prepared_micros = began.elapsed().as_micros() as u64;
         for (id, _) in order {
             if !self.metadata_room()
                 || nodes
@@ -2884,6 +2892,9 @@ impl Inventory {
                     }
                     Err(e) => return Err(e.to_string()),
                     Ok(_) => (),
+                }
+                if !gate.excludes_path(&o.path) {
+                    return Err("retiring report path reappeared; preserve replacement".into());
                 }
                 if identity(&root)? != o.identity {
                     return Err("output identity changed; preserve replacement".into());
@@ -3169,6 +3180,11 @@ impl Inventory {
                             protected.push(json!({"id":id,"reason":"report bytes absent; bounded reference detachment resumes on ordinary entry"}));
                             continue;
                         }
+                        if !gate.excludes_path(&o.path) {
+                            self.save(&l, &gate)?;
+                            protected.push(json!({"id":id,"reason":"report edges detached; final retirement requires path exclusion"}));
+                            continue;
+                        }
                     }
                     let o = Arc::unwrap_or_clone(l.outputs.remove(i).value);
                     let summary = json!({"id":o.id,"producer":o.producer,"path":o.path,"identity":o.identity,"sha256":o.sha256,"original_outcome":o.outcome,"observed_return":o.observed_return,"original":disposal_fact,"removed_logical_bytes":o.removed_logical_bytes,"physical_bytes_reclaimed":null,"large_original_recheck":if o.length.is_some_and(|n|n>self.policy.max_bytes_per_round) {"sealed-identity-and-content-stamp; digest-not-reread"} else {"not-applicable"}});
@@ -3211,7 +3227,9 @@ impl Inventory {
                 Err(error) => protected.push(json!({"id":id,"reason":error})),
             }
         }
+        let disposal_finished_micros = began.elapsed().as_micros() as u64;
         self.save(&l, &gate)?;
+        let saved_micros = began.elapsed().as_micros() as u64;
         let mut measurements = [0u64; 8];
         for output in &l.outputs {
             for (total, value) in measurements.iter_mut().zip(retained_measurements(
@@ -3227,6 +3245,22 @@ impl Inventory {
         for (key, value) in RETAINED_MEASUREMENT_FIELDS.iter().zip(measurements) {
             result[*key] = json!(value);
         }
+        // Emit after bounded work: sink IO must not consume its disposal window.
+        // Every checkpoint uses the same owning round's start, including gates.
+        tracing::debug!(
+            event_id = "retention.round.component",
+            host = %self.root.display(),
+            entered_micros,
+            loaded_micros,
+            prepared_micros,
+            disposal_finished_micros,
+            saved_micros,
+            outputs = count,
+            nodes,
+            removed_logical_bytes = bytes,
+            max_millis_per_round = self.policy.max_millis_per_round,
+            "bounded retention component returned"
+        );
         Ok(result)
     }
 
@@ -3719,12 +3753,26 @@ impl Publication {
         consumer: Option<&str>,
         seal_all: bool,
         observe: impl FnOnce(),
-        mut exhausted: impl FnMut(Instant, usize) -> bool,
+        exhausted: impl FnMut(Instant, usize) -> bool,
     ) -> Result<(), String> {
         // Returning a completed original hands its capability to any enclosing
         // caller before the producer closes. A nested caller may have no durable
         // root left after success, while its parent still needs its exact result.
         self.inventory.remember_output(&self.lease, &self.id)?;
+        self.account_rounds(Some(outcome), consumer, seal_all, observe, exhausted)?;
+        Ok(())
+    }
+    /// The same capability and manifest cursor account either a real completion
+    /// or recovery measurement. Only a real completion may release publication.
+    fn account_rounds(
+        &self,
+        outcome: Option<Value>,
+        consumer: Option<&str>,
+        seal_all: bool,
+        observe: impl FnOnce(),
+        mut exhausted: impl FnMut(Instant, usize) -> bool,
+    ) -> Result<(u64, usize), String> {
+        let completing = outcome.is_some();
         if serde_json::to_vec(&outcome)
             .map_err(|e| e.to_string())?
             .len()
@@ -3753,8 +3801,10 @@ impl Publication {
             o.length = Some(length);
         }
         o.creation = None;
-        o.outcome = outcome;
-        o.phase = "sealing".into();
+        if let Some(outcome) = outcome {
+            o.outcome = outcome;
+            o.phase = "sealing".into();
+        }
         let mut total_steps = 0;
         loop {
             let o = &mut owned;
@@ -3776,11 +3826,20 @@ impl Publication {
                     break;
                 }
             }
-            if o.manifest.sealed {
-                o.reserved_bytes = o.manifest.bytes;
+            let sealed = o.manifest.sealed;
+            let measured = (o.manifest.bytes, o.manifest.entries.len());
+            if accounting_releases(completing, sealed) {
+                o.reserved_bytes = measured.0;
                 o.phase = "released".into();
             }
-            o.expires = now()?.saturating_add(self.inventory.keep_seconds(&o.producer));
+            if completing {
+                o.expires = now()?.saturating_add(self.inventory.keep_seconds(&o.producer));
+            } else if sealed && measured.0 <= self.byte_limit() {
+                // The caller can still write its domain result. Persist a fresh
+                // cursor so the eventual completion must account those bytes too.
+                o.manifest = Manifest::default();
+                o.phase = "publishing".into();
+            }
             self.lease.stable()?;
             let roles = consumer
                 .map(|c| self.inventory.consumer_role(c))
@@ -3833,18 +3892,14 @@ impl Publication {
             if let Some(error) = accounting_error {
                 return Err(error);
             }
-            if l.outputs
-                .iter()
-                .find(|o| o.id == self.id)
-                .is_some_and(|o| o.manifest.bytes > self.byte_limit())
-            {
+            if measured.0 > self.byte_limit() {
                 return Err(
                 "output byte capacity exceeded; original accounted and preserved until released"
                     .into(),
             );
             }
-            if owned.manifest.sealed || !seal_all {
-                return Ok(());
+            if sealed || !seal_all {
+                return Ok(measured);
             }
             if steps == 0
                 || total_steps >= self.inventory.policy.max_manifest_nodes.saturating_mul(4)

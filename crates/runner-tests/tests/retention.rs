@@ -51,6 +51,18 @@ fn maintenance(root: &Path) -> Value {
     }
     round
 }
+#[cfg(not(verus_keep_ghost))]
+fn diagnosed_maintenance_originals(root: &Path, id: &str) -> Value {
+    use chrono_diagnostics::logging::{Level, Logger};
+    // The existing operation owns and bounds stderr; no extra log family or
+    // subscriber is installed in the parent test process.
+    let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
+    let round = logger.run(|| inventory(root).maintain_originals(&[id.to_owned()]));
+    logger
+        .finish()
+        .expect("original retention stage diagnostics");
+    round.unwrap()
+}
 // The fixture owns every address below its private root. This count observes
 // those declarations after bounded work; it is never written into a producer report.
 #[cfg(not(verus_keep_ghost))]
@@ -811,6 +823,162 @@ fn unfinished_directory_resumes_after_accounting_and_seals_only_after_actual_pub
         .unwrap();
     maintain_fixture_to(h.path(), 0);
     assert!(!h.path().join(path).exists());
+}
+
+#[test]
+fn unfinished_directory_recovery_accounts_beyond_one_round_without_publishing_completion() {
+    if !isolated_capability_test(
+        "unfinished_directory_recovery_accounts_beyond_one_round_without_publishing_completion",
+    ) {
+        return;
+    }
+    let h = host(2, 16);
+    let path = ".chrono-harness/state/fixtures/recovered-rounds";
+    let publication = inventory(h.path())
+        .plan_rooted(
+            "fixture",
+            path,
+            json!({"completion":"not-established"}),
+            "domain-recovery",
+        )
+        .unwrap();
+    let id = publication.id().to_owned();
+    publication.materialize().unwrap();
+    for name in ["first", "second", "third"] {
+        publication
+            .write_file(&h.path().join(path).join(name), name.as_bytes())
+            .unwrap();
+    }
+    drop(publication);
+    let repaired = std::cell::Cell::new(0);
+    let result = inventory(h.path()).recover_unfinished_directory("fixture", path, || {
+        repaired.set(repaired.get() + 1);
+        fs::write(h.path().join(path).join("recovery-result"), b"repaired")
+            .map_err(|error| error.to_string())
+    });
+    let publication = match result {
+        Ok(Some(publication)) => publication,
+        Ok(None) => panic!("the original publication must remain adopted"),
+        Err(error) => {
+            let original = h.keep();
+            panic!("bounded recovery must continue accounting: {error}; originals: {original:?}");
+        }
+    };
+    assert_eq!(publication.id(), id);
+    assert_eq!(
+        repaired.get(),
+        1,
+        "accounting must not repeat domain repair"
+    );
+    let before = ledger(h.path());
+    let original = before["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == id)
+        .unwrap();
+    assert_eq!(original["phase"], "publishing");
+    assert_eq!(original["outcome"]["completion"], "not-established");
+    assert_eq!(
+        inventory(h.path())
+            .rooted_original("fixture", "domain-recovery")
+            .unwrap()
+            .unwrap()
+            .0,
+        id
+    );
+    publication
+        .write_file(&h.path().join(path).join("final"), b"published")
+        .unwrap();
+    publication
+        .complete_sealed(json!({"publication":"committed"}))
+        .unwrap();
+    for (name, expected) in [
+        ("first", b"first".as_slice()),
+        ("second", b"second".as_slice()),
+        ("third", b"third".as_slice()),
+        ("recovery-result", b"repaired".as_slice()),
+        ("final", b"published".as_slice()),
+    ] {
+        assert_eq!(fs::read(h.path().join(path).join(name)).unwrap(), expected);
+    }
+    let after = ledger(h.path());
+    let original = after["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["id"] == id)
+        .unwrap();
+    assert_eq!(original["phase"], "released");
+    assert_eq!(original["manifest"]["sealed"], true);
+    assert_eq!(original["outcome"]["publication"], "committed");
+}
+
+#[test]
+fn unfinished_directory_recovery_keeps_original_byte_and_manifest_bounds() {
+    if !isolated_capability_test(
+        "unfinished_directory_recovery_keeps_original_byte_and_manifest_bounds",
+    ) {
+        return;
+    }
+    for (kind, byte_limit, node_limit, expected_error) in [
+        ("bytes", 4, 16, "output byte capacity exceeded"),
+        ("nodes", 1024, 2, "capacity; preserve original"),
+    ] {
+        let h = host(2, 16);
+        let policy_path = h.path().join(POLICY_PATH);
+        let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+        policy["max_output_bytes"] = json!(byte_limit);
+        policy["max_manifest_nodes"] = json!(node_limit);
+        fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+        let path = format!(".chrono-harness/state/fixtures/recovery-{kind}");
+        let publication = inventory(h.path())
+            .plan_rooted(
+                "fixture",
+                &path,
+                json!({"completion":"not-established"}),
+                "domain-recovery",
+            )
+            .unwrap();
+        let id = publication.id().to_owned();
+        publication.materialize().unwrap();
+        drop(publication);
+        let result = inventory(h.path()).recover_unfinished_directory("fixture", &path, || {
+            fs::write(h.path().join(&path).join("first"), b"12345")
+                .and_then(|()| fs::write(h.path().join(&path).join("second"), b"second"))
+                .map_err(|error| error.to_string())
+        });
+        let error = match result {
+            Err(error) => error,
+            Ok(_) => panic!("recovery must preserve the original {kind} bound"),
+        };
+        assert!(error.contains(expected_error), "{kind}: {error}");
+        assert_eq!(
+            fs::read(h.path().join(&path).join("first")).unwrap(),
+            b"12345"
+        );
+        assert_eq!(
+            fs::read(h.path().join(&path).join("second")).unwrap(),
+            b"second"
+        );
+        let after = ledger(h.path());
+        let original = after["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["id"] == id)
+            .unwrap();
+        assert_eq!(original["phase"], "publishing");
+        assert_eq!(original["outcome"]["completion"], "not-established");
+        assert_eq!(
+            inventory(h.path())
+                .rooted_original("fixture", "domain-recovery")
+                .unwrap()
+                .unwrap()
+                .0,
+            id
+        );
+    }
 }
 
 #[test]
@@ -5664,9 +5832,7 @@ fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisit
         .collect();
     let mut rounds = Vec::new();
     for _ in 0..4 {
-        let round = inventory(h.path())
-            .maintain_originals(&[report_id.clone()])
-            .unwrap();
+        let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
@@ -5678,7 +5844,12 @@ fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisit
             break;
         }
     }
-    assert!(!h.path().join(report).exists(), "{rounds:?}");
+    assert!(
+        !h.path().join(report).exists(),
+        "{rounds:?}; policy: {policy}; report declaration: {}; original declaration: {}",
+        fs::read_to_string(retention_state::object_path(h.path(), &report_id)).unwrap(),
+        fs::read_to_string(retention_state::object_path(h.path(), &ids[0])).unwrap()
+    );
     assert_eq!(fs::read(role_path).unwrap(), role_before);
     for (path, bytes) in untouched {
         assert_eq!(fs::read(path).unwrap(), bytes);
@@ -5863,9 +6034,7 @@ fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
             .unwrap();
     let mut rounds = Vec::new();
     for _ in 0..4 {
-        let round = inventory(h.path())
-            .maintain_originals(&[report_id.clone()])
-            .unwrap();
+        let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
@@ -5877,7 +6046,14 @@ fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
             break;
         }
     }
-    assert!(!h.path().join(report).exists(), "{rounds:?}");
+    let report_state: Value = serde_json::from_slice(
+        &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+    )
+    .unwrap();
+    assert!(
+        !h.path().join(report).exists(),
+        "consumer metadata exclusion: {consumer}; rounds: {rounds:?}; policy: {policy}; report declaration: {report_state}"
+    );
     assert_eq!(
         fs::read(h.path().join(original)).unwrap(),
         b"original still required by its consumer"
@@ -5958,9 +6134,7 @@ fn released_report_detaches_many_originals_with_bounded_durable_progress() {
     let mut checked_replacement = false;
     for _ in 0..ids.len() + 8 {
         // Reopen the owner on every call: progress must survive process loss.
-        let round = inventory(h.path())
-            .maintain_originals(&[report_id.clone()])
-            .unwrap();
+        let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
@@ -6021,7 +6195,10 @@ fn released_report_detaches_many_originals_with_bounded_durable_progress() {
         rounds.push(round);
     }
     let final_state: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
-    assert!(final_state["output"].is_null(), "{rounds:?}; {final_state}");
+    assert!(
+        final_state["output"].is_null(),
+        "{rounds:?}; policy: {policy}; report declaration: {final_state}"
+    );
     assert!(checked_replacement);
     assert_eq!(removed, bytes.len() as u64, "{rounds:?}");
     assert!(!h.path().join(report).exists());
@@ -6043,6 +6220,121 @@ fn finalized_original_path_lease_does_not_block_released_report() {
         "finalized_original_path_lease_does_not_block_released_report",
         false,
     );
+}
+
+#[test]
+fn retiring_report_detaches_without_reacquiring_its_absent_path() {
+    if !isolated_capability_test("retiring_report_detaches_without_reacquiring_its_absent_path") {
+        return;
+    }
+    // The first two-node round removes bytes but cannot also detach an edge.
+    let h = host(2, 128);
+    let original = ".chrono-harness/state/fixtures/required-original";
+    fs::write(
+        h.path().join(original),
+        b"original required by its consumer",
+    )
+    .unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", original, json!(null))
+        .unwrap();
+    let original_id = publication.id().to_owned();
+    publication.complete(json!({"exit": 7})).unwrap();
+    inventory(h.path())
+        .reference("actual-original-consumer", &[original_id.clone()])
+        .unwrap();
+    let role = retention_state::role_path(h.path(), "actual-original-consumer");
+    let role_before = fs::read(&role).unwrap();
+    let report = ".chrono-harness/state/fixtures/retiring-report";
+    fs::write(h.path().join(report), b"obsolete report").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", report, json!(null))
+        .unwrap();
+    let report_id = publication.id().to_owned();
+    inventory(h.path())
+        .dependencies(&report_id, &[original_id.clone()])
+        .unwrap();
+    publication.complete(json!({"exit": 0})).unwrap();
+    let record = retention_state::object_path(h.path(), &report_id);
+    let first = diagnosed_maintenance_originals(h.path(), &report_id);
+    assert!(!h.path().join(report).exists(), "{first}");
+    let pending: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(pending["output"]["phase"], "disposing", "{pending}");
+    assert_eq!(
+        pending["output"]["references"],
+        json!([original_id]),
+        "{pending}"
+    );
+
+    // An observed replacement is preserved before any outgoing protection ends.
+    fs::write(
+        h.path().join(report),
+        b"replacement has no retirement authority",
+    )
+    .unwrap();
+    let replacement = diagnosed_maintenance_originals(h.path(), &report_id);
+    let preserved: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(
+        preserved["output"]["references"], pending["output"]["references"],
+        "{replacement}"
+    );
+    assert_eq!(
+        fs::read(h.path().join(report)).unwrap(),
+        b"replacement has no retirement authority"
+    );
+    fs::remove_file(h.path().join(report)).unwrap();
+
+    let mut address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in report.split('/') {
+        address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    address.push("address.json");
+    let exclusion =
+        chrono_harness::ownership::DirectoryLease::acquire(address.parent().unwrap(), true, None)
+            .unwrap()
+            .unwrap();
+    let detached = diagnosed_maintenance_originals(h.path(), &report_id);
+    assert!(
+        detached["accounting_errors"].as_array().unwrap().is_empty(),
+        "{detached}"
+    );
+    let waiting: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(
+        waiting["output"]["references"],
+        json!([]),
+        "{detached}; {waiting}"
+    );
+    assert_eq!(waiting["output"]["phase"], "disposing");
+    let original_record = retention_state::object_path(h.path(), &original_id);
+    let retained: Value = serde_json::from_slice(&fs::read(&original_record).unwrap()).unwrap();
+    assert_eq!(retained["incoming"], json!([]));
+
+    // Final path/address retirement still waits for the actual path capability.
+    let blocked = diagnosed_maintenance_originals(h.path(), &report_id);
+    assert!(
+        !blocked["accounting_errors"].as_array().unwrap().is_empty(),
+        "{blocked}"
+    );
+    let still_waiting: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(still_waiting["output"], waiting["output"]);
+    drop(exclusion);
+    let retired = diagnosed_maintenance_originals(h.path(), &report_id);
+    let done: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert!(done["output"].is_null(), "{retired}; {done}");
+    let path_state: Value = serde_json::from_slice(&fs::read(address).unwrap()).unwrap();
+    assert!(path_state["output"].is_null(), "{path_state}");
+    assert!(!h.path().join(report).exists());
+    assert_eq!(
+        fs::read(h.path().join(original)).unwrap(),
+        b"original required by its consumer"
+    );
+    assert_eq!(fs::read(role).unwrap(), role_before);
+    let retained: Value = serde_json::from_slice(&fs::read(original_record).unwrap()).unwrap();
+    assert_eq!(retained["output"]["outcome"]["exit"], 7);
+    assert_eq!(retained["roles"], json!(["actual-original-consumer"]));
+    assert_eq!(retained["incoming"], json!([]));
 }
 
 #[test]
