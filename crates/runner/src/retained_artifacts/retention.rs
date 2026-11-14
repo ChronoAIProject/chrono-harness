@@ -3057,11 +3057,10 @@ impl Inventory {
                     .saturating_sub(l.outputs[i].removed_logical_bytes);
                 let entered_disposal = l.outputs[i].phase != "disposing";
                 l.outputs[i].phase = "disposing".into();
-                // A regular output already in disposal has a durable phase and
-                // manifest. Defer the replacement write until its bounded
-                // physical effect (or the round's final save), avoiding a full
-                // inventory sync before every one-file retirement.
-                if entered_disposal || o.tree {
+                // Resumed disposal already has a durable phase and manifest.
+                // Save its cursor with the next physical step or final save;
+                // tree entries still persist every step below.
+                if entered_disposal {
                     self.save(&l, &gate)?;
                 }
                 while self.metadata_room()
