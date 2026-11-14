@@ -84,10 +84,9 @@ mod runtime {
         pub fn record(&self, path: &Path, value: &Value) -> Result<(), String> {
             let raw = serde_json::to_vec(value).map_err(|e| e.to_string())?;
             let temporary = path.with_extension("json.writing");
+            // write_file synchronizes these bytes before returning. The link
+            // below still needs the directory sync, without a second file sync.
             self.publication.write_file(&temporary, &raw)?;
-            fs::File::open(&temporary)
-                .and_then(|f| f.sync_all())
-                .map_err(|e| e.to_string())?;
             fs::hard_link(&temporary, path).map_err(|e| e.to_string())?;
             fs::remove_file(&temporary).map_err(|e| e.to_string())?;
             fs::File::open(path.parent().ok_or("E_CACHE_ATTEMPT: record parent")?)

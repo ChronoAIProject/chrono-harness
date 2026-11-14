@@ -25,6 +25,160 @@ mod probe;
 
 verus! {
 
+enum ExpectedFinalError {
+    Publication(Option<String>, String),
+    Recovery(String, String),
+    Encoding(String),
+}
+
+fn recovery_finalization_case(retain_ok: bool, pointer_ok: bool, recovery: Option<&str>,
+    warn: bool, encode_ok: bool, path: &str, raw_error: &str)
+{
+    let retain = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<String, String>))
+        ensures out.0@ == trace@.push(0u8), match out.1 {
+            Ok(original) => retain_ok && original@ == path@,
+            Err(error) => !retain_ok && error@ == raw_error@,
+        },
+    {
+        trace.push(0);
+        (trace, if retain_ok { Ok(path.to_string()) } else { Err(raw_error.to_string()) })
+    };
+    let pointer = |mut trace: Vec<u8>, original: &String|
+        -> (out: (Vec<u8>, Result<(), String>))
+        ensures out.0@ == trace@.push(1u8), match out.1 {
+            Ok(()) => pointer_ok,
+            Err(error) => !pointer_ok && error@ == raw_error@,
+        },
+    {
+        trace.push(1);
+        (trace, if pointer_ok { Ok(()) } else { Err(raw_error.to_string()) })
+    };
+    let warning = |mut trace: Vec<u8>, original: &String| -> (out: Vec<u8>)
+        ensures out@ == trace@.push(2u8),
+    {
+        trace.push(2);
+        trace
+    };
+    let encode = |mut trace: Vec<u8>, original: String|
+        -> (out: (Vec<u8>, Result<String, ExpectedFinalError>))
+        ensures out.0@ == trace@.push(3u8), match out.1 {
+            Ok(text) => encode_ok && text == original,
+            Err(error) => !encode_ok && match error {
+                ExpectedFinalError::Encoding(error) => error@ == raw_error@,
+                _ => false,
+            },
+        },
+    {
+        trace.push(3);
+        (trace, if encode_ok { Ok(original) }
+            else { Err(ExpectedFinalError::Encoding(raw_error.to_string())) })
+    };
+    let publication_error = |recovery: Option<String>, publication: String|
+        -> (out: ExpectedFinalError)
+        ensures out == ExpectedFinalError::Publication(recovery, publication),
+    { ExpectedFinalError::Publication(recovery, publication) };
+    let recovery_error = |error: String, original: String| -> (out: ExpectedFinalError)
+        ensures out == ExpectedFinalError::Recovery(error, original),
+    { ExpectedFinalError::Recovery(error, original) };
+    let result = match recovery {
+        Some(error) => Err(error.to_string()), None => Ok(()),
+    };
+    let (trace, result) = policy::finalize_recovery(Vec::new(), result, warn,
+        retain, pointer, warning, encode, &publication_error, &recovery_error);
+    assert(trace@ == if !retain_ok { seq![0u8] }
+        else if !pointer_ok || recovery is Some { seq![0u8, 1u8] }
+        else if warn { seq![0u8, 1u8, 2u8, 3u8] } else { seq![0u8, 1u8, 3u8] });
+    expect_cache_true(trace[0] == 0);
+    if !retain_ok {
+        expect_cache_true(trace.len() == 1);
+    } else {
+        expect_cache_true(trace[1] == 1);
+        if !pointer_ok || recovery.is_some() {
+            expect_cache_true(trace.len() == 2);
+        } else if warn {
+            expect_cache_true(trace.len() == 4);
+            expect_cache_true(trace[2] == 2);
+            expect_cache_true(trace[3] == 3);
+        } else {
+            expect_cache_true(trace.len() == 3);
+            expect_cache_true(trace[2] == 3);
+        }
+    }
+    if !retain_ok || !pointer_ok {
+        match result {
+            Err(ExpectedFinalError::Publication(failed, publication)) => {
+                expect_restore_text(publication.as_str(), raw_error);
+                match failed {
+                    Some(error) => match recovery {
+                        Some(expected) => expect_restore_text(error.as_str(), expected),
+                        None => expect_cache_true(false),
+                    },
+                    None => expect_cache_true(recovery.is_none()),
+                }
+            },
+            _ => expect_cache_true(false),
+        }
+    } else if let Some(expected) = recovery {
+        match result {
+            Err(ExpectedFinalError::Recovery(error, original)) => {
+                expect_restore_text(error.as_str(), expected);
+                expect_restore_text(original.as_str(), path);
+            },
+            _ => expect_cache_true(false),
+        }
+    } else if !encode_ok {
+        match result {
+            Err(ExpectedFinalError::Encoding(error)) => expect_restore_text(error.as_str(), raw_error),
+            _ => expect_cache_true(false),
+        }
+    } else {
+        match result {
+            Ok(text) => expect_restore_text(text.as_str(), path),
+            _ => expect_cache_true(false),
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_finalization_stops_at_retention_or_pointer_failure() {
+    recovery_finalization_case(false, false, None, false, false, "unused", "retain denied");
+    recovery_finalization_case(false, true, Some("restore/λverus! {
+
+\n"), true, true,
+        "unused", "retain/λverus! {
+
+\n");
+    recovery_finalization_case(true, false, None, true, true, "original", "pointer denied");
+    recovery_finalization_case(true, false, Some(""), false, false, "original/λverus! {
+
+\n", "");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_finalization_preserves_recovery_error_after_publication() {
+    recovery_finalization_case(true, true, Some("restore denied"), false, true,
+        "original", "unused");
+    recovery_finalization_case(true, true, Some("restore/λverus! {
+
+\n"), true, false,
+        "original/λverus! {
+
+\n", "unused");
+    recovery_finalization_case(true, true, Some(""), true, true, "", "");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_finalization_warns_before_encoding_and_keeps_encoding_failure() {
+    recovery_finalization_case(true, true, None, false, true, "original", "unused");
+    recovery_finalization_case(true, true, None, true, true, "original/λverus! {
+
+\n", "unused");
+    recovery_finalization_case(true, true, None, false, false, "original", "encode denied");
+    recovery_finalization_case(true, true, None, true, false, "", "encode/λverus! {
+
+\n");
+}
+
 pub open spec fn removal_event(trace: Seq<(u8, usize, String)>, previous: Seq<(u8, usize, String)>,
     kind: u8, index: usize, payload: Seq<char>) -> bool {
     trace.len() == previous.len() + 1 && trace.drop_last() == previous
