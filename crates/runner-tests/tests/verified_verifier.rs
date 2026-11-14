@@ -264,13 +264,15 @@ fn report(verification: Verification) -> (out: Option<CompilerReport>)
 }
 
 fn arguments() -> (out: Vec<String>)
-    ensures policy::verifier_arguments(out@),
+    ensures out.len() == 12, policy::verifier_arguments(out@), policy::source_only_invocation(out@),
         out[7]@ == "--emit=link=out,dep-info=out.d"@,
         out[8]@ == "root"@, out[10]@ == "out"@,
 {
     proof {
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info=");
         reveal_strlit("out"); reveal_strlit(".d"); reveal_strlit("root");
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
         assert(policy::invocation_value(vstd::utf8::encode_utf8("out"@)));
         assert(policy::invocation_value(vstd::utf8::encode_utf8("root"@)));
         reveal_strlit("--emit=link=out,dep-info=out.d");
@@ -311,6 +313,17 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
         reveal_strlit("producer=producer.rlib"); reveal_strlit("producer=producer.vir");
         reveal_strlit("consumer.vir"); reveal_strlit("root"); reveal_strlit("out");
         reveal_strlit("--emit=link=out,dep-info=out.d");
+        reveal_strlit("dependency=");
+        vstd::utf8::is_ascii_chars_encode_utf8("consumer"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("CARGO_PKG_VERSION=0.1.0"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("dependency=deps"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("dependency="@);
+        vstd::utf8::is_ascii_chars_encode_utf8("other=other.rlib"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("producer=producer.rlib"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("producer=producer.vir"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("consumer.vir"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
     }
     let parsed = policy::parse_verifier_arguments(&args);
     expect_verifier_true(parsed.is_some());
@@ -349,6 +362,7 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
+    proof { reveal_strlit("--unknown"); reveal_strlit("--extern"); }
     let mut unknown = arguments(); unknown[7] = "--unknown".to_string();
     let rejected = policy::parse_verifier_arguments(&unknown);
     expect_verifier_true(rejected.is_none());
@@ -363,6 +377,11 @@ fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
         reveal_strlit("one"); reveal_strlit("two"); reveal_strlit("missing=producer.vir");
         reveal_strlit("root"); reveal_strlit("out");
         reveal_strlit("--emit=link=out,dep-info=out.d");
+        vstd::utf8::is_ascii_chars_encode_utf8("one"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("two"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("missing=producer.vir"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
     }
     let prefix = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
         "--no-external-by-default".to_string(), "--num-threads".to_string(),
@@ -390,6 +409,16 @@ fn named_argument_identity_and_payload_boundaries_are_independent() {
         reveal_strlit("a=x=y"); reveal_strlit("a=路径"); reveal_strlit("a=");
         reveal_strlit("=x"); reveal_strlit("a=x"); reveal_strlit("ab=x");
         reveal_strlit("a=\0x");
+        vstd::utf8::is_ascii_chars_encode_utf8("a=x=y"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a="@);
+        vstd::utf8::is_ascii_chars_encode_utf8("=x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a=x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("ab=x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a=\0x"@);
+        assert('路' as u32 == 36335 && '径' as u32 == 24452);
+        assert(vstd::utf8::encode_scalar(36335) == seq![232u8,183,175]) by (compute);
+        assert(vstd::utf8::encode_scalar(24452) == seq![229u8,190,132]) by (compute);
+        assert(vstd::utf8::encode_utf8("a=路径"@) =~= seq![97u8,61,232,183,175,229,190,132]);
     }
     let equals_in_payload = policy::valid_named_invocation_value("a=x=y".as_bytes());
     let unicode_payload = policy::valid_named_invocation_value("a=路径".as_bytes());
