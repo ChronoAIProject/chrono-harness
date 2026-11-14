@@ -66,6 +66,26 @@ pub open spec fn recovery_text(value: Option<&str>) -> Option<Seq<char>> {
     match value { None => None, Some(text) => Some(text@) }
 }
 
+/// 恢复决策的错误分类与完整缓存身份；适配器只按顺序拼接两段原文。
+pub fn recovery_decision_error<'a>(error: &planner::RecoveryDecisionError, id: &'a str)
+    -> (parts: [&'a str; 2])
+    ensures parts[1]@ == id@,
+        parts[0]@ == match error {
+            planner::RecoveryDecisionError::MalformedOutputs =>
+                "E_CACHE_RECOVERY: malformed restore outputs for "@,
+            planner::RecoveryDecisionError::UnknownOutcome =>
+                "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for "@,
+        },
+{
+    let prefix = match error {
+        planner::RecoveryDecisionError::MalformedOutputs =>
+            "E_CACHE_RECOVERY: malformed restore outputs for ",
+        planner::RecoveryDecisionError::UnknownOutcome =>
+            "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for ",
+    };
+    [prefix, id]
+}
+
 pub struct RecoveryOptions<'a> {
     host_root: Option<&'a str>,
     config: Option<&'a str>,
@@ -572,19 +592,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 None,
                 false,
             );
-            let base_action = match base_action {
-                Ok(action) => action,
-                Err(super::verified_planner::RecoveryDecisionError::MalformedOutputs) => {
-                    return Err(format!(
-                        "E_CACHE_RECOVERY: malformed restore outputs for {id}"
-                    ));
-                }
-                Err(super::verified_planner::RecoveryDecisionError::UnknownOutcome) => {
-                    return Err(format!(
-                        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for {id}"
-                    ));
-                }
-            };
+            let base_action =
+                base_action.map_err(|error| recovery_decision_error(&error, id).concat())?;
             let content_method = cache["content_verification"].as_str();
             let mut verification = None;
             if matches!(base_action, super::verified_planner::RecoveryAction::Keep)
@@ -612,19 +621,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 content_status,
                 config.caches[id].refresh_sources,
             );
-            let action = match action {
-                Ok(action) => action,
-                Err(super::verified_planner::RecoveryDecisionError::MalformedOutputs) => {
-                    return Err(format!(
-                        "E_CACHE_RECOVERY: malformed restore outputs for {id}"
-                    ));
-                }
-                Err(super::verified_planner::RecoveryDecisionError::UnknownOutcome) => {
-                    return Err(format!(
-                        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for {id}"
-                    ));
-                }
-            };
+            let action = action.map_err(|error| recovery_decision_error(&error, id).concat())?;
             let discard = matches!(action, super::verified_planner::RecoveryAction::Discard);
             report["caches"][id] = json!({"restore":restore,"reason":reason,"status":if discard {"pending"} else {"not-required"},"artifacts":[]});
             if let Some(verification) = verification {

@@ -25,6 +25,27 @@ mod probe;
 
 verus! {
 
+fn recovery_decision_errors_keep_the_complete_id(id: &str) {
+    let malformed = policy::recovery_decision_error(
+        &policy::RecoveryDecisionError::MalformedOutputs, id);
+    expect_restore_text(malformed[0], "E_CACHE_RECOVERY: malformed restore outputs for ");
+    expect_restore_text(malformed[1], id);
+    let unknown = policy::recovery_decision_error(
+        &policy::RecoveryDecisionError::UnknownOutcome, id);
+    expect_restore_text(unknown[0],
+        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for ");
+    expect_restore_text(unknown[1], id);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_decision_errors_select_both_prefixes_and_preserve_text_boundaries() {
+    recovery_decision_errors_keep_the_complete_id("");
+    recovery_decision_errors_keep_the_complete_id("cache-id");
+    recovery_decision_errors_keep_the_complete_id("Cache-ID");
+    recovery_decision_errors_keep_the_complete_id("缓存/λ\0\n");
+    recovery_decision_errors_keep_the_complete_id("\0cache-id\0");
+}
+
 fn recovery_preserves_cache_status(status: Option<&str>)
     requires policy::recovery_text(status) != Some("pending"@),
 {
