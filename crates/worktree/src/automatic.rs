@@ -2024,12 +2024,46 @@ impl Manager {
         Ok(())
     }
 
-    /// Interrupted removal still uses this object's fixed adopted inputs, even
-    /// after its physical checkout has gone. Only candidate code executes.
+    fn adopt_cleanup_policy(&mut self, r: &mut Runner, maintenance: bool) -> Result<(), String> {
+        let imported = self.current_entry(&self.scope).is_some_and(|i| {
+            let entry = &self.ledger.entries[i];
+            crate::verified_lifecycle::imported_policy_required(
+                entry.enrollment["kind"].as_str().unwrap_or(""),
+                !entry.policy_migrations.is_empty(),
+            )
+        });
+        // An optional retention owner supplies the identity-bound original.
+        // Other hosts retain their existing current-target validation path.
+        let managed_originals = if imported && maintenance {
+            chrono_harness::retained_artifacts::retention::Inventory::adopted(
+                &self.inputs.policy.coordinator_root,
+            )?
+            .is_some()
+        } else {
+            false
+        };
+        if crate::verified_lifecycle::restore_present_import(
+            imported,
+            maintenance,
+            managed_originals,
+        ) {
+            self.restore_adopted_policy(r)
+        } else {
+            self.adopt_live_policy(r)
+        }
+    }
+
     fn restore_absent_policy(&mut self, r: &mut Runner) -> Result<(), String> {
         if self.scope.exists() {
             return Ok(());
         }
+        self.restore_adopted_policy(r)
+    }
+
+    /// Imports retain the caller's adopted policy until explicit migration.
+    /// Interrupted removal uses the same fixed inputs after checkout removal.
+    /// Only candidate code executes; target configuration stays bound raw data.
+    fn restore_adopted_policy(&mut self, r: &mut Runner) -> Result<(), String> {
         let Some(i) = self.current_entry(&self.scope) else {
             return Ok(());
         };
@@ -2039,7 +2073,7 @@ impl Manager {
         // An import adopts the caller's policy while retaining the target's raw
         // input bindings. Those are separate sources until an explicit migration.
         let mut _original_guard = None;
-        match crate::verified_lifecycle::absent_policy_source(
+        match crate::verified_lifecycle::adopted_policy_source(
             entry.enrollment["kind"].as_str().unwrap_or(""),
             !entry.policy_migrations.is_empty(),
             &binding.head,
@@ -2047,9 +2081,9 @@ impl Manager {
             &binding.policy_sha256,
             &sha256(&self.inputs.policy_bytes),
         ) {
-            crate::verified_lifecycle::AbsentPolicySource::Current => return Ok(()),
-            crate::verified_lifecycle::AbsentPolicySource::RetainedTarget => (),
-            crate::verified_lifecycle::AbsentPolicySource::ImportedOriginal => {
+            crate::verified_lifecycle::AdoptedPolicySource::Current => return Ok(()),
+            crate::verified_lifecycle::AdoptedPolicySource::RetainedTarget => (),
+            crate::verified_lifecycle::AdoptedPolicySource::ImportedOriginal => {
                 let path = entry.enrollment["receipt"]["report_path"]
                     .as_str()
                     .ok_or("import enrollment lacks its original report path")?;
@@ -2108,7 +2142,7 @@ impl Manager {
             &serde_json::to_vec(&binding.inputs).map_err(|e| e.to_string())?,
         ) || !equal_text(&sha256(&policy_bytes), &binding.policy_sha256)
         {
-            return Err("absent worktree policy does not match its retained adoption".into());
+            return Err("adopted worktree policy does not match its retained inputs".into());
         }
         // These bound bytes supply addresses, never an executable configuration.
         #[derive(Deserialize)]
@@ -2121,10 +2155,10 @@ impl Manager {
             &serde_json::to_vec(&config.automatic_cleanup).map_err(|e| e.to_string())?,
             &serde_json::to_vec(&Some(&self.inputs.policy_path)).map_err(|e| e.to_string())?,
         ) {
-            return Err("absent worktree policy input address changed".into());
+            return Err("adopted worktree policy input address changed".into());
         }
         // Coordinator producers execute from anchor_policy, not from this
-        // absent checkout's retained data. Keep its original bytes bound.
+        // checkout's retained data. Keep its original bytes bound.
         let mut cleanup_policy = json(&policy_bytes)?;
         if let Some(object) = cleanup_policy.as_object_mut() {
             object.remove("retained_producers");
@@ -2138,7 +2172,7 @@ impl Manager {
             &policy_namespace(&policy),
             &policy_namespace(&self.inputs.anchor_policy),
         ) {
-            return Err("absent worktree ownership namespace changed".into());
+            return Err("adopted worktree ownership namespace changed".into());
         }
         let (registrations, registry_digest) =
             start::registrations(r, &root, &binding.head, &config.host_config)?;
@@ -3338,7 +3372,7 @@ impl Manager {
         // pass; independent worktree and producer maintenance has already run.
         report["output_retention"] = if unprotected.is_empty() {
             value!(self.outside_enrollment(r, |inputs, _| {
-                chrono_harness::retained_artifacts::retention::maintain_adopted(
+                chrono_harness::retained_artifacts::retention::maintain_explicit_adopted(
                     &inputs.policy.coordinator_root,
                 )
             })?)
@@ -3365,7 +3399,11 @@ impl Manager {
     ) -> Result<Vec<String>, String> {
         // Selection and execution must use this checkout's committed choices;
         // the coordinator's thresholds can differ or be absent.
-        self.adopt_live_policy(r)?;
+        // A failed admission can leave an owned metadata address without an
+        // enrolled checkout. Its existing directory is not a policy consumer.
+        if crate::verified_lifecycle::enrolled_policy_required(self.ledger.entries.len()) {
+            self.adopt_cleanup_policy(r, maintenance)?;
+        }
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
         failures.extend(self.rotate_cache_history(r, report)?);
@@ -3477,7 +3515,7 @@ impl Manager {
                 "cleanup",
                 "cleaned",
                 |r, token, attempt| {
-                    self.adopt_live_policy(r)?;
+                    self.adopt_cleanup_policy(r, maintenance)?;
                     attempt["source_commit"] = value!(self.inputs.anchor_head);
                     attempt["policy_source_root"] = value!(self.inputs.source_root);
                     attempt["policy_source_commit"] = value!(self.inputs.source_head);

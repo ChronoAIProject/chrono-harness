@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+chrono-judge-routes = { path = "../judge-routes" }
 chrono-judge-filemap = { path = "../judge-filemap" }
 chrono-judge-registration = { path = "../judge-registration" }
 chrono-identifiers = { path = "../identifiers" }
@@ -47,7 +48,6 @@ libc = "0.2"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 chrono-worktree = { path = "../worktree", features = ["producer-birth-test"] }
 tempfile = "3"
-chrono-judge-routes = { path = "../judge-routes" }
 
 [profile.dev.package.sha2]
 opt-level = 3
@@ -83,5 +83,17 @@ bench = false
 [[bin]]
 name = "chrono-judge-filemap-test-cli"
 path = "../judge-filemap/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-routes-test-cli"
+path = "../judge-routes/src/main.rs"
+test = false
+bench = false
+
+[[bin]]
+name = "chrono-judge-projects-test-cli"
+path = "../judge-projects/src/main.rs"
 test = false
 bench = false

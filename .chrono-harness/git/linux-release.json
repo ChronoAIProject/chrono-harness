@@ -22,6 +22,12 @@
       "tracked": false
     },
     {
+      "path": "examples/ci-host-job-gating/.chrono-harness/state/",
+      "owner": "ci",
+      "kind": "execution-evidence",
+      "tracked": false
+    },
+    {
       "path": "crates/runner/target/",
       "owner": "runner",
       "kind": "cargo-output",

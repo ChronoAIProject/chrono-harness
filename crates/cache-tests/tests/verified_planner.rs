@@ -21,6 +21,339 @@ mod continuity;
 
 verus! {
 
+fn replay_observation<'a>(path: &'a str, plan_hash: &'a str, steps_hash: &'a str,
+    status: Option<&'a str>) -> (out: policy::RecoveryReplay<'a>)
+    ensures out.schema == Some("chrono-cache-recovery/v1"), out.plan_fields == Some(2usize),
+        out.plan_path == Some(path), out.plan_sha256 == Some(plan_hash),
+        out.steps_sha256 == Some(steps_hash), out.status == status,
+{
+    policy::RecoveryReplay {
+        schema: Some("chrono-cache-recovery/v1"), plan_fields: Some(2),
+        plan_path: Some(path), plan_sha256: Some(plan_hash),
+        steps_sha256: Some(steps_hash), status,
+    }
+}
+
+fn replay_accepts(path: &str, plan_hash: &str, steps_hash: &str, original: &str,
+    status: &str)
+    requires status@ == "recovered"@ || status@ == "not-required"@,
+{
+    let report = replay_observation(path, plan_hash, steps_hash, Some(status));
+    match policy::admit_recovery_replay(&report, path, plan_hash, steps_hash, original) {
+        Ok(()) => (),
+        Err(_) => panic!("matching completed recovery rejected"),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn replay_accepts_both_terminal_states_and_complete_binding_values() {
+    replay_accepts("计划/λ\0\n", "摘要甲\0\n", "摘要乙/λ", "原件\0\n", "recovered");
+    replay_accepts("", "", "", "", "not-required");
+}
+
+fn replay_wrong_inputs(report: &policy::RecoveryReplay, path: &str,
+    plan_hash: &str, steps_hash: &str)
+    requires !policy::recovery_replay_bound(report, path, plan_hash, steps_hash),
+{
+    match policy::admit_recovery_replay(report, path, plan_hash, steps_hash, "原件\0\n") {
+        Ok(()) => panic!("different recovery inputs accepted"),
+        Err(error) => {
+            expect_restore_text(error[0],
+                "E_CACHE_RECOVERY: previous recovery belongs to different inputs");
+            expect_restore_text(error[1], "");
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn replay_rejects_each_missing_or_changed_binding_and_extra_plan_fields_first() {
+    proof {
+        reveal_strlit("chrono-cache-recovery/v1");
+        reveal_strlit("CHRONO-cache-recovery/v1");
+        reveal_strlit("plan"); reveal_strlit("plan\0");
+        reveal_strlit("hash"); reveal_strlit("Hash");
+        reveal_strlit("steps"); reveal_strlit("");
+        assert("plan"@.len() == 4); assert("plan\0"@.len() == 5);
+        assert("steps"@.len() == 5); assert(""@.len() == 0);
+        assert("hash"@[0] != "Hash"@[0]);
+        assert("chrono-cache-recovery/v1"@[0] != "CHRONO-cache-recovery/v1"@[0]);
+    }
+    let mut report = replay_observation("plan", "hash", "steps", Some("failed"));
+    report.schema = None;
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.schema = Some("CHRONO-cache-recovery/v1");
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.schema = Some("chrono-cache-recovery/v1");
+    report.plan_fields = None;
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_fields = Some(0);
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_fields = Some(1);
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_fields = Some(3);
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_fields = Some(2);
+    report.plan_path = None;
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_path = Some("plan\0");
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_path = Some("plan");
+    report.plan_sha256 = None;
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_sha256 = Some("Hash");
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.plan_sha256 = Some("hash");
+    report.steps_sha256 = None;
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+    report.steps_sha256 = Some("");
+    replay_wrong_inputs(&report, "plan", "hash", "steps");
+}
+
+fn replay_failed(status: Option<&str>, original: &str)
+    requires policy::recovery_text(status) != Some("recovered"@),
+        policy::recovery_text(status) != Some("not-required"@),
+{
+    let report = replay_observation("plan", "hash", "steps", status);
+    match policy::admit_recovery_replay(&report, "plan", "hash", "steps", original) {
+        Ok(()) => panic!("failed or unknown previous recovery accepted"),
+        Err(error) => {
+            expect_restore_text(error[0], "E_CACHE_RECOVERY: previous attempt failed; original ");
+            expect_restore_text(error[1], original);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn replay_rejects_failed_missing_unknown_case_and_nul_statuses_with_original_path() {
+    proof {
+        reveal_strlit("recovered"); reveal_strlit("not-required");
+        reveal_strlit("failed"); reveal_strlit("");
+        reveal_strlit("Recovered"); reveal_strlit("recovered\0");
+        assert("recovered"@.len() == 9); assert("not-required"@.len() == 12);
+        assert("failed"@.len() == 6); assert(""@.len() == 0);
+        assert("recovered\0"@.len() == 10);
+        assert("recovered"@[0] != "Recovered"@[0]);
+    }
+    replay_failed(None, "原件/λ\0\n");
+    replay_failed(Some("failed"), "原件/λ\0\n");
+    replay_failed(Some(""), "");
+    replay_failed(Some("Recovered"), "原件/λ\0\n");
+    replay_failed(Some("recovered\0"), "原件/λ\0\n");
+}
+
+fn recovery_value(actual: Option<&str>, expected: &str)
+    requires policy::recovery_text(actual) == Some(expected@),
+{
+    match actual {
+        Some(text) => expect_restore_text(text, expected),
+        None => panic!("missing recovery option"),
+    }
+}
+
+fn recovery_missing(options: &policy::RecoveryOptions, key: &policy::RecoveryOption,
+    expected: &str)
+    requires options.value(key.slot()).is_none(), expected@ == key.missing(),
+{
+    match options.required(key) {
+        Ok(_) => panic!("missing recovery option accepted"),
+        Err(error) => expect_restore_text(error, expected),
+    }
+}
+
+fn recovery_values(root: &str, config: &str, plan: &str, environment: &str) {
+    let args = ["--plan".to_owned(), plan.to_owned(),
+        "--host-root".to_owned(), root.to_owned(),
+        "--steps-env".to_owned(), environment.to_owned(),
+        "--config".to_owned(), config.to_owned()];
+    proof {
+        reveal_strlit("--host-root"); reveal_strlit("--config");
+        reveal_strlit("--plan"); reveal_strlit("--steps-env");
+        assert("--plan"@.len() == 6);
+        assert("--config"@.len() == 8);
+        assert("--host-root"@.len() == 11);
+        assert("--steps-env"@.len() == 11);
+        assert("--host-root"@[2] != "--steps-env"@[2]);
+        assert(policy::recovery_pair_slot(args@, 0) == 2);
+        assert(policy::recovery_pair_slot(args@, 1) == 0);
+        assert(policy::recovery_pair_slot(args@, 2) == 3);
+        assert(policy::recovery_pair_slot(args@, 3) == 1);
+        assert forall|i: int| 0 <= i < 4 implies
+            policy::recovery_pair_slot(args@, i) < 4 by { }
+        assert forall|i: int, j: int| 0 <= i < j < 4 implies
+            policy::recovery_pair_slot(args@, i) != policy::recovery_pair_slot(args@, j) by { }
+        assert(policy::recovery_prefix_valid(args@, 4));
+        assert(policy::recovery_args_valid(args@));
+    }
+    let options = match policy::parse_recovery_options(&args) {
+        Ok(options) => options,
+        Err(_) => panic!("complete recovery options rejected"),
+    };
+    proof {
+        assert(policy::recovery_options_bound(args@, 4, &options));
+        assert(options.value(0) == Some(root@));
+        assert(options.value(1) == Some(config@));
+        assert(options.value(2) == Some(plan@));
+        assert(options.value(3) == Some(environment@));
+    }
+    recovery_value(options.get(&policy::RecoveryOption::HostRoot), root);
+    recovery_value(options.get(&policy::RecoveryOption::Config), config);
+    recovery_value(options.get(&policy::RecoveryOption::Plan), plan);
+    recovery_value(options.get(&policy::RecoveryOption::StepsEnvironment), environment);
+    match options.required(&policy::RecoveryOption::Plan) {
+        Ok(actual) => expect_restore_text(actual, plan),
+        Err(_) => panic!("present recovery option rejected"),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_options_preserve_reordered_complete_values() {
+    recovery_values("根/λ\0\n", ".chrono-harness/配置\0\n",
+        ".chrono-harness/state/计划\0\n", "环境\0\n");
+    recovery_values("", "", "", "");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_empty_options_keep_all_four_missing_errors() {
+    let options = match policy::parse_recovery_options(&[]) {
+        Ok(options) => options,
+        Err(_) => panic!("empty recovery options rejected before required lookup"),
+    };
+    recovery_missing(&options, &policy::RecoveryOption::HostRoot,
+        "E_CACHE_RECOVERY: missing --host-root");
+    recovery_missing(&options, &policy::RecoveryOption::Config,
+        "E_CACHE_RECOVERY: missing --config");
+    recovery_missing(&options, &policy::RecoveryOption::Plan,
+        "E_CACHE_RECOVERY: missing --plan");
+    recovery_missing(&options, &policy::RecoveryOption::StepsEnvironment,
+        "E_CACHE_RECOVERY: missing --steps-env");
+}
+
+fn recovery_parse_error(args: &[String])
+    requires !policy::recovery_args_valid(args@),
+{
+    match policy::parse_recovery_options(args) {
+        Ok(_) => panic!("invalid recovery options accepted"),
+        Err(error) => expect_restore_text(error,
+            "E_CACHE_RECOVERY: invalid or duplicate recovery option"),
+    }
+}
+
+fn recovery_duplicate(key: &str)
+    requires policy::recovery_arg_slot(key@) < 4,
+{
+    let args = [key.to_owned(), "first\0\n".to_owned(),
+        key.to_owned(), "second/λ".to_owned()];
+    proof {
+        assert(policy::recovery_pair_slot(args@, 0) == policy::recovery_arg_slot(key@));
+        assert(policy::recovery_pair_slot(args@, 1) == policy::recovery_arg_slot(key@));
+        assert(!policy::recovery_args_valid(args@)) by {
+            if policy::recovery_args_valid(args@) {
+                assert(policy::recovery_prefix_valid(args@, 2));
+                assert(policy::recovery_pair_slot(args@, 0)
+                    != policy::recovery_pair_slot(args@, 1));
+            }
+        }
+    }
+    recovery_parse_error(&args);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_rejects_each_duplicate_option() {
+    proof {
+        reveal_strlit("--host-root"); reveal_strlit("--config");
+        reveal_strlit("--plan"); reveal_strlit("--steps-env");
+    }
+    recovery_duplicate("--host-root");
+    recovery_duplicate("--config");
+    recovery_duplicate("--plan");
+    recovery_duplicate("--steps-env");
+}
+
+fn recovery_unknown(key: &str)
+    requires policy::recovery_arg_slot(key@) == 4,
+{
+    let args = [key.to_owned(), "原值\0\n".to_owned()];
+    proof {
+        assert(policy::recovery_pair_slot(args@, 0) == 4);
+        assert(!policy::recovery_args_valid(args@)) by {
+            if policy::recovery_args_valid(args@) {
+                assert(policy::recovery_prefix_valid(args@, 1));
+                assert(policy::recovery_pair_slot(args@, 0) < 4);
+            }
+        }
+    }
+    recovery_parse_error(&args);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_rejects_unknown_case_and_nul_keys_and_odd_input() {
+    proof {
+        reveal_strlit("--host-root"); reveal_strlit("--config");
+        reveal_strlit("--plan"); reveal_strlit("--steps-env");
+        reveal_strlit("--PLAN"); reveal_strlit("--plan\0");
+        reveal_strlit("");
+        assert(""@.len() != "--host-root"@.len());
+        assert(""@.len() != "--config"@.len());
+        assert(""@.len() != "--plan"@.len());
+        assert(""@.len() != "--steps-env"@.len());
+        assert("--PLAN"@[2] != "--plan"@[2]);
+    }
+    recovery_unknown("");
+    recovery_unknown("--PLAN");
+    recovery_unknown("--plan\0");
+    let args = ["--host-root".to_owned()];
+    recovery_parse_error(&args);
+    let args = ["--host-root".to_owned(), "根".to_owned(), "--config".to_owned()];
+    recovery_parse_error(&args);
+}
+
+fn recovery_paths(config: &str, plan: &str, accepted: bool)
+    requires accepted == (policy::restore_prefix_matches(config, Some(".chrono-harness/"))
+        && policy::restore_prefix_matches(plan, Some(".chrono-harness/state/"))),
+{
+    match policy::admit_recovery_paths(config, plan) {
+        Ok(()) => expect_cache_true(accepted),
+        Err(error) => {
+            expect_cache_true(!accepted);
+            expect_restore_text(error, "E_CACHE_RECOVERY: expected host config and retained state plan");
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_paths_require_both_exact_prefixes() {
+    proof {
+        reveal_strlit(".chrono-harness/"); reveal_strlit(".chrono-harness/state/");
+        reveal_strlit(".chrono-harness/配置\0\n");
+        reveal_strlit(".chrono-harness/state/计划\0\n");
+        reveal_strlit(".chrono-harness-other/config");
+        reveal_strlit(".chrono-harness/states/plan");
+        reveal_strlit(".chrono-harness"); reveal_strlit("");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(".chrono-harness/")
+            && vstd::string::is_ascii(".chrono-harness/state/")
+            && vstd::string::is_ascii(".chrono-harness-other/config")
+            && vstd::string::is_ascii(".chrono-harness/states/plan")
+            && vstd::string::is_ascii(".chrono-harness")
+            && vstd::string::is_ascii(""));
+        reveal_with_fuel(vstd::utf8::encode_utf8, 32);
+        assert(forall|i: int| 0 <= i < ".chrono-harness/".spec_bytes().len()
+            ==> ".chrono-harness/配置\0\n".spec_bytes()[i] == ".chrono-harness/".spec_bytes()[i]);
+        assert(forall|i: int| 0 <= i < ".chrono-harness/state/".spec_bytes().len()
+            ==> ".chrono-harness/state/计划\0\n".spec_bytes()[i] == ".chrono-harness/state/".spec_bytes()[i]);
+        assert(".chrono-harness-other/config".spec_bytes()[15]
+            != ".chrono-harness/".spec_bytes()[15]);
+        assert(".chrono-harness/states/plan".spec_bytes()[21]
+            != ".chrono-harness/state/".spec_bytes()[21]);
+    }
+    recovery_paths(".chrono-harness/配置\0\n", ".chrono-harness/state/计划\0\n", true);
+    recovery_paths(".chrono-harness/", ".chrono-harness/state/", true);
+    recovery_paths(".chrono-harness-other/config", ".chrono-harness/state/", false);
+    recovery_paths(".chrono-harness/", ".chrono-harness/states/plan", false);
+    recovery_paths(".chrono-harness", ".chrono-harness/state/", false);
+    recovery_paths("", "", false);
+}
+
 fn artifact_trace(mut state: Vec<u8>, event: u8) -> (out: Vec<u8>)
     ensures out@ == state@.push(event),
 {

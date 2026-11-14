@@ -781,9 +781,7 @@
         ],
         "consumer": "check.unit_judge-filemap",
         "caches": [
-          "check.judge-filemap-tests",
-          "check.judge-projects",
-          "check.judge-routes"
+          "check.judge-filemap-tests"
         ],
         "save_caches": [
           "check.judge-filemap-tests"
@@ -821,12 +819,9 @@
         ],
         "consumer": "check.unit_judge-projects",
         "caches": [
-          "check.judge-projects",
-          "check.judge-projects-tests",
-          "check.judge-routes"
+          "check.judge-projects-tests"
         ],
         "save_caches": [
-          "check.judge-projects",
           "check.judge-projects-tests"
         ]
       },
@@ -882,9 +877,6 @@
         "consumer": "check.unit_judge-workflow",
         "caches": [
           "check.ci",
-          "check.inputs",
-          "check.judge-projects",
-          "check.judge-routes",
           "check.judge-workflow-tests"
         ],
         "save_caches": [
@@ -904,14 +896,10 @@
         ],
         "consumer": "check.unit_inputs",
         "caches": [
-          "check.inputs-tests",
-          "check.judge-projects",
-          "check.judge-routes",
-          "check.judge-workflow"
+          "check.inputs-tests"
         ],
         "save_caches": [
-          "check.inputs-tests",
-          "check.judge-workflow"
+          "check.inputs-tests"
         ]
       },
       "unit_distribution": {
@@ -966,10 +954,6 @@
         ],
         "consumer": "check.unit_judge-workflow-units",
         "caches": [
-          "check.ci",
-          "check.inputs",
-          "check.judge-projects",
-          "check.judge-routes",
           "check.judge-workflow-tests.judge-workflow-units"
         ],
         "save_caches": [
@@ -990,9 +974,6 @@
         "consumer": "check.unit_judge-workflow-short",
         "caches": [
           "check.ci",
-          "check.inputs",
-          "check.judge-projects",
-          "check.judge-routes",
           "check.judge-workflow-tests.judge-workflow-short"
         ],
         "save_caches": [
@@ -1012,7 +993,6 @@
         ],
         "consumer": "check.unit_worktree-adoption",
         "caches": [
-          "check.ci",
           "check.worktree-tests.worktree-adoption"
         ],
         "save_caches": [

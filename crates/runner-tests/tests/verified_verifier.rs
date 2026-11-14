@@ -24,18 +24,18 @@ verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn new_file_classification_is_required_while_existing_unknowns_stay_unknown() {
-    let base = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "old".to_string(), verification: None }],
+    let base = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "old".to_string(), verification: None }],
         require_new_file_classification: None,
-    };
-    let mut current = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "old".to_string(), verification: None }],
+    } };
+    let mut current = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "old".to_string(), verification: None }],
         require_new_file_classification: Some(true),
-    };
+    } };
     proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
     let unchanged = policy::sources::validate_file_classifications(&current, Ok(Some(&base)));
     expect_verifier_true(unchanged.is_ok());
-    current.files.push(policy::sources::SourceFile { path: "new".to_string(), verification: None });
+    current.files.entries.push(policy::sources::SourceFile { path: "new".to_string(), verification: None });
     proof {
         reveal_strlit("old"); reveal_strlit("new");
         assert("old"@[0] != "new"@[0]);
@@ -52,17 +52,17 @@ fn new_file_classification_is_required_while_existing_unknowns_stay_unknown() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn declared_files_cannot_become_unknown_and_deleted_files_need_no_classification() {
-    let base = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "data".to_string(),
+    let base = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "data".to_string(),
             verification: Some(policy::sources::SourceVerification {
                 role: policy::sources::SourceRole::Data, roots: Vec::new(),
             }) }],
         require_new_file_classification: Some(true),
-    };
-    let current = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "data".to_string(), verification: None }],
+    } };
+    let current = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "data".to_string(), verification: None }],
         require_new_file_classification: Some(true),
-    };
+    } };
     proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
     let removed = policy::sources::validate_file_classifications(&current, Ok(Some(&base)));
     expect_verifier_true(removed.is_err());
@@ -70,26 +70,26 @@ fn declared_files_cannot_become_unknown_and_deleted_files_need_no_classification
     let exact = identifiers::equal_text(error.message,
         "E_VERUS_COVERAGE: existing verification classification was removed: ");
     expect_verifier_true(exact);
-    let deleted = policy::sources::SourceRegistry {
-        files: Vec::new(), require_new_file_classification: Some(true),
-    };
+    let deleted = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: Vec::new(), require_new_file_classification: Some(true),
+    } };
     let absent = policy::sources::validate_file_classifications(&deleted, Ok(Some(&base)));
     expect_verifier_true(absent.is_ok());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn explicit_new_data_is_allowed_and_empty_new_program_roots_are_rejected() {
-    let mut current = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "data".to_string(),
+    let mut current = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "data".to_string(),
             verification: Some(policy::sources::SourceVerification {
                 role: policy::sources::SourceRole::Data, roots: Vec::new(),
             }) }],
         require_new_file_classification: Some(true),
-    };
+    } };
     proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
     let data = policy::sources::validate_file_classifications(&current, Ok(None));
     expect_verifier_true(data.is_ok());
-    current.files.push(policy::sources::SourceFile { path: "program".to_string(),
+    current.files.entries.push(policy::sources::SourceFile { path: "program".to_string(),
         verification: Some(policy::sources::SourceVerification {
             role: policy::sources::SourceRole::Program, roots: Vec::new(),
         }) });
@@ -105,19 +105,19 @@ fn explicit_new_data_is_allowed_and_empty_new_program_roots_are_rejected() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn classification_continuity_checks_the_base_even_when_candidate_disables_the_rule() {
-    let strict = policy::sources::SourceRegistry {
-        files: Vec::new(), require_new_file_classification: Some(true),
-    };
-    let mut current = policy::sources::SourceRegistry {
-        files: Vec::new(), require_new_file_classification: None,
-    };
+    let strict = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: Vec::new(), require_new_file_classification: Some(true),
+    } };
+    let mut current = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: Vec::new(), require_new_file_classification: None,
+    } };
     let absent = policy::sources::validate_file_classifications(&current, Ok(Some(&strict)));
     expect_verifier_true(absent.is_err());
     let error = absent.unwrap_err();
     expect_verifier_true(identifiers::equal_text(error.message,
         "E_VERUS_COVERAGE: existing classification requirement cannot be disabled: "));
     expect_verifier_true(identifiers::equal_text(error.path, "require_new_file_classification"));
-    current.require_new_file_classification = Some(false);
+    current.files.require_new_file_classification = Some(false);
     let disabled = policy::sources::validate_file_classifications(&current, Ok(Some(&strict)));
     expect_verifier_true(disabled.is_err());
     let error = disabled.unwrap_err();
@@ -131,9 +131,9 @@ fn classification_continuity_checks_the_base_even_when_candidate_disables_the_ru
         "E_VERUS_COVERAGE: base file classifications unavailable: ");
     let original = identifiers::equal_text(error.path, "base\0失败");
     expect_verifier_true(message && original);
-    let unadopted = policy::sources::SourceRegistry {
-        files: Vec::new(), require_new_file_classification: None,
-    };
+    let unadopted = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: Vec::new(), require_new_file_classification: None,
+    } };
     let unchanged = policy::sources::validate_file_classifications(&current, Ok(Some(&unadopted)));
     expect_verifier_true(unchanged.is_ok());
     let initial = policy::sources::validate_file_classifications(&current, Ok(None));
@@ -142,17 +142,17 @@ fn classification_continuity_checks_the_base_even_when_candidate_disables_the_ru
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn classification_identity_is_complete_and_first_file_error_is_stable() {
-    let base = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "name".to_string(), verification: None }],
+    let base = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "name".to_string(), verification: None }],
         require_new_file_classification: None,
-    };
-    let current = policy::sources::SourceRegistry {
-        files: vec![
+    } };
+    let current = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![
             policy::sources::SourceFile { path: "name\0".to_string(), verification: None },
             policy::sources::SourceFile { path: "Name".to_string(), verification: None },
         ],
         require_new_file_classification: Some(true),
-    };
+    } };
     proof {
         reveal_strlit("name"); reveal_strlit("name\0");
         assert("name"@.len() != "name\0"@.len());
@@ -163,10 +163,10 @@ fn classification_identity_is_complete_and_first_file_error_is_stable() {
     let error = first.unwrap_err();
     let path = identifiers::equal_text(error.path, "name\0");
     expect_verifier_true(path);
-    let case = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "Name".to_string(), verification: None }],
+    let case = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "Name".to_string(), verification: None }],
         require_new_file_classification: Some(true),
-    };
+    } };
     proof {
         reveal_strlit("Name");
         assert("name"@[0] != "Name"@[0]);
@@ -174,10 +174,10 @@ fn classification_identity_is_complete_and_first_file_error_is_stable() {
     }
     let case_result = policy::sources::validate_file_classifications(&case, Ok(Some(&base)));
     expect_verifier_true(case_result.is_err());
-    let unicode = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "数据".to_string(), verification: None }],
+    let unicode = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "数据".to_string(), verification: None }],
         require_new_file_classification: Some(true),
-    };
+    } };
     proof {
         reveal_strlit("数据");
         assert("name"@.len() != "数据"@.len());
@@ -195,22 +195,22 @@ fn a_file_with_a_proof_obligation_cannot_be_reclassified_as_data() {
 fn expect_downgrade_rejected(role: SourceRole)
     requires matches!(role, SourceRole::Program | SourceRole::Specification),
 {
-    let base = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "logic".to_string(),
+    let base = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "logic".to_string(),
             verification: Some(policy::sources::SourceVerification {
                 role, roots: vec![policy::sources::SourceProofRoot {
                     path: "proof.rs".to_string(), operation: "prove".to_string(),
                 }],
             }) }],
         require_new_file_classification: Some(true),
-    };
-    let current = policy::sources::SourceRegistry {
-        files: vec![policy::sources::SourceFile { path: "logic".to_string(),
+    } };
+    let current = policy::sources::SourceRegistry { files: policy::sources::SourceFiles {
+        entries: vec![policy::sources::SourceFile { path: "logic".to_string(),
             verification: Some(policy::sources::SourceVerification {
                 role: SourceRole::Data, roots: Vec::new(),
             }) }],
         require_new_file_classification: Some(true),
-    };
+    } };
     proof { reveal_with_fuel(policy::sources::classifications_error, 2); }
     let result = policy::sources::validate_file_classifications(&current, Ok(Some(&base)));
     expect_verifier_true(result.is_err());
@@ -271,6 +271,8 @@ fn arguments() -> (out: Vec<String>)
     proof {
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info=");
         reveal_strlit("out"); reveal_strlit(".d"); reveal_strlit("root");
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("out"@)));
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("root"@)));
         reveal_strlit("--emit=link=out,dep-info=out.d");
         assert("--emit=link=out,dep-info=out.d"@ =~=
             "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
@@ -280,6 +282,136 @@ fn arguments() -> (out: Vec<String>)
         "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
         "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()]
+}
+
+// J 的独立预期先于实现登记：扩展值不能改变真实根／输出，语法识别不授予依赖资格。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
+    let args = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--edition=2024".to_string(), "--crate-name".to_string(), "consumer".to_string(),
+        "-Zunstable-options".to_string(), "--env-set".to_string(), "CARGO_PKG_VERSION=0.1.0".to_string(),
+        "-L".to_string(), "dependency=deps".to_string(),
+        "--extern".to_string(), "other=other.rlib".to_string(),
+        "--extern".to_string(), "producer=producer.rlib".to_string(),
+        "--import".to_string(), "producer=producer.vir".to_string(),
+        "--export".to_string(), "consumer.vir".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        reveal_with_fuel(policy::invocation_extensions, 16);
+        reveal_with_fuel(policy::interpreted_option_sequence, 16);
+        reveal_with_fuel(policy::sources::next_byte, 32);
+        reveal_strlit("--edition=2024"); reveal_strlit("--crate-name");
+        reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
+        reveal_strlit("-L"); reveal_strlit("--extern"); reveal_strlit("--import"); reveal_strlit("--export");
+        reveal_strlit("consumer"); reveal_strlit("CARGO_PKG_VERSION=0.1.0");
+        reveal_strlit("dependency=deps"); reveal_strlit("other=other.rlib");
+        reveal_strlit("producer=producer.rlib"); reveal_strlit("producer=producer.vir");
+        reveal_strlit("consumer.vir"); reveal_strlit("root"); reveal_strlit("out");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+    }
+    let parsed = policy::parse_verifier_arguments(&args);
+    expect_verifier_true(parsed.is_some());
+    let parsed = parsed.unwrap();
+    expect_verifier_true(parsed.source == 24 && parsed.output == 26 && parsed.emit == 23);
+    let source = identifiers::equal_text(args[parsed.source].as_str(), "root");
+    let output = identifiers::equal_text(args[parsed.output].as_str(), "out");
+    expect_verifier_true(source && output);
+    expect_verifier_true(parsed.options.len() == 9);
+    expect_verifier_true(matches!(parsed.options[0].kind, policy::InvocationKind::Edition));
+    expect_verifier_true(matches!(parsed.options[1].kind, policy::InvocationKind::CrateName));
+    expect_verifier_true(matches!(parsed.options[2].kind, policy::InvocationKind::Unstable));
+    expect_verifier_true(matches!(parsed.options[3].kind, policy::InvocationKind::Environment));
+    expect_verifier_true(matches!(parsed.options[4].kind, policy::InvocationKind::Search));
+    expect_verifier_true(matches!(parsed.options[5].kind, policy::InvocationKind::Extern));
+    expect_verifier_true(matches!(parsed.options[6].kind, policy::InvocationKind::Extern));
+    expect_verifier_true(matches!(parsed.options[7].kind, policy::InvocationKind::Import));
+    expect_verifier_true(matches!(parsed.options[8].kind, policy::InvocationKind::Export));
+    let export = identifiers::equal_text(args[parsed.options[8].value].as_str(), "consumer.vir");
+    let env = identifiers::equal_text(args[parsed.options[3].value].as_str(), "CARGO_PKG_VERSION=0.1.0");
+    expect_verifier_true(export && env);
+    let admitted = policy::admit_output(&contract(), &report(verification()), &args, 0, false);
+    expect_verifier_true(admitted.is_err());
+    let failed = policy::admit_output(&contract(), &report(verification()), &args, 1, false);
+    expect_verifier_true(failed.is_err());
+    let process_error = identifiers::equal_text(failed.unwrap_err().as_str(),
+        "E_VERUS_RESULT: process or verifier arguments rejected");
+    let qualification_error = identifiers::equal_text(admitted.unwrap_err().as_str(),
+        "E_VERUS_QUALIFICATION: compiler context and dependency/VIR producer evidence unavailable");
+    expect_verifier_true(process_error && qualification_error);
+    let mut conflicting = args;
+    conflicting[18] = "other=wrong.rlib".to_string();
+    let duplicate_name = policy::parse_verifier_arguments(&conflicting);
+    expect_verifier_true(duplicate_name.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
+    let mut unknown = arguments(); unknown[7] = "--unknown".to_string();
+    let rejected = policy::parse_verifier_arguments(&unknown);
+    expect_verifier_true(rejected.is_none());
+    let mut flag_root = arguments(); flag_root[8] = "--extern".to_string();
+    let rejected_root = policy::parse_verifier_arguments(&flag_root);
+    expect_verifier_true(rejected_root.is_none());
+    // 重复单值选项即使取值相同也不能造成两个解释；import 必须点名 extern。
+    proof {
+        reveal_with_fuel(policy::invocation_extensions, 6);
+        reveal_with_fuel(policy::sources::next_byte, 12);
+        reveal_strlit("--crate-name"); reveal_strlit("--import"); reveal_strlit("--extern");
+        reveal_strlit("one"); reveal_strlit("two"); reveal_strlit("missing=producer.vir");
+        reveal_strlit("root"); reveal_strlit("out");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+    }
+    let prefix = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--crate-name".to_string(), "one".to_string(),
+        "--crate-name".to_string(), "two".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    let duplicate = policy::parse_verifier_arguments(&prefix);
+    expect_verifier_true(duplicate.is_none());
+    let orphan = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--import".to_string(), "missing=producer.vir".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    let unpaired = policy::parse_verifier_arguments(&orphan);
+    expect_verifier_true(unpaired.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn named_argument_identity_and_payload_boundaries_are_independent() {
+    proof {
+        reveal_with_fuel(policy::sources::next_byte, 8);
+        reveal_strlit("a=x=y"); reveal_strlit("a=路径"); reveal_strlit("a=");
+        reveal_strlit("=x"); reveal_strlit("a=x"); reveal_strlit("ab=x");
+        reveal_strlit("a=\0x");
+    }
+    let equals_in_payload = policy::valid_named_invocation_value(b"a=x=y");
+    let unicode_payload = policy::valid_named_invocation_value("a=路径".as_bytes());
+    let empty_payload = policy::valid_named_invocation_value(b"a=");
+    let empty_name = policy::valid_named_invocation_value(b"=x");
+    let control_payload = policy::valid_named_invocation_value(b"a=\0x");
+    let same_name = policy::same_invocation_input_name(b"a=x", b"a=x=y");
+    let prefix_name = policy::same_invocation_input_name(b"a=x", b"ab=x");
+    expect_verifier_true(equals_in_payload && unicode_payload && same_name);
+    expect_verifier_true(!empty_payload && !empty_name && !control_payload && !prefix_name);
+}
+
+/// 任何报告、rlib、dep-info（包括失败 producer 遗留的产物）均不能补出未观察的资格。
+fn any_unqualified_explicit_input_rejects_even_a_success_report(
+    args: &Vec<String>, dependency: &Option<Result<Vec<u8>, String>>,
+    artifact: &Option<Result<policy::CompiledArtifact, String>>,
+)
+    requires policy::verifier_arguments(args@), !policy::source_only_invocation(args@),
+{
+    let rejected = policy::admit_observed_output(&contract(), &report(verification()),
+        args, 0, false, dependency, 1024, artifact);
+    expect_verifier_true(rejected.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -475,7 +607,7 @@ fn any_accepted_compiler_receipt_has_the_same_library(
     if accepted.is_ok() {
         assert(exit == 0 && !failed);
         assert(artifact.is_some() && artifact.unwrap().is_ok());
-        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[10]@));
+        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[policy::invocation_output(args@)]@));
         assert(artifact.unwrap().unwrap().length > 0);
         assert(policy::identifiers::digest_format(artifact.unwrap().unwrap().sha256@));
     }
@@ -706,6 +838,10 @@ fn any_unified_proof_has_a_unique_method_and_complete_original_evidence<I>(
         assert(proof.report.verification.verified > 0);
         assert(proof.report.verification.is_verifying_entire_crate);
         assert(proof.sources.candidate.len() > 0);
+        assert(policy::invocation_matches(&proof.invocation, methods[index].argv@));
+        assert(proof.artifact.path@ == original.unwrap().artifact.unwrap().unwrap().path@);
+        assert(proof.artifact.sha256@ == original.unwrap().artifact.unwrap().unwrap().sha256@);
+        assert(proof.artifact.length == original.unwrap().artifact.unwrap().unwrap().length);
     }
 }
 
@@ -926,6 +1062,12 @@ fn planned_source() -> (file: policy::sources::SourceFile)
     file
 }
 
+fn classified_plan(files: Vec<policy::sources::SourceFile>) -> (registry: policy::sources::SourceFiles)
+    ensures registry.entries == files, registry.require_new_file_classification == Some(true),
+{
+    policy::sources::SourceFiles { entries: files, require_new_file_classification: Some(true) }
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn selected_plan_requires_every_affected_declared_proof() {
     proof {
@@ -940,16 +1082,24 @@ fn selected_plan_requires_every_affected_declared_proof() {
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
         assert("file:file"@ =~= "file:"@ + "file"@);
     }
-    let files = vec![planned_source()];
+    let mut files = classified_plan(vec![planned_source()]);
     let affected = vec!["file:file".to_string()];
     let missing = policy::sources::validate_selected_roots(&files, &affected, &Vec::new(), &Vec::new());
     expect_verifier_true(missing.is_err());
+    files.require_new_file_classification = None;
+    let declared_without_policy = policy::sources::validate_selected_roots(
+        &files, &affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(declared_without_policy.is_err());
+    files.require_new_file_classification = Some(false);
+    let declared_with_disabled_policy = policy::sources::validate_selected_roots(
+        &files, &affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(declared_with_disabled_policy.is_err());
     let args = arguments();
     let output = contract();
     let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
         output_contract: &output, output_limit_bytes: 4096 }];
     assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
-    assert(policy::sources::root_planned(&files[0].verification.unwrap().roots[0], methods@));
+    assert(policy::sources::root_planned(&files.entries[0].verification.unwrap().roots[0], methods@));
     let admitted = policy::sources::validate_selected_roots(&files, &affected, &methods, &Vec::new());
     expect_verifier_true(admitted.is_ok());
 }
@@ -968,7 +1118,7 @@ fn changed_declared_root_requires_its_proof_without_a_source_file_seed() {
         reveal_strlit("file:"); reveal_strlit("root"); reveal_strlit("file:root");
         assert("file:root"@ =~= "file:"@ + "root"@);
     }
-    let files = vec![planned_source()];
+    let files = classified_plan(vec![planned_source()]);
     let affected = vec!["file:root".to_string()];
     let missing = policy::sources::validate_selected_roots(&files, &affected, &Vec::new(), &Vec::new());
     expect_verifier_true(missing.is_err());
@@ -989,7 +1139,7 @@ fn changed_proof_owner_or_tool_requires_the_selected_proof() {
         reveal_strlit("project:owner"); reveal_strlit("tool:verifier");
         assert("tool:verifier"@ =~= "tool:"@ + "verifier"@);
     }
-    let files = vec![planned_source()];
+    let files = classified_plan(vec![planned_source()]);
     let scopes = vec![policy::sources::SourceMethodScope {
         operation: "proof", owner: "project:owner", tool: "verifier" }];
     let owner = vec!["project:owner".to_string()];
@@ -1003,7 +1153,7 @@ fn changed_proof_owner_or_tool_requires_the_selected_proof() {
     let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
         output_contract: &output, output_limit_bytes: 4096 }];
     assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
-    assert(policy::sources::root_planned(&files[0].verification.unwrap().roots[0], methods@));
+    assert(policy::sources::root_planned(&files.entries[0].verification.unwrap().roots[0], methods@));
     let admitted = policy::sources::validate_selected_roots(&files, &tool, &methods, &scopes);
     expect_verifier_true(admitted.is_ok());
 }
@@ -1033,7 +1183,7 @@ fn proof_impact_uses_complete_nodes_and_the_matching_registered_operation() {
         assert("tool:verifier\0"@.len() != "tool:verifier"@.len());
         assert("proof"@[0] != "other"@[0]);
     }
-    let files = vec![planned_source()];
+    let files = classified_plan(vec![planned_source()]);
     let scopes = vec![policy::sources::SourceMethodScope {
         operation: "proof", owner: "project:owner", tool: "verifier" }];
     let unrelated = vec!["project:Owner".to_string(), "project:owner\0".to_string(),
@@ -1090,7 +1240,7 @@ fn changing_one_root_preserves_other_roots_scope_but_source_changes_require_both
         assert("file:r"@ != "file:"@ + "file"@);
         assert("file:r"@ != "file:"@ + "R"@);
     }
-    let files = vec![planned_pair()];
+    let files = classified_plan(vec![planned_pair()]);
     let root = vec!["file:r".to_string()];
     let source = vec!["file:file".to_string()];
     let mut args = arguments();
@@ -1099,7 +1249,7 @@ fn changing_one_root_preserves_other_roots_scope_but_source_changes_require_both
     let methods = vec![policy::ProofInvocation { operation: "proof", argv: &args,
         output_contract: &output, output_limit_bytes: 4096 }];
     assert(policy::unique_proof_invocation(methods@, "proof"@, 0));
-    assert(policy::sources::root_planned(&files[0].verification.unwrap().roots[0], methods@));
+    assert(policy::sources::root_planned(&files.entries[0].verification.unwrap().roots[0], methods@));
     let only_changed_root = policy::sources::validate_selected_roots(&files, &root, &methods, &Vec::new());
     expect_verifier_true(only_changed_root.is_ok());
     let both_required = policy::sources::validate_selected_roots(&files, &source, &methods, &Vec::new());
@@ -1120,7 +1270,7 @@ fn selected_ordinary_operation_cannot_satisfy_a_declared_proof() {
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
         assert("file:file"@ =~= "file:"@ + "file"@);
     }
-    let files = vec![planned_source()];
+    let files = classified_plan(vec![planned_source()]);
     let affected = vec!["file:file".to_string()];
     let args = arguments();
     let ordinary = None;
@@ -1146,7 +1296,7 @@ fn selected_proof_rejects_duplicate_methods_wrong_roots_and_noncanonical_argumen
         assert("file:file"@ =~= "file:"@ + "file"@);
         assert("root"@[0] != "Root"@[0]);
     }
-    let files = vec![planned_source()];
+    let files = classified_plan(vec![planned_source()]);
     let affected = vec!["file:file".to_string()];
     let args = arguments();
     let output = contract();
@@ -1188,7 +1338,7 @@ fn proof_plan_preserves_explicit_scope_data_and_unknown_boundaries() {
         assert("file:other"@ != "file:"@ + "file"@);
         assert("file:other"@ != "file:"@ + "root"@);
     }
-    let files = vec![planned_source()];
+    let files = classified_plan(vec![planned_source()]);
     expect_verifier_true(policy::sources::can_validate_selected_plan(&Vec::new()));
     let blocked = vec!["missing required input".to_string()];
     expect_verifier_true(!policy::sources::can_validate_selected_plan(&blocked));
@@ -1197,12 +1347,32 @@ fn proof_plan_preserves_explicit_scope_data_and_unknown_boundaries() {
     expect_verifier_true(unselected.is_ok());
     let unknown = policy::sources::SourceFile { path: "file".to_string(), verification: None };
     let data = source_declaration(SourceRole::Data, Vec::new());
-    let inventory = vec![unknown, data];
+    let mut inventory = classified_plan(vec![unknown, data]);
     let affected = vec!["file:file".to_string()];
     let no_proof_claim = policy::sources::validate_selected_roots(&inventory, &affected, &Vec::new(), &Vec::new());
-    expect_verifier_true(no_proof_claim.is_ok());
+    expect_verifier_true(no_proof_claim.is_err());
+    let error = no_proof_claim.unwrap_err();
+    expect_verifier_true(identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: affected file lacks explicit verification classification: "));
+    expect_verifier_true(identifiers::equal_text(error.path, "file"));
+    inventory.require_new_file_classification = None;
+    let absent_policy = policy::sources::validate_selected_roots(
+        &inventory, &affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(absent_policy.is_ok());
+    inventory.require_new_file_classification = Some(false);
+    let disabled_policy = policy::sources::validate_selected_roots(
+        &inventory, &affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(disabled_policy.is_ok());
+    let data_only = classified_plan(vec![source_declaration(SourceRole::Data, Vec::new())]);
+    let declared_data = policy::sources::validate_selected_roots(
+        &data_only, &affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(declared_data.is_ok());
+    let data_affected = vec!["file:other".to_string()];
+    let data_is_allowed = policy::sources::validate_selected_roots(
+        &inventory, &data_affected, &Vec::new(), &Vec::new());
+    expect_verifier_true(data_is_allowed.is_ok());
     let invalid = source_declaration(SourceRole::Program, Vec::new());
-    let bad = vec![invalid];
+    let bad = classified_plan(vec![invalid]);
     let rejected = policy::sources::validate_selected_roots(&bad, &affected, &Vec::new(), &Vec::new());
     expect_verifier_true(rejected.is_err());
 }
@@ -1846,8 +2016,10 @@ fn unified_bound_result(file: &str, root: &str) -> Result<Option<policy::ProofAd
         });
     }
     let registry = Ok(policy::sources::SourceRegistry {
-        files,
-        require_new_file_classification: None,
+        files: policy::sources::SourceFiles {
+            entries: files,
+            require_new_file_classification: None,
+        },
     });
     let digest = String::from_utf8(BoundSources.digest(b"source")).unwrap();
     let dependency = Some(Ok(format!(

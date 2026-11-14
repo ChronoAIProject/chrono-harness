@@ -2349,6 +2349,14 @@ impl Inventory {
     }
     /// Timestamp is a supplied observation for deterministic owner tests, not a live-user heuristic.
     pub fn maintain_at(&self, observed: u64) -> Result<Value, String> {
+        let quotas = self.terminal_quotas_at(observed);
+        self.maintain_round(observed, None).map(|mut result| {
+            result["terminal_quotas"] = json!(quotas);
+            result
+        })
+    }
+
+    fn terminal_quotas_at(&self, observed: u64) -> serde_json::Map<String, Value> {
         let began = Instant::now();
         let mut quotas = serde_json::Map::new();
         for producer in self.policy.terminal_limits.keys() {
@@ -2361,14 +2369,7 @@ impl Inventory {
             );
             quotas.insert(producer.clone(), quota);
         }
-        self.round_metadata
-            .set(Some(self.policy.max_metadata_bytes_per_round));
-        let result = self.maintain_round(observed, None);
-        self.round_metadata.set(None);
-        result.map(|mut result| {
-            result["terminal_quotas"] = json!(quotas);
-            result
-        })
+        quotas
     }
     /// Shared explicit selection bounds for migration and maintenance.
     fn validate_originals(&self, originals: &[String]) -> Result<(), String> {
@@ -2399,11 +2400,7 @@ impl Inventory {
         observed: u64,
     ) -> Result<Value, String> {
         self.validate_originals(originals)?;
-        self.round_metadata
-            .set(Some(self.policy.max_metadata_bytes_per_round));
-        let result = self.maintain_round(observed, Some(originals));
-        self.round_metadata.set(None);
-        result
+        self.maintain_round(observed, Some(originals))
     }
     /// Ordinary entries coalesce concurrent reclamation without waiting behind
     /// another bounded pass. Publication still acquires authoritative admission.
@@ -2411,12 +2408,23 @@ impl Inventory {
         self.maintain()
     }
     fn maintain_round(&self, observed: u64, originals: Option<&[String]>) -> Result<Value, String> {
+        self.with_round_budget(|| self.partition_round(observed, originals))
+    }
+
+    fn with_round_budget<T>(
+        &self,
+        action: impl FnOnce() -> Result<T, String>,
+    ) -> Result<T, String> {
+        self.round_metadata
+            .set(Some(self.policy.max_metadata_bytes_per_round));
         self.round_began.set(Some(Instant::now()));
         self.round_node_limit
             .set(Some(self.policy.max_nodes_per_round));
-        let result = self.partition_round(observed, originals);
+        let result = action();
         self.round_node_limit.set(None);
         self.round_began.set(None);
+        self.round_metadata.set(None);
+        self.round_verified_left.set(None);
         result
     }
     /// Under admission exclusion, only reverse-reachable outputs can still
@@ -3827,6 +3835,14 @@ pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
         .transpose()
 }
 
+/// Explicit cross-object maintenance visits each existing declaration once.
+/// Ordinary adopted operations keep the bounded entry above.
+pub fn maintain_explicit_adopted(root: &Path) -> Result<Option<Value>, String> {
+    Inventory::adopted(root)?
+        .map(|i| i.maintain_explicit())
+        .transpose()
+}
+
 /// Enroll a real producer output in the adopted owner, recovering prior released work first.
 pub fn begin_adopted(
     root: &Path,
@@ -4007,28 +4023,34 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(None);
     };
-    let gate = inventory.member_gate(&[], &[path.into()])?;
-    let l = inventory.load(&gate)?;
-    let found = l
-        .outputs
-        .iter()
-        .find(|o| o.path == path || (o.tree && path.starts_with(&format!("{}/", o.path))));
-    let Some(o) = found else { return Ok(None) };
-    if o.phase == "disposing" {
-        return Err("original evidence unavailable: disposal has started".into());
+    inventory.read_guard(path)
+}
+impl Inventory {
+    /// The same addressed read protection also applies to a standalone producer.
+    pub fn read_guard(&self, path: &str) -> Result<Option<Lease>, String> {
+        let gate = self.member_gate(&[], &[path.into()])?;
+        let l = self.load(&gate)?;
+        let found = l
+            .outputs
+            .iter()
+            .find(|o| o.path == path || (o.tree && path.starts_with(&format!("{}/", o.path))));
+        let Some(o) = found else { return Ok(None) };
+        if o.phase == "disposing" {
+            return Err("original evidence unavailable: disposal has started".into());
+        }
+        let lease = Lease::acquire(
+            &self.directory.join(&o.lease),
+            Some(&o.lease_id),
+            false,
+            false,
+            None,
+        )?
+        .ok_or("original evidence disposal busy")?;
+        self.stable(&gate)?;
+        drop(gate);
+        self.remember_input(&lease, &o.id)?;
+        Ok(Some(lease))
     }
-    let lease = Lease::acquire(
-        &inventory.directory.join(&o.lease),
-        Some(&o.lease_id),
-        false,
-        false,
-        None,
-    )?
-    .ok_or("original evidence disposal busy")?;
-    inventory.stable(&gate)?;
-    drop(gate);
-    inventory.remember_input(&lease, &o.id)?;
-    Ok(Some(lease))
 }
 
 /// Publish a newly addressed original under its opted-in natural producer.

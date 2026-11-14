@@ -25,6 +25,19 @@ impl EnrollmentOriginalsFixture {
         Self::build(Some(""))
     }
 
+    fn make_present(&self) {
+        let fixture = json(&fs::read(self.root.join("git-fixture.json")).unwrap()).unwrap();
+        fs::create_dir_all(self.target.join(".chrono-harness")).unwrap();
+        for path in [POLICY, AUTO_POLICY] {
+            fs::write(
+                self.target.join(path),
+                fixture["retained"]["b".repeat(64)][path].as_str().unwrap(),
+            )
+            .unwrap();
+        }
+        fs::write(self.target.join("unsaved-source.rs"), "unique source\n").unwrap();
+    }
+
     fn build(import_fault: Option<&str>) -> Self {
         use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
         let directory = tempfile::tempdir().unwrap();
@@ -326,6 +339,29 @@ fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_in
 }
 
 #[test]
+fn present_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = EnrollmentOriginalsFixture::imported();
+    h.make_present();
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+    let original = fs::read(h.root.join(&h.original)).unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(report["cleanup_failures"], value!([]), "{report}");
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_eq!(fs::read(h.root.join(&h.original)).unwrap(), original);
+    for (path, expected) in [
+        (POLICY, "target original configuration is raw data"),
+        (AUTO_POLICY, "target original policy is different raw data"),
+        ("unsaved-source.rs", "unique source\n"),
+    ] {
+        assert_eq!(fs::read(h.target.join(path)).unwrap(), expected.as_bytes());
+    }
+}
+
+#[test]
 fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -382,6 +418,15 @@ fn absent_import_after_explicit_migration_uses_the_last_target_binding() {
 
 #[test]
 fn absent_import_preserves_unqualified_originals_and_rejects_source_drift() {
+    assert_import_recovery_rejects_faults(false);
+}
+
+#[test]
+fn present_import_preserves_unqualified_originals_and_rejects_source_drift() {
+    assert_import_recovery_rejects_faults(true);
+}
+
+fn assert_import_recovery_rejects_faults(present: bool) {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -407,6 +452,9 @@ fn absent_import_preserves_unqualified_originals_and_rejects_source_drift() {
         "symlink",
     ] {
         let h = EnrollmentOriginalsFixture::build(Some(fault));
+        if present {
+            h.make_present();
+        }
         let original_path = h.root.join(&h.original);
         match fault {
             "replaced" => {
@@ -441,7 +489,14 @@ fn absent_import_preserves_unqualified_originals_and_rejects_source_drift() {
             "{fault}"
         );
         assert_eq!(fs::read(&original_path).ok(), original, "{fault}");
-        assert!(!h.target.exists(), "{fault}");
+        assert_eq!(h.target.exists(), present, "{fault}");
+        if present {
+            assert_eq!(
+                fs::read(h.target.join("unsaved-source.rs")).unwrap(),
+                b"unique source\n",
+                "{fault}"
+            );
+        }
     }
 }
 
@@ -647,6 +702,38 @@ fn enrollment_originals_are_protected_before_global_maintenance() {
         "independent released originals can still be reclaimed: {report}"
     );
     assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+}
+
+#[test]
+fn empty_admission_preserves_foreign_checkout_without_reading_its_policy() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = EnrollmentOriginalsFixture::new();
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    ledger["entries"] = value!([]);
+    let ledger_bytes = serde_json::to_vec(&ledger).unwrap();
+    fs::write(&ledger_path, &ledger_bytes).unwrap();
+    fs::create_dir_all(h.target.join(".chrono-harness")).unwrap();
+    let foreign_policy = h.target.join(POLICY);
+    let foreign_bytes = b"this checkout has not adopted this coordinator's policy\n";
+    fs::write(&foreign_policy, foreign_bytes).unwrap();
+    let source = h.target.join("unsaved-source");
+    fs::write(&source, b"independent work\n").unwrap();
+
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert!(report["cleanup_failures"].as_array().unwrap().is_empty());
+    assert_ne!(report["output_retention"]["status"], "preserved");
+    assert_eq!(fs::read(&ledger_path).unwrap(), ledger_bytes);
+    assert_eq!(fs::read(&foreign_policy).unwrap(), foreign_bytes);
+    assert_eq!(fs::read(&source).unwrap(), b"independent work\n");
+    let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
+        .unwrap()
+        .unwrap();
+    maintain_original_until_absent(&inventory, &h.root.join(&h.sibling));
+    assert!(!h.root.join(&h.sibling).exists());
 }
 
 #[test]

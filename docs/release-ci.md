@@ -44,7 +44,7 @@ Rust、发布资产和验证操作由该宿主入口及配方管理，生成器�
 
 测试 CLI 由各专属测试项目从唯一生产 `main.rs` 编译，通过 Cargo 提供的路径复制、探测和执行；继续核对真实身份、协议、原始字节及安装回执。各测试项目的 manifest 负责同源入口，原未过滤操作和限制归 [projects.json](../.chrono-harness/projects.json)。测试使用方与宿主构建登记同步迁移，不另建转发实现。
 
-filemap、projects、cost、mixed、inputs 和 workflow 六项验证均在自己的 target 编译 filemap 测试 CLI。两平台删除这些验证的 filemap 发布资产依赖、下载和消费声明；cost 与 mixed 因此不再消费发布资产。各验证仍需哪些生产资产，由 [build.json 的 verification_consumers](../.chrono-harness/release/build.json) 负责；CI 的 `needs` 和下载只传输该明确子集，不能靠旧迁移叙述增加依赖。
+filemap、projects、cost、mixed、inputs 和 workflow 六项验证均在自己的 target 编译 filemap 测试 CLI。两平台删除这些验证的 filemap 发布资产依赖、下载和消费声明；cost 与 mixed 因此不再消费发布资产。filemap、projects、inputs 和 workflow 四项验证也在自己的 target 编译 routes／projects 测试 CLI，两平台同步删除这四项验证对两份发布资产的依赖和下载。inputs 验证在自己的 target 编译 workflow 测试 CLI，workflow 验证同样编译 inputs 测试 CLI；两平台同步移除对应资产传输，workflow 仍消费 CI 发布程序。各验证仍需哪些生产资产，由 [build.json 的 verification_consumers](../.chrono-harness/release/build.json) 负责；CI 的 `needs` 和下载只传输该明确子集，不能靠旧迁移叙述增加依赖。
 
 生产构建、发布前端、collector、最终打包和真实安装继续消费各自登记的生产资产。测试根沿用原锁、开发配置、未过滤操作、断言、分组、线程和时限；测试编译不证明发布执行物字节、性能或完整两平台发布相同。当前候选的原生发布、公开安装及完整生命周期成本仍须分别验收或实测。
 

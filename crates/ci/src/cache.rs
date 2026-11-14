@@ -92,11 +92,19 @@ pub(crate) fn validate(c: &Config, jobs: &BTreeSet<String>) -> Result<(), String
 
 /// Resolve references against the host's single cache registry before projecting.
 pub(crate) fn validate_registry(root: &Path, c: Option<&Config>) -> Result<(), String> {
+    validate_registry_with(root, c, &mut |path| {
+        fs::read(no_symlink_parents(root, path)?).map_err(|e| e.to_string())
+    })
+}
+pub(crate) fn validate_registry_with(
+    root: &Path,
+    c: Option<&Config>,
+    read: &mut impl FnMut(&str) -> Result<Vec<u8>, String>,
+) -> Result<(), String> {
     let Some(c) = c else {
         return Ok(());
     };
-    let registry: Value =
-        decode(&fs::read(no_symlink_parents(root, &c.config)?).map_err(|e| e.to_string())?)?;
+    let registry: Value = decode(&read(&c.config)?)?;
     if !crate::verified_literals::valid_cache_registry(
         registry["schema"].as_str(),
         registry["require_primary_checkout"] == true,
@@ -110,7 +118,7 @@ pub(crate) fn validate_registry(root: &Path, c: Option<&Config>) -> Result<(), S
         .as_object()
         .ok_or("persistent cache registry needs caches")?;
     if let Some(downloads) = &c.downloads {
-        crate::downloads::validate_registry(root, downloads, &registry)?;
+        crate::downloads::validate_registry(root, downloads, &registry, read)?;
     }
     for consumer in c.jobs.values() {
         let selected = caches

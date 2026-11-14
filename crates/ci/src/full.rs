@@ -1,5 +1,5 @@
 //! Fixed full-governance context transport; the configured judges own admission.
-use super::{action, full_oid, output_preflight, scalar, shell, write_file};
+use super::{action, full_oid, scalar, shell, write_file};
 use chrono_harness::{
     decode,
     facts::Reader,
@@ -12,7 +12,6 @@ use std::{fs, path::Path};
 
 pub const SCHEMA: &str = "chrono-github-full-ci/v2";
 const MARKER: &str = "# chrono-ci: owned github-full-ci/v1\n";
-const ADOPTED: &str = ".chrono-harness/ci/full.json";
 
 fn marker(path: &str) -> String {
     format!("{MARKER}# chrono-ci: full source {}\n", scalar(path))
@@ -227,44 +226,24 @@ fn scope_preflight(root: &Path, c: &Config) -> Result<(), String> {
     Ok(())
 }
 
-pub(crate) fn generate(root: &Path, path: &str, c: &Config, verify: bool) -> Result<bool, String> {
+pub(super) fn projection_plan(
+    root: &Path,
+    path: &str,
+    c: &Config,
+    verify: bool,
+) -> Result<super::generation::Plan, String> {
     let output = render(c, path)?;
     scope_preflight(root, c)?;
-    let same = output_preflight(root, &c.workflow_path, &output, &marker(path))?;
-    if verify && !same {
-        return Err(format!(
-            "generated full CI workflow drift: {}",
-            c.workflow_path
-        ));
-    }
-    if !verify && !same {
-        write_file(root, &c.workflow_path, output.as_bytes())?;
-    }
-    Ok(!same)
-}
-
-pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
-    let target = no_symlink_parents(root, ADOPTED)?;
-    let existing = target.exists();
-    let c = if existing {
-        decode(&fs::read(target).map_err(|e| e.to_string())?)?
-    } else {
-        incoming
-    };
-    let rendered = render(&c, ADOPTED)?;
-    scope_preflight(root, &c)?;
-    let same = output_preflight(root, &c.workflow_path, &rendered, &marker(ADOPTED))?;
-    if !existing {
-        write_file(
-            root,
-            ADOPTED,
-            &(serde_json::to_string_pretty(&c).map_err(|e| e.to_string())? + "\n").into_bytes(),
-        )?;
-    }
-    if !same {
-        write_file(root, &c.workflow_path, rendered.as_bytes())?;
-    }
-    Ok(!existing || !same)
+    let mut plan = super::generation::Plan::default();
+    plan.workflow(
+        root,
+        &c.workflow_path,
+        output,
+        &marker(path),
+        verify,
+        "generated full CI workflow drift",
+    )?;
+    Ok(plan)
 }
 
 fn matching_output(root: &Path, path: &str, bytes: &[u8]) -> Result<bool, String> {

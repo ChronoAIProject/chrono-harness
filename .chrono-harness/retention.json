@@ -33,6 +33,9 @@
     "instructions-operation": [
       ".chrono-harness/state/instructions-operations/"
     ],
+    "ci-generation-operation": [
+      ".chrono-harness/state/ci-generation-operations/"
+    ],
     "pr-original": [
       ".chrono-harness/state/pr-operations/"
     ],
@@ -55,6 +58,12 @@
   "max_manifest_nodes": 16384,
   "max_metadata_bytes_per_round": 67108864,
   "terminal_limits": {
+    "ci-generation-operation": {
+      "keep_seconds": 86400,
+      "max_count": 32,
+      "max_bytes": 67108864,
+      "metadata_keep_seconds": 0
+    },
     "instructions-operation": {
       "keep_seconds": 86400,
       "max_count": 32,

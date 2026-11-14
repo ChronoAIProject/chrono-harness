@@ -428,7 +428,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let Projection::Units(c) = load_projection(&no_symlink_parents(root, path)?)? else {
         return Err("detect requires registered unit provider".into());
     };
-    units::generate(root, path, &c, true)?;
+    units::verify_projection(root, path, &c)?;
     if env("GITHUB_JOB")? != "detect" {
         return Err("detector job identity mismatch".into());
     }

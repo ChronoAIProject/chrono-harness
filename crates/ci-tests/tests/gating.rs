@@ -514,7 +514,11 @@ fn exact_parent_gather_and_final_judge_admit_real_selected_reports_and_empty_del
             })
             .collect();
         for _ in 0..2 {
-            let out = h.command(&["check", "--collect"], &d, &n).output().unwrap();
+            let out = chrono_worktree::TemporaryHost::capture_bound_output(
+                h.path(),
+                &mut h.command(&["check", "--collect"], &d, &n),
+            )
+            .unwrap();
             if !out.status.success() {
                 // Keep the actual nested producer receipts, including child exit,
                 // stdout and stderr, before the fixture's temporary host is dropped.
@@ -1484,8 +1488,9 @@ fn fresh_short_host_init_selects_parent_topology_and_retains_host_settings() {
     for name in ["collection.yml"] {
         fs::remove_file(h.root.join(format!(".github/workflows/{name}"))).unwrap();
     }
-    let c = serde_json::from_value(incoming).unwrap();
-    assert!(chrono_ci::units::init(&h.root, c).unwrap());
+    let input = h.root.join("incoming.json");
+    fs::write(&input, serde_json::to_vec(&incoming).unwrap()).unwrap();
+    assert!(chrono_ci::init(&h.root, &input).unwrap());
     let adopted: Value = serde_json::from_slice(&fs::read(h.root.join(PROVIDER)).unwrap()).unwrap();
     assert_eq!(adopted["job_gating"]["schema"], "chrono-job-gating/v1");
     assert_eq!(adopted["units"]["alpha"]["runs_on"], "host-custom");
@@ -2151,12 +2156,11 @@ fn current_product_host_registration_and_generated_parent_select_the_real_source
         dir.path(),
         &["config", "user.email", "fixture@example.invalid"],
     );
-    // A copied migration candidate can already contain the group adoption;
-    // regeneration can still change only its deliberately drifted workflow.
-    // Bind both producer changes explicitly for the selection assertions below.
+    // 复制的候选可能已经采用分组，重新生成只修复刻意制造的工作流漂移。
+    // 用实际生产证明根制造两个所有者的源码变更，保留下面的选测断言。
     for source_path in [
-        "crates/ci/src/gating.rs",
-        "crates/judge-workflow/src/lib.rs",
+        "crates/ci/src/verified_literals.rs",
+        "crates/judge-workflow/src/verified_execution.rs",
     ] {
         let path = dir.path().join(source_path);
         let mut bytes = fs::read(&path).unwrap();

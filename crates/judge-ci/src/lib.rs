@@ -902,14 +902,6 @@ struct Inventory {
 /// This does not validate a canonical entry, execute operations or grant admission.
 /// Full preparation shares FILEMAP impact and routes' global obligation owner.
 /// No judge or business/version process is launched here.
-pub fn full_collection_requirements(
-    root: &Path,
-    profile: &str,
-    prepared: &chrono_harness::prepared::PreparedCheck,
-    originals: &chrono_harness::units::FullManifest,
-) -> Result<Value, String> {
-    full_collection_requirements_with_inputs(root, profile, prepared, &|_| Ok(originals.clone()))
-}
 /// The acquisition callback is used only for necessary historical conversion.
 /// Registration names the decoder test units; the collector reads DELTA-required
 /// reports separately after the shared selection owner returns its requirements.
@@ -1585,73 +1577,6 @@ fn inventory_profile(
         methods,
     })
 }
-/// The admitted execution phase of a scoped check. Admission/tool preparation
-/// has completed; executing this value does not publish a final CI response.
-/// The diagnostics consumer transports this same plan across its process boundary.
-#[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PreparedExecution {
-    pub request: Request,
-    pub plan: chrono_judge_routes::Execution,
-}
-impl PreparedExecution {
-    pub fn execute(&self) -> Result<chrono_judge_projects::Results, String> {
-        let root = fs::canonicalize(&self.request.host_root).map_err(|e| e.to_string())?;
-        if self.plan.root != root
-            || self.plan.binding["candidate"] != self.request.candidate
-            || self.plan.binding["config"] != self.request.config_sha256
-            || self.plan.binding["run"] != self.request.request_id
-        {
-            return Err("prepared CI execution request/plan binding differs".into());
-        }
-        let config = Profile::load(&self.request)?.config;
-        if self.plan.binding["operation_state"] != operation_state_path(&self.request, &config)? {
-            return Err("prepared CI execution request/plan binding differs".into());
-        }
-        execute_plan(&self.request, &self.plan)
-    }
-}
-
-/// Admit the actual registered unit through the ordinary inventory and routes
-/// owners. Collection and blocked obligations cannot produce an execution.
-pub fn prepare_execution(req: &Request) -> Result<PreparedExecution, String> {
-    let Some(chrono_harness::units::Scope::Unit { unit }) = &req.scope else {
-        return Err("prepared execution requires a scoped unit".into());
-    };
-    let i = inventory(
-        req,
-        &mut Reader::legacy(),
-        &mut Value::Null,
-        &mut String::new(),
-        true,
-        true,
-    )?;
-    if !i.blocked.is_empty() {
-        return Err(format!("blocked global obligations: {:?}", i.blocked));
-    }
-    let selected = units::selection(
-        i.p.units
-            .as_ref()
-            .ok_or("unit profile missing assignments")?,
-        &i.global_selected,
-        unit,
-    )?;
-    let plan = prepare_plan(
-        req,
-        &i.config,
-        &selected,
-        &i.new,
-        &i.methods,
-        &i.declarations,
-        i.environment,
-        &i.reused,
-    )?;
-    Ok(PreparedExecution {
-        request: req.clone(),
-        plan,
-    })
-}
-
 fn operation_state_path(req: &Request, config: &CheckConfig) -> Result<String, String> {
     let report = req
         .scope

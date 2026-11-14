@@ -15,6 +15,7 @@
     "artifacts": [
       ".chrono-harness/bin/",
       ".chrono-harness/state/",
+      "examples/ci-host-job-gating/.chrono-harness/state/",
       "crates/runner/target/",
       "crates/runner-tests/target/",
       "crates/instructions/target/",
@@ -212,30 +213,7 @@
       "build.ci": [
         "judge-workflow",
         "judge-workflow-short",
-        "judge-workflow-units",
-        "worktree",
-        "worktree-adoption"
-      ],
-      "build.inputs": [
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
-      "build.judge-projects": [
-        "inputs",
-        "judge-filemap",
-        "judge-projects",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
-      "build.judge-routes": [
-        "inputs",
-        "judge-filemap",
-        "judge-projects",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
+        "worktree"
       ],
       "fmt.judge-workflow": [
         "judge-workflow",

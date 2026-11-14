@@ -10,6 +10,10 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 
 pub const OBSERVATION_SCHEMA: &str = "chrono-git-facts/v2";
 
@@ -299,9 +303,22 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
         .map_err(|missing| format!("{}{}", missing.prefix, missing.field))
 }
 
-struct JsonBindingReferences<'a>(&'a [Value]);
+verus! {
+
+broadcast use crate::json_value_specs::str_lookup;
+
+#[doc(hidden)]
+pub struct JsonBindingReferences<'a>(pub &'a [Value]);
 
 impl verified_git_binding::BindingReferenceRows for JsonBindingReferences<'_> {
+    open spec fn count(&self) -> nat { self.0@.len() }
+
+    open spec fn id_at(&self, index: int) -> Option<&str> {
+        if 0 <= index < self.0@.len() {
+            crate::json_value_specs::field_text(&self.0@[index], "id"@)
+        } else { None }
+    }
+
     fn len(&self) -> usize {
         self.0.len()
     }
@@ -310,6 +327,8 @@ impl verified_git_binding::BindingReferenceRows for JsonBindingReferences<'_> {
         self.0[index]["id"].as_str()
     }
 }
+
+} // verus!
 
 /// Validate the new link without interpreting any historical config as v3.
 pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {

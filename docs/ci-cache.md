@@ -204,7 +204,7 @@ Cargo 下载内容由其已有自动清理管理；CI 的工具链目录随隔�
 
 distribution 测试项目直接编译生产 `main.rs`，其单元仅订阅 `check.distribution-tests`。测试专用的 `build.distribution` 前置和 `check.distribution` 已移除；两平台发布构建仍使用 `distribution.target` 及各自缓存。完整编译、传输、存储和生命周期成本收益未测。
 
-inputs 专属测试也由 Cargo 从生产 `main.rs` 编译测试 CLI，单元移除自身的 `check.inputs` 订阅与 `build.inputs` 前置；`check.inputs` 及 `inputs.target` 仍服务 workflow 的三个测试组，生产发布缓存保留。完整成本收益未测。
+inputs 与 workflow 专属测试均在各自 target 从唯一生产 `main.rs` 编译 inputs／workflow 测试 CLI，删除对应独立生产构建；已无使用方的 `check.inputs`、`check.judge-workflow` 缓存及其订阅退役。生产发布缓存与资产保留。完整成本收益未测。
 
 发布缓存按登记选择项目输出，验证与包收集操作由现役 Rust 发布配方执行。分组测试中不同生产者使用不同条目。
 

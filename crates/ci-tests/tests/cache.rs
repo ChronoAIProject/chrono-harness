@@ -195,7 +195,7 @@ fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, bytes).unwrap();
     };
-    let config = serde_json::from_value(download_adoption()).unwrap();
+    let config: chrono_ci::units::Config = serde_json::from_value(download_adoption()).unwrap();
     write(
         ".chrono-harness/ci/check.json",
         &serde_json::to_vec(&source(
@@ -207,6 +207,10 @@ fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
     write(".chrono-harness/ci/toolchain.json", b"{}");
     write("producer/Cargo.lock", b"locked producer");
     write("tests/Cargo.lock", b"locked tests");
+    write(
+        ".chrono-harness/ci/units.json",
+        &serde_json::to_vec(&config).unwrap(),
+    );
     let registry = json!({"artifacts":[{"path":".chrono-harness/cache/cargo/registry/","owner":"fixture","tracked":false,"kind":"download-cache"}]});
     let output = root.path().join(".github/workflows/chrono-ci.yml");
     for (field, bad) in [
@@ -220,13 +224,8 @@ fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
             ".chrono-harness/artifacts.json",
             &serde_json::to_vec(&invalid).unwrap(),
         );
-        let error = chrono_ci::units::generate(
-            root.path(),
-            ".chrono-harness/ci/units.json",
-            &config,
-            false,
-        )
-        .unwrap_err();
+        let error =
+            chrono_ci::generate(root.path(), ".chrono-harness/ci/units.json", false).unwrap_err();
         assert!(
             error.contains("registered non-evidence artifact"),
             "{error}"
@@ -239,15 +238,11 @@ fn downloads_bind_exact_artifact_owners_and_inputs_before_writing_a_workflow() {
     );
     fs::remove_file(root.path().join("tests/Cargo.lock")).unwrap();
     let error =
-        chrono_ci::units::generate(root.path(), ".chrono-harness/ci/units.json", &config, false)
-            .unwrap_err();
+        chrono_ci::generate(root.path(), ".chrono-harness/ci/units.json", false).unwrap_err();
     assert!(error.contains("tests/Cargo.lock"), "{error}");
     assert!(!output.exists());
     write("tests/Cargo.lock", b"locked tests");
-    assert!(
-        chrono_ci::units::generate(root.path(), ".chrono-harness/ci/units.json", &config, false)
-            .unwrap()
-    );
+    assert!(chrono_ci::generate(root.path(), ".chrono-harness/ci/units.json", false).unwrap());
     assert!(output.is_file());
 }
 

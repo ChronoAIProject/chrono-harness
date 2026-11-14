@@ -88,18 +88,22 @@ fn full_units_require_exact_separate_context_mappings_and_keep_v1_strict() {
         }
         let d = tempfile::tempdir().unwrap();
         json_file(d.path(), ".chrono-harness/ci/units.json", &value);
-        assert!(
-            generate(d.path(), ".chrono-harness/ci/units.json", false).is_err(),
-            "accepted {case}"
-        );
+        let error = generate(d.path(), ".chrono-harness/ci/units.json", false)
+            .expect_err(&format!("accepted {case}"));
         assert!(
             !d.path().join(".github").exists(),
             "wrote output for {case}"
         );
-        assert!(
-            !d.path().join(".chrono-harness/state").exists(),
-            "wrote state for {case}"
+        let operation = super::generation_operation(d.path());
+        let result: Value =
+            serde_json::from_slice(&fs::read(operation.join("result.json")).unwrap()).unwrap();
+        assert_eq!(
+            result["producer_evaluation"],
+            json!({"error":error}),
+            "{case}"
         );
+        assert_eq!(result["effects"], "not-started", "{case}");
+        assert_eq!(result["original_process_exit"], Value::Null, "{case}");
     }
 }
 
@@ -512,7 +516,10 @@ fn gather_host_config_and_retention(
             .unwrap();
     configure(&mut cfg);
     json_file(root, ".chrono-harness/ci/units.json", &cfg);
-    if let Some(policy) = retention {
+    if let Some(mut policy) = retention {
+        policy["producers"]["ci-generation-operation"] =
+            json!([".chrono-harness/state/ci-generation-operations/"]);
+        policy["terminal_limits"] = json!({"ci-generation-operation":{"keep_seconds":86400,"max_count":32,"max_bytes":67108864,"metadata_keep_seconds":0}});
         // Keep the existing judge's phase and operation events in its original
         // stderr when this fixture exercises retained publication boundaries.
         let path = ".chrono-harness/ci/check.json";
@@ -558,9 +565,11 @@ fn native_check(host: &short::gating::GatedHost, args: &[&str]) -> Command {
 }
 
 fn collect_cli(host: &short::gating::GatedHost) -> std::process::Output {
-    native_check(host, &["check", "--collect"])
-        .output()
-        .unwrap()
+    chrono_worktree::TemporaryHost::capture_bound_output(
+        host.path(),
+        &mut native_check(host, &["check", "--collect"]),
+    )
+    .unwrap()
 }
 
 #[test]
@@ -918,7 +927,14 @@ fn provider_refuses_ambiguous_stale_workflow_and_changed_attempt_evidence() {
                 host.path()
                     .join(".chrono-harness/state/collection/gather.json"),
             )
-            .unwrap(),
+            .unwrap_or_else(|error| {
+                panic!(
+                    "{mode}: collection did not publish gather.json: {error}; status={} stdout={} stderr={}",
+                    result.status,
+                    String::from_utf8_lossy(&result.stdout),
+                    String::from_utf8_lossy(&result.stderr)
+                )
+            }),
         )
         .unwrap();
         assert!(
