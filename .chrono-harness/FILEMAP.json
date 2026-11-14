@@ -12,7 +12,10 @@
     }
   },
   "files": [
-    {"path":"crates/runner/src/json_value_specs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"specification","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
+    {"path":".chrono-harness/experiments/verus-tool-contract/consume.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}],"verification":{"role":"program","roots":[{"path":".chrono-harness/experiments/verus-tool-contract/consume.rs","operation":"investigate.verus-tool-contract.consume"}]}},
+    {"path":".chrono-harness/experiments/verus-tool-contract/reject.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}],"verification":{"role":"program","roots":[{"path":".chrono-harness/experiments/verus-tool-contract/reject.rs","operation":"investigate.verus-tool-contract.reject"}]}},
+    {"path":".chrono-harness/experiments/verus-tool-contract/vstd.patch","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"compile","to":"project:runner-tests"}],"verification":{"role":"data","roots":[]}},
+    {"path":"crates/runner/src/json_value_specs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"specification","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
     {"path":"crates/runner-tests/tests/json_adapters.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner-tests/tests/json_adapters.rs","operation":"verify.runner-json-adapters-tests"}]}},
     {"path":".chrono-harness/experiments/ci-generation-dependencies.md","owner":"ci","surface":"documentation","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/maintenance.launchd.plist","owner":"repository","surface":"membership","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
@@ -1696,6 +1699,11 @@
       "verify.ci-literals": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.ci-literals-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "verify.runner-json-adapters-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.verus-tool-contract.extract": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.verus-tool-contract.patch": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.verus-tool-contract.build": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.verus-tool-contract.consume": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "investigate.verus-tool-contract.reject": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "investigate.ci-generation-dependency.runner": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "investigate.ci-generation-dependency.consumer": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "investigate.ci-generation-dependency.missing": {"resources":[],"outputs":[".chrono-harness/state/"]},

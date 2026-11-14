@@ -178,4 +178,56 @@ runner 的 `require_registered_input_evidence` 另外仍拒绝非空扩展编译
 
 后续若取得这样的受支持机制，先在现有规格所有者准备最小真实外部合同和独立 Verus 成功／失败／边界预期，显式登记准备与严格使用的不同作用，封存干净候选后由调用方委派受保护 operation。准备成功不算证明，严格使用成功也只算 raw 工具观察；完整准入修复随后仍须复用 runner／routes／本地与离线使用方的现有所有者。新增证明不得丢失严格参数、整 crate、原线程、预算或原断言。
 
+## S：真实 vstd 源码候选与严格使用实验
+
+S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d018fae4044760eb96a20a4bb4` 准备本节候选，不重查 R 已解决的普通 proxy／import 类。目的仍是七个实际适配器及 generation 所需的真实外部 JSON／全文合同。**当前只完成源码与操作登记；没有构建或运行两个严格根，端到端能力为 ASSUMED-UNVERIFIED。** 不据此宣称严格成功、完整 family、正式 ProofAdmission 或交付。
+
+**可见变更警告：同时增加工具库源码补丁、Verus 实验程序和宿主实验方法登记。** 原安装工具、产品源码、正式证明操作和准入判断均未修改。旧安装 vstd 没有这里的 JSON／全文模型关系；候选是真实 vstd 源码的一项显式扩展。新增构建、证明、CI、存储和维护成本尚未实测，不因候选使用原二进制的版本字符串就沿用旧库资格。
+
+### 原生依据与组件身份
+
+固定上游 [vstd_build/src/main.rs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/vstd_build/src/main.rs) 直接把真实 `vstd/vstd.rs` 交给 `rust_verify`，使用 `--is-vstd`、`--compile`、`--export` 并等待子进程。其参数循环不接受额外 extern；[vargo 的 rebuild_vstd](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/tools/vargo/src/commands/build.rs#L450) 也明确未转发 verus_args。因此不把 serde_json 参数塞给这个不支持的前端，不重建编译器；projects 的准备操作直接复用该前端已经调用的原生 Verus 能力，完整验证并编译真实 vstd 源码。没有 `--no-verify` 或自制执行器。
+
+[原生 wrapper](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/verus/src/main.rs#L97) 从自身旁边的 `verus-root` 和 `rust_verify` 定位组件；[driver](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/rust_verify/src/driver.rs#L193)、[externs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/rust_verify/src/externs.rs#L47) 和上述 R 的 import 证据说明标准根怎样同时使用邻接的 `libvstd.rlib` 与 `vstd.vir`。严格实验通过已有 bash 工具作单次 `exec` 转交，以使用独立目录内的原生 wrapper；不增加脚本、工具绑定、环境替换、等待器或新的运行框架。这个源码依据不是实际运行观察。
+
+组件名称为 `vstd-f8e1704+chrono-json-fulltext.1`。`vstd.patch` 只给**完整真实 vstd 根**加入内部 self 别名和指向现有 `crates/runner/src/json_value_specs.rs` 的模块路径；没有另造同名库，没有把适配器／仓内判断移入工具，也没有修改序列化 VIR。所有合同仍只有这一份现有源。独立目录固定为 `.chrono-harness/state/verus-tool-contract-20261114/`，从已有发行包解压，绝不覆盖 `.chrono-harness/bin/verus/` 或共享产物。`--is-vstd` 仅用于这个实际 vstd 源码构建，两个仓内实验根均不使用它。
+
+| 固定输入／新源 | 当前身份与用途 |
+| --- | --- |
+| 原发行包 `.chrono-harness/bin/verus.zip` | 25,543,507 字节；SHA-256 `023e0a6e67bb9927f43a8757ebdec318b50cbfe1fec4a1c320c53d5fd71008e7`。复用缓存，不下载编译器。 |
+| 发行包内的真实 vstd 源码 | 本轮以固定上游 tree 的明确文件表核对已安装的全部 108 个 vstd 文件，共 1,429,187 字节，Git blob 身份全部一致；不是靠目录名认定其来源。根 `vstd.rs` 的旧 SHA-256 为 `a5317ab99820e48f7a1fab6f298732bab29047ed6e2ca8cf4e4e5290be5c230a`。调用方解压后须再核对实际被编译的字节。 |
+| 补丁后的根与合同源 | 根的预期 SHA-256 为 `4cca22df78489ce34a5fb3c71c8aa688d0ceb46c5e339d09947d31d6349f6b8a`；所引用合同源为 `a41dd58bc38e1d7dbc2a7bc55ae4bcb15b35ab22f1db821863fceb421b2df4dc`。补丁和实验根随调用方封存的新候选绑定，不能只读将来漂移的工作树。 |
+| Verus／Rust、宏及 serde_json | 沿用本文前表的原二进制、Rust 1.95.0 和 serde_json 1.0.151 缓存 rlib。额外核对原 `libverus_state_machines_macros.dylib` 为 `958d50e815616624702567343d539f0cd4b6109141f9a38da4d4cda47201bb5a`。 |
+| 新库、VIR 与 dep-info | 尚未产生。成功后须记录实际新字节、完整上下文、源与外部依赖；原 vstd 库／VIR 的摘要不能替代。解压得到的旧 rlib／VIR 绝不是构建成功证据。 |
+
+本轮读到的固定原生源码 SHA-256：`vstd_build` 为 `d3472fb12e8ebd2ab984f890a928c1cd7c3e3211489e81d5c25ab88dc4fa74ee`，wrapper 为 `0ff5ef2d7e0064ed55a1e70446ba32f3af0cf09a3abd7d674af7eea97b030409`，driver 为 `237cb3700aa97d98fc7aab6ba74ceb7f579d432d6a5b4990b30f8c5cd7b5a22c`。来源均为上述固定 commit；只取得必要源码数据，没有运行这些源码或更改安装组件。
+
+本轮也读取实际缓存 serde_json 1.0.151 的 `value/mod.rs`、`value/index.rs`、`map.rs`，SHA-256 分别为 `6331d59ea362a74b6cd3d302d08114a63a73a384ff56fef737de29edea2f8d91`、`f1404ed12e795a5553da4bdf72835c441a5e0cc0f6e794fee875eaa887d65319`、`b5a2fd1ee865e6cfd83ef2da0a2e1057f892465ac7ede8a78a11354a60526f33`：get 转交原 Index，str 索引仅查询对象，缺失的不可变索引返回静态 Null，文本／对象借用只匹配对应变体，len 转交原 map。固定 Rust 1.95.0 源文档中，String 在原 `Vec<u8>` 字段上派生比较，str 的 Ord／PartialEq 比较全文字节；BTreeSet::insert 返回底层 map 插入是否原来缺失，BTreeMap::contains_key 转交 get().is_some()，并明确要求借用键与存储键顺序一致。这些源码关系支持本次外部接口假设的现实解释，不是 Verus 模型精化或消费者成功的替代证据。
+
+### 所有者与唯一待执行入口
+
+完整 argv 只由 projects.json 维护。新增操作均有现有 `.chrono-harness/state/` 产物占用，沿本文原 `chrono-worktree use --operation` 入口执行。原生工具库的准备不提供仓内证明贡献；两个实验根保持 `--no-cheating`、`--no-external-by-default`、两线程、整 crate、编译和 checksum。所有新 action 均无 `output_contract`，不伪造现役不支持的 typed 资格。原测试计划、线程、时限、原行为断言和生产证明操作均保留，实验不会自动加入 CI／缓存或正式汇总。
+
+| 操作／现有负责方 | 必需输入、顺序与实际使用方 |
+| --- | --- |
+| `investigate.verus-tool-contract.extract`／host-bootstrap-launcher、host-bootstrap-native | 调用方先提交候选、确认干净且持有 use；核对原发行包、独立目标目录及两个使用根的输出路径均不存在，不覆盖独有工作。原生 tar 在独立目录准备原工具和完整源。 |
+| `investigate.verus-tool-contract.patch`／同一工具所有者 | 只消费上一项的完整解压结果及已封存 `vstd.patch`；原生 patch 禁用 fuzz、禁止交互，非零保留原结果，不原地重试。补丁后核对根与合同实际路径／字节。 |
+| `investigate.verus-tool-contract.build`／同一工具所有者 | 消费补丁后全部 vstd 源码、唯一 JSON 合同源、原宏／工具链与固定 serde_json rlib；原生 `--is-vstd` 完整构建允许工具库原有显式假设，不冒充仓内严格证明。只能在原任务零退出、完整验证及编译结果和新库／VIR／dep-info 身份都取得后交给下面两项。 |
+| `investigate.verus-tool-contract.consume`／runner-tests | 消费同次成功新组件。`consume.rs` 实际调用 `as_str`、`as_object`、`get::<&str>`、泛型 `Index<&str>`、Map::len、借用键查询和 set::insert，证明完整返回关系、状态变化及下面的边界。不是未用 import 或 fixture 回调。 |
+| `investigate.verus-tool-contract.reject`／runner-tests | 仅在上项严格成功后，以相同组件与严格路径检查 `reject.rs` 中仓内函数的 `assume(false)`；原程序应非零退出，原诊断须确实指向该函数的 `assume/admit not allowed with --no-cheating`。失败状态原样保留，不能转成成功 ProofAdmission。 |
+
+FILEMAP 逐文件保持 `consume.rs`／`reject.rs` 为 program，分别绑定自己的整 crate 操作；`vstd.patch` 是原生 patch 的输入数据，不包含新判断程序，登记为 data。现有合同源的 specification／runner 证明根保留，并增加真实工具准备使用边。补丁及两个根的输入／输出关系由本表明确登记，不靠扫描或新项目推断；独立原生操作不改正式测试计划。完整 DELTA 仍须由后续资格所有者处理这些尚未准入的实验根，不能据 raw 登记声称覆盖已闭合。
+
+### 执行前固定的预期、范围与剩余义务
+
+正向根必须整 crate 零退出、验证成功且实际编译出新库和 dep-info。其函数没有把实际外部调用换成仓内假实现：get 的完整成员关系、Index 缺键无文本、object 的真实成员数、String→str 借用和集合插入均由调用后的证明义务使用。边界分别要求：缺键得到 None；存在但非文本时 get 为 Some 而文本为 None；任意全文相等（包括不同存储、Unicode、NUL、换行）有相同成员关系；insert 的 fresh 与此前全文成员关系互补并保全实际旧 set。JSON 模型前提只是外部观察条件，不证明 JSON 构造或解析；原 `json_adapters.rs` 的实际空／null／错类型／前缀／组合 Unicode／重复插入预期继续保留，由后续原未过滤操作消费。
+
+反向根必须在确实消费同一新库的前提下，因仓内 `assume` 被严格检查拒绝；缺文件、类型错误、其他前置失败、无输出或超时均不是这一预期的通过证据。反向原非零结果继续是失败原件，不安装“失败就成功”的包装。当前组件尚未构建，因此两个结果均未知；本轮真实工具探针数为零。准备后由调用方封存并另行委派，不运行 canonical／bootstrap，也不把上述待执行项记成已完成。
+
+本候选只试验一个真实工具库载体：源码层面的 family 依据是所有所需声明由真实 vstd 所有，消费者仍走未放宽的严格检查；它**尚未**提供全 family 的实测成功。可证伪条件是：新组件完整准备成功后，实际使用这些合同的正向严格根仍拒绝或无法证明关系，或相同严格路径不再拒绝仓内 assume。失败须先读原输入／stdout／stderr／退出，不重跑 R 的普通 import 拒绝，也不逐项修改仓内编译参数来伪造覆盖。
+
+真实 serde_json／标准文本模型仍是逐项列出的外部假设，不是已机械精化的库实现。正向 raw 成功也不证明全部 runner／adapter-tests／generation、完整生产编译绑定或 ProofAdmission。后续仍须在原所有者完成唯一合同的实际消费迁移、68 个受影响未分类文件与六个旧整文件映射、完整 producer／argv／cwd／env／rlib／dep-info／VIR／宏及必要传递输入资格、generation 四生产投影与 prepare／effect／recovery、正式 DELTA、integration／dev 和实际落地。
+
+产物沿现有 state 的 evidence-retain 与 check-original 所有者保管；不新增保留生产者、总账或清理器。使用方是工具合同工程、runner 资格工程、调用方与 mandatory review。原失败保留到调试／验收义务完成；新组件及原件在这些使用方结束、已保全必要证据且无活使用方后由调用方通过现有生命周期／保留所有者回收，2026-11-21 复核用途，不因日期自行删除。新增运行总成本未知；本轮只量取上表输入字节，没有用预算、重复运行或降低目标换取成功。
+
 本节没有待执行的新登记操作，验证总成本未知。全部受影响源码的实质证明、generation 四个真实投影与 prepare／effect／recovery、正式 DELTA、原生 integration／dev、平台与生命周期义务继续未完成。保留使用方和复核条件沿用本文既有声明；本节不新增运行账本、执行器、缓存或永久证据副本。

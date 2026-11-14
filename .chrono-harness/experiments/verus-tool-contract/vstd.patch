@@ -1,0 +1,9 @@
+--- a/vstd/vstd.rs
++++ b/vstd/vstd.rs
+@@ -25,0 +26,6 @@
++
++// vstd-f8e1704+chrono-json-fulltext.1：仅扩展真实外部库合同。
++// 复用唯一合同源；这里不包含 runner 的适配器、判断或状态实现。
++extern crate self as vstd;
++#[path = "../../../../crates/runner/src/json_value_specs.rs"]
++pub mod json_value_specs;

@@ -744,6 +744,66 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
+        },
+        "investigate_tool_contract_consume": {
+          "operation": "investigate.verus-tool-contract.consume",
+          "tool": "bash",
+          "argv": [
+            "-c",
+            "exec .chrono-harness/state/verus-tool-contract-20261114/verus \"$@\"",
+            "verus-tool-contract-consume",
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--edition=2021",
+            "--crate-name",
+            "verus_tool_contract_consume",
+            "-L",
+            "dependency=crates/ci-tests/target/debug/deps",
+            "--extern",
+            "serde_json=crates/ci-tests/target/debug/deps/libserde_json-f23d5e320f77b40e.rlib",
+            "--export",
+            ".chrono-harness/state/verus-tool-contract-20261114-consume.vir",
+            "--emit=link=.chrono-harness/state/verus-tool-contract-20261114-consume.rlib,dep-info=.chrono-harness/state/verus-tool-contract-20261114-consume.rlib.d",
+            ".chrono-harness/experiments/verus-tool-contract/consume.rs",
+            "-o",
+            ".chrono-harness/state/verus-tool-contract-20261114-consume.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "investigate_tool_contract_reject": {
+          "operation": "investigate.verus-tool-contract.reject",
+          "tool": "bash",
+          "argv": [
+            "-c",
+            "exec .chrono-harness/state/verus-tool-contract-20261114/verus \"$@\"",
+            "verus-tool-contract-reject",
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--edition=2021",
+            "--crate-name",
+            "verus_tool_contract_reject",
+            "-L",
+            "dependency=crates/ci-tests/target/debug/deps",
+            "--extern",
+            "serde_json=crates/ci-tests/target/debug/deps/libserde_json-f23d5e320f77b40e.rlib",
+            "--export",
+            ".chrono-harness/state/verus-tool-contract-20261114-reject.vir",
+            "--emit=link=.chrono-harness/state/verus-tool-contract-20261114-reject.rlib,dep-info=.chrono-harness/state/verus-tool-contract-20261114-reject.rlib.d",
+            ".chrono-harness/experiments/verus-tool-contract/reject.rs",
+            "-o",
+            ".chrono-harness/state/verus-tool-contract-20261114-reject.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
         }
       },
       "language": "rust"
@@ -3743,7 +3803,11 @@
         "format": {
           "operation": "format.cache-tests",
           "tool": "cargo",
-          "argv": ["fmt", "--manifest-path", "crates/cache-tests/Cargo.toml"]
+          "argv": [
+            "fmt",
+            "--manifest-path",
+            "crates/cache-tests/Cargo.toml"
+          ]
         },
         "execute": {
           "operation": "test.cache-tests",
@@ -4649,6 +4713,56 @@
             "-s",
             "|^verus-arm64-macos|.chrono-harness/bin/verus|",
             "--no-same-owner"
+          ]
+        },
+        "verus-contract-extract": {
+          "operation": "investigate.verus-tool-contract.extract",
+          "tool": "tar",
+          "argv": [
+            "-x",
+            "-f",
+            ".chrono-harness/bin/verus.zip",
+            "-s",
+            "|^verus-arm64-macos|.chrono-harness/state/verus-tool-contract-20261114|",
+            "--no-same-owner"
+          ]
+        },
+        "verus-contract-patch": {
+          "operation": "investigate.verus-tool-contract.patch",
+          "tool": "bash",
+          "argv": [
+            "-c",
+            "exec /usr/bin/patch -f -F 0 -p1 -d .chrono-harness/state/verus-tool-contract-20261114 < .chrono-harness/experiments/verus-tool-contract/vstd.patch"
+          ]
+        },
+        "verus-contract-build": {
+          "operation": "investigate.verus-tool-contract.build",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--crate-name",
+            "vstd",
+            "--is-vstd",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--edition=2021",
+            "--cfg",
+            "feature=\"std\"",
+            "--cfg",
+            "feature=\"alloc\"",
+            "-L",
+            "dependency=crates/ci-tests/target/debug/deps",
+            "--extern",
+            "serde_json=crates/ci-tests/target/debug/deps/libserde_json-f23d5e320f77b40e.rlib",
+            "--export",
+            ".chrono-harness/state/verus-tool-contract-20261114/vstd.vir",
+            "--emit=link=.chrono-harness/state/verus-tool-contract-20261114/libvstd.rlib,dep-info=.chrono-harness/state/verus-tool-contract-20261114/libvstd.rlib.d",
+            ".chrono-harness/state/verus-tool-contract-20261114/vstd/vstd.rs",
+            "-o",
+            ".chrono-harness/state/verus-tool-contract-20261114/libvstd.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       }
