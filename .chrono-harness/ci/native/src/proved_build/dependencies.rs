@@ -418,7 +418,11 @@ pub fn collect(
                 continue;
             }
             for path in &artifact.filenames {
-                if root_inputs.contains(&PathBuf::from(path)) && path.ends_with(".rlib") {
+                // rustc may consume Cargo's rmeta output while the raw linker
+                // needs the paired rlib from the very same compiler-artifact.
+                if path.ends_with(".rlib") && (root_inputs.contains(&PathBuf::from(path))
+                    || (artifact.filenames.contains(&PathBuf::from(path).with_extension("rmeta").to_string_lossy().into_owned())
+                        && root_inputs.contains(&PathBuf::from(path).with_extension("rmeta")))) {
                     matches.push(path.clone());
                 }
             }
