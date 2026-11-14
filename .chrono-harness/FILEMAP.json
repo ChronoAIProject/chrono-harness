@@ -1308,7 +1308,18 @@
     {"test":"pr-tests","cost":"unmeasured"}
   ],
   "execution_plans": {
-    "test:host-release-native-tests": {"operations":["verify.release-recipe","verify.release-recipe-tests","fmt.host-release-native","fmt.host-release-native-tests","build.cache","test.host-release-native-tests"],"timeout_seconds":600,"output_limit_bytes":1048576},
+    "test:host-release-native-tests": {
+      "operations": [
+        "verify.release-recipe",
+        "verify.release-recipe-tests",
+        "fmt.host-release-native",
+        "fmt.host-release-native-tests",
+        "build.cache",
+        "test.host-release-native-tests"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 1048576
+    },
     "test:identifiers-tests": {
       "operations": [
         "verify.identifiers",
@@ -1345,17 +1356,7 @@
         "verify.bootstrap-execution-driver"
       ],
       "timeout_seconds": 900,
-      "output_limit_bytes": 1048576,
-      "operation_bounds": {
-        "prepare.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        },
-        "investigate.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        }
-      }
+      "output_limit_bytes": 1048576
     },
     "test:runner-tool-contract-consume": {
       "operations": [
@@ -1415,17 +1416,7 @@
         "verify.ci-judge-crate"
       ],
       "timeout_seconds": 900,
-      "output_limit_bytes": 1048576,
-      "operation_bounds": {
-        "prepare.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        },
-        "investigate.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        }
-      }
+      "output_limit_bytes": 1048576
     },
     "test:ci-tests": {
       "operations": [
@@ -1467,17 +1458,7 @@
         "verify.registration-crate"
       ],
       "timeout_seconds": 900,
-      "output_limit_bytes": 1048576,
-      "operation_bounds": {
-        "prepare.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        },
-        "investigate.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        }
-      }
+      "output_limit_bytes": 1048576
     },
     "test:judge-filemap-tests": {
       "operations": [
@@ -1501,17 +1482,7 @@
         "verify.routes-driver"
       ],
       "timeout_seconds": 900,
-      "output_limit_bytes": 1048576,
-      "operation_bounds": {
-        "prepare.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        },
-        "investigate.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        }
-      }
+      "output_limit_bytes": 1048576
     },
     "test:judge-projects-tests": {
       "operations": [
@@ -1527,17 +1498,7 @@
         "verify.projects-driver"
       ],
       "timeout_seconds": 900,
-      "output_limit_bytes": 1048576,
-      "operation_bounds": {
-        "prepare.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        },
-        "investigate.ci-generation-dependency.runner": {
-          "timeout_seconds": 900,
-          "output_limit_bytes": 1048576
-        }
-      }
+      "output_limit_bytes": 1048576
     },
     "test:judge-cost-tests": {
       "operations": [

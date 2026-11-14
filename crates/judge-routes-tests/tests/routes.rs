@@ -751,12 +751,13 @@ fn scheduling_binds_identity_and_collection_reconstructs_without_processes() {
     assert!(legacy.with_scheduling(Some(bad)).is_err());
 }
 
-/// Mocked compiler and parent observations exercise the actual selected-plan consumer.
+/// 编译器与父进程均由 mock 提供，直接验收现役所选计划使用方。
 #[test]
 fn nested_child_result_is_required_even_when_the_parent_succeeds() {
     use chrono_harness::{nested_proof, verified_verifier as verifier};
     let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
+    let canonical = fs::canonicalize(dir.path()).unwrap();
+    let root = canonical.as_path();
     fs::create_dir(root.join("component")).unwrap();
     fs::copy(TOOL, root.join("component/verus")).unwrap();
     fs::write(root.join("library.fixture"), b"compiled fixture library").unwrap();

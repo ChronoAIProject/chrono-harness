@@ -185,9 +185,8 @@
       "actions": {
         "investigate_generation_dependency": {
           "operation": "investigate.ci-generation-dependency.runner",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -482,9 +481,8 @@
         },
         "prepare_generation_dependencies": {
           "operation": "prepare.ci-generation-dependency.runner",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -504,9 +502,8 @@
       "actions": {
         "verify_json_adapters": {
           "operation": "verify.runner-json-adapters-tests",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -781,9 +778,8 @@
         },
         "investigate_tool_contract_consume": {
           "operation": "investigate.verus-tool-contract.consume",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -792,9 +788,8 @@
         },
         "investigate_tool_contract_reject": {
           "operation": "investigate.verus-tool-contract.reject",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -1103,9 +1098,8 @@
         },
         "verify_complete_affected_root": {
           "operation": "verify.ci-judge-crate",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -1246,9 +1240,8 @@
       "actions": {
         "investigate_generation_consumer": {
           "operation": "investigate.ci-generation-dependency.consumer",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -1257,9 +1250,8 @@
         },
         "investigate_generation_missing": {
           "operation": "investigate.ci-generation-dependency.missing",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -1796,9 +1788,8 @@
         },
         "verify_complete_affected_root": {
           "operation": "verify.registration-crate",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -2206,9 +2197,8 @@
         },
         "verify_complete_affected_root": {
           "operation": "verify.routes-crate",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -2308,9 +2298,8 @@
         },
         "verify_complete_affected_root": {
           "operation": "verify.routes-driver",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -2551,9 +2540,8 @@
         },
         "verify_complete_affected_root": {
           "operation": "verify.projects-driver",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -4381,9 +4369,8 @@
         },
         "verify_complete_affected_root": {
           "operation": "verify.bootstrap-execution-driver",
-          "tool": "bash",
+          "tool": "bootstrap-native",
           "argv": [
-            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
