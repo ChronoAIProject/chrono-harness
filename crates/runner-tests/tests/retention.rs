@@ -3563,6 +3563,609 @@ fn addressed_legacy_original_is_verified_without_silent_enrollment_or_rewriting(
 }
 
 #[test]
+fn unfinished_creation_policy_migration_preserves_state_and_reaches_existing_recovery() {
+    if !isolated_capability_test(
+        "unfinished_creation_policy_migration_preserves_state_and_reaches_existing_recovery",
+    ) {
+        return;
+    }
+    // These are interrupted producer states, not evidence of inactivity. Each
+    // fixture closes its producer and leaves the real owner guards in place.
+    for (phase, capability_exists, attached_inode) in [
+        ("creating", true, false),
+        ("creating", true, true),
+        ("reserving", true, false),
+        ("reserving", false, false),
+    ] {
+        for domain in [false, true] {
+            let mut h = host(256, 16);
+            h.disable_cleanup(true);
+            eprintln!(
+                "creation migration originals ({phase}, capability={capability_exists}, inode={attached_inode}, domain={domain}): {}",
+                h.path().display()
+            );
+            let path = ".chrono-harness/state/fixtures/interrupted-creation";
+            let role = "fixture-creation-recovery";
+            let outcome = if domain && attached_inode {
+                json!({"exit":9,"completion":"not-established","recovery_role":role,"error":"original domain failure"})
+            } else if domain {
+                json!({"exit":null,"completion":"unknown","recovery_role":role})
+            } else {
+                json!({"exit":9,"completion":"unknown","error":"original producer failure"})
+            };
+            let publication = if domain {
+                inventory(h.path()).plan_rooted("fixture", path, outcome.clone(), role)
+            } else {
+                inventory(h.path()).plan("fixture", path, true, outcome.clone())
+            }
+            .unwrap();
+            let id = publication.id().to_owned();
+            drop(publication);
+            let directory = h.path().join(".chrono-harness/state/output-retention-v1");
+            let capability = directory.join(&id);
+            let staged = directory.join(format!("creation-{id}"));
+            let staged_identity = attached_inode.then(|| {
+                fs::create_dir(&staged).unwrap();
+                let identity = chrono_harness::artifact_disposal::identity(&staged).unwrap();
+                let mut output = ledger(h.path())["outputs"][0].clone();
+                // Reproduce the durable inode attachment before destination
+                // publication, without materializing through a new attempt.
+                output["identity"] = json!(identity);
+                retention_state::replace_output(h.path(), &output);
+                identity
+            });
+            if phase == "reserving" {
+                let mut output = ledger(h.path())["outputs"][0].clone();
+                output["phase"] = json!(phase);
+                output["lease_id"] = json!("");
+                retention_state::replace_output(h.path(), &output);
+            }
+            if !capability_exists {
+                fs::remove_file(&capability).unwrap();
+            }
+            let capability_before = capability_exists.then(|| {
+                (
+                    chrono_harness::ownership::identity(&capability).unwrap(),
+                    fs::read(&capability).unwrap(),
+                )
+            });
+            let record = retention_state::object_path(h.path(), &id);
+            let before: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+            let role_before = domain.then(|| {
+                let address = retention_state::role_path(h.path(), role);
+                (address.clone(), fs::read(address).unwrap())
+            });
+            let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+            fs::write(h.path().join("previous-policy.json"), &previous).unwrap();
+            let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+            policy["keep_seconds"] = json!(3600);
+            let current = serde_json::to_vec(&policy).unwrap();
+            fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+            let request = json!({"operation":"migrate-policy","previous_policy":{"path":"previous-policy.json","sha256":chrono_harness::sha256(&previous)},"originals":[id]});
+
+            // A formal request must unlock recovery by changing only the
+            // binding, including when the original capability ID is empty.
+            let migrated = consumer_call(h.path(), request.clone());
+            assert_eq!(
+                migrated.exit_code, 0,
+                "stdout: {}; stderr: {}",
+                migrated.stdout, migrated.stderr
+            );
+            let receipt: Value = serde_json::from_str(&migrated.stdout).unwrap();
+            assert_eq!(receipt["effects"], "metadata-binding-only");
+            assert_eq!(receipt["completion"], "not-established");
+            assert_eq!(receipt["outputs_preserved"], 1);
+            assert_eq!(receipt["roots_preserved"], json!(if domain { 1 } else { 0 }));
+            assert_eq!(receipt["scope"]["complete"], false);
+            let mut expected = before.clone();
+            expected["policy_sha256"] = json!(chrono_harness::sha256(&current));
+            assert_eq!(
+                serde_json::from_slice::<Value>(&fs::read(&record).unwrap()).unwrap(),
+                expected
+            );
+            assert!(
+                !h.path().join(path).exists(),
+                "migration must not materialize the original"
+            );
+            if let Some(identity) = staged_identity {
+                assert_eq!(
+                    chrono_harness::artifact_disposal::identity(&staged).unwrap(),
+                    identity
+                );
+                assert!(fs::read_dir(&staged).unwrap().next().is_none());
+            }
+            if let Some((identity, bytes)) = capability_before {
+                assert_eq!(
+                    chrono_harness::ownership::identity(&capability).unwrap(),
+                    identity
+                );
+                assert_eq!(fs::read(&capability).unwrap(), bytes);
+            }
+            if let Some((address, bytes)) = &role_before {
+                assert_eq!(fs::read(address).unwrap(), *bytes);
+            }
+            let migrated_bytes = fs::read(&record).unwrap();
+            let repeated = consumer_call(h.path(), request);
+            assert_eq!(
+                repeated.exit_code, 0,
+                "stdout: {}; stderr: {}",
+                repeated.stdout, repeated.stderr
+            );
+            assert_eq!(fs::read(&record).unwrap(), migrated_bytes);
+
+            if domain {
+                // Ordinary maintenance does not retire the domain's failed or
+                // unknown result after expiry. Its existing recovery owner can
+                // then materialize the same object without creating an attempt.
+                let round = maintenance(h.path());
+                assert_eq!(fixture_remaining(h.path(), &round), 1);
+                let original = inventory(h.path())
+                    .rooted_original("fixture", role)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    original,
+                    (id.clone(), path.into(), "creating".into(), outcome.clone())
+                );
+                assert!(!h.path().join(path).exists());
+                assert!(ledger(h.path())["summaries"].as_array().unwrap().is_empty());
+                inventory(h.path())
+                    .materialize_rooted("fixture", role)
+                    .unwrap();
+                assert!(h.path().join(path).is_dir());
+                let resumed = inventory(h.path())
+                    .rooted_original("fixture", role)
+                    .unwrap()
+                    .unwrap();
+                assert_eq!(
+                    resumed,
+                    (id.clone(), path.into(), "publishing".into(), outcome.clone())
+                );
+                assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+                assert_eq!(ledger(h.path())["outputs"][0]["outcome"], outcome);
+                assert_eq!(ledger(h.path())["roots"][role], json!([id]));
+                let (address, bytes) = role_before.unwrap();
+                assert_eq!(fs::read(address).unwrap(), bytes);
+            } else {
+                assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+                let state = ledger(h.path());
+                let summary = state["summaries"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .find(|s| s["id"] == id)
+                    .unwrap();
+                assert_eq!(summary["original_outcome"]["original"], outcome);
+                assert_eq!(
+                    summary["original_outcome"]["publication"],
+                    "interrupted-creation"
+                );
+                assert_eq!(summary["original_outcome"]["completion"], "not-established");
+            }
+            h.disable_cleanup(false);
+        }
+    }
+}
+
+#[test]
+fn unfinished_creation_policy_migration_excludes_original_producers_and_readers() {
+    if !isolated_capability_test(
+        "unfinished_creation_policy_migration_excludes_original_producers_and_readers",
+    ) {
+        return;
+    }
+    for phase in ["creating", "reserving"] {
+        let mut h = host(256, 16);
+        h.disable_cleanup(true);
+        eprintln!(
+            "live creation migration originals ({phase}): {}",
+            h.path().display()
+        );
+        let publication = inventory(h.path())
+            .plan(
+                "fixture",
+                ".chrono-harness/state/fixtures/live-creation",
+                true,
+                json!({"completion":"unknown"}),
+            )
+            .unwrap();
+        let id = publication.id().to_owned();
+        if phase == "reserving" {
+            // The producer still owns the real capability while its durable
+            // reservation has not attached an identity yet.
+            let mut output = ledger(h.path())["outputs"][0].clone();
+            output["phase"] = json!(phase);
+            output["lease_id"] = json!("");
+            retention_state::replace_output(h.path(), &output);
+        }
+        let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+        fs::write(h.path().join("previous-policy.json"), &previous).unwrap();
+        let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+        policy["keep_seconds"] = json!(3600);
+        fs::write(
+            h.path().join(POLICY_PATH),
+            serde_json::to_vec(&policy).unwrap(),
+        )
+        .unwrap();
+        let request = json!({"operation":"migrate-policy","previous_policy":{"path":"previous-policy.json","sha256":chrono_harness::sha256(&previous)},"originals":[id]});
+        let record = retention_state::object_path(h.path(), &id);
+        let before = fs::read(&record).unwrap();
+        let blocked = consumer_call(h.path(), request.clone());
+        assert_eq!(
+            blocked.exit_code, 2,
+            "stdout: {}; stderr: {}",
+            blocked.stdout, blocked.stderr
+        );
+        assert_eq!(fs::read(&record).unwrap(), before);
+        drop(publication);
+
+        let migrated = consumer_call(h.path(), request.clone());
+        assert_eq!(
+            migrated.exit_code, 0,
+            "stdout: {}; stderr: {}",
+            migrated.stdout, migrated.stderr
+        );
+        let bound = fs::read(&record).unwrap();
+        let capability = h
+            .path()
+            .join(".chrono-harness/state/output-retention-v1")
+            .join(&id);
+        let reader =
+            chrono_harness::ownership::Lease::acquire(&capability, None, false, false, None)
+                .unwrap()
+                .unwrap();
+        // Reentry must exclude a current-binding reader too, even if the
+        // record still has the original empty reservation capability ID.
+        let blocked = consumer_call(h.path(), request.clone());
+        assert_eq!(
+            blocked.exit_code, 2,
+            "stdout: {}; stderr: {}",
+            blocked.stdout, blocked.stderr
+        );
+        assert_eq!(fs::read(&record).unwrap(), bound);
+        drop(reader);
+        let repeated = consumer_call(h.path(), request);
+        assert_eq!(
+            repeated.exit_code, 0,
+            "stdout: {}; stderr: {}",
+            repeated.stdout, repeated.stderr
+        );
+        assert_eq!(fs::read(&record).unwrap(), bound);
+        h.disable_cleanup(false);
+    }
+}
+
+#[test]
+fn unfinished_creation_policy_migration_preserves_missing_changed_and_unknown_custody() {
+    if !isolated_capability_test(
+        "unfinished_creation_policy_migration_preserves_missing_changed_and_unknown_custody",
+    ) {
+        return;
+    }
+    for custody in [
+        "missing-attached",
+        "changed-attached",
+        "directory-reservation",
+        "symlink-reservation",
+        "excluded-reservation",
+    ] {
+        let mut h = host(256, 16);
+        h.disable_cleanup(true);
+        eprintln!(
+            "invalid creation migration originals ({custody}): {}",
+            h.path().display()
+        );
+        let publication = inventory(h.path())
+            .plan(
+                "fixture",
+                ".chrono-harness/state/fixtures/unknown-creation",
+                true,
+                json!({"exit":null}),
+            )
+            .unwrap();
+        let id = publication.id().to_owned();
+        drop(publication);
+        let capability = h
+            .path()
+            .join(".chrono-harness/state/output-retention-v1")
+            .join(&id);
+        // Rename, rather than unlink, so an attached replacement cannot reuse
+        // the original inode and the fixture retains the original capability.
+        let parked = capability.with_extension("original");
+        fs::rename(&capability, &parked).unwrap();
+        if custody.ends_with("reservation") {
+            let mut output = ledger(h.path())["outputs"][0].clone();
+            output["phase"] = json!("reserving");
+            output["lease_id"] = json!("");
+            retention_state::replace_output(h.path(), &output);
+        }
+        match custody {
+            "changed-attached" => fs::write(&capability, b"unknown replacement capability").unwrap(),
+            "directory-reservation" => fs::create_dir(&capability).unwrap(),
+            "symlink-reservation" => std::os::unix::fs::symlink(&parked, &capability).unwrap(),
+            _ => (),
+        }
+        let record = retention_state::object_path(h.path(), &id);
+        let exclusion = (custody == "excluded-reservation").then(|| {
+            chrono_harness::ownership::DirectoryLease::acquire(record.parent().unwrap(), true, None)
+                .unwrap()
+                .unwrap()
+        });
+        let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+        fs::write(h.path().join("previous-policy.json"), &previous).unwrap();
+        let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+        policy["keep_seconds"] = json!(3600);
+        fs::write(
+            h.path().join(POLICY_PATH),
+            serde_json::to_vec(&policy).unwrap(),
+        )
+        .unwrap();
+        let before = fs::read(&record).unwrap();
+        let original_identity = chrono_harness::ownership::identity(&parked).unwrap();
+        let request = json!({"operation":"migrate-policy","previous_policy":{"path":"previous-policy.json","sha256":chrono_harness::sha256(&previous)},"originals":[id]});
+        let blocked = consumer_call(h.path(), request);
+        assert_eq!(
+            blocked.exit_code, 2,
+            "stdout: {}; stderr: {}",
+            blocked.stdout, blocked.stderr
+        );
+        assert_eq!(fs::read(&record).unwrap(), before);
+        assert_eq!(
+            chrono_harness::ownership::identity(&parked).unwrap(),
+            original_identity
+        );
+        assert_eq!(fs::read(&parked).unwrap(), b"");
+        match custody {
+            "changed-attached" => assert_eq!(
+                fs::read(&capability).unwrap(),
+                b"unknown replacement capability"
+            ),
+            "directory-reservation" => assert!(capability.is_dir()),
+            "symlink-reservation" => assert_eq!(fs::read_link(&capability).unwrap(), parked),
+            _ => assert!(!capability.exists()),
+        }
+        drop(exclusion);
+        h.disable_cleanup(false);
+    }
+}
+
+#[test]
+fn unfinished_creation_policy_migration_preserves_dependencies_and_mixed_binding_retry() {
+    if !isolated_capability_test(
+        "unfinished_creation_policy_migration_preserves_dependencies_and_mixed_binding_retry",
+    ) {
+        return;
+    }
+    let mut h = host(256, 16);
+    h.disable_cleanup(true);
+    eprintln!(
+        "mixed creation migration originals: {}",
+        h.path().display()
+    );
+    let dependency_path = tree(h.path(), "required-input");
+    fs::write(
+        h.path().join(&dependency_path).join("original"),
+        b"original failure input",
+    )
+    .unwrap();
+    let dependency = inventory(h.path())
+        .begin("fixture", &dependency_path, json!({"exit":9}))
+        .unwrap();
+    let dependency_id = dependency.id().to_owned();
+    dependency.complete(json!({"exit":9})).unwrap();
+    let mut ids = Vec::new();
+    for phase in ["reserving", "creating"] {
+        let path = format!(".chrono-harness/state/fixtures/{phase}");
+        let publication = inventory(h.path())
+            .plan("fixture", &path, true, json!({"completion":"unknown"}))
+            .unwrap();
+        let id = publication.id().to_owned();
+        drop(publication);
+        if phase == "reserving" {
+            let state = ledger(h.path());
+            let mut output = state["outputs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|o| o["id"] == id)
+                .unwrap()
+                .clone();
+            output["phase"] = json!(phase);
+            output["lease_id"] = json!("");
+            retention_state::replace_output(h.path(), &output);
+        }
+        ids.push(id);
+    }
+    inventory(h.path())
+        .dependencies(&ids[0], &[dependency_id.clone()])
+        .unwrap();
+    let reader = inventory(h.path()).consume(&dependency_id).unwrap();
+    let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+    fs::write(h.path().join("previous-policy.json"), &previous).unwrap();
+    let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+    policy["keep_seconds"] = json!(3600);
+    let current = serde_json::to_vec(&policy).unwrap();
+    fs::write(h.path().join(POLICY_PATH), &current).unwrap();
+    let records: Vec<_> = ids
+        .iter()
+        .chain(std::iter::once(&dependency_id))
+        .map(|id| {
+            let path = retention_state::object_path(h.path(), id);
+            (path.clone(), fs::read(path).unwrap())
+        })
+        .collect();
+    let mut request = json!({"operation":"migrate-policy","previous_policy":{"path":"previous-policy.json","sha256":chrono_harness::sha256(&previous)},"originals":[ids[0]]});
+    let blocked = consumer_call(h.path(), request.clone());
+    assert_eq!(
+        blocked.exit_code, 2,
+        "stdout: {}; stderr: {}",
+        blocked.stdout, blocked.stderr
+    );
+    for (path, bytes) in &records {
+        assert_eq!(fs::read(path).unwrap(), *bytes);
+    }
+    drop(reader);
+    // An unfinished source does not waive the existing dependency contract.
+    // Keep each invalid fixture input and prove refusal before restoring it.
+    let (dependency_record, dependency_bytes) = &records[2];
+    let parked = dependency_record.with_extension("original");
+    for condition in ["unknown-binding", "missing-declaration"] {
+        if condition == "unknown-binding" {
+            let mut dependency: Value = serde_json::from_slice(dependency_bytes).unwrap();
+            let mut third_policy = policy.clone();
+            third_policy["keep_seconds"] = json!(7200);
+            dependency["policy_sha256"] =
+                json!(chrono_harness::sha256(&serde_json::to_vec(&third_policy).unwrap()));
+            fs::write(dependency_record, serde_json::to_vec(&dependency).unwrap()).unwrap();
+        } else {
+            fs::rename(dependency_record, &parked).unwrap();
+        }
+        let original_path = if condition == "unknown-binding" {
+            dependency_record
+        } else {
+            &parked
+        };
+        let invalid_bytes = fs::read(original_path).unwrap();
+        let blocked = consumer_call(h.path(), request.clone());
+        assert_eq!(
+            blocked.exit_code, 2,
+            "{condition}; stdout: {}; stderr: {}",
+            blocked.stdout, blocked.stderr
+        );
+        assert_eq!(fs::read(original_path).unwrap(), invalid_bytes);
+        for (path, bytes) in &records[..2] {
+            assert_eq!(fs::read(path).unwrap(), *bytes);
+        }
+        if condition == "unknown-binding" {
+            fs::write(dependency_record, dependency_bytes).unwrap();
+        } else {
+            assert!(!dependency_record.exists());
+            fs::rename(&parked, dependency_record).unwrap();
+        }
+    }
+    let migrated = consumer_call(h.path(), request.clone());
+    assert_eq!(
+        migrated.exit_code, 0,
+        "stdout: {}; stderr: {}",
+        migrated.stdout, migrated.stderr
+    );
+    let receipt: Value = serde_json::from_str(&migrated.stdout).unwrap();
+    assert_eq!(receipt["outputs_preserved"], 2);
+    assert_eq!(fs::read(&records[1].0).unwrap(), records[1].1);
+    // A completed subset leaves a mixed old/current cohort. The same prior
+    // policy and full original list must finish and then safely repeat.
+    request["originals"] = json!(ids);
+    for _ in 0..2 {
+        let migrated = consumer_call(h.path(), request.clone());
+        assert_eq!(
+            migrated.exit_code, 0,
+            "stdout: {}; stderr: {}",
+            migrated.stdout, migrated.stderr
+        );
+        let receipt: Value = serde_json::from_str(&migrated.stdout).unwrap();
+        assert_eq!(receipt["outputs_preserved"], 3);
+        for (path, bytes) in &records {
+            let mut expected: Value = serde_json::from_slice(bytes).unwrap();
+            expected["policy_sha256"] = json!(chrono_harness::sha256(&current));
+            assert_eq!(
+                serde_json::from_slice::<Value>(&fs::read(path).unwrap()).unwrap(),
+                expected
+            );
+        }
+        assert_eq!(
+            fs::read(h.path().join(&dependency_path).join("original")).unwrap(),
+            b"original failure input"
+        );
+    }
+    h.disable_cleanup(false);
+}
+
+#[test]
+fn unfinished_creation_policy_binding_keeps_existing_recovery_identity_guards() {
+    if !isolated_capability_test(
+        "unfinished_creation_policy_binding_keeps_existing_recovery_identity_guards",
+    ) {
+        return;
+    }
+    for domain in [false, true] {
+        for original in ["destination", "staging"] {
+            let mut h = host(256, 16);
+            h.disable_cleanup(true);
+            eprintln!(
+                "creation recovery guard originals ({original}, domain={domain}): {}",
+                h.path().display()
+            );
+            let path = ".chrono-harness/state/fixtures/replaced-creation";
+            let role = "fixture-recovery-guard";
+            let outcome = json!({"exit":null,"completion":"unknown","recovery_role":role});
+            let publication = if domain {
+                inventory(h.path()).plan_rooted("fixture", path, outcome.clone(), role)
+            } else {
+                inventory(h.path()).plan("fixture", path, true, outcome.clone())
+            }
+            .unwrap();
+            let id = publication.id().to_owned();
+            drop(publication);
+            let original_path = if original == "destination" {
+                h.path().join(path)
+            } else {
+                h.path()
+                    .join(".chrono-harness/state/output-retention-v1")
+                    .join(format!("creation-{id}"))
+            };
+            fs::create_dir(&original_path).unwrap();
+            fs::write(original_path.join("original"), b"unknown required original").unwrap();
+            let original_identity =
+                chrono_harness::artifact_disposal::identity(&original_path).unwrap();
+            let previous = fs::read(h.path().join(POLICY_PATH)).unwrap();
+            fs::write(h.path().join("previous-policy.json"), &previous).unwrap();
+            let mut policy: Value = serde_json::from_slice(&previous).unwrap();
+            policy["keep_seconds"] = json!(3600);
+            fs::write(
+                h.path().join(POLICY_PATH),
+                serde_json::to_vec(&policy).unwrap(),
+            )
+            .unwrap();
+            let before = ledger(h.path());
+            let request = json!({"operation":"migrate-policy","previous_policy":{"path":"previous-policy.json","sha256":chrono_harness::sha256(&previous)},"originals":[id]});
+            let migrated = consumer_call(h.path(), request);
+            assert_eq!(
+                migrated.exit_code, 0,
+                "stdout: {}; stderr: {}",
+                migrated.stdout, migrated.stderr
+            );
+            if domain {
+                maintenance(h.path());
+                assert!(
+                    inventory(h.path())
+                        .materialize_rooted("fixture", role)
+                        .is_err()
+                );
+            } else {
+                let round = maintenance(h.path());
+                assert!(
+                    !round["accounting_errors"].as_array().unwrap().is_empty(),
+                    "{round}"
+                );
+            }
+            assert_eq!(
+                chrono_harness::artifact_disposal::identity(&original_path).unwrap(),
+                original_identity
+            );
+            assert_eq!(
+                fs::read(original_path.join("original")).unwrap(),
+                b"unknown required original"
+            );
+            let after = ledger(h.path());
+            assert_eq!(after["outputs"], before["outputs"]);
+            assert_eq!(after["roots"], before["roots"]);
+            assert_eq!(after["summaries"], before["summaries"]);
+            h.disable_cleanup(false);
+        }
+    }
+}
+
+#[test]
 fn policy_migration_recovers_interrupted_transactions_and_preserves_live_owners() {
     if !isolated_capability_test(
         "policy_migration_recovers_interrupted_transactions_and_preserves_live_owners",
