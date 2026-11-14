@@ -136,3 +136,46 @@ E 的固定起点为 `01b9d7ebed083908ec0e3a49fe23c106e8b0da08`，工作树为 `
 D conclusion 报告的 managed 原件和 20 份补充材料按 caller 已核结果继续保护。旧 6af74eb canonical 与两流目前缺失，责任方及恢复为 unknown；同字节新 stdout 不能恢复其保管链，也不阻断本次独立 export 修复。E 不删除、覆盖或重跑原失败，不修改 state、缓存、bin 或生命周期。
 
 本 flight 的固定源身份与限定 patch 由 caller、F 和同包 mandatory review 消费，沿既有负责方保留到真实使用方消费并完成验收／调试义务；2026-11-21 仅复核需求，不是自动删除授权。E 只交接静态编辑，没有运行构建、bootstrap、Cargo、Verus、业务测试、机器判官或生命周期；独立预期及完整验证成本仍为 unknown。
+
+## R：固定工具对导入外部合同的检查边界
+
+本节服务完整同源证明与实际编译绑定，修正“另建普通外部规格库再 import 或许可以满足当前严格根”的未决判断。检查起点是 `e7854f5e7c1787b0c7430fc7c900c72f1aec7d4f`，工具仍为上述固定 Verus／Rust。这里只核对该版本的官方源码和现有所有者，没有新工具运行结果；不修改 SPEC、生产方法、严格参数、分类、预算或准入规则。
+
+SPEC §2.1.1 允许逐项登记真正的外部接口假设。下面的限制来自固定工具实现，**不能把工具缺口解释成 SPEC 禁止这些假设，也不能给仓内适配、选择或状态函数增加豁免**。
+
+### 声明、准备与严格使用是三件事
+
+固定上游 commit 为 `f8e17045c4ac17a02e566b8997070f2eecc255be`，tree 为 `30bee75a9c8563d45ed3c1f1e99c8b0a04001773`。以下引用全部固定到该 commit：
+
+| 机制与权威位置 | 当前版本的实际作用与边界 |
+| --- | --- |
+| [assume_specification 参考](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/docs/guide/src/reference-assume-specification.md) | 支持为外部 exec 函数声明合同，声明可位于另一个 crate；文档明确它是无证明的假设。这说明声明语法受支持，不说明严格使用方允许它。 |
+| [rust_to_vir_func.rs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/rust_verify/src/rust_to_vir_func.rs#L1565) 的 `handle_external_fn` 调用及 `FunctionX` 构造 | 声明映射到真正的外部函数，但保留非空 `proxy`；`owning_module` 仍是声明所在模块，不因目标是 serde_json 或标准库就变成 vstd。`external_trait_specification` 派生的方法也经过此路径。 |
+| [import_export.rs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/rust_verify/src/import_export.rs#L56) 的 `export_crate` | 可导出公开合同，按模式移除部分函数体；不清除 `proxy`、`attrs.is_external_body` 或 `owning_module`。导出发生在后续严格检查之前，文件存在不证明生产者成功。`CrateWithMetadata` 仅含 Krate 与原文件位置元数据，没有生产者成功或完整编译输入资格。 |
+| [verifier.rs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/rust_verify/src/verifier.rs#L2808) 的 `construct_vir_crate` | 合并导入和当前 VIR，随后以**当前使用方**的 `no_verify`／`no_cheating` 调用 `well_formed::check_crate`，不把已导出合同视作严格检查例外。 |
+| [prune.rs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/vir/src/prune.rs#L839) 与 [well_formed.rs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/vir/src/well_formed.rs#L1952) | 这里以 `module=None` 做 crate 级处理；保留当前 crate 及可达导入，函数调用会标记其真实目标可达。函数保留检查所需标记，`check_crate` 对结果中的每个函数调用 `check_function`。未使用合同可能被裁掉，但不构成真实使用成功；把实际使用的合同移到导入库不能避开检查。 |
+| [well_formed.rs:1471](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/vir/src/well_formed.rs#L1471) | `no_cheating && (is_external_body || proxy.is_some())` 产生 `external_body/assume_specification not allowed with --no-cheating`；唯一该分支例外是 `owning_module.is_vstd_path()`。此条件不检查外部合同是否符合现实语义，也不读取宿主逐项登记。 |
+| [ast_util.rs:58](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/vir/src/ast_util.rs#L58) | `is_vstd_path` 要求 `CrateId::Vstd`，不是普通库中的 `vstd` 同名模块。冒用工具的 vstd 身份或替换安装产物不属于本次支持路径。 |
+| [no_cheating.rs](https://github.com/verus-lang/verus/blob/f8e17045c4ac17a02e566b8997070f2eecc255be/source/rust_verify_test/tests/no_cheating.rs#L89) 的既有独立预期 | 上游明确预期 `--no-cheating --no-verify` 仍拒绝 `external_body`；`--no-verify` 只取消求解阶段，不取消上述构造／检查。这里读取了预期源码，没有执行上游测试。 |
+
+因此，先用普通声明生成库／VIR、再让严格生产根 import，仍没有得到这些合同的受支持严格载体；准备阶段即使不声称证明，也不会改变使用阶段的判法。外部类型声明本身与函数合同须分别判断：不能仅从 `external_type_specification` 的存在推出所有类型声明被 `no-cheating` 拒绝；但只有类型描述不足以证明真实 JSON 方法的返回关系。当前宏还把 bodyless spec 和 broadcast axiom 降为 `external_body`，这些模型声明同样不能凭另一个普通 crate 的身份取得例外。
+
+这是一条针对普通外部规格声明及其原生 export/import 的共同检查条件，覆盖本类直接 JSON／全文合同，不是逐成员补丁，也不是对所有 Verus 版本或未核对机制的不可行性证明。可证伪条件是：在固定工具、未冒用 vstd、未清除假设标记且保留严格整 crate 参数的前提下，真实使用方成功消费所需合同；只有语法接受、非严格准备成功或文件存在都不满足它。
+
+### 现有可复用合同与尚缺的现实关系
+
+固定 vstd 已有 `String::as_str`／Deref、字符串全文 view、切片、Option 和树集合合同；这些是真正的导入工具合同，不是本仓函数证明。`string.rs` 的 `String::as_str` 保留全部字符，`std_specs/btree.rs` 的合同仍带 `obeys_cmp` 和借用键模型前提；本轮没有找到可直接替代 JSON／全文补充关系的已安装合同。
+
+仍需承载的真实外部接口是 `serde_json::Value::{as_str, as_object, get}`、`<Value as Index<I>>::index`、`serde_json::Map<String, Value>::len`，以及标准 String／str 树键的顺序、String→str 借用查询和相同全文的集合成员关系。现有 `json_value_specs.rs` 已集中表达这些提案，无需复制。实际使用方仍是 `JsonBindingReferences`、`JsonGuardReferences`、`JsonSelectorRows` 的两个视图、`JsonTargetRows`、`CapturedRegistry` 和 `SeenSelectorText`；七个实现及其仓内组合继续承担完整证明义务，不能成为准备阶段的假设。现有独立 `json_adapters.rs` 继续保留成功、失败、空值、null／缺键、全文和重复插入预期。
+
+runner 的 `require_registered_input_evidence` 另外仍拒绝非空扩展编译上下文；它不读取上述 Verus 实现，也没有可由普通 import 填充的完整生产者资格记录。工具承载限制和宿主准入缺口是两个独立义务。即使将来前者解决，仍须绑定完整 argv／环境、实际源／编译生产者、rlib、dep-info、VIR、宏和必要传递输入；不得把“明确允许的外部假设”写成“已证明的仓内依赖”。
+
+### 当前交接与能够改变结论的负责方修正
+
+本轮没有发现能满足上述固定严格使用条件的新增受支持操作，因此没有新增实验源码、执行登记或尝试已知会被该共同条件拒绝的生产根；没有重跑旧 CAPACITY 失败，也没有建立新的成功原件。现有操作继续按原前置阻断，不以本节替代运行结果或类型化准入。当前结果属于源码可行性证据，raw 严格使用、正式 ProofAdmission 和实际交付均未新增。
+
+能够改变此结论的修正归现有 Verus 外部接口／runner 资格所有者：工具必须提供有明确语义的外部合同输入，使严格使用方可以接受**真正的外部接口声明**，同时继续拒绝仓内函数、适配判断和状态维护的假设；或提供实际涵盖本类接口、可在固定严格根使用的工具合同。当前 `well_formed::check_function` 只有 vstd 例外，不能仅改 projects 的声明或把普通规格库称为工具合同来实现这一点。在固定工具身份不变时，这项能力尚未找到；需要改变工具／方法的方案须先显式说明原默认严格方法与新作用范围，不在本轮静默采用。
+
+后续若取得这样的受支持机制，先在现有规格所有者准备最小真实外部合同和独立 Verus 成功／失败／边界预期，显式登记准备与严格使用的不同作用，封存干净候选后由调用方委派受保护 operation。准备成功不算证明，严格使用成功也只算 raw 工具观察；完整准入修复随后仍须复用 runner／routes／本地与离线使用方的现有所有者。新增证明不得丢失严格参数、整 crate、原线程、预算或原断言。
+
+本节没有待执行的新登记操作，验证总成本未知。全部受影响源码的实质证明、generation 四个真实投影与 prepare／effect／recovery、正式 DELTA、原生 integration／dev、平台与生命周期义务继续未完成。保留使用方和复核条件沿用本文既有声明；本节不新增运行账本、执行器、缓存或永久证据副本。
