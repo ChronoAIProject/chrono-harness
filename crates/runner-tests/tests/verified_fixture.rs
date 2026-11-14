@@ -276,6 +276,12 @@ mod git_status_io {
             ok(&["status", "--porcelain", "-z"]),
             b" D ignored/tracked\0?? visible\0"
         );
+        fs::create_dir(root.join("ignored/tracked")).unwrap();
+        assert_eq!(
+            ok(&["status", "--porcelain", "-z"]),
+            b" D ignored/tracked\0?? visible\0"
+        );
+        fs::remove_dir(root.join("ignored/tracked")).unwrap();
         fs::write(root.join("ignored/tracked"), b"after").unwrap();
         let output = ok(&["status", "--porcelain", "--ignored", "-z"]);
         let mut records: Vec<_> = output.split(|byte| *byte == 0).collect();
