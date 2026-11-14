@@ -20,6 +20,10 @@ use vstd::vpanic as panic;
 mod continuity;
 
 #[cfg(verus_keep_ghost)]
+#[path = "keys.rs"]
+mod keys;
+
+#[cfg(verus_keep_ghost)]
 #[path = "support/probe.rs"]
 mod probe;
 

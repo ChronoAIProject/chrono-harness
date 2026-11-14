@@ -1,18 +1,158 @@
 #![allow(unexpected_cfgs)]
 
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+
+verus! {
+
+pub open spec fn named_probe_result<S, I, C, R>(source: S, inspect: I, clear: C,
+    reject: R, out: (S, Result<(), String>)) -> bool
+    where I: FnOnce(S) -> (S, Result<(bool, bool), String>), C: FnOnce(S) -> S,
+        R: FnOnce(S) -> (S, bool),
+{
+    exists|observed: S, result: Result<(bool, bool), String>|
+        #[trigger] inspect.ensures((source,), (observed, result))
+        && match result {
+            Err(error) => out == (observed, Err::<(), String>(error)),
+            Ok((absolute, identity)) => if !absolute {
+                out.0 == observed && match out.1 {
+                    Err(error) => error@ == "named probe path is not absolute"@, _ => false,
+                }
+            } else if !identity {
+                out.0 == observed && match out.1 {
+                    Err(error) => error@ == "named probe executable differs"@, _ => false,
+                }
+            } else { exists|cleared: S, rejected: bool|
+                clear.ensures((observed,), cleared)
+                && #[trigger] reject.ensures((cleared,), (out.0, rejected))
+                && if rejected { out.1 == Ok::<(), String>(()) } else { match out.1 {
+                    Err(error) => error@ == "missing declared PATH fell back to ambient tools"@,
+                    _ => false,
+                } }
+            },
+        }
+}
+
+/// 先核实际绑定，再清除声明 PATH 并要求拒绝；前置失败不继续。
+pub fn check_named_probe<S, I, C, R>(source: S, inspect: I, clear: C, reject: R)
+    -> (out: (S, Result<(), String>))
+    where I: FnOnce(S) -> (S, Result<(bool, bool), String>), C: FnOnce(S) -> S,
+        R: FnOnce(S) -> (S, bool),
+    requires inspect.requires((source,)), forall|state: S| clear.requires((state,)),
+        forall|state: S| reject.requires((state,)),
+    ensures named_probe_result(source, inspect, clear, reject, out),
+{
+    let (state, result) = inspect(source);
+    let ghost observed = state;
+    let ghost original = result;
+    assert(inspect.ensures((source,), (observed, original)));
+    let (absolute, identity) = match result {
+        Err(error) => return (state, Err(error)),
+        Ok(value) => value,
+    };
+    assert(original == Ok::<(bool, bool), String>((absolute, identity)));
+    if !absolute { return (state, Err("named probe path is not absolute".to_string())); }
+    if !identity { return (state, Err("named probe executable differs".to_string())); }
+    let state = clear(state);
+    let ghost cleared = state;
+    let (state, rejected) = reject(state);
+    assert(clear.ensures((observed,), cleared));
+    assert(reject.ensures((cleared,), (state, rejected)));
+    let out = (state, if rejected { Ok(()) }
+        else { Err("missing declared PATH fell back to ambient tools".to_string()) });
+    assert(inspect.ensures((source,), (observed, original)));
+    assert(clear.ensures((observed,), cleared));
+    assert(reject.ensures((cleared,), (out.0, rejected)));
+    assert(if rejected { out.1 == Ok::<(), String>(()) } else { match out.1 {
+        Err(error) => error@ == "missing declared PATH fell back to ambient tools"@,
+        _ => false,
+    } });
+    assert(exists|cleared_state: S, rejected_value: bool|
+        clear.ensures((observed,), cleared_state)
+        && #[trigger] reject.ensures((cleared_state,), (out.0, rejected_value))
+        && if rejected_value { out.1 == Ok::<(), String>(()) } else { match out.1 {
+            Err(error) => error@ == "missing declared PATH fell back to ambient tools"@,
+            _ => false,
+        } });
+    out
+}
+
+fn named_probe_expect(actual: bool)
+    requires actual,
+{
+    if !actual { panic!(); }
+}
+
+fn named_probe_case(failed: bool, absolute: bool, identity: bool, rejected: bool) {
+    let inspect = |mut trace: Vec<u8>| -> (out: (Vec<u8>, Result<(bool, bool), String>))
+        ensures out.0@ == trace@.push(0),
+            if failed { match out.1 { Err(error) => error@ == "original/λ\0\n"@, _ => false } }
+            else { out.1 == Ok::<(bool, bool), String>((absolute, identity)) },
+    {
+        trace.push(0);
+        (trace, if failed { Err("original/λ\0\n".to_string()) } else { Ok((absolute, identity)) })
+    };
+    let clear = |mut trace: Vec<u8>| -> (out: Vec<u8>)
+        ensures out@ == trace@.push(1),
+    { trace.push(1); trace };
+    let reject = |mut trace: Vec<u8>| -> (out: (Vec<u8>, bool))
+        ensures out.0@ == trace@.push(2), out.1 == rejected,
+    { trace.push(2); (trace, rejected) };
+    let (trace, result) = check_named_probe(Vec::new(), inspect, clear, reject);
+    if failed || !absolute || !identity {
+        named_probe_expect(trace.len() == 1 && trace[0] == 0);
+    } else {
+        named_probe_expect(trace.len() == 3 && trace[0] == 0 && trace[1] == 1 && trace[2] == 2);
+    }
+    if !failed && absolute && identity && rejected { named_probe_expect(result.is_ok()); }
+    else { match result {
+        Ok(()) => named_probe_expect(false),
+        Err(error) => {
+            let expected = if failed { "original/λ\0\n" }
+                else if !absolute { "named probe path is not absolute" }
+                else if !identity { "named probe executable differs" }
+                else { "missing declared PATH fell back to ambient tools" };
+            named_probe_expect(error == expected.to_string());
+        },
+    } }
+}
+
+#[test]
+fn named_probe_driver_preserves_binding_order_and_original_errors() {
+    named_probe_case(false, true, true, true);
+    named_probe_case(true, false, false, false);
+    named_probe_case(false, false, true, true);
+    named_probe_case(false, true, false, true);
+    named_probe_case(false, true, true, false);
+}
+
+}
+
 #[path = "continuity.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod continuity;
 
 #[path = "recovery.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod recovery;
 
+#[cfg(not(verus_keep_ghost))]
 use chrono_cache::{Config, prepare};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use sha2::{Digest, Sha256};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, path::Path, process::Command};
 
+#[cfg(not(verus_keep_ghost))]
 struct Host(tempfile::TempDir);
 
+#[cfg(not(verus_keep_ghost))]
 impl Host {
     fn new() -> Self {
         let retained = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -26,6 +166,7 @@ impl Host {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Host {
     fn drop(&mut self) {
         if std::thread::panicking() {
@@ -40,6 +181,7 @@ impl Drop for Host {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn fixture() -> (Host, Value) {
     let root = Host::new();
     fs::create_dir(root.path().join(".chrono-harness")).unwrap();
@@ -69,6 +211,7 @@ fn fixture() -> (Host, Value) {
     (root, config)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn register_artifacts(root: &Path, config: &Value) {
     let rows: Vec<_> = config["artifacts"].as_object().unwrap().values()
         .map(|a| json!({"path":a["path"],"owner":a["owner"],"kind":"fixture-output","tracked":false})).collect();
@@ -79,6 +222,7 @@ fn register_artifacts(root: &Path, config: &Value) {
     .unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
     let config: Config = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
     let result = prepare(root, &config, consumer);
@@ -94,6 +238,7 @@ fn plan(root: &Path, value: &Value, consumer: &str) -> Result<Value, String> {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     let (root, mut config) = fixture();
     let retained = root.path().to_path_buf();
@@ -121,6 +266,7 @@ fn failed_test_retains_probe_originals_and_success_removes_its_host() {
     assert!(!removed.exists());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn register_consumer_contract(root: &Path, config: &mut Value) {
     fs::write(
         root.join(".chrono-harness/operations.json"),
@@ -135,6 +281,7 @@ fn register_consumer_contract(root: &Path, config: &mut Value) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn only_current_cache_registration_is_admitted() {
     let (root, mut config) = fixture();
     let current = plan(root.path(), &config, "check.one").unwrap();
@@ -161,6 +308,7 @@ fn only_current_cache_registration_is_admitted() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn source_changes_reuse_compatible_domain_and_compiler_changes_do_not() {
     let (root, config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
@@ -194,6 +342,7 @@ fn source_changes_reuse_compatible_domain_and_compiler_changes_do_not() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn consumers_select_only_registered_inputs_and_never_fall_back_to_all() {
     let (root, mut config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
@@ -227,6 +376,7 @@ fn consumers_select_only_registered_inputs_and_never_fall_back_to_all() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
     let (root, mut config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
@@ -239,6 +389,7 @@ fn adding_a_consumer_does_not_invalidate_an_unchanged_producer_cache() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
     let (root, mut config) = fixture();
     let source = root.path().join(".chrono-harness/operations.json");
@@ -273,6 +424,7 @@ fn adopted_consumer_contract_rejects_a_retired_producer_before_input_probes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn consumer_operation_references_reject_missing_ambiguous_and_nonoperation_values() {
     let (root, mut config) = fixture();
     config["consumer_operations"] = json!({
@@ -310,6 +462,7 @@ fn consumer_operation_references_reject_missing_ambiguous_and_nonoperation_value
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_host_cache_consumers_resolve_original_operation_registrations() {
     let host = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -361,6 +514,7 @@ fn native_host_cache_consumers_resolve_original_operation_registrations() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn a_consumer_registry_cannot_be_restored_as_a_cache_artifact() {
     let (root, mut config) = fixture();
     config["artifacts"]["target"]["path"] = json!(".chrono-harness/operations.json");
@@ -373,6 +527,7 @@ fn a_consumer_registry_cannot_be_restored_as_a_cache_artifact() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn plan_retains_probe_original_without_creating_release_output() {
     let (root, mut config) = fixture();
     config["inputs"]["compiler"] = json!({"kind":"command","command":{
@@ -424,6 +579,7 @@ fn plan_retains_probe_original_without_creating_release_output() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
     let (root, config) = fixture();
     fs::write(
@@ -458,6 +614,7 @@ fn compatibility_binds_profile_producer_artifacts_owner_and_namespace() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_inputs_are_explicit_and_empty_files_are_present() {
     let (root, mut config) = fixture();
     fs::remove_file(root.path().join("source")).unwrap();
@@ -481,6 +638,7 @@ fn absent_inputs_are_explicit_and_empty_files_are_present() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn exact_keys_still_require_builds_and_artifact_fields_are_closed() {
     let (root, mut config) = fixture();
     config["caches"]["project"]["restore"] = json!("exact");
@@ -504,6 +662,7 @@ fn exact_keys_still_require_builds_and_artifact_fields_are_closed() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registration_rejects_missing_ambiguous_and_cross_owner_references() {
     let (root, config) = fixture();
     for (pointer, value) in [
@@ -539,6 +698,7 @@ fn registration_rejects_missing_ambiguous_and_cross_owner_references() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cache_paths_exclude_evidence_metadata_sources_and_overlapping_outputs() {
     let (root, config) = fixture();
     for path in [
@@ -573,6 +733,7 @@ fn cache_paths_exclude_evidence_metadata_sources_and_overlapping_outputs() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cache_artifacts_require_host_paths_and_exact_existing_registration() {
     let (root, mut config) = fixture();
     let catalog = root.path().join(".chrono-harness/artifacts.json");
@@ -620,6 +781,7 @@ fn cache_artifacts_require_host_paths_and_exact_existing_registration() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn file_and_cache_aliases_do_not_silently_expand_registered_paths() {
     let (root, config) = fixture();
     fs::rename(root.path().join("source"), root.path().join("real-source")).unwrap();
@@ -640,6 +802,7 @@ fn file_and_cache_aliases_do_not_silently_expand_registered_paths() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cli_observes_only_explicit_child_environment_without_exposing_values() {
     let (root, mut config) = fixture();
     config["inputs"]["profile"] =
@@ -688,6 +851,7 @@ fn cli_observes_only_explicit_child_environment_without_exposing_values() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn restore_policy_is_bound_without_consumer_list_order() {
     let (root, mut config) = fixture();
     let first = plan(root.path(), &config, "check.one").unwrap();
@@ -703,6 +867,7 @@ fn restore_policy_is_bound_without_consumer_list_order() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cli_rejects_unknown_actions_and_ambiguous_options() {
     for args in [
         vec![],
@@ -717,6 +882,7 @@ fn cli_rejects_unknown_actions_and_ambiguous_options() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
     let (root, mut config) = fixture();
     config["caches"]["other"]["consumers"] = json!(["check.one"]);
@@ -795,6 +961,7 @@ fn github_outputs_preserve_selected_paths_and_never_publish_a_failed_plan() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
     let (root, mut config) = fixture();
     let compiler = root.path().join("compiler");
@@ -843,6 +1010,7 @@ fn registered_probe_binds_actual_selected_compiler_bytes_with_stable_keys() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
     let (root, mut config) = fixture();
     let tools = root.path().join("tools");
@@ -853,25 +1021,37 @@ fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
         "program":"registered-probe", "args":["echo","actual compiler"],
         "env":{"PATH":tools},"timeout_seconds":2,"output_limit_bytes":4096},
         "inherit":[],"result":"stdout"});
-    let prepared = plan(root.path(), &config, "check.one").unwrap();
-    let observed = Path::new(
-        prepared["inputs"]["compiler"]["observation"]["executable"]
-            .as_str()
-            .unwrap(),
-    );
-    assert!(observed.is_absolute());
-    assert_eq!(
-        fs::canonicalize(observed).unwrap(),
-        fs::canonicalize(executable).unwrap()
-    );
-    config["inputs"]["compiler"]["command"]["env"] = json!({});
-    assert!(
-        plan(root.path(), &config, "check.one").is_err(),
-        "a missing declared PATH must not fall back to ambient tools"
-    );
+    check_named_probe(
+        config,
+        |config| {
+            let result = plan(root.path(), &config, "check.one").map(|prepared| {
+                let observed = Path::new(
+                    prepared["inputs"]["compiler"]["observation"]["executable"]
+                        .as_str()
+                        .unwrap(),
+                );
+                (
+                    observed.is_absolute(),
+                    fs::canonicalize(observed).unwrap() == fs::canonicalize(&executable).unwrap(),
+                )
+            });
+            (config, result)
+        },
+        |mut config| {
+            config["inputs"]["compiler"]["command"]["env"] = json!({});
+            config
+        },
+        |config| {
+            let rejected = plan(root.path(), &config, "check.one").is_err();
+            (config, rejected)
+        },
+    )
+    .1
+    .unwrap();
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_and_bounded_probes_retain_original_results_and_stop_planning() {
     for (mode, limit, timeout) in [("exit", 4096, 5), ("sleep", 4096, 1), ("flood", 64, 5)] {
         let (root, mut config) = fixture();
@@ -904,6 +1084,7 @@ fn failed_and_bounded_probes_retain_original_results_and_stop_planning() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_source_keys_follow_only_explicit_transitive_filemap_edges() {
     let (root, mut config) = fixture();
     config["inputs"]["source"] = json!({"kind":"registered-files","registry":".chrono-harness/FILEMAP.json","node":"project:product","edges":["compile"]});
@@ -982,6 +1163,7 @@ fn registered_source_keys_follow_only_explicit_transitive_filemap_edges() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn primary_checkout_transport_refuses_linked_worktrees_before_restoration() {
     let (root, mut config) = fixture();
     config["require_primary_checkout"] = json!(true);
@@ -1003,6 +1185,7 @@ fn primary_checkout_transport_refuses_linked_worktrees_before_restoration() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
     let host = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -1073,6 +1256,7 @@ fn host_cache_fixture(consumers: &[&str]) -> (Host, Value) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
     let (root, config) = host_cache_fixture(&["check.detect"]);
     let first = plan(root.path(), &config, "check.detect").unwrap();
@@ -1101,6 +1285,7 @@ fn host_detector_cache_keys_ignore_check_policy_but_bind_core_bootstrap() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn verus_archive_cache_binds_download_and_checksum_without_compiler_inputs() {
     let (root, mut config) = host_cache_fixture(&["check.detect"]);
     let host = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -1144,6 +1329,7 @@ fn verus_archive_cache_binds_download_and_checksum_without_compiler_inputs() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() {
     let consumers = ["check.unit_runner", "check.unit_ci"];
     let (root, config) = host_cache_fixture(&consumers);
@@ -1200,6 +1386,7 @@ fn host_check_caches_ignore_unit_metadata_but_bind_build_environment_and_tool() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() {
     let (root, mut config) = fixture();
     config["inputs"]["profile"] =
@@ -1263,6 +1450,7 @@ fn json_value_inputs_bind_selected_semantics_and_retain_whole_file_provenance() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality() {
     let (root, config) = host_cache_fixture(&["check.unit_cache", "check.detect"]);
     let projects = root.path().join(".chrono-harness/projects.json");
@@ -1309,6 +1497,7 @@ fn selected_cache_producers_bind_actual_actions_and_preserve_unrelated_locality(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_producer_mock_preserves_source_refresh_and_compatible_domain() {
     let (root, mut config) = host_cache_fixture(&["check.unit_cache"]);
     fs::create_dir_all(root.path().join(".git")).unwrap();
