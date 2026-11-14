@@ -14,6 +14,18 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg(verus_keep_ghost)]
+fn bounded_inputs_accept_the_limit_and_reject_the_next_byte() {
+    expect_true(policy::commands::within_bound(0, 0));
+    expect_true(!policy::commands::within_bound(1, 0));
+    expect_true(policy::commands::within_bound(65536, 65536));
+    expect_true(!policy::commands::within_bound(65537, 65536));
+    expect_true(policy::commands::within_bound(1048576, 1048576));
+    expect_true(!policy::commands::within_bound(1048577, 1048576));
+    expect_true(policy::commands::within_bound(u64::MAX, u64::MAX));
+    expect_true(!policy::commands::within_bound(u64::MAX, u64::MAX - 1));
+}
+
 fn expect_retirement_id(actual: &String, expected: &str)
     requires actual@ == expected@,
 {

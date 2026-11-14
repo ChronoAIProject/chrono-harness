@@ -4628,91 +4628,47 @@ fn staged_source_added_after_publication_prevents_disposal() {
 }
 
 #[test]
-fn historical_cli_requires_registered_producer_receipt_exclusion_and_release_evidence() {
-    if !isolated_capability_test(
-        "historical_cli_requires_registered_producer_receipt_exclusion_and_release_evidence",
-    ) {
-        return;
-    }
-    use chrono_harness::{artifact_disposal::identity, ownership::Lease, sha256};
+#[cfg(not(verus_keep_ghost))]
+fn retired_historical_inputs_preserve_unregistered_originals() {
     let h = host(256, 16);
-    let p = tree(h.path(), "historical");
-    fs::write(h.path().join(&p).join("failure"), [9; 2048]).unwrap();
-    let source = b"registered fixture producer source";
-    fs::write(h.path().join("producer.rs"), source).unwrap();
-    let receipt = json!({"schema":"fixture-producer/v1","path":p,"outcome":{"exit":101,"error":"original failure"}});
-    let raw = serde_json::to_vec(&receipt).unwrap();
-    fs::write(h.path().join("receipt.json"), &raw).unwrap();
-    let release = serde_json::to_vec(&json!({"recovery":"released"})).unwrap();
-    fs::write(h.path().join("release.json"), &release).unwrap();
-    let lease_path = ".chrono-harness/state/legacy-owner.lease";
-    let lease = Lease::acquire(&h.path().join(lease_path), None, true, false, None)
-        .unwrap()
-        .unwrap();
-    let mut policy: Value =
-        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
-    policy["historical"] = json!({"cohort":{"producer":"fixture","path":p,"producer_source":{"path":"producer.rs","sha256":sha256(source)},"receipt":{"path":"receipt.json","sha256":sha256(&raw)},"receipt_schema":"fixture-producer/v1","output_pointer":"/path","outcome_pointer":"/outcome","owner_lease":lease_path,"owner_lease_identity":lease.id(),"roots":["historical-recovery:cohort"],"release":{"receipt":{"path":"release.json","sha256":sha256(&release)},"pointer":"/recovery","expected":"released"}}});
-    fs::write(
-        h.path().join(POLICY_PATH),
-        serde_json::to_vec(&policy).unwrap(),
-    )
-    .unwrap();
-    let call = |request: Value| {
+    let path = tree(h.path(), "unregistered-original");
+    let original = h.path().join(&path).join("failure");
+    let bytes = [9; 2048];
+    fs::write(&original, bytes).unwrap();
+    for request in [
+        json!({"operation":"enroll","enrollment":"cohort","expected_identity":chrono_harness::artifact_disposal::identity(&h.path().join(&path)).unwrap()}),
+        json!({"operation":"release","enrollment":"cohort"}),
+    ] {
         fs::write(
             h.path().join("request.json"),
             serde_json::to_vec(&request).unwrap(),
         )
         .unwrap();
-        chrono_harness::dispatch(&[
+        let result = chrono_harness::dispatch(&[
             "retention",
             "--host-root",
             h.path().to_str().unwrap(),
             "--request",
             "request.json",
-        ])
-    };
-    let request = json!({"operation":"enroll","enrollment":"cohort","expected_identity":identity(&h.path().join(&p)).unwrap()});
-    assert_eq!(call(request.clone()).exit_code, 2); // Actual live legacy owner.
-    drop(lease);
-    let original_receipt = policy["historical"]["cohort"]["receipt"].clone();
-    let nested_receipt = format!("{p}/receipt.json");
-    fs::write(h.path().join(&nested_receipt), &raw).unwrap();
-    policy["historical"]["cohort"]["receipt"]["path"] = json!(nested_receipt);
+        ]);
+        assert_eq!(result.exit_code, 2, "{}", result.stderr);
+        assert!(
+            result.stderr.contains("unknown variant"),
+            "{}",
+            result.stderr
+        );
+        assert_eq!(fs::read(&original).unwrap(), bytes);
+    }
+    let mut policy: Value =
+        serde_json::from_slice(&fs::read(h.path().join(POLICY_PATH)).unwrap()).unwrap();
+    policy["historical"] = json!({});
     fs::write(
         h.path().join(POLICY_PATH),
         serde_json::to_vec(&policy).unwrap(),
     )
     .unwrap();
-    let rejected = call(request.clone());
-    assert_eq!(rejected.exit_code, 2);
-    assert!(rejected.stderr.contains("outside the disposable output"));
-    fs::remove_file(h.path().join(nested_receipt)).unwrap();
-    policy["historical"]["cohort"]["receipt"] = original_receipt;
-    fs::write(
-        h.path().join(POLICY_PATH),
-        serde_json::to_vec(&policy).unwrap(),
-    )
-    .unwrap();
-    let result = call(request);
-    assert_eq!(result.exit_code, 0, "{}", result.stderr);
-    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
-    assert_eq!(
-        call(json!({"operation":"release","enrollment":"cohort"})).exit_code,
-        0
-    );
-    let rounds = maintain_fixture_rounds_to(h.path(), 0);
-    assert_eq!(
-        rounds
-            .iter()
-            .map(|round| round["removed_logical_bytes"].as_u64().unwrap())
-            .sum::<u64>(),
-        2048
-    );
-    assert_eq!(
-        ledger(h.path())["summaries"][0]["original_outcome"]["original_outcome"]["exit"],
-        101
-    );
-    assert_eq!(fs::read(h.path().join("receipt.json")).unwrap(), raw);
+    assert!(matches!(Inventory::adopted(h.path()), Err(error) if error.contains("unknown field")));
+    assert_eq!(fs::read(&original).unwrap(), bytes);
 }
 
 #[test]
