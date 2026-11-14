@@ -586,3 +586,15 @@ AC 另有可复核的输入缺口：固定成功报告 `use-53527-17946336134117
 prepare 的成功只表示已完成登记的依赖观察和当前输入组件生产；fresh、host 无 checksum、构建脚本、native、backend／SDK 等资格缺口如实留在 observation，不授予正式资格。四项登记 raw 调查消费同一原件及实际依赖字节，缺失、漂移、歧义或错绑继续失败。raw 不要求尚未实现的 typed 资格作为永久启动门；`verified_verifier` 的 source-only guard、`ProofAdmission`、整 crate、严格 flags、lifetime、全部仓内证明义务保留。正式 DELTA 仍会拒绝缺失资格，raw 退出 0 不能代替它。
 
 新增承重逻辑和独立预期仍归原 Rust 源／配对测试及已登记的整 crate Verus 根，登记不等于已证明。适用入口为候选 bootstrap、正式 DELTA，以及现役 `chrono-worktree use` 的 prepare、raw 消费和独立验证操作；全部保留原线程、时限、输出限制及未过滤测试。新增构建、证明、IO、存储及维护成本 unknown；实际结果归 ignored 原件，不在本文手填通过。
+
+## AR：恢复分类连续性并修复现役证明源码
+
+**产品与宿主登记同时修改。** `verified_verifier` 修复证明表达式的 Vec 索引类型，以同值 UTF-8 字节表示当前 `dependency=` 前缀，并补齐参数、输入证据错误和 import 见证的证明；`verified_sources` 在原循环内证明 push 前后的已登记源码及普通文件模式保全。原执行判断、错误、source-only／typed `ProofAdmission` guard 和规格义务保留。配对独立预期保留全部原输入与行为断言，只补字面量、字节边界和递归语法的证明事实。
+
+FILEMAP 精确恢复固定基线 `71d5e0d2fb624d83ee7530582bba8e55bb47bdd7` 中、当前路径仍存在的二十项 verification：十二项 program、八项 data；原根及其操作不变。恢复现有义务不等于这些根已经成功证明，也不以空根或降为 data 绕过检查。两组变更分别由现役 Verus／Rust 操作和 canonical DELTA 验收；范围、原退出及双流由 AR 原件记录，普通测试或 raw 成功不授予正式资格。
+
+工具域仍有实质缺口。固定 Verus `f8e17045c4ac17a02e566b8997070f2eecc255be` 的类型检查先于 erasure context 初始化；默认严格域中的普通及后续生成 const 会在早期 THIR 请求中命中原断言。既有宏的双表示只处理自身输入，现有 derive 处理也不能证明 serde／tracing 生成逻辑。此次有界源码审查尚未核实支持完整普通／生成域的统一修法，没有逐常量改写、工具 guard 绕过或重跑不变输入赌绿。native 的真实 derive 类型义务、runner JSON 适配器缺失的真实模型参数及其仓内解析逻辑证明，也仍由原所有者承担，不能假托外部 IO 合同。
+
+原 runner／native 严格失败及其显式后继阻断继续保留；恢复条件是同域完整源码和生成项在原整 crate、lifetime、strict flags、两线程及预算下证明，并绑定同次实际编译产物。现有依赖 receipt、匹配组件、AC／AE 与必要失败原件继续由原保留负责方保护；不重建匹配组件、不重新下载全部工具、不清空 target。AR 诊断与验证原件供调用方和工程所有者使用，2026-11-21 复核用途，调试和验收义务结束且无使用方后再释放。
+
+证明修复、未过滤行为测试、候选 bootstrap、正式 DELTA、原生 integration→dev 和落地分别核实；本文不把局部成功记作交付。新增验证／存储与完整生命周期成本仍 unknown，完整 SPEC goal 保持 active。
