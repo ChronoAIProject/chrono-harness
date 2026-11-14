@@ -324,6 +324,9 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
         vstd::utf8::is_ascii_chars_encode_utf8("consumer.vir"@);
         vstd::utf8::is_ascii_chars_encode_utf8("root"@);
         vstd::utf8::is_ascii_chars_encode_utf8("out"@);
+        assert("--emit=link=out,dep-info=out.d"@ =~=
+            "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
+        assert(policy::verifier_arguments(args@));
     }
     let parsed = policy::parse_verifier_arguments(&args);
     expect_verifier_true(parsed.is_some());
@@ -362,7 +365,11 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
-    proof { reveal_strlit("--unknown"); reveal_strlit("--extern"); }
+    proof {
+        reveal_strlit("--unknown"); reveal_strlit("--extern");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+        vstd::utf8::is_ascii_chars_encode_utf8("--extern"@);
+    }
     let mut unknown = arguments(); unknown[7] = "--unknown".to_string();
     let rejected = policy::parse_verifier_arguments(&unknown);
     expect_verifier_true(rejected.is_none());
@@ -416,8 +423,11 @@ fn named_argument_identity_and_payload_boundaries_are_independent() {
         vstd::utf8::is_ascii_chars_encode_utf8("ab=x"@);
         vstd::utf8::is_ascii_chars_encode_utf8("a=\0x"@);
         assert('路' as u32 == 36335 && '径' as u32 == 24452);
+        assert(vstd::utf8::encode_scalar(97) == seq![97u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(61) == seq![61u8]) by (compute);
         assert(vstd::utf8::encode_scalar(36335) == seq![232u8,183,175]) by (compute);
         assert(vstd::utf8::encode_scalar(24452) == seq![229u8,190,132]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 5);
         assert(vstd::utf8::encode_utf8("a=路径"@) =~= seq![97u8,61,232,183,175,229,190,132]);
     }
     let equals_in_payload = policy::valid_named_invocation_value("a=x=y".as_bytes());
@@ -527,6 +537,7 @@ fn extra_filtered_or_rebound_verifier_arguments_are_rejected() {
     proof {
         reveal_strlit("--compile"); reveal_strlit("--verify-function=one");
         reveal_strlit("out"); reveal_strlit("other");
+        reveal_strlit("-Zchecksum-hash-algorithm=sha256");
         reveal_strlit("--no-cheating"); reveal_strlit("--no-verify");
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
         reveal_strlit("--emit=link=out,dep-info=out.d");
@@ -1262,6 +1273,7 @@ fn changing_one_root_preserves_other_roots_scope_but_source_changes_require_both
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
         reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("file:r"); reveal_strlit("file:R");
         reveal_strlit("proof"); reveal_strlit("other");
+        vstd::utf8::is_ascii_chars_encode_utf8("r"@);
         assert("file:file"@ =~= "file:"@ + "file"@);
         assert("file:r"@ =~= "file:"@ + "r"@);
         assert("file:R"@ =~= "file:"@ + "R"@);
