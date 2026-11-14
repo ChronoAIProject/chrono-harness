@@ -21,6 +21,12 @@ harness 及原 mock 可执行文件的环境输入，不通过 cfg 隐藏测试�
 规划及记录原调用，扩展上下文、extern 搜索、VIR、宏和传递输入尚未具备完整资格时，
 原 source-only 判法仍拒绝授予 ProofAdmission。这些缺口不因迁移而消失。
 
+直接 runner 操作当前读取 native bootstrap 的依赖目录；原 JSON 调查读取
+runner Cargo 实例及其匹配的动态组件。二者不是同一个编译上下文，不能互相替代
+来源证明。直接调用尚未完成原 JSON 生产链的迁移、完整来源资格或成功消费；
+不得用它的计划声明宣称上述义务已完成。retention.rs 与 partition.rs 的实际
+状态维护同时登记整个 runner 库根，原 release 辅助根只证明其自身覆盖的逻辑。
+
 验收覆盖同源 verifier 及独立预期、native cargo 独立预期、retention 的现役证明根、
 原未过滤 runner／native 操作、候选 bootstrap 和 canonical；两端明确依赖继续由
 FILEMAP 选取。不能把局部原件或语法通过扩大为完整 SPEC 证明；实际失败及尚未

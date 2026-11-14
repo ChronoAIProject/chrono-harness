@@ -316,6 +316,8 @@ fn test_harness_and_extern_search_preserve_the_full_input_gate() {
         assert(policy::extension_value_valid(args@, 8, 10));
         assert(policy::fresh_extension(args@, 7));
         assert(policy::fresh_extension(args@, 8));
+        reveal_with_fuel(policy::invocation_extensions, 4);
+        reveal_with_fuel(policy::interpreted_option_sequence, 4);
         assert(policy::verifier_arguments(args@));
     }
     let parsed = policy::parse_verifier_arguments(&args);
