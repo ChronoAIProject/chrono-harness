@@ -978,7 +978,12 @@ impl Host {
     pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
         self.auto_command_at(&self.root, command, extra)
     }
-    fn auto_command_at(&self, invoking: &Path, command: &str, extra: &[&str]) -> Command {
+    pub(super) fn auto_command_at(
+        &self,
+        invoking: &Path,
+        command: &str,
+        extra: &[&str],
+    ) -> Command {
         let mut c = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
         c.current_dir(invoking)
             .env_clear()

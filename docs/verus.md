@@ -1,5 +1,25 @@
 # Verus 实施范围
 
+## 显式维护保留真实调用者
+
+`round` 将实际调用根传给 `run_round`；同源 Verus `maintenance_exclusions` 构造
+精确的 `[coordinator, invoking]`，证明完整值、顺序和重复项均保留。inventory 观察与
+`drain_entries` 消费同一个集合，避免从 linked worktree 发起维护时只排除协调者。
+原 cache-only 处置合同继续由现役清理所有者判断，本范围不扩大缓存排除。
+
+独立 Verus 预期覆盖不同／重复根、整数端点、空串、Unicode、NUL 和换行。真实回归从
+已过删除年龄的 linked worktree 发起维护，核调用根、唯一源码及 HEAD 不变，并核另一个
+独立过期检出确实移除。回归的准入顺序、错误传播、判定及失败现场保留由同源 Verus
+驱动，独立反例分别改变退出码、报告调用根、源码、HEAD、兄弟检出状态和观察错误。
+沿用两个生命周期证明根及原未过滤 core／adoption 行为入口，不增加证明参数或预算。
+
+路径适配明确采用 Rust `PathBuf::clone`／`Path::to_path_buf` 保留路径值的接口合同。
+真实 fixture 复用已有创建、年龄等待和 CLI 适配；进程结果及 JSON 字段读取沿原接口，
+文件观察采用 `read_to_string` 和 `try_exists` 的实际结果，Git HEAD 沿原登记 Git 接口。
+这些接口不为仓内函数授予 `external_body` 或 assume 例外；原 fixture 内部实现、完整维护
+事务和真实文件系统快照仍有各自的证明义务。新增生产逻辑和回归驱动均在 Verus 内，
+没有新增运行时依赖、外部假设包装器或证明入口；完整构建、CI、运行和存储成本未测。
+
 ## 维护激活 socket 的完整准入顺序
 
 `automatic/service.rs::validate_activation` 直接消费同源 Verus
