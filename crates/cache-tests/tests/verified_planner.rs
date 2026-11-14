@@ -48,6 +48,207 @@ struct RecoveryContentObservation {
     status: String,
 }
 
+type ArtifactPlanTrace = Vec<(u8, usize, String, String)>;
+
+fn artifact_plan_validate(mut trace: ArtifactPlanTrace, path: &str,
+    fail_at: usize, io_error: bool, raw_error: &str)
+    -> (out: (ArtifactPlanTrace, Result<bool, String>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 0, out.0@.last().1 == trace@.len() / 2,
+        out.0@.last().2@ == path@, out.0@.last().3@ == ""@,
+        if trace@.len() / 2 == fail_at {
+            if io_error { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+            else { out.1 == Ok::<bool, String>(false) }
+        } else { out.1 == Ok::<bool, String>(true) },
+{
+    let index = trace.len() / 2;
+    let ghost previous = trace@;
+    trace.push((0, index, path.to_string(), "".to_string()));
+    assert(trace@.drop_last() =~= previous);
+    let result = if index == fail_at {
+        if io_error { Err(raw_error.to_string()) } else { Ok(false) }
+    } else { Ok(true) };
+    (trace, result)
+}
+
+fn artifact_plan_append(mut trace: ArtifactPlanTrace, index: usize,
+    path: &str, status: &'static str) -> (out: ArtifactPlanTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == 1, out@.last().1 == index,
+        out@.last().2@ == path@, out@.last().3@ == status@,
+{
+    let ghost previous = trace@;
+    trace.push((1, index, path.to_string(), status.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn recovery_artifact_plan_case(paths: &[Option<&str>], stop: usize,
+    io_error: bool, raw_error: &str)
+    requires paths.len() <= 3, stop <= paths.len(),
+        forall|i: int| 0 <= i < stop ==> paths[i] is Some,
+{
+    let validate = |trace, path: &str|
+        -> (out: (ArtifactPlanTrace, Result<bool, String>))
+        ensures artifact_plan_validate.ensures((trace, path, stop, io_error, raw_error), out),
+    { artifact_plan_validate(trace, path, stop, io_error, raw_error) };
+    let initial = ArtifactPlanTrace::new();
+    let ghost source = initial;
+    let (trace, result) = policy::collect_recovery_artifacts(initial, Some(paths),
+        &validate, &artifact_plan_append);
+    proof {
+        let states = choose|states: Seq<ArtifactPlanTrace>|
+            #[trigger] policy::recovery_artifact_prefix(paths@, states, source,
+                &validate, &artifact_plan_append)
+            && match result {
+                Ok(()) => states.len() == paths.len() + 1 && trace == states.last(),
+                Err(error) => states.len() <= paths.len()
+                    && policy::recovery_artifact_step(states.last(), (states.len() - 1) as usize,
+                        paths@[states.len() - 1], &validate, &artifact_plan_append,
+                        (trace, Err::<(), String>(error))),
+            };
+        assert forall|i: int| 0 <= i < states.len() - 1 implies
+            states[i + 1]@.len() == states[i]@.len() + 2
+            && states[i]@.len() / 2 != stop
+            && states[i + 1]@.drop_last().drop_last() == #[trigger] states[i]@
+            && states[i + 1]@[states[i]@.len() as int].0 == 0
+            && states[i + 1]@[states[i]@.len() as int + 1].0 == 1
+            && states[i + 1]@[states[i]@.len() as int + 1].1 == i
+            && (match paths@[i] { Some(path) =>
+                states[i + 1]@[states[i]@.len() as int].2@ == path@
+                && states[i + 1]@[states[i]@.len() as int + 1].2@ == path@,
+                None => false })
+            && states[i + 1]@[states[i]@.len() as int + 1].3@ == "pending"@ by {
+            assert(policy::recovery_artifact_step(states[i], i as usize, paths@[i],
+                &validate, &artifact_plan_append, (states[i + 1], Ok::<(), String>(()))));
+            let path = paths@[i].unwrap();
+            let (observed, valid) = choose|observed: ArtifactPlanTrace, valid: Result<bool, String>|
+                #[trigger] validate.ensures((states[i], path), (observed, valid))
+                && valid == Ok::<bool, String>(true)
+                && artifact_plan_append.ensures((observed, i as usize, path, "pending"), states[i + 1]);
+        }
+        let count = states.len() - 1;
+        if count > 0 { assert(states[1]@.len() == 2); }
+        if count > 1 { assert(states[2]@.len() == 4); }
+        if count > 2 { assert(states[3]@.len() == 6); }
+        assert(states.last()@.len() == 2 * count);
+        if count > stop {
+            assert(states[stop as int]@.len() == 2 * stop);
+            assert(states[stop as int]@.len() / 2 != stop);
+            assert(false);
+        }
+        assert(count <= stop);
+        match &result {
+            Ok(()) => { assert(stop == paths.len()); },
+            Err(error) => {
+                if count < stop {
+                    assert(paths@[count] is Some);
+                    assert(false);
+                }
+                assert(count == stop);
+                match paths@[count] {
+                    None => {
+                        assert(trace == states.last());
+                        assert(error@ == "E_CACHE_RECOVERY: artifact path"@);
+                    },
+                    Some(path) => {
+                        assert(trace@.len() == 2 * stop + 1);
+                        assert(trace@.drop_last() == states.last()@);
+                        assert(trace@.last().0 == 0 && trace@.last().2@ == path@);
+                        assert(error@ == if io_error { raw_error@ }
+                            else { "E_CACHE_RECOVERY: only registered host artifacts may be discarded"@ });
+                    },
+                }
+            },
+        }
+        assert forall|j: int| 0 <= j < stop implies
+            #[trigger] trace@[2 * j].0 == 0 && trace@[2 * j + 1].0 == 1
+            && trace@[2 * j + 1].1 == j
+            && trace@[2 * j + 1].3@ == "pending"@
+            && (match paths@[j] { Some(path) => trace@[2 * j].2@ == path@
+                && trace@[2 * j + 1].2@ == path@, None => false }) by {
+            assert(states[j + 1]@[2 * j].0 == 0);
+            assert(states[j + 1]@[2 * j + 1].0 == 1);
+            if j + 2 <= count {
+                assert(states[j + 2]@.drop_last().drop_last() == states[j + 1]@);
+            }
+            if j + 3 <= count {
+                assert(states[j + 3]@.drop_last().drop_last() == states[j + 2]@);
+            }
+        }
+    }
+    if stop == paths.len() {
+        expect_cache_true(result.is_ok());
+        expect_cache_true(trace.len() == 2 * stop);
+    } else {
+        let expected = match paths[stop] {
+            None => "E_CACHE_RECOVERY: artifact path",
+            Some(_) => if io_error { raw_error }
+                else { "E_CACHE_RECOVERY: only registered host artifacts may be discarded" },
+        };
+        match result {
+            Err(error) => expect_restore_text(error.as_str(), expected),
+            Ok(()) => expect_cache_true(false),
+        }
+        expect_cache_true(trace.len() == 2 * stop + if paths[stop].is_some() { 1 } else { 0 });
+    }
+    let mut i = 0;
+    while i < stop
+        invariant i <= stop, stop <= 3, 2 * stop <= trace.len(), stop <= paths.len(),
+            forall|j: int| 0 <= j < stop ==> #[trigger] trace@[2 * j].0 == 0
+                && trace@[2 * j + 1].0 == 1 && trace@[2 * j + 1].1 == j
+                && trace@[2 * j + 1].3@ == "pending"@
+                && (match paths@[j] { Some(path) => trace@[2 * j].2@ == path@
+                    && trace@[2 * j + 1].2@ == path@, None => false }),
+        decreases stop - i,
+    {
+        expect_cache_true(trace[2 * i].0 == 0 && trace[2 * i + 1].0 == 1);
+        expect_cache_true(trace[2 * i + 1].1 == i);
+        expect_restore_text(trace[2 * i + 1].3.as_str(), "pending");
+        let path = paths[i].unwrap();
+        expect_restore_text(trace[2 * i].2.as_str(), path);
+        expect_restore_text(trace[2 * i + 1].2.as_str(), path);
+        i += 1;
+    }
+}
+
+#[test]
+fn recovery_artifact_collection_preserves_order_duplicates_and_full_paths() {
+    recovery_artifact_plan_case(&[], 0, false, "unused");
+    recovery_artifact_plan_case(&[Some("")], 1, false, "unused");
+    recovery_artifact_plan_case(&[Some("path/λ\0\n"), Some(""), Some("path/λ\0\n")],
+        3, false, "unused");
+}
+
+#[test]
+fn recovery_artifact_collection_stops_before_missing_and_rejected_paths() {
+    recovery_artifact_plan_case(&[None, Some("later")], 0, true, "must not be read");
+    recovery_artifact_plan_case(&[Some("first"), None, Some("later")], 1, false, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("path/λ\0\n"), None], 2, true, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("blocked"), None], 0, false, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("blocked"), None], 1, false, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("second"), Some("blocked")], 2, false, "unused");
+}
+
+#[test]
+fn recovery_artifact_collection_preserves_first_io_error_without_appending_it() {
+    recovery_artifact_plan_case(&[Some("first"), None], 0, true, "");
+    recovery_artifact_plan_case(&[Some("first"), Some("path/λ\0\n"), None], 1, true, "error/λ\0\n");
+    recovery_artifact_plan_case(&[Some("first"), Some("second"), Some("third")], 2, true, "full error");
+}
+
+#[test]
+fn recovery_artifact_collection_rejects_missing_object_without_callbacks() {
+    let validate = |trace, path: &str| artifact_plan_validate(trace, path, 0, true, "unused");
+    let (trace, result) = policy::collect_recovery_artifacts(ArtifactPlanTrace::new(), None,
+        &validate, &artifact_plan_append);
+    expect_cache_true(trace.is_empty());
+    match result {
+        Err(error) => expect_restore_text(error.as_str(), "E_CACHE_RECOVERY: artifacts missing"),
+        Ok(()) => expect_cache_true(false),
+    }
+}
+
 fn recovery_content_verify(mut trace: Vec<(u8, String)>, key: &str,
     payload: &str, status: &str, error: Option<&str>)
     -> (out: (Vec<(u8, String)>, Result<RecoveryContentObservation, String>))

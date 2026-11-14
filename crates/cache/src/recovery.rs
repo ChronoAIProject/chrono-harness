@@ -471,6 +471,177 @@ pub fn select_recovery_entry<S, T, O, I, R>(
     out
 }
 
+pub open spec fn recovery_artifact_step<S, V, A>(initial: S, index: usize,
+    path: Option<&str>, validate: &V, append: &A, out: (S, Result<(), String>)) -> bool
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+{
+    match path {
+        None => out.0 == initial && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: artifact path"@,
+            _ => false,
+        },
+        Some(path) => exists|observed: S, result: Result<bool, String>|
+            #[trigger] validate.ensures((initial, path), (observed, result))
+            && match result {
+                Err(error) => out == (observed, Err::<(), String>(error)),
+                Ok(false) => out.0 == observed && match out.1 {
+                    Err(error) => error@ ==
+                        "E_CACHE_RECOVERY: only registered host artifacts may be discarded"@,
+                    _ => false,
+                },
+                Ok(true) => append.ensures((observed, index, path, "pending"), out.0)
+                    && out.1 == Ok::<(), String>(()),
+            },
+    }
+}
+
+fn collect_recovery_artifact<S, V, A>(state: S, index: usize, path: Option<&str>,
+    validate: &V, append: &A) -> (out: (S, Result<(), String>))
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+    requires forall|state: S, path: &str| validate.requires((state, path)),
+        forall|state: S, index: usize, path: &str, status: &'static str|
+            append.requires((state, index, path, status)),
+    ensures recovery_artifact_step(state, index, path, validate, append, out),
+{
+    let path = match path {
+        Some(path) => path,
+        None => return (state, Err("E_CACHE_RECOVERY: artifact path".to_string())),
+    };
+    let ghost initial = state;
+    let (state, result) = validate(state, path);
+    let ghost observed = state;
+    let ghost original = result;
+    let out = match result {
+        Err(error) => (state, Err(error)),
+        Ok(false) => (state, Err(
+            "E_CACHE_RECOVERY: only registered host artifacts may be discarded".to_string())),
+        Ok(true) => (append(state, index, path, "pending"), Ok(())),
+    };
+    assert(validate.ensures((initial, path), (observed, original)));
+    out
+}
+
+pub open spec fn recovery_artifact_prefix<S, V, A>(paths: Seq<Option<&str>>,
+    states: Seq<S>, initial: S, validate: &V, append: &A) -> bool
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+{
+    0 < states.len() <= paths.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] recovery_artifact_step(states[i], i as usize, paths[i],
+                validate, append, (states[i + 1], Ok::<(), String>(())))
+}
+
+/// 顺序验证并登记完整路径；首错保留原状态和错误，不接触后续项。
+pub fn collect_recovery_artifacts<S, V, A>(source: S, artifacts: Option<&[Option<&str>]>,
+    validate: &V, append: &A) -> (out: (S, Result<(), String>))
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+    requires forall|state: S, path: &str| validate.requires((state, path)),
+        forall|state: S, index: usize, path: &str, status: &'static str|
+            append.requires((state, index, path, status)),
+    ensures match artifacts {
+        None => out.0 == source && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: artifacts missing"@,
+            _ => false,
+        },
+        Some(paths) => exists|states: Seq<S>|
+            #[trigger] recovery_artifact_prefix(paths@, states, source, validate, append)
+            && match out.1 {
+                Ok(()) => states.len() == paths.len() + 1 && out.0 == states.last(),
+                Err(error) => states.len() <= paths.len()
+                    && recovery_artifact_step(states.last(), (states.len() - 1) as usize,
+                        paths@[states.len() - 1], validate, append,
+                        (out.0, Err::<(), String>(error))),
+            },
+    },
+{
+    let paths = match artifacts {
+        Some(paths) => paths,
+        None => return (source, Err("E_CACHE_RECOVERY: artifacts missing".to_string())),
+    };
+    let mut state = source;
+    let ghost states = seq![source];
+    let mut i = 0;
+    while i < paths.len()
+        invariant i <= paths.len(), states.len() == i + 1, states.last() == state,
+            artifacts == Some(paths),
+            recovery_artifact_prefix(paths@, states, source, validate, append),
+            forall|state: S, path: &str| validate.requires((state, path)),
+            forall|state: S, index: usize, path: &str, status: &'static str|
+                append.requires((state, index, path, status)),
+        decreases paths.len() - i,
+    {
+        let (next, result) = collect_recovery_artifact(state, i, paths[i], validate, append);
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(out.1 == Err::<(), String>(error));
+                assert(recovery_artifact_prefix(paths@, states, source, validate, append));
+                assert(states.len() <= paths@.len());
+                assert(recovery_artifact_step(states.last(), (states.len() - 1) as usize,
+                    paths@[states.len() - 1], validate, append,
+                    (out.0, Err::<(), String>(error))));
+                assert(exists|history: Seq<S>|
+                    #[trigger] recovery_artifact_prefix(paths@, history, source, validate, append)
+                    && match out.1 {
+                        Ok(()) => history.len() == paths.len() + 1 && out.0 == history.last(),
+                        Err(error) => history.len() <= paths.len()
+                            && recovery_artifact_step(history.last(), (history.len() - 1) as usize,
+                                paths@[history.len() - 1], validate, append,
+                                (out.0, Err::<(), String>(error))),
+                    });
+                assert(artifacts is Some);
+                assert(artifacts->Some_0 == paths);
+                assert(match artifacts {
+                    None => false,
+                    Some(input) => exists|history: Seq<S>|
+                        #[trigger] recovery_artifact_prefix(input@, history, source, validate, append)
+                        && match out.1 {
+                            Ok(()) => history.len() == input.len() + 1 && out.0 == history.last(),
+                            Err(error) => history.len() <= input.len()
+                                && recovery_artifact_step(history.last(), (history.len() - 1) as usize,
+                                    input@[history.len() - 1], validate, append,
+                                    (out.0, Err::<(), String>(error))),
+                        },
+                });
+                return out;
+            },
+            Ok(()) => {
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] recovery_artifact_step(states[j], j as usize, paths@[j],
+                            validate, append, (states[j + 1], Ok::<(), String>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(recovery_artifact_step(previous[j], j as usize, paths@[j],
+                                validate, append, (previous[j + 1], Ok::<(), String>(()))) );
+                        }
+                    }
+                }
+                state = next;
+            },
+        }
+        i += 1;
+    }
+    let out = (state, Ok(()));
+    assert(out.1 == Ok::<(), String>(()));
+    assert(states.len() == paths@.len() + 1 && out.0 == states.last());
+    assert(exists|history: Seq<S>|
+        #[trigger] recovery_artifact_prefix(paths@, history, source, validate, append)
+        && match out.1 {
+            Ok(()) => history.len() == paths.len() + 1 && out.0 == history.last(),
+            Err(error) => history.len() <= paths.len()
+                && recovery_artifact_step(history.last(), (history.len() - 1) as usize,
+                    paths@[history.len() - 1], validate, append,
+                    (out.0, Err::<(), String>(error))),
+        });
+    out
+}
+
 pub type RecoveryRemovalError = (&'static str, String, &'static str, String);
 
 pub open spec fn recovery_removal_step<S, R, C, F>(
@@ -1482,28 +1653,34 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 }
                 continue;
             }
-            let artifacts: BTreeMap<_, _> = cache["artifacts"]
-                .as_object()
-                .ok_or("E_CACHE_RECOVERY: artifacts missing")?
-                .iter()
-                .collect();
-            for (_, artifact) in artifacts {
-                let path = artifact["path"]
-                    .as_str()
-                    .ok_or("E_CACHE_RECOVERY: artifact path")?;
-                let target = super::path(&root, path)?;
-                if !target.starts_with(&root) {
-                    return Err(
-                        "E_CACHE_RECOVERY: only registered host artifacts may be discarded".into(),
-                    );
-                }
-                let position = report["caches"][id]["artifacts"].as_array().unwrap().len();
-                report["caches"][id]["artifacts"]
-                    .as_array_mut()
-                    .unwrap()
-                    .push(json!({"path":path,"status":"pending"}));
-                paths.push((id.clone(), position, path.to_owned()));
-            }
+            let artifacts: Option<Vec<_>> = cache["artifacts"].as_object().map(|artifacts| {
+                artifacts
+                    .values()
+                    .map(|artifact| artifact["path"].as_str())
+                    .collect()
+            });
+            let ((updated, selected), collected) = collect_recovery_artifacts(
+                (std::mem::take(&mut report), std::mem::take(&mut paths)),
+                artifacts.as_deref(),
+                &|state, path| {
+                    let valid = super::path(&root, path).map(|target| target.starts_with(&root));
+                    (state, valid)
+                },
+                &|(mut report, mut paths): (Value, Vec<(String, usize, String)>),
+                  position,
+                  path,
+                  status| {
+                    report["caches"][id]["artifacts"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(json!({"path":path,"status":status}));
+                    paths.push((id.clone(), position, path.to_owned()));
+                    (report, paths)
+                },
+            );
+            report = updated;
+            paths = selected;
+            collected?;
         }
         // Validate the complete selected set before the first removal, and
         // publish the original plan/restore binding before touching any output.
