@@ -24,6 +24,25 @@ fn current_root_keeps_its_direct_original_boundary() {
     }
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn discovered_rootless_parent_can_retire_without_expanding_all_originals() {
+    let actual = policy::finalized_expansion(false, Some("leaf"), "parent", 0, 0);
+    match actual {
+        policy::FinalizedExpansion::RetireFrontier => {},
+        _ => require_frontier_expectation(false),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn chosen_parent_preserves_every_other_observed_original() {
+    proof {
+        reveal_strlit("parent"); reveal_strlit("leaf");
+        assert("parent"@[0] != "leaf"@[0]);
+    }
+    require_frontier_expectation(!policy::preserve_frontier_original("parent", "parent"));
+    require_frontier_expectation(policy::preserve_frontier_original("leaf", "parent"));
+}
+
 
 }
 
