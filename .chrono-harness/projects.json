@@ -4739,6 +4739,14 @@
             "exec /usr/bin/patch -f -F 0 -p1 -d .chrono-harness/state/verus-tool-contract-20261114 < .chrono-harness/experiments/verus-tool-contract/vstd.patch"
           ]
         },
+        "verus-contract-repair-self-alias": {
+          "operation": "investigate.verus-tool-contract.repair-self-alias",
+          "tool": "bash",
+          "argv": [
+            "-c",
+            "exec /usr/bin/patch -f -F 0 -b -V simple -z .pre-e0254 -p1 -d .chrono-harness/state/verus-tool-contract-20261114 < .chrono-harness/experiments/verus-tool-contract/vstd-repair-self-alias.patch"
+          ]
+        },
         "verus-contract-build": {
           "operation": "investigate.verus-tool-contract.build",
           "tool": "verus",
