@@ -1,12 +1,82 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_lifecycle::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_history_keeps_unknown_future_live_and_unexpired_records() {
+    let boundary = policy::retire_history(true, true, Some(100), 110, 10, false);
+    let young = policy::retire_history(true, true, Some(100), 109, 10, false);
+    let capacity = policy::retire_history(true, true, Some(100), 100, 10, true);
+    let unknown = policy::retire_history(true, true, None, 110, 0, true);
+    let future = policy::retire_history(true, true, Some(111), 110, 0, true);
+    let active = policy::retire_history(false, true, Some(100), 110, 0, true);
+    let busy = policy::retire_history(true, false, Some(100), 110, 0, true);
+    let maximum = policy::retire_history(true, true, Some(u64::MAX), u64::MAX, 1, false);
+    expect(boundary && !young && capacity && !unknown && !future && !active && !busy && !maximum);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cache_history_preserves_current_generations_and_unknown_completion() {
+    let expired = policy::retire_cache_history(true, 1, 2, true, Some(100), 110, 10, false);
+    let capacity = policy::retire_cache_history(true, 1, 2, true, Some(100), 100, 10, true);
+    let current = policy::retire_cache_history(true, 2, 2, true, Some(100), 110, 0, true);
+    let future = policy::retire_cache_history(true, 3, 2, true, Some(100), 110, 0, true);
+    let unknown = policy::retire_cache_history(true, 1, 2, true, None, 110, 0, true);
+    let incomplete = policy::retire_cache_history(false, 1, 2, true, Some(100), 110, 0, true);
+    let busy = policy::retire_cache_history(true, 1, 2, false, Some(100), 110, 0, true);
+    expect(expired && capacity && !current && !future && !unknown && !incomplete && !busy);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn reusable_outputs_wait_for_release_and_evidence_keeps_its_own_permission() {
+    use policy::Disposition::*;
+    expect(policy::select_artifact(&Dispose, false, false));
+    expect(policy::select_artifact(&Dispose, true, true));
+    expect(!policy::select_artifact(&FinishDispose, false, false));
+    expect(!policy::select_artifact(&FinishDispose, false, true));
+    expect(policy::select_artifact(&FinishDispose, true, false));
+    expect(policy::select_artifact(&FinishDispose, true, true));
+    expect(!policy::select_artifact(&Retain, false, false));
+    expect(!policy::select_artifact(&Retain, true, true));
+    expect(!policy::select_artifact(&EvidenceRetain, true, false));
+    expect(policy::select_artifact(&EvidenceRetain, false, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_requests_bind_only_the_requested_cache_generation() {
+    expect(!policy::reusable_release(false, 7, None));
+    expect(policy::reusable_release(false, 7, Some(7)));
+    expect(!policy::reusable_release(false, 8, Some(7)));
+    expect(!policy::reusable_release(false, 7, Some(8)));
+    expect(!policy::reusable_release(false, u64::MAX, None));
+    expect(!policy::reusable_release(false, u64::MAX, Some(0)));
+    expect(policy::reusable_release(false, u64::MAX, Some(u64::MAX)));
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
+#[cfg(not(verus_keep_ghost))]
 fn main_host() -> Host {
     main_host_mode("rebuild-evidence")
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn reusable_cache_survives_separate_operations_until_explicit_release() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -87,6 +157,7 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -130,6 +201,7 @@ fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_terminal_handoff_rotates_completed_cache_generations() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -199,6 +271,7 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
     assert!(target.join(".chrono-harness/state/evidence").is_file());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
     let h = main_host();
     adopt_lifecycle_retention(&h);
@@ -222,6 +295,7 @@ fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cache_history_releases_old_generations_and_their_owned_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -343,6 +417,7 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -421,9 +496,11 @@ fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     assert_eq!(remaining[1], protected[2]);
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn main_host_mode(mode: &str) -> Host {
     configure_main(Host::new("payload"), mode)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn configure_main(h: Host, mode: &str) -> Host {
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, mode);
@@ -436,6 +513,7 @@ pub(super) fn configure_main(h: Host, mode: &str) -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 const CARGO_FILES: &[(&str, &[u8])] = &[
     (
         "producer/Cargo.toml",
@@ -463,6 +541,7 @@ const CARGO_FILES: &[(&str, &[u8])] = &[
     ),
 ];
 
+#[cfg(not(verus_keep_ghost))]
 fn cargo_host() -> Host {
     let h = configure_main(Host::retained("payload"), "bounded-cargo");
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
@@ -505,6 +584,7 @@ fn cargo_host() -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cargo_plan(root: &Path, hold: Option<&str>) {
     fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
     fs::write(root.join(".chrono-harness/state/cargo-plan.json"), serde_json::to_vec(&value!({
@@ -512,11 +592,13 @@ fn cargo_plan(root: &Path, hold: Option<&str>) {
     })).unwrap()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cost(root: &Path) -> Value {
     json(&fs::read(root.join(".chrono-harness/state/cargo-cost.json")).unwrap()).unwrap()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -629,6 +711,7 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -670,6 +753,7 @@ fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -706,6 +790,7 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second_consumer() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -770,6 +855,7 @@ fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_objects() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -811,6 +897,7 @@ fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_o
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -857,6 +944,7 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -922,6 +1010,7 @@ fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -952,6 +1041,7 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_cleanup() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -980,6 +1070,7 @@ fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_clean
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1009,6 +1100,7 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     assert_eq!(code, 0, "{used} {error}");
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn historical_host() -> Host {
     let h = main_host();
     for path in ["output λ", "nested/cache"] {
@@ -1019,6 +1111,7 @@ fn historical_host() -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn custody_plan(h: &Host, artifacts: &[&str]) -> String {
     let path = ".chrono-harness/state/current-custody.json";
     let plan = value!({"schema":"chrono-main-cache-custody/v1", "path":h.root,
@@ -1029,6 +1122,7 @@ fn custody_plan(h: &Host, artifacts: &[&str]) -> String {
     path.into()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn custody(h: &Host, plan: &str) -> (i32, Value, String) {
     h.auto(
         "migrate",
@@ -1037,6 +1131,7 @@ fn custody(h: &Host, plan: &str) -> (i32, Value, String) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_historical_custody_reclaims_selected_outputs_and_preserves_original_enrollment() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1074,6 +1169,7 @@ fn main_historical_custody_reclaims_selected_outputs_and_preserves_original_enro
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_historical_custody_requires_exclusion_explicit_scope_and_source_protection() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1111,6 +1207,7 @@ fn main_historical_custody_requires_exclusion_explicit_scope_and_source_protecti
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_historical_custody_publication_retry_and_partial_disposal_preserve_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;

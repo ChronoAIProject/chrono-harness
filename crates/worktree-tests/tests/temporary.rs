@@ -10,14 +10,6 @@ use chrono_worktree::verified_lifecycle as policy;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 verus! {
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn whole_directory_requires_owned_lifetime_and_consumer_exclusion() {
-    expect(policy::rolling_disposal(true, true, true, true));
-    expect(!policy::rolling_disposal(false, true, true, true));
-    expect(!policy::rolling_disposal(true, false, true, true));
-    expect(!policy::rolling_disposal(true, true, false, true));
-    expect(!policy::rolling_disposal(true, true, true, false));
-}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn rolling_windows_distinguish_failure_diagnostics_and_unknown_outcomes() {

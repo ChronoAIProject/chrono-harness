@@ -1,7 +1,11 @@
 #![cfg(unix)]
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+use super::policy::artifact_disposal as disposal;
+#[cfg(verus_keep_ghost)]
 use super::policy::maintenance_signal as signal;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::artifact_disposal as disposal;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -9,6 +13,14 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn observing_a_socket_requires_both_the_observer_and_socket_kind() {
+    if !disposal::observable_socket(true, true)
+        || disposal::observable_socket(false, true)
+        || disposal::observable_socket(true, false)
+        || disposal::observable_socket(false, false) { panic!(); }
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn hint_length_keeps_the_original_nonempty_64_byte_boundary() {
     if signal::valid_hint_length(0) || !signal::valid_hint_length(1)

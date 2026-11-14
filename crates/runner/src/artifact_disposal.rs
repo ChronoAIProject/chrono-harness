@@ -1,11 +1,26 @@
 //! Physical artifact effects shared by lifecycle and explicit output retention owners.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+verus! {
+/// Socket observation does not authorize a strict footprint or any effect.
+pub fn observable_socket(observe_sockets: bool, is_socket: bool) -> (allowed: bool)
+    ensures allowed == (observe_sockets && is_socket),
+{ observe_sockets && is_socket }
+}
+
+#[cfg(not(verus_keep_ghost))]
 use serde::Serialize;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 /// Publish an identity already durably enrolled at an exact staging slot.
 /// Both supported kernel operations refuse to replace an occupied destination.
+#[cfg(not(verus_keep_ghost))]
 pub fn publish_entry(staged: &Path, destination: &Path) -> Result<(), String> {
     use std::{ffi::CString, os::unix::ffi::OsStrExt};
     let source = CString::new(staged.as_os_str().as_bytes()).map_err(|e| e.to_string())?;
@@ -32,6 +47,7 @@ pub fn publish_entry(staged: &Path, destination: &Path) -> Result<(), String> {
     }
 }
 /// Identity of an exact entry; links are identities of the link, never its target.
+#[cfg(not(verus_keep_ghost))]
 pub fn identity(path: &Path) -> Result<String, String> {
     let m = fs::symlink_metadata(path).map_err(|e| e.to_string())?;
     #[cfg(unix)]
@@ -59,6 +75,7 @@ pub fn identity(path: &Path) -> Result<String, String> {
     }
 }
 /// Parent resolution excludes links. A final internal link is unlinked without traversal.
+#[cfg(not(verus_keep_ghost))]
 pub fn entry_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     crate::relative_path(relative)?;
     let path = Path::new(relative);
@@ -71,6 +88,7 @@ pub fn entry_path(root: &Path, relative: &str) -> Result<PathBuf, String> {
     Ok(physical.join(path.file_name().ok_or("artifact name")?))
 }
 /// Exactly one unlink/rmdir effect. The owner supplies live policy/reference/exclusion checks.
+#[cfg(not(verus_keep_ghost))]
 pub fn dispose_entry(
     root: &Path,
     relative: &str,
@@ -94,6 +112,7 @@ pub fn dispose_entry(
     .map_err(|e| e.to_string())
 }
 /// Legacy all-at-once contract; output retention uses dispose_entry for resumable bounds.
+#[cfg(not(verus_keep_ghost))]
 pub fn dispose_directory(path: &Path) -> Result<(), String> {
     fs::remove_dir_all(path).map_err(|e| e.to_string())
 }
@@ -101,6 +120,7 @@ pub fn dispose_directory(path: &Path) -> Result<(), String> {
 /// Reuse the Git fact owner to protect both committed and staged source. A
 /// directory policy is never permission to remove a newly staged descendant.
 /// Standalone fixture hosts without a Git owner have no source/index to query.
+#[cfg(not(verus_keep_ghost))]
 pub fn source_safe(root: &Path, relative: &str) -> Result<(), String> {
     crate::relative_path(relative)?;
     match fs::symlink_metadata(root.join(".git")) {
@@ -147,6 +167,7 @@ pub fn source_safe(root: &Path, relative: &str) -> Result<(), String> {
 }
 
 #[derive(Default, Serialize)]
+#[cfg(not(verus_keep_ghost))]
 pub struct ArtifactFootprint {
     pub file_entries: u64,
     pub logical_bytes: u64,
@@ -154,6 +175,7 @@ pub struct ArtifactFootprint {
 }
 
 /// Measure only the caller's exact object. Block allocation is not physical savings.
+#[cfg(not(verus_keep_ghost))]
 pub fn artifact_footprint(path: &Path) -> Result<ArtifactFootprint, String> {
     footprint(path, false).map(|(footprint, _)| footprint)
 }
@@ -161,10 +183,12 @@ pub fn artifact_footprint(path: &Path) -> Result<ArtifactFootprint, String> {
 /// A diagnostic can lstat retained sockets without reading from or disposing
 /// them. All effects keep the strict contract above and in dispose_entry.
 /// The second value counts these observed socket entries explicitly.
+#[cfg(not(verus_keep_ghost))]
 pub fn observed_artifact_footprint(path: &Path) -> Result<(ArtifactFootprint, u64), String> {
     footprint(path, true)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn footprint(path: &Path, observe_sockets: bool) -> Result<(ArtifactFootprint, u64), String> {
     match fs::symlink_metadata(path) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((
@@ -221,7 +245,7 @@ fn footprint(path: &Path, observe_sockets: bool) -> Result<(ArtifactFootprint, u
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::FileTypeExt;
-                    if observe_sockets && m.file_type().is_socket() {
+                    if observable_socket(observe_sockets, m.file_type().is_socket()) {
                         result.logical_bytes = m.len();
                         result.file_entries = 1;
                         return Ok((result, 1));

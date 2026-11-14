@@ -1,28 +1,99 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_lifecycle::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cli_success_requires_an_original_success_status_and_includes_service_handoffs() {
+    broadcast use vstd::string::group_string_axioms;
+    proof { reveal_strlit("created"); reveal_strlit("reconstructed"); reveal_strlit("recovered"); reveal_strlit("cleaned"); reveal_strlit("observed"); reveal_strlit("rebound"); reveal_strlit("finished"); reveal_strlit("maintained"); reveal_strlit("maintenance-requested"); reveal_strlit("maintenance-idle-exit"); reveal_strlit("imported"); reveal_strlit("migrated"); reveal_strlit("owner-deployed"); reveal_strlit("used"); reveal_strlit("failed"); reveal_strlit(""); reveal_strlit("Created"); reveal_strlit("created\0"); }
+    expect(policy::successful_report_status(Some("created")));
+    expect(policy::successful_report_status(Some("reconstructed")));
+    expect(policy::successful_report_status(Some("recovered")));
+    expect(policy::successful_report_status(Some("cleaned")));
+    expect(policy::successful_report_status(Some("observed")));
+    expect(policy::successful_report_status(Some("rebound")));
+    expect(policy::successful_report_status(Some("finished")));
+    expect(policy::successful_report_status(Some("maintained")));
+    expect(policy::successful_report_status(Some("maintenance-requested")));
+    expect(policy::successful_report_status(Some("maintenance-idle-exit")));
+    expect(policy::successful_report_status(Some("imported")));
+    expect(policy::successful_report_status(Some("migrated")));
+    expect(policy::successful_report_status(Some("owner-deployed")));
+    expect(policy::successful_report_status(Some("used")));
+    expect(!policy::successful_report_status(None));
+    expect(!policy::successful_report_status(Some("failed")));
+    expect(!policy::successful_report_status(Some("")));
+    expect(!policy::successful_report_status(Some("Created")));
+    expect(!policy::successful_report_status(Some("created\0")));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn empty_admission_has_no_policy_consumer_and_nonempty_enrollments_keep_the_check() {
+    expect(!policy::enrolled_policy_required(0));
+    expect(policy::enrolled_policy_required(1));
+    expect(policy::enrolled_policy_required(usize::MAX));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn enclosing_fixture_requires_retired_objects_metadata_and_known_members() {
+    expect(policy::producer_namespace_retired(true, true, true));
+    expect(!policy::producer_namespace_retired(false, true, true));
+    expect(!policy::producer_namespace_retired(true, false, true));
+    expect(!policy::producer_namespace_retired(true, true, false));
+    expect(!policy::producer_namespace_retired(false, false, false));
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
 #[path = "support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod fixture_coordinator;
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod isolated_capability;
 #[path = "../../runner-tests/tests/support/retention_state.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod retention_state;
 #[path = "../../judge-filemap-tests/tests/support/mod.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod support;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::sha256;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
 };
+#[cfg(not(verus_keep_ghost))]
 use support::*;
+#[cfg(not(verus_keep_ghost))]
 const POLICY: &str = ".chrono-harness/worktree.json";
+#[cfg(not(verus_keep_ghost))]
 const SOURCE_CONFIG: &str = ".chrono-harness/source platform.json";
+#[cfg(not(verus_keep_ghost))]
 const TARGET_CONFIG: &str = ".chrono-harness/fetched platform.json";
+#[cfg(not(verus_keep_ghost))]
 const TARGET_WORKFLOW: &str = ".chrono-harness/fetched workflow.json";
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn cli_read_only_stdout_returns_native_publication_failure() {
     let expected = chrono_worktree::run(&["--help".into()]);
     assert_eq!(expected.exit_code, 0);
@@ -92,11 +163,13 @@ fn cli_read_only_stdout_returns_native_publication_failure() {
 
 // Decode the current lifecycle interface before exercising the original byte,
 // failure and identity assertions. Other documents keep their original view.
+#[cfg(not(verus_keep_ghost))]
 fn json(bytes: &[u8]) -> Result<Value, String> {
     let mut report = chrono_harness::json(bytes)?;
     expand_lifecycle_report(&mut report)?;
     Ok(report)
 }
+#[cfg(not(verus_keep_ghost))]
 fn expand_lifecycle_report(report: &mut Value) -> Result<(), String> {
     if report["schema"] == "chrono-worktree-report/v1" {
         if report["tool"]["version"].is_object() {
@@ -119,6 +192,7 @@ fn expand_lifecycle_report(report: &mut Value) -> Result<(), String> {
 }
 
 // Consume the current producer's exact addressed original.
+#[cfg(not(verus_keep_ghost))]
 fn retained_report(entry: &Value) -> Value {
     assert!(entry.get("input_bytes").is_none());
     assert!(entry.get("report").is_none());
@@ -135,12 +209,14 @@ fn retained_report(entry: &Value) -> Value {
     assert_eq!(sha256(&bytes), input["sha256"]);
     json(&bytes).unwrap()
 }
+#[cfg(not(verus_keep_ghost))]
 fn drain_report(entry: &Value) -> Value {
     let report = retained_report(entry);
     assert_eq!(entry["status"], report["status"]);
     assert_eq!(entry["error"], report["error"]);
     report
 }
+#[cfg(not(verus_keep_ghost))]
 fn producer_objects(report: &Value) -> Value {
     value!(
         report["producer_drains"]
@@ -156,6 +232,7 @@ fn producer_objects(report: &Value) -> Value {
 }
 // Assertion view over current producer-written registrations. There is no
 // mutable aggregate in the implementation and no historical-format fallback.
+#[cfg(not(verus_keep_ghost))]
 fn producer_state(directory: &Path) -> Value {
     let owner_bytes = fs::read(directory.join("objects.json")).unwrap();
     let mut owner = json(&owner_bytes).unwrap();
@@ -171,36 +248,56 @@ fn producer_state(directory: &Path) -> Value {
     owner["objects"] = value!(objects);
     owner
 }
+#[cfg(not(verus_keep_ghost))]
 fn producer_record_path(directory: &Path, allocation: &Path) -> PathBuf {
     directory.join("producer-records").join(format!(
         "{}.json",
         sha256(allocation.file_name().unwrap().to_str().unwrap().as_bytes())
     ))
 }
+#[cfg(not(verus_keep_ghost))]
 fn fixture_git() -> PathBuf {
     chrono_harness::resolve_program(&source(), "git", None).expect("Git fixture tool on PATH")
 }
+#[cfg(not(verus_keep_ghost))]
 mod age;
+#[cfg(not(verus_keep_ghost))]
 mod automatic;
+#[cfg(not(verus_keep_ghost))]
 mod bounded_cleanup;
+#[cfg(not(verus_keep_ghost))]
 mod check_inputs;
+#[cfg(not(verus_keep_ghost))]
 mod evidence_retirement;
+#[cfg(not(verus_keep_ghost))]
 mod fixture_body;
+#[cfg(not(verus_keep_ghost))]
 mod interrupted_cleanup;
+#[cfg(not(verus_keep_ghost))]
 mod maintenance;
+#[cfg(not(verus_keep_ghost))]
 mod owner_deployment;
+#[cfg(not(verus_keep_ghost))]
 mod policy_migration;
+#[cfg(not(verus_keep_ghost))]
 mod rebind;
+#[cfg(not(verus_keep_ghost))]
 mod temporary;
+#[cfg(not(verus_keep_ghost))]
 mod unified_maintenance;
+#[cfg(not(verus_keep_ghost))]
 mod verified_attention;
+#[cfg(not(verus_keep_ghost))]
 mod verified_lifecycle;
+#[cfg(not(verus_keep_ghost))]
 mod verified_owner_publication;
 
+#[cfg(not(verus_keep_ghost))]
 enum HostDirectory {
     Ephemeral(tempfile::TempDir),
     Retained(chrono_worktree::TemporaryHost),
 }
+#[cfg(not(verus_keep_ghost))]
 impl HostDirectory {
     fn path(&self) -> &Path {
         match self {
@@ -237,12 +334,14 @@ impl HostDirectory {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 struct Host {
     _dir: HostDirectory,
     root: PathBuf,
     remote: PathBuf,
     parent: PathBuf,
 }
+#[cfg(not(verus_keep_ghost))]
 fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> {
     if !root.is_dir() {
         return Ok(());
@@ -259,6 +358,7 @@ fn retain_fixture_state(root: &Path, destination: &Path) -> std::io::Result<()> 
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Host {
     fn drop(&mut self) {
         let failed = std::thread::panicking();
@@ -270,6 +370,7 @@ impl Drop for Host {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Host {
     fn diagnostic_directory(failed: bool) -> Option<PathBuf> {
         std::env::var_os("CHRONO_WORKTREE_TEST_RECEIPTS")
@@ -335,6 +436,7 @@ impl Host {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Host {
     fn new(layout: &str) -> Self {
         let dir = tempfile::Builder::new()
@@ -554,11 +656,13 @@ impl Host {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn platform() -> String {
     format!("{}-{}", std::env::consts::OS, std::env::consts::ARCH)
 }
 
 /// Keep the worktree policy's stable host_config entry unchanged.
+#[cfg(not(verus_keep_ghost))]
 fn select_config(root: &Path, target: &str) {
     let entry = json(&fs::read(root.join(CONFIG)).unwrap()).unwrap();
     let old = entry["platforms"][platform()].as_str().unwrap_or(CONFIG);
@@ -595,6 +699,7 @@ fn select_config(root: &Path, target: &str) {
     fs::write(root.join(FM), serde_json::to_vec(&fm).unwrap()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn selected_values(root: &Path, oid: &str, effective: &str, workflow: &str) -> Values {
     [CONFIG, effective, JUDGES, PROJECTS, FM, workflow]
         .into_iter()
@@ -607,6 +712,7 @@ fn selected_values(root: &Path, oid: &str, effective: &str, workflow: &str) -> V
         .collect()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn assert_fixed_registry_reads(
     report: &Value,
     repository: &Path,
@@ -692,6 +798,7 @@ fn assert_fixed_registry_reads(
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn assert_bound_registry_process(report: &Value, row: &Value) {
     assert_eq!(row["process"]["exit_code"], 0);
     assert!(row["process"]["failure"].is_null());
@@ -707,6 +814,7 @@ fn assert_bound_registry_process(report: &Value, row: &Value) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -840,6 +948,7 @@ fn selected_start_resolves_source_and_fetched_targets_with_complete_digest() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_batch_failures_preserve_original_bytes_before_checkout_effects() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -871,6 +980,7 @@ fn registered_batch_failures_preserve_original_bytes_before_checkout_effects() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn selected_endpoint_errors_preserve_fixed_evidence_without_creating_checkout() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1028,6 +1138,7 @@ fn selected_endpoint_errors_preserve_fixed_evidence_without_creating_checkout() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn fetches_advanced_registered_target_preserves_dirty_source_and_explicit_layouts() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1081,6 +1192,7 @@ fn fetches_advanced_registered_target_preserves_dirty_source_and_explicit_layout
     }
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn uses_registered_prefix_and_disables_inherited_tracking_without_changing_config() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1106,6 +1218,7 @@ fn uses_registered_prefix_and_disables_inherited_tracking_without_changing_confi
     assert!(git(&h.root, &["worktree", "list", "--porcelain"]).contains("trial/sample"));
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn preserves_existing_destination_and_branch_instead_of_resetting_them() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1140,6 +1253,7 @@ fn preserves_existing_destination_and_branch_instead_of_resetting_them() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rejects_nested_destinations_and_unregistered_or_changed_policy() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1171,6 +1285,7 @@ fn rejects_nested_destinations_and_unregistered_or_changed_policy() {
     assert!(!target.exists());
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn remote_policy_change_requires_adoption_before_creating_a_branch() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1204,6 +1319,7 @@ fn remote_policy_change_requires_adoption_before_creating_a_branch() {
     assert!(!target.exists());
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retains_actual_failed_fetch_and_version_observations() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1241,6 +1357,7 @@ fn retains_actual_failed_fetch_and_version_observations() {
     );
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_checkout_hook_keeps_work_and_owned_lock_with_original_exit() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1267,6 +1384,7 @@ fn failed_checkout_hook_keeps_work_and_owned_lock_with_original_exit() {
     assert!(process["stderr"].as_str().unwrap().contains("hook-failure"));
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn successful_hook_with_dirty_checkout_cannot_report_created() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1285,6 +1403,7 @@ fn successful_hook_with_dirty_checkout_cannot_report_created() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn raw_checkout_creation_rejects_hidden_mode_from_successful_hook() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1300,6 +1419,7 @@ fn raw_checkout_creation_rejects_hidden_mode_from_successful_hook() {
     assert!(git(&h.root, &["worktree", "list", "--porcelain"]).contains("locked"));
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn strict_cli_and_configuration_fail_without_creating_a_worktree() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1319,6 +1439,7 @@ fn strict_cli_and_configuration_fail_without_creating_a_worktree() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1335,6 +1456,7 @@ fn configured_digest_mismatch_does_not_execute_the_wrong_git() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_policy_runs_the_actual_creation_consumer() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1400,6 +1522,7 @@ fn adopted_policy_runs_the_actual_creation_consumer() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn registered_artifacts_from_checkout_hooks_are_preserved() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1415,6 +1538,7 @@ fn registered_artifacts_from_checkout_hooks_are_preserved() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Host {
     fn reconstruct(&self, plan: Value, name: &str) -> (i32, Value, String) {
         let path = ".chrono-harness/state/reconstruction.json";
@@ -1460,11 +1584,13 @@ impl Host {
         head
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn reconstruction(base: &str, candidate: &str, changes: Value) -> Value {
     value!({"schema":"chrono-worktree-reconstruction/v1", "base":base,"candidate":candidate,"changes":changes})
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn selected_reconstruction_carries_explicit_work_onto_fetched_target() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1514,6 +1640,7 @@ fn selected_reconstruction_carries_explicit_work_onto_fetched_target() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn reconstructs_explicit_choices_on_advanced_target_without_merging_old_branch() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1570,6 +1697,7 @@ fn reconstructs_explicit_choices_on_advanced_target_without_merging_old_branch()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn reconstruction_preserves_binary_modes_symlinks_adds_deletes_and_literal_paths() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1637,6 +1765,7 @@ fn reconstruction_preserves_binary_modes_symlinks_adds_deletes_and_literal_paths
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn reconstruction_conflict_preserves_both_worktrees_original_exit_and_owned_lock() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1672,6 +1801,7 @@ fn reconstruction_conflict_preserves_both_worktrees_original_exit_and_owned_lock
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn invalid_reconstruction_choices_or_dirty_source_never_create_a_destination() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1713,6 +1843,7 @@ fn invalid_reconstruction_choices_or_dirty_source_never_create_a_destination() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retired_only_reconstruction_keeps_new_target_without_applying_a_patch() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1746,6 +1877,7 @@ fn retired_only_reconstruction_keeps_new_target_without_applying_a_patch() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn source_mutation_during_reconstruction_fails_and_preserves_recovery_work() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1777,6 +1909,7 @@ fn source_mutation_during_reconstruction_fails_and_preserves_recovery_work() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn reconstruction_patch_bound_fails_before_creating_work() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1811,6 +1944,7 @@ fn reconstruction_patch_bound_fails_before_creating_work() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn empty_reconstruction_and_existing_destination_keep_explicit_boundaries() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1831,6 +1965,7 @@ fn empty_reconstruction_and_existing_destination_keep_explicit_boundaries() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn large_registered_artifacts_do_not_exhaust_cleanliness_output_bound() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1873,6 +2008,7 @@ fn large_registered_artifacts_do_not_exhaust_cleanliness_output_bound() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn large_unregistered_directory_is_rejected_without_exhausting_cleanliness_output_bound() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1916,6 +2052,7 @@ fn large_unregistered_directory_is_rejected_without_exhausting_cleanliness_outpu
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn register_artifact(h: &Host, artifact: &str, ignore: &str) {
     let mut config = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
     config["artifacts"]
@@ -1933,6 +2070,7 @@ fn register_artifact(h: &Host, artifact: &str, ignore: &str) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_files_visible() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1977,6 +2115,7 @@ fn artifact_exclusions_keep_ignored_neighbors_literal_lookalikes_and_untracked_f
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn changing_ignore_rules_cannot_hide_unregistered_work_during_reconstruction() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2005,6 +2144,7 @@ fn changing_ignore_rules_cannot_hide_unregistered_work_during_reconstruction() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2042,6 +2182,7 @@ fn artifact_directory_names_do_not_hide_tracked_changes_files_or_symlinks() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn adopt_lifecycle_retention(h: &Host) {
     use chrono_harness::retained_artifacts::retention::POLICY_PATH;
     let policy = value!({"schema":"chrono-output-retention/v2","producers":{"lifecycle-original":[".chrono-harness/state/worktrees/"]},"keep_seconds":0,"max_related_outputs":32,"max_summaries":16,"max_nodes_per_round":256,"max_bytes_per_round":1048576,"max_millis_per_round":1000});
@@ -2060,6 +2201,7 @@ fn adopt_lifecycle_retention(h: &Host) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2120,6 +2262,7 @@ fn adopted_lifecycle_publisher_rolls_failed_original_after_its_diagnostic_window
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn lifecycle_report_retains_exact_failure_streams_without_duplicate_aliases() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2158,6 +2301,7 @@ fn lifecycle_report_retains_exact_failure_streams_without_duplicate_aliases() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -2217,6 +2361,7 @@ fn adopted_lifecycle_failure_keeps_large_error_in_original_with_compact_outcome(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cargo_boundary_mock_preserves_source_outputs_original_failure_and_unknown_arguments() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
@@ -2339,6 +2484,7 @@ fn cargo_boundary_mock_preserves_source_outputs_original_failure_and_unknown_arg
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn custody_fixture_selects_only_current_declared_producers() {
     assert!(fixture_coordinator::known_custody_producer("ci-test-host"));
     assert!(fixture_coordinator::known_custody_producer(
@@ -2352,6 +2498,7 @@ fn custody_fixture_selects_only_current_declared_producers() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn joined_fixture_case_removes_outer_custody_only_after_all_producers_retire() {
     let observed = std::cell::RefCell::new(None);
     if isolated_capability::isolated_git_with_retirement(|root| {

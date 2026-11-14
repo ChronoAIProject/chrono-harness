@@ -75,8 +75,12 @@ pub(crate) mod service;
 pub(crate) mod service;
 #[cfg(all(not(verus_keep_ghost), feature = "producer-birth-test"))]
 pub use inventory::write_record as write_inventory_record;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/retirement.rs"]
+#[rustfmt::skip]
+pub(crate) mod retirement;
 #[cfg(not(verus_keep_ghost))]
-mod retirement;
+pub(crate) mod retirement;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_lifecycle::{Disposition, select_artifact};
 // Explicit file custody uses these same admission/enrollment capabilities, without

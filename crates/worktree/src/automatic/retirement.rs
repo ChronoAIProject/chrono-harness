@@ -1,9 +1,45 @@
 //! Retire only identity-bound capabilities and declared empty enrollment metadata.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn retire_history(disposed: bool, consumers_released: bool,
+    confirmed_at: Option<u64>, observed: u64, keep_seconds: u64, over_limit: bool) -> (retire: bool)
+    ensures retire <==> (disposed && consumers_released
+        && confirmed_at.is_some()
+        && confirmed_at.unwrap() <= observed
+        && (over_limit || observed - confirmed_at.unwrap() >= keep_seconds)),
+{
+    match confirmed_at {
+        Some(confirmed) => disposed && consumers_released
+            && confirmed <= observed && (over_limit || observed - confirmed >= keep_seconds),
+        None => false,
+    }
+}
+
+pub fn retire_cache_history(completed: bool, generation: u64, current_generation: u64,
+    consumers_released: bool, confirmed_at: Option<u64>, observed: u64,
+    keep_seconds: u64, over_limit: bool) -> (retire: bool)
+    ensures retire <==> (completed && generation < current_generation && consumers_released
+        && confirmed_at.is_some() && confirmed_at.unwrap() <= observed
+        && (over_limit || observed - confirmed_at.unwrap() >= keep_seconds)),
+{
+    retire_history(completed && generation < current_generation, consumers_released,
+        confirmed_at, observed, keep_seconds, over_limit)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{artifact_disposal as disposal, ownership::DirectoryLease};
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Member {
     name: String,
     identity: String,
@@ -12,6 +48,7 @@ struct Member {
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Retirement {
     schema: String,
     coordinator_root: PathBuf,
@@ -21,10 +58,12 @@ struct Retirement {
     admission_id: String,
     members: Vec<Member>,
 }
+#[cfg(not(verus_keep_ghost))]
 const MEMBERS: [&str; 3] = ["ledger.json", "owner.json", "metadata.lease"];
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct RetiredLease {
     pub(super) ownership: Ownership,
     pub(super) creator_agent: Option<crate::AgentIdentity>,
@@ -32,6 +71,7 @@ pub(super) struct RetiredLease {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) error: Option<String>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl RetiredLease {
     pub(super) fn check_agent(&self) -> Result<(), String> {
         if self
@@ -45,6 +85,7 @@ impl RetiredLease {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn absent(path: &Path) -> Result<bool, String> {
     match fs::symlink_metadata(path) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(true),
@@ -52,6 +93,7 @@ pub(super) fn absent(path: &Path) -> Result<bool, String> {
         Ok(_) => Ok(false),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn names(directory: &Path) -> Result<BTreeSet<String>, String> {
     fs::read_dir(directory)
         .map_err(|error| error.to_string())?
@@ -64,6 +106,7 @@ fn names(directory: &Path) -> Result<BTreeSet<String>, String> {
         })
         .collect()
 }
+#[cfg(not(verus_keep_ghost))]
 fn observe(directory: &Path, name: &str) -> Result<Member, String> {
     let path = no_symlink_parents(directory, name)?;
     let identity = crate::ownership::identity(&path)?;
@@ -78,6 +121,7 @@ fn observe(directory: &Path, name: &str) -> Result<Member, String> {
         length: bytes.len() as u64,
     })
 }
+#[cfg(not(verus_keep_ghost))]
 fn check_member(directory: &Path, member: &Member) -> Result<bool, String> {
     let path = no_symlink_parents(directory, &member.name)?;
     if absent(&path)? {
@@ -105,6 +149,7 @@ fn check_member(directory: &Path, member: &Member) -> Result<bool, String> {
     }
     Ok(true)
 }
+#[cfg(not(verus_keep_ghost))]
 fn note(report: &mut Value, field: &str, value: Value) {
     if report[field].is_null() {
         report[field] = value!([]);
@@ -112,6 +157,7 @@ fn note(report: &mut Value, field: &str, value: Value) {
     report[field].as_array_mut().unwrap().push(value);
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
     // Transfer to this field and publish the ledger BEFORE dropping the final
     // history reference. An interrupted unlink therefore retains its owner.
@@ -272,6 +318,7 @@ impl Manager {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn resume_address(
     inputs: &PolicyInputs,
     owner_directory: &Path,
@@ -405,6 +452,7 @@ pub(super) fn resume_address(
 
 // The declared enrollment namespace is the inventory, as in retention's
 // transaction owner. No source/output directory discovery supplies members.
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn resume_retired_addresses(
     inputs: &PolicyInputs,
     owner_directory: &Path,
