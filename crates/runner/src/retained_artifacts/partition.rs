@@ -602,6 +602,21 @@ impl Inventory {
         self.maintain_explicit_at(now()?)
     }
     pub fn maintain_explicit_at(&self, observed: u64) -> Result<Value, String> {
+        self.maintain_explicit_reporting_at(observed, None)
+    }
+    /// Stream every declared member and its unabridged original round to the
+    /// actual maintain report. The compact sweep's sample ceiling is unchanged.
+    pub fn maintain_explicit_observed(
+        &self,
+        mut observer: impl FnMut(&Value) -> Result<(), String>,
+    ) -> Result<Value, String> {
+        self.maintain_explicit_reporting_at(now()?, Some(&mut observer))
+    }
+    fn maintain_explicit_reporting_at(
+        &self,
+        observed: u64,
+        mut observer: Option<&mut dyn FnMut(&Value) -> Result<(), String>>,
+    ) -> Result<Value, String> {
         let began = Instant::now();
         let mut sweep = SweepReport::new(&self.policy);
         sweep.value["terminal_quotas"] = json!(self.terminal_quotas_at(observed));
@@ -610,6 +625,10 @@ impl Inventory {
             let entries = match fs::read_dir(self.directory.join(namespace)) {
                 Ok(entries) => entries,
                 Err(error) => {
+                    if let Some(observer) = observer.as_deref_mut() {
+                        observer(&json!({"kind":"enumeration-error","namespace":namespace,
+                            "error":error.to_string()}))?;
+                    }
                     sweep.observation(
                         namespace,
                         None,
@@ -624,6 +643,10 @@ impl Inventory {
                 let entry = match entry {
                     Ok(entry) => entry,
                     Err(error) => {
+                        if let Some(observer) = observer.as_deref_mut() {
+                            observer(&json!({"kind":"enumeration-error","namespace":namespace,
+                                "error":error.to_string()}))?;
+                        }
                         sweep.observation(
                             namespace,
                             None,
@@ -638,6 +661,10 @@ impl Inventory {
                 let address = match entry.file_name().into_string() {
                     Ok(address) => address,
                     Err(_) => {
+                        if let Some(observer) = observer.as_deref_mut() {
+                            observer(&json!({"kind":"enumeration-error","namespace":namespace,
+                                "error":"declaration address is not UTF8; preserve it"}))?;
+                        }
                         sweep.observation(
                             namespace,
                             None,
@@ -647,7 +674,15 @@ impl Inventory {
                         continue;
                     }
                 };
-                let round = match namespace {
+                if let Some(observer) = observer.as_deref_mut() {
+                    let mut declaration = json!({"kind":"declaration","namespace":namespace,
+                        "address":address,"observed_unix_seconds":observed,
+                        "policy_sha256":sha256(&self.policy_bytes),"owner_root":self.root,
+                        "qualification":"owned by retention; reporting grants no disposal permission"});
+                    declaration["state"] = json!("see original bounded round");
+                    observer(&declaration)?;
+                }
+                let mut round = match namespace {
                     "transaction-gates" => self.metadata_round(|nodes| {
                         *nodes = 1;
                         self.retire_transaction(&address)
@@ -656,12 +691,35 @@ impl Inventory {
                     // an explicit caller selection. Let the same nonblocking
                     // reader refuse non-files, links and oversized metadata.
                     "objects" => {
-                        self.maintain_round(observed, Some(std::slice::from_ref(&address)))
+                        if observer.is_some() {
+                            self.with_round_budget(|| self.partition_round_inventory(
+                                observed, Some(std::slice::from_ref(&address)), true,
+                            ))
+                        } else {
+                            self.maintain_round(observed, Some(std::slice::from_ref(&address)))
+                        }
                     }
                     _ => {
                         self.metadata_round(|nodes| self.prune_role(&entry.path(), observed, nodes))
                     }
                 };
+                if let Some(observer) = observer.as_deref_mut() {
+                    if let Ok(round) = &mut round {
+                        if let Some(declarations) = round.as_object_mut().unwrap().remove("inventory_declarations") {
+                            for record in declarations.as_array().unwrap() {
+                                observer(&json!({"kind":"declaration-state","namespace":namespace,
+                                    "address":record["id"],"source_round":address,"record":record,
+                                    "freshness":"state observed before original round; path measured after it"}))?;
+                            }
+                        }
+                    }
+                    observer(&match &round {
+                        Ok(round) => json!({"kind":"round","namespace":namespace,
+                            "address":address,"original":round}),
+                        Err(error) => json!({"kind":"round","namespace":namespace,
+                            "address":address,"error":error,"action":"not-established"}),
+                    })?;
+                }
                 sweep.round(namespace, &address, round)?;
             }
             sweep.value["enumeration"][namespace]["exhausted"] = json!(exhausted);
@@ -670,6 +728,27 @@ impl Inventory {
         // Never sum their retained inventories or infer a global remaining count.
         sweep.value["elapsed_millis"] = json!(u64::try_from(began.elapsed().as_millis()).ok());
         Ok(sweep.value)
+    }
+
+    fn inventory_declaration(record: &Object, directory: &Path) -> Value {
+        let output = record.output.as_ref().map(|o| {
+            let allocated = o.manifest.entries.iter().try_fold(0u64, |sum, e| {
+                sum.checked_add(e.allocated_bytes?)
+            });
+            json!({"id":o.id,"producer":o.producer,"identity":o.identity,
+                "phase":o.phase,"tree":o.tree,"expires":o.expires,
+                "outcome":o.outcome,"observed_return":o.observed_return,
+                "references":o.references,"removed_logical_bytes":o.removed_logical_bytes,
+                "sealed_measurement":{"sealed":o.manifest.sealed,
+                    "logical_bytes":if o.manifest.sealed {Some(o.manifest.bytes)} else {None},
+                    "allocated_bytes":if o.manifest.sealed {allocated} else {None},
+                    "unit":"bytes","freshness":"historical-manifest; observation time unknown",
+                    "scope":"manifest entries; may overlap other declarations"}})
+        });
+        json!({"id":record.id,"path":record.path,"output":output,
+            "metadata_path":directory.join("record.json"),
+            "incoming":record.incoming,"roles":record.roles,
+            "retired_capabilities":record.retired_leases,"metadata_expires":record.metadata_expires})
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
         let (leases, directories) = self.path_gates(paths, true, true, true)?;
@@ -712,6 +791,14 @@ impl Inventory {
         observed: u64,
         originals: Option<&[String]>,
     ) -> Result<Value, String> {
+        self.partition_round_inventory(observed, originals, false)
+    }
+    fn partition_round_inventory(
+        &self,
+        observed: u64,
+        originals: Option<&[String]>,
+        report_inventory: bool,
+    ) -> Result<Value, String> {
         let began = self
             .round_began
             .get()
@@ -730,6 +817,9 @@ impl Inventory {
             "protected":[],"disposed":[],"scope":{"kind":"visited-components","complete":false},
             "legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"});
         let mut nodes = 0usize;
+        if report_inventory {
+            result["inventory_declarations"] = json!([]);
+        }
         let mut complete = true;
         let global = crate::verified_release::global_maintenance(originals);
         if let Some(originals) = originals {
@@ -795,14 +885,25 @@ impl Inventory {
             let attempted = (|| {
                 let gate = self.addressed_gate(&[id.clone()], &[], &[], None, true, false)?;
                 let owned: Vec<_> = gate.objects.borrow().keys().cloned().collect();
+                // Reuse exactly the records already loaded by this bounded
+                // component. No second metadata read, graph or round budget.
+                let declarations: Vec<_> = if report_inventory {
+                    gate.objects.borrow().values().map(|record| {
+                        Self::inventory_declaration(record,
+                            &self.directory.join("objects").join(&record.id))
+                    }).collect()
+                } else { vec![] };
                 seen.extend(owned.iter().cloned());
                 self.maintain_locked(observed, &gate).map(|round| {
                     let observations = gate.measurements(self.policy.max_output_bytes);
-                    (round, owned, observations, gate.unvisited_relations.clone())
+                    (round, owned, observations, gate.unvisited_relations.clone(), declarations)
                 })
             })();
             match attempted {
-                Ok((round, owned, observations, unvisited)) => {
+                Ok((round, owned, observations, unvisited, declarations)) => {
+                    if report_inventory {
+                        result["inventory_declarations"].as_array_mut().unwrap().extend(declarations);
+                    }
                     measurements.extend(observations);
                     unvisited_relations.extend(unvisited);
                     nodes += round["nodes"].as_u64().ok_or("component round nodes")? as usize;

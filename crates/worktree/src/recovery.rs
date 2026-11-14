@@ -511,6 +511,10 @@ pub(crate) fn protect_report_consumer(
 /// reports. Neither directory scans nor recursive JSON guesses define edges.
 pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>, String> {
     let mut originals = Vec::new();
+    if let Some(path) = report["complete_inventory"]["path"].as_str() {
+        state_path(root, path)?;
+        originals.push(path.into());
+    }
     let mut inputs = Vec::new();
     collect_inputs(report, &mut inputs)?;
     for input in inputs {
@@ -638,6 +642,9 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
         .ok_or("lifecycle result path")?;
     let originals = original_paths(root, report)?;
     inventory.dependencies_paths(path, &originals)?;
+    if let Some(original) = report["complete_inventory"]["receipt"]["path"].as_str() {
+        inventory.reference_paths(&format!("recovery:{original}"), &[])?;
+    }
     bind_result_handoffs(&inventory, root, report)?;
     if report["managed_process_original"]["joined"] == true {
         release_managed_process_original(root, report)?;

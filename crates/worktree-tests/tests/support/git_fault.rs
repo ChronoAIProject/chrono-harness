@@ -870,10 +870,17 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
             );
         }
         ["worktree", "list", "--porcelain", "-z"] => {
+            if let Some(error) = config["inventory_error"].as_str() {
+                eprintln!("{error}");
+                std::process::exit(74);
+            }
             print!(
                 "worktree {}\0HEAD {head}\0branch refs/heads/dev\0\0",
                 root.display()
             );
+            for path in config["inventory_paths"].as_array().into_iter().flatten() {
+                print!("worktree {}\0HEAD {head}\0detached\0\0", path.as_str().unwrap());
+            }
         }
         ["show", spec] => io::stdout().write_all(&blob(spec)).unwrap(),
         ["--literal-pathspecs", "ls-files", "-z", "--", path]

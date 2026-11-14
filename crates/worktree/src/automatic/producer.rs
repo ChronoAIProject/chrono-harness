@@ -1487,6 +1487,56 @@ impl ProducerPolicy {
         Ok(())
     }
 
+    /// Read the producer's own declarations for the explicit maintenance report.
+    /// This does not import directories, acquire deletion rights or change state.
+    pub(super) fn observe_inventory(&self, inputs: &PolicyInputs, inventory: &mut super::inventory::Report) {
+        inventory.record(value!({"kind":"producer-policy","producer":self.id,
+            "owner_root":inputs.policy.coordinator_root,"directory":self.directory,
+            "policy_sha256":sha256(&inputs.anchor_policy_bytes),
+            "generated_outputs":self.generated_outputs,"source_roots":self.source_roots,
+            "temporary":self.temporary,"fixture_bodies":self.fixture_bodies}));
+        let observed = (|| {
+            let directory = self.directory(&inputs.policy.coordinator_root)?;
+            if !directory.exists() || !directory.join("objects.json").exists() {
+                inventory.unknown(&self.id, "no explicit producer registry");
+                inventory.record(value!({"kind":"producer-namespace","producer":self.id,
+                    "path":directory,"members":"unknown","action":"not-executed",
+                    "reason":"no explicit producer registry; historical objects remain untouched"}));
+                return Ok::<(), String>(());
+            }
+            let mut store = Store::open(&directory, &self.id, false)?;
+            let (objects, errors) = store.records()?;
+            for error in errors {
+                inventory.error(&self.id, &error);
+            }
+            // Release the namespace handle before potentially long footprint IO.
+            drop(store);
+            for object in objects {
+                let path = directory.join(&object.path);
+                let measurement = inventory.measure(&path);
+                inventory.record(value!({"kind":"producer-allocation","producer":self.id,
+                    "path":path,"identity":object.identity,"intent":object.intent,
+                    "publication":object.publication,"sealed":object.sealed,
+                    "consumers":object.consumers,"retention_reason":object.retention_reason,
+                    "disposed":object.disposed,"cache_lease":object.cache_lease,
+                    "generated":object.generated,"bodies":object.bodies,"rolling":object.rolling,
+                    "measurement":measurement,"action":"see producer-result original"}));
+                let members: BTreeSet<_> = object.generated.keys().chain(object.bodies.keys()).collect();
+                for member in members {
+                    let physical = path.join(member.trim_end_matches('/'));
+                    let measurement = inventory.measure(&physical);
+                    inventory.record(value!({"kind":"producer-artifact","producer":self.id,
+                        "allocation":path,"member":member,"path":physical,
+                        "measurement":measurement,"action":"see producer-result original"}));
+                }
+            }
+            Ok(())
+        })();
+        if let Err(error) = observed {
+            inventory.error(&self.id, error);
+        }
+    }
+
     pub(super) fn drain(
         &self,
         inputs: &PolicyInputs,

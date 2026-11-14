@@ -95,6 +95,9 @@ use super::*;
 use std::collections::BTreeMap;
 #[cfg(not(verus_keep_ghost))]
 const AUTO_POLICY: &str = ".chrono-harness/cleanup.json";
+#[path = "complete_inventory.rs"]
+#[cfg(not(verus_keep_ghost))]
+mod complete_inventory;
 
 // A metadata fixture with a fully mocked Git boundary. The absent checkout's
 // adopted policy cannot be read, while its ledger still consumes an original.

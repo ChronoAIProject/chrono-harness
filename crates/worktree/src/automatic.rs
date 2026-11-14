@@ -60,6 +60,10 @@ mod owner_deployment;
 #[cfg(not(verus_keep_ghost))]
 mod producer;
 #[cfg(not(verus_keep_ghost))]
+mod inventory;
+#[cfg(all(not(verus_keep_ghost), feature = "producer-birth-test"))]
+pub use inventory::write_record as write_inventory_record;
+#[cfg(not(verus_keep_ghost))]
 mod retirement;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_lifecycle::{Disposition, select_artifact};
@@ -1315,6 +1319,15 @@ impl Observation<'_> {
         Ok(addresses)
     }
     fn enrollment_paths(&self) -> Result<Vec<PathBuf>, String> {
+        let mut errors = Vec::new();
+        let paths = self.enrollment_paths_observed(|issue| {
+            // In-progress address retirement can have no owner marker. Preserve
+            // the existing execution selection; diagnostics still expose it.
+            if issue["owner_missing"] != true { errors.push(issue.to_string()); }
+        })?;
+        if errors.is_empty() { Ok(paths) } else { Err(errors.join("; ")) }
+    }
+    fn enrollment_paths_observed(&self, mut issue: impl FnMut(Value)) -> Result<Vec<PathBuf>, String> {
         let namespace = no_symlink_parents(&self.directory, "enrollments")?;
         let mut paths = Vec::new();
         let items = match fs::read_dir(namespace) {
@@ -1323,26 +1336,40 @@ impl Observation<'_> {
             Err(e) => return Err(e.to_string()),
         };
         for item in items {
-            let item = item.map_err(|e| e.to_string())?;
-            if !item.file_type().map_err(|e| e.to_string())?.is_dir() {
-                return Err("enrollment namespace contains an unknown member".into());
-            }
-            let marker = item.path().join("owner.json");
-            let raw = match fs::read(&marker) {
-                Ok(raw) => raw,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(e.to_string()),
+            let item = match item {
+                Ok(item) => item,
+                Err(error) => {
+                    issue(value!({"record_path":null,"error":error.to_string()}));
+                    continue;
+                }
             };
-            let owner = json(&raw)?;
-            let path = PathBuf::from(
-                owner["path"]
-                    .as_str()
-                    .ok_or("enrollment declaration lacks its worktree address")?,
-            );
-            if record_directory(&self.directory, &path)? != item.path() {
-                return Err("enrollment declaration address differs from its namespace".into());
+            let observed = (|| {
+                if !item.file_type().map_err(|e| e.to_string())?.is_dir() {
+                    return Err("enrollment namespace contains an unknown member".into());
+                }
+                let marker = no_symlink_parents(&item.path(), "owner.json")?;
+                let raw = match fs::read(marker) {
+                    Ok(raw) => raw,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        issue(value!({"record_path":item.path(),"owner_missing":true,
+                            "error":"enrollment owner marker unavailable; address unknown"}));
+                        return Ok(None);
+                    }
+                    Err(error) => return Err(error.to_string()),
+                };
+                let owner = json(&raw)?;
+                let path = PathBuf::from(owner["path"].as_str()
+                    .ok_or("enrollment declaration lacks its worktree address")?);
+                if record_directory(&self.directory, &path)? != item.path() {
+                    return Err("enrollment declaration address differs from its namespace".into());
+                }
+                Ok::<_, String>(Some(path))
+            })();
+            match observed {
+                Ok(Some(path)) => paths.push(path),
+                Ok(None) => (),
+                Err(error) => issue(value!({"record_path":item.path(),"error":error})),
             }
-            paths.push(path);
         }
         paths.sort();
         Ok(paths)
@@ -1431,10 +1458,11 @@ impl Observation<'_> {
         let mut empty_records = BTreeSet::new();
         let mut unreadable_records = 0;
         let mut namespace_error = None;
+        let mut namespace_issues = Vec::new();
         // Read only the declared enrollment metadata to select this agent's work.
         // Other agents' physical checkouts are observed only by explicit all-status.
         if all || current.is_some() {
-            match self.enrollment_paths() {
+            match self.enrollment_paths_observed(|issue| namespace_issues.push(issue)) {
                 Ok(paths) => {
                     for path in paths {
                         declared.insert(path.clone());
@@ -1509,7 +1537,15 @@ impl Observation<'_> {
             }
         }
         let mut inventory = value!({});
-        let git_addresses = self.observe_inventory(r, &[], &mut inventory, all, &selected)?;
+        let mut inventory_error = None;
+        let git_addresses = match self.observe_inventory(r, &[], &mut inventory, all, &selected) {
+            Ok(addresses) => addresses,
+            Err(error) => {
+                inventory_error = Some(error);
+                inventory["worktree_inventory"].as_array().into_iter().flatten()
+                    .filter_map(|row| row["path"].as_str().map(PathBuf::from)).collect()
+            }
+        };
         for path in git_addresses {
             if path != self.inputs.policy.coordinator_root
                 && (!declared.contains(&path) || empty_records.contains(&path))
@@ -1532,6 +1568,17 @@ impl Observation<'_> {
                 "cleanup_state":"unknown","attention_required":true,
                 "agent_attention_required":false,
                 "next_action":"inspect-enrollment-namespace","error":error}));
+        }
+        if let Some(error) = &inventory_error {
+            rows.push(value!({"path":null,"work_state":"unknown","cleanup_state":"unknown",
+                "attention_required":true,"agent_attention_required":false,
+                "next_action":"inspect-git-inventory","error":error}));
+        }
+        for issue in &namespace_issues {
+            rows.push(value!({"path":null,"record_path":issue["record_path"],
+                "work_state":"unknown","cleanup_state":"unknown",
+                "attention_required":true,"agent_attention_required":false,
+                "next_action":"inspect-enrollment-namespace","error":issue["error"]}));
         }
         for path in paths {
             let snapshot = self.enrollment_snapshot(&path);
@@ -1632,7 +1679,7 @@ impl Observation<'_> {
                 "physical_present":physical.is_ok(),"git_registered":git.is_some(),
                 "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
                 "cleanup_receipt":entry.and_then(|e| e.attempts.last()).and_then(|a| a.receipt.as_ref()),
-                "error":error}));
+                "git_observation":git,"error":error}));
             if let Some(ledger) = snapshot.as_ref().ok().and_then(Option::as_ref) {
                 for pending in &ledger.retired_leases {
                     let agent_attention = pending_for_agent(
@@ -1657,9 +1704,11 @@ impl Observation<'_> {
             "scope":if all {"coordinator"} else if current.is_some() {"target-and-current-agent"} else {"target"},
             "agent":report["agent"],"unknown_creator_records":unknown_creators.len(),
             "unreadable_records":unreadable_records,"namespace_error":namespace_error,
+            "namespace_issues":namespace_issues,"inventory_error":inventory_error,
             "agent_observation_complete":current.is_some() && unknown_creators.is_empty()
-                && unreadable_records == 0 && namespace_error.is_none(),"worktrees":rows});
-        Ok(())
+                && unreadable_records == 0 && namespace_error.is_none() && namespace_issues.is_empty()
+                && inventory_error.is_none(),"worktrees":rows});
+        match inventory_error { Some(error) => Err(error), None => Ok(()) }
     }
 }
 
@@ -3352,6 +3401,7 @@ impl Manager {
         exclude: &[PathBuf],
         report: &mut Value,
         all: bool,
+        mut inventory: Option<&mut inventory::Report>,
     ) -> Result<(), String> {
         report["drain"] = value!([]);
         report["cleanup_failures"] = value!([]);
@@ -3368,7 +3418,7 @@ impl Manager {
             vec![]
         };
         self.observe_inventory(r, exclude, report, all, &BTreeSet::new())?;
-        failures.extend(self.drain_entries(r, exclude, report, all)?);
+        failures.extend(self.drain_entries(r, exclude, report, all, inventory.as_deref_mut())?);
         if !all {
             report["cleanup_failures"] = value!(failures);
             return if failures.is_empty() {
@@ -3407,7 +3457,7 @@ impl Manager {
                                 .push(value!({"path":path,"status":"failed","error":error}));
                             continue;
                         }
-                        match owner.drain_entries(r, exclude, report, true) {
+                        match owner.drain_entries(r, exclude, report, true, inventory.as_deref_mut()) {
                             Ok(pending) => failures.extend(pending),
                             Err(error) => {
                                 failures.push(format!("{}: {error}", path.display()));
@@ -3458,6 +3508,9 @@ impl Manager {
                 "cleaned",
                 |r, _, attempt| {
                     attempt["producer_objects"] = value!([]);
+                    if let Some(inventory) = inventory.as_deref_mut() {
+                        producer.observe_inventory(inputs, inventory);
+                    }
                     producer.drain(inputs, r, attempt)
                 },
             )?;
@@ -3480,11 +3533,23 @@ impl Manager {
         // pass; independent worktree and producer maintenance has already run.
         report["output_retention"] = if unprotected.is_empty() {
             value!(self.outside_enrollment(r, |inputs, _| {
-                chrono_harness::retained_artifacts::retention::maintain_explicit_adopted(
-                    &inputs.policy.coordinator_root,
-                )
+                if let Some(inventory_report) = inventory.as_deref_mut() {
+                    chrono_harness::retained_artifacts::retention::Inventory::adopted(
+                        &inputs.policy.coordinator_root,
+                    )?.map(|owner| owner.maintain_explicit_observed(|row| {
+                        inventory_report.retention(row.clone());
+                        Ok(())
+                    })).transpose()
+                } else {
+                    chrono_harness::retained_artifacts::retention::maintain_explicit_adopted(
+                        &inputs.policy.coordinator_root,
+                    )
+                }
             })?)
         } else {
+            if let Some(inventory) = inventory.as_deref_mut() {
+                inventory.error("retention", "original protection unavailable; retention not executed");
+            }
             value!({"status":"preserved","reason":"enrollment original protection unavailable",
                 "unprotected_enrollments":unprotected})
         };
@@ -3504,6 +3569,7 @@ impl Manager {
         exclude: &[PathBuf],
         report: &mut Value,
         maintenance: bool,
+        inventory: Option<&mut inventory::Report>,
     ) -> Result<Vec<String>, String> {
         // Selection and execution must use this checkout's committed choices;
         // the coordinator's thresholds can differ or be absent.
@@ -3511,6 +3577,9 @@ impl Manager {
         // enrolled checkout. Its existing directory is not a policy consumer.
         if crate::verified_lifecycle::enrolled_policy_required(self.ledger.entries.len()) {
             self.adopt_cleanup_policy(r, maintenance)?;
+        }
+        if let Some(inventory) = inventory {
+            inventory.artifacts(self);
         }
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
@@ -4086,7 +4155,7 @@ impl Manager {
         exclude: &[PathBuf],
         report: &mut Value,
     ) -> Result<(), String> {
-        match self.drain(r, exclude, report, false) {
+        match self.drain(r, exclude, report, false, None) {
             Err(_)
                 if report["cleanup_failures"]
                     .as_array()
@@ -4546,9 +4615,22 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     report,
                 ),
                 "maintain" => {
-                    let result = manager.drain(r, &[invoking.clone()], report, true);
-                    manager.observe_attention(r, report, true)?;
-                    result
+                    let mut inventory = inventory::Report::begin(
+                        &manager.inputs.policy.coordinator_root, report,
+                    )?;
+                    inventory.worktrees(&manager, r, report, "before");
+                    let result = manager.drain(r, &[invoking.clone()], report, true, Some(&mut inventory));
+                    inventory.worktrees(&manager, r, report, "after");
+                    let observed = inventory.finish(report);
+                    if let Err(error) = &observed {
+                        report["complete_inventory"]["status"] = value!("incomplete");
+                        report["complete_inventory"]["report_error"] = value!(error);
+                    }
+                    match (result, observed) {
+                        (Ok(()), Ok(())) => Ok(()),
+                        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+                        (Err(cleanup), Err(inventory)) => Err(format!("{cleanup}; {inventory}")),
+                    }
                 }
                 "import" => {
                     manager.enroll(
@@ -4590,7 +4672,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    let result = manager.drain(r, &[invoking.clone()], report, false);
+                    let result = manager.drain(r, &[invoking.clone()], report, false, None);
                     manager.observe_attention(r, report, false)?;
                     result
                 }
