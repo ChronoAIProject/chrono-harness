@@ -6,7 +6,8 @@
     "verus-source": ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/target-verus/release/verus"
   },
   "operations": [
-    "investigate.verus-source.dependencies"
+    "investigate.verus-source.dependencies",
+    "investigate.verus-source.execution"
   ],
   "install": [],
   "participation": {

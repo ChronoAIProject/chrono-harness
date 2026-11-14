@@ -5284,6 +5284,31 @@
             ".chrono-harness/ci/bootstrap-verus-source-check.json"
           ]
         },
+        "verus-source-execution": {
+          "operation": "investigate.verus-source.execution",
+          "tool": "verus-source",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--edition=2024",
+            "--extern",
+            "verus_builtin_macros=.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/target-verus/release/libverus_builtin_macros.dylib",
+            "--extern",
+            "serde=.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/runner-dependencies/debug/deps/libserde-da85fb7ff7ebe563.rlib",
+            "-L",
+            "dependency=.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/runner-dependencies/debug/deps",
+            "--emit=link=.chrono-harness/state/verus-source-workflow-execution.rlib,dep-info=.chrono-harness/state/verus-source-workflow-execution.rlib.d",
+            "crates/judge-workflow/src/verified_execution.rs",
+            "-o",
+            ".chrono-harness/state/verus-source-workflow-execution.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
         "verus-source-dependencies": {
           "operation": "investigate.verus-source.dependencies",
           "tool": "cargo",

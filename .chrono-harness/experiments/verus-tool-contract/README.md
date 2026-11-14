@@ -61,6 +61,11 @@ native 原报告保存固定宿主提交、配置、完整操作、实际工具�
 和已有下载缓存离线构建真实 runner 库；独立编译目录留在本次固定源码缓存槽位中。
 原 Cargo JSON 决定实际 Serde 等依赖的产物路径，不能从目录扫描或猜测 hash 选择。
 这份生产记录供原 workflow 严格根的修复实验使用，不授予正式证明资格。
+随后 `investigate.verus-source.execution` 直接验证原来的
+`crates/judge-workflow/src/verified_execution.rs`，包含真实 response／status 源码及
+Serde derive；完整根、严格参数、编译和 dep-info 保留。所选 Serde 库路径来自上述
+原 Cargo 产物记录；依赖变化后须重新核实际记录和字节，不能静默选择另一个库。
+该实验方法不登记正式 `output_contract`，普通退出成功不绕过原资格检查。
 
 源码构建应复用上游 Cargo 构建方法和固定 lock，不另造编译器构建框架。
 其编译器、后端、库、宏、vstd、Z3 及生产原件必须与实际构建实例匹配。
