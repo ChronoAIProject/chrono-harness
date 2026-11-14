@@ -82,7 +82,8 @@
       "runner": {
         "tests": [
           "test:identifiers-tests",
-          "test:runner-tests"
+          "test:runner-tests",
+          "test:runner-tool-contract-consume"
         ],
         "report_path": ".chrono-harness/state/units/runner/check.json"
       },

@@ -12,9 +12,9 @@
     }
   },
   "files": [
-    {"path":".chrono-harness/experiments/verus-tool-contract/consume.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}],"verification":{"role":"program","roots":[{"path":".chrono-harness/experiments/verus-tool-contract/consume.rs","operation":"investigate.verus-tool-contract.consume"}]}},
-    {"path":".chrono-harness/experiments/verus-tool-contract/reject.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}],"verification":{"role":"program","roots":[{"path":".chrono-harness/experiments/verus-tool-contract/reject.rs","operation":"investigate.verus-tool-contract.reject"}]}},
-    {"path":".chrono-harness/experiments/verus-tool-contract/vstd.patch","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"compile","to":"project:runner-tests"}],"verification":{"role":"data","roots":[]}},
+    {"path":".chrono-harness/experiments/verus-tool-contract/consume.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tool-contract-consume"}],"verification":{"role":"program","roots":[{"path":".chrono-harness/experiments/verus-tool-contract/consume.rs","operation":"investigate.verus-tool-contract.consume"}]}},
+    {"path":".chrono-harness/experiments/verus-tool-contract/fixtures/reject.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:runner-tests"}],"verification":{"role":"data","roots":[]}},
+    {"path":".chrono-harness/experiments/verus-tool-contract/vstd.patch","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tool-contract-consume"}],"verification":{"role":"data","roots":[]}},
     {"path":"crates/runner/src/json_value_specs.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"compile","to":"project:runner"},{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"specification","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
     {"path":"crates/runner-tests/tests/json_adapters.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"},{"kind":"test-execution","to":"test:runner-tests"}],"verification":{"role":"program","roots":[{"path":"crates/runner-tests/tests/json_adapters.rs","operation":"verify.runner-json-adapters-tests"}]}},
     {"path":".chrono-harness/experiments/ci-generation-dependencies.md","owner":"ci","surface":"documentation","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
@@ -725,6 +725,7 @@
     {"from":"project:runner","kind":"compile","to":"project:runner-tests"},
     {"from":"project:runner","kind":"runtime-input","to":"project:runner-tests"},
     {"from":"project:runner","kind":"test-execution","to":"test:runner-tests"},
+    {"from":"project:runner","kind":"test-execution","to":"test:runner-tool-contract-consume"},
     {"from":"project:runner-tests","kind":"test-execution","to":"test:runner-tests"},
     {"from":"project:instructions","kind":"compile","to":"project:instructions-tests"},
     {"from":"project:instructions","kind":"test-execution","to":"test:instructions-tests"},
@@ -1278,6 +1279,7 @@
     {"test":"host-bootstrap-launcher-tests","cost":"unmeasured"},
     {"test":"host-bootstrap-native-tests","cost":"unmeasured"},
     {"test":"runner-tests","cost":"unmeasured"},
+    {"test":"runner-tool-contract-consume","cost":"unmeasured"},
     {"test":"instructions-tests","cost":"unmeasured"},
     {"test":"judge-ci-tests","cost":"unmeasured"},
     {"test":"ci-tests","cost":"unmeasured"},
@@ -1326,6 +1328,13 @@
         "fmt.host-bootstrap-native",
         "fmt.host-bootstrap-native-tests",
         "test.host-bootstrap-native-tests"
+      ],
+      "timeout_seconds": 900,
+      "output_limit_bytes": 1048576
+    },
+    "test:runner-tool-contract-consume": {
+      "operations": [
+        "investigate.verus-tool-contract.consume"
       ],
       "timeout_seconds": 900,
       "output_limit_bytes": 1048576

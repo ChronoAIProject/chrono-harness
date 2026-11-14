@@ -180,7 +180,7 @@ runner 的 `require_registered_input_evidence` 另外仍拒绝非空扩展编译
 
 ## S：真实 vstd 源码候选与严格使用实验
 
-S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d018fae4044760eb96a20a4bb4` 准备本节候选，不重查 R 已解决的普通 proxy／import 类。目的仍是七个实际适配器及 generation 所需的真实外部 JSON／全文合同。**当前只完成源码与操作登记；没有构建或运行两个严格根，端到端能力为 ASSUMED-UNVERIFIED。** 不据此宣称严格成功、完整 family、正式 ProofAdmission 或交付。
+S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d018fae4044760eb96a20a4bb4` 准备本节候选，不重查 R 已解决的普通 proxy／import 类。目的仍是七个实际适配器及 generation 所需的真实外部 JSON／全文合同。**S 的初始登记不完整；T 在派发前被拒绝，U 的当前修正仍待封存和原生准入。没有构建或运行正反向输入，端到端能力为 ASSUMED-UNVERIFIED。** 不据此宣称严格成功、完整 family、正式 ProofAdmission 或交付。
 
 **可见变更警告：同时增加工具库源码补丁、Verus 实验程序和宿主实验方法登记。** 原安装工具、产品源码、正式证明操作和准入判断均未修改。旧安装 vstd 没有这里的 JSON／全文模型关系；候选是真实 vstd 源码的一项显式扩展。新增构建、证明、CI、存储和维护成本尚未实测，不因候选使用原二进制的版本字符串就沿用旧库资格。
 
@@ -206,7 +206,7 @@ S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d01
 
 ### 所有者与唯一待执行入口
 
-完整 argv 只由 projects.json 维护。新增操作均有现有 `.chrono-harness/state/` 产物占用，沿本文原 `chrono-worktree use --operation` 入口执行。原生工具库的准备不提供仓内证明贡献；两个实验根保持 `--no-cheating`、`--no-external-by-default`、两线程、整 crate、编译和 checksum。所有新 action 均无 `output_contract`，不伪造现役不支持的 typed 资格。原测试计划、线程、时限、原行为断言和生产证明操作均保留，实验不会自动加入 CI／缓存或正式汇总。
+完整 argv 只由 projects.json 维护。五项操作均有现有 `.chrono-harness/state/` 产物占用，沿本文原 `chrono-worktree use --operation` 入口执行。原生工具库的准备不提供仓内证明贡献；正向程序和反向外部工具输入的调用均保持 `--no-cheating`、`--no-external-by-default`、两线程、整 crate、编译和 checksum。所有实验 action 均无 `output_contract`，不伪造现役不支持的 typed 资格。原未过滤测试计划、线程、时限、行为断言和生产证明操作均保留。U 补充的正向组及现有 runner 单元归属见下节；反向原非零结果不进入成功证明计划，不新增缓存订阅。
 
 | 操作／现有负责方 | 必需输入、顺序与实际使用方 |
 | --- | --- |
@@ -214,9 +214,29 @@ S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d01
 | `investigate.verus-tool-contract.patch`／同一工具所有者 | 只消费上一项的完整解压结果及已封存 `vstd.patch`；原生 patch 禁用 fuzz、禁止交互，非零保留原结果，不原地重试。补丁后核对根与合同实际路径／字节。 |
 | `investigate.verus-tool-contract.build`／同一工具所有者 | 消费补丁后全部 vstd 源码、唯一 JSON 合同源、原宏／工具链与固定 serde_json rlib；原生 `--is-vstd` 完整构建允许工具库原有显式假设，不冒充仓内严格证明。只能在原任务零退出、完整验证及编译结果和新库／VIR／dep-info 身份都取得后交给下面两项。 |
 | `investigate.verus-tool-contract.consume`／runner-tests | 消费同次成功新组件。`consume.rs` 实际调用 `as_str`、`as_object`、`get::<&str>`、泛型 `Index<&str>`、Map::len、借用键查询和 set::insert，证明完整返回关系、状态变化及下面的边界。不是未用 import 或 fixture 回调。 |
-| `investigate.verus-tool-contract.reject`／runner-tests | 仅在上项严格成功后，以相同组件与严格路径检查 `reject.rs` 中仓内函数的 `assume(false)`；原程序应非零退出，原诊断须确实指向该函数的 `assume/admit not allowed with --no-cheating`。失败状态原样保留，不能转成成功 ProofAdmission。 |
+| `investigate.verus-tool-contract.reject`／runner-tests | 仅在上项严格成功后，以相同组件与严格路径检查 `fixtures/reject.rs` 中模拟仓内函数的 `assume(false)`；该故意非法输入应使 Verus 非零退出，原诊断须确实指向该函数的 `assume/admit not allowed with --no-cheating`。失败状态原样保留，不能转成成功 ProofAdmission。 |
 
-FILEMAP 逐文件保持 `consume.rs`／`reject.rs` 为 program，分别绑定自己的整 crate 操作；`vstd.patch` 是原生 patch 的输入数据，不包含新判断程序，登记为 data。现有合同源的 specification／runner 证明根保留，并增加真实工具准备使用边。补丁及两个根的输入／输出关系由本表明确登记，不靠扫描或新项目推断；独立原生操作不改正式测试计划。完整 DELTA 仍须由后续资格所有者处理这些尚未准入的实验根，不能据 raw 登记声称覆盖已闭合。
+当前 FILEMAP 将 `consume.rs` 保持为 program，绑定其实际整 crate 操作和下节正向执行组；故意非法的外部 Verus 输入 `fixtures/reject.rs` 按 fixture 数据合同登记为 data、`roots: []`，仍由同一 runner-tests action 真正传给 Verus。`vstd.patch` 仍是原生 patch 的输入数据，不包含新判断程序，登记为 data。现有合同源的 specification／runner 证明根和真实工具准备使用边保留。补丁及正反向输入／输出关系由本表明确登记，不靠扫描、新项目或成功包装推断。完整 DELTA 和正式证明资格仍待验收，不能据 raw 登记声称覆盖已闭合。
+
+### U：完整实验关系的登记修正与待验收方法
+
+**可见方法变更警告：修正实验分类、执行组、影响边和单元归属；不修改产品判断、分类判官或工具资格规则。** S 原来将正向程序和故意非法输入都登记为成功证明根，却没有把两项操作放入任何 execution plan。现在只有真正需要成功证明的 `consume.rs` 是 program；反向 fixture 保留独立的非法载荷和严格拒绝预期。此修正只适用于 S 已明确要求非零的外部工具输入，不豁免产品、适配器、测试驱动、状态判断或独立 Verus 预期。
+
+现役分类门拒绝同一路径从 program 降为 data。为纠正 S 的输入表示，原 `reject.rs` 的全部 322 字节原样保存在 `fixtures/reject.rs`，SHA-256 仍为 `aeeb242ba37a121eb817855517ef8930f918d5591005c2c053026a11e119aa60`；原 action 只迁移该输入路径，原输出路径、所有参数及 `assume(false)` 均保留。旧路径不再登记，新的 fixture 行有实际 runner-tests 运行输入边。没有移走或隐藏任何应成功证明的仓内实现；外部 Verus 仍会看到相同函数并必须真实拒绝它。
+
+| 当前登记／实际使用方 | 作用和边界 |
+| --- | --- |
+| projects 的 runner-tests `test_groups` | `runner-tests → execute` 保留原未过滤操作；`runner-tool-contract-consume → investigate_tool_contract_consume` 绑定真实正向 action。没有反向成功组或新项目。 |
+| FILEMAP `test:runner-tool-contract-consume` | 单项计划只含 `investigate.verus-tool-contract.consume`，默认上限沿用 runner-tests 的 900 秒、1,048,576 字节；这不是实测用时或总预算。consume／补丁的执行边与 runner 到组的配对边明确选择该根，成本为 unmeasured。原 `test:runner-tests` 计划原样保留。 |
+| check.json 的现有 `runner` 单元 | 同一单元同时拥有原测试和新增正向组，保持全部计划恰有一个单元负责；不新增原生 job、生成投影、缓存、共享操作或执行器。正向组是新增的相关验收义务，不代表 CI 已运行或支持该工具合同。 |
+| extract／patch／build 的三个 action 与 claim | 仍归 `script:host-bootstrap-launcher`，五项完整 argv／产物 claim 均保留；它们是上述表中逐项核验的显式准备操作，不伪装成测试组。正向单项计划不会自动准备组件；调用方须先取得同次成功准备结果。 |
+| reject action 与 claim | 仍归 `project:runner-tests`，直接消费真实 fixture，并原样保留非零 stdout／stderr／退出状态。它不需要成功证明根或成功计划；独立拒绝验收由本节既定预期和调用方消费原件，不转换成 ProofAdmission。 |
+
+T 在封存 `b11d7b936d30320f185c8538c56f741f6e5786c6`／tree `e7f2d25f6382ae17dfc1394dcbc90b0c65ac535c` 上的原生 `status-7081-1794624176321927000-0` 和一次 extract use `use-14172-1794624253437090000-0` 均退出 2：`filemap: .chrono-harness/experiments/verus-tool-contract/consume.rs: E_VERUS_COVERAGE: proof root operation is not registered`。原件分别为 `.chrono-harness/state/worktrees/status-7081-1794624176321927000-0.json` 与 `.chrono-harness/state/worktrees/use-14172-1794624253437090000-0.json`。两个报告各保留 25 项已加入的 Git 读取进程；未取得 use、未派发任何实验操作、未启动 tar／Verus。raw positive／negative 均未知；这不是预期的 assume 拒绝，也不是历史 cleanup identity 失败。原件按本节既有使用方和 2026-11-21 用途复核条件保留，不复制日志或另建账本。
+
+U 只准备候选，未重跑原输入或任何 status／use、准备／证明操作。已有原生 CLI 的实际登记解析从固定提交读取，正式 check 还要求干净候选；本轮没有另造脏目录解析器，也不把 JSON 解码或源码核对称为原生登记通过。调用方先封存完整变更，再以 `.chrono-harness/bin/chrono-worktree use --operation investigate.verus-tool-contract.extract --path /Users/macstudio2/chrono-spec-current-dev` 核验新候选的实际准入；成功后才按上表逐项执行 patch、build、consume、reject，每项等待并核原结果，任一前置失败只停止其依赖项。旧 T 输入不重跑。
+
+正式 DELTA 仍走 `.chrono-harness/bin/chrono-harness check`，所选证明和原未过滤测试由登记负责。当前正向 action 的 bash 转交、extern／新组件及缺少 typed 资格仍受现役工具合同限制；补入计划成员不使其自动满足 `root_planned` 或实际编译绑定，不能添加虚假 `output_contract`。候选原生登记／extract 准入尚未验收，后续任何前置或工具资格错误仍是失败。新增组带来额外正向验证义务；完整构建、运行、CI、存储和维护成本未知。
 
 ### 执行前固定的预期、范围与剩余义务
 
@@ -230,4 +250,4 @@ FILEMAP 逐文件保持 `consume.rs`／`reject.rs` 为 program，分别绑定自
 
 产物沿现有 state 的 evidence-retain 与 check-original 所有者保管；不新增保留生产者、总账或清理器。使用方是工具合同工程、runner 资格工程、调用方与 mandatory review。原失败保留到调试／验收义务完成；新组件及原件在这些使用方结束、已保全必要证据且无活使用方后由调用方通过现有生命周期／保留所有者回收，2026-11-21 复核用途，不因日期自行删除。新增运行总成本未知；本轮只量取上表输入字节，没有用预算、重复运行或降低目标换取成功。
 
-本节没有待执行的新登记操作，验证总成本未知。全部受影响源码的实质证明、generation 四个真实投影与 prepare／effect／recovery、正式 DELTA、原生 integration／dev、平台与生命周期义务继续未完成。保留使用方和复核条件沿用本文既有声明；本节不新增运行账本、执行器、缓存或永久证据副本。
+R 的普通 proxy／import 源码调查没有待执行的新登记操作；S 的五项真实组件操作仍按上表前置关系等待执行。验证总成本未知。全部受影响源码的实质证明、generation 四个真实投影与 prepare／effect／recovery、正式 DELTA、原生 integration／dev、平台与生命周期义务继续未完成。保留使用方和复核条件沿用本文既有声明；本节不新增运行账本、执行器、缓存或永久证据副本。

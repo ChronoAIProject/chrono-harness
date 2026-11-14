@@ -799,14 +799,18 @@
             "--export",
             ".chrono-harness/state/verus-tool-contract-20261114-reject.vir",
             "--emit=link=.chrono-harness/state/verus-tool-contract-20261114-reject.rlib,dep-info=.chrono-harness/state/verus-tool-contract-20261114-reject.rlib.d",
-            ".chrono-harness/experiments/verus-tool-contract/reject.rs",
+            ".chrono-harness/experiments/verus-tool-contract/fixtures/reject.rs",
             "-o",
             ".chrono-harness/state/verus-tool-contract-20261114-reject.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ]
         }
       },
-      "language": "rust"
+      "language": "rust",
+      "test_groups": {
+        "runner-tests": "execute",
+        "runner-tool-contract-consume": "investigate_tool_contract_consume"
+      }
     },
     {
       "id": "instructions",
