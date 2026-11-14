@@ -8,6 +8,8 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::std_specs::cmp::OrdSpec;
 #[cfg(verus_keep_ghost)]
+use vstd::std_specs::iter::IteratorSpec;
+#[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 
 #[cfg(verus_keep_ghost)]
@@ -456,16 +458,18 @@ pub fn pending_registry_paths(paths: Vec<String>, entry: &str, effective: &str) 
     let ghost all = paths@;
     let ghost text = all.map_values(|p: String| p@);
     let mut iterator = paths.into_iter();
+    let ghost consumed: int = 0;
     let mut pending: Vec<String> = Vec::new();
     loop
         invariant
             all == paths@, text == all.map_values(|p: String| p@),
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            0 <= consumed <= all.len(),
+            iterator.remaining() == all.subrange(consumed, all.len() as int),
             pending@.map_values(|p: String| p@)
-                == registry_pending_prefix(text, iterator@.0, entry@, effective@),
-        decreases all.len() - iterator@.0,
+                == registry_pending_prefix(text, consumed, entry@, effective@),
+        decreases all.len() - consumed,
     {
-        let ghost at = iterator@.0;
+        let ghost at = consumed;
         match iterator.next() {
             None => { return pending; },
             Some(path) => {
@@ -479,6 +483,7 @@ pub fn pending_registry_paths(paths: Vec<String>, entry: &str, effective: &str) 
                     pending.push(path);
                     assert(pending@.map_values(|p: String| p@) =~= previous.push(original));
                 }
+                proof { consumed = at + 1; }
             },
         }
     }
@@ -649,10 +654,11 @@ pub fn registry_parse_batch_with_model<V, P>(
             vstd::laws_cmp::obeys_cmp::<String>(),
             all == originals@, all.len() == expected.len(),
             initial_bytes == bytes@, initial_values == values@,
-            remaining@.1 == all, 0 <= remaining@.0 <= all.len(), index as int == remaining@.0,
-            registry_batch_prefix(expected@, all, model, remaining@.0),
+            0 <= index <= all.len(),
+            remaining.remaining() == all.subrange(index as int, all.len() as int),
+            registry_batch_prefix(expected@, all, model, index as int),
             registry_batch_spec(expected@, all, initial_bytes, initial_values, model)
-                == registry_batch_fold(expected@, all, remaining@.0, collected_bytes@, collected_values@, model),
+                == registry_batch_fold(expected@, all, index as int, collected_bytes@, collected_values@, model),
             forall|i: int, raw: &[u8]| 0 <= i < all.len()
                 && registry_batch_prefix(expected@, all, model, i)
                 && expected@[i]@ == all[i].0@ && raw@ == all[i].1@
@@ -660,9 +666,9 @@ pub fn registry_parse_batch_with_model<V, P>(
             forall|raw: &[u8], result: Result<V, String>|
                 decode.requires((raw,)) && decode.ensures((raw,), result)
                 ==> registry_decoded_view(result) == model(raw@),
-        decreases all.len() - remaining@.0,
+        decreases all.len() - index,
     {
-        let ghost at = remaining@.0;
+        let ghost at = index as int;
         proof { reveal_with_fuel(registry_batch_fold, 1); }
         let (path, original) = match remaining.next() {
             None => { return Ok((collected_bytes, collected_values)); },
@@ -776,15 +782,15 @@ pub fn registry_read_sequence<S, V, R, P>(
     loop
         invariant vstd::laws_cmp::obeys_cmp::<String>(),
             all == paths@, initial == (input_source, bytes@, values@),
-            remaining@.1 == all, 0 <= remaining@.0 <= all.len(),
-            states.len() == remaining@.0 + 1,
+            1 <= states.len() <= all.len() + 1,
+            remaining.remaining() == all.subrange(states.len() - 1, all.len() as int),
             states.last() == (source, collected_bytes@, collected_values@),
             registry_read_sequence_prefix(states, initial, all, read, decode),
             all.len() > 0 ==> (forall|source: S, path: &str| #[trigger] read.requires((source, path))),
             all.len() > 0 ==> (forall|raw: &[u8]| #[trigger] decode.requires((raw,))),
-        decreases all.len() - remaining@.0,
+        decreases all.len() + 1 - states.len(),
     {
-        let ghost at = remaining@.0;
+        let ghost at = states.len() - 1;
         let ghost before = states.last();
         let path = match remaining.next() {
             None => {
@@ -1397,15 +1403,15 @@ pub fn parse_git_text_rows(decoded: Vec<Option<String>>) -> (out: Result<Vec<Str
     let mut paths: Vec<String> = Vec::new();
     loop
         invariant all == decoded@,
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
-            paths.len() == iterator@.0,
+            paths.len() <= all.len(),
+            iterator.remaining() == all.subrange(paths.len() as int, all.len() as int),
             forall|i: int| 0 <= i < paths.len() ==> match (#[trigger] all[i]) {
                 Some(text) => text@ == paths@[i]@,
                 None => false,
             },
-        decreases all.len() - iterator@.0,
+        decreases all.len() - paths.len(),
     {
-        let ghost at = iterator@.0;
+        let ghost at = paths.len() as int;
         match iterator.next() {
             None => { return Ok(paths); },
             Some(row) => {
@@ -1733,14 +1739,13 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
 {
     proof { tree_path_obeys_cmp(); }
     let mut iterator = tree.iter();
-    let ghost all = iterator@.1;
+    let ghost all = vstd::std_specs::btree::into_iter(iterator);
     let mut rows: Vec<(&TreePath, &TreeEntry)> = Vec::new();
     loop
         invariant
-            iterator@.1 == all,
-            iterator@.0 == rows.len(),
-            0 <= iterator@.0 <= all.len(),
-            tree_rows_view(rows@) == all.take(iterator@.0),
+            rows.len() <= all.len(),
+            iterator.remaining().unref() == all.subrange(rows.len() as int, all.len() as int),
+            tree_rows_view(rows@) == all.take(rows.len() as int),
             all.to_set() == tree@.kv_pairs(),
             vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (TreePath, TreeEntry)| row.0)),
         decreases all.len() - rows.len(),
@@ -1766,7 +1771,7 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
             }
             Some((key, value)) => {
                 rows.push((key, value));
-                proof { assert(tree_rows_view(rows@) =~= all.take(iterator@.0)); }
+                proof { assert(tree_rows_view(rows@) =~= all.take(rows.len() as int)); }
             }
         }
     }
@@ -1921,7 +1926,7 @@ fn tree_keys_have_unique_text<V>(tree: &BTreeMap<TreePath, V>)
     proof { tree_path_obeys_cmp(); }
     let iterator = tree.iter();
     proof {
-        let rows = iterator@.1;
+        let rows = vstd::std_specs::btree::into_iter(iterator);
         let keys = rows.map(|i: int, row: (TreePath, V)| row.0);
         vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
         assert forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
@@ -2229,13 +2234,18 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
 {
     proof { git_index_stage_obeys_cmp(); }
     let mut iterator = stages.keys();
-    let ghost all = iterator@.1;
-    proof { all.unique_seq_to_set(); }
+    let ghost all = vstd::std_specs::btree::into_iter_keys(iterator);
+    proof {
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
+        all.unique_seq_to_set();
+    }
     let mut keys: Vec<GitIndexStage<'a>> = Vec::new();
     loop
         invariant
-            iterator@.1 == all, iterator@.0 == keys.len(),
-            0 <= iterator@.0 <= all.len(), keys@ == all.take(iterator@.0),
+            keys.len() <= all.len(),
+            iterator.remaining().unref() == all.subrange(keys.len() as int, all.len() as int),
+            keys@ == all.take(keys.len() as int),
             all.to_set() == stages@.dom(), all.len() == stages@.len(),
             vstd::std_specs::btree::increasing_seq(all),
         decreases all.len() - keys.len(),
@@ -2255,7 +2265,7 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
             },
             Some(key) => {
                 keys.push(GitIndexStage { path: key.path, stage: key.stage });
-                proof { assert(keys@ =~= all.take(iterator@.0)); }
+                proof { assert(keys@ =~= all.take(keys.len() as int)); }
             },
         }
     }
@@ -2269,7 +2279,7 @@ fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
     proof { git_index_stage_obeys_cmp(); }
     let iterator = stages.iter();
     proof {
-        let rows = iterator@.1;
+        let rows = vstd::std_specs::btree::into_iter(iterator);
         let keys = rows.map(|i: int, row: (GitIndexStage, ())| row.0);
         vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
         assert forall|a: GitIndexStage, b: GitIndexStage|
@@ -2788,19 +2798,21 @@ pub fn normalize_checkout_paths(first: Vec<String>, second: Vec<String>) -> (out
     let mut additional = second;
     pending.append(&mut additional);
     let mut iterator = pending.into_iter();
+    let ghost consumed: int = 0;
     let mut changes = CheckoutChanges::new();
     loop
         invariant all == first@ + second@,
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
-            changes@.len() <= iterator@.0,
+            0 <= consumed <= all.len(),
+            iterator.remaining() == all.subrange(consumed, all.len() as int),
+            changes@.len() <= consumed,
             forall|path: Seq<char>| #[trigger] checkout_change_has_path(changes@, path)
-                == checkout_path_prefix(all, iterator@.0, path),
-        decreases all.len() - iterator@.0,
+                == checkout_path_prefix(all, consumed, path),
+        decreases all.len() - consumed,
     {
-        let ghost at = iterator@.0;
+        let ghost at = consumed;
         match iterator.next() {
             None => {
-                assert(iterator@.0 == all.len());
+                assert(consumed == all.len());
                 let out = checkout_changed_paths(&changes);
                 proof {
                     assert forall|text: Seq<char>|
@@ -2815,8 +2827,9 @@ pub fn normalize_checkout_paths(first: Vec<String>, second: Vec<String>) -> (out
             Some(path) => {
                 record_checkout_owned_change(&mut changes, path);
                 proof {
+                    consumed = at + 1;
                     assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
-                        == checkout_path_prefix(all, iterator@.0, text) by {
+                        == checkout_path_prefix(all, consumed, text) by {
                         assert(checkout_path_prefix(all, at + 1, text)
                             == (checkout_path_prefix(all, at, text) || all[at]@ == text));
                     }
@@ -2838,13 +2851,18 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
 {
     proof { tree_path_obeys_cmp(); }
     let mut iterator = changes.keys();
-    let ghost all = iterator@.1;
-    proof { all.unique_seq_to_set(); }
+    let ghost all = vstd::std_specs::btree::into_iter_keys(iterator);
+    proof {
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
+        all.unique_seq_to_set();
+    }
     let mut paths: Vec<String> = Vec::new();
     loop
         invariant
-            iterator@.1 == all, iterator@.0 == paths.len(),
-            0 <= iterator@.0 <= all.len(), all.to_set() == changes@.dom(),
+            paths.len() <= all.len(),
+            iterator.remaining().unref() == all.subrange(paths.len() as int, all.len() as int),
+            all.to_set() == changes@.dom(),
             all.len() == changes@.len(),
             vstd::std_specs::btree::increasing_seq(all),
             forall|i: int| 0 <= i < paths.len() ==> (#[trigger] paths@[i])@ == all[i]@,
