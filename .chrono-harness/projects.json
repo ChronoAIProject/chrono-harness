@@ -3787,7 +3787,7 @@
           "tool": "bash",
           "argv": [
             "-c",
-            "RUSTC_BOOTSTRAP=1 exec .chrono-harness/bin/verus/cargo-verus \"$@\" --config \"build.rustflags=[\\\"-Zbinary-dep-depinfo\\\",\\\"-Zchecksum-hash-algorithm=sha256\\\",\\\"--extern\\\",\\\"vstd=$PWD/.chrono-harness/bin/verus/libvstd.rlib\\\",\\\"-L\\\",\\\"dependency=$PWD/.chrono-harness/bin/verus\\\"]\" -- --import \"vstd=$PWD/.chrono-harness/bin/verus/vstd.vir\" --no-cheating --no-external-by-default --num-threads 2 --output-json -Zchecksum-hash-algorithm=sha256",
+            "RUSTC_BOOTSTRAP=1 exec .chrono-harness/bin/verus/cargo-verus \"$1\" --config \"build.rustflags=[\\\"-Zbinary-dep-depinfo\\\",\\\"-Zchecksum-hash-algorithm=sha256\\\",\\\"--extern\\\",\\\"vstd=$PWD/.chrono-harness/bin/verus/libvstd.rlib\\\",\\\"-L\\\",\\\"dependency=$PWD/.chrono-harness/bin/verus\\\"]\" \"${@:2}\" -- --import \"vstd=$PWD/.chrono-harness/bin/verus/vstd.vir\" --no-cheating --no-external-by-default --num-threads 2 --output-json -Zchecksum-hash-algorithm=sha256",
             "verify.bootstrap-dependency-owner",
             "build",
             "-v",
@@ -3906,7 +3906,7 @@
           "tool": "bash",
           "argv": [
             "-c",
-            "RUSTC_BOOTSTRAP=1 exec .chrono-harness/bin/verus/cargo-verus \"$@\" --config \"build.rustflags=[\\\"-Zbinary-dep-depinfo\\\",\\\"-Zchecksum-hash-algorithm=sha256\\\",\\\"--extern\\\",\\\"vstd=$PWD/.chrono-harness/bin/verus/libvstd.rlib\\\",\\\"-L\\\",\\\"dependency=$PWD/.chrono-harness/bin/verus\\\"]\" -- --import \"vstd=$PWD/.chrono-harness/bin/verus/vstd.vir\" --no-cheating --no-external-by-default --num-threads 2 --output-json -Zchecksum-hash-algorithm=sha256",
+            "RUSTC_BOOTSTRAP=1 exec .chrono-harness/bin/verus/cargo-verus \"$1\" --config \"build.rustflags=[\\\"-Zbinary-dep-depinfo\\\",\\\"-Zchecksum-hash-algorithm=sha256\\\",\\\"--extern\\\",\\\"vstd=$PWD/.chrono-harness/bin/verus/libvstd.rlib\\\",\\\"-L\\\",\\\"dependency=$PWD/.chrono-harness/bin/verus\\\"]\" \"${@:2}\" -- --import \"vstd=$PWD/.chrono-harness/bin/verus/vstd.vir\" --no-cheating --no-external-by-default --num-threads 2 --output-json -Zchecksum-hash-algorithm=sha256",
             "verify.bootstrap-dependency-owner-tests",
             "build",
             "-v",
