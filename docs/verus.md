@@ -1,5 +1,32 @@
 # Verus 实施范围
 
+## 生命周期报告的保管范围选择
+
+`start.rs` 的 `select_report_input_scope` 用同源 Verus 选择实际保管回调，并完整保留
+回调返回的状态、scope 或错误：`maintain` 有 publication 时只调用子输出保管；没有时
+不建立 scope。普通活动有 publication 时调用该 publication 的输入保管，否则保管
+原调用方输入。独立 Verus 预期覆盖四种组合、原 publication 身份、成功值、完整错误载荷，
+以及空、大小写、Unicode、NUL 操作名；这些预期同时作为 Rust 测试运行。
+
+生命周期入口已在准备阶段确定协调者作为报告发布方，随后只消费这次已选 scope。
+删除该入口额外建立的协调者全输入 scope，避免 linked worktree 发起维护时把各子项
+独立保管的输入重复累计到同一调用方关系集合。创建路径仍在调用方发布报告，保留原有
+协调者保护。真实容量回归沿原 512 项 fixture 分别核 main／linked 调用的合格回收与必需
+原件保留，不增加容量、预算或等待机制。
+
+容量用例验证 main／linked 的边界保留行为；它们在删除重复 scope 前也能通过，
+不把它们当作原输入累计失败的复现。原回归另发现，等待指定原件跨对象回收的辅助函数
+错误地调用了只处理本轮局部范围的普通维护；该纯转发改用已有 `maintain_explicit`，
+保留原八轮上限、每轮预算、失败诊断及最终删除断言。生命周期真实入口仍由原用例验收。
+
+**产品与宿主登记同步修改：**FILEMAP 为 `start.rs` 登记现有生命周期生产／独立预期根，
+复用 `verify.worktree-lifecycle`／`verify.worktree-lifecycle-tests` 整 crate 操作及其原参数。
+该文件只将上述选择纳入证明编译；存量 Git、JSON、报告发布和外层事务继续未完成，
+不能把文件分类或局部证明解释为整文件已证明。保管回调直接调用既有 retention 所有者，
+本批只证明调用选择及原结果传递，不把这些仓内函数登记为外部接口或豁免其最终证明。
+标准 Option／Result／元组及固定 vstd 的字符串比较沿用现有合同；没有新增 `external_body`、
+`assume`、依赖、证明操作或过滤。额外构建、证明、CI 和存储总成本未测。
+
 ## 受影响文件的分类门控
 
 本仓 FILEMAP 已启用 `require_new_file_classification: true`。当前候选只要影响某个已登记文件，

@@ -17,6 +17,13 @@ use vstd::vpanic as panic;
 
 verus! {
 
+fn require_capacity_fixture_exit(code: i32)
+    requires code == 0,
+    ensures code == 0,
+{
+    if code != 0 { panic!(); }
+}
+
 fn require_absence_expectation(actual: bool)
     requires actual,
 {
@@ -913,14 +920,17 @@ impl Host {
         self.policy(|p| p["automatic_cleanup"] = value!(AUTO_POLICY));
     }
     pub(super) fn auto_command(&self, command: &str, extra: &[&str]) -> Command {
+        self.auto_command_at(&self.root, command, extra)
+    }
+    fn auto_command_at(&self, invoking: &Path, command: &str, extra: &[&str]) -> Command {
         let mut c = Command::new(Path::new(env!("CARGO_BIN_EXE_chrono-worktree-test-cli")));
-        c.current_dir(&self.root)
+        c.current_dir(invoking)
             .env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .args([
                 command,
                 "--host-root",
-                self.root.to_str().unwrap(),
+                invoking.to_str().unwrap(),
                 "--config",
                 POLICY,
             ])
@@ -1072,13 +1082,21 @@ fn caught_capacity_failure_exports_original_inventory_and_command_streams() {
 // Exercise the actual lifecycle CLI with the adopted finite owner, not an
 // alternate maintenance implementation. Failed cases retain their original host.
 #[cfg(not(verus_keep_ghost))]
-fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
+fn ordinary_report_capacity(
+    operation: &str,
+    all_rooted: bool,
+    invoking_root: impl FnOnce(&Host) -> PathBuf,
+) {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = Host::new("payload");
     let directory = Host::diagnostic_directory(true).unwrap();
     let result = capacity_fixture_with_diagnostics(&h, &directory, || {
         h.kernel_cleanup();
         native_consumer(&h, "ordinary");
+        let invoking = invoking_root(&h);
         let bootstrap = ".chrono-harness/ci/capacity.json";
         fs::create_dir_all(h.root.join(".chrono-harness/ci")).unwrap();
         fs::write(h.root.join(bootstrap), serde_json::to_vec(&value!({
@@ -1180,7 +1198,7 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
             } else {
                 vec![]
             };
-            let mut command = h.auto_command(operation, &extra);
+            let mut command = h.auto_command_at(&invoking, operation, &extra);
             let out = h._dir.capture_bound(&mut command);
             let dir = h.root.join(".chrono-harness/state");
             fs::write(dir.join(format!("capacity-{phase}.stdout")), &out.stdout).unwrap();
@@ -1304,28 +1322,39 @@ fn ordinary_report_capacity(operation: &str, all_rooted: bool) {
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn ordinary_report_capacity_maintenance_reclaims_only_eligible_originals() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
-    ordinary_report_capacity("maintain", false);
+    ordinary_report_capacity("maintain", false, |h| h.root.clone());
 }
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn ordinary_report_capacity_bootstrap_admits_without_unrelated_maintenance() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
-    ordinary_report_capacity("bootstrap", false);
+    ordinary_report_capacity("bootstrap", false, |h| h.root.clone());
 }
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
 fn ordinary_report_capacity_maintenance_preserves_required_originals() {
-    if !chrono_git_boundary::isolated_git() {
-        return;
-    }
-    ordinary_report_capacity("maintain", true);
+    ordinary_report_capacity("maintain", true, |h| h.root.clone());
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn linked_capacity_invoker(h: &Host) -> PathBuf {
+    let target = h.parent.join("capacity-invoker");
+    let (code, _, _) = h.invoke("feature", "capacity-invoker", &target);
+    require_capacity_fixture_exit(code);
+    target
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn linked_report_capacity_maintenance_reclaims_only_eligible_originals() {
+    ordinary_report_capacity("maintain", false, linked_capacity_invoker);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn linked_report_capacity_maintenance_preserves_required_originals() {
+    ordinary_report_capacity("maintain", true, linked_capacity_invoker);
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -2524,7 +2553,8 @@ fn maintain_original_until_absent(
 ) {
     let mut rounds = Vec::new();
     for _ in 0..8 {
-        let round = inventory.maintain().unwrap();
+        // 此处明确等待跨对象原件回收；普通入口只处理其本轮局部范围。
+        let round = inventory.maintain_explicit().unwrap();
         // 只核本用例的原件；无关对象的保留失败仍留在每轮原始诊断中。
         rounds.push(round);
         if !path.exists() {
