@@ -317,7 +317,7 @@ JSON 字符串观察与标准 Debug 格式化是明确外部接口，剩余登�
 | 65 活消费／恢复下数量字节超限 | 部分：候选 per_relation_capacity_preserves_independent_outputs_and_recovers_pending_record 要求关系集上限 1 时独立发布、恢复点名 pending；执行待完成 | 字节／未知占用组合、完整生产／恢复采用 |
 | 66 删除前新增引用／身份变化／后代未等待 | 部分：准入／排除／身份复核 | 在现有所有者同步全部声明产物发布／引用／释放／处置 |
 | 67 原件退役／重复清理 | 部分：缓存重试证据避免递归膨胀 | 真实退役摘要、证据不足消费、通用有限退役 metadata |
-| 68 大型旧／未登记／重复宿主产物 | 部分：runner-tests/tests/retention.rs::historical_cli_requires_registered_producer_receipt_exclusion_and_release_evidence 用当前 CLI，拒绝活旧所有者和内部可丢回执，要求精确 source／receipt／lease／root／release，回收 2048 字节、保原退出 101 和外部回执；Darwin 原件确认 | 任意历史产物仍须真实迁移、消费者／释放证据；未知所有权保护，不产生历史 API 兼容 |
+| 68 大型旧／未登记／重复宿主产物 | 通用历史纳管接口因无现役采用而退役；runner-tests/tests/retention.rs::retired_historical_inputs_preserve_unregistered_originals 核退役输入报错且保留原件。现役类型化迁移和未知所有权保护继续适用 | 任意历史产物仍须真实迁移、消费者／释放证据；完整宿主验收未完成，不产生历史 API 兼容 |
 | 69 启动时通知／阻塞或两者皆无 | 部分：引擎 exec 前绑定原生退出身份，经原通道阻塞，有静默等待计数回归 | Linux、宿主／调用方能力选择，无通用外部任务通道 |
 | 70 无终态的超时／静默／丢通道 | 待实现：§7.4 | 保原句柄／结果／unknown，不重复启动地恢复收取，继续独立授权工作 |
 | 71 launcher 退出而自有子进程活着，或终态错任务 | 待实现：§7.4 | 真正等待自有工作，交接前核任务身份、原退出及结果 |
