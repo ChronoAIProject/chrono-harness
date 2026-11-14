@@ -1284,6 +1284,31 @@ impl Inventory {
                 observed.insert(id, record);
                 continue;
             }
+            // An unfinished live producer already protects its direct reports.
+            // Discover only that frontier, as for a durable current root; walking
+            // every child's independent inputs would invent one global related
+            // component and can exceed the bound before observing this owner.
+            if discover_under_lease && !finalized(&record) {
+                if let Some(output) = &record.output {
+                    if matches!(output.phase.as_str(), "publishing" | "sealing")
+                        && !output.lease_id.is_empty()
+                        && Lease::acquire(
+                            &self.directory.join(&output.lease),
+                            Some(&output.lease_id),
+                            false,
+                            true,
+                            None,
+                        )?
+                        .is_none()
+                    {
+                        retained_dependencies.insert(id.clone());
+                        selected.extend(output.references.iter().cloned());
+                        retained_dependencies.extend(output.references.iter().cloned());
+                        observed.insert(id, record);
+                        continue;
+                    }
+                }
+            }
             if verified::defer_finalized_original(discover_under_lease, finalized(&record)) {
                 wanted_roles.extend(record.roles.iter().cloned());
                 observed.insert(id.clone(), record);
