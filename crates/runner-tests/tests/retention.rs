@@ -4846,14 +4846,14 @@ fn native_delivery_acknowledgement_releases_only_its_exact_original_and_keeps_fa
     ) {
         return;
     }
-    use retained_artifacts::retention::{publish_original, reference_report, settle_report};
+    use retained_artifacts::retention::{publish_owned_original, reference_report, settle_report};
     let h = report_host();
     let path = ".chrono-harness/state/preparation/native-delivery.json";
     let raw = serde_json::to_vec(
         &json!({"request":{"request_id":"native-1"},"response":{"status":"failed"}}),
     )
     .unwrap();
-    publish_original(h.path(), path, &raw, json!({"exit":1})).unwrap();
+    publish_owned_original(h.path(), "check-original", path, &raw, json!({"exit":1})).unwrap();
     let slot = ".chrono-harness/state/current.json";
     let slot_owner = reference_report(h.path(), slot, path, &[], Some("native-1")).unwrap();
     settle_report(h.path(), slot, path).unwrap();
@@ -4950,7 +4950,7 @@ fn native_upload_cli_consumes_current_reference_and_rejects_pointer_digest_drift
     ) {
         return;
     }
-    use retained_artifacts::retention::{publish_original, reference_report, settle_report};
+    use retained_artifacts::retention::{publish_owned_original, reference_report, settle_report};
     let h = report_host();
     let original = ".chrono-harness/state/preparation/native-cli.json";
     let slot = ".chrono-harness/state/check.json";
@@ -4958,7 +4958,14 @@ fn native_upload_cli_consumes_current_reference_and_rejects_pointer_digest_drift
         &json!({"request":{"request_id":"native-cli"},"response":{"status":"failed"}}),
     )
     .unwrap();
-    publish_original(h.path(), original, &raw, json!({"exit":1})).unwrap();
+    publish_owned_original(
+        h.path(),
+        "check-original",
+        original,
+        &raw,
+        json!({"exit":1}),
+    )
+    .unwrap();
     let publisher = reference_report(h.path(), slot, original, &[], Some("native-cli")).unwrap();
     settle_report(h.path(), slot, original).unwrap();
     drop(publisher);
@@ -7271,10 +7278,17 @@ fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retir
     ) {
         return;
     }
-    use retained_artifacts::retention::{external_removal_guards, publish_original};
+    use retained_artifacts::retention::{external_removal_guards, publish_owned_original};
     let h = report_host();
     let path = ".chrono-harness/state/preparation/nested-original";
-    publish_original(h.path(), path, b"exact final bytes", json!({"exit_code":0})).unwrap();
+    publish_owned_original(
+        h.path(),
+        "check-original",
+        path,
+        b"exact final bytes",
+        json!({"exit_code":0}),
+    )
+    .unwrap();
     assert!(
         external_removal_guards(
             h.path(),
@@ -7302,8 +7316,9 @@ fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retir
             .exists()
     );
     let independent = ".chrono-harness/state/preparation/independent-original";
-    publish_original(
+    publish_owned_original(
         h.path(),
+        "check-original",
         independent,
         b"independent bytes",
         json!({"exit_code":3}),
@@ -7314,7 +7329,14 @@ fn fixture_effect_exclusion_holds_exact_final_original_members_until_owner_retir
         b"independent bytes"
     );
     assert!(
-        publish_original(h.path(), path, b"conflicting bytes", json!({"exit_code":0})).is_err()
+        publish_owned_original(
+            h.path(),
+            "check-original",
+            path,
+            b"conflicting bytes",
+            json!({"exit_code":0})
+        )
+        .is_err()
     );
     assert!(!h.path().join(path).exists());
     guard.as_ref().unwrap().stable().unwrap();
