@@ -24,19 +24,6 @@ pub enum FixtureProbe {
     JudgeEof,
 }
 
-pub fn install_program(root: &Path, project: &str, binary: &str, probe: FixtureProbe) -> String {
-    let source = if (project, binary) == ("runner", "chrono-harness") {
-        env!("CARGO_BIN_EXE_chrono-harness-test-cli").into()
-    } else if (project, binary) == ("judge-registration", "chrono-judge-registration") {
-        env!("CARGO_BIN_EXE_chrono-judge-registration-test-cli").into()
-    } else if (project, binary) == ("judge-filemap", "chrono-judge-filemap") {
-        env!("CARGO_BIN_EXE_chrono-judge-filemap-test-cli").into()
-    } else {
-        source().join(format!("crates/{project}/target/debug/{binary}"))
-    };
-    install_executable(root, &source, binary, probe)
-}
-
 pub fn install_executable(root: &Path, source: &Path, binary: &str, probe: FixtureProbe) -> String {
     assert!(source.is_file(), "build {}", source.display());
     let destination = root.join(format!(".chrono-harness/bin/{binary}"));
@@ -124,21 +111,37 @@ impl Host {
         git(&root, &["init", "-q"]);
         fs::create_dir_all(root.join(".chrono-harness/bin")).unwrap();
         let mut v = values();
-        for (id, crate_name, binary) in [
-            ("runner", "runner", "chrono-harness"),
+        for (id, executable, binary) in [
+            (
+                "runner",
+                env!("CARGO_BIN_EXE_chrono-harness-test-cli"),
+                "chrono-harness",
+            ),
             (
                 "registration",
-                "judge-registration",
+                env!("CARGO_BIN_EXE_chrono-judge-registration-test-cli"),
                 "chrono-judge-registration",
             ),
-            ("filemap", "judge-filemap", "chrono-judge-filemap"),
-            ("routes", "judge-routes", "chrono-judge-routes"),
-            ("projects", "judge-projects", "chrono-judge-projects"),
+            (
+                "filemap",
+                env!("CARGO_BIN_EXE_chrono-judge-filemap-test-cli"),
+                "chrono-judge-filemap",
+            ),
+            (
+                "routes",
+                env!("CARGO_BIN_EXE_chrono-judge-routes-test-cli"),
+                "chrono-judge-routes",
+            ),
+            (
+                "projects",
+                env!("CARGO_BIN_EXE_chrono-judge-projects-test-cli"),
+                "chrono-judge-projects",
+            ),
         ] {
             let path = format!(".chrono-harness/bin/{binary}");
-            let digest = install_program(
+            let digest = install_executable(
                 &root,
-                crate_name,
+                Path::new(executable),
                 binary,
                 if id == "runner" {
                     FixtureProbe::Version

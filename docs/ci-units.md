@@ -22,7 +22,7 @@ judge-ci 专属测试根也采用相同优化和调试信息选择。原诊断�
 
 worktree 的 detached 年龄回归与已有具名分支回归一样，先完成复用与源码／索引保全，再通过正式 migrate 采用原 60 秒删除年龄。仍使用真实创建时间，迁移不得重置年龄；不把复用步骤耗时当成应已进入删除阶段。
 
-各组保留构建前置，并通过登记的 `workflow.inventory` 操作运行 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
+核心组与短命令组保留测试实际调用所需的 `build.ci`；直接完整单元组不调用 CI CLI，移除该组无使用方的生产构建及 `check.ci` 缓存订阅。各组继续通过登记的 `workflow.inventory` 操作运行已安装的 Rust `chrono-ci test-inventory`。宿主只维护 `.chrono-harness/ci/workflow-inventory.json` 配置。配置明确绑定原 action、分组表、Cargo 工具及二进制列表。真实未过滤清单及各分组须非空，各组互不相交且合计精确覆盖；ignored 清单须为空；列举失败保留原退出和输出。清单程序比较当前集合，不永远固定数量；迁移时的历史名称基线只是另一项实现观察。清单解析、完整且互不重叠的分组、登记漂移和子进程失败由 Rust `ci-tests` 配对验证，不再设置独立 Python 测试单元。
 
 共享前置和清单操作明确分给三单元，各有上下文／报告；已有 detector 和 always 汇总仍是原生入口，汇总是唯一必需分支保护检查。调用方在已提交候选上真实运行前，不宣称分组原生耗时或激活验收。
 
@@ -34,7 +34,9 @@ worktree 测试分 `worktree`、`worktree-adoption`。采用组明确点名四�
 
 分页登记迁移的替换检测也使用同一隔离工具：释放原分配者后，迁移必须能够取得 metadata 写锁，才可到达测试注入的登记替换边界。保留替换拒绝、原登记保全和后续迁移仍拒绝的全部断言。
 
-`worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。两组共用原构建前置，明确声明共享 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。分组不保证任意宿主在任意外部负载下都满足时限。
+`worktree.inventory` 用同一 Rust 清单程序及 `.chrono-harness/ci/worktree-inventory.json`，要求当前未过滤列表被非空、不相交、完整覆盖。核心组的 `generated_full_native_short_step_preserves_exact_context_bytes` 实际调用 CI 生产 CLI，保留 `build.ci` 和 `check.ci` 缓存。采用组的四个用例只使用测试项目编译的工具，移除该组无使用方的 CI 生产构建和缓存订阅；清单操作继续使用已安装的候选 `chrono-ci`。完整构建、CI、存储和维护净收益未测。
+
+两组继续显式声明共享测试 target 和清单资源，因此本地不能并发写同一 target；原生 job 各有检出、报告、重跑。原测试、断言、分组、线程、profile 和时限保留。分组不保证任意宿主在任意外部负载下都满足时限。
 
 本地调度在共享构建就绪后，优先执行 worktree 清单、核心组和采用组，再执行 workflow 清单与各组。这样可让耗时较长的 worktree 链与其他项目检查重叠；现有依赖、cap=2、资源声明、动作、线程和时限均保留。优先级只影响已经就绪的操作，不跳过前置或放宽并发冲突。
 
@@ -44,11 +46,13 @@ projects 测试使用单一 `judge-projects` 单元和原未过滤 `execute`。�
 
 judge-ci、CI 和 projects 专属测试都在各自 target 编译同一份 judge-ci 生产 `main.rs`，通过 Cargo 提供的 CLI 路径交给真实 runner。三项测试计划不再前置 `build.judge-ci`；普通单元不再恢复或保存 judge-ci 生产 target，已无使用方的 `check.judge-ci` 缓存退役。detector 启动和公开发布仍按原登记构建生产 judge-ci，并保留各自缓存。发布验证不再为这三项测试依赖、下载或暂存 judge-ci 资产；各项其余真实资产消费保留。原未过滤测试、断言、线程和时限保留，总成本未测。
 
-workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.rs`，通过 Cargo 提供的路径复制并运行真实 CLI。三个 workflow 测试计划不再前置 `build.judge-workflow`，对应单元也不再恢复生产 target；`inputs` 仍消费生产 CLI，保留该构建及缓存，并负责保存缓存。测试根保留原 profile（含 `strip="debuginfo"`）、测试、断言、分组、线程和时限；完整成本收益未测。
+workflow 专属测试在自己的 target 编译唯一的 workflow 生产 `main.rs`，通过 Cargo 提供的路径复制并运行真实 CLI。三个 workflow 测试计划不再前置 `build.judge-workflow`，对应单元也不再恢复生产 target；inputs 专属测试也在自己的 target 编译 workflow 测试 CLI，删除最后一项重复构建和已无使用方的 `check.judge-workflow` 缓存及订阅。测试根保留原 profile（含 `strip="debuginfo"`）、测试、断言、分组、线程和时限；完整成本收益未测。
 
 **宿主构建登记与测试安装同时修改：**CI、inputs、registration、filemap、projects、workflow 六个测试项目也从唯一的 runner 生产 `main.rs` 编译测试 CLI，保留原复制、探测、身份绑定及真实检查调用。对应八个单元不再前置 `build.runner`，退役已无使用方的 `check.runner` 缓存及其订阅；detector 启动、正式生产构建和发布打包继续使用各自登记。原未过滤测试、断言、线程、分组、cap=2 和时限保留。验证使用正式生成、canonical check 及两段 PR／落地检查，完整成本收益未测。
 
 **生产与测试构建配置同改：**CI、inputs 及各自专属测试项目的开发构建均显式采用 `opt-level=1`，与 runner 的日常构建一致。Cargo 只采用构建根项目的 profile，不继承依赖项目的 profile，因此四个根分别声明，让真实 CLI 和测试 CLI 中的共享原件编码、解码及状态维护采用相同优化选择。Cargo 的开发配置继续启用调试断言和溢出检查，原未过滤测试、断言、线程和时限保留。实际测试、原生消费和完整编译／运行成本须按候选结果核验，配置本身不证明超时原因或收益。
+
+cache 及其专属测试项目也显式采用同一 `opt-level=1`。原本只有 SHA-256 依赖采用优化，缓存 CLI 中的 runner 不继承 runner 项目自身的 profile。本次采用来自 canonical 原件中的两项真实失败：已封存失败尝试在原 19 轮维护内未完成回收，以及原活进程在中断前已超时；原测试、断言、线程、维护轮数及所有时限保持。保留原失败现场，通过同一登记入口核候选行为，不凭优化设置或一次通过认定根因；完整构建、运行、CI 和存储成本及可比收益仍未测。
 
 CI、projects、workflow、worktree 测试不再共用整套 fixture 生产者 claim。每个保留 fixture 分配拥有自己的登记和排除，普通命令不排空无关分配。workflow／worktree 清单操作及精确输出空间继续声明真实冲突，在原 cap=2 下调度。显式维护保留忙碌对象，继续可用兄弟对象；跨调用的检出／输出隔离仍归调用方。总耗时、存储、CI 成本未测。
 
@@ -132,7 +136,7 @@ provider 的必需 `job_gating` 字段登记 detector 的平台、时限、boots
 
 本仓 detector 为单元和汇总生产登记的核心启动工具。缓存 profile 单独准备 `chrono-cache`；core profile 构建并安装四项当前启动工具：`chrono-harness`、`chrono-judge-ci`、`chrono-ci`、`chrono-worktree`，并安装已校验的 Verus 原压缩包 `.chrono-harness/bin/verus.zip`。消费者安装所选 profile 后，在登记的准备位置验证原报告和已安装内容，再进入标准检查。单元从该包解压 Verus，不再各自下载、校验和构建 bootstrap 前端；本地 core 仍完成完整安装。
 
-当前宿主没有启用调用 `chrono-inputs` 的 `native_adoption`，登记 action 也不调用它，因此 core 不预先获取、构建、安装或传递这个程序。inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，不再单独构建生产 inputs 项目；workflow 的三个测试组仍按自己的计划构建并消费生产 inputs 程序，公开发布资产保留。宿主工具表及专属依赖边同步移除这项闲置安装的声明，避免把产物的存在当作使用理由。
+当前宿主没有启用调用 `chrono-inputs` 的 `native_adoption`，登记 action 也不调用它，因此 core 不预先获取、构建、安装或传递这个程序。inputs 专属测试由 Cargo 从生产 `main.rs` 编译测试 CLI，不再单独构建生产 inputs 项目；workflow 的三个测试组也在自己的 target 编译 inputs 测试 CLI，原五处 capture 调用及断言保留，删除重复构建和已无使用方的 `check.inputs` 缓存；公开发布资产保留。宿主工具表及专属依赖边同步移除这项闲置安装的声明，避免把产物的存在当作使用理由。
 
 **实现与宿主政策同时变更：**共享文件允许普通非零权限 `0001`–`0777`，包含无执行位的压缩包；不把数据文件改成可执行文件。现役 Rust 共享入口及其证明采用此范围。安装仍核全部来源、摘要、大小和原权限，使用时拒绝字节或权限漂移；特殊权限、零权限、损坏或缺失仍失败。压缩包随现有 startup 产物传输并沿用保留期限。逐单元外部下载已删除，传输、存储和完整 CI 总成本仍未测。
 

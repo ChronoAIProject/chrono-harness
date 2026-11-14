@@ -213,30 +213,7 @@
       "build.ci": [
         "judge-workflow",
         "judge-workflow-short",
-        "judge-workflow-units",
-        "worktree",
-        "worktree-adoption"
-      ],
-      "build.inputs": [
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
-      "build.judge-projects": [
-        "inputs",
-        "judge-filemap",
-        "judge-projects",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
-      ],
-      "build.judge-routes": [
-        "inputs",
-        "judge-filemap",
-        "judge-projects",
-        "judge-workflow",
-        "judge-workflow-short",
-        "judge-workflow-units"
+        "worktree"
       ],
       "fmt.judge-workflow": [
         "judge-workflow",

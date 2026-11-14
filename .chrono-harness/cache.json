@@ -1051,9 +1051,7 @@
       "consumers": [
         "check.unit_judge-workflow",
         "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units",
-        "check.unit_worktree",
-        "check.unit_worktree-adoption"
+        "check.unit_worktree"
       ],
       "artifacts": [
         "ci.target"
@@ -1421,130 +1419,14 @@
         "bootstrap.config",
         "check.environment",
         "cache.cargo-registration",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-routes.manifest",
+        "judge-routes.lock"
       ],
       "source_inputs": [
         "judge-filemap-tests.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
-    "check.judge-projects": {
-      "owner": "judge-projects",
-      "producer": "build.judge-projects",
-      "consumers": [
-        "check.unit_inputs",
-        "check.unit_judge-filemap",
-        "check.unit_judge-projects",
-        "check.unit_judge-workflow",
-        "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units"
-      ],
-      "artifacts": [
-        "judge-projects.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-projects.manifest",
-        "judge-projects.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "judge-projects.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
-    "check.judge-routes": {
-      "owner": "judge-routes",
-      "producer": "build.judge-routes",
-      "consumers": [
-        "check.unit_inputs",
-        "check.unit_judge-filemap",
-        "check.unit_judge-projects",
-        "check.unit_judge-workflow",
-        "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units"
-      ],
-      "artifacts": [
-        "judge-routes.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "judge-routes.sources"
       ],
       "restore": "compatible",
       "refresh_sources": true
@@ -1777,122 +1659,6 @@
       "restore": "compatible",
       "refresh_sources": true
     },
-    "check.inputs": {
-      "owner": "inputs",
-      "producer": "build.inputs",
-      "consumers": [
-        "check.unit_judge-workflow",
-        "check.unit_judge-workflow-short",
-        "check.unit_judge-workflow-units"
-      ],
-      "artifacts": [
-        "inputs.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "inputs.manifest",
-        "inputs.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "inputs.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
-    "check.judge-workflow": {
-      "owner": "judge-workflow",
-      "producer": "build.judge-workflow",
-      "consumers": [
-        "check.unit_inputs"
-      ],
-      "artifacts": [
-        "judge-workflow.target"
-      ],
-      "compatibility_inputs": [
-        "rustc.file",
-        "cargo.file",
-        "rustc.version",
-        "platform",
-        "macos.sdk",
-        "macos.linker",
-        "macos.cc",
-        "bootstrap.cargo.home-config",
-        "bootstrap.cargo.home-config-toml",
-        "absent.RUSTFLAGS",
-        "absent.CARGO_ENCODED_RUSTFLAGS",
-        "absent.CARGO_BUILD_TARGET",
-        "absent.CARGO_TARGET_DIR",
-        "absent.RUSTC",
-        "absent.RUSTC_WRAPPER",
-        "absent.RUSTC_WORKSPACE_WRAPPER",
-        "root.cargo-config",
-        "root.cargo-config-toml",
-        "root.rust-toolchain",
-        "root.rust-toolchain-toml",
-        "diagnostics.manifest",
-        "diagnostics.lock",
-        "judge-filemap.manifest",
-        "judge-filemap.lock",
-        "judge-mixed.manifest",
-        "judge-mixed.lock",
-        "judge-projects.manifest",
-        "judge-projects.lock",
-        "judge-registration.manifest",
-        "judge-registration.lock",
-        "judge-routes.manifest",
-        "judge-routes.lock",
-        "judge-workflow.manifest",
-        "judge-workflow.lock",
-        "runner.manifest",
-        "runner.lock",
-        "bootstrap.script",
-        "bootstrap.config",
-        "check.environment",
-        "cache.cargo-registration",
-        "bootstrap.toolchains"
-      ],
-      "source_inputs": [
-        "judge-workflow.sources"
-      ],
-      "restore": "compatible",
-      "refresh_sources": true
-    },
     "check.judge-workflow-tests": {
       "owner": "judge-workflow-tests",
       "producer": "test.workflow.core",
@@ -1947,7 +1713,9 @@
         "bootstrap.config",
         "check.environment",
         "cache.cargo-registration",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "inputs.manifest",
+        "inputs.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -2007,7 +1775,11 @@
         "bootstrap.config",
         "check.environment",
         "cache.cargo-registration",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-workflow.manifest",
+        "judge-workflow.lock"
       ],
       "source_inputs": [
         "inputs-tests.sources"
@@ -3113,7 +2885,11 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.config",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-workflow.manifest",
+        "judge-workflow.lock"
       ],
       "source_inputs": [
         "inputs-tests.sources"
@@ -3387,7 +3163,9 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.config",
+        "inputs.manifest",
+        "inputs.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -3479,7 +3257,11 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.config",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-routes.manifest",
+        "judge-routes.lock"
       ],
       "source_inputs": [
         "judge-filemap-tests.sources"
@@ -4677,7 +4459,11 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.config",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-workflow.manifest",
+        "judge-workflow.lock"
       ],
       "source_inputs": [
         "inputs-tests.sources"
@@ -4956,7 +4742,9 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.config",
+        "inputs.manifest",
+        "inputs.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -5050,7 +4838,11 @@
         "runner.manifest",
         "runner.lock",
         "release.script",
-        "release.config"
+        "release.config",
+        "judge-projects.manifest",
+        "judge-projects.lock",
+        "judge-routes.manifest",
+        "judge-routes.lock"
       ],
       "source_inputs": [
         "judge-filemap-tests.sources"
@@ -5406,7 +5198,9 @@
         "bootstrap.config",
         "check.environment",
         "cache.cargo-registration",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "inputs.manifest",
+        "inputs.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"
@@ -5468,7 +5262,9 @@
         "bootstrap.config",
         "check.environment",
         "cache.cargo-registration",
-        "bootstrap.toolchains"
+        "bootstrap.toolchains",
+        "inputs.manifest",
+        "inputs.lock"
       ],
       "source_inputs": [
         "judge-workflow-tests.sources"

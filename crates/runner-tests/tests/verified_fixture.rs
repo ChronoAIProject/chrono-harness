@@ -3,6 +3,9 @@
 #[path = "../../worktree-tests/tests/support/cargo_model.rs"]
 mod cargo;
 #[cfg(verus_keep_ghost)]
+#[path = "support/cli_child.rs"]
+mod cli_child;
+#[cfg(verus_keep_ghost)]
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod custody;
 #[path = "../../distribution-tests/tests/support/bootstrap.rs"]
@@ -19,6 +22,9 @@ mod git_fixture;
 mod identifiers;
 #[path = "support/isolated_capability.rs"]
 mod isolation;
+#[cfg(verus_keep_ghost)]
+#[path = "protocol_v1.rs"]
+mod protocol;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]

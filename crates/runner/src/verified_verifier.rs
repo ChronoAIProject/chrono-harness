@@ -949,11 +949,11 @@ pub open spec fn proof_bound(
                 && proof.artifact.sha256@ == artifact.sha256@ && proof.artifact.length == artifact.length,
             _ => false,
         }
-        && sources::binding_error(registry.files@, method.operation@, method.argv[invocation_source(method.argv@)]@,
+        && sources::binding_error(registry.files.entries@, method.operation@, method.argv[invocation_source(method.argv@)]@,
             proof.sources.candidate@, 0).is_none()
         && match process.dependency {
             Some(Ok(bytes)) => sources::admission_matches(&proof.sources,
-                process.argv@.skip(1), bytes@, registry.files@),
+                process.argv@.skip(1), bytes@, registry.files.entries@),
             _ => false,
         }
 }
@@ -1056,7 +1056,7 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
         Some(parsed) => parsed,
         None => { return Err("E_VERUS_RESULT: process or verifier arguments rejected".to_string()); },
     };
-    match sources::bind_registered_roots(&source_registry.files, operation,
+    match sources::bind_registered_roots(&source_registry.files.entries, operation,
         args[parsed.source].as_str(), &source_admission.candidate) {
         Ok(()) => {},
         Err(error) => { return Err(error.render(format_error)); },

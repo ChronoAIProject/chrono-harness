@@ -214,7 +214,7 @@ fn retained_input_duplicates_check_each_descriptor_and_refresh_on_each_validatio
     assert!(validate(&req).is_ok());
     let originals = json!({blob:{"schema":"chrono-retained-blob/v1","storage":blob,"sha256":sha256(original),"length":original.len()}});
     let validate_original = |request: &chrono_harness::wire::Request| {
-        inputs::validate_retained(request, &r, &r, &originals)
+        inputs::validate_retained_at(request, &r, &r, &originals, &request.candidate.root, None)
     };
     assert!(validate_original(&req).is_ok());
     // The base reference is observed first; the candidate points at that same path.

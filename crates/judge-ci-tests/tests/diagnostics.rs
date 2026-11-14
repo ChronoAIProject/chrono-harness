@@ -165,6 +165,175 @@ fn execution_diagnostics_delayed_admission_does_not_consume_interruption_window(
     incomplete_execution(true);
 }
 
+struct ReadinessGate {
+    log: fs::File,
+    listener: Option<std::net::TcpListener>,
+    socket: Option<std::net::TcpStream>,
+    observed: Arc<Mutex<Value>>,
+    startup_millis: i32,
+}
+impl Write for ReadinessGate {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.log.write_all(bytes)?;
+        let row: Value = serde_json::from_slice(bytes).map_err(std::io::Error::other)?;
+        if row["event"] == "process.readers_ready_wait" {
+            use std::os::fd::AsRawFd;
+            let listener = self
+                .listener
+                .take()
+                .ok_or_else(|| std::io::Error::other("duplicate outer reader barrier"))?;
+            let began = std::time::Instant::now();
+            let mut event = libc::pollfd {
+                fd: listener.as_raw_fd(),
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            // One bounded native wait, never a status-poll loop. A nonblocking
+            // accept also keeps a stale readiness notification finite.
+            let polled = unsafe { libc::poll(&mut event, 1, self.startup_millis) };
+            let mut observed = if polled == 1 && event.revents & libc::POLLIN != 0 {
+                match (|| -> std::io::Result<Value> {
+                    let (socket, peer) = listener.accept()?;
+                    socket.set_nonblocking(false)?;
+                    socket.set_read_timeout(Some(std::time::Duration::from_secs(1)))?;
+                    let mut bytes = Vec::new();
+                    let read = std::io::BufReader::new(&socket).read_until(b'\n', &mut bytes);
+                    self.socket = Some(socket);
+                    Ok(json!({"peer":peer.to_string(),"bytes":bytes,
+                        "read_error":read.err().map(|e|e.to_string())}))
+                })() {
+                    Ok(value) => value,
+                    Err(error) => json!({"startup_error":error.to_string()}),
+                }
+            } else if polled == 0 {
+                json!({"startup_error":"business readiness timed out"})
+            } else if polled < 0 {
+                json!({"startup_error":std::io::Error::last_os_error().to_string(),
+                    "poll_result":polled,"poll_events":event.revents})
+            } else {
+                json!({"startup_error":"readiness listener was not readable",
+                    "poll_result":polled,"poll_events":event.revents})
+            };
+            observed["wait_micros"] = json!(began.elapsed().as_micros());
+            *self.observed.lock().unwrap() = observed;
+        }
+        Ok(bytes.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.log.flush()
+    }
+}
+
+fn diagnostic_execution(
+    h: &Host,
+    req: &Request,
+    listener: std::net::TcpListener,
+    admission: Option<std::net::TcpListener>,
+) -> chrono_harness::ProcessResult {
+    let directory = h.root().join(".chrono-harness/state");
+    fs::create_dir_all(&directory).unwrap();
+    let input = serde_json::to_vec(req).unwrap();
+    fs::write(directory.join("request.json"), &input).unwrap();
+    let config: Value = serde_json::from_slice(&fs::read(h.root().join(CONFIG)).unwrap()).unwrap();
+    listener.set_nonblocking(true).unwrap();
+    let observed = Arc::new(Mutex::new(Value::Null));
+    let logger = chrono_diagnostics::logging::Logger::new(
+        "ci-monitor-fixture",
+        chrono_diagnostics::logging::Level::DEBUG,
+        ReadinessGate {
+            log: fs::File::create(directory.join("monitor.jsonl")).unwrap(),
+            listener: Some(listener),
+            socket: None,
+            observed: observed.clone(),
+            // Reuse this fixture's existing judge admission bound. The actual
+            // engine monitor remains one second and the operation three seconds.
+            startup_millis: i32::try_from(
+                config["judge"]["timeout_seconds"].as_u64().unwrap() * 1000,
+            )
+            .unwrap(),
+        },
+    );
+    let spec = chrono_harness::CommandSpec {
+        program: child().into(),
+        args: vec!["judge-debug".into()],
+        // The ordinary judge performs Git admission in this child too. Bind the
+        // same private Git fixture that created this host's synthetic commits.
+        env: BTreeMap::from([("PATH".into(), std::env::var("PATH").unwrap())]),
+        timeout_seconds: 1,
+        output_limit_bytes: 65536,
+    };
+    let digest = chrono_harness::file_identity(Path::new(child())).unwrap().0;
+    let admitted = std::sync::atomic::AtomicBool::new(false);
+    let address = admission
+        .as_ref()
+        .map(|listener| listener.local_addr().unwrap());
+    let result = std::thread::scope(|scope| {
+        let task = scope.spawn(|| {
+            let result = logger.run(|| {
+                chrono_harness::run_process_observed_retained(
+                    h.root(),
+                    &spec,
+                    &input,
+                    &digest,
+                    &chrono_harness::ProcessEvidence {
+                        root: h.root(),
+                        stdout: &directory.join("producer.stdout"),
+                        stderr: &directory.join("producer.stderr"),
+                        launch: &directory.join("producer.launch.json"),
+                        publication: None,
+                    },
+                )
+            });
+            // Early admission failure must wake the original single accept.
+            if let Some(address) = address {
+                if !admitted.load(std::sync::atomic::Ordering::Acquire) {
+                    if let Ok(mut socket) = std::net::TcpStream::connect(address) {
+                        let _ = socket.write_all(b"finished!");
+                    }
+                }
+            }
+            result
+        });
+        if let Some(admission) = admission {
+            let (mut socket, _) = admission.accept().unwrap();
+            admitted.store(true, std::sync::atomic::Ordering::Release);
+            socket
+                .set_read_timeout(Some(std::time::Duration::from_millis(1100)))
+                .unwrap();
+            let mut message = [0; 9];
+            socket.read_exact(&mut message).unwrap();
+            assert_eq!(&message, b"admission");
+            let held = std::time::Instant::now();
+            let error = socket.read_exact(&mut [0]).unwrap_err();
+            let elapsed = held.elapsed();
+            fs::write(directory.join("admission.json"), serde_json::to_vec(&json!({
+                "message":message,"held_millis":elapsed.as_millis(),"observation_error":error.to_string()
+            })).unwrap()).unwrap();
+            assert!(elapsed >= std::time::Duration::from_secs(1));
+            assert!(matches!(
+                error.kind(),
+                std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+            ));
+            socket.write_all(&[0]).unwrap();
+        }
+        task.join().unwrap().unwrap()
+    });
+    logger.finish().unwrap();
+    fs::write(
+        directory.join("readiness.json"),
+        serde_json::to_vec(&*observed.lock().unwrap()).unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        directory.join("result.json"),
+        serde_json::to_vec(&result).unwrap(),
+    )
+    .unwrap();
+    // The gate owns the ready socket until the real engine has joined its work.
+    drop(logger);
+    result
+}
+
 fn incomplete_execution(delayed_admission: bool) {
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     let h = host(Some(listener.local_addr().unwrap().to_string()));
@@ -188,140 +357,21 @@ fn incomplete_execution(delayed_admission: bool) {
     let req = request(&h);
     let assert_result = std::panic::catch_unwind(|| {
         let directory = h.root().join(".chrono-harness/state");
-        fs::create_dir_all(&directory).unwrap();
-        fs::write(
-            directory.join("request.json"),
-            serde_json::to_vec(&req).unwrap(),
-        )
-        .unwrap();
-        let began = std::time::Instant::now();
-        let admitted = std::sync::atomic::AtomicBool::new(false);
-        let prepared = if delayed_admission {
-            std::thread::scope(|scope| {
-                let admitted = &admitted;
-                let task = scope.spawn(move || {
-                    let result = chrono_judge_ci::prepare_execution(&req);
-                    // Wake the one native accept on an admission error too.
-                    if !admitted.load(std::sync::atomic::Ordering::Acquire) {
-                        std::net::TcpStream::connect(address)
-                            .unwrap()
-                            .write_all(b"finished!")
-                            .unwrap();
-                    }
-                    result
-                });
-                let (mut socket, _) = admission.accept().unwrap();
-                admitted.store(true, std::sync::atomic::Ordering::Release);
-                socket
-                    .set_read_timeout(Some(std::time::Duration::from_millis(1100)))
-                    .unwrap();
-                let mut message = [0; 9];
-                socket.read_exact(&mut message).unwrap();
-                assert_eq!(&message, b"admission");
-                let held = std::time::Instant::now();
-                let error = socket.read_exact(&mut [0]).unwrap_err();
-                let elapsed = held.elapsed();
-                fs::write(directory.join("admission.json"), serde_json::to_vec(&json!({
-                    "message":message,"held_millis":elapsed.as_millis(),"observation_error":error.to_string()
-                })).unwrap()).unwrap();
-                assert!(elapsed >= std::time::Duration::from_secs(1));
-                assert!(matches!(
-                    error.kind(),
-                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
-                ));
-                socket.write_all(&[0]).unwrap();
-                task.join().unwrap().unwrap()
-            })
-        } else {
-            chrono_judge_ci::prepare_execution(&req).unwrap()
-        };
-        fs::write(
-            directory.join("preparation.json"),
-            serde_json::to_vec(&json!({
-                "elapsed_millis":began.elapsed().as_millis(),"plan":prepared.plan.identity
-            }))
-            .unwrap(),
-        )
-        .unwrap();
-        let req = &prepared.request;
+        let input = serde_json::to_vec(&req).unwrap();
+        let result =
+            diagnostic_execution(&h, &req, listener, delayed_admission.then_some(admission));
+        let readiness: Value =
+            serde_json::from_slice(&fs::read(directory.join("readiness.json")).unwrap()).unwrap();
         let stdout = directory.join("producer.stdout");
         let stderr = directory.join("producer.stderr");
-        let launch = directory.join("producer.launch.json");
-        let spec = chrono_harness::CommandSpec {
-            program: child().into(),
-            args: vec!["execute-debug".into()],
-            env: BTreeMap::new(),
-            timeout_seconds: 1,
-            output_limit_bytes: 65536,
-        };
-        let digest = chrono_harness::file_identity(Path::new(child())).unwrap().0;
-        let input = serde_json::to_vec(&prepared).unwrap();
-        fs::write(directory.join("prepared.json"), &input).unwrap();
-        let readiness_observed = std::sync::atomic::AtomicBool::new(false);
-        let began = std::time::Instant::now();
-        let (result, readiness) = std::thread::scope(|scope| {
-            let task = scope.spawn(|| {
-                let result = chrono_harness::run_process_observed_retained(
-                    h.root(),
-                    &spec,
-                    &input,
-                    &digest,
-                    &chrono_harness::ProcessEvidence {
-                        root: h.root(),
-                        stdout: &stdout,
-                        stderr: &stderr,
-                        launch: &launch,
-                        publication: None,
-                    },
-                );
-                // A missing real readiness is also finite: the joined engine
-                // wakes this single blocking receiver, without a status poll.
-                if !readiness_observed.load(std::sync::atomic::Ordering::Acquire) {
-                    if let Ok(mut socket) =
-                        std::net::TcpStream::connect(listener.local_addr().unwrap())
-                    {
-                        let _ = socket.write_all(b"finished\n");
-                    }
-                }
-                result
-            });
-            let (readiness, socket_guard) = match listener.accept() {
-                Ok((socket, peer)) => {
-                    readiness_observed.store(true, std::sync::atomic::Ordering::Release);
-                    socket
-                        .set_read_timeout(Some(std::time::Duration::from_secs(1)))
-                        .unwrap();
-                    let mut bytes = Vec::new();
-                    let read = std::io::BufReader::new(&socket).read_until(b'\n', &mut bytes);
-                    (
-                        json!({"peer":peer.to_string(),"bytes":bytes,
-                        "observed_micros":began.elapsed().as_micros(),"read_error":read.err().map(|e|e.to_string())}),
-                        Some(socket),
-                    )
-                }
-                Err(error) => (json!({"accept_error":error.to_string()}), None),
-            };
-            // Never release the ready business process. Join the original
-            // finite timeout and all of its engine-owned descendants/streams.
-            let result = task.join().unwrap().unwrap();
-            drop(socket_guard);
-            (result, readiness)
-        });
-        fs::write(
-            directory.join("result.json"),
-            serde_json::to_vec(&result).unwrap(),
-        )
-        .unwrap();
-        fs::write(
-            directory.join("readiness.json"),
-            serde_json::to_vec(&readiness).unwrap(),
-        )
-        .unwrap();
         // Keep the producer originals on failed assertions; successful fixtures are
         // exclusively test-owned and the existing TempDir owner removes them.
         assert_eq!(result.failure.as_deref(), Some("process timed out"));
+        assert!(result.owned_work_joined);
+        assert!(result.stdout_complete && result.stderr_complete);
         assert_eq!(fs::read(&stdout).unwrap(), result.stdout_bytes);
         assert_eq!(fs::read(&stderr).unwrap(), result.stderr_bytes);
+        assert!(readiness["startup_error"].is_null(), "{readiness}");
         assert!(readiness["read_error"].is_null(), "{readiness}");
         let ready: Vec<u8> = serde_json::from_value(readiness["bytes"].clone()).unwrap();
         let (_, ready_ns) = std::str::from_utf8(&ready)
@@ -342,7 +392,11 @@ fn incomplete_execution(delayed_admission: bool) {
             ready_ns < deadline,
             "nested execution was not ready before the one-second interruption: {readiness}; deadline={deadline}"
         );
-        let rows = records(&result.stderr_bytes);
+        assert!(
+            ready_ns <= deadline.checked_sub(1_000_000_000).unwrap(),
+            "the one-second monitor started before real business readiness: {readiness}; deadline={deadline}"
+        );
+        let rows = records(&fs::read(directory.join("diagnostics.jsonl")).unwrap());
         let launch = rows
             .iter()
             .find(|r| r["event"] == "process.launched" && r["context"]["operation"] == "test.suite")
@@ -351,23 +405,31 @@ fn incomplete_execution(delayed_admission: bool) {
         assert_eq!(launch["context"]["candidate"], req.candidate);
         assert!(launch["context"]["child_pid"].is_number());
         assert_eq!(launch["context"]["config_sha256"], req.config_sha256);
-        assert_eq!(launch["context"]["plan"], prepared.plan.identity);
+        let plan = &launch["context"]["plan"];
+        assert!(plan.as_str().is_some_and(|identity| !identity.is_empty()));
         assert_eq!(launch["level"], "debug");
-        // The enclosing timeout remains a failure even when cancellation lets
-        // execute-debug join and serialize its genuine failed execution. A kill
-        // can also interrupt that serialization, leaving only a JSON prefix.
-        match serde_json::from_slice::<Value>(&result.stdout_bytes) {
-            Ok(execution) => {
-                assert_eq!(execution["plan"], prepared.plan.identity);
-                assert_eq!(execution["selected"], json!(["test:suite"]));
-                assert_eq!(execution["blocked"], json!([]));
-                assert_eq!(execution["tests"], json!({"test:suite":"failed"}));
-                assert_eq!(execution["removed"], json!({}));
-                let executed = execution["executed"].as_array().unwrap();
+        // Ordinary CI can publish a genuine failed Response while cancellation
+        // joins its operations. A kill may leave only a prefix; success is never valid.
+        match serde_json::from_slice::<Response>(&result.stdout_bytes) {
+            Ok(response) => {
+                assert_eq!(response.request_id, req.request_id);
+                assert_eq!(response.status, Status::Failed);
+                let evidence = &response.evidence;
+                assert_eq!(evidence["plan"]["identity"], *plan);
+                assert_eq!(evidence["selected"], json!(["test:suite"]));
+                assert_eq!(evidence["blocked"], json!([]));
+                assert_eq!(evidence["removed"], json!({}));
+                let failed = response
+                    .results
+                    .iter()
+                    .find(|r| r.id == "test.suite")
+                    .unwrap();
+                assert_eq!(failed.status, Status::Failed);
+                assert_eq!(failed.cause, "process cancelled by enclosing owner");
+                assert_eq!(failed.exit_code, Some(-1));
+                let executed = evidence["executed"].as_array().unwrap();
                 assert_eq!(executed.len(), 1);
                 assert_eq!(executed[0]["operation"], "test.suite");
-                assert_eq!(executed[0]["status"], "error");
-                assert_eq!(executed[0]["error"], "process cancelled by enclosing owner");
                 let process =
                     chrono_harness::full::expand_process(&executed[0]["receipt"]["process"])
                         .unwrap();
@@ -377,7 +439,7 @@ fn incomplete_execution(delayed_admission: bool) {
                 assert_eq!(process["stdout_bytes"], json!([255, 0, 10]));
                 assert_eq!(process["stderr_bytes"], json!([254, 0, 10]));
             }
-            Err(error) => assert!(error.is_eof(), "invalid execution output: {error}"),
+            Err(error) => assert!(error.is_eof(), "invalid CI response output: {error}"),
         }
         assert_eq!(
             ready,
@@ -476,8 +538,8 @@ fn incomplete_execution(delayed_admission: bool) {
         let mut files = serde_json::Map::new();
         for name in [
             "request.json",
-            "prepared.json",
-            "preparation.json",
+            "diagnostics.jsonl",
+            "monitor.jsonl",
             "producer.stdout",
             "producer.stderr",
             "producer.launch.json",
@@ -515,8 +577,62 @@ fn incomplete_execution(delayed_admission: bool) {
 }
 
 #[test]
+fn execution_diagnostics_early_admission_rejection_joins_without_readiness() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let h = host(None);
+    h.change_registry(CONFIG, |v| {
+        v["policy"]
+            .as_object_mut()
+            .unwrap()
+            .remove("execution_diagnostics");
+    });
+    h.commit();
+    let mut req = request(&h);
+    req.scope = Some(chrono_harness::units::Scope::Unit {
+        unit: "missing".into(),
+    });
+    let asserted = std::panic::catch_unwind(|| {
+        let result = diagnostic_execution(&h, &req, listener, None);
+        let directory = h.root().join(".chrono-harness/state");
+        let ready: Value =
+            serde_json::from_slice(&fs::read(directory.join("readiness.json")).unwrap()).unwrap();
+        assert_eq!(ready["startup_error"], "business readiness timed out");
+        assert_eq!(result.exit_code, 1);
+        assert!(result.failure.is_none(), "{result:?}");
+        assert!(result.owned_work_joined);
+        assert!(result.stdout_complete && result.stderr_complete);
+        assert_eq!(
+            fs::read(directory.join("producer.stdout")).unwrap(),
+            result.stdout_bytes
+        );
+        assert_eq!(
+            fs::read(directory.join("producer.stderr")).unwrap(),
+            result.stderr_bytes
+        );
+        let response: Response = serde_json::from_slice(&result.stdout_bytes).unwrap();
+        assert_eq!(response.request_id, req.request_id);
+        assert_eq!(response.status, Status::Failed);
+        let rows = records(&fs::read(directory.join("diagnostics.jsonl")).unwrap());
+        assert!(
+            rows.iter()
+                .all(|r| r["event"] != "projects.operation_started")
+        );
+    });
+    if let Err(error) = asserted {
+        eprintln!(
+            "failed early admission fixture retained at {}",
+            h.dir.keep().display()
+        );
+        std::panic::resume_unwind(error);
+    }
+}
+
+#[test]
 #[cfg(unix)]
-fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects() {
+fn execution_diagnostics_request_matches_real_host_root_before_effects() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
@@ -534,26 +650,17 @@ fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects
     std::os::unix::fs::symlink(fs::canonicalize(h.root()).unwrap(), &alias).unwrap();
     let mut req = request(&h);
     req.host_root = alias;
-    let prepared = chrono_judge_ci::prepare_execution(&req).unwrap();
-    assert_ne!(prepared.plan.root, req.host_root);
-    assert_eq!(
-        prepared.plan.root,
-        fs::canonicalize(&req.host_root).unwrap()
-    );
-    let prepared: chrono_judge_ci::PreparedExecution =
-        chrono_harness::decode(&serde_json::to_vec(&prepared).unwrap()).unwrap();
     let other = Host::new();
-    for field in ["root", "candidate", "config", "run"] {
-        let mut changed = prepared.clone();
-        changed.request.host_root = changed.plan.root.clone();
+    for field in ["root", "candidate", "config"] {
+        let mut changed = req.clone();
         match field {
-            "root" => changed.request.host_root = other.root().to_path_buf(),
-            "candidate" => changed.request.candidate = "0".repeat(40),
-            "config" => changed.request.config_sha256 = "0".repeat(64),
-            "run" => changed.request.request_id.push_str("-changed"),
+            "root" => changed.host_root = other.root().to_path_buf(),
+            "candidate" => changed.candidate = "0".repeat(40),
+            "config" => changed.config_sha256 = "0".repeat(64),
             _ => unreachable!(),
         }
-        assert!(changed.execute().unwrap_err().contains("binding differs"));
+        let response = chrono_judge_ci::judge(&changed);
+        assert_eq!(response.status, Status::Failed, "{field}: {response:?}");
         assert_eq!(
             h.calls(),
             0,
@@ -561,50 +668,44 @@ fn execution_diagnostics_prepared_consumer_matches_real_host_root_before_effects
         );
         assert_eq!(other.calls(), 0);
     }
-    let mut invalid = prepared.clone();
-    invalid.request.host_root = invalid.plan.root.clone();
-    invalid.plan.identity.push_str("-changed");
-    assert!(invalid.execute().unwrap_err().contains("E_PLAN_IDENTITY"));
-    assert_eq!(h.calls(), 0);
-    assert!(prepared.execute().unwrap().passed());
+    let response = chrono_judge_ci::judge(&req);
+    pass(&response);
+    let canonical_root = fs::canonicalize(&req.host_root).unwrap();
+    assert_ne!(canonical_root, req.host_root);
+    assert_eq!(response.evidence["plan"]["root"], json!(canonical_root));
     assert_eq!(h.calls(), 1);
-    assert!(
-        prepared
-            .execute()
-            .unwrap_err()
-            .contains("do not redispatch")
-    );
+    let repeated = chrono_judge_ci::judge(&req);
+    fail(&repeated, "do not redispatch");
     assert_eq!(h.calls(), 1);
     let mut canonical_req = unit_request(&h, req.base.as_deref().unwrap(), &req.candidate);
-    canonical_req.host_root = prepared.plan.root.clone();
-    let canonical = chrono_judge_ci::prepare_execution(&canonical_req).unwrap();
-    assert!(canonical.execute().unwrap().passed());
+    canonical_req.host_root = canonical_root;
+    pass(&chrono_judge_ci::judge(&canonical_req));
     assert_eq!(h.calls(), 2);
 }
 
 #[test]
-fn execution_diagnostics_prepared_consumer_validates_request_and_uses_registered_execution() {
+fn execution_diagnostics_request_validates_unit_and_uses_registered_execution() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
     let h = host(Some("success".into()));
     let req = request(&h);
-    let prepared = chrono_judge_ci::prepare_execution(&req).unwrap();
-    assert_eq!(prepared.plan.operations.len(), 1);
-    assert_eq!(prepared.plan.operations[0].method.operation, "test.suite");
-    assert_eq!(prepared.plan.operations[0].timeout_seconds, 3);
-    assert_eq!(prepared.plan.operations[0].output_limit_bytes, 4096);
-    let mut changed = prepared.clone();
-    changed.request.request_id.push_str("-changed");
-    assert!(changed.execute().unwrap_err().contains("binding differs"));
-    assert!(prepared.execute().unwrap().passed());
-    let mut unscoped = req;
-    unscoped.scope = None;
-    assert!(
-        chrono_judge_ci::prepare_execution(&unscoped)
-            .unwrap_err()
-            .contains("scoped unit")
-    );
+    let mut invalid = req.clone();
+    invalid.scope = Some(chrono_harness::units::Scope::Unit {
+        unit: "missing".into(),
+    });
+    let rejected = chrono_judge_ci::judge(&invalid);
+    assert_eq!(rejected.status, Status::Failed);
+    assert_eq!(rejected.evidence["executed"], json!([]));
+    let response = chrono_judge_ci::judge(&req);
+    pass(&response);
+    let operations = response.evidence["plan"]["operations"].as_array().unwrap();
+    assert_eq!(operations.len(), 1);
+    assert_eq!(operations[0]["method"]["operation"], "test.suite");
+    assert_eq!(operations[0]["timeout_seconds"], 3);
+    assert_eq!(operations[0]["output_limit_bytes"], 4096);
+    assert_eq!(response.evidence["executed"].as_array().unwrap().len(), 1);
+    assert_eq!(response.evidence["executed"][0]["operation"], "test.suite");
 }
 
 #[test]

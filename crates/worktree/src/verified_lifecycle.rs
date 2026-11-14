@@ -12,6 +12,13 @@ use identifiers::equal_text;
 
 verus! {
 
+/// An address left by failed admission has no checkout policy consumer.
+pub fn enrolled_policy_required(entries: usize) -> (required: bool)
+    ensures required <==> entries > 0,
+{
+    entries > 0
+}
+
 pub enum ProducerNamespaceMember { Owner, Records, Metadata, Disposals, Unknown }
 
 pub fn producer_namespace_member(name: &str) -> (member: ProducerNamespaceMember)
@@ -164,28 +171,41 @@ pub fn accepts_cleanup_branch(kind: &str, registered: bool) -> (accepted: bool)
 }
 
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, PartialEq, Eq))]
-pub enum AbsentPolicySource {
+pub enum AdoptedPolicySource {
     ImportedOriginal,
     Current,
     RetainedTarget,
 }
 
-pub fn absent_policy_source(kind: &str, migrated: bool, head: &str, current_head: &str,
-    digest: &str, current_digest: &str) -> (source: AbsentPolicySource)
+pub fn imported_policy_required(kind: &str, migrated: bool) -> (required: bool)
+    ensures required <==> (kind@ == "import"@ && !migrated),
+{
+    equal_text(kind, "import") && !migrated
+}
+
+pub fn restore_present_import(imported: bool, maintenance: bool,
+    managed_originals: bool) -> (restore: bool)
+    ensures restore <==> (imported && maintenance && managed_originals),
+{
+    imported && maintenance && managed_originals
+}
+
+pub fn adopted_policy_source(kind: &str, migrated: bool, head: &str, current_head: &str,
+    digest: &str, current_digest: &str) -> (source: AdoptedPolicySource)
     ensures
-        (source == AbsentPolicySource::ImportedOriginal) <==>
+        (source == AdoptedPolicySource::ImportedOriginal) <==>
             (kind@ == "import"@ && !migrated),
-        (source == AbsentPolicySource::Current) <==>
+        (source == AdoptedPolicySource::Current) <==>
             (!(kind@ == "import"@ && !migrated)
                 && head@ == current_head@ && digest@ == current_digest@),
-        (source == AbsentPolicySource::RetainedTarget) <==>
+        (source == AdoptedPolicySource::RetainedTarget) <==>
             (!(kind@ == "import"@ && !migrated)
                 && (head@ != current_head@ || digest@ != current_digest@)),
 {
-    if equal_text(kind, "import") && !migrated { AbsentPolicySource::ImportedOriginal }
+    if imported_policy_required(kind, migrated) { AdoptedPolicySource::ImportedOriginal }
     else if equal_text(head, current_head) && equal_text(digest, current_digest) {
-        AbsentPolicySource::Current
-    } else { AbsentPolicySource::RetainedTarget }
+        AdoptedPolicySource::Current
+    } else { AdoptedPolicySource::RetainedTarget }
 }
 
 pub struct ImportedPolicyReceipt<'a> {
