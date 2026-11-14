@@ -138,6 +138,35 @@ pub open spec fn restore_status_spec(
     }
 }
 
+pub proof fn restore_status_has_match(
+    outcome: Option<&str>, requested: Option<&str>, matched: Option<&str>,
+    prefixes: Seq<Option<&str>>,
+)
+    requires restore_status_spec(outcome, requested, matched, prefixes) == "exact"@
+        || restore_status_spec(outcome, requested, matched, prefixes) == "compatible"@,
+    ensures matched is Some,
+{
+    reveal_strlit("exact"); reveal_strlit("compatible");
+    reveal_strlit("miss-or-unavailable"); reveal_strlit("error");
+    reveal_strlit("not-attempted"); reveal_strlit("unavailable");
+    if matched is None {
+        match outcome {
+            None => assert(false),
+            Some(value) => {
+                if value@ == "success"@ {
+                    assert(false);
+                } else if value@ == "failure"@ || value@ == "cancelled"@ {
+                    assert(false);
+                } else if value@ == "skipped"@ {
+                    assert(false);
+                } else {
+                    assert(false);
+                }
+            },
+        }
+    }
+}
+
 /// 原生恢复结果的完整文本和全部前缀共同决定原因；空／非文本前缀从不授权恢复。
 pub fn restore_status(
     outcome: Option<&str>, requested: Option<&str>, matched: Option<&str>,

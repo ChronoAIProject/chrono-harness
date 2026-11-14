@@ -115,7 +115,7 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
     };
     if base.requires_content_verification(method, reason) {
         assert(reason@ == "exact"@ || reason@ == "compatible"@);
-        reveal(planner::restore_status_spec);
+        proof { planner::restore_status_has_match(outcome, requested, matched, prefixes@); }
         assert(matched.is_some());
         let key = matched.unwrap();
         let ghost initial = state;
@@ -127,6 +127,8 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
             Ok(value) => value,
             Err(error) => return (state, reason, Err(error)),
         };
+        let ghost verified_value = value;
+        assert(original == Ok::<T, String>(verified_value));
         let (state, status) = read_status(state, &value);
         assert(read_status.ensures((verified, &value), (state, status)));
         let action = planner::recovery_action(outcome, reason, unconfirmed,
@@ -140,6 +142,13 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
                 return (state, reason, Err(message));
             },
         };
+        assert(recovery_cache_final_result(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, status, refresh, Some(verified_value), result));
+        assert(exists|observed: Option<&str>|
+            #[trigger] read_status.ensures((verified, &verified_value), (state, observed))
+            && recovery_cache_final_result(outcome, reason, unconfirmed,
+                outputs_valid, key_valid, method, observed, refresh,
+                Some(verified_value), result));
         assert(recovery_cache_decision_result(initial_state, outcome, reason, matched,
             unconfirmed, outputs_valid, key_valid, method, refresh, id,
             verify, read_status, render_error, (state, result)));
