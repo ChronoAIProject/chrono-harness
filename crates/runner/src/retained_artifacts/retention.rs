@@ -4147,43 +4147,6 @@ pub fn publish_owned_observed(
     )
 }
 
-/// Stream a known original only after its output byte reservation is admitted.
-/// The source's declared length and digest remain authoritative if it changes while copying.
-#[cfg(not(verus_keep_ghost))]
-pub fn publish_owned_file(
-    root: &Path,
-    producer: &str,
-    path: &str,
-    input: &Path,
-    digest: &str,
-    length: u64,
-    outcome: Value,
-) -> Result<bool, String> {
-    publish_owned_with(
-        root,
-        producer,
-        path,
-        length,
-        digest,
-        outcome,
-        |file| {
-            let mut input = fs::File::open(input).map_err(|e| e.to_string())?;
-            if !input.metadata().map_err(|e| e.to_string())?.is_file() {
-                return Err("original input must be a regular file".into());
-            }
-            let observed = crate::copy_hashed((&mut input).take(length), file)?;
-            let mut extra = [0];
-            if observed != (digest.to_owned(), length)
-                || input.read(&mut extra).map_err(|e| e.to_string())? != 0
-            {
-                return Err("original input changed during bounded publication".into());
-            }
-            Ok(())
-        },
-        None,
-    )
-}
-
 #[cfg(not(verus_keep_ghost))]
 fn publish_owned_with(
     root: &Path,
