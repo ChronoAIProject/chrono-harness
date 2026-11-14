@@ -428,9 +428,26 @@ fn run_attempt(
         return Err("E_VERUS_BUILD: ambiguous registered cache recovery".into());
     }
     let recovery = recovery.pop().ok_or("missing registered cache recovery")?;
+    let mut tools = BTreeMap::new();
+    for name in [
+        "cargo-verus",
+        "verus",
+        "rust_verify",
+        "z3",
+        "libvstd.rlib",
+        "vstd.vir",
+    ] {
+        let file = verus.join(name);
+        tools.insert(file.clone(), file_identity(&file)?);
+    }
+    tools.insert(executable.clone(), file_identity(&executable)?);
     let rustflags = vec![
         "-Zbinary-dep-depinfo".to_owned(),
         "-Zchecksum-hash-algorithm=sha256".to_owned(),
+        format!(
+            "--cfg=chrono_verus_toolchain=\"{}\"",
+            chrono_harness::wire::digest(&tools)?
+        ),
         "--extern".to_owned(),
         format!("vstd={}", verus.join("libvstd.rlib").display()),
         "-L".to_owned(),
@@ -479,19 +496,6 @@ fn run_attempt(
         config.rust_toolchain.clone().into(),
     );
     environment.insert("RUSTC_BOOTSTRAP".into(), "1".into());
-    let mut tools = BTreeMap::new();
-    for name in [
-        "cargo-verus",
-        "verus",
-        "rust_verify",
-        "z3",
-        "libvstd.rlib",
-        "vstd.vir",
-    ] {
-        let file = verus.join(name);
-        tools.insert(file.clone(), file_identity(&file)?);
-    }
-    tools.insert(executable.clone(), file_identity(&executable)?);
     let required = config
         .library
         .sources

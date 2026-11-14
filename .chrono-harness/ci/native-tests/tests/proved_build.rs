@@ -136,9 +136,28 @@ impl Fixture {
     }
     fn argv(&self) -> Vec<String> {
         let verus = self.root.join(".chrono-harness/bin/verus");
+        let tools = [
+            "cargo-verus",
+            "verus",
+            "rust_verify",
+            "z3",
+            "libvstd.rlib",
+            "vstd.vir",
+        ]
+        .map(|name| {
+            let path = verus.join(name);
+            let identity = chrono_harness::file_identity(&path).unwrap();
+            (path, identity)
+        })
+        .into_iter()
+        .collect::<std::collections::BTreeMap<_, _>>();
         let flags = json!([
             "-Zbinary-dep-depinfo",
             "-Zchecksum-hash-algorithm=sha256",
+            format!(
+                "--cfg=chrono_verus_toolchain=\"{}\"",
+                chrono_harness::wire::digest(&tools).unwrap()
+            ),
             "--extern",
             format!("vstd={}/libvstd.rlib", verus.display()),
             "-L",
