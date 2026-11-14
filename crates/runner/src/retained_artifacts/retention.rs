@@ -485,7 +485,13 @@ pub(crate) fn replace_report(path: &Path, raw: &[u8]) -> std::io::Result<()> {
     let mut pending = name.to_os_string();
     pending.push(".publication-pending");
     replace_file(path, &path.with_file_name(pending), raw)?;
-    sync_report(path)
+    // replace_file synced the file before rename; only the directory entry
+    // still needs synchronization after publishing that same inode.
+    fs::File::open(
+        path.parent()
+            .ok_or_else(|| std::io::Error::other("report parent"))?,
+    )?
+    .sync_all()
 }
 
 #[cfg(not(verus_keep_ghost))]
