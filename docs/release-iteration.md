@@ -19,6 +19,8 @@
 
 收尾先核每个宿主实际采用的生命周期。只有已采用 `automatic_cleanup` 的宿主才使用 `finish`；未采用者沿其登记的显式 cleanup 计划，逐项绑定工作树、分支、head、保留引用和已释放产物。`automatic cleanup is not opted in` 是入口不适用，不能报告清理成功，也不为收尾启用新政策。失败原件仍有调试或验收使用方时继续保留；等使用方结束再核删除资格。
 
+发布来源 CI 与安全扫描各按其登记身份验收。发布的 `verified_run` 仍须是本仓规定的成功 dev push 检查；GitHub 默认 CodeQL 的原运行可能是 `event=dynamic`、`path=dynamic/github-code-scanning/codeql`，列表名称也可能显示 `Push on dev`。核对固定源码、工作流路径、实际扫描检查及结论，不把发布来源的 push 条件套给 CodeQL，也不因名称不同跳过必需扫描。
+
 ## 何时发布正式版
 
 “稳定”按当前固定候选的可观察结果判定，不按发布次数、经过天数或暂时无人反馈判定：
