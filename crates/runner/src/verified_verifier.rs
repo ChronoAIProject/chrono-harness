@@ -914,7 +914,7 @@ pub proof fn invocation_extensions_congruent(
         if invocation_kind(first[i]@) == InvocationKind::Import {
             if import_has_extern(first, i, end) {
                 let j = choose|j: int| 7 <= j < end && first[j]@ == "--extern"@
-                    && j + 1 < end && same_input_name(vstd::utf8::encode_utf8(first[j + 1]@),
+                    && j + 1 < end && #[trigger] same_input_name(vstd::utf8::encode_utf8(first[j + 1]@),
                         vstd::utf8::encode_utf8(first[i + 1]@));
                 assert(first[j]@ == second[j]@);
                 assert(first[j + 1]@ == second[j + 1]@);
@@ -925,7 +925,7 @@ pub proof fn invocation_extensions_congruent(
             }
             if import_has_extern(second, i, end) {
                 let j = choose|j: int| 7 <= j < end && second[j]@ == "--extern"@
-                    && j + 1 < end && same_input_name(vstd::utf8::encode_utf8(second[j + 1]@),
+                    && j + 1 < end && #[trigger] same_input_name(vstd::utf8::encode_utf8(second[j + 1]@),
                         vstd::utf8::encode_utf8(second[i + 1]@));
                 assert(first[j]@ == second[j]@);
                 assert(first[j + 1]@ == second[j + 1]@);
