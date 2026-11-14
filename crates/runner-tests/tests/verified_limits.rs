@@ -12,6 +12,10 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
+#[cfg(verus_keep_ghost)]
+#[path = "maintenance_signal.rs"]
+mod maintenance_boundaries;
+
 verus! {
 
 // 前置条件由独立预期证明，普通 Rust 同时执行失败分支。

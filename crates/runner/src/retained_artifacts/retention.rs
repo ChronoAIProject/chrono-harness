@@ -1823,7 +1823,10 @@ impl Inventory {
         let gate = self.addressed_gate(ids, &[], &[consumer.into()], None, false, true)?;
         let mut l = self.load(&gate)?;
         self.reference_locked(&mut l, consumer, ids)?;
-        self.save(&l, &gate)
+        self.save(&l, &gate)?;
+        drop(gate);
+        crate::maintenance_signal::announce_adopted(&self.root, "retention-reference");
+        Ok(())
     }
     fn reference_locked(
         &self,
@@ -2051,6 +2054,10 @@ impl Inventory {
                 .ok_or("consumer protection/release receipt unavailable")?
                 .clone();
             self.stable(&gate)?;
+            drop(gate);
+            let mut receipt = receipt;
+            receipt["maintenance_request"] =
+                crate::maintenance_signal::request_adopted(&self.root, "retention-release");
             return Ok(receipt);
         }
         if l.roots.get(&role) != Some(&ids) {
@@ -2063,6 +2070,11 @@ impl Inventory {
         let excess = l.summaries.len().saturating_sub(self.policy.max_summaries);
         l.summaries.drain(..excess);
         self.save(&l, &gate)?;
+        drop(_leases);
+        drop(gate);
+        let mut receipt = receipt;
+        receipt["maintenance_request"] =
+            crate::maintenance_signal::request_adopted(&self.root, "retention-release");
         Ok(receipt)
     }
     /// A terminal caller preserves an exact original outside the retired host.
@@ -3689,7 +3701,7 @@ impl Publication {
     }
     /// Keep producer status distinct from storage status; no synthetic success on interruption.
     pub fn complete(self, outcome: Value) -> Result<(), String> {
-        self.complete_with_release(outcome, None)
+        self.complete_mode(outcome, None, false, || {})
     }
     /// Finish the caller's exact publication before a synchronous domain handoff.
     /// Persist each bounded sealing round under the original capability; do not
@@ -3711,25 +3723,14 @@ impl Publication {
     /// actual caller has taken custody. Unsettled or interrupted publication
     /// uses complete and preserves the repair handoff.
     pub fn complete_releasing_consumer(self, outcome: Value, consumer: &str) -> Result<(), String> {
-        self.complete_with_release(outcome, Some(consumer))
+        self.complete_mode(outcome, Some(consumer), false, || {})
     }
     /// Deterministic observation at the content-IO boundary for the dedicated
     /// regression consumer; it does not change the publication method.
     #[cfg(feature = "retention-test")]
     #[doc(hidden)]
     pub fn complete_observed(self, outcome: Value, observe: impl FnOnce()) -> Result<(), String> {
-        self.complete_with_release_observed(outcome, None, observe)
-    }
-    fn complete_with_release(self, outcome: Value, consumer: Option<&str>) -> Result<(), String> {
-        self.complete_with_release_observed(outcome, consumer, || {})
-    }
-    fn complete_with_release_observed(
-        self,
-        outcome: Value,
-        consumer: Option<&str>,
-        observe: impl FnOnce(),
-    ) -> Result<(), String> {
-        self.complete_mode(outcome, consumer, false, observe)
+        self.complete_mode(outcome, None, false, observe)
     }
     fn complete_mode(
         self,
@@ -3756,6 +3757,9 @@ impl Publication {
         // root left after success, while its parent still needs its exact result.
         self.inventory.remember_output(&self.lease, &self.id)?;
         self.account_rounds(Some(outcome), consumer, seal_all, observe, exhausted)?;
+        let root = self.inventory.root.clone();
+        drop(self);
+        crate::maintenance_signal::announce_adopted(&root, "retention-complete");
         Ok(())
     }
     /// The same capability and manifest cursor account either a real completion

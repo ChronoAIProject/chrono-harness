@@ -7,12 +7,24 @@
     <key>ProgramArguments</key>
     <array>
         <string>@PROGRAM@</string>
-        <string>maintain</string>
+        <string>maintenance-service</string>
         <string>--host-root</string>
         <string>@COORDINATOR@</string>
     </array>
     <key>WorkingDirectory</key>
     <string>@COORDINATOR@</string>
+    <key>Sockets</key>
+    <dict>
+        <key>Maintenance</key>
+        <dict>
+            <key>SockPathName</key>
+            <string>@SOCKET@</string>
+            <key>SockType</key>
+            <string>dgram</string>
+            <key>SockPathMode</key>
+            <integer>384</integer>
+        </dict>
+    </dict>
     <key>StartInterval</key>
     <integer>3600</integer>
     <key>RunAtLoad</key>

@@ -27,6 +27,7 @@ chrono-judge-workflow = { path = "../judge-workflow" }
 serde = { version = "1", features = ["derive", "rc"] }
 serde_json = { version = "1", features = ["raw_value"] }
 tempfile = "3"
+libc = "0.2"
 time = { version = "0.3", features = ["formatting"] }
 
 [profile.dev.package.sha2]

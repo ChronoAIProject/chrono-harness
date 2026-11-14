@@ -4,6 +4,15 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "maintenance_signal.rs"]
+pub mod maintenance_signal;
+
+#[cfg(verus_keep_ghost)]
+#[path = "artifact_disposal.rs"]
+#[rustfmt::skip]
+pub mod artifact_disposal;
+
 verus! {
 
 pub const MAX_OUTPUT_BYTES: usize = 67_108_864;

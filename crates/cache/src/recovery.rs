@@ -642,6 +642,188 @@ pub fn collect_recovery_artifacts<S, V, A>(source: S, artifacts: Option<&[Option
     out
 }
 
+pub open spec fn recovery_planning_branch<S, X, R, P, Q, C>(state: S, row: &X,
+    action: planner::RecoveryAction, prepare: &P, queue: &Q, collect: &C,
+    out: (S, Result<(), String>)) -> bool
+    where P: Fn(S, &X) -> (S, Result<R, String>),
+        Q: Fn(S, &X, R, &'static str) -> S,
+        C: Fn(S, &X) -> (S, Result<(), String>),
+{
+    match action {
+        planner::RecoveryAction::Keep => out == (state, Ok::<(), String>(())),
+        planner::RecoveryAction::Discard => collect.ensures((state, row), out),
+        planner::RecoveryAction::Refresh => exists|prepared: S, result: Result<R, String>|
+            #[trigger] prepare.ensures((state, row), (prepared, result))
+            && match result {
+                Err(error) => out == (prepared, Err::<(), String>(error)),
+                Ok(value) => queue.ensures((prepared, row, value, "pending"), out.0)
+                    && out.1 == Ok::<(), String>(()),
+            },
+    }
+}
+
+pub open spec fn recovery_planning_step<S, X, V, R, D, I, A, P, Q, C>(
+    source: S, index: usize, row: &X, decide: &D, initialize: &I, attach: &A,
+    prepare: &P, queue: &Q, collect: &C, out: (S, Result<(), String>)) -> bool
+    where D: Fn(S, usize, &X) -> (S, &'static str,
+            Result<(planner::RecoveryAction, Option<V>), String>),
+        I: Fn(S, usize, &X, &'static str, &'static str) -> S,
+        A: Fn(S, &X, V) -> S,
+        P: Fn(S, &X) -> (S, Result<R, String>),
+        Q: Fn(S, &X, R, &'static str) -> S,
+        C: Fn(S, &X) -> (S, Result<(), String>),
+{
+    exists|decided: S, reason: &'static str,
+        decision: Result<(planner::RecoveryAction, Option<V>), String>|
+        #[trigger] decide.ensures((source, index, row), (decided, reason, decision))
+        && match decision {
+            Err(error) => out == (decided, Err::<(), String>(error)),
+            Ok((action, verification)) => exists|initialized: S, status: &'static str|
+                status@ == match action {
+                    planner::RecoveryAction::Discard => "pending"@,
+                    _ => "not-required"@,
+                }
+                && #[trigger] initialize.ensures((decided, index, row, reason, status), initialized)
+                && match verification {
+                    None => recovery_planning_branch(initialized, row, action,
+                        prepare, queue, collect, out),
+                    Some(value) => exists|attached: S|
+                        #[trigger] attach.ensures((initialized, row, value), attached)
+                        && recovery_planning_branch(attached, row, action,
+                            prepare, queue, collect, out),
+                },
+        }
+}
+
+/// 决策成功后才初始化报告；按原动作准备刷新或收集产物，保留首错状态。
+pub fn plan_recovery_cache<S, X, V, R, D, I, A, P, Q, C>(
+    source: S, index: usize, row: &X, decide: &D, initialize: &I, attach: &A,
+    prepare: &P, queue: &Q, collect: &C) -> (out: (S, Result<(), String>))
+    where D: Fn(S, usize, &X) -> (S, &'static str,
+            Result<(planner::RecoveryAction, Option<V>), String>),
+        I: Fn(S, usize, &X, &'static str, &'static str) -> S,
+        A: Fn(S, &X, V) -> S,
+        P: Fn(S, &X) -> (S, Result<R, String>),
+        Q: Fn(S, &X, R, &'static str) -> S,
+        C: Fn(S, &X) -> (S, Result<(), String>),
+    requires forall|state: S, i: usize, row: &X| decide.requires((state, i, row)),
+        forall|state: S, i: usize, row: &X, reason: &'static str, status: &'static str|
+            initialize.requires((state, i, row, reason, status)),
+        forall|state: S, row: &X, value: V| attach.requires((state, row, value)),
+        forall|state: S, row: &X| prepare.requires((state, row)),
+        forall|state: S, row: &X, value: R, status: &'static str|
+            queue.requires((state, row, value, status)),
+        forall|state: S, row: &X| collect.requires((state, row)),
+    ensures recovery_planning_step(source, index, row, decide, initialize, attach,
+        prepare, queue, collect, out),
+{
+    let (state, reason, decision) = decide(source, index, row);
+    let ghost decided = state;
+    let ghost original = decision;
+    assert(decide.ensures((source, index, row), (decided, reason, original)));
+    let (action, verification) = match decision {
+        Err(error) => return (state, Err(error)),
+        Ok(value) => value,
+    };
+    let status = action.initial_status();
+    let state = initialize(state, index, row, reason, status);
+    let ghost initialized = state;
+    let state = match verification {
+        Some(value) => attach(state, row, value),
+        None => state,
+    };
+    let ghost branched = state;
+    let out = match action {
+        planner::RecoveryAction::Keep => (state, Ok(())),
+        planner::RecoveryAction::Discard => collect(state, row),
+        planner::RecoveryAction::Refresh => {
+            let (state, result) = prepare(state, row);
+            let ghost prepared = state;
+            let ghost prepared_result = result;
+            assert(prepare.ensures((branched, row), (prepared, prepared_result)));
+            match result {
+                Err(error) => (state, Err(error)),
+                Ok(value) => (queue(state, row, value, "pending"), Ok(())),
+            }
+        },
+    };
+    assert(recovery_planning_branch(branched, row, action, prepare, queue, collect, out));
+    out
+}
+
+pub open spec fn recovery_plan_prefix<S, X, P>(rows: Seq<X>, states: Seq<S>,
+    source: S, prepare: &P) -> bool
+    where P: Fn(S, usize, &X) -> (S, Result<(), String>),
+{
+    0 < states.len() <= rows.len() + 1 && states[0] == source
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] prepare.ensures((states[i], i as usize, &rows[i]),
+                (states[i + 1], Ok::<(), String>(())))
+}
+
+/// 完整遍历准备项；首错保留原状态，只有全部成功才返回成功。
+pub fn plan_recovery_caches<S, X, P>(source: S, rows: &[X], prepare: &P)
+    -> (out: (S, Result<(), String>))
+    where P: Fn(S, usize, &X) -> (S, Result<(), String>),
+    requires forall|state: S, i: usize, row: &X| prepare.requires((state, i, row)),
+    ensures exists|states: Seq<S>|
+        #[trigger] recovery_plan_prefix(rows@, states, source, prepare)
+        && match out.1 {
+            Ok(()) => states.len() == rows.len() + 1 && out.0 == states.last(),
+            Err(error) => states.len() <= rows.len()
+                && prepare.ensures((states.last(), (states.len() - 1) as usize,
+                    &rows@[states.len() - 1]), (out.0, Err::<(), String>(error))),
+        },
+{
+    let mut state = source;
+    let ghost states = seq![source];
+    let mut i = 0;
+    while i < rows.len()
+        invariant i <= rows.len(), states.len() == i + 1, states.last() == state,
+            recovery_plan_prefix(rows@, states, source, prepare),
+            forall|state: S, i: usize, row: &X| prepare.requires((state, i, row)),
+        decreases rows.len() - i,
+    {
+        let ghost previous_state = state;
+        let (next, result) = prepare(state, i, &rows[i]);
+        let ghost original = result;
+        assert(prepare.ensures((previous_state, i, &rows@[i as int]), (next, result)));
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(prepare.ensures((states.last(), (states.len() - 1) as usize,
+                    &rows@[states.len() - 1]), (out.0, Err::<(), String>(error))));
+                return out;
+            },
+            Ok(value) => {
+                assert(value == ());
+                assert(original == Ok::<(), String>(value));
+                assert(original == Ok::<(), String>(()));
+                assert(previous_state == states.last());
+                assert(prepare.ensures((previous_state, i, &rows@[i as int]),
+                    (next, original)));
+                assert(prepare.ensures((states.last(), i, &rows@[i as int]),
+                    (next, Ok::<(), String>(()))) );
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] prepare.ensures((states[j], j as usize, &rows@[j]),
+                            (states[j + 1], Ok::<(), String>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(prepare.ensures((previous[j], j as usize, &rows@[j]),
+                                (previous[j + 1], Ok::<(), String>(()))) );
+                        }
+                    }
+                }
+                state = next;
+            },
+        }
+        i += 1;
+    }
+    (state, Ok(()))
+}
+
 pub open spec fn recovery_refresh_step<S, K, T, F, C>(source: S, row: (K, T),
     apply: &F, complete: &C, out: (S, Result<(), String>)) -> bool
     where F: Fn(S, &K, T) -> (S, Result<(), String>),
@@ -1580,7 +1762,7 @@ use chrono_harness::{decode, no_symlink_parents, prepared, sha256};
 #[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
 #[cfg(not(verus_keep_ghost))]
-use std::{collections::BTreeMap, fs, io::Write, path::Path};
+use std::{fs, io::Write, path::Path};
 
 #[cfg(not(verus_keep_ghost))]
 fn restore_prefixes(cache: &Value) -> Vec<Option<&str>> {
@@ -1724,91 +1906,127 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
             |(), steps: &Value| ((), steps.is_object()),
         )
         .1?;
-        let caches: BTreeMap<_, _> = plan["caches"]
+        let caches: Vec<_> = plan["caches"]
             .as_object()
             .ok_or("E_CACHE_RECOVERY: caches missing")?
             .iter()
             .collect();
-        let mut paths = vec![];
-        let mut refreshes = vec![];
-        for (index, (id, cache)) in caches.into_iter().enumerate() {
-            let restore = &steps[format!("cache_{index}_restore")];
-            let prefixes = restore_prefixes(cache);
-            let outputs = &restore["outputs"];
-            let outputs_is_null_or_object = outputs.is_null() || outputs.is_object();
-            let matched_key_is_null_or_string = outputs
-                .get("cache-matched-key")
-                .is_none_or(|key| key.is_null() || key.is_string());
-            let (_, reason, decision) = decide_recovery_cache(
-                (),
-                restore["outcome"].as_str(),
-                cache["key"].as_str(),
-                outputs["cache-matched-key"].as_str(),
-                &prefixes,
-                config.recover_unconfirmed_restores,
-                outputs_is_null_or_object,
-                matched_key_is_null_or_string,
-                cache["content_verification"].as_str(),
-                config.caches[id].refresh_sources,
-                id,
-                |(), key| {
-                    (
-                        (),
-                        super::content::verify(&root, &directory, id, cache, key),
-                    )
-                },
-                |(), value: &Value| ((), value["status"].as_str()),
-                |(), parts| ((), parts.concat()),
-            );
-            let (action, verification) = decision?;
-            let discard = action.discards_outputs();
-            report["caches"][id] = json!({"restore":restore,"reason":reason,"status":action.initial_status(),"artifacts":[]});
-            if let Some(verification) = verification {
-                report["caches"][id]["verification"] = verification;
-            }
-            if !discard {
-                if action.refreshes_sources() {
-                    let refresh = super::freshness::prepare(
-                        &root,
-                        &config.caches[id],
-                        cache,
-                        &plan["inputs"],
-                    )?;
-                    report["caches"][id]["source_freshness"] =
-                        json!({"method":super::freshness::METHOD,"status":"pending"});
-                    refreshes.push((id.clone(), refresh));
-                }
-                continue;
-            }
-            let artifacts: Option<Vec<_>> = cache["artifacts"].as_object().map(|artifacts| {
-                artifacts
-                    .values()
-                    .map(|artifact| artifact["path"].as_str())
-                    .collect()
-            });
-            let ((updated, selected), collected) = collect_recovery_artifacts(
-                (std::mem::take(&mut report), std::mem::take(&mut paths)),
-                artifacts.as_deref(),
-                &|state, path| {
-                    let valid = super::path(&root, path).map(|target| target.starts_with(&root));
-                    (state, valid)
-                },
-                &|(mut report, mut paths): (Value, Vec<(String, usize, String)>),
-                  position,
-                  path,
-                  status| {
-                    report["caches"][id]["artifacts"]
-                        .as_array_mut()
-                        .unwrap()
-                        .push(json!({"path":path,"status":status}));
-                    paths.push((id.clone(), position, path.to_owned()));
-                    (report, paths)
-                },
-            );
-            report = updated;
-            paths = selected;
-            collected?;
-        }
+        type PlanningState = (
+            Value,
+            Vec<(String, usize, String)>,
+            Vec<(String, super::freshness::Prepared)>,
+        );
+        let ((updated, paths, refreshes), planned) = plan_recovery_caches(
+            (std::mem::take(&mut report), vec![], vec![]),
+            &caches,
+            &|state, index, row: &(&String, &Value)| {
+                plan_recovery_cache(
+                    state,
+                    index,
+                    row,
+                    &|state, index, &(id, cache): &(&String, &Value)| {
+                        let restore = &steps[format!("cache_{index}_restore")];
+                        let prefixes = restore_prefixes(cache);
+                        let outputs = &restore["outputs"];
+                        let outputs_is_null_or_object = outputs.is_null() || outputs.is_object();
+                        let matched_key_is_null_or_string = outputs
+                            .get("cache-matched-key")
+                            .is_none_or(|key| key.is_null() || key.is_string());
+                        let (_, reason, decision) = decide_recovery_cache(
+                            (),
+                            restore["outcome"].as_str(),
+                            cache["key"].as_str(),
+                            outputs["cache-matched-key"].as_str(),
+                            &prefixes,
+                            config.recover_unconfirmed_restores,
+                            outputs_is_null_or_object,
+                            matched_key_is_null_or_string,
+                            cache["content_verification"].as_str(),
+                            config.caches[id].refresh_sources,
+                            id,
+                            |(), key| {
+                                (
+                                    (),
+                                    super::content::verify(&root, &directory, id, cache, key),
+                                )
+                            },
+                            |(), value: &Value| ((), value["status"].as_str()),
+                            |(), parts| ((), parts.concat()),
+                        );
+                        (state, reason, decision)
+                    },
+                    &|(mut report, paths, refreshes): PlanningState,
+                      index,
+                      &(id, _): &(&String, &Value),
+                      reason,
+                      status| {
+                        report["caches"][id] = json!({
+                            "restore":steps[format!("cache_{index}_restore")],
+                            "reason":reason,"status":status,"artifacts":[]});
+                        (report, paths, refreshes)
+                    },
+                    &|(mut report, paths, refreshes): PlanningState,
+                      &(id, _): &(&String, &Value),
+                      verification: Value| {
+                        report["caches"][id]["verification"] = verification;
+                        (report, paths, refreshes)
+                    },
+                    &|state, &(id, cache): &(&String, &Value)| {
+                        (
+                            state,
+                            super::freshness::prepare(
+                                &root,
+                                &config.caches[id],
+                                cache,
+                                &plan["inputs"],
+                            ),
+                        )
+                    },
+                    &|(mut report, paths, mut refreshes): PlanningState,
+                      &(id, _): &(&String, &Value),
+                      refresh,
+                      status| {
+                        report["caches"][id]["source_freshness"] =
+                            json!({"method":super::freshness::METHOD,"status":status});
+                        refreshes.push((id.clone(), refresh));
+                        (report, paths, refreshes)
+                    },
+                    &|(report, paths, refreshes): PlanningState,
+                      &(id, cache): &(&String, &Value)| {
+                        let artifacts: Option<Vec<_>> =
+                            cache["artifacts"].as_object().map(|artifacts| {
+                                artifacts
+                                    .values()
+                                    .map(|artifact| artifact["path"].as_str())
+                                    .collect()
+                            });
+                        let ((report, paths), collected) = collect_recovery_artifacts(
+                            (report, paths),
+                            artifacts.as_deref(),
+                            &|state, path| {
+                                let valid = super::path(&root, path)
+                                    .map(|target| target.starts_with(&root));
+                                (state, valid)
+                            },
+                            &|(mut report, mut paths): (Value, Vec<(String, usize, String)>),
+                              position,
+                              path,
+                              status| {
+                                report["caches"][id]["artifacts"]
+                                    .as_array_mut()
+                                    .unwrap()
+                                    .push(json!({"path":path,"status":status}));
+                                paths.push((id.clone(), position, path.to_owned()));
+                                (report, paths)
+                            },
+                        );
+                        ((report, paths, refreshes), collected)
+                    },
+                )
+            },
+        );
+        report = updated;
+        planned?;
         // Validate the complete selected set before the first removal, and
         // publish the original plan/restore binding before touching any output.
         let (updated, removed) = run_recovery_removals(

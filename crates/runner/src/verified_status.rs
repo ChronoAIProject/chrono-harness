@@ -28,6 +28,15 @@ pub mod scopes;
 #[path = "verified_export.rs"]
 pub mod snapshot_export;
 
+#[cfg(not(verus_keep_ghost))]
+pub use crate::admit_relative_path;
+#[cfg(verus_keep_ghost)]
+#[path = "lib.rs"]
+#[rustfmt::skip]
+mod path_admission_owner;
+#[cfg(verus_keep_ghost)]
+pub use path_admission_owner::admit_relative_path;
+
 verus! {
 
 /// Only the synchronous owner releases a local directory operation on return.
@@ -323,16 +332,6 @@ impl<'a> RegistryPathError<'a> {
             Self::Invalid { path } => format_invalid(path),
         }
     }
-}
-
-pub fn admit_relative_path(value: &str) -> (out: Result<(), &str>)
-    ensures match out {
-        Ok(()) => paths::relative_path(value.spec_bytes()),
-        Err(invalid) => invalid@ == value@ && !paths::relative_path(value.spec_bytes()),
-    },
-{
-    if paths::valid_relative_path(value.as_bytes()) { Ok(()) }
-    else { Err(value) }
 }
 
 pub open spec fn registry_path_valid(row: Option<&str>) -> bool {
