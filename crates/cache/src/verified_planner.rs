@@ -30,9 +30,9 @@ pub use crate::attempt::{
 pub use crate::recovery::{
     RecoveryCacheObservation, RecoveryEntryError, RecoveryOption, RecoveryOptions, RecoveryProbe,
     RecoveryRemovalError, RecoveryReplay, RecoverySummary, admit_recovery_paths,
-    admit_recovery_replay, complete_recovery_cache, finalize_recovery, parse_recovery_options,
-    preflight_recovery, recovery_decision_error, remove_recovery_output, run_recovery_removals,
-    select_recovery_entry, summarize_recovery,
+    admit_recovery_replay, complete_recovery_cache, decide_recovery_cache, finalize_recovery,
+    parse_recovery_options, preflight_recovery, recovery_decision_error, remove_recovery_output,
+    run_recovery_removals, select_recovery_entry, summarize_recovery,
 };
 #[cfg(verus_keep_ghost)]
 pub use attempt::{
@@ -135,6 +135,53 @@ pub open spec fn restore_status_spec(
             "unavailable"@
         },
         None => "unavailable"@,
+    }
+}
+
+pub proof fn restore_status_has_match(
+    outcome: Option<&str>, requested: Option<&str>, matched: Option<&str>,
+    prefixes: Seq<Option<&str>>,
+)
+    requires restore_status_spec(outcome, requested, matched, prefixes) == "exact"@
+        || restore_status_spec(outcome, requested, matched, prefixes) == "compatible"@,
+    ensures matched is Some,
+{
+    reveal_strlit("exact"); reveal_strlit("compatible");
+    reveal_strlit("miss-or-unavailable"); reveal_strlit("error");
+    reveal_strlit("not-attempted"); reveal_strlit("unavailable");
+    reveal(restore_status_spec);
+    assert("exact"@.len() == 5);
+    assert("compatible"@.len() == 10);
+    assert("unavailable"@.len() == 11);
+    assert("miss-or-unavailable"@.len() == 19);
+    assert("error"@.len() == 5);
+    assert("not-attempted"@.len() == 13);
+    assert("unavailable"@ != "exact"@ && "unavailable"@ != "compatible"@);
+    assert("miss-or-unavailable"@ != "exact"@
+        && "miss-or-unavailable"@ != "compatible"@);
+    assert("error"@[1] != "exact"@[1]);
+    assert("error"@ != "exact"@ && "error"@ != "compatible"@);
+    assert("not-attempted"@ != "exact"@ && "not-attempted"@ != "compatible"@);
+    if matched is None {
+        match outcome {
+            None => {
+                assert(restore_status_spec(outcome, requested, matched, prefixes) == "unavailable"@);
+                assert(false);
+            },
+            Some(value) => {
+                if value@ == "success"@ {
+                    assert(restore_status_spec(outcome, requested, matched, prefixes)
+                        == "miss-or-unavailable"@);
+                    assert(false);
+                } else if value@ == "failure"@ || value@ == "cancelled"@ {
+                    assert(false);
+                } else if value@ == "skipped"@ {
+                    assert(false);
+                } else {
+                    assert(false);
+                }
+            },
+        }
     }
 }
 

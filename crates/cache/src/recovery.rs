@@ -14,6 +14,149 @@ use vstd::prelude::*;
 
 verus! {
 
+pub open spec fn recovery_decision_parts<'a>(error: planner::RecoveryDecisionError,
+    id: &'a str) -> [&'a str; 2]
+{
+    [match error {
+        planner::RecoveryDecisionError::MalformedOutputs =>
+            "E_CACHE_RECOVERY: malformed restore outputs for ",
+        planner::RecoveryDecisionError::UnknownOutcome =>
+            "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for ",
+    }, id]
+}
+
+pub open spec fn recovery_cache_final_result<T>(outcome: Option<&str>, reason: &str,
+    unconfirmed: bool, outputs_valid: bool, key_valid: bool,
+    method: Option<&str>, status: Option<&str>, refresh: bool,
+    verification: Option<T>, out: Result<(planner::RecoveryAction, Option<T>), String>) -> bool
+{
+    match planner::recovery_action_spec(outcome, reason, unconfirmed,
+        outputs_valid, key_valid, method, status, refresh) {
+        Ok(action) => out == Ok::<(planner::RecoveryAction, Option<T>), String>(
+            (action, verification)),
+        Err(_) => false,
+    }
+}
+
+/// 从同一原生观察计算原因、按需核验及最终动作，保留原核验值和首错。
+pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
+    requested: Option<&str>, matched: Option<&str>, prefixes: &[Option<&str>],
+    unconfirmed: bool, outputs_valid: bool, key_valid: bool,
+    method: Option<&str>, refresh: bool, id: &str, verify: V, read_status: R, render_error: E,
+) -> (out: (S, &'static str, Result<(planner::RecoveryAction, Option<T>), String>))
+    where V: FnOnce(S, &str) -> (S, Result<T, String>),
+        R: FnOnce(S, &T) -> (S, Option<&str>),
+        E: FnOnce(S, [&str; 2]) -> (S, String),
+    requires forall|state: S, key: &str| verify.requires((state, key)),
+        forall|state: S, value: &T| read_status.requires((state, value)),
+        forall|state: S, parts: [&str; 2]| render_error.requires((state, parts)),
+    ensures out.1@ == planner::restore_status_spec(outcome, requested, matched, prefixes@),
+        match planner::recovery_action_spec(outcome, out.1, unconfirmed,
+            outputs_valid, key_valid, None, None, false) {
+            Err(error) => match out.2 {
+                Err(message) => render_error.ensures(
+                    (state, recovery_decision_parts(error, id)), (out.0, message)),
+                _ => false,
+            },
+            Ok(base) => if matches!(base, planner::RecoveryAction::Keep)
+                && planner::content_verification_applies_spec(method, out.1) {
+                match matched {
+                    None => false,
+                    Some(key) => (exists|verified: S, error: String|
+                        #[trigger] verify.ensures((state, key),
+                            (verified, Err::<T, String>(error)))
+                        && (out.0, out.2) == (verified,
+                            Err::<(planner::RecoveryAction, Option<T>), String>(error)))
+                        || (exists|verified: S, value: T, status: Option<&str>|
+                            verify.ensures((state, key), (verified, Ok::<T, String>(value)))
+                            && #[trigger] read_status.ensures((verified, &value), (out.0, status))
+                            && recovery_cache_final_result(outcome, out.1, unconfirmed,
+                                outputs_valid, key_valid, method, status, refresh,
+                                Some(value), out.2)),
+                }
+            } else {
+                out.0 == state && recovery_cache_final_result(outcome, out.1, unconfirmed,
+                    outputs_valid, key_valid, method, None, refresh, None::<T>, out.2)
+            },
+        },
+{
+    reveal(recovery_cache_final_result);
+    let ghost initial_state = state;
+    let reason = planner::restore_status(outcome, requested, matched, prefixes);
+    let base = match planner::recovery_action(outcome, reason, unconfirmed,
+        outputs_valid, key_valid, None, None, false) {
+        Ok(action) => action,
+        Err(error) => {
+            let parts = recovery_decision_error(&error, id);
+            let (state, message) = render_error(state, parts);
+            return (state, reason, Err(message));
+        },
+    };
+    if base.requires_content_verification(method, reason) {
+        assert(reason@ == "exact"@ || reason@ == "compatible"@);
+        proof { planner::restore_status_has_match(outcome, requested, matched, prefixes@); }
+        assert(matched.is_some());
+        let key = matched.unwrap();
+        assert(matched == Some(key));
+        assert(planner::recovery_action_spec(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, None, None, false)
+            == Ok::<planner::RecoveryAction, planner::RecoveryDecisionError>(
+                planner::RecoveryAction::Keep));
+        let ghost initial = state;
+        let (state, result) = verify(state, key);
+        let ghost verified = state;
+        let ghost original = result;
+        assert(verify.ensures((initial, key), (verified, original)));
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => return (state, reason, Err(error)),
+        };
+        let ghost verified_value = value;
+        assert(original == Ok::<T, String>(verified_value));
+        assert(initial == initial_state);
+        assert(verify.ensures((initial_state, key),
+            (verified, Ok::<T, String>(verified_value))));
+        let (state, status) = read_status(state, &value);
+        assert(read_status.ensures((verified, &value), (state, status)));
+        let action = planner::recovery_action(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, status, refresh);
+        let result = match action {
+            Ok(action) => Ok((action, Some(value))),
+            Err(error) => {
+                assert(false);
+                let parts = recovery_decision_error(&error, id);
+                let (state, message) = render_error(state, parts);
+                return (state, reason, Err(message));
+            },
+        };
+        assert(recovery_cache_final_result(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, status, refresh, Some(verified_value), result));
+        assert(planner::content_verification_applies_spec(method, reason));
+        let out = (state, reason, result);
+        assert(out.0 == state && out.1 == reason && out.2 == result);
+        assert(exists|observed_state: S, value: T, observed: Option<&str>|
+            verify.ensures((initial_state, key),
+                (observed_state, Ok::<T, String>(value)))
+            && #[trigger] read_status.ensures((observed_state, &value), (out.0, observed))
+            && recovery_cache_final_result(outcome, out.1, unconfirmed,
+                outputs_valid, key_valid, method, observed, refresh, Some(value), out.2));
+        out
+    } else {
+        let action = planner::recovery_action(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, None, refresh);
+        let result = match action {
+            Ok(action) => Ok((action, None)),
+            Err(error) => {
+                assert(false);
+                let parts = recovery_decision_error(&error, id);
+                let (state, message) = render_error(state, parts);
+                return (state, reason, Err(message));
+            },
+        };
+        (state, reason, result)
+    }
+}
+
 pub open spec fn recovery_preflight_result<S, T, P, V, D, J>(
     initial: S, enabled: bool, consumer: Option<&str>,
     prepare: P, attempt: V, decode: D, is_object: J, out: (S, Result<T, String>),
@@ -545,7 +688,7 @@ pub open spec fn recovery_text(value: Option<&str>) -> Option<Seq<char>> {
 /// 恢复决策的错误分类与完整缓存身份；适配器只按顺序拼接两段原文。
 pub fn recovery_decision_error<'a>(error: &planner::RecoveryDecisionError, id: &'a str)
     -> (parts: [&'a str; 2])
-    ensures parts[1]@ == id@,
+    ensures parts == recovery_decision_parts(*error, id), parts[1]@ == id@,
         parts[0]@ == match error {
             planner::RecoveryDecisionError::MalformedOutputs =>
                 "E_CACHE_RECOVERY: malformed restore outputs for "@,
@@ -1142,19 +1285,13 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, io::Write, path::Path};
 
 #[cfg(not(verus_keep_ghost))]
-fn restore_status(cache: &Value, restore: &Value) -> &'static str {
-    let prefixes: Vec<_> = cache["restore_keys"]
+fn restore_prefixes(cache: &Value) -> Vec<Option<&str>> {
+    cache["restore_keys"]
         .as_array()
         .into_iter()
         .flatten()
         .map(Value::as_str)
-        .collect();
-    super::verified_planner::restore_status(
-        restore["outcome"].as_str(),
-        cache["key"].as_str(),
-        restore["outputs"]["cache-matched-key"].as_str(),
-        &prefixes,
-    )
+        .collect()
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -1298,51 +1435,34 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         let mut refreshes = vec![];
         for (index, (id, cache)) in caches.into_iter().enumerate() {
             let restore = &steps[format!("cache_{index}_restore")];
-            let reason = restore_status(cache, restore);
+            let prefixes = restore_prefixes(cache);
             let outputs = &restore["outputs"];
             let outputs_is_null_or_object = outputs.is_null() || outputs.is_object();
             let matched_key_is_null_or_string = outputs
                 .get("cache-matched-key")
                 .is_none_or(|key| key.is_null() || key.is_string());
-            let outcome = restore["outcome"].as_str();
-            let base_action = super::verified_planner::recovery_action(
-                outcome,
-                reason,
+            let (_, reason, decision) = decide_recovery_cache(
+                (),
+                restore["outcome"].as_str(),
+                cache["key"].as_str(),
+                outputs["cache-matched-key"].as_str(),
+                &prefixes,
                 config.recover_unconfirmed_restores,
                 outputs_is_null_or_object,
                 matched_key_is_null_or_string,
-                None,
-                None,
-                false,
-            );
-            let base_action =
-                base_action.map_err(|error| recovery_decision_error(&error, id).concat())?;
-            let content_method = cache["content_verification"].as_str();
-            let mut verification = None;
-            if base_action.requires_content_verification(content_method, reason) {
-                let verified = super::content::verify(
-                    &root,
-                    &directory,
-                    id,
-                    cache,
-                    restore["outputs"]["cache-matched-key"].as_str().unwrap(),
-                )?;
-                verification = Some(verified);
-            }
-            let content_status = verification
-                .as_ref()
-                .and_then(|value| value["status"].as_str());
-            let action = super::verified_planner::recovery_action(
-                outcome,
-                reason,
-                config.recover_unconfirmed_restores,
-                outputs_is_null_or_object,
-                matched_key_is_null_or_string,
-                content_method,
-                content_status,
+                cache["content_verification"].as_str(),
                 config.caches[id].refresh_sources,
+                id,
+                |(), key| {
+                    (
+                        (),
+                        super::content::verify(&root, &directory, id, cache, key),
+                    )
+                },
+                |(), value: &Value| ((), value["status"].as_str()),
+                |(), parts| ((), parts.concat()),
             );
-            let action = action.map_err(|error| recovery_decision_error(&error, id).concat())?;
+            let (action, verification) = decision?;
             let discard = action.discards_outputs();
             report["caches"][id] = json!({"restore":restore,"reason":reason,"status":action.initial_status(),"artifacts":[]});
             if let Some(verification) = verification {
