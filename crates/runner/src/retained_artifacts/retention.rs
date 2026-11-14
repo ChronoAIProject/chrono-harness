@@ -2429,6 +2429,8 @@ impl Inventory {
         Ok(json!({"scope_complete":complete,"errors":errors,"expired":expired}))
     }
 
+    /// Ordinary entries coalesce concurrent reclamation without waiting behind
+    /// another bounded pass. Publication still acquires authoritative admission.
     pub fn maintain(&self) -> Result<Value, String> {
         self.maintain_at(now()?)
     }
@@ -2486,11 +2488,6 @@ impl Inventory {
     ) -> Result<Value, String> {
         self.validate_originals(originals)?;
         self.maintain_round(observed, Some(originals))
-    }
-    /// Ordinary entries coalesce concurrent reclamation without waiting behind
-    /// another bounded pass. Publication still acquires authoritative admission.
-    pub fn maintain_available(&self) -> Result<Value, String> {
-        self.maintain()
     }
     fn maintain_round(&self, observed: u64, originals: Option<&[String]>) -> Result<Value, String> {
         self.with_round_budget(|| self.partition_round(observed, originals))
@@ -2818,7 +2815,6 @@ impl Inventory {
         // continuations so a dependency closure cannot consume the whole
         // admission window. Stable sorting preserves the durable cursor among
         // peers; cycles remain reclaimable.
-        let referenced: BTreeSet<_> = l.outputs.iter().flat_map(|o| o.references.iter()).collect();
         let mut consumers: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for output in &l.outputs {
             for original in &output.references {
@@ -2834,12 +2830,13 @@ impl Inventory {
         let mut order: Vec<_> = (0..count)
             .map(|n| {
                 let output = &l.outputs[(start + n) % count];
+                let has_consumers = consumers.contains_key(&output.id);
                 (
                     output.id.clone(),
                     (
                         output.phase != "disposing",
-                        consumers.contains_key(&output.id) || !output.references.is_empty(),
-                        referenced.contains(&output.id),
+                        has_consumers || !output.references.is_empty(),
+                        has_consumers,
                     ),
                 )
             })
@@ -3069,11 +3066,10 @@ impl Inventory {
                     .saturating_sub(l.outputs[i].removed_logical_bytes);
                 let entered_disposal = l.outputs[i].phase != "disposing";
                 l.outputs[i].phase = "disposing".into();
-                // A regular output already in disposal has a durable phase and
-                // manifest. Defer the replacement write until its bounded
-                // physical effect (or the round's final save), avoiding a full
-                // inventory sync before every one-file retirement.
-                if entered_disposal || o.tree {
+                // Resumed disposal already has a durable phase and manifest.
+                // Save its cursor with the next physical step or final save;
+                // tree entries still persist every step below.
+                if entered_disposal {
                     self.save(&l, &gate)?;
                 }
                 while self.metadata_room()
@@ -3932,9 +3928,7 @@ impl Publication {
 /// Ordinary adopted owners share this entry. Unknown legacy outputs remain protected.
 #[cfg(not(verus_keep_ghost))]
 pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
-    Inventory::adopted(root)?
-        .map(|i| i.maintain_available())
-        .transpose()
+    Inventory::adopted(root)?.map(|i| i.maintain()).transpose()
 }
 
 /// Explicit cross-object maintenance visits each existing declaration once.

@@ -25,6 +25,849 @@ mod probe;
 
 verus! {
 
+proof fn recovery_utf8_concat(left: Seq<char>, right: Seq<char>)
+    ensures vstd::utf8::encode_utf8(left + right)
+        == vstd::utf8::encode_utf8(left) + vstd::utf8::encode_utf8(right),
+    decreases left.len(),
+{
+    if left.len() == 0 {
+        assert(left =~= Seq::<char>::empty());
+    } else {
+        assert((left + right)[0] == left[0]);
+        assert((left + right).drop_first() =~= left.drop_first() + right);
+        recovery_utf8_concat(left.drop_first(), right);
+        assert((vstd::utf8::encode_scalar(left[0] as u32)
+            + vstd::utf8::encode_utf8(left.drop_first())) + vstd::utf8::encode_utf8(right)
+            =~= vstd::utf8::encode_scalar(left[0] as u32)
+                + (vstd::utf8::encode_utf8(left.drop_first()) + vstd::utf8::encode_utf8(right)));
+    }
+}
+
+struct RecoveryContentObservation {
+    payload: String,
+    status: String,
+}
+
+type RecoveryTrace = Vec<(u8, usize, String, String)>;
+
+fn source_refresh_apply(mut trace: RecoveryTrace, id: &String, index: usize,
+    stop: usize, raw_error: &str) -> (out: (RecoveryTrace, Result<(), String>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 0, out.0@.last().1 == index,
+        out.0@.last().2@ == id@, out.0@.last().3@ == ""@,
+        if index == stop { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+        else { out.1 == Ok::<(), String>(()) },
+{
+    let ghost previous = trace@;
+    trace.push((0, index, id.clone(), "".to_string()));
+    assert(trace@.drop_last() =~= previous);
+    let result = if index == stop { Err(raw_error.to_string()) } else { Ok(()) };
+    (trace, result)
+}
+
+fn source_refresh_complete(mut trace: RecoveryTrace, id: &String, status: &'static str)
+    -> (out: RecoveryTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == 1, out@.last().1 == trace@.len() / 2,
+        out@.last().2@ == id@, out@.last().3@ == status@,
+{
+    let index = trace.len() / 2;
+    let ghost previous = trace@;
+    trace.push((1, index, id.clone(), status.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn source_refresh_case(ids: &[&str], stop: usize, raw_error: &str)
+    requires ids.len() <= 3, stop <= ids.len(),
+{
+    let mut rows = Vec::<(String, usize)>::new();
+    let mut n = 0;
+    while n < ids.len()
+        invariant n <= ids.len(), rows.len() == n,
+            forall|j: int| 0 <= j < n ==> (#[trigger] rows@[j]).0@ == ids@[j]@
+                && rows@[j].1 == j,
+        decreases ids.len() - n,
+    {
+        rows.push((ids[n].to_string(), n));
+        n += 1;
+    }
+    let ghost entries = rows@;
+    let apply = |trace, id: &String, index: usize|
+        -> (out: (RecoveryTrace, Result<(), String>))
+        ensures source_refresh_apply.ensures((trace, id, index, stop, raw_error), out),
+    { source_refresh_apply(trace, id, index, stop, raw_error) };
+    let initial = RecoveryTrace::new();
+    let ghost source = initial;
+    let (trace, result) = policy::run_recovery_refreshes(initial, rows, &apply, &source_refresh_complete);
+    proof {
+        let states = choose|states: Seq<RecoveryTrace>|
+            #[trigger] policy::recovery_refresh_prefix(entries, states, source,
+                &apply, &source_refresh_complete)
+            && match result {
+                Ok(()) => states.len() == entries.len() + 1 && trace == states.last(),
+                Err(error) => states.len() <= entries.len()
+                    && policy::recovery_refresh_step(states.last(), entries[states.len() - 1],
+                        &apply, &source_refresh_complete, (trace, Err::<(), String>(error))),
+            };
+        assert forall|i: int| 0 <= i < states.len() - 1 implies
+            states[i + 1]@.len() == states[i]@.len() + 2 && i != stop
+            && states[i + 1]@.drop_last().drop_last() == #[trigger] states[i]@
+            && states[i + 1]@[states[i]@.len() as int].0 == 0
+            && states[i + 1]@[states[i]@.len() as int].1 == i
+            && states[i + 1]@[states[i]@.len() as int].2@ == ids@[i]@
+            && states[i + 1]@[states[i]@.len() as int + 1].0 == 1
+            && states[i + 1]@[states[i]@.len() as int + 1].1 == (states[i]@.len() + 1) / 2
+            && states[i + 1]@[states[i]@.len() as int + 1].2@ == ids@[i]@
+            && states[i + 1]@[states[i]@.len() as int + 1].3@ == "source-times-refreshed"@ by {
+            assert(policy::recovery_refresh_step(states[i], entries[i], &apply,
+                &source_refresh_complete, (states[i + 1], Ok::<(), String>(()))));
+            let observed = choose|observed: RecoveryTrace|
+                #[trigger] apply.ensures((states[i], &entries[i].0, entries[i].1),
+                    (observed, Ok::<(), String>(())))
+                && source_refresh_complete.ensures((observed, &entries[i].0,
+                    "source-times-refreshed"), states[i + 1]);
+        }
+        let count = states.len() - 1;
+        if count > 0 { assert(states[1]@.len() == 2); }
+        if count > 1 { assert(states[2]@.len() == 4); }
+        if count > 2 { assert(states[3]@.len() == 6); }
+        assert(states.last()@.len() == 2 * count);
+        if count > stop {
+            assert(stop < count);
+            assert(false);
+        }
+        assert(count <= stop);
+        match &result {
+            Ok(()) => {
+                assert(count == entries.len());
+                assert(stop == ids.len());
+                assert(trace@.len() == 2 * stop);
+            },
+            Err(error) => {
+                if count < stop { assert(false); }
+                assert(count == stop && stop < ids.len());
+                assert(trace@.len() == 2 * stop + 1);
+                assert(trace@.drop_last() == states.last()@);
+                assert(trace@.last().0 == 0 && trace@.last().1 == stop);
+                assert(trace@.last().2@ == ids@[stop as int]@);
+                assert(error@ == raw_error@);
+            },
+        }
+        assert forall|j: int| 0 <= j < stop implies
+            #[trigger] trace@[2 * j].0 == 0 && trace@[2 * j].1 == j
+            && trace@[2 * j].2@ == ids@[j]@
+            && trace@[2 * j + 1].0 == 1 && trace@[2 * j + 1].1 == j
+            && trace@[2 * j + 1].2@ == ids@[j]@
+            && trace@[2 * j + 1].3@ == "source-times-refreshed"@ by {
+            assert(states[j]@.len() == 2 * j);
+            assert(states[j + 1]@[2 * j].0 == 0);
+            assert(states[j + 1]@[2 * j + 1].0 == 1);
+            if j + 2 <= count {
+                assert(states[j + 2]@.drop_last().drop_last() == states[j + 1]@);
+            }
+            if j + 3 <= count {
+                assert(states[j + 3]@.drop_last().drop_last() == states[j + 2]@);
+            }
+        }
+    }
+    expect_cache_true(trace.len() == 2 * stop + if stop < ids.len() { 1 } else { 0 });
+    if stop == ids.len() {
+        expect_cache_true(result.is_ok());
+    } else {
+        match result {
+            Err(error) => expect_restore_text(error.as_str(), raw_error),
+            Ok(()) => expect_cache_true(false),
+        }
+        expect_cache_true(trace[2 * stop].0 == 0 && trace[2 * stop].1 == stop);
+        expect_restore_text(trace[2 * stop].2.as_str(), ids[stop]);
+    }
+    let mut i = 0;
+    while i < stop
+        invariant i <= stop, stop <= 3, stop <= ids.len(), 2 * stop <= trace.len(),
+            forall|j: int| 0 <= j < stop ==> #[trigger] trace@[2 * j].0 == 0
+                && trace@[2 * j].1 == j && trace@[2 * j].2@ == ids@[j]@
+                && trace@[2 * j + 1].0 == 1 && trace@[2 * j + 1].1 == j
+                && trace@[2 * j + 1].2@ == ids@[j]@
+                && trace@[2 * j + 1].3@ == "source-times-refreshed"@,
+        decreases stop - i,
+    {
+        expect_cache_true(trace[2 * i].0 == 0 && trace[2 * i].1 == i);
+        expect_cache_true(trace[2 * i + 1].0 == 1 && trace[2 * i + 1].1 == i);
+        expect_restore_text(trace[2 * i].2.as_str(), ids[i]);
+        expect_restore_text(trace[2 * i + 1].2.as_str(), ids[i]);
+        expect_restore_text(trace[2 * i + 1].3.as_str(), "source-times-refreshed");
+        i += 1;
+    }
+}
+
+#[test]
+fn recovery_source_refresh_preserves_consumption_order_keys_and_success_status() {
+    source_refresh_case(&[], 0, "unused");
+    source_refresh_case(&[""], 1, "unused");
+    source_refresh_case(&["id/λ\0\n", "", "id/λ\0\n"], 3, "unused");
+}
+
+#[test]
+fn recovery_source_refresh_preserves_first_error_and_skips_success_and_later_calls() {
+    source_refresh_case(&["first", "later", "last"], 0, "");
+    source_refresh_case(&["first", "id/λ\0\n", "later"], 1, "error/λ\0\n");
+    source_refresh_case(&["first", "second", ""], 2, "last error");
+}
+
+fn artifact_plan_validate(mut trace: RecoveryTrace, path: &str,
+    fail_at: usize, io_error: bool, raw_error: &str)
+    -> (out: (RecoveryTrace, Result<bool, String>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 0, out.0@.last().1 == trace@.len() / 2,
+        out.0@.last().2@ == path@, out.0@.last().3@ == ""@,
+        if trace@.len() / 2 == fail_at {
+            if io_error { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+            else { out.1 == Ok::<bool, String>(false) }
+        } else { out.1 == Ok::<bool, String>(true) },
+{
+    let index = trace.len() / 2;
+    let ghost previous = trace@;
+    trace.push((0, index, path.to_string(), "".to_string()));
+    assert(trace@.drop_last() =~= previous);
+    let result = if index == fail_at {
+        if io_error { Err(raw_error.to_string()) } else { Ok(false) }
+    } else { Ok(true) };
+    (trace, result)
+}
+
+fn artifact_plan_append(mut trace: RecoveryTrace, index: usize,
+    path: &str, status: &'static str) -> (out: RecoveryTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == 1, out@.last().1 == index,
+        out@.last().2@ == path@, out@.last().3@ == status@,
+{
+    let ghost previous = trace@;
+    trace.push((1, index, path.to_string(), status.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn recovery_artifact_plan_case(paths: &[Option<&str>], stop: usize,
+    io_error: bool, raw_error: &str)
+    requires paths.len() <= 3, stop <= paths.len(),
+        forall|i: int| 0 <= i < stop ==> paths[i] is Some,
+{
+    let validate = |trace, path: &str|
+        -> (out: (RecoveryTrace, Result<bool, String>))
+        ensures artifact_plan_validate.ensures((trace, path, stop, io_error, raw_error), out),
+    { artifact_plan_validate(trace, path, stop, io_error, raw_error) };
+    let initial = RecoveryTrace::new();
+    let ghost source = initial;
+    let (trace, result) = policy::collect_recovery_artifacts(initial, Some(paths),
+        &validate, &artifact_plan_append);
+    proof {
+        let states = choose|states: Seq<RecoveryTrace>|
+            #[trigger] policy::recovery_artifact_prefix(paths@, states, source,
+                &validate, &artifact_plan_append)
+            && match result {
+                Ok(()) => states.len() == paths.len() + 1 && trace == states.last(),
+                Err(error) => states.len() <= paths.len()
+                    && policy::recovery_artifact_step(states.last(), (states.len() - 1) as usize,
+                        paths@[states.len() - 1], &validate, &artifact_plan_append,
+                        (trace, Err::<(), String>(error))),
+            };
+        assert forall|i: int| 0 <= i < states.len() - 1 implies
+            states[i + 1]@.len() == states[i]@.len() + 2
+            && states[i]@.len() / 2 != stop
+            && states[i + 1]@.drop_last().drop_last() == #[trigger] states[i]@
+            && states[i + 1]@[states[i]@.len() as int].0 == 0
+            && states[i + 1]@[states[i]@.len() as int + 1].0 == 1
+            && states[i + 1]@[states[i]@.len() as int + 1].1 == i
+            && (match paths@[i] { Some(path) =>
+                states[i + 1]@[states[i]@.len() as int].2@ == path@
+                && states[i + 1]@[states[i]@.len() as int + 1].2@ == path@,
+                None => false })
+            && states[i + 1]@[states[i]@.len() as int + 1].3@ == "pending"@ by {
+            assert(policy::recovery_artifact_step(states[i], i as usize, paths@[i],
+                &validate, &artifact_plan_append, (states[i + 1], Ok::<(), String>(()))));
+            let path = paths@[i].unwrap();
+            let (observed, valid) = choose|observed: RecoveryTrace, valid: Result<bool, String>|
+                #[trigger] validate.ensures((states[i], path), (observed, valid))
+                && valid == Ok::<bool, String>(true)
+                && artifact_plan_append.ensures((observed, i as usize, path, "pending"), states[i + 1]);
+        }
+        let count = states.len() - 1;
+        if count > 0 { assert(states[1]@.len() == 2); }
+        if count > 1 { assert(states[2]@.len() == 4); }
+        if count > 2 { assert(states[3]@.len() == 6); }
+        assert(states.last()@.len() == 2 * count);
+        if count > stop {
+            assert(states[stop as int]@.len() == 2 * stop);
+            assert(states[stop as int]@.len() / 2 != stop);
+            assert(false);
+        }
+        assert(count <= stop);
+        match &result {
+            Ok(()) => { assert(stop == paths.len()); },
+            Err(error) => {
+                if count < stop {
+                    assert(paths@[count] is Some);
+                    assert(false);
+                }
+                assert(count == stop);
+                match paths@[count] {
+                    None => {
+                        assert(trace == states.last());
+                        assert(error@ == "E_CACHE_RECOVERY: artifact path"@);
+                    },
+                    Some(path) => {
+                        assert(trace@.len() == 2 * stop + 1);
+                        assert(trace@.drop_last() == states.last()@);
+                        assert(trace@.last().0 == 0 && trace@.last().2@ == path@);
+                        assert(error@ == if io_error { raw_error@ }
+                            else { "E_CACHE_RECOVERY: only registered host artifacts may be discarded"@ });
+                    },
+                }
+            },
+        }
+        assert forall|j: int| 0 <= j < stop implies
+            #[trigger] trace@[2 * j].0 == 0 && trace@[2 * j + 1].0 == 1
+            && trace@[2 * j + 1].1 == j
+            && trace@[2 * j + 1].3@ == "pending"@
+            && (match paths@[j] { Some(path) => trace@[2 * j].2@ == path@
+                && trace@[2 * j + 1].2@ == path@, None => false }) by {
+            assert(states[j + 1]@[2 * j].0 == 0);
+            assert(states[j + 1]@[2 * j + 1].0 == 1);
+            if j + 2 <= count {
+                assert(states[j + 2]@.drop_last().drop_last() == states[j + 1]@);
+            }
+            if j + 3 <= count {
+                assert(states[j + 3]@.drop_last().drop_last() == states[j + 2]@);
+            }
+        }
+    }
+    if stop == paths.len() {
+        expect_cache_true(result.is_ok());
+        expect_cache_true(trace.len() == 2 * stop);
+    } else {
+        let expected = match paths[stop] {
+            None => "E_CACHE_RECOVERY: artifact path",
+            Some(_) => if io_error { raw_error }
+                else { "E_CACHE_RECOVERY: only registered host artifacts may be discarded" },
+        };
+        match result {
+            Err(error) => expect_restore_text(error.as_str(), expected),
+            Ok(()) => expect_cache_true(false),
+        }
+        expect_cache_true(trace.len() == 2 * stop + if paths[stop].is_some() { 1 } else { 0 });
+    }
+    let mut i = 0;
+    while i < stop
+        invariant i <= stop, stop <= 3, 2 * stop <= trace.len(), stop <= paths.len(),
+            forall|j: int| 0 <= j < stop ==> #[trigger] trace@[2 * j].0 == 0
+                && trace@[2 * j + 1].0 == 1 && trace@[2 * j + 1].1 == j
+                && trace@[2 * j + 1].3@ == "pending"@
+                && (match paths@[j] { Some(path) => trace@[2 * j].2@ == path@
+                    && trace@[2 * j + 1].2@ == path@, None => false }),
+        decreases stop - i,
+    {
+        expect_cache_true(trace[2 * i].0 == 0 && trace[2 * i + 1].0 == 1);
+        expect_cache_true(trace[2 * i + 1].1 == i);
+        expect_restore_text(trace[2 * i + 1].3.as_str(), "pending");
+        let path = paths[i].unwrap();
+        expect_restore_text(trace[2 * i].2.as_str(), path);
+        expect_restore_text(trace[2 * i + 1].2.as_str(), path);
+        i += 1;
+    }
+}
+
+#[test]
+fn recovery_artifact_collection_preserves_order_duplicates_and_full_paths() {
+    recovery_artifact_plan_case(&[], 0, false, "unused");
+    recovery_artifact_plan_case(&[Some("")], 1, false, "unused");
+    recovery_artifact_plan_case(&[Some("path/λ\0\n"), Some(""), Some("path/λ\0\n")],
+        3, false, "unused");
+}
+
+#[test]
+fn recovery_artifact_collection_stops_before_missing_and_rejected_paths() {
+    recovery_artifact_plan_case(&[None, Some("later")], 0, true, "must not be read");
+    recovery_artifact_plan_case(&[Some("first"), None, Some("later")], 1, false, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("path/λ\0\n"), None], 2, true, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("blocked"), None], 0, false, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("blocked"), None], 1, false, "unused");
+    recovery_artifact_plan_case(&[Some("first"), Some("second"), Some("blocked")], 2, false, "unused");
+}
+
+#[test]
+fn recovery_artifact_collection_preserves_first_io_error_without_appending_it() {
+    recovery_artifact_plan_case(&[Some("first"), None], 0, true, "");
+    recovery_artifact_plan_case(&[Some("first"), Some("path/λ\0\n"), None], 1, true, "error/λ\0\n");
+    recovery_artifact_plan_case(&[Some("first"), Some("second"), Some("third")], 2, true, "full error");
+}
+
+#[test]
+fn recovery_artifact_collection_rejects_missing_object_without_callbacks() {
+    let validate = |trace, path: &str| artifact_plan_validate(trace, path, 0, true, "unused");
+    let (trace, result) = policy::collect_recovery_artifacts(RecoveryTrace::new(), None,
+        &validate, &artifact_plan_append);
+    expect_cache_true(trace.is_empty());
+    match result {
+        Err(error) => expect_restore_text(error.as_str(), "E_CACHE_RECOVERY: artifacts missing"),
+        Ok(()) => expect_cache_true(false),
+    }
+}
+
+fn recovery_content_verify(mut trace: Vec<(u8, String)>, key: &str,
+    payload: &str, status: &str, error: Option<&str>)
+    -> (out: (Vec<(u8, String)>, Result<RecoveryContentObservation, String>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 0, out.0@.last().1@ == key@,
+        match out.1 {
+            Ok(value) => error is None && value.payload@ == payload@ && value.status@ == status@,
+            Err(value) => match error { Some(error) => value@ == error@, None => false },
+        },
+{
+    let ghost previous = trace@;
+    trace.push((0, key.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    (trace, match error {
+        Some(error) => Err(error.to_string()),
+        None => Ok(RecoveryContentObservation { payload: payload.to_string(), status: status.to_string() }),
+    })
+}
+
+fn recovery_content_status<'a>(mut trace: Vec<(u8, String)>, value: &'a RecoveryContentObservation)
+    -> (out: (Vec<(u8, String)>, Option<&'a str>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 1, out.0@.last().1@ == value.payload@,
+        match out.1 { Some(status) => status@ == value.status@, None => false },
+{
+    let ghost previous = trace@;
+    trace.push((1, value.payload.clone()));
+    assert(trace@.drop_last() =~= previous);
+    (trace, Some(value.status.as_str()))
+}
+
+fn recovery_content_missing_status<'a>(trace: Vec<(u8, String)>, value: &'a RecoveryContentObservation)
+    -> (out: (Vec<(u8, String)>, Option<&'a str>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 1, out.0@.last().1@ == value.payload@,
+        out.1 is None,
+{
+    let (trace, _) = recovery_content_status(trace, value);
+    (trace, None)
+}
+
+fn recovery_content_error(mut trace: Vec<(u8, String)>, parts: [&str; 2], message: &str)
+    -> (out: (Vec<(u8, String)>, String))
+    ensures out.0@.len() == trace@.len() + 2,
+        out.0@.drop_last().drop_last() == trace@,
+        out.0@[trace@.len() as int].0 == 2, out.0@[trace@.len() as int].1@ == parts[0]@,
+        out.0@.last().0 == 3, out.0@.last().1@ == parts[1]@,
+        out.1@ == message@,
+{
+    let ghost original = trace@;
+    trace.push((2, parts[0].to_string()));
+    assert(trace@.drop_last() =~= original);
+    let ghost previous = trace@;
+    trace.push((3, parts[1].to_string()));
+    assert(trace@.drop_last() =~= previous);
+    assert(trace@.drop_last().drop_last() =~= original);
+    (trace, message.to_string())
+}
+
+fn recovery_exact_content_case(key: &str, payload: &str, status: &str, error: Option<&str>)
+    requires key.spec_bytes().len() > 0,
+{
+    proof {
+        reveal_strlit("success"); reveal_strlit("failure"); reveal_strlit("skipped");
+        reveal_strlit("producer-manifest/v1"); reveal_strlit("exact");
+        reveal_strlit("miss-or-unavailable"); reveal_strlit("incompatible");
+        reveal_strlit("compatible");
+        assert("success"@[0] != "failure"@[0]);
+        assert("exact"@.len() != "miss-or-unavailable"@.len());
+        assert("exact"@.len() != "incompatible"@.len());
+        assert("exact"@.len() != "compatible"@.len());
+        reveal(policy::recovery_cache_final_result);
+        reveal(policy::recovery_action_spec);
+        assert(policy::recovery_action_spec(Some("success"), "exact", true, true, true,
+            Some("producer-manifest/v1"), Some(status), true)
+            == Ok::<policy::RecoveryAction, policy::RecoveryDecisionError>(
+                if status@ == "matched"@ { policy::RecoveryAction::Keep }
+                else { policy::RecoveryAction::Discard }));
+    }
+    let verify = |trace, actual: &str|
+        -> (out: (Vec<(u8, String)>, Result<RecoveryContentObservation, String>))
+        ensures recovery_content_verify.ensures((trace, actual, payload, status, error), out),
+    { recovery_content_verify(trace, actual, payload, status, error) };
+    let render = |trace, parts: [&str; 2]|
+        -> (out: (Vec<(u8, String)>, String))
+        ensures recovery_content_error.ensures((trace, parts, "unexpected error"), out),
+    { recovery_content_error(trace, parts, "unexpected error") };
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some(key), Some(key), &[], true, true, true, Some("producer-manifest/v1"),
+        true, "cache/λ\0\n", verify, recovery_content_status, render);
+    expect_restore_text(reason, "exact");
+    expect_cache_true(trace.len() == if error.is_some() { 1 } else { 2 });
+    expect_cache_true(trace[0].0 == 0);
+    expect_restore_text(trace[0].1.as_str(), key);
+    match result {
+        Err(actual) => match error {
+            Some(expected) => expect_restore_text(actual.as_str(), expected),
+            None => expect_cache_true(false),
+        },
+        Ok((action, value)) => {
+            expect_cache_true(error.is_none());
+            expect_cache_true(trace[1].0 == 1);
+            expect_restore_text(trace[1].1.as_str(), payload);
+            match value {
+                Some(value) => {
+                    expect_restore_text(value.payload.as_str(), payload);
+                    expect_restore_text(value.status.as_str(), status);
+                },
+                None => expect_cache_true(false),
+            }
+            if status.to_string() == "matched".to_string() {
+                match action { policy::RecoveryAction::Keep => (), _ => expect_cache_true(false) }
+            } else {
+                match action { policy::RecoveryAction::Discard => (), _ => expect_cache_true(false) }
+            }
+        },
+    }
+}
+
+#[test]
+fn recovery_decision_preserves_exact_keys_payloads_and_first_verification_errors() {
+    recovery_exact_content_case("key", "", "matched", None);
+    recovery_exact_content_case("key/λ\0\n", "payload/λ\0\n", "matched", None);
+    recovery_exact_content_case("\0", "full payload", "Matched", None);
+    recovery_exact_content_case("key", "untouched", "matched\0", None);
+    recovery_exact_content_case("key", "untouched", "matched", Some(""));
+    recovery_exact_content_case("key/λ\0\n", "untouched", "matched", Some("error/λ\0\n"));
+}
+
+fn recovery_compatible_content_case(refresh: bool) {
+    proof {
+        reveal_strlit("success"); reveal_strlit("failure"); reveal_strlit("skipped");
+        reveal_strlit("producer-manifest/v1"); reveal_strlit("matched");
+        reveal_strlit("different"); reveal_strlit("prefix/λ\0\n");
+        reveal_strlit("prefix/λ"); reveal_strlit("\0\n"); reveal_strlit("");
+        reveal_strlit("compatible"); reveal_strlit("miss-or-unavailable");
+        reveal_strlit("incompatible");
+        assert("success"@[0] != "failure"@[0]);
+        assert("compatible"@.len() != "miss-or-unavailable"@.len());
+        assert("compatible"@.len() != "incompatible"@.len());
+        assert("different"@.len() != "prefix/λ\0\n"@.len());
+        assert("prefix/λ\0\n"@ =~= "prefix/λ"@ + "\0\n"@);
+        recovery_utf8_concat("prefix/λ"@, "\0\n"@);
+        vstd::utf8::encode_utf8_valid_utf8("prefix/λ"@);
+        vstd::utf8::encode_utf8_decode_utf8("prefix/λ"@);
+        assert("prefix/λ".spec_bytes().len() > 0) by {
+            if "prefix/λ".spec_bytes().len() == 0 {
+                assert("prefix/λ".spec_bytes() == Seq::<u8>::empty());
+                reveal(vstd::utf8::decode_utf8);
+            }
+        }
+        assert("prefix/λ\0\n".spec_bytes().len() > 0);
+        assert(forall|i: int| 0 <= i < "prefix/λ".spec_bytes().len()
+            ==> "prefix/λ\0\n".spec_bytes()[i] == "prefix/λ".spec_bytes()[i]);
+    }
+    let verify = |trace, actual: &str|
+        -> (out: (Vec<(u8, String)>, Result<RecoveryContentObservation, String>))
+        ensures recovery_content_verify.ensures(
+            (trace, actual, "payload/λ\0\n", "matched", None), out),
+    { recovery_content_verify(trace, actual, "payload/λ\0\n", "matched", None) };
+    let render = |trace, parts: [&str; 2]|
+        -> (out: (Vec<(u8, String)>, String))
+        ensures recovery_content_error.ensures((trace, parts, "unexpected error"), out),
+    { recovery_content_error(trace, parts, "unexpected error") };
+    let prefixes = [Some(""), None, Some("prefix/λ")];
+    proof {
+        assert(policy::restore_prefix_matches("prefix/λ\0\n", prefixes@[2]));
+        assert(policy::compatible_restore_key("prefix/λ\0\n", prefixes@));
+    }
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("different"), Some("prefix/λ\0\n"), &prefixes, true, true, true,
+        Some("producer-manifest/v1"), refresh, "id", verify, recovery_content_status, render);
+    expect_restore_text(reason, "compatible");
+    expect_cache_true(trace.len() == 2);
+    expect_restore_text(trace[0].1.as_str(), "prefix/λ\0\n");
+    expect_restore_text(trace[1].1.as_str(), "payload/λ\0\n");
+    match result {
+        Err(_) => expect_cache_true(false),
+        Ok((action, value)) => {
+            expect_cache_true(value.is_some());
+            if refresh {
+                match action { policy::RecoveryAction::Refresh => (), _ => expect_cache_true(false) }
+            } else {
+                match action { policy::RecoveryAction::Keep => (), _ => expect_cache_true(false) }
+            }
+        },
+    }
+}
+
+#[test]
+fn recovery_decision_verifies_compatible_prefix_before_optional_refresh() {
+    recovery_compatible_content_case(false);
+    recovery_compatible_content_case(true);
+}
+
+fn recovery_rejected_content_case(outcome: Option<&str>, outputs: bool, key: bool,
+    expected: &str)
+    requires expected@ == if match outcome { Some(outcome) => outcome@ == "success"@, None => false } {
+            "E_CACHE_RECOVERY: malformed restore outputs for cache/λ\0\n"@
+        } else { "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n"@ },
+        match outcome { Some(outcome) => outcome@ == "success"@ ==> (!outputs || !key), None => true },
+        match outcome { Some(outcome) => outcome@ != "failure"@ && outcome@ != "skipped"@, None => true },
+{
+    proof {
+        reveal_strlit("success"); reveal_strlit("failure"); reveal_strlit("skipped");
+        reveal(policy::recovery_decision_parts);
+        reveal(policy::recovery_action_spec);
+        assert(policy::recovery_decision_parts(policy::RecoveryDecisionError::MalformedOutputs,
+            "cache/λ\0\n")[0]@
+            == "E_CACHE_RECOVERY: malformed restore outputs for "@);
+        assert(policy::recovery_decision_parts(policy::RecoveryDecisionError::UnknownOutcome,
+            "cache/λ\0\n")[0]@
+            == "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for "@);
+    }
+    let verify = |trace, actual: &str|
+        -> (out: (Vec<(u8, String)>, Result<RecoveryContentObservation, String>))
+        ensures recovery_content_verify.ensures(
+            (trace, actual, "payload", "matched", Some("must not be called")), out),
+    { recovery_content_verify(trace, actual, "payload", "matched", Some("must not be called")) };
+    let render = |trace, parts: [&str; 2]|
+        -> (out: (Vec<(u8, String)>, String))
+        ensures recovery_content_error.ensures((trace, parts, expected), out),
+    { recovery_content_error(trace, parts, expected) };
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), outcome,
+        Some("key"), Some("key"), &[], true, outputs, key,
+        Some("producer-manifest/v1"), true, "cache/λ\0\n", verify, recovery_content_status, render);
+    expect_cache_true(trace.len() == 2);
+    expect_cache_true(trace[0].0 == 2);
+    expect_cache_true(trace[1].0 == 3);
+    expect_restore_text(trace[1].1.as_str(), "cache/λ\0\n");
+    if matches!(outcome, Some(outcome) if outcome.to_string() == "success".to_string()) {
+        proof {
+            assert(policy::recovery_action_spec(outcome, reason, true, outputs, key,
+                None, None, false) == Err::<policy::RecoveryAction, policy::RecoveryDecisionError>(
+                    policy::RecoveryDecisionError::MalformedOutputs));
+        }
+        expect_restore_text(trace[0].1.as_str(), "E_CACHE_RECOVERY: malformed restore outputs for ");
+    } else {
+        proof {
+            assert(policy::recovery_action_spec(outcome, reason, true, outputs, key,
+                None, None, false) == Err::<policy::RecoveryAction, policy::RecoveryDecisionError>(
+                    policy::RecoveryDecisionError::UnknownOutcome));
+        }
+        expect_restore_text(trace[0].1.as_str(),
+            "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for ");
+    }
+    match result {
+        Err(actual) => expect_restore_text(actual.as_str(), expected),
+        Ok(_) => expect_cache_true(false),
+    }
+}
+
+#[test]
+fn recovery_decision_rejects_original_outcome_and_shape_before_verification() {
+    recovery_rejected_content_case(None, false, false,
+        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n");
+    recovery_rejected_content_case(Some("cancelled"), false, false,
+        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n");
+    recovery_rejected_content_case(Some("Success"), true, true,
+        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n");
+    recovery_rejected_content_case(Some("success"), false, true,
+        "E_CACHE_RECOVERY: malformed restore outputs for cache/λ\0\n");
+    recovery_rejected_content_case(Some("success"), true, false,
+        "E_CACHE_RECOVERY: malformed restore outputs for cache/λ\0\n");
+}
+
+#[test]
+fn recovery_decision_missing_key_discards_and_unregistered_method_keeps_without_callbacks() {
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "payload", "matched", Some("must not be called"));
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("key"), None, &[], true, true, true, Some("producer-manifest/v1"),
+        true, "id", verify, recovery_content_status,
+        |trace, parts| recovery_content_error(trace, parts, "unexpected error"));
+    expect_cache_true(trace.is_empty());
+    expect_restore_text(reason, "miss-or-unavailable");
+    match result {
+        Ok((policy::RecoveryAction::Discard, None)) => (),
+        _ => expect_cache_true(false),
+    }
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "payload", "matched", Some("must not be called"));
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("key"), Some("key"), &[], true, true, true, Some("Producer-manifest/v1"),
+        true, "id", verify, recovery_content_status,
+        |trace, parts| recovery_content_error(trace, parts, "unexpected error"));
+    expect_cache_true(trace.is_empty());
+    expect_restore_text(reason, "exact");
+    match result {
+        Ok((policy::RecoveryAction::Keep, None)) => (),
+        _ => expect_cache_true(false),
+    }
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "original/λ\0\n", "ignored", None);
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("key"), Some("key"), &[], true, true, true, Some("producer-manifest/v1"),
+        true, "id", verify, recovery_content_missing_status,
+        |trace, parts| recovery_content_error(trace, parts, "unexpected error"));
+    expect_cache_true(trace.len() == 2);
+    expect_restore_text(reason, "exact");
+    expect_restore_text(trace[1].1.as_str(), "original/λ\0\n");
+    match result {
+        Ok((policy::RecoveryAction::Discard, Some(value))) =>
+            expect_restore_text(value.payload.as_str(), "original/λ\0\n"),
+        _ => expect_cache_true(false),
+    }
+}
+
+fn recovery_preflight_case(enabled: bool, consumer: Option<&str>, prepare_error: Option<&str>,
+    differs: bool, attempt_error: Option<&str>, decode_error: Option<&str>,
+    object: bool, payload: &str)
+{
+    let prepare = |mut trace: Vec<(u8, String)>, actual: &str|
+        -> (out: (Vec<(u8, String)>, Result<bool, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 0u8, out.0@.last().1@ == actual@,
+            match out.1 {
+                Ok(value) => prepare_error is None && value == differs,
+                Err(error) => match prepare_error {
+                    Some(original) => error@ == original@, None => false,
+                },
+            },
+    {
+        let ghost previous = trace@;
+        trace.push((0, actual.to_string()));
+        assert(trace@.drop_last() =~= previous);
+        (trace, match prepare_error {
+            Some(error) => Err(error.to_string()), None => Ok(differs),
+        })
+    };
+    let attempt = |mut trace: Vec<(u8, String)>|
+        -> (out: (Vec<(u8, String)>, Result<(), String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 1u8,
+            match out.1 {
+                Ok(()) => attempt_error is None,
+                Err(error) => match attempt_error {
+                    Some(original) => error@ == original@, None => false,
+                },
+            },
+    {
+        let ghost previous = trace@;
+        trace.push((1, "".to_string()));
+        assert(trace@.drop_last() =~= previous);
+        (trace, match attempt_error {
+            Some(error) => Err(error.to_string()), None => Ok(()),
+        })
+    };
+    let decode = |mut trace: Vec<(u8, String)>|
+        -> (out: (Vec<(u8, String)>, Result<String, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 2u8,
+            match out.1 {
+                Ok(value) => decode_error is None && value@ == payload@,
+                Err(error) => match decode_error {
+                    Some(original) => error@ == original@, None => false,
+                },
+            },
+    {
+        let ghost previous = trace@;
+        trace.push((2, "".to_string()));
+        assert(trace@.drop_last() =~= previous);
+        (trace, match decode_error {
+            Some(error) => Err(error.to_string()), None => Ok(payload.to_string()),
+        })
+    };
+    let is_object = |mut trace: Vec<(u8, String)>, value: &String|
+        -> (out: (Vec<(u8, String)>, bool))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 3u8, out.0@.last().1@ == value@, out.1 == object,
+    {
+        let ghost previous = trace@;
+        trace.push((3, value.clone()));
+        assert(trace@.drop_last() =~= previous);
+        (trace, object)
+    };
+    let (trace, result) = policy::preflight_recovery(Vec::new(), enabled, consumer,
+        prepare, attempt, decode, is_object);
+    let calls = if !enabled || consumer.is_none() { 0usize }
+        else if prepare_error.is_some() || differs { 1usize }
+        else if attempt_error.is_some() { 2usize }
+        else if decode_error.is_some() { 3usize } else { 4usize };
+    expect_cache_true(trace.len() == calls);
+    if calls > 0 {
+        expect_cache_true(trace[0].0 == 0);
+        match consumer {
+            Some(expected) => expect_restore_text(trace[0].1.as_str(), expected),
+            None => expect_cache_true(false),
+        }
+    }
+    if calls > 1 { expect_cache_true(trace[1].0 == 1); }
+    if calls > 2 { expect_cache_true(trace[2].0 == 2); }
+    if calls > 3 {
+        expect_cache_true(trace[3].0 == 3);
+        expect_restore_text(trace[3].1.as_str(), payload);
+    }
+    let failure = if !enabled {
+        Some("E_CACHE_RECOVERY: recovery is not registered")
+    } else if consumer.is_none() {
+        Some("E_CACHE_RECOVERY: consumer missing")
+    } else if prepare_error.is_some() { prepare_error }
+    else if differs {
+        Some("E_CACHE_RECOVERY: original plan differs from current registration or host")
+    } else if attempt_error.is_some() { attempt_error }
+    else if decode_error.is_some() { decode_error }
+    else if !object { Some("E_CACHE_RECOVERY: native step observations missing") }
+    else { None };
+    match result {
+        Ok(value) => {
+            expect_cache_true(failure.is_none());
+            expect_restore_text(value.as_str(), payload);
+        },
+        Err(error) => match failure {
+            Some(expected) => expect_restore_text(error.as_str(), expected),
+            None => expect_cache_true(false),
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_rejects_disabled_or_missing_consumer_without_calls() {
+    recovery_preflight_case(false, None, Some("prepare"), true,
+        Some("attempt"), Some("decode"), false, "unused");
+    recovery_preflight_case(false, Some(""), None, false, None, None, true, "");
+    recovery_preflight_case(true, None, Some("prepare"), true,
+        Some("attempt"), Some("decode"), false, "unused");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_preserves_prepare_failure_and_plan_mismatch_priority() {
+    recovery_preflight_case(true, Some("check/λ\0\n"), Some("prepare/λ\0\n"), true,
+        Some("attempt"), Some("decode"), false, "unused");
+    recovery_preflight_case(true, Some(""), Some(""), false, None, None, true, "");
+    recovery_preflight_case(true, Some("check.one"), None, true,
+        Some("attempt"), Some("decode"), false, "unused");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_preserves_attempt_and_decode_failure_before_later_calls() {
+    recovery_preflight_case(true, Some("check.one"), None, false,
+        Some("attempt/λ\0\n"), Some("decode"), false, "unused");
+    recovery_preflight_case(true, Some("check.one"), None, false,
+        None, Some("decode/λ\0\n"), false, "unused");
+    recovery_preflight_case(true, Some(""), None, false, None, Some(""), true, "");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_preflight_checks_decoded_value_and_returns_it_unchanged() {
+    recovery_preflight_case(true, Some("check.one"), None, false, None, None, false, "");
+    recovery_preflight_case(true, Some("check/λ\0\n"), None, false,
+        None, None, true, "steps/λ\0\n");
+    recovery_preflight_case(true, Some(""), None, false, None, None, true, "");
+}
+
 enum ExpectedFinalError {
     Publication(Option<String>, String),
     Recovery(String, String),
@@ -818,6 +1661,151 @@ fn recovery_completes_only_the_exact_pending_cache_status() {
 
 fn recovery_failure_precedes_cache_effects(summary: &policy::RecoverySummary) {
     expect_restore_text(summary.status(true), "failed");
+}
+
+fn recovery_observed_artifact<'a>(status: &'a Option<&'a str>) -> (out: Option<&'a str>)
+    ensures out == *status,
+{ *status }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_handles_no_caches_and_failed_cache_without_artifacts() {
+    proof {
+        reveal_strlit("failed"); reveal_strlit("recovered");
+        assert("failed"@.len() == 6); assert("recovered"@.len() == 9);
+    }
+    let caches: [policy::RecoveryCacheObservation<Option<&str>>; 0] = [];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    expect_restore_text(summary.status(false), "not-required");
+    recovery_failure_precedes_cache_effects(&summary);
+    if summary.warning(Some("recovered")) { panic!("empty recovery warned"); }
+
+    let artifacts: [Option<&str>; 0] = [];
+    let caches = [policy::RecoveryCacheObservation {
+        status: Some("discarded"), outcome: Some("failure"), artifacts: &artifacts,
+    }];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    proof {
+        assert(policy::recovery_cache_changed(caches@[0]));
+        assert(policy::recovery_cache_warns(caches@[0],
+            |status: Option<&str>| policy::recovery_text(status)));
+    }
+    expect_restore_text(summary.status(false), "recovered");
+    recovery_failure_precedes_cache_effects(&summary);
+    if !summary.warning(Some("recovered")) { panic!("failed empty cache did not warn"); }
+    if summary.warning(Some("failed")) { panic!("failed recovery warned"); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_combines_first_cache_change_and_last_artifact_removal() {
+    let ghost model = |status: Option<&str>| policy::recovery_text(status);
+    let first = [None, Some("absent")];
+    let middle: [Option<&str>; 0] = [];
+    let last = [Some("absent"), None, Some("removed")];
+    let caches = [
+        policy::RecoveryCacheObservation {
+            status: Some("source-times-refreshed"), outcome: None, artifacts: &first,
+        },
+        policy::RecoveryCacheObservation {
+            status: None, outcome: Some("success"), artifacts: &middle,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("pending"), outcome: None, artifacts: &last,
+        },
+    ];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(model));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    proof {
+        assert(policy::recovery_cache_changed(caches@[0]));
+        assert(model(caches@[2].artifacts@[2]) == Some("removed"@));
+        assert(policy::recovery_cache_warns(caches@[2], model));
+    }
+    expect_restore_text(summary.status(false), "recovered");
+    recovery_failure_precedes_cache_effects(&summary);
+    if !summary.warning(Some("recovered")) { panic!("late artifact removal was lost"); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_combines_first_artifact_removal_and_last_cache_change() {
+    let ghost model = |status: Option<&str>| policy::recovery_text(status);
+    let first = [Some("removed"), Some("absent")];
+    let empty: [Option<&str>; 0] = [];
+    let caches = [
+        policy::RecoveryCacheObservation {
+            status: None, outcome: None, artifacts: &first,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("unknown"), outcome: None, artifacts: &empty,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("discarded"), outcome: Some("success"), artifacts: &empty,
+        },
+    ];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(model));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    proof {
+        assert(policy::recovery_cache_changed(caches@[2]));
+        assert(model(caches@[0].artifacts@[0]) == Some("removed"@));
+        assert(policy::recovery_cache_warns(caches@[0], model));
+    }
+    expect_restore_text(summary.status(false), "recovered");
+    if !summary.warning(Some("recovered")) { panic!("early artifact removal was lost"); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_aggregate_keeps_unknown_case_nul_and_unicode_text_exact() {
+    proof {
+        reveal_strlit("discarded"); reveal_strlit("Discarded"); reveal_strlit("discarded\0");
+        reveal_strlit("source-times-refreshed"); reveal_strlit(""); reveal_strlit("状态/λ");
+        reveal_strlit("failure"); reveal_strlit("Failure"); reveal_strlit("failure\0");
+        reveal_strlit("removed"); reveal_strlit("Removed"); reveal_strlit("removed\0");
+        assert("discarded"@.len() == 9); assert("discarded\0"@.len() == 10);
+        assert("Discarded"@.len() == 9); assert("discarded"@[0] != "Discarded"@[0]);
+        assert("source-times-refreshed"@.len() == 22); assert(""@.len() == 0);
+        assert("状态/λ"@.len() == 4); assert("failure"@.len() == 7);
+        assert("Failure"@.len() == 7); assert("failure\0"@.len() == 8);
+        assert("failure"@[0] != "Failure"@[0]);
+        assert("removed"@.len() == 7); assert("Removed"@.len() == 7);
+        assert("removed\0"@.len() == 8); assert("removed"@[0] != "Removed"@[0]);
+    }
+    let artifacts = [None, Some(""), Some("Removed"), Some("removed\0"), Some("状态/λ")];
+    let empty: [Option<&str>; 0] = [];
+    let caches = [
+        policy::RecoveryCacheObservation {
+            status: Some("Discarded"), outcome: Some("Failure"), artifacts: &artifacts,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("discarded\0"), outcome: Some("failure\0"), artifacts: &empty,
+        },
+        policy::RecoveryCacheObservation {
+            status: Some("状态/λ"), outcome: Some(""), artifacts: &empty,
+        },
+    ];
+    #[cfg(verus_keep_ghost)]
+    let summary = policy::summarize_recovery(&caches,
+        recovery_observed_artifact,
+        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+    #[cfg(not(verus_keep_ghost))]
+    let summary = policy::summarize_recovery(&caches, recovery_observed_artifact);
+    expect_restore_text(summary.status(false), "not-required");
+    if summary.warning(Some("recovered")) { panic!("inexact recovery text counted as an effect"); }
 }
 
 fn recovery_changed_cache_recovers(status: &str)
