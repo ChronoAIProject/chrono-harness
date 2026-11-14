@@ -424,6 +424,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
                         retained_ref,
                         retained_commit,
                         retention,
+                        allow_retained_ref_advance: false,
                         discard_artifacts,
                         remove_branch,
                         allow_absent_worktree,
@@ -679,6 +680,26 @@ pub(crate) fn release_reconciled(
     report["context"] = value!({"base":base,"candidate":null,"branch_ref":branch});
     Ok(())
 }
+pub(crate) fn retained_commit_reachable(
+    r: &mut Runner,
+    root: &Path,
+    retained_commit: &str,
+    current_commit: &str,
+) -> Result<(), String> {
+    if current_commit != retained_commit {
+        r.git(
+            root,
+            &[
+                "merge-base",
+                "--is-ancestor",
+                retained_commit,
+                current_commit,
+            ],
+        )?;
+    }
+    Ok(())
+}
+
 pub(crate) fn saved_commit(
     r: &mut Runner,
     root: &Path,
@@ -686,6 +707,7 @@ pub(crate) fn saved_commit(
     retained_ref: &str,
     retained_commit: &str,
     retention: &Retention,
+    allow_retained_ref_advance: bool,
 ) -> Result<(), String> {
     let commit = format!("{head}^{{commit}}");
     let head_tree = format!("{head}^{{tree}}");
@@ -711,7 +733,10 @@ pub(crate) fn saved_commit(
         facts::full_oid(oid)?;
     }
     if oids[0] != retained_commit {
-        return Err("retained reference changed".into());
+        if !allow_retained_ref_advance {
+            return Err("retained reference changed".into());
+        }
+        retained_commit_reachable(r, root, retained_commit, oids[0])?;
     }
     if oids[1] != head {
         return Err("cleanup HEAD is not a commit".into());
@@ -739,6 +764,7 @@ pub(crate) struct Cleanup {
     pub(crate) retained_ref: String,
     pub(crate) retained_commit: String,
     pub(crate) retention: Retention,
+    pub(crate) allow_retained_ref_advance: bool,
     pub(crate) discard_artifacts: Vec<String>,
     pub(crate) remove_branch: bool,
     pub(crate) allow_absent_worktree: bool,
@@ -755,6 +781,7 @@ impl Cleanup {
             &self.retained_ref,
             &self.retained_commit,
             &self.retention,
+            self.allow_retained_ref_advance,
         )
     }
     fn absent(&self, r: &mut Runner, root: &Path) -> Result<(), String> {
@@ -1017,6 +1044,7 @@ fn cleanup_fetch_ref(
         retained_ref,
         retained_commit,
         &Retention::Ancestor,
+        false,
     )?;
     let symbolic = r.command(root, &["symbolic-ref", "--quiet", fetch_ref])?;
     if symbolic.exit_code != 1 {
@@ -1037,6 +1065,7 @@ fn cleanup_fetch_ref(
                 retained_ref,
                 retained_commit,
                 &Retention::Ancestor,
+                false,
             )?;
             report["fetch_ref_removal"] = value!("attempted-unverified");
             r.git(root, &["update-ref", "--no-deref", "-d", fetch_ref, head])?;
@@ -1062,6 +1091,7 @@ fn cleanup_fetch_ref(
         retained_ref,
         retained_commit,
         &Retention::Ancestor,
+        false,
     )?;
     stable()
 }

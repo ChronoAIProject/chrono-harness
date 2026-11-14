@@ -410,6 +410,7 @@ impl Manager {
             retained_ref: reference.into(),
             retained_commit: head.into(),
             retention: Retention::Ancestor,
+            allow_retained_ref_advance: false,
             discard_artifacts: names,
             remove_branch: false,
             allow_absent_worktree: !e.attempts.is_empty(),
@@ -434,6 +435,7 @@ impl Manager {
                     reference,
                     head,
                     &Retention::Ancestor,
+                    false,
                 )?;
                 if e.path.exists() {
                     if !self.age_eligible(&e, true)? {

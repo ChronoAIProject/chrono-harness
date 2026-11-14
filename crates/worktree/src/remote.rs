@@ -37,6 +37,7 @@ impl Cleanup {
             &format!("{}^{{commit}}", self.retained_commit),
             &self.retained_commit,
             &self.retention,
+            false,
         )
     }
 

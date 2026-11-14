@@ -2467,16 +2467,21 @@ impl Manager {
         )?
         .exit_code
             != 1
-            || r.oid(
-                &self.inputs.policy.coordinator_root,
-                &self.inputs.policy.retained_ref,
-            )? != t.retained_commit
         {
             return Err(
                 "retained reference changed after terminal handoff; preserve checkout".into(),
             );
         }
-        Ok(())
+        let current = r.oid(
+            &self.inputs.policy.coordinator_root,
+            &self.inputs.policy.retained_ref,
+        )?;
+        maintenance::retained_commit_reachable(
+            r,
+            &self.inputs.policy.coordinator_root,
+            &t.retained_commit,
+            &current,
+        )
     }
     fn target_policy_inputs(
         &self,
@@ -4114,6 +4119,7 @@ impl Manager {
                     &self.inputs.policy.retained_ref,
                     &t.retained_commit,
                     &self.inputs.policy.retention,
+                    true,
                 ) {
                     preserved = Some(format!("commit retention unresolved: {error}"));
                 }
@@ -4193,6 +4199,7 @@ impl Manager {
                     retained_ref: manager.inputs.policy.retained_ref.clone(),
                     retained_commit: t.retained_commit.clone(),
                     retention: manager.inputs.policy.retention.clone(),
+                    allow_retained_ref_advance: true,
                     discard_artifacts: names,
                     remove_branch: manager.inputs.policy.remove_branch,
                     allow_absent_worktree: !e.attempts.is_empty(),

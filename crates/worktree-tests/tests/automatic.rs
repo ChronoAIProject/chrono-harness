@@ -4188,6 +4188,8 @@ fn automatic_terminal_rejects_changed_head_rewound_ref_policy_attachment_and_git
     for fault in [
         "head",
         "rewound-ref",
+        "diverged-ref",
+        "symbolic-ref",
         "policy",
         "target-policy",
         "target-config",
@@ -4220,6 +4222,36 @@ fn automatic_terminal_rejects_changed_head_rewound_ref_policy_attachment_and_git
             }
             "rewound-ref" => {
                 git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
+            }
+            "diverged-ref" => {
+                git(&h.root, &["update-ref", "refs/heads/dev", "HEAD^"]);
+                git(
+                    &h.root,
+                    &[
+                        "-c",
+                        "user.name=fixture",
+                        "-c",
+                        "user.email=fixture@example.invalid",
+                        "commit",
+                        "--allow-empty",
+                        "-qm",
+                        "diverged reference",
+                    ],
+                );
+            }
+            "symbolic-ref" => {
+                git(
+                    &h.root,
+                    &["update-ref", "refs/heads/retention-alias", "HEAD"],
+                );
+                git(
+                    &h.root,
+                    &[
+                        "symbolic-ref",
+                        "refs/heads/dev",
+                        "refs/heads/retention-alias",
+                    ],
+                );
             }
             "policy" => {
                 let mut p = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
