@@ -6223,6 +6223,121 @@ fn finalized_original_path_lease_does_not_block_released_report() {
 }
 
 #[test]
+fn retiring_report_detaches_without_reacquiring_its_absent_path() {
+    if !isolated_capability_test("retiring_report_detaches_without_reacquiring_its_absent_path") {
+        return;
+    }
+    // The first two-node round removes bytes but cannot also detach an edge.
+    let h = host(2, 128);
+    let original = ".chrono-harness/state/fixtures/required-original";
+    fs::write(
+        h.path().join(original),
+        b"original required by its consumer",
+    )
+    .unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", original, json!(null))
+        .unwrap();
+    let original_id = publication.id().to_owned();
+    publication.complete(json!({"exit": 7})).unwrap();
+    inventory(h.path())
+        .reference("actual-original-consumer", &[original_id.clone()])
+        .unwrap();
+    let role = retention_state::role_path(h.path(), "actual-original-consumer");
+    let role_before = fs::read(&role).unwrap();
+    let report = ".chrono-harness/state/fixtures/retiring-report";
+    fs::write(h.path().join(report), b"obsolete report").unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", report, json!(null))
+        .unwrap();
+    let report_id = publication.id().to_owned();
+    inventory(h.path())
+        .dependencies(&report_id, &[original_id.clone()])
+        .unwrap();
+    publication.complete(json!({"exit": 0})).unwrap();
+    let record = retention_state::object_path(h.path(), &report_id);
+    let first = diagnosed_maintenance_originals(h.path(), &report_id);
+    assert!(!h.path().join(report).exists(), "{first}");
+    let pending: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(pending["output"]["phase"], "disposing", "{pending}");
+    assert_eq!(
+        pending["output"]["references"],
+        json!([original_id]),
+        "{pending}"
+    );
+
+    // An observed replacement is preserved before any outgoing protection ends.
+    fs::write(
+        h.path().join(report),
+        b"replacement has no retirement authority",
+    )
+    .unwrap();
+    let replacement = diagnosed_maintenance_originals(h.path(), &report_id);
+    let preserved: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(
+        preserved["output"]["references"], pending["output"]["references"],
+        "{replacement}"
+    );
+    assert_eq!(
+        fs::read(h.path().join(report)).unwrap(),
+        b"replacement has no retirement authority"
+    );
+    fs::remove_file(h.path().join(report)).unwrap();
+
+    let mut address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in report.split('/') {
+        address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    address.push("address.json");
+    let exclusion =
+        chrono_harness::ownership::DirectoryLease::acquire(address.parent().unwrap(), true, None)
+            .unwrap()
+            .unwrap();
+    let detached = diagnosed_maintenance_originals(h.path(), &report_id);
+    assert!(
+        detached["accounting_errors"].as_array().unwrap().is_empty(),
+        "{detached}"
+    );
+    let waiting: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(
+        waiting["output"]["references"],
+        json!([]),
+        "{detached}; {waiting}"
+    );
+    assert_eq!(waiting["output"]["phase"], "disposing");
+    let original_record = retention_state::object_path(h.path(), &original_id);
+    let retained: Value = serde_json::from_slice(&fs::read(&original_record).unwrap()).unwrap();
+    assert_eq!(retained["incoming"], json!([]));
+
+    // Final path/address retirement still waits for the actual path capability.
+    let blocked = diagnosed_maintenance_originals(h.path(), &report_id);
+    assert!(
+        !blocked["accounting_errors"].as_array().unwrap().is_empty(),
+        "{blocked}"
+    );
+    let still_waiting: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert_eq!(still_waiting["output"], waiting["output"]);
+    drop(exclusion);
+    let retired = diagnosed_maintenance_originals(h.path(), &report_id);
+    let done: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+    assert!(done["output"].is_null(), "{retired}; {done}");
+    let path_state: Value = serde_json::from_slice(&fs::read(address).unwrap()).unwrap();
+    assert!(path_state["output"].is_null(), "{path_state}");
+    assert!(!h.path().join(report).exists());
+    assert_eq!(
+        fs::read(h.path().join(original)).unwrap(),
+        b"original required by its consumer"
+    );
+    assert_eq!(fs::read(role).unwrap(), role_before);
+    let retained: Value = serde_json::from_slice(&fs::read(original_record).unwrap()).unwrap();
+    assert_eq!(retained["output"]["outcome"]["exit"], 7);
+    assert_eq!(retained["roles"], json!(["actual-original-consumer"]));
+    assert_eq!(retained["incoming"], json!([]));
+}
+
+#[test]
 fn report_retirement_preserves_unfinished_originals_and_their_busy_consumers() {
     if !isolated_capability_test(
         "report_retirement_preserves_unfinished_originals_and_their_busy_consumers",
