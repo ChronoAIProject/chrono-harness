@@ -1,15 +1,5 @@
 //! 原件交接的请求边界、精确成员与局部释放；IO 仍归保留所有者。
 #[cfg(not(verus_keep_ghost))]
-pub use crate::retained_artifacts::retention::partition::metadata_only_retirement;
-#[cfg(verus_keep_ghost)]
-pub use accounting::partition::metadata_only_retirement;
-#[cfg(verus_keep_ghost)]
-#[path = "retention.rs"]
-pub mod accounting;
-#[cfg(verus_keep_ghost)]
-#[path = "retention_command.rs"]
-pub(crate) mod commands;
-#[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
@@ -20,6 +10,29 @@ mod identifiers;
 use crate::verified_identifiers as identifiers;
 
 verus! {
+
+/// Sealed recovery accounting alone never establishes domain completion.
+pub fn accounting_releases(completing: bool, sealed: bool) -> (released: bool)
+    ensures released == (completing && sealed),
+{
+    completing && sealed
+}
+
+/// Empty retiring reports may advance pending metadata without physical path
+/// exclusion. Retiring the final address still requires that exclusion.
+pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
+    entries_empty: bool, pending_references: bool) -> (metadata_only: bool)
+    ensures metadata_only == (retiring && disposing && sealed && entries_empty
+        && pending_references),
+{
+    retiring && disposing && sealed && entries_empty && pending_references
+}
+
+pub fn within_bound(length: u64, limit: u64) -> (fits: bool)
+    ensures fits == (length <= limit),
+{
+    length <= limit
+}
 
 pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
     match text { Some(value) => Some(value@), None => None }

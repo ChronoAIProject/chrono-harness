@@ -12,31 +12,26 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::retained_artifacts::retention as accounting;
-#[cfg(verus_keep_ghost)]
-use policy::accounting;
-
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn recovery_accounting_never_substitutes_for_domain_completion() {
-    expect_true(!accounting::accounting_releases(false, false));
-    expect_true(!accounting::accounting_releases(false, true));
-    expect_true(!accounting::accounting_releases(true, false));
-    expect_true(accounting::accounting_releases(true, true));
+    expect_true(!policy::accounting_releases(false, false));
+    expect_true(!policy::accounting_releases(false, true));
+    expect_true(!policy::accounting_releases(true, false));
+    expect_true(policy::accounting_releases(true, true));
 }
 
-#[cfg(verus_keep_ghost)]
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn bounded_inputs_accept_the_limit_and_reject_the_next_byte() {
-    expect_true(policy::commands::within_bound(0, 0));
-    expect_true(!policy::commands::within_bound(1, 0));
-    expect_true(policy::commands::within_bound(65536, 65536));
-    expect_true(!policy::commands::within_bound(65537, 65536));
-    expect_true(policy::commands::within_bound(1048576, 1048576));
-    expect_true(!policy::commands::within_bound(1048577, 1048576));
-    expect_true(policy::commands::within_bound(u64::MAX, u64::MAX));
-    expect_true(!policy::commands::within_bound(u64::MAX, u64::MAX - 1));
+    expect_true(policy::within_bound(0, 0));
+    expect_true(!policy::within_bound(1, 0));
+    expect_true(policy::within_bound(65536, 65536));
+    expect_true(!policy::within_bound(65537, 65536));
+    expect_true(policy::within_bound(1048576, 1048576));
+    expect_true(!policy::within_bound(1048577, 1048576));
+    expect_true(policy::within_bound(u64::MAX, u64::MAX));
+    expect_true(!policy::within_bound(u64::MAX, u64::MAX - 1));
 }
 
 fn expect_retirement_id(actual: &String, expected: &str)

@@ -22,6 +22,34 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 
 verus! {
+fn expected_no_fail_fast(owner: &str) -> (required: bool)
+    ensures required == (owner@ == "runner-tests"@),
+{
+    identifiers::equal_text(owner, "runner-tests")
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn no_fail_fast_belongs_only_to_the_complete_runner_suite() {
+    proof {
+        reveal_strlit("runner-tests"); reveal_strlit("runner-tests-extra");
+        reveal_strlit("Runner-tests"); reveal_strlit("runner-tests\0");
+        reveal_strlit(""); reveal_strlit("运行/λ");
+        assert("runner-tests"@.len() == 12);
+        assert("runner-tests-extra"@.len() == 18);
+        assert("Runner-tests"@.len() == 12);
+        assert("Runner-tests"@[0] != "runner-tests"@[0]);
+        assert("runner-tests\0"@.len() == 13);
+        assert(""@.len() == 0); assert("运行/λ"@.len() == 4);
+    }
+    let exact = expected_no_fail_fast("runner-tests");
+    let prefix = expected_no_fail_fast("runner-tests-extra");
+    let case = expected_no_fail_fast("Runner-tests");
+    let nul = expected_no_fail_fast("runner-tests\0");
+    let empty = expected_no_fail_fast("");
+    let unicode = expected_no_fail_fast("运行/λ");
+    if !exact || prefix || case || nul || empty || unicode { panic!(); }
+}
+
 fn expected_test_threads(owner: &str) -> (out: Option<&'static str>)
     ensures
         if owner@ == "worktree-tests"@ {
@@ -208,21 +236,22 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
         if owner["language"] == "rust" {
             let action = &owner["actions"]["execute"]["argv"];
             let argv = action.as_array().unwrap();
-            assert_eq!(
-                &argv[..4],
-                &[
-                    json!("test"),
-                    json!("--locked"),
-                    json!("--manifest-path"),
-                    owner["manifest"].clone()
-                ]
-            );
+            let mut prefix = vec![json!("test")];
+            if expected_no_fail_fast(owner["id"].as_str().unwrap()) {
+                prefix.push(json!("--no-fail-fast"));
+            }
+            prefix.extend([
+                json!("--locked"),
+                json!("--manifest-path"),
+                owner["manifest"].clone(),
+            ]);
+            assert_eq!(&argv[..prefix.len()], prefix.as_slice());
             let test_threads = expected_test_threads(owner["id"].as_str().unwrap());
             let output_arguments = if let Some(test_threads) = test_threads {
                 assert_eq!(&argv[argv.len() - 2..], &[json!("--"), json!(test_threads)]);
-                &argv[4..argv.len() - 2]
+                &argv[prefix.len()..argv.len() - 2]
             } else {
-                &argv[4..]
+                &argv[prefix.len()..]
             };
             assert!(
                 output_arguments.is_empty()

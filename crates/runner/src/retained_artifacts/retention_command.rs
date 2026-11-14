@@ -1,39 +1,19 @@
 //! Explicit maintenance, migration and consumer requests for the retention owner.
-#![allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
-use crate::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-pub(crate) fn within_bound(length: u64, limit: u64) -> (fits: bool)
-    ensures fits == (length <= limit),
-{
-    length <= limit
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
 use super::retention::{Consumer, Inventory, OriginalIdentity, POLICY_PATH};
-#[cfg(not(verus_keep_ghost))]
+use crate::verified_release::within_bound;
 use crate::{CliOutput, decode, no_symlink_parents, sha256};
-#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
-#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
-#[cfg(not(verus_keep_ghost))]
 use std::{fs, io::Read, path::Path};
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub(super) struct Evidence {
     pub path: String,
     pub sha256: String,
 }
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "kebab-case", deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 enum Request {
     Maintain {
         originals: Option<Vec<String>>,
@@ -70,7 +50,6 @@ enum Request {
         report: crate::prepared::Original,
     },
 }
-#[cfg(not(verus_keep_ghost))]
 fn evidence(root: &Path, e: &Evidence) -> Result<Vec<u8>, String> {
     let path = no_symlink_parents(root, &e.path)?;
     let m = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
@@ -88,7 +67,6 @@ fn evidence(root: &Path, e: &Evidence) -> Result<Vec<u8>, String> {
     }
     Ok(bytes)
 }
-#[cfg(not(verus_keep_ghost))]
 fn bounded_json(root: &Path, path: &str, limit: u64) -> Result<(Value, Vec<u8>), String> {
     let path = no_symlink_parents(root, path)?;
     let metadata = fs::symlink_metadata(&path)
@@ -107,7 +85,6 @@ fn bounded_json(root: &Path, path: &str, limit: u64) -> Result<(Value, Vec<u8>),
     }
     Ok((decode(&raw)?, raw))
 }
-#[cfg(not(verus_keep_ghost))]
 fn execute(root: &Path, request: Request) -> Result<Value, String> {
     let inventory = Inventory::adopted(root)?.ok_or("host has not adopted output retention")?;
     match request {
@@ -176,7 +153,6 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
         } => inventory.acknowledge_delivery(&report, &report_sha256, artifact_id, &artifact_digest),
     }
 }
-#[cfg(not(verus_keep_ghost))]
 fn outside_originals(path: &str, originals: &[OriginalIdentity]) -> Result<(), String> {
     crate::relative_path(path)?;
     if originals
@@ -189,7 +165,6 @@ fn outside_originals(path: &str, originals: &[OriginalIdentity]) -> Result<(), S
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn consumer(root: &Path, declaration: &Evidence) -> Result<Consumer, String> {
     let consumer: Consumer = decode(&evidence(root, declaration)?)?;
     if consumer.schema != "chrono-retention-consumer/v1"
@@ -201,7 +176,6 @@ fn consumer(root: &Path, declaration: &Evidence) -> Result<Consumer, String> {
     outside_originals(&declaration.path, &consumer.originals)?;
     Ok(consumer)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn command(args: &[&str]) -> CliOutput {
     let result = (|| {
         if let [

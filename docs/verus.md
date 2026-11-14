@@ -3182,23 +3182,29 @@ JSON、路径与实际 IO 仍由原适配器承载，尚未机械精化；新增
 **产品与宿主验证登记同时变更：**未完成目录恢复复用 `Publication` 的分轮计量，
 在同一独占能力下保存原游标，每轮结束释放局部元数据排斥；修复回调仅调用一次。
 恢复计量保留原 outcome、身份和恢复根，完成测量后重置游标，后续真实发布重新核全部内容。
-`retention.rs::accounting_releases` 由现役引擎直接使用，只有真实 completion 与 sealed
-同时成立才允许 released。既有两项 retention-release 根实际包含该源码，独立预期
+`verified_release.rs::accounting_releases` 由现役引擎直接使用，只有真实 completion 与 sealed
+同时成立才允许 released。既有两项 retention-release 根直接编译同一判断源码，独立预期
 覆盖四种组合并作为 Rust 测试运行；原生回归核跨节点预算、原字节／节点容量、原引用
 及最终写入后的完整封存。证明只覆盖该状态判断，未证明整个 IO 文件。
 未改期限、线程、维护轮数或生产预算；源码条件编译、宏及受影响使用方的构建和验证
 完整成本未测，真实发布和下游验收仍须另行完成。
 
-**产品与验证分类政策同时变更：**`partition.rs` 的真实路径选择新增
-`metadata_only_retirement`，只有正在退役、disposing、manifest 已封口且条目为空、
-仍有待解绑引用五项同时成立，才省去物理路径排除。FILEMAP 将该文件登记为 program；
-现有 retention-release 生产与独立预期根实际编译同一源码中的这个判断，原生 IO 项
-沿用条件编译边界。独立预期逐项核对缺少任一条件时的拒绝，并作为 Rust 测试运行。
+**产品与验证登记同时变更：**`partition.rs` 的真实路径选择直接调用
+`verified_release.rs::metadata_only_retirement`，只有正在退役、disposing、manifest 已封口且条目为空、
+仍有待解绑引用五项同时成立，才省去物理路径排除。现有 retention-release 生产与独立预期根
+直接编译该判断。独立预期逐项核对缺少任一条件时的拒绝，并作为 Rust 测试运行。
 实际 Gate 记录精确目标路径的独占能力；无该能力时，只接受物理路径缺失，保留任何
 重新出现的条目。最后一条引用解绑后仍保留 disposing 声明，下轮取得路径能力后才
 完成地址退役。真实锁、替换文件、持久化与原件保护由未过滤 runner 行为检查验收；
 这些 IO 仍未证明，分类不表示整文件已证明。维护预算、轮数、线程及证明入口不变，
 新增编译、证明及 IO 总成本未测。
+
+这三个局部判断（含请求输入的 `within_bound`）统一由现有 `verified_release.rs` 拥有，
+生产者和独立预期都直接消费；边界预期同时作为普通 Rust 测试执行。
+`retention.rs`、`partition.rs`、`retention_command.rs` 不再为局部证明排除生产实现，
+局部根也不再反向包含这些 IO 文件。FILEMAP 只为它们保留完整 runner 库根义务，
+不以局部判断证明冒领整个文件；完整库根、真实消费者和候选 DELTA 仍须实际通过。
+这次调整不增加证明入口、预算或接口假设。
 
 已声明根不能代替原进程成功结果；观察事实的
 采集、JSON、文件发布、目录身份、租约、跨进程恢复和整个 IO 组合仍未证明，不能将
