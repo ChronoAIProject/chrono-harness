@@ -2981,11 +2981,12 @@ impl Inventory {
                     .saturating_sub(l.outputs[i].removed_logical_bytes);
                 let entered_disposal = l.outputs[i].phase != "disposing";
                 l.outputs[i].phase = "disposing".into();
-                // A regular output already in disposal has a durable phase and
-                // manifest. Defer the replacement write until its bounded
-                // physical effect (or the round's final save), avoiding a full
-                // inventory sync before every one-file retirement.
-                if entered_disposal || o.tree {
+                // The sealed manifest and disposing phase precede every effect.
+                // Its finite entries also recover tree progress: missing entries
+                // are reconciled under the same node/deadline bounds below.
+                // Persist a continuation once at the round boundary, rather than
+                // syncing the same declaration around each child unlink.
+                if entered_disposal {
                     self.save(&l, &gate)?;
                 }
                 while self.metadata_room()
@@ -3004,9 +3005,6 @@ impl Inventory {
                     match fs::symlink_metadata(&path) {
                         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                             l.outputs[i].manifest.entries.pop();
-                            if o.tree {
-                                self.save(&l, &gate)?;
-                            }
                             continue;
                         }
                         Err(e) => return Err(e.to_string()),
@@ -3065,12 +3063,9 @@ impl Inventory {
                     l.outputs[i].reserved_bytes =
                         l.outputs[i].reserved_bytes.saturating_sub(entry.bytes);
                     l.outputs[i].manifest.entries.pop();
-                    // Missing regular entries are safely reconciled from the
-                    // durable disposing manifest on the next round. Tree and
-                    // partial-disposal cursors retain their per-step writes.
-                    if o.tree {
-                        self.save(&l, &gate)?;
-                    }
+                    // A restart uses the original sealed membership and refuses
+                    // changed identities or new descendants. Overflow discovery
+                    // retains its separate durable stack and per-step writes.
                 }
                 Ok(l.outputs[i].manifest.entries.is_empty())
             })();
