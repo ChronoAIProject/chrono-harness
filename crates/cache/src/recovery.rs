@@ -404,25 +404,6 @@ pub fn admit_recovery_replay<'a>(report: &RecoveryReplay, path: &str,
 
 }
 
-#[cfg(verus_keep_ghost)]
-verus! {
-    /// Bind the runtime adapter's decision call to the planner's proved specification.
-    pub fn recovery_action_binding(
-        outcome: Option<&str>, reason: &str, unconfirmed: bool,
-        outputs_is_null_or_object: bool, matched_key_is_null_or_string: bool,
-        content_method: Option<&str>, content_status: Option<&str>, refresh_enabled: bool,
-    ) -> (out: Result<super::RecoveryAction, super::RecoveryDecisionError>)
-        ensures out == super::recovery_action_spec(
-            outcome, reason, unconfirmed, outputs_is_null_or_object,
-            matched_key_is_null_or_string, content_method, content_status, refresh_enabled),
-    {
-        super::recovery_action(
-            outcome, reason, unconfirmed, outputs_is_null_or_object,
-            matched_key_is_null_or_string, content_method, content_status, refresh_enabled,
-        )
-    }
-}
-
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, no_symlink_parents, prepared, sha256};
 #[cfg(not(verus_keep_ghost))]
