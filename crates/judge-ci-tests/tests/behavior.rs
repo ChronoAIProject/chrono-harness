@@ -134,6 +134,19 @@ mod git_facts;
 mod retirement;
 #[path = "units.rs"]
 mod units;
+fn execution_receipt(root: &Path, row: &Value) -> Value {
+    let reference = serde_json::from_value(row["original"].clone()).unwrap();
+    let bytes = chrono_harness::prepared::read_original(root, &reference, None).unwrap();
+    let mut original: Value = serde_json::from_slice(&bytes).unwrap();
+    let process =
+        chrono_harness::scoped_report::restore_process(&original["receipt"]["process"], |o| {
+            chrono_harness::prepared::read_original(root, o, None)
+        })
+        .unwrap();
+    original["receipt"]["process"] = json!(process);
+    original["receipt"].take()
+}
+
 struct Host {
     dir: TempDir,
     next_request: AtomicU64,
@@ -283,7 +296,7 @@ fn source_closure_executes_real_command() {
     assert_eq!(h.calls(), 1);
     assert_eq!(r.evidence["selected"], json!(["test:suite"]));
     assert!(
-        r.evidence["executed"][0]["receipt"]["process"]["sha256"]
+        execution_receipt(h.root(), &r.evidence["executed"][0])["process"]["sha256"]
             .as_str()
             .unwrap()
             .len()
@@ -417,7 +430,7 @@ fn operation_only_change_is_selected_and_failure_is_real() {
     let r = h.check(&b, &c);
     fail(&r, "exit 7");
     assert_eq!(
-        r.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+        execution_receipt(h.root(), &r.evidence["executed"][0])["process"]["exit_code"],
         7
     );
 }
@@ -852,7 +865,7 @@ fn index_flags_created_by_operations_fail_the_post_snapshot_guard() {
         let result = h.check(&base, &candidate);
         fail(&result, reason);
         assert_eq!(
-            result.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+            execution_receipt(h.root(), &result.evidence["executed"][0])["process"]["exit_code"],
             0
         );
         let guard = result

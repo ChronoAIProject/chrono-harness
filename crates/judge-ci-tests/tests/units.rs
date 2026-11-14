@@ -94,7 +94,10 @@ fn filemap_v2_bound_delta(key: &str, old: u64, candidate: u64, case: &str, reaso
     assert_eq!(e["not_required"], json!(["test:other"]));
     assert_eq!(e["executed"].as_array().unwrap().len(), 1);
     assert_eq!(e["executed"][0]["operation"], "test.suite");
-    assert_eq!(e["executed"][0]["receipt"]["process"]["exit_code"], 0);
+    assert_eq!(
+        execution_receipt(h.root(), &e["executed"][0])["process"]["exit_code"],
+        0
+    );
     assert_eq!(e["plan"]["operations"][0][key], json!(candidate));
     assert_eq!(
         e["selection_explanation"]["extra_selections"]["test:suite"],
@@ -395,14 +398,19 @@ fn execution_originals_use_one_lossless_receipt_and_collect_without_reexecution(
     let evidence = &report["response"]["evidence"];
     assert_eq!(
         evidence["execution_evidence_schema"],
-        "chrono-ci-executions/v2"
+        "chrono-ci-executions/v3"
     );
     let row = &evidence["executed"][0];
+    assert!(
+        row.get("receipt").is_none(),
+        "the operation original owns the receipt"
+    );
+    assert!(row["original"]["path"].as_str().is_some());
     assert!(
         row.get("process").is_none(),
         "the receipt is the single process owner"
     );
-    let original = chrono_harness::full::expand_process(&row["receipt"]["process"]).unwrap();
+    let original = execution_receipt(h.root(), row)["process"].clone();
     let process: chrono_harness::ProcessResult = serde_json::from_value(original).unwrap();
     let mut expected = vec![b'0'; 80_000];
     expected.extend_from_slice(b"\xff\x00\xce\xbb\n");
@@ -444,48 +452,88 @@ fn collection_rejects_missing_schema_and_conflicting_or_corrupt_current_evidence
         reference["sha256"] = json!(sha256(&fs::read(h.root().join(path)).unwrap()));
         reference
     };
+    let operation_path = h.root().join(
+        original["response"]["evidence"]["executed"][0]["original"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let operation_bytes = fs::read(&operation_path).unwrap();
+    let operation: Value = serde_json::from_slice(&operation_bytes).unwrap();
+    let stream_path = h.root().join(
+        operation["receipt"]["process"]["stdout_original"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let stream_bytes = fs::read(&stream_path).unwrap();
     for mode in [
         "missing-schema",
         "schema",
-        "duplicate",
-        "missing-encoding",
-        "encoding",
+        "unknown-schema",
+        "duplicate-process",
+        "duplicate-receipt",
+        "missing-original",
+        "missing-file",
+        "path",
         "digest",
+        "operation-schema",
+        "state",
+        "status",
+        "operation",
         "receipt",
+        "stream",
+        "launch",
+        "inline-stream",
     ] {
         let mut report = original.clone();
         let e = &mut report["response"]["evidence"];
+        let mut saved = operation.clone();
         match mode {
             "missing-schema" => {
                 e.as_object_mut()
                     .unwrap()
                     .remove("execution_evidence_schema");
-                for row in e["executed"].as_array_mut().unwrap() {
-                    let process =
-                        chrono_harness::full::expand_process(&row["receipt"]["process"]).unwrap();
-                    row["receipt"]["process"] = process.clone();
-                    row["process"] = process;
-                }
             }
-            "schema" => e["execution_evidence_schema"] = json!("chrono-ci-executions/v999"),
-            "duplicate" => {
-                e["executed"][0]["process"] = e["executed"][0]["receipt"]["process"].clone()
+            "schema" => e["execution_evidence_schema"] = json!("chrono-ci-executions/v2"),
+            "unknown-schema" => e["execution_evidence_schema"] = json!("unknown"),
+            "duplicate-process" => {
+                e["executed"][0]["process"] = saved["receipt"]["process"].clone()
             }
-            "missing-encoding" => {
-                e["executed"][0]["receipt"]["process"]
-                    .as_object_mut()
-                    .unwrap()
-                    .remove("encoding");
+            "duplicate-receipt" => e["executed"][0]["receipt"] = saved["receipt"].clone(),
+            "missing-original" => {
+                e["executed"][0].as_object_mut().unwrap().remove("original");
             }
-            "encoding" => e["executed"][0]["receipt"]["process"]["encoding"] = json!("unknown"),
-            "digest" => {
-                e["executed"][0]["receipt"]["process"]["stdout_sha256"] = json!("0".repeat(64))
+            "missing-file" => {
+                e["executed"][0]["original"]["path"] = json!(".chrono-harness/state/missing.json")
             }
-            _ => e["executed"][0]["receipt"]["digest"] = json!("0".repeat(64)),
+            "path" => {
+                e["executed"][0]["original"]["path"] =
+                    json!(".chrono-harness/state/../outside.json")
+            }
+            "digest" => e["executed"][0]["original"]["sha256"] = json!("0".repeat(64)),
+            "operation-schema" => saved["schema"] = json!("unknown"),
+            "state" => saved["state"] = json!("unknown"),
+            "status" => saved["status"] = json!("failed"),
+            "operation" => saved["operation"] = json!("other"),
+            "receipt" => saved["receipt"]["digest"] = json!("0".repeat(64)),
+            "stream" => {
+                fs::write(&stream_path, b"corrupt stream").unwrap();
+            }
+            "launch" => {
+                saved["receipt"]["process"]["launch_original"]["sha256"] = json!("0".repeat(64))
+            }
+            "inline-stream" => saved["receipt"]["process"]["stdout"] = json!("duplicate"),
+            _ => unreachable!(),
+        }
+        if saved != operation {
+            let bytes = serde_json::to_vec(&saved).unwrap();
+            fs::write(&operation_path, &bytes).unwrap();
+            e["executed"][0]["original"]["sha256"] = json!(sha256(&bytes));
         }
         let reference = publish(&mut report);
         let response = collect(&h, &b, &c, json!([reference]));
         assert_eq!(response.status, Status::Failed, "{mode}: {response:?}");
+        fs::write(&operation_path, &operation_bytes).unwrap();
+        fs::write(&stream_path, &stream_bytes).unwrap();
     }
     h.json(path, &original);
     pass(&collect(&h, &b, &c, json!([input])));
@@ -642,11 +690,34 @@ fn collection_preserves_result_set_semantics_from_original_stdout() {
     assert_eq!(h.calls(), 1);
 }
 
+fn operation_original_bytes(h: &Host, report: &Value) -> usize {
+    let mut total = 0;
+    for row in report["response"]["evidence"]["executed"]
+        .as_array()
+        .unwrap()
+    {
+        let reference = serde_json::from_value(row["original"].clone()).unwrap();
+        let bytes = chrono_harness::prepared::read_original(h.root(), &reference, None).unwrap();
+        total += bytes.len();
+        let original: Value = serde_json::from_slice(&bytes).unwrap();
+        for key in ["stdout_original", "stderr_original", "launch_original"] {
+            let reference =
+                serde_json::from_value(original["receipt"]["process"][key].clone()).unwrap();
+            total += chrono_harness::prepared::read_original(h.root(), &reference, None)
+                .unwrap()
+                .len();
+        }
+    }
+    total
+}
+
 fn pad_report(h: &Host, mut report: Value, length: usize) -> Value {
     let path = h.root().join(report["path"].as_str().unwrap());
     let mut bytes = fs::read(&path).unwrap();
-    assert!(bytes.len() < length);
-    bytes.resize(length, b' ');
+    let value: Value = serde_json::from_slice(&bytes).unwrap();
+    let metadata_length = length - operation_original_bytes(h, &value);
+    assert!(bytes.len() < metadata_length);
+    bytes.resize(metadata_length, b' ');
     fs::write(path, &bytes).unwrap();
     report["sha256"] = json!(sha256(&bytes));
     report
@@ -667,7 +738,11 @@ fn collection_report_limit_accepts_exact_bytes_and_rejects_one_more() {
     let c = h.commit();
     let report = pad_report(&h, write_report(&h, &b, &c, "alpha"), limit);
     pass(&collect(&h, &b, &c, json!([report.clone()])));
-    let too_large = pad_report(&h, report, limit + 1);
+    let too_large = pad_report(&h, report.clone(), limit + 1);
+    let r = collect(&h, &b, &c, json!([too_large]));
+    fail(&r, "operation original/stream budget");
+    let value = h.read(report["path"].as_str().unwrap());
+    let too_large = pad_report(&h, report, limit + 1 + operation_original_bytes(&h, &value));
     let r = collect(&h, &b, &c, json!([too_large]));
     fail(&r, "collection input exceeds report_bytes");
     fail(&r, "2097153 > 2097152");
@@ -1076,7 +1151,7 @@ fn exit_zero_infrastructure_failure_has_null_summary_and_retained_receipt_in_col
         .unwrap();
     assert_eq!(row.status, Status::Failed);
     assert_eq!(row.exit_code, None);
-    let original = &response.evidence["executed"][0]["receipt"]["process"];
+    let original = &execution_receipt(h.root(), &response.evidence["executed"][0])["process"];
     assert_eq!(original["exit_code"], 0);
     assert!(
         original["failure"]

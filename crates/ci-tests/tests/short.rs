@@ -4,6 +4,19 @@ mod chrono_git_boundary;
 pub(super) mod gating;
 use super::*;
 
+fn execution_receipt(root: &Path, row: &Value) -> Value {
+    let reference = serde_json::from_value(row["original"].clone()).unwrap();
+    let bytes = chrono_harness::prepared::read_original(root, &reference, None).unwrap();
+    let mut original: Value = serde_json::from_slice(&bytes).unwrap();
+    let process =
+        chrono_harness::scoped_report::restore_process(&original["receipt"]["process"], |o| {
+            chrono_harness::prepared::read_original(root, o, None)
+        })
+        .unwrap();
+    original["receipt"]["process"] = json!(process);
+    original["receipt"].take()
+}
+
 #[test]
 fn typed_report_inputs_match_complete_originals_and_follow_declared_extra_stream() {
     if !chrono_git_boundary::isolated_git() {
@@ -682,10 +695,11 @@ fn scoped_stream_reports_keep_business_failure_and_transport_failure_originals()
             &out,
         );
         if unit == "alpha" {
-            let process = chrono_harness::full::expand_process(
-                &report["response"]["evidence"]["executed"][0]["receipt"]["process"],
-            )
-            .unwrap();
+            let process = execution_receipt(
+                &h.root,
+                &report["response"]["evidence"]["executed"][0],
+            )["process"]
+                .clone();
             assert_eq!(process["exit_code"], 19);
             assert_eq!(process["stderr"], "original-business-failure");
         }
@@ -930,7 +944,8 @@ fn report_references_preserve_business_failure_and_original_read_limits() {
             assert!(original_size > 1024);
             if !limited && unit == "alpha" {
                 assert_eq!(
-                    report["response"]["evidence"]["executed"][0]["receipt"]["process"]["exit_code"],
+                    execution_receipt(&h.root, &report["response"]["evidence"]["executed"][0])["process"]
+                        ["exit_code"],
                     19
                 );
             }
@@ -966,7 +981,7 @@ fn short_preserves_actual_business_and_producer_failures() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|e| e["receipt"]["process"]["exit_code"] == 7)
+            .any(|e| execution_receipt(&h.root, e)["process"]["exit_code"] == 7)
     );
     git(
         &h.root,
@@ -1965,7 +1980,7 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
         return;
     }
     let mut h = ShortHost::new();
-    // A large genuine business process receipt must stay in the original report.
+    // Large business bytes stay in their operation original; the report references them.
     fs::write(h.root.join("a.case"), "alpha-large-original\n").unwrap();
     h.modify(".chrono-harness/FILEMAP.json", |f| {
         f["execution_plans"]["test:a"]["output_limit_bytes"] = json!(2_000_000)
@@ -1992,11 +2007,28 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
     let report = published_report(&h.root, Some("alpha"), &out);
     let retained = h.root.join(report["retained_report"].as_str().unwrap());
     let original = fs::read(&retained).unwrap();
-    assert!(original.len() > 1_000_000);
-    let process = chrono_harness::full::expand_process(
-        &report["response"]["evidence"]["executed"][0]["receipt"]["process"],
+    let operation: Value = serde_json::from_slice(
+        &prepared::read_original(
+            &h.root,
+            &serde_json::from_value(
+                report["response"]["evidence"]["executed"][0]["original"].clone(),
+            )
+            .unwrap(),
+            None,
+        )
+        .unwrap(),
     )
     .unwrap();
+    let stream_path = h.root.join(
+        operation["receipt"]["process"]["stdout_original"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let stream_original = fs::read(&stream_path).unwrap();
+    assert!(stream_original.len() > 1_000_000);
+    let process =
+        execution_receipt(&h.root, &report["response"]["evidence"]["executed"][0])["process"]
+            .clone();
     let bytes: Vec<u8> = serde_json::from_value(process["stdout_bytes"].clone()).unwrap();
     assert_eq!(bytes.len(), 1100024);
     assert_eq!(
@@ -2020,6 +2052,7 @@ fn short_console_large_original_success_has_constant_output_and_no_extra_operati
     // A subsequent check must preserve the first original byte for byte.
     h.run(&["check", "--unit", "alpha"], 0);
     assert_eq!(fs::read(retained).unwrap(), original);
+    assert_eq!(fs::read(stream_path).unwrap(), stream_original);
 }
 
 #[test]

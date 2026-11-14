@@ -463,7 +463,15 @@ fn scoped_adapter(bound: bool, selected: Option<bool>) {
         "pt"
     );
     if selected.is_some() {
-        let process = &report["response"]["evidence"]["executed"][1]["receipt"]["process"];
+        let reference = serde_json::from_value(
+            report["response"]["evidence"]["executed"][1]["original"].clone(),
+        )
+        .unwrap();
+        let original: Value = serde_json::from_slice(
+            &chrono_harness::prepared::read_original(&root, &reference, None).unwrap(),
+        )
+        .unwrap();
+        let process = &original["receipt"]["process"];
         assert_eq!(
             process["environment"]["ONLY_FROM_TARGET"],
             "selected environment"

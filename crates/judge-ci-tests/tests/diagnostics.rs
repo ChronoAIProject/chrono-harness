@@ -91,10 +91,8 @@ fn execution_diagnostics_failed_check_preserves_originals_and_identity() {
         )
         .unwrap();
         fail(&response, "operation exit 7");
-        let process = chrono_harness::full::expand_process(
-            &response.evidence["executed"][0]["receipt"]["process"],
-        )
-        .unwrap();
+        let process =
+            execution_receipt(h.root(), &response.evidence["executed"][0])["process"].clone();
         assert_eq!(process["stdout_bytes"], json!([255, 0, 10]));
         assert_eq!(process["stderr_bytes"], json!([254, 0, 10]));
         assert_eq!(process["exit_code"], 7);
@@ -430,9 +428,7 @@ fn incomplete_execution(delayed_admission: bool) {
                 let executed = evidence["executed"].as_array().unwrap();
                 assert_eq!(executed.len(), 1);
                 assert_eq!(executed[0]["operation"], "test.suite");
-                let process =
-                    chrono_harness::full::expand_process(&executed[0]["receipt"]["process"])
-                        .unwrap();
+                let process = execution_receipt(h.root(), &executed[0])["process"].clone();
                 assert_eq!(process["child_pid"], launch["context"]["child_pid"]);
                 assert_eq!(process["exit_code"], -1);
                 assert_eq!(process["failure"], "process cancelled by enclosing owner");
@@ -866,7 +862,7 @@ fn execution_diagnostics_success_and_unselected_sink_preserve_verdicts() {
     let failed = chrono_judge_ci::judge_with_diagnostic_sink(&next, Reject);
     fail(&failed, "ci.execution-diagnostics");
     assert_eq!(
-        failed.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+        execution_receipt(h.root(), &failed.evidence["executed"][0])["process"]["exit_code"],
         0
     );
     h.change_registry(CONFIG, |v| {
@@ -912,7 +908,7 @@ fn execution_diagnostics_sink_failure_retains_business_failure() {
     fail(&r, "operation exit 7");
     assert!(r.results.iter().any(|v| v.id == "ci.execution-diagnostics"));
     assert_eq!(
-        r.evidence["executed"][0]["receipt"]["process"]["exit_code"],
+        execution_receipt(h.root(), &r.evidence["executed"][0])["process"]["exit_code"],
         7
     );
     let errors = &r.evidence["diagnostic_errors"];

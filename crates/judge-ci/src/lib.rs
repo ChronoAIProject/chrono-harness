@@ -1750,10 +1750,14 @@ fn evaluate(
                     &source_io,
                 ),
             ));
-            if let Some(receipt) = &result.receipt {
-                let mut original = serde_json::to_value(receipt).map_err(|e| e.to_string())?;
-                original["process"] = chrono_harness::full::compact_process(&original["process"])?;
-                executed.push(object!({"operation":result.operation,"receipt":original}));
+            if result.receipt.is_some() {
+                let original = result
+                    .original
+                    .as_ref()
+                    .ok_or("operation original missing")?;
+                executed.push(object!({"operation":result.operation,"original":{
+                    "path":original["path"],"sha256":original["sha256"]
+                }}));
             }
         }
         for (old, replacement) in removed
@@ -1806,7 +1810,7 @@ fn evaluate(
         request_id: req.request_id.clone(),
         status: verified_collection::response_status(&results),
         results,
-        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v2","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
+        evidence: object!({"scope":config.schema,"mode":if req.initial{"initial-inventory"}else{"delta"},"base":req.base,"candidate":req.candidate,"previous_enforcement":previous,"changed_paths":paths,"selection_explanation":selection_explanation,"selected":selected,"operations":operations,"plan":plan,"conversion":conversion,"removed":removed,"retirement_context":retirement_context,"execution_evidence_schema":"chrono-ci-executions/v3","executed":executed,"not_required":not_required,"blocked":blocked,"input_closure":"incomplete: ambient toolchain, SDK, environment and external inputs are not fully enumerated","parity":"unestablished"}),
     };
     units::decorate(req, &new, &global_selected, &mut response.evidence);
     response.evidence["operation_state"] = object!(operation_state);

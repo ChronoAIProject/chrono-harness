@@ -69,6 +69,7 @@ pub struct UnitOriginals {
     pub request: Request,
     pub producer: ProcessResult,
     pub retained_report_path: Option<String>,
+    remaining_bytes: u64,
 }
 
 pub fn unit_originals(
@@ -128,7 +129,10 @@ pub fn unit_originals(
         retained_report_path = Some(path);
         (original, limits.report_bytes - raw.len() as u64)
     } else {
-        (published, 0)
+        (
+            published,
+            limits.report_bytes.saturating_sub(bytes.len() as u64),
+        )
     };
     if report["schema"] != report_schema || report.get("transport_failure").is_some() {
         return Err(format!("unit transport failed: {}", unit));
@@ -171,6 +175,7 @@ pub fn unit_originals(
         request: original,
         producer,
         retained_report_path,
+        remaining_bytes: remaining,
     })
 }
 
@@ -278,6 +283,7 @@ pub(super) fn collect(
             },
         )?;
         retained_originals.extend(originals.retained_report_path);
+        let mut remaining_bytes = originals.remaining_bytes;
         let report = originals.report;
         let original = originals.request;
         let producer = originals.producer;
@@ -472,19 +478,47 @@ pub(super) fn collect(
         if e["operations"] != object!(expected_ops) || executed.len() != operations.len() {
             return Err("unit execution coverage missing or extra".into());
         }
-        if e["execution_evidence_schema"] != "chrono-ci-executions/v2" {
+        if e["execution_evidence_schema"] != "chrono-ci-executions/v3" {
             return Err("unsupported or missing unit execution evidence schema".into());
         }
         for (operation, row) in operations.iter().zip(executed) {
-            let mut original = row["receipt"].clone();
-            if row.get("process").is_some() {
-                return Err("unit execution has duplicate process evidence".into());
+            if row.as_object().is_none_or(|fields| fields.len() != 2) {
+                return Err("unit execution must contain only operation and original".into());
             }
-            if original["process"].get("encoding").is_none() {
-                return Err("unit execution process encoding required".into());
+            let reference: chrono_harness::prepared::Original =
+                serde_json::from_value(row["original"].clone()).map_err(|e| e.to_string())?;
+            let mut read_original = |original: &chrono_harness::prepared::Original| {
+                let path =
+                    chrono_harness::prepared::original_path(original, input.artifacts.as_ref())?;
+                let bytes = read(
+                    &req.host_root,
+                    &path,
+                    p,
+                    "report_bytes (operation original/stream budget)",
+                    remaining_bytes,
+                )?;
+                if sha256(&bytes) != original.sha256 {
+                    return Err(format!("unit operation original digest mismatch: {path}"));
+                }
+                remaining_bytes -= bytes.len() as u64;
+                Ok(bytes)
+            };
+            let mut original = json(&read_original(&reference)?)?;
+            if original["schema"] != "chrono-project-operation-result/v1"
+                || original["state"] != "completed"
+                || original["status"] != "passed"
+                || original["operation"] != operation.method.operation
+                || !original["error"].is_null()
+            {
+                return Err("unit operation original is incomplete or disagrees".into());
             }
-            original["process"] = chrono_harness::full::expand_process(&original["process"])?;
-            let receipt: Receipt = serde_json::from_value(original).map_err(|e| e.to_string())?;
+            let process = chrono_harness::scoped_report::restore_process(
+                &original["receipt"]["process"],
+                read_original,
+            )?;
+            original["receipt"]["process"] = object!(process);
+            let receipt: Receipt =
+                serde_json::from_value(original["receipt"].take()).map_err(|e| e.to_string())?;
             chrono_judge_routes::compare(&plan, operation, Some(&receipt))?;
             source_binding::bind_output(
                 "passed",
