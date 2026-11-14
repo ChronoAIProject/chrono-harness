@@ -848,7 +848,7 @@ fn named_probe_uses_only_its_declared_path_and_records_the_bound_executable() {
     let tools = root.path().join("tools");
     fs::create_dir(&tools).unwrap();
     let executable = tools.join("registered-probe");
-    fs::copy(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), &executable).unwrap();
+    fs::hard_link(env!("CARGO_BIN_EXE_chrono-cache-test-probe"), &executable).unwrap();
     config["inputs"]["compiler"] = json!({"kind":"command", "command":{
         "program":"registered-probe", "args":["echo","actual compiler"],
         "env":{"PATH":tools},"timeout_seconds":2,"output_limit_bytes":4096},
