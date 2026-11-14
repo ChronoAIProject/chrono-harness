@@ -711,7 +711,7 @@ pub fn run_recovery_refreshes<S, K, T, F, C>(source: S, rows: Vec<(K, T)>,
     let ghost states = seq![source];
     let mut i = 0;
     while i < count
-        invariant i <= count, count == entries.len(),
+        invariant i <= count, count == entries.len(), entries == rows@,
             remaining@.0 == i, remaining@.1 == entries,
             states.len() == i + 1, states.last() == state,
             recovery_refresh_prefix(entries, states, source, apply, complete),
@@ -724,6 +724,9 @@ pub fn run_recovery_refreshes<S, K, T, F, C>(source: S, rows: Vec<(K, T)>,
         match result {
             Err(error) => {
                 let out = (next, Err(error));
+                assert(out.1 == Err::<(), String>(error));
+                assert(recovery_refresh_prefix(rows@, states, source, apply, complete));
+                assert(states.len() <= rows.len());
                 assert(recovery_refresh_step(states.last(), entries[states.len() - 1],
                     apply, complete, (out.0, Err::<(), String>(error))));
                 assert(exists|history: Seq<S>|
