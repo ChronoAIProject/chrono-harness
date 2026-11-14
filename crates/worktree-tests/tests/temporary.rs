@@ -1,11 +1,39 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use super::verified_lifecycle::expect;
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+verus! {
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn rolling_windows_distinguish_failure_diagnostics_and_unknown_outcomes() {
+    expect(policy::rolling_keep(true, false, false, 0, 86400, 3600) == 0);
+    expect(policy::rolling_keep(true, true, false, 0, 86400, 3600) == 86400);
+    expect(policy::rolling_keep(true, false, true, 0, 86400, 3600) == 86400);
+    expect(policy::rolling_keep(false, false, false, 0, 86400, 3600) == 3600);
+    expect(policy::rolling_keep(false, true, true, 0, 86400, 3600) == 3600);
+    expect(policy::rolling_keep(true, true, true, u64::MAX, 0, u64::MAX) == 0);
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
+#[cfg(not(verus_keep_ghost))]
 fn host() -> Host {
     host_mode("noop")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn host_mode(mode: &str) -> Host {
     let h = super::bounded_cleanup::main_host_mode(mode);
     let path = h.root.join(".chrono-harness/cleanup.json");
@@ -19,6 +47,7 @@ fn host_mode(mode: &str) -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn capture_directory(root: &Path) -> PathBuf {
     let captures: Vec<_> = fs::read_dir(root.join(".chrono-harness/state/command-captures"))
         .unwrap()
@@ -28,6 +57,7 @@ fn capture_directory(root: &Path) -> PathBuf {
     captures[0].clone()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn command_carrier_count(command: &Command) -> usize {
     command
         .get_envs()
@@ -41,10 +71,12 @@ fn command_carrier_count(command: &Command) -> usize {
         .unwrap_or(0)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn rolling_host(keep_seconds: u64) -> Host {
     rolling_host_mode(keep_seconds, "noop")
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn rolling_host_mode(keep_seconds: u64, mode: &str) -> Host {
     let h = host_mode(mode);
     let path = h.root.join(".chrono-harness/cleanup.json");
@@ -57,6 +89,7 @@ fn rolling_host_mode(keep_seconds: u64, mode: &str) -> Host {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn private_fixture_retirement_observes_actual_release_not_test_success() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -140,6 +173,8 @@ fn private_fixture_retirement_observes_actual_release_not_test_success() {
             fixture.retain_diagnostic().unwrap();
         }
         let result = fixture.finish(state == "failed").unwrap();
+        let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+        assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
         assert_eq!(result["status"], "finished", "{state}: {result}");
         assert_eq!(
             retired(),
@@ -195,6 +230,7 @@ fn private_fixture_retirement_observes_actual_release_not_test_success() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn private_fixture_retirement_preserves_corrupt_and_pending_metadata_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -216,6 +252,7 @@ fn private_fixture_retirement_preserves_corrupt_and_pending_metadata_originals()
     // Keep the current metadata retention policy: physical disposal alone
     // cannot authorize removal of its original metadata before that consumer ends.
     assert_eq!(fixture.finish(false).unwrap()["status"], "finished");
+    assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(
         !chrono_worktree::TemporaryHost::retired_fixture_store(&store, "test-allocation").unwrap()
     );
@@ -228,6 +265,7 @@ fn private_fixture_retirement_preserves_corrupt_and_pending_metadata_originals()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_failure() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -253,6 +291,12 @@ fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_fail
         assert_eq!(process["stderr"], "original artifact diagnostic");
         let allocation = PathBuf::from(process["stdout"].as_str().unwrap());
         assert_eq!(report["artifact_directory"]["path"], value!(allocation));
+        assert!(
+            allocation.exists(),
+            "handoff does not dispose producer output"
+        );
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
         if failed {
             assert_eq!(
                 fs::read(allocation.join("arbitrary products/original.bin")).unwrap(),
@@ -266,6 +310,7 @@ fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_fail
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_ambiguous_operation_owner_refuses_before_launch() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -291,6 +336,7 @@ fn rolling_directory_ambiguous_operation_owner_refuses_before_launch() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -326,6 +372,8 @@ fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
     fs::write(&survivor, b"keep external bytes").unwrap();
     std::os::unix::fs::symlink(&survivor, path.join("external link")).unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert_eq!(result["status"], "finished", "{result}");
     assert!(
         !path.exists(),
@@ -348,6 +396,7 @@ fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_reference_or_duplicate_input()
  {
     if !chrono_git_boundary::isolated_git() {
@@ -379,6 +428,8 @@ fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_referenc
     fs::copy(source, &destination).unwrap();
     fixture.retain_diagnostic().unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert_eq!(result["status"], "finished", "{result}");
     assert_eq!(
         fs::read(destination).unwrap(),
@@ -392,6 +443,7 @@ fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_referenc
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -417,6 +469,8 @@ fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal
     let path = fixture.path().to_owned();
     let store = path.parent().unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert_eq!(result["status"], "finished", "{result}");
     assert!(
         !path.exists(),
@@ -451,6 +505,7 @@ fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_waits_for_real_capability_and_retention_window() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -467,6 +522,8 @@ fn rolling_directory_waits_for_real_capability_and_retention_window() {
     fs::write(path.join("result.bin"), b"retained while read").unwrap();
     let reader = fixture.capability().unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert!(
         path.exists(),
         "live capability must exclude disposal: {result}"
@@ -498,6 +555,7 @@ fn rolling_directory_waits_for_real_capability_and_retention_window() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rolling_directory_reclaims_expired_interruption_without_claiming_task_completion() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -543,6 +601,7 @@ fn rolling_directory_reclaims_expired_interruption_without_claiming_task_complet
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -599,6 +658,7 @@ fn busy_allocation_metadata_does_not_delay_independent_cleanup() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_store_resolution_does_not_acquire_maintenance_admission() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -641,6 +701,7 @@ fn producer_store_resolution_does_not_acquire_maintenance_admission() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_state() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -713,6 +774,7 @@ fn producer_store_resolution_checks_committed_inputs_without_creating_cleanup_st
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_temporary_outputs_do_not_rewrite_producer_state_or_publish_disposal() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -753,6 +815,7 @@ fn absent_temporary_outputs_do_not_rewrite_producer_state_or_publish_disposal() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn one_drain_keeps_every_released_artifact_disposal_and_original() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -816,6 +879,7 @@ fn one_drain_keeps_every_released_artifact_disposal_and_original() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unavailable_allocation_preserves_originals_and_does_not_block_eligible_sibling() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -882,6 +946,7 @@ fn unavailable_allocation_preserves_originals_and_does_not_block_eligible_siblin
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn allocation_native_binding_forwards_existing_scope_once() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -928,6 +993,7 @@ fn allocation_native_binding_forwards_existing_scope_once() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_capture_preserves_actual_nonzero_exit_and_raw_bytes() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -960,6 +1026,7 @@ fn native_capture_preserves_actual_nonzero_exit_and_raw_bytes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_protocol_capture_preserves_exact_input_bytes_and_eof() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -993,6 +1060,7 @@ fn native_protocol_capture_preserves_exact_input_bytes_and_eof() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn declared_nested_git_root_preserves_committed_and_staged_source_under_outputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1045,6 +1113,7 @@ fn declared_nested_git_root_preserves_committed_and_staged_source_under_outputs(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnostic() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1119,6 +1188,7 @@ fn excluded_source_check_allows_unrelated_publication_and_refuses_late_diagnosti
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn actual_cargo_native_descendant_uses_absolute_allocation_from_varying_working_directories() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1220,6 +1290,7 @@ fn actual_cargo_native_descendant_uses_absolute_allocation_from_varying_working_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn capture_interruption_helper() {
     let Some(root) = std::env::var_os("CHRONO_CAPTURE_ROOT") else {
         return;
@@ -1234,6 +1305,7 @@ fn capture_interruption_helper() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_native_capture_keeps_partial_raw_streams_without_a_join_or_disposal_claim() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1295,6 +1367,7 @@ fn interrupted_native_capture_keeps_partial_raw_streams_without_a_join_or_dispos
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_spawn_failure_keeps_intent_and_empty_original_streams_without_result() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1321,6 +1394,7 @@ fn native_spawn_failure_keeps_intent_and_empty_original_streams_without_result()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn overlapping_native_allocations_preserve_output_after_kill_until_join_and_diagnostic_release() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1398,6 +1472,7 @@ fn overlapping_native_allocations_preserve_output_after_kill_until_join_and_diag
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn prospective_outputs_cannot_claim_git_identity_or_native_capture_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1425,6 +1500,7 @@ fn prospective_outputs_cannot_claim_git_identity_or_native_capture_originals() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1469,6 +1545,7 @@ fn unavailable_lease_preserves_its_registration_and_allows_an_eligible_allocatio
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_output() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1606,6 +1683,7 @@ fn real_coordinator_adoption_protects_native_use_then_recovers_registered_cargo_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_drop() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1657,6 +1735,7 @@ fn retained_lifecycle_command_preserves_real_allocation_exclusion_after_host_dro
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_lifecycle_adapter_captures_actual_failed_result_and_original_streams() {
     if !chrono_git_boundary::isolated_git() {
         return;

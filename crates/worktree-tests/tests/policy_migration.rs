@@ -1,8 +1,92 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_lifecycle::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn imported_policy_requires_published_original_and_exact_receipt_fields() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("chrono-worktree-report/v1"); reveal_strlit("chrono-worktree-report/v2");
+        reveal_strlit("import"); reveal_strlit("migrate");
+        reveal_strlit("imported"); reveal_strlit("failed");
+        reveal_strlit("/owner"); reveal_strlit("/owner\0");
+        reveal_strlit("report"); reveal_strlit("report/other");
+        reveal_strlit("config"); reveal_strlit("config\0");
+        assert("chrono-worktree-report/v1"@[24] != "chrono-worktree-report/v2"@[24]);
+        assert("import"@.len() == 6 && "migrate"@.len() == 7);
+        assert("imported"@.len() == 8 && "failed"@.len() == 6);
+        assert("/owner"@.len() == 6 && "/owner\0"@.len() == 7);
+        assert("report"@.len() == 6 && "report/other"@.len() == 12);
+        assert("config"@.len() == 6 && "config\0"@.len() == 7);
+    }
+    let mut r = policy::ImportedPolicyReceipt {
+        schema: Some("chrono-worktree-report/v1"), operation: Some("import"),
+        status: Some("imported"), source_root: Some("/owner"),
+        report_path: Some("report"), config_path: Some("config"),
+    };
+    expect(policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    expect(!policy::imported_policy_receipt_valid(&r, false, "/owner", "report", "config"));
+    r.schema = None;
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.schema = Some("chrono-worktree-report/v2");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.schema = Some("chrono-worktree-report/v1");
+    r.operation = Some("migrate");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.operation = Some("import"); r.status = Some("failed");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.status = Some("imported"); r.source_root = Some("/owner\0");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.source_root = Some("/owner"); r.report_path = Some("report/other");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.report_path = Some("report"); r.config_path = Some("config\0");
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+    r.config_path = None;
+    expect(!policy::imported_policy_receipt_valid(&r, true, "/owner", "report", "config"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn checkout_adoption_requires_active_joined_nonterminal_work() {
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("active"); reveal_strlit("terminal");
+        reveal_strlit("retained"); reveal_strlit("Active");
+        reveal_strlit("active\0"); reveal_strlit("");
+        assert("active"@[0] != "Active"@[0]);
+        assert("active"@.len() == 6 && "active\0"@.len() == 7 && ""@.len() == 0);
+    }
+    expect(policy::checkout_migration_ready("active", false, false, false));
+    expect(!policy::checkout_migration_ready("active", true, false, false));
+    expect(!policy::checkout_migration_ready("active", false, true, false));
+    expect(!policy::checkout_migration_ready("active", false, false, true));
+    expect(!policy::checkout_migration_ready("active", true, true, true));
+    expect(!policy::checkout_migration_ready("terminal", false, false, false));
+    expect(!policy::checkout_migration_ready("retained", false, false, false));
+    expect(!policy::checkout_migration_ready("Active", false, false, false));
+    expect(!policy::checkout_migration_ready("active\0", false, false, false));
+    expect(!policy::checkout_migration_ready("", false, false, false));
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 const CLEANUP: &str = ".chrono-harness/cleanup.json";
 
+#[cfg(not(verus_keep_ghost))]
 fn edit(root: &Path, path: &str, change: impl FnOnce(&mut Value)) {
     let file = root.join(path);
     let mut value = json(&fs::read(&file).unwrap()).unwrap();
@@ -10,6 +94,7 @@ fn edit(root: &Path, path: &str, change: impl FnOnce(&mut Value)) {
     fs::write(file, serde_json::to_vec_pretty(&value).unwrap()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn fixture() -> (Host, PathBuf) {
     let h = Host::new("payload");
     h.kernel_cleanup();
@@ -19,6 +104,7 @@ fn fixture() -> (Host, PathBuf) {
     (h, target)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn advance(h: &Host) {
     edit(&h.root, CLEANUP, |v| {
         v["allow_evidence_disposal"] = value!(false)
@@ -26,11 +112,13 @@ fn advance(h: &Host) {
     commit(&h.root);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn adopt(h: &Host, target: &Path) {
     let head = git(&h.root, &["rev-parse", "HEAD"]);
     git(target, &["merge", "--ff-only", head.trim()]);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn migrate(h: &Host, target: &Path) -> Value {
     let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{report} {error}");
@@ -42,12 +130,14 @@ fn migrate(h: &Host, target: &Path) -> Value {
     report
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cache(target: &Path) {
     fs::create_dir_all(target.join("output λ")).unwrap();
     fs::write(target.join("output λ/cache"), "rebuildable").unwrap();
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_birth() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -107,6 +197,7 @@ fn policy_migration_adopts_new_registered_outputs_without_disposal_or_rewriting_
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_requires_each_endpoints_own_committed_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -140,6 +231,7 @@ fn policy_migration_requires_each_endpoints_own_committed_inputs() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn independent_worktree_policy_migrates_without_changing_coordinator_choices() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -182,6 +274,7 @@ fn independent_worktree_policy_migrates_without_changing_coordinator_choices() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_obeys_original_live_kernel_lease() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -203,6 +296,7 @@ fn policy_migration_obeys_original_live_kernel_lease() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_retries_published_transition_without_growing_or_rewriting_history() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -241,6 +335,7 @@ fn policy_migration_retries_published_transition_without_growing_or_rewriting_hi
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_corrupt_receipt_or_retained_policy_blocks_later_disposal() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -274,6 +369,7 @@ fn policy_migration_corrupt_receipt_or_retained_policy_blocks_later_disposal() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_requires_artifact_registration_by_target_owner() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -303,6 +399,7 @@ fn policy_migration_requires_artifact_registration_by_target_owner() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn target_policy_can_add_registered_outputs_without_coordinator_registration() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -336,6 +433,7 @@ fn target_policy_can_add_registered_outputs_without_coordinator_registration() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_policy_cannot_redefine_shared_producer_storage_or_outputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -369,6 +467,7 @@ fn linked_policy_cannot_redefine_shared_producer_storage_or_outputs() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identical() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -399,6 +498,12 @@ fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identi
         "finish",
         &["--path", target.to_str().unwrap(), "--dispose-evidence"],
     );
+    assert_eq!(code, 0, "{failed} {error}");
+    assert!(
+        target.exists(),
+        "business handoff does not perform the failing removal"
+    );
+    let (code, failed, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{failed} {error}");
     assert!(!target.exists());
     let original = drain_report(&failed["drain"][0]);
@@ -414,6 +519,7 @@ fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identi
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -424,6 +530,12 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{report} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     let prior = h.ledger()["entries"][0].clone();
     assert_eq!(prior["status"], "retained");
     let terminal = h
@@ -444,6 +556,12 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{report} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     assert!(!target.join("output λ").exists());
     assert_eq!(fs::read(terminal).unwrap(), bytes);
     assert_eq!(
@@ -453,6 +571,7 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -502,6 +621,7 @@ fn policy_migration_supports_policy_cycles_and_rejects_a_missing_predecessor() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn immutable_input_limits_acquire_large_registered_configuration_and_preserve_drift_checks() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -546,6 +666,7 @@ fn immutable_input_limits_acquire_large_registered_configuration_and_preserve_dr
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn immutable_input_limits_refuse_undeclared_or_over_bound_data_before_worktree_creation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -588,6 +709,7 @@ fn immutable_input_limits_refuse_undeclared_or_over_bound_data_before_worktree_c
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn immutable_input_limits_reject_invalid_paths_and_capacity_before_git_launch() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -616,6 +738,7 @@ fn immutable_input_limits_reject_invalid_paths_and_capacity_before_git_launch() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn coordinator_input_capacity_preserves_existing_target_binding_and_fixed_sources() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -661,6 +784,7 @@ fn coordinator_input_capacity_preserves_existing_target_binding_and_fixed_source
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_preserves_birth_old_commits_and_uncommitted_work() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -774,6 +898,7 @@ fn checkout_migration_preserves_birth_old_commits_and_uncommitted_work() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -829,6 +954,7 @@ fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_hands_off_a_sealed_result_without_maintaining_other_worktrees() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -876,6 +1002,7 @@ fn checkout_migration_hands_off_a_sealed_result_without_maintaining_other_worktr
     drop(held);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn checkout_result_fixture() -> (Host, PathBuf, Value) {
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = Host::new("payload");
@@ -922,6 +1049,7 @@ fn checkout_result_fixture() -> (Host, PathBuf, Value) {
 
 // Reproduce interruption after publishing the original use result but before
 // the ledger atomically removes its token and records the completed result.
+#[cfg(not(verus_keep_ghost))]
 fn restore_interrupted_use(h: &Host, target: &Path, used: &Value) -> PathBuf {
     let token = used["lock_reason"].as_str().unwrap();
     let ledger_path = h.ledger_path(target);
@@ -938,6 +1066,7 @@ fn restore_interrupted_use(h: &Host, target: &Path, used: &Value) -> PathBuf {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_reconciles_interrupted_uses_without_global_maintenance() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1034,6 +1163,7 @@ fn checkout_migration_reconciles_interrupted_uses_without_global_maintenance() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_preserves_interrupted_uses_with_missing_or_drifted_intents() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1068,6 +1198,7 @@ fn checkout_migration_preserves_interrupted_uses_with_missing_or_drifted_intents
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1144,6 +1275,7 @@ fn checkout_migration_keeps_unqualified_result_handoffs_pending() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_rejects_candidate_policy_before_recovering_uses_or_results() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1169,6 +1301,7 @@ fn checkout_migration_rejects_candidate_policy_before_recovering_uses_or_results
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_keeps_live_unjoined_and_terminal_work_protected() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1220,11 +1353,17 @@ fn checkout_migration_keeps_live_unjoined_and_terminal_work_protected() {
     let terminal = fs::read(h.ledger_path(&target)).unwrap();
     let (code, refused, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
     assert_ne!(code, 0, "{refused} {error}");
-    assert!(refused["error"].as_str().unwrap().contains("pending work"));
+    assert!(
+        refused["error"]
+            .as_str()
+            .unwrap()
+            .contains("pending terminal disposal")
+    );
     assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), terminal);
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_migration_checks_current_ref_locks_and_keeps_branch_contract() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1269,6 +1408,7 @@ fn checkout_migration_checks_current_ref_locks_and_keeps_branch_contract() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn checkout_and_policy_adoption_share_one_generation_and_cleanup_uses_current_branch() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1303,6 +1443,12 @@ fn checkout_and_policy_adoption_share_one_generation_and_cleanup_uses_current_br
         &["--path", target.to_str().unwrap(), "--dispose-evidence"],
     );
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists(), "{finished}");
     assert_eq!(
         git(&h.root, &["rev-parse", "integration/migrating"]),
@@ -1319,6 +1465,7 @@ fn checkout_and_policy_adoption_share_one_generation_and_cleanup_uses_current_br
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn imported_checkout_can_adopt_local_or_detached_binding_without_claiming_new_birth() {
     if !chrono_git_boundary::isolated_git() {
         return;
