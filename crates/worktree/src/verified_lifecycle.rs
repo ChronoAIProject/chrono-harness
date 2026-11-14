@@ -11,6 +11,14 @@ use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
 #[cfg(verus_keep_ghost)]
+#[path = "start.rs"]
+mod start_verification;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::start::select_report_input_scope;
+#[cfg(verus_keep_ghost)]
+pub use start_verification::select_report_input_scope;
+
+#[cfg(verus_keep_ghost)]
 #[path = "automatic.rs"]
 // The ordinary automatic module owns formatting of its runtime child modules.
 // This proof-only alias has a different module directory and must not traverse them.

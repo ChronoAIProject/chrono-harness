@@ -4532,7 +4532,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 true,
             )?;
             manager.restore_absent_policy(r)?;
-            manager.protect_reports(r, &invoking)?;
             if !matches!(operation.as_str(), "maintain" | "import") {
                 manager.adopt_live_policy(r)?;
             }
