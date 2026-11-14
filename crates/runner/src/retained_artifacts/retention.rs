@@ -2806,7 +2806,6 @@ impl Inventory {
         // continuations so a dependency closure cannot consume the whole
         // admission window. Stable sorting preserves the durable cursor among
         // peers; cycles remain reclaimable.
-        let referenced: BTreeSet<_> = l.outputs.iter().flat_map(|o| o.references.iter()).collect();
         let mut consumers: BTreeMap<String, Vec<String>> = BTreeMap::new();
         for output in &l.outputs {
             for original in &output.references {
@@ -2822,12 +2821,13 @@ impl Inventory {
         let mut order: Vec<_> = (0..count)
             .map(|n| {
                 let output = &l.outputs[(start + n) % count];
+                let has_consumers = consumers.contains_key(&output.id);
                 (
                     output.id.clone(),
                     (
                         output.phase != "disposing",
-                        consumers.contains_key(&output.id) || !output.references.is_empty(),
-                        referenced.contains(&output.id),
+                        has_consumers || !output.references.is_empty(),
+                        has_consumers,
                     ),
                 )
             })
