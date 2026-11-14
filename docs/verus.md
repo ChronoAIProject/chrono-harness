@@ -12,8 +12,11 @@ Verus 编译中使用相同的 Debug／Serde 派生及 Serde 字段属性。源�
 保留原有局部生产与独立预期根。CI 的完整库以及 behavior、git_facts、cache 三个
 实际 Cargo 测试根另有直接严格操作；units／short／gating、full／full_scope、startup
 分别属于这些原测试根，不单独编造可执行测试项目。原未过滤行为操作先生产相同的
-依赖和 mock 执行物，再执行新增证明。新的根、依赖搜索及实际 Cargo 环境值均由
+依赖和 mock 执行物，再执行新增证明。新的根、依赖搜索及登记的编译期环境值均由
 projects 的现役方法与 FILEMAP 计划、输出占用显式登记，不靠扫描选择检查。
+CI 库根采用实际生产的默认 feature 上下文；测试依赖库的 generation-test 上下文、
+测试方法中的相对执行物路径和 Cargo 实际编译期环境仍未建立逐字对应，不能授予
+完整编译绑定或把这些方法当作已经合格的生产／测试证明。
 
 本批同时补齐固定开发 DELTA 的全部显式分类；JSON、文档与 Cargo 锁文件仍按其
 真实数据合同登记，仓内程序及测试保持 program。完整根只是必须执行的义务，

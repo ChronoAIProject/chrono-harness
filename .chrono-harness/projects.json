@@ -1552,8 +1552,6 @@
             "--output-json",
             "--compile",
             "--edition=2024",
-            "--cfg",
-            "feature=\"generation-test\"",
             "--extern",
             "chrono_harness",
             "--extern",
