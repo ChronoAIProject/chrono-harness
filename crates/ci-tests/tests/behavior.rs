@@ -1,3 +1,8 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+#[path = "release.rs"]
+mod release_driver;
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 #[path = "support/tools.rs"]
@@ -1313,7 +1318,7 @@ fn retain_command_result_exported(
     if !output.status.success() {
         eprintln!("original CI fixture evidence: {}", destination.display());
     }
-    let receipt = match birth_observer {
+    let mut receipt = match birth_observer {
         Some(observer) => chrono_worktree::RetainedArtifact::begin_with_birth_observer(
             &directory,
             "ci-command-result",
@@ -1338,6 +1343,9 @@ fn retain_command_result_exported(
             destination.display()
         )
     });
+    receipt
+        .bind_maintenance_owner(producer_root, ".chrono-harness/worktree.json")
+        .unwrap();
     receipt.seal().unwrap();
     if let Some(export) = export {
         receipt

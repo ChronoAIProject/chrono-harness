@@ -89,17 +89,17 @@ schema 2／`atomic-rules/relative-alias/v3`、四阶段简短根指南，以及�
 .chrono-harness/bin/chrono-worktree status
 ```
 
-执行登记操作时，必须持有 use 保护。调用方等待全部自有任务和后台任务，核对实际完成及落地后，从仍存活的协调宿主执行 finish；maintain 负责独立重试。创建、重建、导入旧 checkout 和显式政策 migrate，按[工作树说明](../../docs/worktree.md)执行；Git／GitHub 交付沿用上文的自动交付授权。
+执行登记操作时，必须持有 use 保护。调用方等待全部自有任务和后台任务，核对实际完成及落地后，从仍存活的协调宿主执行 finish；统一维护进程负责实际清理和独立恢复。创建、重建、导入旧 checkout 和显式政策 migrate，按[工作树说明](../../docs/worktree.md)执行；Git／GitHub 交付沿用上文的自动交付授权。
 
 AI 开始和交接本仓工作时运行 status，关注本地未终结、未知及清理保留事项；按原件解决待办并保全提交。普通生命周期命令的 `W_WORKTREE_ATTENTION` 是同一账本的提醒，非零状态和原始失败仍须单独核对；提醒不证明完成，也不授予删除权。详见[本地状态与 AI 提醒](../../docs/worktree.md#本地状态与-ai-提醒)。
 
-本宿主在 worktree.json／cleanup.json 中采用 automatic_cleanup/v2。协调锚是 Git owner inventory 的 main worktree，状态位于 `.chrono-harness/state/automatic-cleanup-v2/`。start／reconstruct 自动登记，只维护目标记录；本宿主采用的 bootstrap／check 委托同一负责方，不扫描无关工作树或输出。跨对象清理走显式 maintain。
+本宿主在 worktree.json／cleanup.json 中采用 automatic_cleanup/v2。协调锚是 Git owner inventory 的 main worktree，状态位于 `.chrono-harness/state/automatic-cleanup-v2/`。start／reconstruct 自动登记，只维护目标记录；本宿主采用的 bootstrap／check 委托同一负责方，不扫描无关工作树或输出。普通入口持久交接后发送事件，不等待维护启动、扫描或处置；显式 maintain 与事件／定时共用同一执行者。
 
-每个工作树有独立地址和 metadata 租约。最后一个内核租约释放后，该对象的普通入口可以回收登记为 dispose 的临时产物；已登记的可复用编译缓存选为 finish-dispose，普通 use／check／bootstrap 和显式维护在检出继续复用时保留缓存，直到明确 finish 或实际检出处置；活子孙进程、源码、分支、尚未保全的提交、bin 和证据都保留，也不因此设置完成状态。只采用已验证的描述符转交链。cleanup.json 明确采用用户选择的实际创建年龄严格 >7200 秒复用、>14400 秒可删除，由显式 maintain 或 finish 后的维护执行；处置前将源码、原索引及 checkout reflog 独有提交保存在真实保留分支，仍排除活跃或未知使用方、当前调用者和必要证据。年龄、目录名或空闲本身不授予任意目录删除资格。
+每个工作树有独立地址和 metadata 租约。最后一个内核租约释放后，统一维护进程可以回收登记为 dispose 的临时产物；已登记的可复用编译缓存选为 finish-dispose，普通 use／check／bootstrap 和显式维护在检出继续复用时保留缓存，直到明确 finish 或实际检出处置；活子孙进程、源码、分支、尚未保全的提交、bin 和证据都保留，也不因此设置完成状态。只采用已验证的描述符转交链。cleanup.json 明确采用用户选择的实际创建年龄严格 >7200 秒复用、>14400 秒可删除，由显式 maintain 或 finish 后的维护执行；处置前将源码、原索引及 checkout reflog 独有提交保存在真实保留分支，仍排除活跃或未知使用方、当前调用者和必要证据。年龄、目录名或空闲本身不授予任意目录删除资格。
 
 retention 明确登记 `bootstrap-owner-stage` 的 `.chrono-harness/bin/owner-stages/`。bootstrap 所有者保留当前发布槽位、活使用方和必要诊断，按登记期限回收合格旧 stage；bootstrap 尝试目录由现役 `check-original` 范围管理。年龄和 stage 范围采用须先部署配套工具，再通过正式生命周期／retention 政策迁移，不能只改配置或手改状态。仍被使用的旧分页 producer 只通过显式 `migrate --partition-producer` 保留原字节和引用后转换，新产物走整目录滚动；普通路径不读取旧分页格式。
 
-显式维护遇到无关登记项清理失败时，保留原回执和 `cleanup_failures`，继续执行合法目标；目标身份、政策、所有权或协调状态写入失败，仍会阻断。显式 maintain 仍报告失败。未封口 birth 只有在实际排除旧使用方，并核对原附件和政策后才能恢复；原来缺失或部分完成的结果继续保留。已发布缓存尝试后出现新使用时，开启新代际，不覆盖旧 intent／result。命令原 stdout、stderr 和退出码都保留；stderr 非空不等于生命周期失败。
+维护遇到无关登记项清理失败时，保留原回执和 `cleanup_failures`，继续执行独立合法目标；普通业务只核本目标身份、政策、所有权与必要状态发布。实际维护轮次仍如实报告失败。未封口 birth 只有在实际排除旧使用方，并核对原附件和政策后才能恢复；原来缺失或部分完成的结果继续保留。已发布缓存尝试后出现新使用时，开启新代际，不覆盖旧 intent／result。命令原 stdout、stderr 和退出码都保留；stderr 非空不等于生命周期失败。
 
 二进制必须理解当前已采用的 policy／config／participation。各工作树分别绑定自己的已提交政策，共享状态只核所有权协议、物理协调者和状态目录；清理选择无需与协调者逐字相同。共享保留生产者仍使用其物理存储所有者的政策。调用方负责等待或排除旧程序、保留原状态、有序部署并核对切换；未知归属继续保护。migrate 采用目标自己的已提交输入，不清理，也不宣称完成。[v2 切换和租约限制](../../docs/worktree.md#kernel-ownership-and-unfinished-cache-recovery-v2)仍要求候选、支持平台和真实宿主验收。
 
@@ -136,3 +136,9 @@ retention 明确登记 `bootstrap-owner-stage` 的 `.chrono-harness/bin/owner-st
 当前 scoped 路径只采用 runner-startup 的版本化内部消费关系检查。full judge 的类型化 prelaunch 和报告诊断已有范围有限的实现。detector→startup 导入与安装→runner 检查→原件汇总链已有 Darwin 原生观察；Linux、外部及全部使用方采用仍未完成，具体限制见负责文档和[覆盖表](../../docs/spec-coverage.md)。旧实验、回退和测试读数直接查 Git、原 PR／CI，不在本上下文维护副本。
 
 完整宿主启用、full 原生 CI、端到端交付和完整 SPEC 验收，仍未完成；阶段成功不是交付。成本仍有 unmeasured 项。来源和许可是可选阅读资料，不是执行政策。Git 生命周期沿用上文的自动交付授权和当前任务范围；不改全局配置、参考仓库或其他工作树，不把过程转录写入产品源。
+
+## 统一维护采用变更
+
+**产品与宿主政策一起修改，已运行正式生成，尚未采用真实服务。** 用户明确要求统一维护进程，取代原同步清理／无 daemon 文案。唯一政策源是 [maintenance.json](../maintenance.json)，提出 300 秒 idle、3600 秒 timer，idle=null 可选常驻；OS 模板归 [maintenance.launchd.plist](../maintenance.launchd.plist)。普通入口先完成必要原件和既有责任交接，实际激活状态以独立 stderr 事件收据报告；事件收据不证明轮次或回收完成。业务不等待全局清理，必要同对象身份、租约和封存仍保留。
+
+统一执行入口及部署合同归 [工作树说明](../../docs/worktree.md#统一维护的业务边界)，独立预期与验证边界归 [统一维护](../../docs/unified-maintenance.md)。后续容量交接后运行现役 generate、固定候选的全部适用检查，再独立评审及 feature→integration→dev 交付。调用方排除旧程序、保留原状态并采用固定程序／政策／OS 配置后，核真实缺席激活、驻留事件／timer、idle／再唤醒、单实例和未结束维护中的 main／linked 业务进展，以及至少三次连续实际定时完成轮次、真实释放到期回收、恢复和同范围占用。源码不能代替这些结果，成本目前 unknown。

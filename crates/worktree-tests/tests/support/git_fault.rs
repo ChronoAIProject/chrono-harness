@@ -1,6 +1,34 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+pub fn inventory_failure<T>(error: Option<T>) -> (out: Result<(), T>)
+    ensures match error {
+        None => out == Ok::<(), T>(()),
+        Some(original) => out == Err::<(), T>(original),
+    },
+{
+    match error { None => Ok(()), Some(original) => Err(original) }
+}
+
+// The Rust command-boundary cases already check the original stderr, exit and unknown inventory.
+#[cfg(verus_keep_ghost)]
+fn configured_inventory_failure_preserves_the_original_and_absence_can_continue() {
+    match inventory_failure::<u8>(None) { Ok(()) => {}, Err(_) => panic!() }
+    match inventory_failure(Some(74u8)) { Err(original) => { if original != 74 { panic!(); } }, Ok(()) => panic!() }
+}
+}
+
 #[path = "../../../runner-tests/tests/support/git_model.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod git_model;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     ffi::OsString,
     fs::{self, File},
@@ -16,21 +44,25 @@ use std::{
     time::Duration,
 };
 
+#[cfg(not(verus_keep_ghost))]
 unsafe extern "C" {
     fn getppid() -> c_int;
     fn kill(pid: c_int, signal: c_int) -> c_int;
     fn dup2(old: c_int, new: c_int) -> c_int;
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn interrupt_parent() {
     assert_eq!(unsafe { kill(getppid(), 9) }, 0);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn redirect(path: &Path, descriptor: c_int) {
     let file = File::create(path).unwrap();
     assert_eq!(unsafe { dup2(file.as_raw_fd(), descriptor) }, descriptor);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn require_success(status: ExitStatus) {
     if !status.success() {
         std::process::exit(
@@ -41,6 +73,7 @@ fn require_success(status: ExitStatus) {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn capture(program: &str, args: &[OsString]) -> String {
     let output = Command::new(program)
         .arg("--git-model")
@@ -51,6 +84,7 @@ fn capture(program: &str, args: &[OsString]) -> String {
     String::from_utf8(output.stdout).unwrap()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn collide_with_intents(suffix: &str) {
     let directory = Path::new(".chrono-harness/state/worktrees");
     let mut reports: Vec<_> = fs::read_dir(directory)
@@ -73,6 +107,7 @@ fn collide_with_intents(suffix: &str) {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn has_rebind_intent() -> bool {
     fs::read_dir(".chrono-harness/state/worktrees").is_ok_and(|entries| {
         entries.filter_map(Result::ok).any(|entry| {
@@ -85,6 +120,7 @@ fn has_rebind_intent() -> bool {
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn update_remote(git: &str, home: &Path, reference: &str) {
     let head = fs::read_to_string(home.join("new-head")).unwrap();
     let mut directory = OsString::from("--git-dir=");
@@ -99,6 +135,7 @@ fn update_remote(git: &str, home: &Path, reference: &str) {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn main() {
     let model_args: Vec<String> = std::env::args().skip(1).collect();
     if model_args.first().is_some_and(|s| s == "--git-model") {
@@ -818,6 +855,7 @@ fn main() {
 }
 
 // This fixture has no real Git fallback. Every external response is explicit.
+#[cfg(not(verus_keep_ghost))]
 fn enrollment_originals(config: &Value, arguments: &[OsString]) {
     use std::io::Read;
     let root = Path::new(config["root"].as_str().unwrap());
@@ -870,10 +908,20 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
             );
         }
         ["worktree", "list", "--porcelain", "-z"] => {
+            if let Err(error) = inventory_failure(config["inventory_error"].as_str()) {
+                eprintln!("{error}");
+                std::process::exit(74);
+            }
             print!(
                 "worktree {}\0HEAD {head}\0branch refs/heads/dev\0\0",
                 root.display()
             );
+            for path in config["inventory_paths"].as_array().into_iter().flatten() {
+                print!(
+                    "worktree {}\0HEAD {head}\0detached\0\0",
+                    path.as_str().unwrap()
+                );
+            }
         }
         ["show", spec] => io::stdout().write_all(&blob(spec)).unwrap(),
         ["--literal-pathspecs", "ls-files", "-z", "--", path]

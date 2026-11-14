@@ -56,18 +56,6 @@
       "kind": "production",
       "test_project": "identifiers-tests",
       "actions": {
-        "build": {
-          "operation": "build.identifiers",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/identifiers/Cargo.toml",
-            "--target-dir",
-            ".chrono-harness/cache/identifiers/target"
-          ]
-        },
         "format_check": {
           "operation": "fmt.identifiers",
           "tool": "cargo",
@@ -918,16 +906,6 @@
       "root": "crates/instructions",
       "test_project": "instructions-tests",
       "actions": {
-        "build": {
-          "operation": "build.instructions",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/instructions/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.instructions",
           "tool": "cargo",
@@ -2020,16 +1998,6 @@
             "crates/judge-registration/Cargo.toml"
           ]
         },
-        "build": {
-          "operation": "build.judge-registration",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-registration/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-registration",
           "tool": "cargo",
@@ -2391,16 +2359,6 @@
             "crates/judge-filemap/Cargo.toml"
           ]
         },
-        "build": {
-          "operation": "build.judge-filemap",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-filemap/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-filemap",
           "tool": "cargo",
@@ -2535,16 +2493,6 @@
             "--offline",
             "--package",
             "chrono-diagnostics",
-            "--manifest-path",
-            "crates/judge-routes/Cargo.toml"
-          ]
-        },
-        "build": {
-          "operation": "build.judge-routes",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
             "--manifest-path",
             "crates/judge-routes/Cargo.toml"
           ]
@@ -2763,16 +2711,6 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
-        },
-        "build": {
-          "operation": "build.judge-projects",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-projects/Cargo.toml"
-          ]
         },
         "format_check": {
           "operation": "fmt.judge-projects",
@@ -3007,16 +2945,6 @@
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
         },
-        "build": {
-          "operation": "build.judge-cost",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-cost/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.judge-cost",
           "tool": "cargo",
@@ -3120,16 +3048,6 @@
             "--offline",
             "--package",
             "chrono-diagnostics",
-            "--manifest-path",
-            "crates/judge-mixed/Cargo.toml"
-          ]
-        },
-        "build": {
-          "operation": "build.judge-mixed",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
             "--manifest-path",
             "crates/judge-mixed/Cargo.toml"
           ]
@@ -3306,16 +3224,6 @@
             "version": "0.2026.04.24.f8e1704",
             "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
           }
-        },
-        "build": {
-          "operation": "build.judge-workflow",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/judge-workflow/Cargo.toml"
-          ]
         },
         "format_check": {
           "operation": "fmt.judge-workflow",
@@ -3608,16 +3516,6 @@
             "crates/inputs/Cargo.toml"
           ]
         },
-        "build": {
-          "operation": "build.inputs",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
-            "--manifest-path",
-            "crates/inputs/Cargo.toml"
-          ]
-        },
         "format_check": {
           "operation": "fmt.inputs",
           "tool": "cargo",
@@ -3699,16 +3597,6 @@
             "--offline",
             "--package",
             "chrono-diagnostics",
-            "--manifest-path",
-            "crates/distribution/Cargo.toml"
-          ]
-        },
-        "build": {
-          "operation": "build.distribution",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
             "--manifest-path",
             "crates/distribution/Cargo.toml"
           ]
@@ -4174,16 +4062,6 @@
             "--offline",
             "--package",
             "chrono-diagnostics",
-            "--manifest-path",
-            "crates/diagnostics/Cargo.toml"
-          ]
-        },
-        "build": {
-          "operation": "build.diagnostics",
-          "tool": "cargo",
-          "argv": [
-            "build",
-            "--locked",
             "--manifest-path",
             "crates/diagnostics/Cargo.toml"
           ]

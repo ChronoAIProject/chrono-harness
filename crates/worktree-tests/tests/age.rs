@@ -1,10 +1,40 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_lifecycle::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_actual_unreleased_evidence_blocks_checkout_removal() {
+    let needed = policy::retain_evidence(false, true);
+    let absent = policy::retain_evidence(false, false);
+    let released = policy::retain_evidence(true, true);
+    let released_absent = policy::retain_evidence(true, false);
+    expect(needed && !absent && !released && !released_absent);
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::automatic::{native_consumer, native_git};
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use std::os::unix::fs::MetadataExt;
+#[cfg(not(verus_keep_ghost))]
 use std::time::{Duration, SystemTime};
 
+#[cfg(not(verus_keep_ghost))]
 fn policy(h: &Host, reuse: u64, delete: u64, evidence: &str) {
     h.automatic(evidence);
     git(&h.root, &["config", "user.name", "Lifecycle fixture"]);
@@ -25,6 +55,7 @@ fn policy(h: &Host, reuse: u64, delete: u64, evidence: &str) {
 
 // Wait once against the real filesystem birth time. Tests never change a ledger,
 // a timestamp, the product clock or the machine clock to make an object eligible.
+#[cfg(not(verus_keep_ghost))]
 fn older_than(target: &Path, seconds: u64) {
     let created = fs::metadata(target).unwrap().created().unwrap();
     let boundary = created + Duration::from_secs(seconds) + Duration::from_millis(50);
@@ -32,6 +63,7 @@ fn older_than(target: &Path, seconds: u64) {
         std::thread::sleep(wait);
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn entry(h: &Host, target: &Path) -> Value {
     json(&fs::read(h.ledger_path(target)).unwrap()).unwrap()["entries"]
         .as_array()
@@ -41,11 +73,13 @@ fn entry(h: &Host, target: &Path) -> Value {
         .unwrap()
         .clone()
 }
+#[cfg(not(verus_keep_ghost))]
 fn output(target: &Path) {
     fs::create_dir_all(target.join("output λ")).unwrap();
     fs::write(target.join("output λ/cache"), vec![11; 4096]).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cache_identity(target: &Path) -> (u64, u64) {
     let cache = target.join("output λ/cache");
     assert_eq!(fs::read(&cache).unwrap(), vec![11; 4096]);
@@ -53,17 +87,20 @@ fn cache_identity(target: &Path) -> (u64, u64) {
     (metadata.dev(), metadata.ino())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn temporary_output(target: &Path) {
     fs::create_dir_all(target.join("nested/cache")).unwrap();
     fs::write(target.join("nested/cache/temporary"), b"disposable").unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn start(h: &Host, name: &str, target: &Path) {
     let (code, report, error) = h.invoke("feature", name, target);
     assert_eq!(code, 0, "{report} {error}");
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn maintenance_selects_creation_age_from_each_targets_adopted_policy() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -137,6 +174,7 @@ fn maintenance_selects_creation_age_from_each_targets_adopted_policy() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -259,11 +297,18 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     older_than(&target, 60);
     let (code, maintained, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{maintained} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (maintained_cleanup_code, maintained_cleanup, maintained_cleanup_error) =
+        h.auto("maintain", &[]);
+    assert_eq!(
+        maintained_cleanup_code, 0,
+        "{maintained_cleanup} {maintained_cleanup_error}"
+    );
     assert!(!target.exists());
     assert_eq!(git(&h.root, &["rev-parse", &reference]), head);
     let disposed = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
     assert_eq!(disposed["entries"][0]["status"], "disposed");
-    let result = maintained["drain"]
+    let result = maintained_cleanup["drain"]
         .as_array()
         .unwrap()
         .iter()
@@ -284,6 +329,7 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn aged_busy_consumer_defers_and_independent_expired_checkout_advances() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -329,6 +375,7 @@ fn aged_busy_consumer_defers_and_independent_expired_checkout_advances() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -424,12 +471,19 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
     older_than(&target, 60);
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists(), "{finished}");
     assert_eq!(git(&h.root, &["rev-parse", "dev"]), dev);
     assert_eq!(show(&saved["retained_ref"]), "current detached source");
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -499,6 +553,12 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(target.exists());
     assert!(!target.join("output λ").exists(), "{finished}");
     assert_eq!(
@@ -508,6 +568,7 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_age_disposal_reentry_preserves_original_unknown_result() {
     if !chrono_git_boundary::isolated_git() {
         return;

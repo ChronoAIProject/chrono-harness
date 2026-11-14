@@ -14,6 +14,12 @@ use chrono_harness::verified_identifiers as identifiers;
 
 verus! {
 
+pub fn publisher_success_gate(explicit_always: bool, needs_publisher: bool) -> (required: bool)
+    ensures required == (!explicit_always && needs_publisher),
+{
+    !explicit_always && needs_publisher
+}
+
 pub enum NativeJobState { Succeeded, ReadDetail { id: u64 }, Rejected }
 
 pub open spec fn optional_text_is(value: Option<&str>, expected: &str) -> bool {

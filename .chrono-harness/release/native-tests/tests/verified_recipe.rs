@@ -14,6 +14,10 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
+#[cfg(verus_keep_ghost)]
+#[path = "recipe.rs"]
+mod recipe;
+
 verus! {
 
 // 同一预期在 Verus 中证明，在普通 Rust 中实际执行。

@@ -1,0 +1,2953 @@
+{
+  "source": {
+    "parent_path": "/Users/macstudio2/chrono-harness/.chrono-harness/state/worktrees/maintain-10264-1794650796067292000-0.json",
+    "parent_sha256": "1bccaef93725e1ba67193e22d99445df290e14dec61df5e8798d0ac16b2b7c24",
+    "parent_bytes": 34188589,
+    "observation_sha256": "2fbc464fbe1d7abf2cbbb9fdce1499c4b0da3e0d23c496dcf0952692edd51173",
+    "scope": "complete drain value; other parent fields not used by projection"
+  },
+  "drain": [
+    {
+      "error": null,
+      "input": {
+        "byte_length": 485062,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650813637411000-2.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "64d189e092a5f46951ebe6e2294bb91cdb75bcfd2c6a45246da57b45cd13ed80",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-age-target-policy-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650813637411000-2.json",
+        "sha256": "64d189e092a5f46951ebe6e2294bb91cdb75bcfd2c6a45246da57b45cd13ed80"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 472713,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650821287139000-5.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "dc57af28c328dcfa1fdd5e4fd102a9df6b3f0957cd107a372844562d4887db3e",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-age-target-policy-integration-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650821287139000-5.json",
+        "sha256": "dc57af28c328dcfa1fdd5e4fd102a9df6b3f0957cd107a372844562d4887db3e"
+      },
+      "status": "cleaned"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-audit-release-docs-20261105",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-ci-native-fixtures-r8-20261105",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-disk-budget-20261105",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-import-language-r10-20261105",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-native-adapter-language-r9-20261105",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 479214,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650859685949000-8.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "bb42e91a4f6663e41ecf69fdc19a22413d3fa398a56ecc706fc734abf01398c3",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-owner-dev-adopt-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650859685949000-8.json",
+        "sha256": "bb42e91a4f6663e41ecf69fdc19a22413d3fa398a56ecc706fc734abf01398c3"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 476114,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650880103237000-11.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "161c090cb6ed0945c739ae2105ab676670197c37039dfdd75f4c293e67a4ee86",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-release-cache-lifecycle-20261110",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650880103237000-11.json",
+        "sha256": "161c090cb6ed0945c739ae2105ab676670197c37039dfdd75f4c293e67a4ee86"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 485897,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650895646553000-14.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "dcf25fa1adaa4cab172cbb3a0f12eaf6cdf7148ea46ce4cef9cf2a0b6bd6f457",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-retention-linked-integration-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650895646553000-14.json",
+        "sha256": "dcf25fa1adaa4cab172cbb3a0f12eaf6cdf7148ea46ce4cef9cf2a0b6bd6f457"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 498725,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650905037324000-17.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "2d5520cfa7370d19bf4b5e5ba4939d864aad925d898e371c8bf359c2a8a9c860",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-retention-linked-progress-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650905037324000-17.json",
+        "sha256": "2d5520cfa7370d19bf4b5e5ba4939d864aad925d898e371c8bf359c2a8a9c860"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 483884,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650913404560000-20.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "a8a9ca60583cfce4e67ed9a6c0b726d7bfafeb951f940d35d7bbd7cc7fd728a1",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-retention-policy-components-20261110",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650913404560000-20.json",
+        "sha256": "a8a9ca60583cfce4e67ed9a6c0b726d7bfafeb951f940d35d7bbd7cc7fd728a1"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 523079,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650923198613000-23.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "8ff7fa388f306fea3ee953bff29545a5b5dd088021cc5a9747003e9baf371c67",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-retention-report-frontier-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650923198613000-23.json",
+        "sha256": "8ff7fa388f306fea3ee953bff29545a5b5dd088021cc5a9747003e9baf371c67"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 471374,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650934127970000-26.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "5fb373510d5ba93a7edb221108fd20ae863f4e3b55116e16b6afdc1f5f9333c2",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-retention-report-frontier-integration-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650934127970000-26.json",
+        "sha256": "5fb373510d5ba93a7edb221108fd20ae863f4e3b55116e16b6afdc1f5f9333c2"
+      },
+      "status": "cleaned"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-retention-tree-progress-20261112",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "error": "retained reference changed after terminal handoff; preserve checkout",
+      "input": {
+        "byte_length": 13968,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650941819003000-29.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "565eca1483f0f83d032cf3a629295b274a265b2973c232b4e84b8a4402a9712b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-retention-tree-progress-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650941819003000-29.json",
+        "sha256": "565eca1483f0f83d032cf3a629295b274a265b2973c232b4e84b8a4402a9712b"
+      },
+      "status": "failed"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-retention-tree-progress-feature-20261112",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "error": "retained reference changed after terminal handoff; preserve checkout",
+      "input": {
+        "byte_length": 13968,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650943830747000-31.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ab14db2327d8a3d21ca89477c43f9ebf1c34ceaf2b6f3d51f7b12195d77e3064",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-retention-tree-progress-feature-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650943830747000-31.json",
+        "sha256": "ab14db2327d8a3d21ca89477c43f9ebf1c34ceaf2b6f3d51f7b12195d77e3064"
+      },
+      "status": "failed"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 2701625,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650949247727000-33.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "97fd95b5eb5a2dd93c8143e9039cd314ac64b8884d6b8406a6d3659327055754",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-spec-current-dev",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650949247727000-33.json",
+        "sha256": "97fd95b5eb5a2dd93c8143e9039cd314ac64b8884d6b8406a6d3659327055754"
+      },
+      "status": "cleaned"
+    },
+    {
+      "path": "/Users/macstudio2/chrono-verus-ci-inventory-batch118",
+      "preserved_reason": "live registered consumers hold enrollment lease",
+      "status": "preserved"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/chrono-verus-current-dev",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "error": "retained reference changed after terminal handoff; preserve checkout",
+      "input": {
+        "byte_length": 13968,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651058159836000-36.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "6abb22943a2d7abf65b6b5e4fac885fede52b9e7730c4776b645415873e371ce",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-verus-current-dev",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651058159836000-36.json",
+        "sha256": "6abb22943a2d7abf65b6b5e4fac885fede52b9e7730c4776b645415873e371ce"
+      },
+      "status": "failed"
+    },
+    {
+      "error": "worktree identity or ownership lock mismatch",
+      "input": {
+        "byte_length": 21568,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651060871609000-38.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "534e17248c9c23056a67f4f077113c3e04891c18b41855c8b6bbd3b5a1c0e942",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-verus-current-dev-next",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651060871609000-38.json",
+        "sha256": "534e17248c9c23056a67f4f077113c3e04891c18b41855c8b6bbd3b5a1c0e942"
+      },
+      "status": "failed"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 2969960,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651063108525000-40.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ae554184b4fa81b9616b9d13aebcb469b5abc6718be58a50f1e8b779e40e5ab1",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-verus-current-dev-transition",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651063108525000-40.json",
+        "sha256": "ae554184b4fa81b9616b9d13aebcb469b5abc6718be58a50f1e8b779e40e5ab1"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": "worktree identity or ownership lock mismatch",
+      "input": {
+        "byte_length": 21682,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651146311238000-43.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "4f16d59f0cfaf44396ff138734236808b7e259658f073290494f2adb762fb040",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-verus-pr-snapshot-batch116",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651146311238000-43.json",
+        "sha256": "4f16d59f0cfaf44396ff138734236808b7e259658f073290494f2adb762fb040"
+      },
+      "status": "failed"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 501505,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651152157314000-45.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "b9ae4b48dfec3bf568606c87b8e175f3ff0923d71e045d0f8d291caf6eb6a7f0",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-verus-pr-snapshot-inputs-batch117",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651152157314000-45.json",
+        "sha256": "b9ae4b48dfec3bf568606c87b8e175f3ff0923d71e045d0f8d291caf6eb6a7f0"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 497467,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651162978238000-48.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "8a5708e408b5f421e93f26d828a20967abac5ea73494895de58666e2ea0fc848",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-worktree-status-observation-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651162978238000-48.json",
+        "sha256": "8a5708e408b5f421e93f26d828a20967abac5ea73494895de58666e2ea0fc848"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 478555,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651174605800000-51.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e56a566cf24bfc7060348f24e03f7de0cfbad789050e53138753557733c8a74c",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/chrono-worktree-status-observation-integration-20261111",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651174605800000-51.json",
+        "sha256": "e56a566cf24bfc7060348f24e03f7de0cfbad789050e53138753557733c8a74c"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 531434,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651182837889000-54.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "1f201d0df45bc65bcabb0c3aec491a7cc25f163cc861485e30eecea67dda7c19",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/absent-cache-feature-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651182837889000-54.json",
+        "sha256": "1f201d0df45bc65bcabb0c3aec491a7cc25f163cc861485e30eecea67dda7c19"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 485644,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651198909372000-57.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ae6df19f322ab85859cda7190806f888382df0424ced273acb9b7e1068ca85b0",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/absent-cache-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651198909372000-57.json",
+        "sha256": "ae6df19f322ab85859cda7190806f888382df0424ced273acb9b7e1068ca85b0"
+      },
+      "status": "cleaned"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 526732,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651227054671000-60.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e869484b9fd4fb19f64de90caa3f6c204095b8293ac707ff08ca8906ae6d35bf",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-ci-proofs",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651227054671000-60.json",
+        "sha256": "e869484b9fd4fb19f64de90caa3f6c204095b8293ac707ff08ca8906ae6d35bf"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 457078,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651252197280000-63.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "38a74fdd7a07adb17cd544960adfbfa830e425a8a16f789a1670a2960478b787",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-ci-terminal",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651252197280000-63.json",
+        "sha256": "38a74fdd7a07adb17cd544960adfbfa830e425a8a16f789a1670a2960478b787"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 464867,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651272349889000-66.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "31e27973d68d56a8417ff932d5934f5d04c0936135173a87ad6c7f6e66e6a836",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-conflict-proof",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651272349889000-66.json",
+        "sha256": "31e27973d68d56a8417ff932d5934f5d04c0936135173a87ad6c7f6e66e6a836"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 465131,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651288510404000-69.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "47d2c2b2035601a75f8b314efe90e6ee7e522b6c9de0b9f579bb410d3cd8ad13",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-contract-artifact",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651288510404000-69.json",
+        "sha256": "47d2c2b2035601a75f8b314efe90e6ee7e522b6c9de0b9f579bb410d3cd8ad13"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 478163,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651303830236000-72.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "29e4570fa48c6dba5529288d25bc46ee66f67e623f9baffd284c1caa4d8c9478",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-contract-download",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651303830236000-72.json",
+        "sha256": "29e4570fa48c6dba5529288d25bc46ee66f67e623f9baffd284c1caa4d8c9478"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 479527,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651321004150000-75.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "5e613df43340ca54185aab50497b45408e58bdc44db840682d4071904cee6242",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-delivery",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651321004150000-75.json",
+        "sha256": "5e613df43340ca54185aab50497b45408e58bdc44db840682d4071904cee6242"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 509082,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651341702993000-78.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ba5a029966dd50f9465e7e076af4f51b265176d8175e95f4295cd7cb38d264e6",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-delivery-conventions",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651341702993000-78.json",
+        "sha256": "ba5a029966dd50f9465e7e076af4f51b265176d8175e95f4295cd7cb38d264e6"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 473886,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651363205480000-81.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ed7daacff2e36fe15c1e9a7ec71eb3c81815572b731a29d740cc44396c00fb69",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-delivery-record",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651363205480000-81.json",
+        "sha256": "ed7daacff2e36fe15c1e9a7ec71eb3c81815572b731a29d740cc44396c00fb69"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 463844,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651377639117000-84.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "85ad341f2d94e91f86d9ae87b53b87b2014c88403c228f624062b1c4c687b6ca",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-dev-conflicts",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651377639117000-84.json",
+        "sha256": "85ad341f2d94e91f86d9ae87b53b87b2014c88403c228f624062b1c4c687b6ca"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 459089,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651389646543000-87.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "fd83fa77a516c24002f5bde92d3b29527e851e33332a602c825b778aba07efec",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-flow",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651389646543000-87.json",
+        "sha256": "fd83fa77a516c24002f5bde92d3b29527e851e33332a602c825b778aba07efec"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 506825,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651405518547000-90.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "c2a2f0388e5cc64f347548b70d8d9c8c9d683da5644dd12ac5be0b0897e9a7e1",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-flow-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651405518547000-90.json",
+        "sha256": "c2a2f0388e5cc64f347548b70d8d9c8c9d683da5644dd12ac5be0b0897e9a7e1"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 474081,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651421916444000-93.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "6d27787fbc53a0ce49fea5c227b6be762c1b2b5772d4d997e25e9387bfe7a1e4",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-flow-v2",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651421916444000-93.json",
+        "sha256": "6d27787fbc53a0ce49fea5c227b6be762c1b2b5772d4d997e25e9387bfe7a1e4"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 465447,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651435863983000-96.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "f7c7e21c0c6f36d45231912f12a3b1bc15d1c43375f3c601f51b5a1a02c3769e",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-independent-proof",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651435863983000-96.json",
+        "sha256": "f7c7e21c0c6f36d45231912f12a3b1bc15d1c43375f3c601f51b5a1a02c3769e"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 473821,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651450440783000-99.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "40fb47d05b33b7838cff5f02e42ee1d514a43c946c3d8ca48694217afe12a0d9",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-linux-inputs",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651450440783000-99.json",
+        "sha256": "40fb47d05b33b7838cff5f02e42ee1d514a43c946c3d8ca48694217afe12a0d9"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 466561,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651465363902000-102.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "9b08aae02361676db3bbc01e39b458e728d0f855614bc29c4f754420a7a36883",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-partition-isolation",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651465363902000-102.json",
+        "sha256": "9b08aae02361676db3bbc01e39b458e728d0f855614bc29c4f754420a7a36883"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 487073,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651478022140000-105.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "6fb8deb800b1a170f17b4557fe2ed3250d3de494f37e1526f595dfe5e4dc4b8b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-publication-receipt",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651478022140000-105.json",
+        "sha256": "6fb8deb800b1a170f17b4557fe2ed3250d3de494f37e1526f595dfe5e4dc4b8b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 468205,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651496655680000-108.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "d75ab7118def24dbf5ab70b8e0d1fd5a8c4106e7bf3249c5e730e9cba521c898",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-publication-receipt-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651496655680000-108.json",
+        "sha256": "d75ab7118def24dbf5ab70b8e0d1fd5a8c4106e7bf3249c5e730e9cba521c898"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 478229,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651508166175000-111.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "a801ee51b2f7afbbae921910d1d21b2820839144b6ecc7070bd1b2a59b758692",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-release-context",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651508166175000-111.json",
+        "sha256": "a801ee51b2f7afbbae921910d1d21b2820839144b6ecc7070bd1b2a59b758692"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 460164,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651520830890000-114.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "92a43930ecf7d6f5d90b4504761771212124e3617dd8653ec77cbc7337808251",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-release-context-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651520830890000-114.json",
+        "sha256": "92a43930ecf7d6f5d90b4504761771212124e3617dd8653ec77cbc7337808251"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 467660,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651531024443000-117.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e6579bb9a51142ce1d2c7b82c29057a53ed5416eb2cb826b706ffb541eacafb5",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-release-install",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651531024443000-117.json",
+        "sha256": "e6579bb9a51142ce1d2c7b82c29057a53ed5416eb2cb826b706ffb541eacafb5"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 499852,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651542193860000-120.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "c130e9cf92301d7cdfae33ea6658a079632b6756f327250fbc3db49a8803dbf9",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ancient-eagle-release-proofs",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651542193860000-120.json",
+        "sha256": "c130e9cf92301d7cdfae33ea6658a079632b6756f327250fbc3db49a8803dbf9"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 509786,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651556520513000-123.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "fe1206627af48b5831fbde787a5084701ede89032c66a2883e6d276c70eda225",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/check-lease-cost-feature-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651556520513000-123.json",
+        "sha256": "fe1206627af48b5831fbde787a5084701ede89032c66a2883e6d276c70eda225"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 496922,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651576153535000-126.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "3740993a34aebcef3ae415e0260f2be279a1f2f8905540f3dac26d253770f0e9",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/check-lease-cost-integration-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651576153535000-126.json",
+        "sha256": "3740993a34aebcef3ae415e0260f2be279a1f2f8905540f3dac26d253770f0e9"
+      },
+      "status": "cleaned"
+    },
+    {
+      "path": "/Users/macstudio2/ec91280d/creation-policy-recovery-feature-20261114",
+      "preserved_reason": "live registered consumers hold enrollment lease",
+      "status": "preserved"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 480264,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651592247014000-129.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e9bdf7f01c6a6b2397159245b8b2c259f18fd2f2a4cf129a08c9ab2ba6c27247",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/creation-policy-recovery-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651592247014000-129.json",
+        "sha256": "e9bdf7f01c6a6b2397159245b8b2c259f18fd2f2a4cf129a08c9ab2ba6c27247"
+      },
+      "status": "cleaned"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "checkout_presence": "absent",
+      "metadata_presence": "absent",
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble",
+      "preserved_reason": "checkout and original metadata are absent; retain unresolved task and original records",
+      "status": "preserved",
+      "task_completion": "unknown",
+      "worktree_removal": "not-claimed"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 458604,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651610336950000-132.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "a071dbd4f846396fe68e78d4812593854a280814597b8fffc586586ff296134f",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-admission-measurement-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651610336950000-132.json",
+        "sha256": "a071dbd4f846396fe68e78d4812593854a280814597b8fffc586586ff296134f"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 465478,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651625085301000-135.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "6a7a6e42df3f5a117594b8ecfe85f878f467c1dc4dbced02a8e7838d7f7dc406",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-bootstrap-validator-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651625085301000-135.json",
+        "sha256": "6a7a6e42df3f5a117594b8ecfe85f878f467c1dc4dbced02a8e7838d7f7dc406"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 464942,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651643352949000-138.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "55d74a94297367e4937918cc6d9b45fbee6430e6c078052196f299885a89d7f5",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-ci-adoption-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651643352949000-138.json",
+        "sha256": "55d74a94297367e4937918cc6d9b45fbee6430e6c078052196f299885a89d7f5"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 457908,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651655460454000-141.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "35969ab86ee662da3cf539f6abee7b1bf6f2d0131c68cf98e29c8c22f83c8e82",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-collection-red-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651655460454000-141.json",
+        "sha256": "35969ab86ee662da3cf539f6abee7b1bf6f2d0131c68cf98e29c8c22f83c8e82"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 440950,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651669811419000-144.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "bd1300abf43af54f28d66919c5eea49ec778bb14dda1ae653d629f41517b123f",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-custody-reader-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651669811419000-144.json",
+        "sha256": "bd1300abf43af54f28d66919c5eea49ec778bb14dda1ae653d629f41517b123f"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 458090,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651684472627000-147.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "f4ab8df4e6e3c2a9498207494af70d40ac5513ebba2e14d19ec0e9c65a211aed",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-decoder-docs-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651684472627000-147.json",
+        "sha256": "f4ab8df4e6e3c2a9498207494af70d40ac5513ebba2e14d19ec0e9c65a211aed"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 458712,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651701487817000-150.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "26d942f03683e594177c528021e3393b723dccc11f2c8a16b31e0e974ef285e0",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-enrollment-filter-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651701487817000-150.json",
+        "sha256": "26d942f03683e594177c528021e3393b723dccc11f2c8a16b31e0e974ef285e0"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 458552,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651714633102000-153.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "2a3d33cec7db0f955f95f49a2233c6f66120a7be94b29556f8686da8c586e46d",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-history-links-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651714633102000-153.json",
+        "sha256": "2a3d33cec7db0f955f95f49a2233c6f66120a7be94b29556f8686da8c586e46d"
+      },
+      "status": "cleaned"
+    },
+    {
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-host-policy-refresh-20261109",
+      "preserved_reason": "live registered consumers hold enrollment lease",
+      "status": "preserved"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 459626,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651731491633000-156.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "c15e40ac3b22270d293d46cf21106307d812b480d046f272a64d4835b9684072",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-pr-experiment-docs-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651731491633000-156.json",
+        "sha256": "c15e40ac3b22270d293d46cf21106307d812b480d046f272a64d4835b9684072"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 458712,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651752296633000-159.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "5b400d40a1e4782679723fe133cb400892af0a3455a52b3ef4fe4906f640a950",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-pr-test-build-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651752296633000-159.json",
+        "sha256": "5b400d40a1e4782679723fe133cb400892af0a3455a52b3ef4fe4906f640a950"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 443696,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651776114711000-162.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "3f3ca3851c21dd55927facdc5e9698d396c9e684c89eb57d52ee98ff59006b71",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-projects-release-dependency-20261110",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651776114711000-162.json",
+        "sha256": "3f3ca3851c21dd55927facdc5e9698d396c9e684c89eb57d52ee98ff59006b71"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 460796,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651811519442000-165.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "eadcdfc1b16bc74f19443838c995a158c33cf6aefb800cc2ef87ec14fd9556c9",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-recovered-report-isolation-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651811519442000-165.json",
+        "sha256": "eadcdfc1b16bc74f19443838c995a158c33cf6aefb800cc2ef87ec14fd9556c9"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 450760,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651840382597000-168.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "28aff44701292c66070314883377bbd0a85277382159c59a4d69b1d20ee9c6d7",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-retired-release-guidance-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651840382597000-168.json",
+        "sha256": "28aff44701292c66070314883377bbd0a85277382159c59a4d69b1d20ee9c6d7"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 478262,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651862939487000-171.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "4655f830067f1757eec95fdd27ae071411eb4ec2b7b8179c547903b9597657da",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-reuse-host-policy-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651862939487000-171.json",
+        "sha256": "4655f830067f1757eec95fdd27ae071411eb4ec2b7b8179c547903b9597657da"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": "Git write-tree exited 128: .chrono-harness/git/macos-26-diagnostics.json: unmerged (36f101b64cdbf345c576b25440747da527954fc2)\n.chrono-harness/git/macos-26-diagnostics.json: unmerged (eac13f30abbe2ff3c3ef9832c14cc36c105d7d80)\n.chrono-harness/git/macos-26-diagnostics.json: unmerged (6b94d64deb44805924cedb9a0eda1eb28b8c84d2)\n.chrono-harness/git/pinned-macos-diagnostics.json: unmerged (28f6e7876f6a125b74c287111da3308cb397227d)\n.chrono-harness/git/pinned-macos-diagnostics.json: unmerged (d4454ac998631ac79d63517b1e65b2feb05142c1)\n.chrono-harness/git/pinned-macos-diagnostics.json: unmerged (ae3ec0292b3b965b18760698012ae91968fe881d)\ncrates/judge-cargo/src/inputs.rs: unmerged (035ddffbe309e598021276f0044bd33f329d014d)\ncrates/judge-cargo/src/inputs.rs: unmerged (fa4bc8456129a307e55d2485e8b85a878b395edd)\ncrates/judge-cargo/src/inputs.rs: unmerged (601492060794a24bf6173712ffc8760c96d22a2b)\ncrates/judge-registration-tests/tests/registration_contract.rs: unmerged (00b9768bba8f5a457d7b1bf23c79ca4bea4e11f0)\n...\nfatal: git-write-tree: error building trees\n",
+      "input": {
+        "byte_length": 336790,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651880071082000-174.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "b2c260f23062d17f40f6a5a897f09a62f4ed2c487c4d99589a250235951c87b5",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-runtime-boundary",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651880071082000-174.json",
+        "sha256": "b2c260f23062d17f40f6a5a897f09a62f4ed2c487c4d99589a250235951c87b5"
+      },
+      "status": "failed"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 459128,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651906494898000-176.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "c2e5b0ab1e279fd86f5bc10484d8da539e480b31fa160798c6d56434d8e2670a",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-shared-cache-verifier-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651906494898000-176.json",
+        "sha256": "c2e5b0ab1e279fd86f5bc10484d8da539e480b31fa160798c6d56434d8e2670a"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 458208,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651920869329000-179.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "df41f83726f0951f0b2533d5739f26b1698eb96302f52eb9fa993072c4c6eb5f",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-unused-prefetch-20261109",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651920869329000-179.json",
+        "sha256": "df41f83726f0951f0b2533d5739f26b1698eb96302f52eb9fa993072c4c6eb5f"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": "import policy original lacks its fixed policy source commit",
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble-verus",
+      "status": "failed"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 500364,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651940564285000-182.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "80511f66e19370ffe60c97bef92550a685c1c0bbfc207194d1d50957030e6b78",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/git-model-direct-feature-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651940564285000-182.json",
+        "sha256": "80511f66e19370ffe60c97bef92550a685c1c0bbfc207194d1d50957030e6b78"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 494086,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651956575388000-185.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "7535d3da3e6aa0e944dcc278e1e742e3da3f4e149f4729af17283edb0c252742",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/git-model-direct-integration-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651956575388000-185.json",
+        "sha256": "7535d3da3e6aa0e944dcc278e1e742e3da3f4e149f4729af17283edb0c252742"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 499594,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651965949318000-188.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "b402ca36358e55a1d75fed35bae33d82010dc39de8ca1c7c60c2917acd8d3bf7",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/git-model-inputs-feature-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651965949318000-188.json",
+        "sha256": "b402ca36358e55a1d75fed35bae33d82010dc39de8ca1c7c60c2917acd8d3bf7"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 493278,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652006724087000-191.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "dd41b2a3dc14793b33d9cc351bd58e87329e35e1304152268c75a28fd8021094",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/git-model-inputs-integration-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652006724087000-191.json",
+        "sha256": "dd41b2a3dc14793b33d9cc351bd58e87329e35e1304152268c75a28fd8021094"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 507136,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652060829890000-194.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "857466de5121232ad8df65ee71ceaa10b2fca3374b9dd0dbc9c79af8dc7d9b1c",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/growth-cleanup-feature-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652060829890000-194.json",
+        "sha256": "857466de5121232ad8df65ee71ceaa10b2fca3374b9dd0dbc9c79af8dc7d9b1c"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 494330,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652100833126000-197.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "2543394b489f54a88bf07082303168b74b14785abb00dc7b6bb540f7b160001e",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/growth-cleanup-integration-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652100833126000-197.json",
+        "sha256": "2543394b489f54a88bf07082303168b74b14785abb00dc7b6bb540f7b160001e"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 510635,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652118387383000-200.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ee21ebb9b458fb05870c5ef94197cc49009f1e3258c8c719048138c26a7c5213",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/imported-policy-feature-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652118387383000-200.json",
+        "sha256": "ee21ebb9b458fb05870c5ef94197cc49009f1e3258c8c719048138c26a7c5213"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 491238,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652128992650000-203.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "c6bfca6564969b3bd84032b8435bad3338855dc67b89eca76859728933377af6",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/imported-policy-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652128992650000-203.json",
+        "sha256": "c6bfca6564969b3bd84032b8435bad3338855dc67b89eca76859728933377af6"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 702191,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652140700242000-206.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "05841b6bc829e6cf620f834b1a687ba98f0a9cc34e67a80dfae896ee589cde82",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652140700242000-206.json",
+        "sha256": "05841b6bc829e6cf620f834b1a687ba98f0a9cc34e67a80dfae896ee589cde82"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 501963,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652163417170000-209.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "d6029f8aca093c221bb1a69ef276f305ad1ef8abf5f13db1887ed948c17fe240",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-cache-plan-stages-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652163417170000-209.json",
+        "sha256": "d6029f8aca093c221bb1a69ef276f305ad1ef8abf5f13db1887ed948c17fe240"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 475980,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652189257141000-212.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "85a6e407925a31b0d7f48b4fb34a3e5f5d98849b6961870a5fbf57355407a3d3",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-cache-plan-stages-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652189257141000-212.json",
+        "sha256": "85a6e407925a31b0d7f48b4fb34a3e5f5d98849b6961870a5fbf57355407a3d3"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481429,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652210913200000-215.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "d1790caacb0a6fbe937c52a0d56141de2d0ded0f9c712f252673595920dc4d4d",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-cycle2-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652210913200000-215.json",
+        "sha256": "d1790caacb0a6fbe937c52a0d56141de2d0ded0f9c712f252673595920dc4d4d"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481692,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652230421770000-218.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "baa01843c3849ec818e44b16964f6b0a2a873ccc34c58c7370d785451d3dfea3",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-cycle2-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652230421770000-218.json",
+        "sha256": "baa01843c3849ec818e44b16964f6b0a2a873ccc34c58c7370d785451d3dfea3"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481690,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652249557229000-221.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "f1045158f5cd007fe6d4da28223afa2c3d7fc445e50a7fb00f33cf63af497856",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-diag-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652249557229000-221.json",
+        "sha256": "f1045158f5cd007fe6d4da28223afa2c3d7fc445e50a7fb00f33cf63af497856"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481920,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652261656108000-224.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "b9229c82b504f3024807e075e4f6ddf78dc20579364cd41107ec32f2270dbb91",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-diag-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652261656108000-224.json",
+        "sha256": "b9229c82b504f3024807e075e4f6ddf78dc20579364cd41107ec32f2270dbb91"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482460,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652271229797000-227.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "9e886a88ecad79013d4247bca21a9b1628c19803298d055ac10c00414d1f3d40",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-examples-version-source-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652271229797000-227.json",
+        "sha256": "9e886a88ecad79013d4247bca21a9b1628c19803298d055ac10c00414d1f3d40"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 488666,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652284601547000-230.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "7982212e1caea9794da97dd7622089b0358af923c080f74cf5bc943ef12ab541",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-frontend-mock-cost-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652284601547000-230.json",
+        "sha256": "7982212e1caea9794da97dd7622089b0358af923c080f74cf5bc943ef12ab541"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482328,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652296887151000-233.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "9ced22c085e1c742391ebbc0d65f31660c75186a49599f4d2da6cf30549ffba6",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-frontend-mock-cost-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652296887151000-233.json",
+        "sha256": "9ced22c085e1c742391ebbc0d65f31660c75186a49599f4d2da6cf30549ffba6"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481940,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652309613627000-236.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "a50079f5dfa8380d907b9423003600f97f75e3adacfe0dc48cf2119b4dcc4ab5",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-inherited-failure-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652309613627000-236.json",
+        "sha256": "a50079f5dfa8380d907b9423003600f97f75e3adacfe0dc48cf2119b4dcc4ab5"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482234,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652318639843000-239.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "2b64285564ac2320bed81256df99b9d6176c47d452eee78d920b518953525d9b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-inherited-failure-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652318639843000-239.json",
+        "sha256": "2b64285564ac2320bed81256df99b9d6176c47d452eee78d920b518953525d9b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 585848,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652328235397000-242.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "612f42612037f900edbff9291e813afe7c7f7c69d6806b790850aa00f8816fce",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-issue852-diagnostic",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652328235397000-242.json",
+        "sha256": "612f42612037f900edbff9291e813afe7c7f7c69d6806b790850aa00f8816fce"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 488216,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652336442062000-245.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "b658e977dee22e209dd3cf27ba668a46b085bf20eb9037683c3c59361bd2f781",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-lessons-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652336442062000-245.json",
+        "sha256": "b658e977dee22e209dd3cf27ba668a46b085bf20eb9037683c3c59361bd2f781"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 475289,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652345641088000-248.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ee5317599d430391a42349abc10ff79f6be1115b5b81aa7dad5e8cd218535024",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-lessons-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652345641088000-248.json",
+        "sha256": "ee5317599d430391a42349abc10ff79f6be1115b5b81aa7dad5e8cd218535024"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481428,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652352787284000-251.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "7e6530a97b887c65f58bee0d2a3809cf36e1d2c2dffc2b7246243a198c2e4cd7",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-pin-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652352787284000-251.json",
+        "sha256": "7e6530a97b887c65f58bee0d2a3809cf36e1d2c2dffc2b7246243a198c2e4cd7"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 475125,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652361894924000-254.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "722deba4b7ae7099e29a4de3b17d77a3594bf5a433bd5c0797c63d003c7dc6c5",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-pin-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652361894924000-254.json",
+        "sha256": "722deba4b7ae7099e29a4de3b17d77a3594bf5a433bd5c0797c63d003c7dc6c5"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 470016,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652376414832000-257.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "83e558e39ec51b585b506c777b57cf9945d400ba5cc3c968990e4d30c89752f0",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-recovery-lessons-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652376414832000-257.json",
+        "sha256": "83e558e39ec51b585b506c777b57cf9945d400ba5cc3c968990e4d30c89752f0"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482488,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652389678484000-260.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "3a437856f89f25629712d6f3d9e2c8d6f58e8a502ff8bf195572da0c7b5dad06",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-recovery-lessons-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652389678484000-260.json",
+        "sha256": "3a437856f89f25629712d6f3d9e2c8d6f58e8a502ff8bf195572da0c7b5dad06"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 488594,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652398789514000-263.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "acf41fb6a5fd4740bac35b16a96edc0a36b555f6ae32c93ca9879b57b799ba6b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-cache-absent-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652398789514000-263.json",
+        "sha256": "acf41fb6a5fd4740bac35b16a96edc0a36b555f6ae32c93ca9879b57b799ba6b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482274,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652411607394000-266.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "3a52d15090ea1f74f9370998c832c779a1a0a0fbad375f25f5ab4cfeee0b8b2b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-cache-absent-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652411607394000-266.json",
+        "sha256": "3a52d15090ea1f74f9370998c832c779a1a0a0fbad375f25f5ab4cfeee0b8b2b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 495572,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652439152680000-269.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "0d553c83f45c2c58d380d38b6949f994d96eb4f76d794f8c859c8842bce9e037",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-cache-live-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652439152680000-269.json",
+        "sha256": "0d553c83f45c2c58d380d38b6949f994d96eb4f76d794f8c859c8842bce9e037"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482732,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652466109336000-272.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "b41dc1800d9f8b7408250071c5c4be593fe2da55f4569a47145ec1173d61a655",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-cache-live-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652466109336000-272.json",
+        "sha256": "b41dc1800d9f8b7408250071c5c4be593fe2da55f4569a47145ec1173d61a655"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481736,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652498865245000-275.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "1363488bd582b49c00a02c385f8f89abcddad1cdc83ce1860c6c6434bc4a63fa",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-exec-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652498865245000-275.json",
+        "sha256": "1363488bd582b49c00a02c385f8f89abcddad1cdc83ce1860c6c6434bc4a63fa"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481984,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652531026966000-278.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "a6c438ab8f34ca16672ec47be5e454007b3311f37fb15b2452d5d800ea4cb80a",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-exec-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652531026966000-278.json",
+        "sha256": "a6c438ab8f34ca16672ec47be5e454007b3311f37fb15b2452d5d800ea4cb80a"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 501266,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652554629316000-281.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "4f0ebc9adc9d8a4498aa8e9035c50db0f3c7b9c7bf67705c86ed0715708c9f0c",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652554629316000-281.json",
+        "sha256": "4f0ebc9adc9d8a4498aa8e9035c50db0f3c7b9c7bf67705c86ed0715708c9f0c"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 509932,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652579306104000-284.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e390f17e59af6114256b26aa71fbdeed7cd4d7801371434b31874a1d85919bcc",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-fetch-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652579306104000-284.json",
+        "sha256": "e390f17e59af6114256b26aa71fbdeed7cd4d7801371434b31874a1d85919bcc"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 471689,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652597116671000-287.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "40ae72ca35beed54bc5b3d81a0e51c3bfef6106e94bef1f5ceddc3f6b3428d43",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-fetch-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652597116671000-287.json",
+        "sha256": "40ae72ca35beed54bc5b3d81a0e51c3bfef6106e94bef1f5ceddc3f6b3428d43"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 517368,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652614162287000-290.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "b7c519ef643f1d888b2cb782e78cbb353bbb56c813875f7ebe8712af48d6db51",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-frontend-recovery-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652614162287000-290.json",
+        "sha256": "b7c519ef643f1d888b2cb782e78cbb353bbb56c813875f7ebe8712af48d6db51"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 497918,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652635153510000-293.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "bc7b62439f99f81b5b308474811f2a775f30d4105c68b47798191ce07e155245",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-frontend-recovery-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652635153510000-293.json",
+        "sha256": "bc7b62439f99f81b5b308474811f2a775f30d4105c68b47798191ce07e155245"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481214,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652666312510000-296.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "382de3535d73431d8667dd4657f783ef6ba64be921336cfccc4f7835109ea9bf",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-hash-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652666312510000-296.json",
+        "sha256": "382de3535d73431d8667dd4657f783ef6ba64be921336cfccc4f7835109ea9bf"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 474909,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652692940794000-299.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "334a488a568ce9c6a61a9690a6435df324e1faac8e0a872c087da8d84e1c61e6",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-hash-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652692940794000-299.json",
+        "sha256": "334a488a568ce9c6a61a9690a6435df324e1faac8e0a872c087da8d84e1c61e6"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 490090,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652706891090000-302.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ab144ca399516ae65bbaad6ce4cdca24a499daa3f4ea8f17732396eadb2a8b87",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-hold-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652706891090000-302.json",
+        "sha256": "ab144ca399516ae65bbaad6ce4cdca24a499daa3f4ea8f17732396eadb2a8b87"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 483757,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652727828278000-305.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "8afd6c56eb66c864147ba5da5b3af06de57776c6450db03e8babbb73cf28c5cb",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-hold-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652727828278000-305.json",
+        "sha256": "8afd6c56eb66c864147ba5da5b3af06de57776c6450db03e8babbb73cf28c5cb"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 474691,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652746254607000-308.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "c264b928434234746ec6d65c81b0ab9e4a0b7fabf6348b1166f9f8268439c417",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652746254607000-308.json",
+        "sha256": "c264b928434234746ec6d65c81b0ab9e4a0b7fabf6348b1166f9f8268439c417"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 486689,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652761905338000-311.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "8d224dac82f2bd35223747dff964671a1343a7d956c8558b4bfa64f9baad68a3",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-iteration-round20-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652761905338000-311.json",
+        "sha256": "8d224dac82f2bd35223747dff964671a1343a7d956c8558b4bfa64f9baad68a3"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 492647,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652778301717000-314.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "6c7b617931d6dce2354b9bf4b63794f3c13521755eae3bd81c474cf3ef2c913a",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-iteration-round20-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652778301717000-314.json",
+        "sha256": "6c7b617931d6dce2354b9bf4b63794f3c13521755eae3bd81c474cf3ef2c913a"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 498576,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652793942355000-317.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "a19906352ac806f35383ce8b4751c460c1212d483a1a7a5bda19f1fed1a709b7",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-loop-evidence-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652793942355000-317.json",
+        "sha256": "a19906352ac806f35383ce8b4751c460c1212d483a1a7a5bda19f1fed1a709b7"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 491982,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652809400729000-320.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ddb99ec17d444bd452771677dcf8af7904724869c3af21933f7f8ea1839df794",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-loop-evidence-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652809400729000-320.json",
+        "sha256": "ddb99ec17d444bd452771677dcf8af7904724869c3af21933f7f8ea1839df794"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 491406,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652823872698000-323.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "f8d3cd3be813e61af7574c93882b7a8b8748f7118faae5cf235baeb61c919ce2",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-originals-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652823872698000-323.json",
+        "sha256": "f8d3cd3be813e61af7574c93882b7a8b8748f7118faae5cf235baeb61c919ce2"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 478506,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652843926471000-326.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "30a722fc35cb957fab00631827a00e7b26e335f333e298db163aacdad11d5c2b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-originals-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652843926471000-326.json",
+        "sha256": "30a722fc35cb957fab00631827a00e7b26e335f333e298db163aacdad11d5c2b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481834,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652863529336000-329.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "7d9c117260ccb14b774fef269872728ab22ad9d4561d259cf029e0891215d9f9",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-plan-012-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652863529336000-329.json",
+        "sha256": "7d9c117260ccb14b774fef269872728ab22ad9d4561d259cf029e0891215d9f9"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482012,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652879237644000-332.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "9a469da6fab4c70b9aafa2eb29269af5f7d900a307c94f50d5da6089afa97186",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-plan-012-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652879237644000-332.json",
+        "sha256": "9a469da6fab4c70b9aafa2eb29269af5f7d900a307c94f50d5da6089afa97186"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481644,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652892639438000-335.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "6ce8673e18d957a16fe379424c5e86374f4f1ca31114657d5d62a4c68cf57834",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-pr-timeout-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652892639438000-335.json",
+        "sha256": "6ce8673e18d957a16fe379424c5e86374f4f1ca31114657d5d62a4c68cf57834"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481882,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652905096391000-338.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "2ef6cc7d089ba6c0f412924357a484914c6c6cbfc753ba2a609698772a3c1eea",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-pr-timeout-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652905096391000-338.json",
+        "sha256": "2ef6cc7d089ba6c0f412924357a484914c6c6cbfc753ba2a609698772a3c1eea"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 554506,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652920153860000-341.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "9a2c2d79968202791a9e9661a1b5914dcfe6fff380c3b546e4582abc63fd68a6",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-promotion-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652920153860000-341.json",
+        "sha256": "9a2c2d79968202791a9e9661a1b5914dcfe6fff380c3b546e4582abc63fd68a6"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 489138,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652937753832000-344.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "da7f1238c239c74fc9abf058e9ba3f75c98c0f650fee901444179559f4211227",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-promotion-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652937753832000-344.json",
+        "sha256": "da7f1238c239c74fc9abf058e9ba3f75c98c0f650fee901444179559f4211227"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 492609,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652961678935000-347.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "3628d63a225e92197b4f368f963f68a192706c0435a67e89100c2b29038cfa67",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-retention-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652961678935000-347.json",
+        "sha256": "3628d63a225e92197b4f368f963f68a192706c0435a67e89100c2b29038cfa67"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 479946,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652982257958000-350.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "cf52003fdee398455d594313660cd0158176cff574df1bc05e11a9568abd4fa3",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-retention-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794652982257958000-350.json",
+        "sha256": "cf52003fdee398455d594313660cd0158176cff574df1bc05e11a9568abd4fa3"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 455627,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653002943069000-353.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "5f16f05204666f0295c8e356b24f75543a8a80eba3e4975da9a238fdd1ceff71",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-retirement-lessons-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653002943069000-353.json",
+        "sha256": "5f16f05204666f0295c8e356b24f75543a8a80eba3e4975da9a238fdd1ceff71"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 447596,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653020089085000-356.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "10ad1e3e19393f0a023a08511688de1b2c182b671a8356f991369eac5a13a353",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-retirement-lessons-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653020089085000-356.json",
+        "sha256": "10ad1e3e19393f0a023a08511688de1b2c182b671a8356f991369eac5a13a353"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 491226,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653035109669000-359.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "6c55ed13bc3d027071b1c6ddb002ecacc9874cc325dc256ce913011969324805",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-worktree-recovery-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653035109669000-359.json",
+        "sha256": "6c55ed13bc3d027071b1c6ddb002ecacc9874cc325dc256ce913011969324805"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 498110,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653047638509000-362.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "fd768d9d20fda9bfe053b9c0148b76e4ff59225083fe6021681a47a9aa12ecd9",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-release-worktree-recovery-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653047638509000-362.json",
+        "sha256": "fd768d9d20fda9bfe053b9c0148b76e4ff59225083fe6021681a47a9aa12ecd9"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 221763,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653060235294000-365.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "30a4c6f0ab0272e9a6ad5b2adccbe668790b70150c9fb72ccbe77d0a50baac35",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-retention-publication-timing-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653060235294000-365.json",
+        "sha256": "30a4c6f0ab0272e9a6ad5b2adccbe668790b70150c9fb72ccbe77d0a50baac35"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 122313,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653076970816000-368.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "1aebb3af33c014555853a596cba5bd98edc690737e28c933cd1b05dd92a8aac5",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-retention-publication-timing-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653076970816000-368.json",
+        "sha256": "1aebb3af33c014555853a596cba5bd98edc690737e28c933cd1b05dd92a8aac5"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 682558,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653081627162000-371.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "54459c11a4fb687431aab1c42b83f0f58236174b38287174bdd659aa1f6bf88a",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-retention-resume-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653081627162000-371.json",
+        "sha256": "54459c11a4fb687431aab1c42b83f0f58236174b38287174bdd659aa1f6bf88a"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 480106,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653107417513000-374.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e0a46aed2ce24c173c7d9377739601ec869808e3404cf1c23eeafd53a96a5c97",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-retention-resume-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653107417513000-374.json",
+        "sha256": "e0a46aed2ce24c173c7d9377739601ec869808e3404cf1c23eeafd53a96a5c97"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 505593,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653118306638000-377.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "2a8c8edc2b4ebee0059f3ea589bef45c78ae4287c9fa614ea622e8a68fbec5c7",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-runner-fixture-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653118306638000-377.json",
+        "sha256": "2a8c8edc2b4ebee0059f3ea589bef45c78ae4287c9fa614ea622e8a68fbec5c7"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 479386,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653129372636000-380.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "53a3f84e8c040538d3ecd2802943691aa96ccc1130678a5baf9033bcf4453ce3",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-runner-fixture-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653129372636000-380.json",
+        "sha256": "53a3f84e8c040538d3ecd2802943691aa96ccc1130678a5baf9033bcf4453ce3"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 488530,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653144437269000-383.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "9a3325f542ffb83f82f005c879778358619cd9710d52cdfc44f8f05ca72824ee",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-seal-api-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653144437269000-383.json",
+        "sha256": "9a3325f542ffb83f82f005c879778358619cd9710d52cdfc44f8f05ca72824ee"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481626,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653151691346000-386.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "586c7ddf80f0a3c1c9328f5eba3b2ae42c6a83272ac56cdf86ac3d460a90a180",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-seal-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653151691346000-386.json",
+        "sha256": "586c7ddf80f0a3c1c9328f5eba3b2ae42c6a83272ac56cdf86ac3d460a90a180"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 481910,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653158937220000-389.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "d66024352c0aaf247e09bca5bbcd94b53e1f19e13ceb7fd73ceb47c6d2966a00",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-seal-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653158937220000-389.json",
+        "sha256": "d66024352c0aaf247e09bca5bbcd94b53e1f19e13ceb7fd73ceb47c6d2966a00"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 488664,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653168672620000-392.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "87a517277cd61e3fd90f0d3108e61ae3a960c910cd3bd2f1a7e5b92432bd5df8",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-stable-docs-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653168672620000-392.json",
+        "sha256": "87a517277cd61e3fd90f0d3108e61ae3a960c910cd3bd2f1a7e5b92432bd5df8"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 475799,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653177696462000-395.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "7abfee802b4673654f0070071099adf170c1350f6d802d5e52b44c0cef5bca89",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-stable-docs-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653177696462000-395.json",
+        "sha256": "7abfee802b4673654f0070071099adf170c1350f6d802d5e52b44c0cef5bca89"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 480868,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653189964469000-398.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "3c4ac07837e4b2da18bccf7584f234509f47149ded0e15a8d623b7239ff33d22",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-stable-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653189964469000-398.json",
+        "sha256": "3c4ac07837e4b2da18bccf7584f234509f47149ded0e15a8d623b7239ff33d22"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 506241,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653199262450000-401.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "33ca27e0c64fe6b7737a2d4e45b098120b123e9f98c8133cc74ebb34099815f1",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-stable-install-gates-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653199262450000-401.json",
+        "sha256": "33ca27e0c64fe6b7737a2d4e45b098120b123e9f98c8133cc74ebb34099815f1"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 480395,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653208520546000-404.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "5fe148c75ac2a8ce6cefdd1a20cf220e1c899e91f8949c84e80072e935b017bc",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-stable-install-gates-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653208520546000-404.json",
+        "sha256": "5fe148c75ac2a8ce6cefdd1a20cf220e1c899e91f8949c84e80072e935b017bc"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 474548,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653218344282000-407.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "58ba1ed365cbc913aecf1e76832329bad64b2a7554500fe8b5863a174487b73a",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-stable-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653218344282000-407.json",
+        "sha256": "58ba1ed365cbc913aecf1e76832329bad64b2a7554500fe8b5863a174487b73a"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482043,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653225062976000-410.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "81900aa7d0789fc7e292675ae9904f17a91adb6f4f5ba84a49ea5034d980d13e",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-worktree-cost-feature",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653225062976000-410.json",
+        "sha256": "81900aa7d0789fc7e292675ae9904f17a91adb6f4f5ba84a49ea5034d980d13e"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 482347,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653234733999000-413.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "eda85a2a2af84a84bcff3b1a577fb360d48e4f50352e8a0d5523ede8d4e60537",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/ivory-oak-worktree-cost-integration",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653234733999000-413.json",
+        "sha256": "eda85a2a2af84a84bcff3b1a577fb360d48e4f50352e8a0d5523ede8d4e60537"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 122418,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653242753196000-416.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "16080ba568e1579ca042494a17f6a180835f28e531dee471f58fd78d37c101b4",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/maintenance-complete-inventory-feature-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653242753196000-416.json",
+        "sha256": "16080ba568e1579ca042494a17f6a180835f28e531dee471f58fd78d37c101b4"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 122244,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653246063818000-419.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "56081fa5ef0efe8bfc6531baa787ca3d395f282f354c5b768e579f2070917e1d",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/maintenance-complete-inventory-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653246063818000-419.json",
+        "sha256": "56081fa5ef0efe8bfc6531baa787ca3d395f282f354c5b768e579f2070917e1d"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 547733,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653249910623000-422.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "a822cee750b31bd5f02b4f77e5b00de38ce037a0ae1a61ce85feb38ec7758ba6",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/maintenance-local-gates-feature-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653249910623000-422.json",
+        "sha256": "a822cee750b31bd5f02b4f77e5b00de38ce037a0ae1a61ce85feb38ec7758ba6"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 502091,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653262215722000-425.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "8faa0a0e0dcc4ea2005281f2203af8bece630b00a1e291af3b8be58937629fc7",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/maintenance-local-gates-integration-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653262215722000-425.json",
+        "sha256": "8faa0a0e0dcc4ea2005281f2203af8bece630b00a1e291af3b8be58937629fc7"
+      },
+      "status": "cleaned"
+    },
+    {
+      "age_eligibility": "unknown",
+      "path": "/Users/macstudio2/ec91280d/olive-island",
+      "preserved_reason": "No such file or directory (os error 2)",
+      "status": "preserved"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 459346,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653270976284000-428.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "dc18a20f86eb7ec949ec3e710a238335a48d7ca57155dbce43357cd6b0da74fa",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/olive-island-git-github",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653270976284000-428.json",
+        "sha256": "dc18a20f86eb7ec949ec3e710a238335a48d7ca57155dbce43357cd6b0da74fa"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 489538,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653277748940000-431.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "393cab6ebff07202cbc18a8c1fb93ccf30e9b4da8351a1ceebe2342ee7455458",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-branches-feature-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653277748940000-431.json",
+        "sha256": "393cab6ebff07202cbc18a8c1fb93ccf30e9b4da8351a1ceebe2342ee7455458"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 483309,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653285070058000-434.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "25ecec2fd74466262e3958ac4839fea5948927f60a12b018f07941383ff8b7c2",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-branches-integration-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653285070058000-434.json",
+        "sha256": "25ecec2fd74466262e3958ac4839fea5948927f60a12b018f07941383ff8b7c2"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 496292,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653293545720000-437.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "ef9f78d5c08d68ab70b2cf98bc6c2f5cd21ffe796463cb0d6f877fbbc05bea2b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-branches-reconcile-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653293545720000-437.json",
+        "sha256": "ef9f78d5c08d68ab70b2cf98bc6c2f5cd21ffe796463cb0d6f877fbbc05bea2b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 496936,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653302512111000-440.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "fd1751605bfe1cf767814148431d944f8c7244a127dccd6d850505b8148ff82a",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-compiler-feature-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653302512111000-440.json",
+        "sha256": "fd1751605bfe1cf767814148431d944f8c7244a127dccd6d850505b8148ff82a"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 484037,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653316783166000-443.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "1b820895112955b0afb94eb388627c6cc3a400e4609653d62e87f98e4e46fb56",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-compiler-integration-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653316783166000-443.json",
+        "sha256": "1b820895112955b0afb94eb388627c6cc3a400e4609653d62e87f98e4e46fb56"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 490326,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653325452710000-446.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "24f1e783b85001e0c68d8cb3a5b6b91b2b545e5c1246cccbecc644f19150094c",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-frontend-feature-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653325452710000-446.json",
+        "sha256": "24f1e783b85001e0c68d8cb3a5b6b91b2b545e5c1246cccbecc644f19150094c"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 484011,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653334287496000-449.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "4ebc4433a02a8cfc70eb21e69ba2592f2c64e7cb44f54aa18f4d96d7ae13df2f",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-frontend-integration-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653334287496000-449.json",
+        "sha256": "4ebc4433a02a8cfc70eb21e69ba2592f2c64e7cb44f54aa18f4d96d7ae13df2f"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 490470,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653342785030000-452.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "5550f09c6466aca8082861985c09242940b79a00f0823c7ec2a38c2392be7d7b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-registration-feature-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653342785030000-452.json",
+        "sha256": "5550f09c6466aca8082861985c09242940b79a00f0823c7ec2a38c2392be7d7b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 484177,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653351242736000-455.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "3c29b9e6e5dd12b3b04acc8e4e2fba11085c52e9ffc7f9b000d7ed59816601ac",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/release-registration-integration-20261112",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653351242736000-455.json",
+        "sha256": "3c29b9e6e5dd12b3b04acc8e4e2fba11085c52e9ffc7f9b000d7ed59816601ac"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 764205,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653360804651000-458.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "01631c98858c361ddc45494d2737520f6d71ec98efaac2211149b1dbd29cbe4d",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/retention-frontier-feature-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653360804651000-458.json",
+        "sha256": "01631c98858c361ddc45494d2737520f6d71ec98efaac2211149b1dbd29cbe4d"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 479898,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653379324531000-461.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e5b34dc0c2230f68992d24a4674950901b6661a9ecf5a6fc9bd75159bbb4de31",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/retention-frontier-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653379324531000-461.json",
+        "sha256": "e5b34dc0c2230f68992d24a4674950901b6661a9ecf5a6fc9bd75159bbb4de31"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 505129,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653389476286000-464.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "2bb6802da1f4ea1b704e75fdb04ca97ae6924097656f1a21ba25d5d1d68c7604",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/retention-sweep-diagnostics-feature-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653389476286000-464.json",
+        "sha256": "2bb6802da1f4ea1b704e75fdb04ca97ae6924097656f1a21ba25d5d1d68c7604"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 492264,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653398324696000-467.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "91a2a1d99bde6dca1f99f883905f1accfe662cbed65b86f9403d9284a1b99247",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/retention-sweep-diagnostics-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653398324696000-467.json",
+        "sha256": "91a2a1d99bde6dca1f99f883905f1accfe662cbed65b86f9403d9284a1b99247"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 530305,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653408819906000-470.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "53c43fe6c8e1596688c134bad81021548bed472eca222b843c7eda1699ca5009",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/retention-sweep-feature-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653408819906000-470.json",
+        "sha256": "53c43fe6c8e1596688c134bad81021548bed472eca222b843c7eda1699ca5009"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 491259,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653420338407000-473.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "e72973eeccf3fc1093b657f24c1afbe07fe8122b88b7a523c6c5b537df421211",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/retention-sweep-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653420338407000-473.json",
+        "sha256": "e72973eeccf3fc1093b657f24c1afbe07fe8122b88b7a523c6c5b537df421211"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 527176,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653428786835000-476.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "4808ff0b19704e55ee604edd5c97f01ee4a25a82c26ac6ee0cffd2fb75aba45b",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/rolling-retention-feature-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653428786835000-476.json",
+        "sha256": "4808ff0b19704e55ee604edd5c97f01ee4a25a82c26ac6ee0cffd2fb75aba45b"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 514780,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653441185698000-479.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "dade061ff5146b0fd2cf9d95ef6db3d439d7989bb3ec0ea3f5476d51432de54f",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/rolling-retention-integration-20261113",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653441185698000-479.json",
+        "sha256": "dade061ff5146b0fd2cf9d95ef6db3d439d7989bb3ec0ea3f5476d51432de54f"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 504036,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653451729675000-482.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "68ad160e7394b39fd479494ca651ae46f85417bc1c578216044df0b96522e357",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/stable-cleanup-feature-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653451729675000-482.json",
+        "sha256": "68ad160e7394b39fd479494ca651ae46f85417bc1c578216044df0b96522e357"
+      },
+      "status": "cleaned"
+    },
+    {
+      "error": null,
+      "input": {
+        "byte_length": 491169,
+        "format": "receipt",
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653462129179000-485.json",
+        "schema": "chrono-worktree-retained-input/v1",
+        "sha256": "51c1928735ed62d6b7dbb2daca7458bd11f5788bf2e04aa7c006abc1e1e635da",
+        "source_root": "/Users/macstudio2/chrono-harness"
+      },
+      "path": "/Users/macstudio2/ec91280d/stable-cleanup-integration-20261114",
+      "receipt": {
+        "path": ".chrono-harness/state/worktrees/cleanup-10264-1794653462129179000-485.json",
+        "sha256": "51c1928735ed62d6b7dbb2daca7458bd11f5788bf2e04aa7c006abc1e1e635da"
+      },
+      "status": "cleaned"
+    }
+  ],
+  "expected_repeated": [
+    {
+      "path": "/Users/macstudio2/chrono-retention-tree-progress-20261112",
+      "steps": 2,
+      "statuses": [
+        "preserved",
+        "failed"
+      ],
+      "receipts": [
+        null,
+        {
+          "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650941819003000-29.json",
+          "sha256": "565eca1483f0f83d032cf3a629295b274a265b2973c232b4e84b8a4402a9712b"
+        }
+      ]
+    },
+    {
+      "path": "/Users/macstudio2/chrono-retention-tree-progress-feature-20261112",
+      "steps": 2,
+      "statuses": [
+        "preserved",
+        "failed"
+      ],
+      "receipts": [
+        null,
+        {
+          "path": ".chrono-harness/state/worktrees/cleanup-10264-1794650943830747000-31.json",
+          "sha256": "ab14db2327d8a3d21ca89477c43f9ebf1c34ceaf2b6f3d51f7b12195d77e3064"
+        }
+      ]
+    },
+    {
+      "path": "/Users/macstudio2/chrono-verus-current-dev",
+      "steps": 2,
+      "statuses": [
+        "preserved",
+        "failed"
+      ],
+      "receipts": [
+        null,
+        {
+          "path": ".chrono-harness/state/worktrees/cleanup-10264-1794651058159836000-36.json",
+          "sha256": "6abb22943a2d7abf65b6b5e4fac885fede52b9e7730c4776b645415873e371ce"
+        }
+      ]
+    },
+    {
+      "path": "/Users/macstudio2/ec91280d/gentle-pebble",
+      "steps": 2,
+      "statuses": [
+        "preserved",
+        "preserved"
+      ],
+      "receipts": [
+        null,
+        null
+      ]
+    }
+  ]
+}

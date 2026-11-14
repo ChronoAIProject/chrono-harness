@@ -2,15 +2,38 @@
 //! mutable inventory. Multi-record exclusion is limited to actual graph edges.
 //! These synchronous mutations have no descendant owner. Their local leases
 //! end on return even while an unrelated fork holds incidental fd copies.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Only pending metadata edges of an already empty retiring report can advance
+/// without physical path exclusion. Final address retirement still needs it.
+pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
+    entries_empty: bool, pending_references: bool) -> (metadata_only: bool)
+    ensures metadata_only == (retiring && disposing && sealed && entries_empty
+        && pending_references),
+{
+    retiring && disposing && sealed && entries_empty && pending_references
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use crate::ownership::DirectoryLease;
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_release as verified;
 
 // A sweep observes independently bounded rounds. These counts describe actual
 // observations, not a deduplicated inventory or a new source of deletion rights.
+#[cfg(not(verus_keep_ghost))]
 struct SweepReport {
     value: Value,
 }
+#[cfg(not(verus_keep_ghost))]
 impl SweepReport {
     fn new(policy: &Policy) -> Self {
         Self {
@@ -118,6 +141,7 @@ impl SweepReport {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Object {
@@ -138,6 +162,7 @@ pub(super) struct Object {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Role {
     observation: Option<ObservationOrder>,
     schema: String,
@@ -152,6 +177,7 @@ struct Role {
 /// One actual request, qualified by its enrolled producer output rather than a clock.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct ObservationToken {
     pub role: String,
     pub epoch: String,
@@ -159,6 +185,7 @@ pub struct ObservationToken {
     pub attempt: u64,
     pub original: OriginalIdentity,
 }
+#[cfg(not(verus_keep_ghost))]
 impl ObservationToken {
     pub fn binding(&self) -> verified::ObservationBinding<'_> {
         verified::ObservationBinding {
@@ -174,6 +201,7 @@ impl ObservationToken {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct ObservationOrder {
     epoch: String,
     issued: u64,
@@ -182,21 +210,28 @@ struct ObservationOrder {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Address {
     path: String,
     output: Option<String>,
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Gate {
     leases: Vec<DirectoryLease>,
     objects: RefCell<BTreeMap<String, Object>>,
     roles: RefCell<BTreeMap<String, Role>>,
     paths: BTreeMap<String, PathBuf>,
+    exclusive_paths: BTreeSet<String>,
     maintenance: bool,
     retiring_report: Option<String>,
     retained_dependencies: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Gate {
+    pub(super) fn excludes_path(&self, path: &str) -> bool {
+        self.exclusive_paths.contains(path)
+    }
     pub(super) fn retiring_report(&self, id: &str) -> bool {
         self.retiring_report.as_deref() == Some(id)
     }
@@ -226,6 +261,7 @@ impl Gate {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Inventory {
     /// Reserve one request under only this object's existing consumer metadata.
     /// Membership protects the actual pending output, including unknown tasks.
@@ -566,14 +602,38 @@ impl Inventory {
         self.maintain_explicit_at(now()?)
     }
     pub fn maintain_explicit_at(&self, observed: u64) -> Result<Value, String> {
+        self.maintain_explicit_reporting_at(observed, None)
+    }
+    /// Stream every declared member and its unabridged original round to the
+    /// actual maintain report. The compact sweep's sample ceiling is unchanged.
+    pub fn maintain_explicit_observed(
+        &self,
+        mut observer: impl FnMut(&Value) -> Result<(), String>,
+    ) -> Result<Value, String> {
+        self.maintain_explicit_reporting_at(now()?, Some(&mut observer))
+    }
+    fn maintain_explicit_reporting_at(
+        &self,
+        observed: u64,
+        mut observer: Option<&mut dyn FnMut(&Value) -> Result<(), String>>,
+    ) -> Result<Value, String> {
         let began = Instant::now();
         let mut sweep = SweepReport::new(&self.policy);
+        // Observe all declaration namespaces before any round can recreate a
+        // missing sibling namespace. Keep the original IO error, not a later
+        // empty directory manufactured by an ordinary owner operation.
+        let declarations = ["transaction-gates", "objects", "roles"]
+            .map(|namespace| (namespace, fs::read_dir(self.directory.join(namespace))));
         sweep.value["terminal_quotas"] = json!(self.terminal_quotas_at(observed));
-        for namespace in ["transaction-gates", "objects", "roles"] {
+        for (namespace, entries) in declarations {
             sweep.value["enumeration"][namespace] = json!({"entries":0,"exhausted":false});
-            let entries = match fs::read_dir(self.directory.join(namespace)) {
+            let entries = match entries {
                 Ok(entries) => entries,
                 Err(error) => {
+                    if let Some(observer) = observer.as_deref_mut() {
+                        observer(&json!({"kind":"enumeration-error","namespace":namespace,
+                            "error":error.to_string()}))?;
+                    }
                     sweep.observation(
                         namespace,
                         None,
@@ -588,6 +648,10 @@ impl Inventory {
                 let entry = match entry {
                     Ok(entry) => entry,
                     Err(error) => {
+                        if let Some(observer) = observer.as_deref_mut() {
+                            observer(&json!({"kind":"enumeration-error","namespace":namespace,
+                                "error":error.to_string()}))?;
+                        }
                         sweep.observation(
                             namespace,
                             None,
@@ -602,6 +666,10 @@ impl Inventory {
                 let address = match entry.file_name().into_string() {
                     Ok(address) => address,
                     Err(_) => {
+                        if let Some(observer) = observer.as_deref_mut() {
+                            observer(&json!({"kind":"enumeration-error","namespace":namespace,
+                                "error":"declaration address is not UTF8; preserve it"}))?;
+                        }
                         sweep.observation(
                             namespace,
                             None,
@@ -611,7 +679,15 @@ impl Inventory {
                         continue;
                     }
                 };
-                let round = match namespace {
+                if let Some(observer) = observer.as_deref_mut() {
+                    let mut declaration = json!({"kind":"declaration","namespace":namespace,
+                        "address":address,"observed_unix_seconds":observed,
+                        "policy_sha256":sha256(&self.policy_bytes),"owner_root":self.root,
+                        "qualification":"owned by retention; reporting grants no disposal permission"});
+                    declaration["state"] = json!("see original bounded round");
+                    observer(&declaration)?;
+                }
+                let mut round = match namespace {
                     "transaction-gates" => self.metadata_round(|nodes| {
                         *nodes = 1;
                         self.retire_transaction(&address)
@@ -620,12 +696,45 @@ impl Inventory {
                     // an explicit caller selection. Let the same nonblocking
                     // reader refuse non-files, links and oversized metadata.
                     "objects" => {
-                        self.maintain_round(observed, Some(std::slice::from_ref(&address)))
+                        if observer.is_some() {
+                            self.with_round_budget(|| {
+                                self.partition_round_inventory(
+                                    observed,
+                                    Some(std::slice::from_ref(&address)),
+                                    true,
+                                )
+                            })
+                        } else {
+                            self.maintain_round(observed, Some(std::slice::from_ref(&address)))
+                        }
                     }
                     _ => {
                         self.metadata_round(|nodes| self.prune_role(&entry.path(), observed, nodes))
                     }
                 };
+                if let Some(observer) = observer.as_deref_mut() {
+                    if let Ok(round) = &mut round {
+                        if let Some(declarations) = round
+                            .as_object_mut()
+                            .unwrap()
+                            .remove("inventory_declarations")
+                        {
+                            for record in declarations.as_array().unwrap() {
+                                observer(
+                                    &json!({"kind":"declaration-state","namespace":namespace,
+                                    "address":record["id"],"source_round":address,"record":record,
+                                    "freshness":"state observed before original round; path measured after it"}),
+                                )?;
+                            }
+                        }
+                    }
+                    observer(&match &round {
+                        Ok(round) => json!({"kind":"round","namespace":namespace,
+                            "address":address,"original":round}),
+                        Err(error) => json!({"kind":"round","namespace":namespace,
+                            "address":address,"error":error,"action":"not-established"}),
+                    })?;
+                }
                 sweep.round(namespace, &address, round)?;
             }
             sweep.value["enumeration"][namespace]["exhausted"] = json!(exhausted);
@@ -634,6 +743,29 @@ impl Inventory {
         // Never sum their retained inventories or infer a global remaining count.
         sweep.value["elapsed_millis"] = json!(u64::try_from(began.elapsed().as_millis()).ok());
         Ok(sweep.value)
+    }
+
+    fn inventory_declaration(record: &Object, directory: &Path) -> Value {
+        let output = record.output.as_ref().map(|o| {
+            let allocated = o
+                .manifest
+                .entries
+                .iter()
+                .try_fold(0u64, |sum, e| sum.checked_add(e.allocated_bytes?));
+            json!({"id":o.id,"producer":o.producer,"identity":o.identity,
+                "phase":o.phase,"tree":o.tree,"expires":o.expires,
+                "outcome":o.outcome,"observed_return":o.observed_return,
+                "references":o.references,"removed_logical_bytes":o.removed_logical_bytes,
+                "sealed_measurement":{"sealed":o.manifest.sealed,
+                    "logical_bytes":if o.manifest.sealed {Some(o.manifest.bytes)} else {None},
+                    "allocated_bytes":if o.manifest.sealed {allocated} else {None},
+                    "unit":"bytes","freshness":"historical-manifest; observation time unknown",
+                    "scope":"manifest entries; may overlap other declarations"}})
+        });
+        json!({"id":record.id,"path":record.path,"output":output,
+            "metadata_path":directory.join("record.json"),
+            "incoming":record.incoming,"roles":record.roles,
+            "retired_capabilities":record.retired_leases,"metadata_expires":record.metadata_expires})
     }
     pub(super) fn removal_gate(&self, paths: &[String]) -> Result<Gate, String> {
         let (leases, directories) = self.path_gates(paths, true, true, true)?;
@@ -651,6 +783,7 @@ impl Inventory {
             objects: RefCell::new(BTreeMap::new()),
             roles: RefCell::new(BTreeMap::new()),
             paths: directories,
+            exclusive_paths: paths.iter().cloned().collect(),
             maintenance: false,
             retiring_report: None,
             retained_dependencies: BTreeSet::new(),
@@ -675,6 +808,14 @@ impl Inventory {
         observed: u64,
         originals: Option<&[String]>,
     ) -> Result<Value, String> {
+        self.partition_round_inventory(observed, originals, false)
+    }
+    fn partition_round_inventory(
+        &self,
+        observed: u64,
+        originals: Option<&[String]>,
+        report_inventory: bool,
+    ) -> Result<Value, String> {
         let began = self
             .round_began
             .get()
@@ -693,6 +834,9 @@ impl Inventory {
             "protected":[],"disposed":[],"scope":{"kind":"visited-components","complete":false},
             "legacy_unenrolled":"not-scanned; owner migration required","completed_work":"not-claimed"});
         let mut nodes = 0usize;
+        if report_inventory {
+            result["inventory_declarations"] = json!([]);
+        }
         let mut complete = true;
         let global = crate::verified_release::global_maintenance(originals);
         if let Some(originals) = originals {
@@ -758,14 +902,42 @@ impl Inventory {
             let attempted = (|| {
                 let gate = self.addressed_gate(&[id.clone()], &[], &[], None, true, false)?;
                 let owned: Vec<_> = gate.objects.borrow().keys().cloned().collect();
+                // Reuse exactly the records already loaded by this bounded
+                // component. No second metadata read, graph or round budget.
+                let declarations: Vec<_> = if report_inventory {
+                    gate.objects
+                        .borrow()
+                        .values()
+                        .map(|record| {
+                            Self::inventory_declaration(
+                                record,
+                                &self.directory.join("objects").join(&record.id),
+                            )
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
                 seen.extend(owned.iter().cloned());
                 self.maintain_locked(observed, &gate).map(|round| {
                     let observations = gate.measurements(self.policy.max_output_bytes);
-                    (round, owned, observations, gate.unvisited_relations.clone())
+                    (
+                        round,
+                        owned,
+                        observations,
+                        gate.unvisited_relations.clone(),
+                        declarations,
+                    )
                 })
             })();
             match attempted {
-                Ok((round, owned, observations, unvisited)) => {
+                Ok((round, owned, observations, unvisited, declarations)) => {
+                    if report_inventory {
+                        result["inventory_declarations"]
+                            .as_array_mut()
+                            .unwrap()
+                            .extend(declarations);
+                    }
                     measurements.extend(observations);
                     unvisited_relations.extend(unvisited);
                     nodes += round["nodes"].as_u64().ok_or("component round nodes")? as usize;
@@ -1131,6 +1303,7 @@ impl Inventory {
             verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
         let discover_under_lease = discovery.object_excluded;
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true, false)?;
+        let mut exclusive_paths: BTreeSet<String> = paths.iter().cloned().collect();
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
         if birth.is_some() && !occupied.is_empty() {
@@ -1198,11 +1371,11 @@ impl Inventory {
                 // reference component, not every independent output sharing
                 // that consumer. Keep its full declaration under exclusion;
                 // load/save below project only the visited members.
-                if let Some(record) = &record
-                    && !maintenance
-                {
-                    selected.extend(record.ids.iter().cloned());
-                    selected.extend(record.attached.iter().cloned());
+                if !maintenance {
+                    if let Some(record) = &record {
+                        selected.extend(record.ids.iter().cloned());
+                        selected.extend(record.attached.iter().cloned());
+                    }
                 }
                 observed_roles.insert(role, record);
                 continue;
@@ -1332,7 +1505,15 @@ impl Inventory {
                         r.output.is_some(),
                         initial.as_ref() == Some(&r.id),
                         retained_dependencies.contains(&r.id),
-                    )
+                    ) && !r.output.as_ref().is_some_and(|output| {
+                        metadata_only_retirement(
+                            retiring_report.as_ref() == Some(&r.id),
+                            output.phase == "disposing",
+                            output.manifest.sealed,
+                            output.manifest.entries.is_empty(),
+                            !output.references.is_empty(),
+                        )
+                    })
                 })
                 .map(|r| r.path.clone())
                 .collect();
@@ -1340,6 +1521,7 @@ impl Inventory {
                 self.path_gates(&target_paths, wait, !discover_under_lease, false)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
+            exclusive_paths.extend(target_paths);
         }
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
@@ -1474,6 +1656,7 @@ impl Inventory {
             objects: RefCell::new(records),
             roles: RefCell::new(role_records),
             paths: path_dirs,
+            exclusive_paths,
             maintenance,
             retiring_report,
             retained_dependencies,
@@ -1849,6 +2032,7 @@ impl Inventory {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn finalized(record: &Object) -> bool {
     verified::original_finalized(
         record.retired_leases.len(),
@@ -1858,6 +2042,7 @@ fn finalized(record: &Object) -> bool {
             .map(|output| (output.manifest.sealed, output.phase.as_str())),
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn objects_reference(outputs: &[OutputRecord], source: &str, target: &str) -> bool {
     outputs
         .iter()

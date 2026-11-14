@@ -153,6 +153,8 @@ action 名可为任意明确非空值，每项绑定全局唯一操作；测试 
 
 本仓测试项目由实际 `cargo test` 操作编译并执行，不另外登记没有当前调用方的 `cargo check` 或 `cargo build --tests`。生产构建、原行为测试、格式操作和同源 Verus 证明各保留其实际入口。缓存登记中的 `check.*` 是缓存 ID，生产者仍明确绑定 build／test 操作，不能把同名缓存误当成 Cargo check 的调用方。
 
+本仓还删除了已失去使用方的 12 项独立调试构建登记：identifiers、instructions、registration、filemap、routes、projects、cost、mixed、workflow、inputs、distribution 和 diagnostics。原测试使用方已迁到各自测试项目，bootstrap 不再安装其中的 CLI；发布由 release 配方按 manifest 独立构建，不读取这些 `build.*` action。FILEMAP 中对应九项无用输出占用声明一并删除。这里精简的是宿主配方；这些操作此前已不在现役检查计划中，因此不据此宣称日常 CI 减少构建时间，完整维护与验证成本未测。
+
 routes 专属测试直接编译真实库和自己的 Rust 工具，不读取生产二进制，因此自己的计划和单元缓存只消费测试 target。filemap、projects、inputs 和 workflow 的共享 Host 改由各自 Cargo target 编译 routes／projects 的唯一生产 main.rs，再按原路径复制、探测和执行；六计划删除两项重复生产构建和无使用方缓存，原测试断言、分组、线程与时限保留。生产 CLI 的独立构建和发布继续由原入口负责，完整成本收益未测。
 
 cache 专属测试同样将生产 `main.rs` 编译为 `chrono-cache-test-cli`，CLI 调用和 planner 路径／摘要／长度绑定一起迁移。自己的计划只保留原证明、格式检查及未过滤测试，不再另构建或缓存生产 target。native 发布测试仍消费生产 cache，生产 claim 保留，完整成本收益未测。

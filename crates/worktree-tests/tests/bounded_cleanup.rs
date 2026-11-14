@@ -1,12 +1,82 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_lifecycle::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn terminal_history_keeps_unknown_future_live_and_unexpired_records() {
+    let boundary = policy::retire_history(true, true, Some(100), 110, 10, false);
+    let young = policy::retire_history(true, true, Some(100), 109, 10, false);
+    let capacity = policy::retire_history(true, true, Some(100), 100, 10, true);
+    let unknown = policy::retire_history(true, true, None, 110, 0, true);
+    let future = policy::retire_history(true, true, Some(111), 110, 0, true);
+    let active = policy::retire_history(false, true, Some(100), 110, 0, true);
+    let busy = policy::retire_history(true, false, Some(100), 110, 0, true);
+    let maximum = policy::retire_history(true, true, Some(u64::MAX), u64::MAX, 1, false);
+    expect(boundary && !young && capacity && !unknown && !future && !active && !busy && !maximum);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cache_history_preserves_current_generations_and_unknown_completion() {
+    let expired = policy::retire_cache_history(true, 1, 2, true, Some(100), 110, 10, false);
+    let capacity = policy::retire_cache_history(true, 1, 2, true, Some(100), 100, 10, true);
+    let current = policy::retire_cache_history(true, 2, 2, true, Some(100), 110, 0, true);
+    let future = policy::retire_cache_history(true, 3, 2, true, Some(100), 110, 0, true);
+    let unknown = policy::retire_cache_history(true, 1, 2, true, None, 110, 0, true);
+    let incomplete = policy::retire_cache_history(false, 1, 2, true, Some(100), 110, 0, true);
+    let busy = policy::retire_cache_history(true, 1, 2, false, Some(100), 110, 0, true);
+    expect(expired && capacity && !current && !future && !unknown && !incomplete && !busy);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn reusable_outputs_wait_for_release_and_evidence_keeps_its_own_permission() {
+    use policy::Disposition::*;
+    expect(policy::select_artifact(&Dispose, false, false));
+    expect(policy::select_artifact(&Dispose, true, true));
+    expect(!policy::select_artifact(&FinishDispose, false, false));
+    expect(!policy::select_artifact(&FinishDispose, false, true));
+    expect(policy::select_artifact(&FinishDispose, true, false));
+    expect(policy::select_artifact(&FinishDispose, true, true));
+    expect(!policy::select_artifact(&Retain, false, false));
+    expect(!policy::select_artifact(&Retain, true, true));
+    expect(!policy::select_artifact(&EvidenceRetain, true, false));
+    expect(policy::select_artifact(&EvidenceRetain, false, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn release_requests_bind_only_the_requested_cache_generation() {
+    expect(!policy::reusable_release(false, 7, None));
+    expect(policy::reusable_release(false, 7, Some(7)));
+    expect(!policy::reusable_release(false, 8, Some(7)));
+    expect(!policy::reusable_release(false, 7, Some(8)));
+    expect(!policy::reusable_release(false, u64::MAX, None));
+    expect(!policy::reusable_release(false, u64::MAX, Some(0)));
+    expect(policy::reusable_release(false, u64::MAX, Some(u64::MAX)));
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
+#[cfg(not(verus_keep_ghost))]
 fn main_host() -> Host {
     main_host_mode("rebuild-evidence")
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn reusable_cache_survives_separate_operations_until_explicit_release() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -22,6 +92,7 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
         assert_eq!(fs::read(h.root.join("output λ/cache")).unwrap(), b"rebuilt");
+        assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(!h.root.join("nested/cache").exists());
         fs::create_dir_all(h.root.join("nested/cache")).unwrap();
         fs::write(h.root.join("nested/cache/temporary"), b"disposable").unwrap();
@@ -50,8 +121,10 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
     }
     fs::create_dir_all(h.root.join("nested")).unwrap();
     std::os::unix::fs::symlink(&outside, h.root.join("nested/cache")).unwrap();
-    let (code, failed, _) = h.auto("finish", &[]);
-    assert_ne!(code, 0, "{failed}");
+    let (code, failed, handoff_error) = h.auto("finish", &[]);
+    assert_eq!(code, 0, "{failed} {handoff_error}");
+    let (code, cleanup, _) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{cleanup}");
     assert!(h.root.join("output λ/cache").is_file());
     assert_eq!(
         h.ledger()["entries"][0]["enrollment"]["cache_release"],
@@ -79,10 +152,12 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
         "an old finish cannot release a new generation"
     );
     assert_eq!(h.auto("finish", &[]).0, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!h.root.join("output λ").exists());
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -114,12 +189,19 @@ fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.join("output λ").exists());
     assert!(target.join("payload").is_file());
     assert!(target.join(".chrono-harness/state/evidence").is_file());
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn linked_terminal_handoff_rotates_completed_cache_generations() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -164,6 +246,12 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
     assert_eq!(entry["status"], "retained");
     assert_eq!(
@@ -172,7 +260,7 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
         "{finished}"
     );
     assert!(
-        finished["cache_history_rotation"]
+        finished_cleanup["cache_history_rotation"]
             .as_array()
             .unwrap()
             .iter()
@@ -183,6 +271,7 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
     assert!(target.join(".chrono-harness/state/evidence").is_file());
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
     let h = main_host();
     adopt_lifecycle_retention(&h);
@@ -206,6 +295,7 @@ fn cache_history_host(keep_seconds: u64, max_entries: usize) -> Host {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cache_history_releases_old_generations_and_their_owned_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -224,6 +314,9 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     for round in 0..3 {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
+        assert!(used["drain"].as_array().unwrap().is_empty());
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
         if round == 1 {
             let entry = h.ledger()["entries"][0].clone();
             let attempt = entry["cache_attempts"][0].clone();
@@ -324,6 +417,7 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -332,6 +426,9 @@ fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     for _ in 0..3 {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
+        assert!(used["drain"].as_array().unwrap().is_empty());
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
     }
     assert_eq!(h.auto("maintain", &[]).0, 0);
     let mut ledger = h.ledger();
@@ -399,9 +496,11 @@ fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     assert_eq!(remaining[1], protected[2]);
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn main_host_mode(mode: &str) -> Host {
     configure_main(Host::new("payload"), mode)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn configure_main(h: Host, mode: &str) -> Host {
     h.kernel_cleanup();
     super::automatic::native_consumer(&h, mode);
@@ -414,6 +513,7 @@ pub(super) fn configure_main(h: Host, mode: &str) -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 const CARGO_FILES: &[(&str, &[u8])] = &[
     (
         "producer/Cargo.toml",
@@ -441,6 +541,7 @@ const CARGO_FILES: &[(&str, &[u8])] = &[
     ),
 ];
 
+#[cfg(not(verus_keep_ghost))]
 fn cargo_host() -> Host {
     let h = configure_main(Host::retained("payload"), "bounded-cargo");
     let mut cfg = json(&fs::read(h.root.join(CONFIG)).unwrap()).unwrap();
@@ -483,6 +584,7 @@ fn cargo_host() -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cargo_plan(root: &Path, hold: Option<&str>) {
     fs::create_dir_all(root.join(".chrono-harness/state")).unwrap();
     fs::write(root.join(".chrono-harness/state/cargo-plan.json"), serde_json::to_vec(&value!({
@@ -490,11 +592,13 @@ fn cargo_plan(root: &Path, hold: Option<&str>) {
     })).unwrap()).unwrap();
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cost(root: &Path) -> Value {
     json(&fs::read(root.join(".chrono-harness/state/cargo-cost.json")).unwrap()).unwrap()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -560,6 +664,13 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
             &["--path", target.to_str().unwrap(), "--artifacts-only"],
         );
         assert_eq!(code, 0, "{} {error}", cleaned["error"]);
+        // 原业务交接与实际清理分别核原结果。
+        let (cleaned_cleanup_code, cleaned_cleanup, cleaned_cleanup_error) =
+            h.auto("maintain", &[]);
+        assert_eq!(
+            cleaned_cleanup_code, 0,
+            "{cleaned_cleanup} {cleaned_cleanup_error}"
+        );
         let cleanup_seconds = began.elapsed().as_secs_f64();
         for project in ["producer", "tests"] {
             assert!(
@@ -600,6 +711,7 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -641,6 +753,7 @@ fn managed_cargo_handshake_consumes_the_actual_failed_producer_and_joins_it() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -664,6 +777,7 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
         .unwrap();
         assert!(child.wait_with_output().unwrap().status.success());
         assert_eq!(h.auto("finish", &[]).0, 0);
+        assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(!h.root.join("independent/tests/target").exists());
         if stage == "installation" {
             assert!(
@@ -676,6 +790,7 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second_consumer() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -723,11 +838,13 @@ fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second
         "joined",
     )
     .unwrap();
-    // Ordinary use retries until the actual final descriptor closes; no PID/age decision.
+    // Business continues; actual maintenance retries until the final descriptor closes.
     let began = std::time::Instant::now();
     loop {
         let (code, used, error) = h.auto("use", &["--operation", "test.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
         if !h.root.join("output λ").exists() {
             break;
         }
@@ -738,6 +855,7 @@ fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_objects() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -779,6 +897,7 @@ fn main_partial_disposal_retry_keeps_business_and_cleanup_errors_and_remaining_o
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -795,13 +914,19 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
     assert_eq!(imported["managed_process"], Value::Null);
     let (code, released, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{released} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (released_cleanup_code, released_cleanup, released_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        released_cleanup_code, 0,
+        "{released_cleanup} {released_cleanup_error}"
+    );
     let descriptor = &released["main_cache_release"];
     let raw = fs::read(h.root.join(descriptor["path"].as_str().unwrap())).unwrap();
     assert_eq!(sha256(&raw), descriptor["sha256"]);
     let release = json(&raw).unwrap();
     assert_eq!(release["path"], value!(h.root));
     assert_eq!(release["task_completion"], "not-claimed");
-    assert_eq!(released["drain"].as_array().unwrap().len(), 1);
+    assert_eq!(released_cleanup["drain"].as_array().unwrap().len(), 1);
     assert!(!h.root.join("output λ").exists());
     assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
     assert_eq!(git(&h.root, &["show-ref"]), refs);
@@ -819,6 +944,7 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -855,6 +981,12 @@ fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
     .unwrap();
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!h.root.join("output λ").exists());
     assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
     assert_eq!(git(&h.root, &["show-ref"]), refs);
@@ -878,6 +1010,7 @@ fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -892,16 +1025,23 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!h.root.join("output λ").exists());
     assert!(h.root.join("nested/cache/unknown-history").exists());
     assert!(
-        drain_report(&finished["drain"][0])
+        drain_report(&finished_cleanup["drain"][0])
             .to_string()
             .contains("pre-existing output has no adopted consumer release")
     );
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_cleanup() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -926,9 +1066,11 @@ fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_clean
     assert!(h.root.join("output λ/cache").exists());
     fs::write(ledger_path, original).unwrap();
     assert_eq!(h.auto("finish", &[]).0, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -945,6 +1087,12 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     let refs = git(&h.root, &["show-ref"]);
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert_eq!(git(&h.root, &["show-ref"]), refs);
     assert!(!h.root.join("output λ").exists());
     assert!(h.ledger()["entries"][0]["terminal"].is_null());
@@ -952,6 +1100,7 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     assert_eq!(code, 0, "{used} {error}");
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn historical_host() -> Host {
     let h = main_host();
     for path in ["output λ", "nested/cache"] {
@@ -962,6 +1111,7 @@ fn historical_host() -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn custody_plan(h: &Host, artifacts: &[&str]) -> String {
     let path = ".chrono-harness/state/current-custody.json";
     let plan = value!({"schema":"chrono-main-cache-custody/v1", "path":h.root,
@@ -972,6 +1122,7 @@ fn custody_plan(h: &Host, artifacts: &[&str]) -> String {
     path.into()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn custody(h: &Host, plan: &str) -> (i32, Value, String) {
     h.auto(
         "migrate",
@@ -980,6 +1131,7 @@ fn custody(h: &Host, plan: &str) -> (i32, Value, String) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_historical_custody_reclaims_selected_outputs_and_preserves_original_enrollment() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1017,6 +1169,7 @@ fn main_historical_custody_reclaims_selected_outputs_and_preserves_original_enro
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_historical_custody_requires_exclusion_explicit_scope_and_source_protection() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1054,6 +1207,7 @@ fn main_historical_custody_requires_exclusion_explicit_scope_and_source_protecti
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn main_historical_custody_publication_retry_and_partial_disposal_preserve_originals() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1105,5 +1259,6 @@ fn main_historical_custody_publication_retry_and_partial_disposal_preserve_origi
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     assert!(h.root.join("output λ/cache").exists());
     assert_eq!(h.auto("use", &["--operation", "test.consumer"]).0, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!h.root.join("output λ").exists());
 }

@@ -1,40 +1,39 @@
-//! Host-selected historical owner migration through the existing retention owner.
+//! Explicit maintenance, migration and consumer requests for the retention owner.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use crate::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub(crate) fn within_bound(length: u64, limit: u64) -> (fits: bool)
+    ensures fits == (length <= limit),
+{
+    length <= limit
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::retention::{Consumer, Inventory, OriginalIdentity, POLICY_PATH};
-use crate::{CliOutput, decode, no_symlink_parents, ownership::Lease, sha256};
+#[cfg(not(verus_keep_ghost))]
+use crate::{CliOutput, decode, no_symlink_parents, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, io::Read, path::Path};
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Evidence {
     pub path: String,
     pub sha256: String,
 }
-#[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct Release {
-    pub receipt: Evidence,
-    pub pointer: String,
-    pub expected: Value,
-}
-#[derive(Clone, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub(super) struct Historical {
-    pub producer: String,
-    pub path: String,
-    pub producer_source: Evidence,
-    pub receipt: Evidence,
-    pub receipt_schema: String,
-    pub output_pointer: Option<String>,
-    pub outcome_pointer: String,
-    pub owner_lease: String,
-    pub owner_lease_identity: String,
-    pub roots: Vec<String>,
-    pub release: Option<Release>,
-}
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "kebab-case", deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 enum Request {
     Maintain {
         originals: Option<Vec<String>>,
@@ -42,13 +41,6 @@ enum Request {
     MigratePolicy {
         previous_policy: Evidence,
         originals: Option<Vec<String>>,
-    },
-    Enroll {
-        enrollment: String,
-        expected_identity: String,
-    },
-    Release {
-        enrollment: String,
     },
     ProtectConsumer {
         declaration: Evidence,
@@ -78,10 +70,11 @@ enum Request {
         report: crate::prepared::Original,
     },
 }
+#[cfg(not(verus_keep_ghost))]
 fn evidence(root: &Path, e: &Evidence) -> Result<Vec<u8>, String> {
     let path = no_symlink_parents(root, &e.path)?;
     let m = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
-    if !m.is_file() || m.len() > 1024 * 1024 {
+    if !m.is_file() || !within_bound(m.len(), 1024 * 1024) {
         return Err("migration evidence must be a bounded regular file".into());
     }
     let mut bytes = Vec::new();
@@ -90,21 +83,17 @@ fn evidence(root: &Path, e: &Evidence) -> Result<Vec<u8>, String> {
         .take(1024 * 1024 + 1)
         .read_to_end(&mut bytes)
         .map_err(|e| e.to_string())?;
-    if bytes.len() > 1024 * 1024 || sha256(&bytes) != e.sha256 {
+    if !within_bound(bytes.len() as u64, 1024 * 1024) || sha256(&bytes) != e.sha256 {
         return Err("migration producer/evidence identity differs".into());
     }
     Ok(bytes)
 }
-fn owner(root: &Path, rule: &Historical) -> Result<Lease, String> {
-    let path = no_symlink_parents(root, &rule.owner_lease)?;
-    Lease::acquire(&path, Some(&rule.owner_lease_identity), false, true, None)?
-        .ok_or("historical producer/readers are live; original preserved".into())
-}
+#[cfg(not(verus_keep_ghost))]
 fn bounded_json(root: &Path, path: &str, limit: u64) -> Result<(Value, Vec<u8>), String> {
     let path = no_symlink_parents(root, path)?;
     let metadata = fs::symlink_metadata(&path)
         .map_err(|e| format!("delivery input {}: {e}", path.display()))?;
-    if !metadata.is_file() || metadata.len() > limit {
+    if !metadata.is_file() || !within_bound(metadata.len(), limit) {
         return Err("delivery input must be a bounded regular file".into());
     }
     let mut raw = Vec::new();
@@ -113,11 +102,12 @@ fn bounded_json(root: &Path, path: &str, limit: u64) -> Result<(Value, Vec<u8>),
         .take(limit + 1)
         .read_to_end(&mut raw)
         .map_err(|e| e.to_string())?;
-    if raw.len() as u64 > limit {
+    if !within_bound(raw.len() as u64, limit) {
         return Err("delivery input byte bound".into());
     }
     Ok((decode(&raw)?, raw))
 }
+#[cfg(not(verus_keep_ghost))]
 fn execute(root: &Path, request: Request) -> Result<Value, String> {
     let inventory = Inventory::adopted(root)?.ok_or("host has not adopted output retention")?;
     match request {
@@ -178,69 +168,6 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
             previous_policy,
             originals,
         } => inventory.migrate_policy(&evidence(root, &previous_policy)?, originals.as_deref()),
-        Request::Enroll {
-            enrollment,
-            expected_identity,
-        } => {
-            let rule = inventory.historical(&enrollment)?.clone();
-            for evidence in [&rule.producer_source, &rule.receipt]
-                .into_iter()
-                .chain(rule.release.as_ref().map(|r| &r.receipt))
-            {
-                crate::relative_path(&evidence.path)?;
-                if evidence.path == rule.path
-                    || evidence.path.starts_with(&format!("{}/", rule.path))
-                {
-                    return Err("historical producer/release evidence must remain outside the disposable output".into());
-                }
-            }
-            let exclusion = owner(root, &rule)?;
-            evidence(root, &rule.producer_source)?;
-            let receipt_bytes = evidence(root, &rule.receipt)?;
-            let receipt: Value = decode(&receipt_bytes)?;
-            if receipt["schema"] != rule.receipt_schema
-                || rule
-                    .output_pointer
-                    .as_ref()
-                    .is_some_and(|p| receipt.pointer(p) != Some(&json!(rule.path)))
-            {
-                return Err("historical producer receipt output/schema differs".into());
-            }
-            let outcome = receipt
-                .pointer(&rule.outcome_pointer)
-                .ok_or("historical original outcome missing")?
-                .clone();
-            if crate::artifact_disposal::identity(&no_symlink_parents(root, &rule.path)?)?
-                != expected_identity
-            {
-                return Err("historical output identity changed".into());
-            }
-            exclusion.stable()?;
-            let publication=inventory.begin_rooted(&rule.producer,&rule.path,json!({"enrollment":enrollment,"producer_source":rule.producer_source.path,"producer_source_sha256":rule.producer_source.sha256,"original_receipt":rule.receipt.path,"original_receipt_sha256":rule.receipt.sha256,"original_outcome":outcome}),&rule.roots)?;
-            let id = publication.id().to_owned();
-            publication.complete(json!({"enrollment":enrollment,"producer_source":rule.producer_source.path,"producer_source_sha256":rule.producer_source.sha256,"original_receipt":rule.receipt.path,"original_receipt_sha256":rule.receipt.sha256,"original_outcome":outcome}))?;
-            exclusion.stable()?;
-            Ok(
-                json!({"schema":"chrono-historical-enrollment/v1","id":id,"path":rule.path,"roots":rule.roots,"original_outcome":outcome,"completion":"not-established","disposal":"not-attempted"}),
-            )
-        }
-        Request::Release { enrollment } => {
-            let rule = inventory.historical(&enrollment)?.clone();
-            let exclusion = owner(root, &rule)?;
-            let release = rule
-                .release
-                .as_ref()
-                .ok_or("historical consumer release evidence is not registered")?;
-            let receipt: Value = decode(&evidence(root, &release.receipt)?)?;
-            if receipt.pointer(&release.pointer) != Some(&release.expected) {
-                return Err("historical consumer release condition not met".into());
-            }
-            exclusion.stable()?;
-            inventory.release_historical(&enrollment, &rule.roots)?;
-            Ok(
-                json!({"schema":"chrono-historical-release/v1","enrollment":enrollment,"released_roots":rule.roots,"disposal":"not-attempted","completion":"not-established"}),
-            )
-        }
         Request::AcknowledgeDelivery {
             report,
             report_sha256,
@@ -249,6 +176,7 @@ fn execute(root: &Path, request: Request) -> Result<Value, String> {
         } => inventory.acknowledge_delivery(&report, &report_sha256, artifact_id, &artifact_digest),
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn outside_originals(path: &str, originals: &[OriginalIdentity]) -> Result<(), String> {
     crate::relative_path(path)?;
     if originals
@@ -261,6 +189,7 @@ fn outside_originals(path: &str, originals: &[OriginalIdentity]) -> Result<(), S
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn consumer(root: &Path, declaration: &Evidence) -> Result<Consumer, String> {
     let consumer: Consumer = decode(&evidence(root, declaration)?)?;
     if consumer.schema != "chrono-retention-consumer/v1"
@@ -272,6 +201,7 @@ fn consumer(root: &Path, declaration: &Evidence) -> Result<Consumer, String> {
     outside_originals(&declaration.path, &consumer.originals)?;
     Ok(consumer)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn command(args: &[&str]) -> CliOutput {
     let result = (|| {
         if let [
@@ -348,7 +278,7 @@ pub fn command(args: &[&str]) -> CliOutput {
             .take(65537)
             .read_to_end(&mut bytes)
             .map_err(|e| e.to_string())?;
-        if bytes.len() > 65536 {
+        if !within_bound(bytes.len() as u64, 65536) {
             return Err("retention request bound".into());
         }
         execute(&root, decode(&bytes)?)

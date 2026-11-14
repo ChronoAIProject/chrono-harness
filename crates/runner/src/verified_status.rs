@@ -30,6 +30,16 @@ pub mod snapshot_export;
 
 verus! {
 
+pub fn admit_relative_path(value: &str) -> (out: Result<(), &str>)
+    ensures match out {
+        Ok(()) => paths::relative_path(value.spec_bytes()),
+        Err(invalid) => invalid@ == value@ && !paths::relative_path(value.spec_bytes()),
+    },
+{
+    if paths::valid_relative_path(value.as_bytes()) { Ok(()) }
+    else { Err(value) }
+}
+
 /// Only the synchronous owner releases a local directory operation on return.
 pub fn release_local_directory(local: bool, owner_pid: u32, current_pid: u32) -> (out: bool)
     ensures out == (local && owner_pid == current_pid),
@@ -323,16 +333,6 @@ impl<'a> RegistryPathError<'a> {
             Self::Invalid { path } => format_invalid(path),
         }
     }
-}
-
-pub fn admit_relative_path(value: &str) -> (out: Result<(), &str>)
-    ensures match out {
-        Ok(()) => paths::relative_path(value.spec_bytes()),
-        Err(invalid) => invalid@ == value@ && !paths::relative_path(value.spec_bytes()),
-    },
-{
-    if paths::valid_relative_path(value.as_bytes()) { Ok(()) }
-    else { Err(value) }
 }
 
 pub open spec fn registry_path_valid(row: Option<&str>) -> bool {

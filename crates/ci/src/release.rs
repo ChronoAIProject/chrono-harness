@@ -1,5 +1,6 @@
 //! Explicit native-release workflow projection; commands remain host-owned.
 use super::{action, scalar, shell};
+pub use crate::verified_literals::publisher_success_gate;
 use chrono_harness::{decode, relative_path};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -406,6 +407,15 @@ fn render_unit<'a>(
                     format!("always() && (inputs.channel == 'stable' || success()) && {condition}");
             } else if delivery.promotion_build_jobs.contains(&job.id) {
                 condition.push_str(" && inputs.channel != 'stable'");
+            } else if publisher_success_gate(job.always, job.needs.contains(&delivery.publisher)) {
+                // 正式晋升跳过构建祖先；普通消费者只核显式直接依赖。
+                let dependencies = job
+                    .needs
+                    .iter()
+                    .map(|id| format!("needs.{id}.result == 'success'"))
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                condition = format!("always() && {dependencies} && {condition}");
             }
         }
     }

@@ -2,7 +2,7 @@
 
 `chrono-diagnostics` 负责 Rust 的 `chrono-log/v1` 和 `chrono-error/v1` 记录。它是独立库，有专属 `diagnostics-tests` 项目，不依赖 runner 或 Git。核心记录和 tracing 层不依赖宿主目录；`runtime` 适配器从明确宿主根读取日志选择。宿主登记它的构建、测试计划、输入、输出和 CI 单元。
 
-测试计划直接由 `test.diagnostics-tests` 编译生产库和测试自己的日志子进程，只使用测试项目的独立 target；该单元也只恢复、保存这份编译缓存。日常 `build.diagnostics` 仍可独立构建生产库，其 target 没有测试使用方，因此不加入测试前置或单元缓存。
+测试计划直接由 `test.diagnostics-tests` 编译生产库和测试自己的日志子进程，只使用测试项目的独立 target；该单元也只恢复、保存这份编译缓存。生产使用方通过自己的 Cargo 构建编译该库；没有独立使用方的 `build.diagnostics` 登记已删除。
 
 ## 保留原错误及其原因
 
@@ -45,6 +45,8 @@ CI 的 `chrono-log-stderr/v1` 仍要求原 stderr：检查 logger 在保留该�
 `LogFailure` 实现 `RecordedError`，包括共享的保留失败，因此外层可以把真实日志异常作为相关错误附上。原生 IO 记录与 `NativeIoError` 共用实现，尝试字节和明确的 write／flush 阶段继续可用；记录错误不代表错误已经成功发布。
 
 ## runner 的输出处理范围
+
+有界 retention 维护的 debug 事件 `retention.round.component` 记录同一轮开始以来的累计微秒：进入组件、加载完成、处置准备完成、处置返回和最终保存完成。事件在本组件的有界工作后发出，同时记录实际节点、移除字节及原毫秒预算。使用方按同一事件内相邻检查点作差，区分地址准备、加载、处置与保存；墙钟观察不证明 CPU 原因。清理进度及繁忙原件回归通过已有 logger 将这些事件写入原 stderr，由原检查操作的输出上限和原件保留政策负责，不新增日志目录或后台任务。诊断不改变原维护轮数、线程、预算及断言，也不代表旧失败已修复；启用 debug 的实际成本仍未测。
 
 runner 的无效 UTF-8 参数路径使用共享 logger，不写 stdout，退出 2。命令分发后的全部 `CliOutput` 消费者使用 runner 统一发布逻辑，两个原输出通道分别尝试写入和刷新。成功时保留原字节与操作退出码；write 或 flush 失败时退出 2，保留原有类型 IO 值、通道、阶段、已确认字节数和原操作结果，并另存另一通道失败，不重放完整内容。
 

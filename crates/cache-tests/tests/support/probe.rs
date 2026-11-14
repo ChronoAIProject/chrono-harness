@@ -1,4 +1,24 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
 use std::io::Write;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+fn expected_cargo_args() -> (args: [&'static str; 4])
+    ensures
+        args[0]@ == "test"@,
+        args[1]@ == "--locked"@,
+        args[2]@ == "--manifest-path"@,
+        args[3]@ == "crates/cache-tests/Cargo.toml"@,
+{
+    ["test", "--locked", "--manifest-path", "crates/cache-tests/Cargo.toml"]
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     let args = if args.first().map(String::as_str) == Some("--no-optional-locks") {
@@ -45,15 +65,7 @@ fn main() {
         }
 
         "cargo" => {
-            assert_eq!(
-                &args[1..],
-                [
-                    "test",
-                    "--locked",
-                    "--manifest-path",
-                    "crates/cache-tests/Cargo.toml"
-                ]
-            );
+            assert_eq!(&args[1..], expected_cargo_args());
             assert_eq!(std::env::var("CARGO_INCREMENTAL").unwrap(), "1");
             let project = std::path::Path::new("crates/cache-tests");
             let target = project.join("target/debug");

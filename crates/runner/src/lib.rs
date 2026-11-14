@@ -2,6 +2,8 @@
 pub use chrono_diagnostics::runtime::cli as logged_main;
 pub use chrono_diagnostics::runtime::cli_at as logged_main_at;
 pub use chrono_diagnostics::runtime::diagnostic as log_cli_error;
+pub use verified_status::admit_relative_path;
+pub use verus_builtin_macros::verus;
 pub mod artifact_disposal;
 mod canonical_request;
 mod checkout;
@@ -44,6 +46,7 @@ pub use facts_inputs::JsonGuardReferences;
 pub mod full;
 pub mod initial;
 pub mod input_file;
+pub mod maintenance_signal;
 pub mod observation;
 pub mod ownership;
 pub mod prepared;
@@ -64,7 +67,6 @@ pub mod verified_release;
 pub mod verified_status;
 pub mod verified_verifier;
 pub use verified_status::{CheckResult, Status};
-pub use verus_builtin_macros::verus;
 pub mod wire;
 use chrono_diagnostics::error::{ErrorRecord, Failure, NativeIoError};
 #[cfg(unix)]
@@ -348,8 +350,7 @@ pub fn file_identity(path: &Path) -> Result<(String, u64), String> {
     copy_hashed(file, std::io::sink())
 }
 pub fn relative_path(value: &str) -> Result<(), String> {
-    verified_status::admit_relative_path(value)
-        .map_err(|invalid| format!("invalid relative path: {invalid:?}"))
+    admit_relative_path(value).map_err(|invalid| format!("invalid relative path: {invalid:?}"))
 }
 pub fn no_symlink_parents(root: &Path, relative: &str) -> Result<PathBuf, String> {
     no_symlink_parents_detailed(root, relative).map_err(|error| error.message)
@@ -1905,29 +1906,29 @@ fn run_process_inner_with_stdout(
         };
         if let Some(paths) = evidence.as_ref() {
             let validate_launch = !launch_publication_failed;
-            if let Err(error) = validate_launch_evidence_detailed(paths.launch, &process)
-                && validate_launch
-            {
-                process.failure = Some(match process.failure.take() {
-                    Some(original) => format!("{original}; {error}"),
-                    None => error.to_string(),
-                });
-                let detail = match process.failure_cause.take() {
-                    Some(original) => Failure::wrap(
-                        "E_PROCESS",
-                        original.message.clone(),
-                        SharedProcessFailure(original),
-                    )
-                    .with_related("launch_evidence", error),
-                    None => {
-                        Failure::wrap("E_PROCESS_LAUNCH_EVIDENCE", error.message.clone(), error)
-                    }
-                };
-                process.failure_record = Some(detail.record());
-                process.failure_cause = Some(Arc::new(ProcessFailure {
-                    message: detail.to_string(),
-                    error: detail,
-                }));
+            if let Err(error) = validate_launch_evidence_detailed(paths.launch, &process) {
+                if validate_launch {
+                    process.failure = Some(match process.failure.take() {
+                        Some(original) => format!("{original}; {error}"),
+                        None => error.to_string(),
+                    });
+                    let detail = match process.failure_cause.take() {
+                        Some(original) => Failure::wrap(
+                            "E_PROCESS",
+                            original.message.clone(),
+                            SharedProcessFailure(original),
+                        )
+                        .with_related("launch_evidence", error),
+                        None => {
+                            Failure::wrap("E_PROCESS_LAUNCH_EVIDENCE", error.message.clone(), error)
+                        }
+                    };
+                    process.failure_record = Some(detail.record());
+                    process.failure_cause = Some(Arc::new(ProcessFailure {
+                        message: detail.to_string(),
+                        error: detail,
+                    }));
+                }
             }
             process.launch_original = launch_descriptor(paths.root, paths.launch);
         }

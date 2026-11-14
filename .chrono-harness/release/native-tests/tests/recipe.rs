@@ -1,10 +1,98 @@
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
 #[path = "support/recipe.rs"]
 mod fixture;
+#[cfg(verus_keep_ghost)]
+use super::policy::identifiers;
+#[cfg(not(verus_keep_ghost))]
 use chrono_host_release::recipe::{Loaded, Scope};
+#[cfg(not(verus_keep_ghost))]
+use chrono_identifiers as identifiers;
+#[cfg(not(verus_keep_ghost))]
 use fixture::Fixture;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, os::unix::fs::symlink};
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
+verus! {
+fn expected_test_threads(owner: &str) -> (out: Option<&'static str>)
+    ensures
+        if owner@ == "worktree-tests"@ {
+            out is Some && out.unwrap()@ == "--test-threads=8"@
+        } else if owner@ == "judge-workflow-tests"@ || owner@ == "pr-tests"@ {
+            out is Some && out.unwrap()@ == "--test-threads=2"@
+        } else { out is None },
+{
+    if identifiers::equal_text(owner, "worktree-tests") {
+        Some("--test-threads=8")
+    } else if identifiers::equal_text(owner, "judge-workflow-tests")
+        || identifiers::equal_text(owner, "pr-tests") {
+        Some("--test-threads=2")
+    } else { None }
+}
+
+fn expect_thread_argument(actual: Option<&str>, expected: Option<&str>)
+    requires match (actual, expected) {
+        (Some(a), Some(e)) => a@ == e@,
+        (None, None) => true,
+        _ => false,
+    },
+{
+    match (actual, expected) {
+        (Some(a), Some(e)) => { if !identifiers::equal_text(a, e) { panic!(); } },
+        (None, None) => (),
+        _ => panic!(),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn registered_thread_arguments_keep_all_three_exact_owners() {
+    proof {
+        reveal_strlit("worktree-tests"); reveal_strlit("judge-workflow-tests");
+        reveal_strlit("pr-tests"); reveal_strlit("cache-tests");
+        assert("worktree-tests"@.len() == 14);
+        assert("judge-workflow-tests"@.len() == 20);
+        assert("pr-tests"@.len() == 8); assert("cache-tests"@.len() == 11);
+    }
+    expect_thread_argument(expected_test_threads("worktree-tests"), Some("--test-threads=8"));
+    expect_thread_argument(expected_test_threads("judge-workflow-tests"), Some("--test-threads=2"));
+    expect_thread_argument(expected_test_threads("pr-tests"), Some("--test-threads=2"));
+    expect_thread_argument(expected_test_threads("cache-tests"), None);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unknown_case_unicode_and_nul_owners_do_not_gain_thread_arguments() {
+    proof {
+        reveal_strlit("worktree-tests"); reveal_strlit("judge-workflow-tests");
+        reveal_strlit("pr-tests");
+        reveal_strlit(""); reveal_strlit("Cache-tests"); reveal_strlit("cache-tests\0");
+        reveal_strlit("Worktree-tests"); reveal_strlit("worktree-tests\0");
+        reveal_strlit("缓存/λ");
+        assert("worktree-tests"@.len() == 14);
+        assert("judge-workflow-tests"@.len() == 20);
+        assert("pr-tests"@.len() == 8);
+        assert(""@.len() == 0); assert("Cache-tests"@.len() == 11);
+        assert("cache-tests\0"@.len() == 12); assert("Worktree-tests"@.len() == 14);
+        assert("worktree-tests\0"@.len() == 15); assert("缓存/λ"@.len() == 4);
+        assert("Worktree-tests"@[0] != "worktree-tests"@[0]);
+    }
+    expect_thread_argument(expected_test_threads(""), None);
+    expect_thread_argument(expected_test_threads("Cache-tests"), None);
+    expect_thread_argument(expected_test_threads("cache-tests\0"), None);
+    expect_thread_argument(expected_test_threads("Worktree-tests"), None);
+    expect_thread_argument(expected_test_threads("worktree-tests\0"), None);
+    expect_thread_argument(expected_test_threads("缓存/λ"), None);
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn fixture_commands_isolate_parent_release_context_and_preserve_explicit_inputs() {
     for channel in ["build", "preview", "stable"] {
@@ -60,6 +148,7 @@ fn fixture_commands_isolate_parent_release_context_and_preserve_explicit_inputs(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumers() {
     use std::{collections::BTreeSet, path::Path};
@@ -128,11 +217,7 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
                     owner["manifest"].clone()
                 ]
             );
-            let test_threads = match owner["id"].as_str().unwrap() {
-                "worktree-tests" => Some("--test-threads=8"),
-                "judge-workflow-tests" | "pr-tests" => Some("--test-threads=2"),
-                _ => None,
-            };
+            let test_threads = expected_test_threads(owner["id"].as_str().unwrap());
             let output_arguments = if let Some(test_threads) = test_threads {
                 assert_eq!(&argv[argv.len() - 2..], &[json!("--"), json!(test_threads)]);
                 &argv[4..argv.len() - 2]
@@ -259,6 +344,7 @@ fn registered_release_preserves_all_unfiltered_actions_and_exact_native_consumer
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn explicit_empty_and_subset_dependencies_keep_original_actions_and_staging() {
     let f = Fixture::new();
@@ -281,6 +367,7 @@ fn explicit_empty_and_subset_dependencies_keep_original_actions_and_staging() {
     assert_eq!(loaded.contracts["test_none"]["status"], "declared");
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn native_frontends_have_exact_platforms_distinct_jobs_and_disjoint_paths() {
     for variant in 0..12 {
@@ -321,6 +408,7 @@ fn native_frontends_have_exact_platforms_distinct_jobs_and_disjoint_paths() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn collection_and_non_rust_verification_only_resolve_their_actual_tools() {
     let f = Fixture::new();
@@ -348,6 +436,7 @@ fn collection_and_non_rust_verification_only_resolve_their_actual_tools() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn booleans_cannot_be_null_numbers_strings_or_containers() {
     for invalid in [
@@ -384,6 +473,7 @@ fn booleans_cannot_be_null_numbers_strings_or_containers() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn dependency_and_membership_mutations_are_rejected_before_tool_resolution() {
     for variant in 0..14 {
@@ -420,6 +510,7 @@ fn dependency_and_membership_mutations_are_rejected_before_tool_resolution() {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn staging_and_failure_evidence_require_owned_nonoverlapping_literal_paths() {
     for variant in 0..10 {
@@ -455,6 +546,7 @@ fn staging_and_failure_evidence_require_owned_nonoverlapping_literal_paths() {
     assert!(Loaded::load(f.root()).unwrap_err().contains("symlink"));
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn ambiguous_original_actions_and_duplicate_json_members_are_rejected() {
     let mut f = Fixture::new();
@@ -473,6 +565,7 @@ fn ambiguous_original_actions_and_duplicate_json_members_are_rejected() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[test]
 fn absent_consumer_explanation_is_visible_and_cannot_claim_verified_necessity() {
     let mut f = Fixture::new();

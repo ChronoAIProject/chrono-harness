@@ -1,7 +1,61 @@
 //! Immutable pre-effect identity; an intent never certifies completion or a stopped process.
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub struct ImportedPolicyReceipt<'a> {
+    pub schema: Option<&'a str>,
+    pub operation: Option<&'a str>,
+    pub status: Option<&'a str>,
+    pub source_root: Option<&'a str>,
+    pub report_path: Option<&'a str>,
+    pub config_path: Option<&'a str>,
+}
+
+pub open spec fn required_text(observed: Option<&str>, expected: &str) -> bool {
+    match observed { Some(text) => text@ == expected@, None => false }
+}
+
+fn matches_required(observed: Option<&str>, expected: &str) -> (valid: bool)
+    ensures valid == required_text(observed, expected),
+{
+    match observed { Some(text) => equal_text(text, expected), None => false }
+}
+
+pub fn imported_policy_receipt_valid(receipt: &ImportedPolicyReceipt, published: bool,
+    root: &str, path: &str, config: &str) -> (valid: bool)
+    ensures valid <==> (published
+        && required_text(receipt.schema, "chrono-worktree-report/v1")
+        && required_text(receipt.operation, "import")
+        && required_text(receipt.status, "imported")
+        && required_text(receipt.source_root, root)
+        && required_text(receipt.report_path, path)
+        && required_text(receipt.config_path, config)),
+{
+    published
+        && matches_required(receipt.schema, "chrono-worktree-report/v1")
+        && matches_required(receipt.operation, "import")
+        && matches_required(receipt.status, "imported")
+        && matches_required(receipt.source_root, root)
+        && matches_required(receipt.report_path, path)
+        && matches_required(receipt.config_path, config)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, facts, json, no_symlink_parents, relative_path, sha256};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeSet,
     fs,
@@ -12,6 +66,7 @@ use std::{
 /// A compact outcome points to the already published complete diagnostic.
 /// Keeping the error body again in inventory would duplicate the original and
 /// could prevent publication of a legitimate large failure.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn publication_outcome(report: &Value, raw: &[u8]) -> Value {
     let mut outcome = value!({"operation":report["operation"],"status":report["status"]});
     if !report["error"].is_null() {
@@ -21,6 +76,7 @@ pub(crate) fn publication_outcome(report: &Value, raw: &[u8]) -> Value {
     outcome
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn state_path(root: &Path, path: &str) -> Result<PathBuf, String> {
     relative_path(path)?;
     if !path.starts_with(".chrono-harness/state/") {
@@ -28,12 +84,14 @@ fn state_path(root: &Path, path: &str) -> Result<PathBuf, String> {
     }
     no_symlink_parents(root, path)
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn state_bytes(root: &Path, path: &str) -> Result<Vec<u8>, String> {
     let _input = chrono_harness::retained_artifacts::retention::read_guard(root, path)?;
     fs::read(state_path(root, path)?).map_err(|e| e.to_string())
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct RetainedInput {
     schema: String,
     source_root: PathBuf,
@@ -42,6 +100,7 @@ struct RetainedInput {
     byte_length: usize,
     format: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl RetainedInput {
     fn bytes(&self, root: &Path) -> Result<Vec<u8>, String> {
         if self.schema != "chrono-worktree-retained-input/v1"
@@ -58,12 +117,14 @@ impl RetainedInput {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn retained_bytes(root: &Path, input: &Value) -> Result<Vec<u8>, String> {
     let input: RetainedInput = serde_json::from_value(input.clone())
         .map_err(|e| format!("invalid retained lifecycle input: {e}"))?;
     input.bytes(root)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn retained_input(root: &Path, path: &str, bytes: &[u8], format: &str) -> Value {
     value!(RetainedInput {
         schema: "chrono-worktree-retained-input/v1".into(),
@@ -76,6 +137,7 @@ pub(crate) fn retained_input(root: &Path, path: &str, bytes: &[u8], format: &str
 }
 
 /// Follow only the reference-bearing fields of the lifecycle contract.
+#[cfg(not(verus_keep_ghost))]
 fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(), String> {
     if report
         .get("prior_report")
@@ -132,6 +194,7 @@ fn collect_inputs(report: &Value, inputs: &mut Vec<RetainedInput>) -> Result<(),
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn verify_inputs(root: &Path, report: &Value) -> Result<(), String> {
     let mut inputs = Vec::new();
     let mut checked = BTreeSet::new();
@@ -159,6 +222,7 @@ pub(crate) fn verify_inputs(root: &Path, report: &Value) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn original_bytes(root: &Path, path: &str) -> Result<Option<Vec<u8>>, String> {
     let path = state_path(root, path)?;
     match fs::symlink_metadata(&path) {
@@ -171,6 +235,7 @@ fn original_bytes(root: &Path, path: &str) -> Result<Option<Vec<u8>>, String> {
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Intent {
     schema: String,
     #[serde(default)]
@@ -188,6 +253,7 @@ struct Intent {
     report_path: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn publish(root: &Path, report: &mut Value) -> Result<(), String> {
     publish_fields(
         root,
@@ -210,6 +276,7 @@ pub(crate) fn publish(root: &Path, report: &mut Value) -> Result<(), String> {
         ],
     )
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn publish_fields(
     root: &Path,
     report: &mut Value,
@@ -273,10 +340,12 @@ pub(crate) fn publish_fields(
 
 #[derive(Deserialize)]
 #[serde(tag = "presence", rename_all = "lowercase", deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(crate) enum ExpectedResult {
     Absent {},
     Present { sha256: String },
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct Evidence {
     pub(crate) descriptor: Value,
     root: PathBuf,
@@ -286,6 +355,7 @@ pub(crate) struct Evidence {
     result_bytes: Option<Vec<u8>>,
     _retention: Vec<chrono_harness::ownership::Lease>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Evidence {
     pub(crate) fn stable(&self) -> Result<(), String> {
         if state_bytes(&self.root, &self.intent_path)? != self.intent_bytes
@@ -297,6 +367,7 @@ impl Evidence {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn inspect(
     root: &Path,
     config_path: &str,
@@ -345,6 +416,7 @@ pub(crate) fn inspect(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn read_intent(
     root: &Path,
     path: &str,
@@ -361,6 +433,7 @@ pub(crate) fn read_intent(
     Ok((bytes, descriptor))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn observe_result(
     root: &Path,
     path: &str,
@@ -382,6 +455,7 @@ pub(crate) fn observe_result(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn observe_rebind_result(
     root: &Path,
     path: &str,
@@ -402,6 +476,7 @@ pub(crate) fn observe_rebind_result(
         true,
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn observe_result_kind(
     root: &Path,
     path: &str,
@@ -491,6 +566,7 @@ fn observe_result_kind(
 }
 
 /// Hand the actual caller its exact root before relinquishing publication.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn protect_report_consumer(
     report: &mut Value,
     publication: Option<&chrono_harness::retained_artifacts::retention::Publication>,
@@ -509,8 +585,13 @@ pub(crate) fn protect_report_consumer(
 
 /// The schema's declared input paths, shared by automatic originals and final
 /// reports. Neither directory scans nor recursive JSON guesses define edges.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>, String> {
     let mut originals = Vec::new();
+    if let Some(path) = report["complete_inventory"]["path"].as_str() {
+        state_path(root, path)?;
+        originals.push(path.into());
+    }
     let mut inputs = Vec::new();
     collect_inputs(report, &mut inputs)?;
     for input in inputs {
@@ -576,6 +657,7 @@ pub(crate) fn original_paths(root: &Path, report: &Value) -> Result<Vec<String>,
 
 /// The actual result handoff or exclusive lifecycle reconciliation owns this
 /// release. It does not manufacture a missing command result.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn release_managed_process_original(root: &Path, report: &Value) -> Result<(), String> {
     if let Some(path) = report["managed_process_original"]["path"].as_str() {
         state_path(root, path)?;
@@ -590,6 +672,7 @@ pub(crate) fn release_managed_process_original(root: &Path, report: &Value) -> R
 
 /// Attach recovery inputs before the domain releases a use token or returns
 /// an original which its still-unpublished report must consume.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn bind_report_inputs(root: &Path, report: &Value) -> Result<(), String> {
     if let Some(inventory) =
         chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
@@ -605,6 +688,7 @@ pub(crate) fn bind_report_inputs(root: &Path, report: &Value) -> Result<(), Stri
 
 /// The pending result is the ledger's actual reader of its final report.
 /// Retention already collects unrooted cycles: neither direction is a root.
+#[cfg(not(verus_keep_ghost))]
 fn bind_result_handoffs(
     inventory: &chrono_harness::retained_artifacts::retention::Inventory,
     root: &Path,
@@ -628,6 +712,7 @@ fn bind_result_handoffs(
 
 /// A producer terminal result ends its interrupted-operation recovery need.
 /// A failed rebind has an explicit resume consumer and keeps that root.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
     let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(root)?
     else {
@@ -638,6 +723,9 @@ pub(crate) fn settle_report(root: &Path, report: &Value) -> Result<(), String> {
         .ok_or("lifecycle result path")?;
     let originals = original_paths(root, report)?;
     inventory.dependencies_paths(path, &originals)?;
+    if let Some(original) = report["complete_inventory"]["receipt"]["path"].as_str() {
+        inventory.reference_paths(&format!("recovery:{original}"), &[])?;
+    }
     bind_result_handoffs(&inventory, root, report)?;
     if report["managed_process_original"]["joined"] == true {
         release_managed_process_original(root, report)?;

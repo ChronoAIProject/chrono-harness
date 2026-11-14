@@ -1,7 +1,32 @@
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::{expect, policy};
+#[cfg(not(verus_keep_ghost))]
+use crate::verified_lifecycle::expect;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn whole_directory_requires_owned_lifetime_and_consumer_exclusion() {
+    expect(policy::rolling_disposal(true, true, true, true));
+    expect(!policy::rolling_disposal(false, true, true, true));
+    expect(!policy::rolling_disposal(true, false, true, true));
+    expect(!policy::rolling_disposal(true, true, false, true));
+    expect(!policy::rolling_disposal(true, true, true, false));
+}
+}
+
 #[path = "../../worktree-tests/tests/support/fixture_coordinator.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod chrono_git_boundary;
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
+#[cfg(not(verus_keep_ghost))]
 fn host() -> Host {
     let h = super::bounded_cleanup::main_host_mode("noop");
     let path = h.root.join(".chrono-harness/cleanup.json");
@@ -20,6 +45,7 @@ fn host() -> Host {
     h
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn allocation(h: &Host) -> (PathBuf, chrono_worktree::TemporaryHost) {
     let (store, outputs) =
         chrono_worktree::TemporaryHost::registered_store(&h.root, POLICY, "test-allocation")
@@ -30,6 +56,7 @@ fn allocation(h: &Host) -> (PathBuf, chrono_worktree::TemporaryHost) {
     (store, host)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
     let source = allocation.join("real-source");
     fs::write(&source, [0, 255, 7, 8]).unwrap();
@@ -48,6 +75,53 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
+fn explicit_inventory_lists_live_producer_allocation_and_every_copied_member() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = host();
+    let (store, allocation) = allocation(&h);
+    let first = copy(&store, allocation.path(), "first.bin");
+    let second = copy(&store, allocation.path(), "second.bin");
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{report} {error}");
+    let bytes = fs::read(
+        h.root
+            .join(report["complete_inventory"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    let rows: Vec<_> = bytes
+        .split(|b| *b == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| json(line).unwrap())
+        .collect();
+    assert!(rows.iter().any(|row| row["kind"] == "producer-allocation"
+        && row["path"] == value!(allocation.path())
+        && row["bodies"]["first.bin"].is_object()));
+    let members: std::collections::BTreeSet<_> = rows
+        .iter()
+        .filter(|row| {
+            row["kind"] == "producer-artifact" && row["allocation"] == value!(allocation.path())
+        })
+        .map(|row| row["member"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        members,
+        std::collections::BTreeSet::from(["first.bin", "second.bin"])
+    );
+    assert!(
+        rows.iter().any(|row| row["kind"] == "producer-result"
+            && row["original"]["producer"] == "test-allocation")
+    );
+    assert_eq!(fs::read(first).unwrap(), [0, 255, 7, 8]);
+    assert_eq!(fs::read(second).unwrap(), [0, 255, 7, 8]);
+    assert!(allocation.path().join("first.bin").exists());
+    drop(allocation);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -133,6 +207,7 @@ fn preparing_a_copy_original_does_not_block_an_independent_allocation() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn concurrent_original_publications_keep_both_body_registrations() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -196,6 +271,7 @@ fn concurrent_original_publications_keep_both_body_registrations() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -284,6 +360,7 @@ fn updating_one_allocation_keeps_other_copies_and_diagnostic_consumers() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn metadata_publication_for_one_allocation_does_not_lock_another() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -349,6 +426,7 @@ fn metadata_publication_for_one_allocation_does_not_lock_another() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_partition_preserves_original_data_and_current_consumers() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -483,6 +561,7 @@ fn explicit_partition_preserves_original_data_and_current_consumers() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -562,6 +641,7 @@ fn copy_publication_refuses_identity_or_original_drift_without_overwriting_it() 
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn same_length_body_declaration_change_refuses_cached_registration() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -616,6 +696,7 @@ fn same_length_body_declaration_change_refuses_cached_registration() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -673,6 +754,7 @@ fn duplicate_producer_map_members_and_nested_fields_refuse_publication() {
     assert_eq!(fs::read(&original).unwrap(), [0, 255, 7, 8]);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn joined_command_body(outcome: &str) {
     use std::io::{Read, Write};
 
@@ -773,10 +855,8 @@ fn joined_command_body(outcome: &str) {
             root.join("joined-body.bin").exists(),
             "ordinary use does not sweep fixture producers"
         );
-        assert!(
-            report["post_use_cleanup"]["producer_drains"].is_array(),
-            "{report}"
-        );
+        assert!(report.get("post_use_cleanup").is_none(), "{report}");
+        assert_eq!(report["maintenance_request"]["disposal"], "not-attempted");
         let (code, maintenance, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintenance} {error}");
         assert_eq!(
@@ -799,6 +879,7 @@ fn joined_command_body(outcome: &str) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_maintenance_reclaims_copied_bodies_after_successful_join() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -807,6 +888,7 @@ fn explicit_maintenance_reclaims_copied_bodies_after_successful_join() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn successful_join_preserves_unreleased_copied_body_consumer() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -815,6 +897,7 @@ fn successful_join_preserves_unreleased_copied_body_consumer() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_join_preserves_copied_bodies_and_original_process_failure() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -823,6 +906,7 @@ fn failed_join_preserves_copied_bodies_and_original_process_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn body_recovers_without_finish_after_overlapping_holders_and_diagnostic_release() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -888,6 +972,7 @@ fn body_recovers_without_finish_after_overlapping_holders_and_diagnostic_release
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -989,6 +1074,7 @@ fn moved_checkout_carries_body_membership_and_retains_its_original_commit() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_siblings() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1056,6 +1142,7 @@ fn partial_body_missing_original_and_committed_source_do_not_veto_eligible_sibli
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcome() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1164,6 +1251,7 @@ fn current_custody_migrates_a_bound_legacy_copy_without_rewriting_unknown_outcom
     assert_eq!(h.auto("maintain", &[]).0, 0);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn paged_producer_fixture(
     h: &Host,
 ) -> (
@@ -1218,6 +1306,7 @@ fn paged_producer_fixture(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn migrate_paged(h: &Host) -> (i32, Value, String) {
     h.auto(
         "migrate",
@@ -1231,6 +1320,7 @@ fn migrate_paged(h: &Host) -> (i32, Value, String) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_paged_partition_preserves_custody_and_excludes_live_allocation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1297,6 +1387,7 @@ fn explicit_paged_partition_preserves_custody_and_excludes_live_allocation() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing_readers() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1336,6 +1427,7 @@ fn explicit_paged_partition_resumes_both_activation_boundaries_without_releasing
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_paged_partition_rejects_prepared_record_drift_before_activation() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -1373,6 +1465,7 @@ fn explicit_paged_partition_rejects_prepared_record_drift_before_activation() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_paged_partition_rejects_unknown_fields_owner_binding_and_symbolic_sources() {
     if !chrono_git_boundary::isolated_git() {
         return;

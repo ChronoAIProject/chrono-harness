@@ -1,9 +1,40 @@
 //! Selected coordinator bytes change only under original affected enrollment EX leases.
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::super::identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+
+pub fn known_absent_enrollment(cache_only: bool, kind: &str) -> (known: bool)
+    ensures known == (!cache_only && (kind@ == "birth"@ || kind@ == "import"@)),
+{
+    !cache_only && (equal_text(kind, "birth") || equal_text(kind, "import"))
+}
+
+pub fn absent_attachment_conflict(path_matches: bool, branch: &str, branch_matches: bool)
+    -> (conflict: bool)
+    ensures conflict == (path_matches || (branch@ != "HEAD"@ && branch_matches)),
+{
+    path_matches || (!equal_text(branch, "HEAD") && branch_matches)
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_owner_publication as publication_policy;
 
+#[cfg(not(verus_keep_ghost))]
 const CURRENT_OWNER_SLOT: &str = ".chrono-harness/state/bootstrap-owner-current.json";
 
+#[cfg(not(verus_keep_ghost))]
 fn protect_adoption(root: &Path, adoption: &Value) -> Result<Option<Lease>, String> {
     if adoption["schema"] != "chrono-worktree-owner-adoption/v1" {
         return Err("current owner adoption schema".into());
@@ -28,6 +59,7 @@ fn protect_adoption(root: &Path, adoption: &Value) -> Result<Option<Lease>, Stri
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn executable_binding(path: &Path) -> Result<Value, String> {
     use std::os::unix::fs::MetadataExt;
     let id = crate::ownership::identity(path)?;
@@ -50,6 +82,7 @@ fn executable_binding(path: &Path) -> Result<Value, String> {
 }
 
 // Fixed producer data is checked here before any selected bytes change.
+#[cfg(not(verus_keep_ghost))]
 fn stage_registration(
     r: &mut Runner,
     root: &Path,
@@ -71,6 +104,7 @@ fn stage_registration(
 
 // Decoding, serialization, hashing and path/OS observations are interface
 // operations. The finite predicates over their results use the required root.
+#[cfg(not(verus_keep_ghost))]
 fn stage_claim(
     checks: &mut Vec<publication_policy::StageCheck>,
     requirement: publication_policy::StageRequirement,
@@ -82,6 +116,7 @@ fn stage_claim(
     });
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn stage_value(
     checks: &mut Vec<publication_policy::StageCheck>,
     actual: &Value,
@@ -101,6 +136,7 @@ fn stage_value(
 
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct StageToolBinding {
     #[serde(default, deserialize_with = "present_stage_binding")]
     path: Option<String>,
@@ -110,6 +146,7 @@ struct StageToolBinding {
     allow_relocation: Option<bool>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn present_stage_binding<'de, D, T>(decoder: D) -> Result<Option<T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -118,6 +155,7 @@ where
     T::deserialize(decoder).map(Some)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn validate_stage(
     r: &mut Runner,
     root: &Path,
@@ -548,10 +586,12 @@ fn validate_stage(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn owner_binding(path: &Path) -> Result<publication_policy::Binding, String> {
     serde_json::from_value(executable_binding(path)?).map_err(|e| e.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn publication_original(
     path: &Path,
     value: &Value,
@@ -582,6 +622,7 @@ fn publication_original(
 // Only deploy_owner calls this, while its original admission and every affected
 // enrollment remain exclusive. Intent and the retained inode survive interruption
 // after rename; publication alone claims neither adoption nor task completion.
+#[cfg(not(verus_keep_ghost))]
 fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
     let expected: publication_policy::Stage =
         serde_json::from_value(record.clone()).map_err(|e| e.to_string())?;
@@ -731,30 +772,37 @@ fn publish_owner(root: &Path, record: &Value) -> Result<Value, String> {
     Ok(result)
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
-    fn check_absent_enrollment(
+    pub(super) fn check_absent_enrollment(
         &self,
         entry: &Entry,
         inventory: &[BTreeMap<String, String>],
     ) -> Result<(), String> {
         absolute(&entry.path, true)?;
         absolute(&entry.attachment.metadata, true)?;
-        if entry.cache_only
-            || !matches!(entry.enrollment["kind"].as_str(), Some("birth" | "import"))
-            || !retirement::absent(&entry.path)?
+        if !known_absent_enrollment(
+            entry.cache_only,
+            entry.enrollment["kind"].as_str().unwrap_or(""),
+        ) || !retirement::absent(&entry.path)?
             || !retirement::absent(&entry.attachment.metadata)?
         {
             return Err(format!(
-                "owner deployment affected enrollment {} has a partial or unknown attachment; preserve selected bytes",
+                "enrollment {} has a partial or unknown attachment; preserve original work",
                 entry.path.display()
             ));
         }
         let branch = maintenance::checkout_reference(entry.current_branch());
         if inventory.iter().any(|row| {
-            Path::new(&row["worktree"]) == entry.path
-                || (branch != "HEAD" && row.get("branch") == Some(&branch))
+            absent_attachment_conflict(
+                Path::new(&row["worktree"]) == entry.path,
+                &branch,
+                row.get("branch") == Some(&branch),
+            )
         }) {
-            return Err("owner deployment missing enrollment has another Git attachment; preserve selected bytes".into());
+            return Err(
+                "missing enrollment has another Git attachment; preserve original work".into(),
+            );
         }
         self.policy_binding(entry)?;
         self.git_locks(entry, None)

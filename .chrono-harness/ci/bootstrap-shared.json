@@ -77,7 +77,6 @@
       "core"
     ],
     "unit_release-build": [
-      "cache",
       "core"
     ],
     "unit_worktree-adoption": [
