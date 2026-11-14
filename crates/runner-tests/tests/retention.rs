@@ -3966,6 +3966,11 @@ fn unfinished_creation_policy_migration_preserves_state_and_reaches_existing_rec
                     identity
                 );
                 assert_eq!(fs::read(&capability).unwrap(), bytes);
+            } else {
+                assert_eq!(
+                    fs::symlink_metadata(&capability).unwrap_err().kind(),
+                    std::io::ErrorKind::NotFound
+                );
             }
             if let Some((address, bytes)) = &role_before {
                 assert_eq!(fs::read(address).unwrap(), *bytes);
@@ -3978,6 +3983,12 @@ fn unfinished_creation_policy_migration_preserves_state_and_reaches_existing_rec
                 repeated.stdout, repeated.stderr
             );
             assert_eq!(fs::read(&record).unwrap(), migrated_bytes);
+            if !capability_exists {
+                assert_eq!(
+                    fs::symlink_metadata(&capability).unwrap_err().kind(),
+                    std::io::ErrorKind::NotFound
+                );
+            }
 
             if domain {
                 // Ordinary maintenance does not retire the domain's failed or
@@ -4134,6 +4145,8 @@ fn unfinished_creation_policy_migration_preserves_missing_changed_and_unknown_cu
         "directory-reservation",
         "symlink-reservation",
         "excluded-reservation",
+        "unbound-creating-present",
+        "unbound-creating-missing",
     ] {
         let mut h = host(256, 16);
         h.disable_cleanup(true);
@@ -4165,8 +4178,15 @@ fn unfinished_creation_policy_migration_preserves_missing_changed_and_unknown_cu
             output["lease_id"] = json!("");
             retention_state::replace_output(h.path(), &output);
         }
+        if custody.starts_with("unbound-creating") {
+            let mut output = ledger(h.path())["outputs"][0].clone();
+            output["lease_id"] = json!("");
+            retention_state::replace_output(h.path(), &output);
+        }
         match custody {
-            "changed-attached" => fs::write(&capability, b"unknown replacement capability").unwrap(),
+            "changed-attached" | "unbound-creating-present" => {
+                fs::write(&capability, b"unknown replacement capability").unwrap()
+            }
             "directory-reservation" => fs::create_dir(&capability).unwrap(),
             "symlink-reservation" => std::os::unix::fs::symlink(&parked, &capability).unwrap(),
             _ => (),
@@ -4202,7 +4222,7 @@ fn unfinished_creation_policy_migration_preserves_missing_changed_and_unknown_cu
         );
         assert_eq!(fs::read(&parked).unwrap(), b"");
         match custody {
-            "changed-attached" => assert_eq!(
+            "changed-attached" | "unbound-creating-present" => assert_eq!(
                 fs::read(&capability).unwrap(),
                 b"unknown replacement capability"
             ),
