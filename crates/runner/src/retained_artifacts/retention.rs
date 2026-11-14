@@ -4142,15 +4142,6 @@ pub fn read_guard(root: &Path, path: &str) -> Result<Option<Lease>, String> {
 /// Publish a newly addressed original under its opted-in natural producer.
 /// Existing unenrolled originals are verified and reused but require explicit legacy migration.
 #[cfg(not(verus_keep_ghost))]
-pub fn publish_original(
-    root: &Path,
-    path: &str,
-    bytes: &[u8],
-    outcome: Value,
-) -> Result<bool, String> {
-    publish_owned_original(root, "check-original", path, bytes, outcome)
-}
-#[cfg(not(verus_keep_ghost))]
 pub fn publish_owned_original(
     root: &Path,
     producer: &str,
