@@ -654,15 +654,6 @@ pub fn retain(root: &Path, prefix: &str, v: &Value) -> Result<String, String> {
         &serde_json::to_vec(v).map_err(|e| e.to_string())?,
     )
 }
-pub fn retain_directory(root: &Path, directory: &str, prefix: &str) -> Result<PathBuf, String> {
-    let dir = no_symlink_parents(root, directory)?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(tempfile::Builder::new()
-        .prefix(prefix)
-        .tempdir_in(dir)
-        .map_err(|e| e.to_string())?
-        .keep())
-}
 pub fn retain_bytes(root: &Path, prefix: &str, bytes: &[u8]) -> Result<String, String> {
     use std::io::Write;
     let dir = no_symlink_parents(root, ".chrono-harness/state/preparation")?;
@@ -729,10 +720,6 @@ pub fn validate_result(req: &InputRequest, p: &PreparedCheck) -> Result<(), Stri
         {
             return Err("original evidence outside selected native upload root".into());
         }
-    }
-    facts::full_oid(&p.candidate)?;
-    if let Some(b) = &p.base {
-        facts::full_oid(b)?;
     }
     if p.initial {
         let reader = facts::Reader::for_config(&req.host_root, &req.host_config)?;
