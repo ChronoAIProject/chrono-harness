@@ -479,7 +479,7 @@
     {"path":"crates/worktree/src/ownership.rs","owner":"worktree","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree"}]},
     {"path":"crates/worktree-tests/tests/interrupted_cleanup.rs","owner":"worktree-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:worktree-tests"}]},
     {"path":"crates/runner-tests/tests/process_fds.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
-    {"path":"crates/runner/src/process_ownership.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}]},
+    {"path":"crates/runner/src/process_ownership.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"},{"kind":"judge-trigger","to":"judge:filemap"}],"verification":{"role":"program","roots":[{"path":"crates/runner/src/lib.rs","operation":"investigate.ci-generation-dependency.runner"}]}},
     {"path":"crates/runner-tests/tests/support/process_lifecycle.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/runner-tests/tests/support/protocol_judge.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},
     {"path":"crates/runner-tests/tests/support/git_input.rs","owner":"runner-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner-tests"}]},

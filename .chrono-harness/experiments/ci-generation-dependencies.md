@@ -522,3 +522,29 @@ FILEMAP 只为该 macOS 工具选择增加 runner、runner-tests 的明确输入
 **正式资格仍未建立。**现有 source-only guard 继续拒绝扩展参数；两个 action 原 `output_contract` 不授予 `ProofAdmission`。合同源在 FILEMAP 的 runner 根登记目前只是尚未满足的证明义务：ghost runner 改为导入工具合同后，不能声称该源出现在 runner 的源码 dep-info；其实际生产者是 AC 的完整 vstd 根及原 105 条 checksum。现役格式不能承载这条完整工具来源关系，本轮不虚改证明根、不把成功 build 加回计划迫使重建，也不改准入逻辑。typed compiler／source／context／report／rlib／dep-info／VIR／宏及传递资格仍由原所有者后续完成。
 
 本轮仅作编辑及静态字节核对；没有运行构建、证明、探针、格式化、bootstrap、check 或 Git／GitHub，没有委派或生命周期变更。纯转发接线不新增镜像测试；候选须另验 runner 整 crate、独立预期、原未过滤 Rust 行为及按两端登记选择的正式 DELTA。新增工具选择观察、构建／证明／CI／存储及完整维护成本未测，不能由旧实验耗时推算。generation 四个真实生产分支、原生 integration→dev／落地及全部 SPEC 仍未完成，goal 保持 active，不触发 chunk formalreview。沿用 AE 的原件使用方、2026-11-21 用途复核及释放条件，活动工作树、`report_handoff_pending` 和旧 cleanup 失败继续保护，由调用方交接。
+
+## AM：CI generation 早期 const THIR 的原位编码准备（未执行）
+
+本节承接旧说明中修正后仍未验证的状态，准确记录 AK 的实际 ICE 与 AL 的事实／假设。固定候选仍为 `feature/ci-generation-state-20261113` 的 `a6218ce61a52f638576537dbb0a605d973eedfce`／tree `60bbc7a2c6a61dad66031e1133728f095043ad4c`；本节只准备源码和登记，不代表严格证明、实际编译、阶段通过或完整 SPEC 交付。
+
+AK 的实际 ICE 属于稳定的 `verus-erasure-context-before-const-thir` 机制族：严格 `investigate.ci-generation-dependency.runner` 整 crate 操作在 erasure context 建立前请求 Verus-aware 本地 body，固定 Verus `f8e17045c4ac17a02e566b8997070f2eecc255be` 在 `source/rustc_mir_build_additional_files/verus.rs:156` 触发 panic。AL 亲核的原报告为 `use-68541-1794643059119974000-0.json`，runner 真实退出 1，`success:false`、`verified:0`、`errors:0`、`whole_crate:true`、`encountered_vir_error:false`；没有 rlib 或 VIR。该证据证明当前 runner 失败及触发族，不证明所有 const/static/const fn 成员都会触发，也不证明下一成员或整类已修复。
+
+AL 已核实的实际 compiler-input 域是 `crates/runner/src/process_ownership.rs:30` 的 `const CAPACITY: usize = 4096`：它同时提供 `Shared.slots: [Slot; CAPACITY]` 和 `Tree::slots`／`descendant` 的数组类型长度，并被共享映射尺寸、4096 个槽初始化、根哨兵、容量耗尽、祖先／取消遍历、上下文边界及 generation×capacity×2 的 cookie 编解码使用。共同 const/static/const fn lowering、unerased body 保留及 VIR `encoded_const` 入口已由固定 Verus 源码核得；AL 未核得展开后完整 HIR 查询轨迹，也未证明该成员是唯一首次触发点，均保持 `ASSUMED-UNVERIFIED`。
+
+采用最小原所有者方案：在该文件顶部以现有项目惯用导入包住原位定义：
+
+```rust
+verus! {
+const CAPACITY: usize = 4096;
+}
+```
+
+本候选保留 `4096`、三处类型级数组及所有运行时消费者、Shared 布局、根哨兵、cookie／代际、耗尽／祖先／取消／回收行为、lifetime、cfg、线程、预算和工具身份；没有改成 data、cfg 隐藏、external_body、手填宏属性或新增机制。其他 const、static、局部值和生成项没有足够的实际触发证据，本节不改。
+
+需保留的行为包括 `process_ownership.rs` 的 `Tree::create`／`Launch::prepare` 成功根路径、容量耗尽错误、`cancelled`／`descendant` 的根哨兵和循环边界、`inherited` 的上下文范围拒绝，以及 `ExitObserver` 的 generation／cookie 代际检查。这些位置是当前实现，不是独立测试证据；本阶段未执行消费者行为验收，不为纯表示改动新增重复形状测试，原未过滤测试义务保留。FILEMAP 同步把该源登记为 `program`，真实根为 `crates/runner/src/lib.rs`，操作为 `investigate.ci-generation-dependency.runner`，并保留原 compile／judge-trigger 边。
+
+这是产品源码与宿主登记同时变化的可见警告：产品侧只改变统一 const lowering 的表示，宿主侧补齐现有真实 runner 根登记；分类准入、严格 flags、操作参数和证明义务没有放宽。新增证明、编译、CI、存储和维护成本仍未测。
+
+下一次原严格 runner 的可证伪验收必须沿原登记一次执行并取得同次完整 `success:true`、整 crate、无 panic／其他错误、rlib、dep-info、VIR、完整源码 checksum 及工具／宏／依赖绑定；任何同族下一成员 panic、后续解析／类型／证明错误、partial dep-info 或缺少任一绑定都继续拒绝。只有该 runner 合格后，才可按既有依赖派发 adapter 操作；raw 成功仍不替代 typed qualification、真实 CI prepare／generation／effect／recovery、正式 DELTA 或 integration／dev 落地。
+
+本节未执行构建、Cargo、Verus、测试、格式化、bootstrap、check、Git／GitHub、生命周期或其他 worker；未修改工具、缓存、state、失败 `.d`、既有成功组件、JSON 合同或独立预期。剩余完整 SPEC、runner 同源证明和实际编译绑定、adapter／generation 传递依赖、typed qualification、正式 DELTA、integration／dev 交付与落地均保持未完成；全 goal 保持 active。阻断记录：trigger=`严格真实 runner 在 erasure 初始化前请求 CAPACITY 的 THIR`；trigger_actor=`固定 Verus f8e17045 查询执行程序`；trigger_path=`ordinary-operation`；mechanism_family=`verus-erasure-context-before-const-thir`；独立 recorded occurrence=`use-68541-1794643059119974000-0.json` 及其 stdout／stderr 原件。
