@@ -619,10 +619,15 @@ impl Inventory {
     ) -> Result<Value, String> {
         let began = Instant::now();
         let mut sweep = SweepReport::new(&self.policy);
+        // Observe all declaration namespaces before any round can recreate a
+        // missing sibling namespace. Keep the original IO error, not a later
+        // empty directory manufactured by an ordinary owner operation.
+        let declarations = ["transaction-gates", "objects", "roles"]
+            .map(|namespace| (namespace, fs::read_dir(self.directory.join(namespace))));
         sweep.value["terminal_quotas"] = json!(self.terminal_quotas_at(observed));
-        for namespace in ["transaction-gates", "objects", "roles"] {
+        for (namespace, entries) in declarations {
             sweep.value["enumeration"][namespace] = json!({"entries":0,"exhausted":false});
-            let entries = match fs::read_dir(self.directory.join(namespace)) {
+            let entries = match entries {
                 Ok(entries) => entries,
                 Err(error) => {
                     if let Some(observer) = observer.as_deref_mut() {
