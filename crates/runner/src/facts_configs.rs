@@ -259,8 +259,8 @@ impl crate::verified_git_binding::RegistryMembership for CapturedRegistry<'_> {
     }
 
     fn contains_path(&self, path: &str) -> bool {
+        broadcast use crate::json_value_specs::standard_string_key_order;
         proof {
-            crate::json_value_specs::standard_string_key_order();
             crate::json_value_specs::string_map_borrow(self.0, path);
         }
         self.0.contains_key(path)
@@ -418,8 +418,8 @@ impl<'a> crate::verified_git_binding::SelectorSeen<'a> for SeenSelectorText<'a> 
 
     fn record(&mut self, text: &'a str) -> bool {
         let ghost before = self.0@;
+        broadcast use crate::json_value_specs::standard_str_key_order;
         proof {
-            crate::json_value_specs::standard_str_key_order();
             crate::json_value_specs::str_set_membership(&self.0, text);
         }
         let fresh = self.0.insert(text);

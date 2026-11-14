@@ -64,8 +64,8 @@ pub fn borrowed_fulltext(map: &BTreeMap<String, Value>, key: &str) -> (out: bool
     ensures out <==> exists|stored: String|
         #[trigger] map@.contains_key(stored) && stored@ == key@,
 {
+    broadcast use json::standard_string_key_order;
     proof {
-        json::standard_string_key_order();
         json::string_map_borrow(map, key);
     }
     map.contains_key(key)
@@ -77,8 +77,8 @@ pub fn fulltext_insert<'a>(set: &mut BTreeSet<&'a str>, text: &'a str) -> (fresh
         set@ == old(set)@.insert(text),
         fresh == !old(set)@.map(|stored: &str| stored@).contains(text@),
 {
+    broadcast use json::standard_str_key_order;
     proof {
-        json::standard_str_key_order();
         json::str_set_membership(set, text);
     }
     set.insert(text)

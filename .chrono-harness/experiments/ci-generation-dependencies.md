@@ -426,3 +426,49 @@ AA dep-info 原字节继续保留；它记录的唯一合同仍为旧 4,342 字�
 consume 必须在同次新组件下，用原严格 flags 整 crate 证明并实际编译，dep-info 必须含本仓同一个 `json_fields.rs`；所有原后置条件、边界断言和状态承诺必须通过。任一 bound／名称／类型错误、返回关系或原断言失败均证伪候选；失败保留原输入／双流／退出，不抬预算或重复运行。reject 必须同组件下真实非零且确为仓内 `assume/admit not allowed with --no-cheating`，前置错误不算严格拒绝。fixture 保持 data 身份及原非法 Verus 输入，不宣称其成功证明。runner、原 adapter-tests 和未过滤测试仍须由正式 DELTA 共同验收，不能以新正向根成功代替。
 
 必要保留归原 evidence-retain／check-original 所有者，使用方仍为工具合同工程、runner 资格工程、调用方与 review；AA 失败及 dep-info 保留至调试／验收义务结束，2026-11-21 复核用途，随后按已有生命周期释放。没有新增永久证据生产者。新函数、模块包含和登记的完整构建／证明／CI／存储／维护与运行成本未知；既有预算不变，没有测量收益。全部 warehouse 迁移、typed compiler-input 资格、完整 CI generation 生产与恢复链、正式 DELTA、原生 integration／dev 及落地验收仍是 active 全 goal 义务。本轮不交付、不清理；自有静态命令均已取得原生终态，无后台任务或委派（一次无关范围过大的只读文件名枚举已中止并取得 exit 130），交接生命周期由调用方负责。
+
+## AC：公开 JSON 查询的真实组件与严格消费（后继阻断）
+
+固定候选为 `8fe9b108fdbf92d50c6e330d139a6314cc215170`／tree `e89a6990b065e2e8b480a9fde775e05566aced84`；操作前工作树干净，AB 全部 93,135 字节／SHA-256 `1f022ac01e504d1bbbc14c73bce712a3aa4722e1eb3f3417f7be4654e1439ce6` 保留为本文前缀。本轮只沿登记 use 各执行一次 build 和 consume，没有改源码、登记、fixture、工具、线程或预算；consume 失败后没有派发 reject。
+
+以下原件均在协调宿主 `/Users/macstudio2/chrono-harness/.chrono-harness/state/worktrees/`；双流路径为对应报告名加 `.process/stdout`／`.process/stderr`。
+
+| 操作／原报告 | 原生终态与原件身份 |
+| --- | --- |
+| build：`use-53527-1794633613411773000-0.json` | use／Verus 均退出 0；55 项唯一进程全部 joined。报告 713,756 字节／`5c56b582b3269b409581125d5a87be3ce5e03f416673eb2831c836beb48c8486`；stdout 675,537 字节／`8f203d5bf564e6a705fb7b4008131201e864b46ef48855a894af2efaae5112a1`；stderr 0 字节／`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`。 |
+| consume：`use-10071-1794633984433939000-0.json` | use 退出 2、Verus 退出 1；42 项唯一进程全部 joined。报告 452,054 字节／`62cf6165ba340bcef4645c4f7e6bc59ed96f45fa1e9c9083049f8b500deaa9f0`；stdout 403 字节／`8defb0303f480d60e4ef3ad65cd0b36a42dd9a2cd7428d4661818e0649598b32`；stderr 285 字节／`4789328f54ab95fe24b712983f13b7f5abe91992a141d43d14a826bf8493abe5`。 |
+
+build 原 stdout 报告 `success:true`、整 crate、1557 verified／0 errors；保留 `--is-vstd`、std／alloc、两线程、2,400 秒和每流 67,108,864 字节。新组件目录仍为 `.chrono-harness/state/verus-tool-contract-20261114/`：`libvstd.rlib` 为 7,594,176 字节／`89345c0e49264471c945c01f551b6cf36efb5e4404739076db812183b5a2efca`，`vstd.vir` 为 25,375,402 字节／`371c8f5d93d25dce8274c7e498dc36c04e501cf24214996da35d4dc2b0356c96`，`libvstd.rlib.d` 为 41,485 字节／`1367c34867875d31e5995dcc1746dcc4bcb1b640266799ce681ed8f21d2c4d4d`。同次 dep-info 的 105 条源码校验和全部匹配当前字节，包括唯一 JSON 合同的 3,768 字节／`49cbbc1615e471987d61a563b560a40d257ab5f07c30a88960ae06eafa594b33`。这是完整真实工具库的构建和编译成功，仍不授予仓内程序假设豁免或完整 typed 资格。
+
+consume 实际使用上述同一组件和原严格 flags，诊断为 `consume.rs:68` 的 `json::standard_string_key_order()`：`cannot call a broadcast_forall function with 0 arguments directly`。原 stdout 为 `success:false`、`encountered-error:true`、`encountered-vir-error:true`，未报告 verified／errors 数量。没有生成 consume rlib；失败过程产生的 VIR／dep-info 只作诊断，其两条源码校验和确含同一仓内 `json_fields.rs` 和 consume 根，不能取得成功证明／编译资格。组件三项产物在 consume 后保持同一字节。此错误不是非法 fixture 的 assume 严格拒绝，正向验收失败、反向未执行，不能生成成功 ProofAdmission。
+
+实际 use 原件中的 PATH 含 `/Users/macstudio2/.cargo/bin`，其 SHA-256 `beeaa76832fc57cab0dc8451b2055535577fe62f8f8c60db3e335f693ca94469` 与两项 managed result 的 PATH 摘要相同；实际 rustup／Rust 1.95.0-aarch64-apple-darwin、固定 Verus `f8e17045c4ac17a02e566b8997070f2eecc255be`、宏、Z3、serde_json rlib 均已核身份。操作前组件相对原发行包的 168 个文件中 167 个相同，唯一差异为已登记 vstd 根；没有重复 extract／patch／repair、下载或修改 installed／shared 工具。更完整的传递输入资格仍未建立。
+
+下一自然差异归现有 JSON 外部合同、严格消费及适配器所有者：修正零参数广播事实的启用方式，保留全部签名、前后条件、独立断言与完整集合状态，再封存新候选按原前置链验收；本轮不修新错误、不重跑。原生定向交接 status 退出 0、32 项进程全部 joined，仍报告 active、`report_handoff_pending:true` 及旧 cleanup 失败提醒；这些不是新工具失败或删除授权，恢复交接与生命周期由调用方负责。
+
+详细原件、源／工具身份、失败 dep-info 和文档 delta 由本次 runner attempt `6af7eebecb95ffcd0a113db0/attempt-1` 的结构化结果引用，不复制 worker 日志。按原生 launch／结果产物文件时间近似计，build 从 launch 到 rlib 写入为 220.639 秒，consume 从 launch 到 result 为 5.123 秒；这不是 CPU、完整 use／CI 或生命周期总成本，原 stdout 未报告耗时，未测收益。必要原件仍归既有 check-original／evidence-retain 所有者，供上述工程、调用方及 review 使用，2026-11-21 复核用途，调试／验收义务结束且无使用方后才由调用方释放；本轮不 finish／maintain／migrate／删除。raw 严格正反向、typed compiler/source/context/report/rlib/dep-info/VIR／宏／传递输入资格、warehouse 和全仓 generation／adapter／独立预期证明、正式 DELTA、原生 integration→dev／落地及完整 SPEC 均未完成，全 goal 保持 active；本节不是正式 review 或交付。
+
+
+## AD：零参数广播事实的实际消费者修正准备
+
+本轮只准备源码；AC 全部 98,348 字节／`80cfb0d6d2eba5262b9ab4d50ec7d479083e7709cbaa4d87fd1fa810e51af1ae` 原样保留为前缀。固定工具仍为 Verus `0.2026.04.24.f8e1704`／commit `f8e17045c4ac17a02e566b8997070f2eecc255be`。其同次构建源码 `vstd/laws_cmp.rs:106–112` 用 `broadcast use` 启用零参数泛型事实，`vstd/layout.rs:157、312` 用同一方式启用零参数 `layout_of_primitives`；这些源均在 AC 的 105 条 dep-info 校验和中。复用成熟语法，在实际消费者的函数体作用域启用原事实，让后续树集合操作也处于该作用域，不改事实声明或增加包装器。
+
+| 原零参数事实 | 直接消费者（四处全部修正） |
+| --- | --- |
+| `standard_string_key_order` | `consume.rs::borrowed_fulltext`；`facts_configs.rs` 中 `CapturedRegistry` 的 `RegistryMembership::contains_path` |
+| `standard_str_key_order` | `consume.rs::fulltext_insert`；`facts_configs.rs` 中 `SeenSelectorText` 的 `SelectorSeen::record` |
+
+共同性质是两个事实没有值参数、分别给出 `obeys_cmp::<String>()` 和 `obeys_cmp::<&str>()`。四处均改为函数体中的 `broadcast use <原路径>;`，紧邻原 `proof` 块之前；原有带参数的借用／成员事实调用继续保留。工程检索覆盖已登记 generation／runner／独立预期根及其相关源码；该合同只有这两个零参数广播事实，未发现其他直接调用。`json_adapters.rs::captured_membership`／`record_text` 经真实适配器消费其合同，不需重复启用；其余 JSON 适配器、共用 `json_fields`、generation 根和独立预期均无同类直接调用。检索不用于选择正式检查。
+
+| 必要源码 delta | before 字节／SHA-256 → after 字节／SHA-256 |
+| --- | --- |
+| `.chrono-harness/experiments/verus-tool-contract/consume.rs` | 3,026／`ac06b5ccd086fd99a62dd0a93ec2bf12b2450045b0f70e81b322bfaa7933b428` → 3,042／`c515184b707dde87e8740af1790859848cf3a7e0b32fa87353c18fe47e3debb3` |
+| `crates/runner/src/facts_configs.rs` | 17,432／`134e3fef236db4387862fc47448682c9128678a2cca65346b77ee7410c4a608d` → 17,448／`e9906a606628b7933095e5c6a06cef4fd0ed5e422248a3e04a056b932898a0b6` |
+
+静态逆变换恰好还原两个 before 摘要：全部签名、requires／ensures、assert、全文 Unicode／引用／树集合状态、运行语句和独立预期原字节均保留。FILEMAP 已把两源登记为 program，并分别绑定严格 consume 和 runner 整 crate 根；现有 runner 编译／测试边及独立预期计划继续适用，FILEMAP、projects、政策和操作 argv 均未修改。没有新增测试或验证机制。
+
+同次构建 dep-info 的 105 条源码校验和仍全部匹配；两个修改源均不在工具库输入中。唯一 `json_value_specs.rs` 仍为 3,768 字节／`49cbbc1615e471987d61a563b560a40d257ab5f07c30a88960ae06eafa594b33`，共用 helper、独立预期及 reject fixture 均未改。AC 三项成功组件产物仍精确匹配该节字节／SHA；本轮前后固定工具、根和备份、补丁及上述输入的静态摘要不变。因此没有使 AC 完整 build 的复用前提失效；不再 extract／patch／repair／build／下载，也不改 installed／shared 工具。完整传递输入的 typed 资格仍未知，这些字节核对不提供该资格。
+
+调用方固定并提交干净候选后，下一 assignment 仅沿原 `chrono-worktree use --operation <ID> --path <work_target>` 执行 `investigate.verus-tool-contract.consume` → `investigate.verus-tool-contract.reject`，每项最多一次，前置失败停止后继。原登记仍要求整 crate、`--no-cheating`、`--no-external-by-default`、两线程、原预算、实际编译和 SHA-256 dep-info。consume 必须完整证明原合同并实际生成成功 rlib，新的 dep-info 必须绑定同源 helper 与新消费者；仅消失本次 VIR 错误不足以通过。reject 必须使用同一组件真实非零，诊断确实是 `repository_assumption` 的 `assume(false)` 被 no-cheating 拒绝；其他失败不得算负向通过。若输入／工具／组件身份漂移，先报告复用前提失效，不能悄悄重建或更改假设。
+
+本轮未执行编译、证明、探针、格式化、bootstrap、check 或任何受治理 operation；严格正向／负向仍未验收。没有 Git／GitHub、state 写入、生命周期操作或委派；全部自有静态命令取得原生退出状态，无后台任务。成本和新语法实际接受结果未测。typed 完整资格、warehouse、完整仓内源证明与实际编译绑定、正式 DELTA、integration→dev 和落地仍待完成，全 goal 保持 active。本 chunk 不触发正式 review；有限修复批次及适用检查完成后仍须 mandatory review triplet。必要失败原件沿既有 check-original／evidence-retain 的使用方、2026-11-21 复核及释放条件保留，旧 cleanup／handoff 未知交调用方处理。
