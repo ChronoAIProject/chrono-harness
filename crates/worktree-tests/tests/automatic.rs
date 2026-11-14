@@ -794,6 +794,19 @@ fn enrollment_originals_are_protected_before_global_maintenance() {
             .contains("mock retained policy read failed"),
         "{report}"
     );
+    assert_ne!(
+        report["output_retention"]["status"], "preserved",
+        "a policy failure after verified original protection must not defer independent retention: {report}"
+    );
+    assert!(
+        report["drain"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|row| row["path"] == value!(h.target)
+                && row["original_protection"]["status"] == "protected"),
+        "the failed cleanup must separately report current original protection: {report}"
+    );
     // A 25 ms round may publish only the disposal intent. Continue the same
     // bounded owner maintenance; the failed policy's input must stay rooted.
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
@@ -866,8 +879,47 @@ fn enrollment_originals_unknown_metadata_defers_only_global_original_maintenance
             .as_array()
             .unwrap()
             .iter()
-            .any(|row| row["path"] == value!(h.target) && row["status"] == "preserved")
+            .any(|row| row["path"] == value!(h.target)
+                && row["status"] == "preserved"
+                && row["original_protection"]["status"] == "unknown")
     );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn enrollment_originals_changed_identity_still_defers_global_maintenance() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = EnrollmentOriginalsFixture::new();
+    let owner_path = h.record.join("owner.json");
+    let mut owner = json(&fs::read(&owner_path).unwrap()).unwrap();
+    owner["path"] = value!(h.root.join("another-checkout"));
+    let owner_bytes = serde_json::to_vec(&owner).unwrap();
+    fs::write(&owner_path, &owner_bytes).unwrap();
+    let ledger = fs::read(h.record.join("ledger.json")).unwrap();
+
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 2, "{report}");
+    assert_eq!(report["output_retention"]["status"], "preserved");
+    assert!(
+        report["output_retention"]["unprotected_enrollments"]
+            .as_array()
+            .unwrap()
+            .contains(&value!(h.target))
+    );
+    assert!(report["drain"].as_array().unwrap().iter().any(|row| {
+        row["path"] == value!(h.target)
+            && row["status"] == "failed"
+            && row["original_protection"]["status"] == "unknown"
+    }));
+    assert_eq!(fs::read(&owner_path).unwrap(), owner_bytes);
+    assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
+    assert_eq!(
+        fs::read(h.root.join(&h.original)).unwrap(),
+        b"original failure bytes\n"
+    );
+    assert!(h.root.join(&h.sibling).is_file());
 }
 
 #[cfg(not(verus_keep_ghost))]

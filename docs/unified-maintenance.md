@@ -23,6 +23,14 @@
 
 ## 判定与登记
 
+清理错误与原件保护分别判定。已核身份的当前 enrollment 账本能够建立全部持久原件引用时，
+后续政策恢复失败仍须如实失败，但不应暂停独立输出的有限保留回收。清理失败后须重新打开
+当前 metadata 并建立引用，不能复用清理前快照或只凭先前打开成功推断保护。重新核对遇到
+身份变化、损坏、繁忙或原件引用失败时，仍保留该地址并暂停依赖它的共享回收。现有 Rust/mock
+原件用例分别核政策失败、未知 metadata 和身份漂移；源码、账本和失败原件的保全断言保留。
+这项修复不采用旧政策，不补写缺失来源，不把原维护失败改成成功；新增 IO 仅发生于清理失败的
+地址，实际成本由本轮原报告观察。
+
 Rust 行为预期归现有 worktree-tests 与 runner-tests；所有具体外部执行边界用既有 Rust mock，不真实调用 OS 命令、Git 或编译器。idle 退出的布尔判定放入现有 verified_lifecycle 与其独立 Verus 预期，正式入口复用 verify.worktree-lifecycle／verify.worktree-lifecycle-tests；这只证明该判定，不覆盖 IPC、IO、锁或完整进程。FILEMAP 登记每个新增源、测试、数据和依赖，成本未知。后续按固定基线与候选两端 DELTA 运行登记的 bootstrap、generation、证明、专属测试和 canonical；实际结果由各阶段原报告负责。
 
 ## 工程选择与真实采用
