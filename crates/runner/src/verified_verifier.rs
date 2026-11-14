@@ -9,6 +9,8 @@ use vstd::prelude::*;
 pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
+#[cfg(verus_keep_ghost)]
+use identifiers::encode_concat;
 use identifiers::{equal_bytes, equal_text};
 
 #[path = "verified_cargo.rs"]
@@ -206,17 +208,6 @@ pub fn proof_stdout<'a>(contract: &Option<OutputContract>, raw: &'a [u8]) -> (ou
     ensures out@ == if contract.is_some() { raw@ } else { Seq::<u8>::empty() },
 {
     match contract { None => &[], Some(_) => raw }
-}
-
-pub proof fn encode_concat(first: Seq<char>, second: Seq<char>)
-    ensures vstd::utf8::encode_utf8(first + second)
-        == vstd::utf8::encode_utf8(first) + vstd::utf8::encode_utf8(second),
-    decreases first.len(),
-{
-    if first.len() > 0 {
-        assert((first + second).drop_first() =~= first.drop_first() + second);
-        encode_concat(first.drop_first(), second);
-    }
 }
 
 fn append_bytes(bytes: &mut Vec<u8>, suffix: &[u8])

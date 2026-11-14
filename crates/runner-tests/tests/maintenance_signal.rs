@@ -11,6 +11,8 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
+#[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -130,6 +132,179 @@ fn hint_send_requires_the_exact_observed_length() {
     hint_send_case("retained", 64, 0, 1);
     hint_send_case("retained", 64, 0, 65);
     hint_send_case("retained", 1, 0, usize::MAX);
+}
+
+fn policy_case<'a>(schema: &'a str, directory: &'a str, socket: &'a str,
+    idle: Option<u64>, timer: u64, failure: u8, payload: &'a str, fields: bool)
+    requires fields == signal::maintenance_policy_fields(schema, directory, socket, idle, timer),
+{
+    let directory_check = |mut trace: Vec<(u8, &'a str)>, path: &'a str|
+        -> (out: (Vec<(u8, &'a str)>, Result<(), String>))
+        ensures out.0@ == trace@.push((0, path)),
+            if failure == 1 { match out.1 {
+                Err(error) => error@ == payload@, _ => false,
+            } } else { out.1 == Ok::<(), String>(()) },
+    {
+        trace.push((0, path));
+        (trace, if failure == 1 { Err(payload.to_string()) } else { Ok(()) })
+    };
+    let socket_check = |mut trace: Vec<(u8, &'a str)>, path: &'a str|
+        -> (out: (Vec<(u8, &'a str)>, Result<(), String>))
+        ensures out.0@ == trace@.push((1, path)),
+            if failure == 2 { match out.1 {
+                Err(error) => error@ == payload@, _ => false,
+            } } else { out.1 == Ok::<(), String>(()) },
+    {
+        trace.push((1, path));
+        (trace, if failure == 2 { Err(payload.to_string()) } else { Ok(()) })
+    };
+    let (trace, result) = signal::validate_policy(Vec::new(), schema, directory, socket,
+        idle, timer, directory_check, socket_check);
+    expect_hint(trace.len() == if failure == 1 { 1 } else { 2 });
+    expect_hint(trace[0].0 == 0);
+    expect_hint_text(trace[0].1, directory);
+    if failure != 1 {
+        expect_hint(trace[1].0 == 1);
+        expect_hint_text(trace[1].1, socket);
+    }
+    if failure == 1 || failure == 2 {
+        match result {
+            Err(error) => expect_hint(error == payload.to_string()),
+            Ok(()) => expect_hint(false),
+        }
+    } else if fields {
+        expect_hint(result.is_ok());
+    } else {
+        match result {
+            Err(error) => expect_hint(error == "invalid explicit maintenance policy".to_string()),
+            Ok(()) => expect_hint(false),
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn policy_checks_keep_path_order_and_the_first_complete_error() {
+    policy_case("bad", "原目录/λ\0\n", "原 socket/λ\0\n", Some(0), 0, 1,
+        "原错/λ\0\n", false);
+    policy_case("bad", "原目录/λ\0\n", "原 socket/λ\0\n", Some(0), 0, 2,
+        "原错/λ\0\n", false);
+    policy_case("bad", "", "", None, 0, 1, "", false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn policy_fields_keep_exact_schema_path_and_timer_boundaries() {
+    proof {
+        reveal(signal::maintenance_location);
+        reveal(signal::maintenance_policy_fields);
+        reveal_strlit("chrono-unified-maintenance/v1");
+        reveal_strlit("chrono-unified-maintenance/v1\n");
+        reveal_strlit("Chrono-unified-maintenance/v1");
+        reveal_strlit(".chrono-harness/state/");
+        reveal_strlit(".chrono-harness/state/m");
+        reveal_strlit(".chrono-harness/state/m/");
+        reveal_strlit(".chrono-harness/state/m.sock");
+        reveal_strlit(".chrono-harness/state2/m/");
+        reveal_strlit(".chrono-harness/state2/m");
+        reveal_strlit("");
+        broadcast use vstd::string::is_ascii_spec_bytes;
+        assert(vstd::string::is_ascii(".chrono-harness/state/")
+            && vstd::string::is_ascii(".chrono-harness/state/m")
+            && vstd::string::is_ascii(".chrono-harness/state/m/")
+            && vstd::string::is_ascii(".chrono-harness/state/m.sock")
+            && vstd::string::is_ascii(".chrono-harness/state2/m/")
+            && vstd::string::is_ascii(".chrono-harness/state2/m")
+            && vstd::string::is_ascii(""));
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/m");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/m/");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state/m.sock");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state2/m/");
+        vstd::string::is_ascii_spec_bytes(".chrono-harness/state2/m");
+        vstd::string::is_ascii_spec_bytes("");
+        unicode_policy_path_bytes();
+        assert(".chrono-harness/state/".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47]);
+        assert(".chrono-harness/state/m".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 109]);
+        let prefix = ".chrono-harness/state/".spec_bytes();
+        assert(prefix.len() == 22);
+        assert(prefix.take(prefix.len() as int) =~= prefix);
+        assert(prefix.last() == 47u8);
+        assert("chrono-unified-maintenance/v1"@.len() == 29);
+        assert("chrono-unified-maintenance/v1\n"@.len() == 30);
+        assert("chrono-unified-maintenance/v1"@[0] == 'c');
+        assert("Chrono-unified-maintenance/v1"@[0] == 'C');
+        assert("chrono-unified-maintenance/v1\n"@ != "chrono-unified-maintenance/v1"@);
+        assert("Chrono-unified-maintenance/v1"@ != "chrono-unified-maintenance/v1"@);
+        assert("".spec_bytes().len() == 0);
+        assert(".chrono-harness/state/m/".spec_bytes().last() == 47u8);
+        assert(".chrono-harness/state/m.sock".spec_bytes().last() == 107u8);
+        assert(".chrono-harness/state2/m/".spec_bytes()[21] == 50u8);
+        assert(".chrono-harness/state2/m".spec_bytes()[21] == 50u8);
+        assert(".chrono-harness/state/m".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m/".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m.sock".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/λ//".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/λ".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m".spec_bytes().last() == 109u8);
+        assert(".chrono-harness/state/λ//".spec_bytes().last() == 47u8);
+        assert(".chrono-harness/state/λ".spec_bytes().last() == 187u8);
+        assert(signal::maintenance_location(".chrono-harness/state/", true));
+        assert(signal::maintenance_location(".chrono-harness/state/m", false));
+        assert(signal::maintenance_location(".chrono-harness/state/λ//", true));
+        assert(signal::maintenance_location(".chrono-harness/state/λ", false));
+    }
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/", ".chrono-harness/state/m",
+        None, 1, 0, "", true);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/λ//", ".chrono-harness/state/λ",
+        Some(u64::MAX), u64::MAX, 0, "", true);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        Some(1), 1, 0, "", true);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        Some(0), 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        None, 0, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1\n", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        None, 1, 0, "", false);
+    policy_case("Chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock",
+        None, 1, 0, "", false);
+    policy_case("", ".chrono-harness/state/m/", ".chrono-harness/state/m.sock", None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", "", ".chrono-harness/state/m", None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m", ".chrono-harness/state/m",
+        None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state2/m/", ".chrono-harness/state/m",
+        None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", "", None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state/",
+        None, 1, 0, "", false);
+    policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/m/", ".chrono-harness/state2/m",
+        None, 1, 0, "", false);
+}
+
+proof fn unicode_policy_path_bytes()
+    ensures ".chrono-harness/state/λ//".spec_bytes() == seq![46u8, 99, 104, 114, 111, 110, 111,
+        45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 206, 187, 47, 47],
+        ".chrono-harness/state/λ".spec_bytes() == seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 206, 187],
+{
+    reveal_strlit(".chrono-harness/state/λ//");
+    reveal_strlit(".chrono-harness/state/λ");
+    reveal_strlit(".chrono-harness/state/");
+    reveal_strlit("λ"); reveal_strlit("λ//");
+    assert(vstd::string::is_ascii(".chrono-harness/state/"));
+    vstd::string::is_ascii_spec_bytes(".chrono-harness/state/");
+    assert(".chrono-harness/state/".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+        45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47]);
+    assert('λ' as u32 == 955 && '/' as u32 == 47);
+    assert(vstd::utf8::encode_scalar(955) == seq![206u8, 187]) by (compute);
+    assert(vstd::utf8::encode_scalar(47) == seq![47u8]) by (compute);
+    reveal_with_fuel(vstd::utf8::encode_utf8, 4);
+    assert("λ".spec_bytes() =~= seq![206u8, 187]);
+    assert("λ//".spec_bytes() =~= seq![206u8, 187, 47, 47]);
+    assert(".chrono-harness/state/λ"@ =~= ".chrono-harness/state/"@ + "λ"@);
+    assert(".chrono-harness/state/λ//"@ =~= ".chrono-harness/state/"@ + "λ//"@);
+    signal::identifiers::encode_concat(".chrono-harness/state/"@, "λ"@);
+    signal::identifiers::encode_concat(".chrono-harness/state/"@, "λ//"@);
 }
 }
 
