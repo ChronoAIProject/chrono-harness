@@ -1565,6 +1565,7 @@
     },
     "test:worktree-tests": {
       "operations": [
+        "prepare.ci-generation-dependency.runner",
         "verify.worktree-lifecycle-tests",
         "verify.worktree-lifecycle",
         "verify.worktree-attention-tests",

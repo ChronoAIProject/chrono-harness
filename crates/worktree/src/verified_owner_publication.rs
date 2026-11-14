@@ -167,16 +167,16 @@ pub fn first_stage_failure(checks: &Vec<StageCheck>) -> (failed: Option<usize>)
     None
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Binding {
     pub identity: String,
     pub sha256: String,
     pub size: u64,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Staged {
     pub path: String,
     pub identity: String,
@@ -184,16 +184,16 @@ pub struct Staged {
     pub size: u64,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Stage {
     pub selected: String,
     pub staged: Staged,
     pub previous: Binding,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Intent {
     pub schema: String,
     pub stage: Stage,

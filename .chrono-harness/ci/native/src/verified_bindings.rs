@@ -248,8 +248,8 @@ pub fn construction_complete(expected: &Vec<String>, actual: &Vec<String>, codes
         && expected_stage == observed_stage
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "lowercase"))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum BuildStatus { Passed, Failed }
 
 pub fn construction_status(failed: bool, complete: bool) -> (out: BuildStatus)
@@ -259,8 +259,8 @@ pub fn construction_status(failed: bool, complete: bool) -> (out: BuildStatus)
     if !failed && complete { BuildStatus::Passed } else { BuildStatus::Failed }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceObservation {
     pub commit: Option<String>,
     pub tree: Option<String>,
@@ -268,8 +268,8 @@ pub struct SourceObservation {
     pub error: Option<String>,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "lowercase"))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum SourceState { Unavailable, Changed, Dirty, Clean }
 
 pub open spec fn optional_text_same(a: &Option<String>, b: &Option<String>) -> bool {
@@ -317,8 +317,8 @@ pub fn source_state(before: &SourceObservation, after: &SourceObservation) -> (o
     else { SourceState::Clean }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceIdentity {
     pub state: SourceState,
     pub commit: Option<String>,
@@ -504,8 +504,8 @@ pub fn disjoint_homes(a: &[u8], b: &[u8]) -> (valid: bool)
     !path_contains(a, b) && !path_contains(b, a)
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize, serde::Serialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct NativePlatform {
     pub system: String,
     pub machine: String,
@@ -611,8 +611,8 @@ pub fn binding_valid(bytes: &[u8], registry: bool, has_path: bool) -> (valid: bo
     valid_sha256(bytes) && (registry || has_path)
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize, serde::Serialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Executable {
     pub path: String,
     pub sha256: String,

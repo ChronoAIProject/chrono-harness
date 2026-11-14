@@ -38,6 +38,13 @@ Debug／Serde trait 缺失错误已不再出现；但常量、Serde 派生、线
 VIR 或源文件生产对应证据的输入；普通 Cargo 编译和工具摘要不能补足这些资格。
 新增完整根的运行、IO、CI、存储及维护总成本尚未测定。
 
+native 完整库根也保留 `verified_bindings` 的六个实际类型，以及共享发布所有者的
+`Binding`、`Staged`、`Stage`、`Intent` 的原 Debug／Serde 实现和字段规则。
+这修复严格输入缺少真实消费者所需 trait 的前置差异，不授予派生宏或仓内实现豁免。
+四个原有 bindings／owner-publication 生产与独立预期操作复用同一动态 Serde 生产者；
+worktree 原计划显式先准备该输入，严格参数、线程、时限、输出上限和行为断言保持。
+完整 native 根及这些原有根的 Verus 翻译、派生实现和编译来源仍按实际原结果验收。
+
 ## CI generation 的现役证明入口
 
 AT 将证明入口迁移到现有 routes／projects 的直接 Verus 操作。native 库、native
