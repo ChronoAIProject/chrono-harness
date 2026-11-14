@@ -445,6 +445,7 @@ fn run_attempt(
             "-Zchecksum-hash-algorithm=sha256".into(),
         ],
         output_contract: None,
+        nested_proof: None,
     };
     let mut environment = inherited.clone();
     environment.insert(

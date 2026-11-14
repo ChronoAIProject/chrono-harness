@@ -190,6 +190,8 @@ pub struct Method {
     pub argv: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_contract: Option<chrono_harness::verified_verifier::OutputContract>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nested_proof: Option<chrono_harness::nested_proof::Declaration>,
 }
 /// A test identity is opaque; its owner and terminal action are explicit registration.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -304,8 +306,25 @@ pub fn methods(projects: &Value) -> Result<BTreeMap<String, Vec<Method>>, String
                         .map_err(|e| e.to_string())?,
                     output_contract: serde_json::from_value(action["output_contract"].clone())
                         .map_err(|e| e.to_string())?,
+                    nested_proof: serde_json::from_value(action["nested_proof"].clone())
+                        .map_err(|e| e.to_string())?,
                 };
                 chrono_harness::verified_verifier::validate_contract(&method.output_contract)?;
+                if let Some(proof) = &method.nested_proof {
+                    if method.output_contract.is_some()
+                        || proof.output_contract.is_none()
+                        || !chrono_harness::verified_limits::valid_execution_bounds(
+                            proof.timeout_seconds,
+                            proof.output_limit_bytes,
+                        )
+                        || !chrono_harness::verified_verifier::canonical_verifier_arguments(
+                            &proof.argv,
+                        )
+                    {
+                        return Err("E_VERUS_NESTED: invalid or duplicate proof declaration".into());
+                    }
+                    chrono_harness::verified_verifier::validate_contract(&proof.output_contract)?;
+                }
                 out.entry(operation.into()).or_default().push(method);
             }
         }

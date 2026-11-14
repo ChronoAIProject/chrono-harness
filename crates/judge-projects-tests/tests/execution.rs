@@ -154,6 +154,7 @@ fn plan(
                     tool: "fixture".into(),
                     argv: vec!["run".into(), serde_json::to_string(steps).unwrap()],
                     output_contract: None,
+                    nested_proof: None,
                 }],
             )
         })

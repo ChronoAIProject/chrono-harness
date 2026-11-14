@@ -481,9 +481,15 @@ pub fn arguments(
             index += 1;
         }
     }
-    for directory in search {
-        result.extend(["-L".into(), format!("dependency={directory}")]);
-    }
+    // 严格调用的固定五项后缀保持最后；动态搜索属于扩展参数。
+    let insert = result
+        .iter()
+        .position(|s| s.starts_with("--emit=link="))
+        .unwrap_or(result.len());
+    let searches = search
+        .iter()
+        .flat_map(|directory| ["-L".into(), format!("dependency={directory}")]);
+    result.splice(insert..insert, searches);
     Ok(result)
 }
 
@@ -496,6 +502,8 @@ pub fn execute_consumer(
     externs: &BTreeMap<String, String>,
     search: &[String],
     environment: &bindings::Environment,
+    proof: Option<&chrono_harness::nested_proof::Declaration>,
+    component_directory: &str,
     stdout: &mut (impl Write + Send),
     stderr: &mut (impl Write + Send),
 ) -> Result<(), BuildFailure> {
@@ -505,8 +513,99 @@ pub fn execute_consumer(
         tool: consumer.tool.clone(),
         argv: arguments(&consumer.argv, externs, search)?,
         output_contract: None,
+        nested_proof: None,
     };
     let executable = profile::path(root, &consumer.executable, b".chrono-harness/state/")?;
+    if let Some(proof) = proof {
+        chrono_harness::verified_verifier::nested::validate_resolution(&proof.argv, &method.argv)?;
+        let environment = environment
+            .iter()
+            .map(|(name, value)| {
+                Ok((
+                    name.to_str()
+                        .ok_or("non UTF-8 environment name")?
+                        .to_owned(),
+                    value
+                        .to_str()
+                        .ok_or("non UTF-8 environment value")?
+                        .to_owned(),
+                ))
+            })
+            .collect::<Result<BTreeMap<_, _>, String>>()?;
+        let executable_sha256 = chrono_harness::file_identity(&executable)?.0;
+        let process = chrono_harness::run_process_observed_retained(
+            root,
+            &chrono_harness::CommandSpec {
+                program: executable
+                    .to_str()
+                    .ok_or("non UTF-8 nested executable")?
+                    .into(),
+                args: method.argv.clone(),
+                env: environment,
+                timeout_seconds: proof.timeout_seconds,
+                output_limit_bytes: proof.output_limit_bytes,
+            },
+            &[],
+            &executable_sha256,
+            &chrono_harness::ProcessEvidence {
+                root,
+                stdout: &directory.join("nested.stdout"),
+                stderr: &directory.join("nested.stderr"),
+                launch: &directory.join("nested.launch.json"),
+                publication: None,
+            },
+        )?;
+        stdout
+            .write_all(&process.stdout_bytes)
+            .map_err(|e| e.to_string())?;
+        stderr
+            .write_all(&process.stderr_bytes)
+            .map_err(|e| e.to_string())?;
+        let original = chrono_harness::nested_proof::Original::capture(
+            root,
+            operation,
+            proof.clone(),
+            method.argv,
+            executable
+                .to_str()
+                .ok_or("non UTF-8 nested executable")?
+                .into(),
+            executable_sha256,
+            component_directory.into(),
+            process,
+        );
+        let path = directory.join("nested-proof-original.json");
+        persist(&path, &original)?;
+        let reference = identity(&path)?;
+        writeln!(
+            stdout,
+            "\n{}",
+            serde_json::to_string(&chrono_harness::nested_proof::Reference {
+                reason: "chrono-nested-proof-original".into(),
+                operation: operation.into(),
+                path: path
+                    .strip_prefix(root)
+                    .map_err(|e| e.to_string())?
+                    .to_str()
+                    .ok_or("non UTF-8 nested original")?
+                    .into(),
+                sha256: reference.sha256,
+                length: reference.length,
+            })
+            .map_err(|e| e.to_string())?
+        )
+        .map_err(|e| e.to_string())?;
+        if original.process.exit_code != 0
+            || original.process.failure.is_some()
+            || !original.process.owned_work_joined
+        {
+            return Err(BuildFailure {
+                message: "strict nested proof process failed".into(),
+                exit_code: Some(original.process.exit_code),
+            });
+        }
+        return Ok(());
+    }
     let result = execution::run_operation(
         root,
         directory,
@@ -670,6 +769,7 @@ fn component(
                 tool: tool.into(),
                 argv,
                 output_contract: None,
+                nested_proof: None,
             };
             let operation = execution::run_operation(
                 root,
@@ -865,6 +965,7 @@ pub(super) fn run(
             tool: "cargo".into(),
             argv,
             output_contract: None,
+            nested_proof: None,
         };
         let metadata = execution::run_operation(
             root,
@@ -963,10 +1064,32 @@ pub(super) fn run(
         return Ok(());
     }
     let operation = consumer;
-    let consumer = config
-        .consumers
+    let methods = execution::methods(&chrono_harness::json(&profile::read(
+        root,
+        &build.projects,
+        b".chrono-harness/",
+    )?)?)?;
+    let registered = methods
         .get(operation)
         .ok_or("unregistered dependency consumer")?;
+    let [registered] = registered.as_slice() else {
+        return Err("ambiguous dependency consumer".into());
+    };
+    let proof = registered.nested_proof.as_ref();
+    let declared;
+    let consumer = if let Some(proof) = proof {
+        declared = Consumer {
+            tool: proof.tool.clone(),
+            executable: proof.executable.clone(),
+            argv: proof.argv.clone(),
+        };
+        &declared
+    } else {
+        config
+            .consumers
+            .get(operation)
+            .ok_or("unregistered dependency consumer")?
+    };
     let reference: cargo::Identity =
         serde_json::from_slice(&bounded(&receipt)?).map_err(|e| e.to_string())?;
     unchanged(std::slice::from_ref(&reference))?;
@@ -1033,6 +1156,8 @@ pub(super) fn run(
         &externs,
         &search,
         &environment,
+        proof,
+        &observation.component.directory,
         stdout,
         stderr,
     )

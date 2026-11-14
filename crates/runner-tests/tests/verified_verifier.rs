@@ -2183,6 +2183,30 @@ fn first_file_error_and_later_roots_are_not_skipped() {
     let path = identifiers::equal_text(error.path, "source");
     expect_verifier_true(path);
 }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn nested_resolution_preserves_the_source_only_domain() {
+    let declared = arguments();
+    let resolved = arguments();
+    proof { reveal_with_fuel(policy::interpreted_option_sequence, 2); }
+    let admitted = policy::nested::validate_resolution(&declared, &resolved);
+    expect_verifier_true(admitted.is_ok());
+    let qualified = policy::require_registered_input_evidence(&resolved);
+    expect_verifier_true(qualified.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn nested_resolution_cannot_remove_a_strict_parameter() {
+    let declared = arguments();
+    let mut changed = arguments();
+    changed[2] = "--external-by-default".to_string();
+    proof {
+        reveal_strlit("--external-by-default"); reveal_strlit("--no-external-by-default");
+        assert("--external-by-default"@[2] != "--no-external-by-default"@[2]);
+    }
+    let rejected = policy::nested::validate_resolution(&declared, &changed);
+    expect_verifier_true(rejected.is_err());
+}
 }
 #[cfg(not(verus_keep_ghost))]
 struct BoundSources;

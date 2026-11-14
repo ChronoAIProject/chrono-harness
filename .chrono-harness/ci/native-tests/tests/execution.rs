@@ -29,6 +29,7 @@ impl Write for Forward {
 fn method(steps: serde_json::Value) -> Method {
     Method {
         output_contract: None,
+        nested_proof: None,
         owner: "fixture".into(),
         operation: "fixture.operation".into(),
         tool: "fixture.native".into(),

@@ -124,11 +124,20 @@ fn common_versions(v: &Value, fields: &[&str], versions: &[u64]) -> Result {
     choice(&v["status"], &["active", "proposed"])
 }
 fn action(v: &Value) -> Result {
-    object(v, &["operation", "tool", "argv"], &["output_contract"])?;
+    object(
+        v,
+        &["operation", "tool", "argv"],
+        &["output_contract", "nested_proof"],
+    )?;
     string(&v["operation"])?;
     string(&v["tool"])?;
     strings(&v["argv"])?;
-    output_contract(&v["output_contract"])
+    output_contract(&v["output_contract"])?;
+    if let Some(proof) = v.get("nested_proof") {
+        let _: chrono_harness::nested_proof::Declaration =
+            serde_json::from_value(proof.clone()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 fn output_contract(v: &Value) -> Result {
     let contract = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;

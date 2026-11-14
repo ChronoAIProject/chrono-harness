@@ -88,6 +88,7 @@ struct Snapshot {
             String,
             Vec<String>,
             Option<chrono_harness::verified_verifier::OutputContract>,
+            Option<chrono_harness::nested_proof::Declaration>,
         ),
     >,
     edges: BTreeSet<Edge>,
@@ -387,6 +388,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
                             tool.to_string(),
                             argv,
                             action.output_contract,
+                            action.nested_proof,
                         ),
                     )
                     .is_some()
@@ -616,7 +618,7 @@ fn ci_impact(
         }
         for op in changed(&old.operations, &new.operations) {
             for s in [old, new] {
-                if let Some((owner, _, _, _)) = s.operations.get(&op) {
+                if let Some((owner, _, _, _, _)) = s.operations.get(&op) {
                     seeds.insert(s.owner_nodes[owner].clone());
                 }
                 for (test, ops) in &s.policy.bindings {
@@ -729,7 +731,9 @@ fn ci_impact(
                         }
                         for tool in &changed_tools {
                             if ops.iter().any(|op| {
-                                s.operations.get(op).is_some_and(|(_, t, _, _)| t == tool)
+                                s.operations.get(op).is_some_and(|(_, t, _, _, proof)| {
+                                    t == tool || proof.as_ref().is_some_and(|p| &p.tool == tool)
+                                })
                             }) {
                                 reasons.insert(format!("changed bound tool: {tool}"));
                             }
@@ -1528,7 +1532,7 @@ fn inventory_profile(
     let methods: BTreeMap<_, _> = new
         .operations
         .iter()
-        .map(|(id, (owner, tool, argv, output_contract))| {
+        .map(|(id, (owner, tool, argv, output_contract, nested_proof))| {
             (
                 id.clone(),
                 vec![chrono_judge_registration::execution::Method {
@@ -1537,6 +1541,7 @@ fn inventory_profile(
                     tool: tool.clone(),
                     argv: argv.clone(),
                     output_contract: output_contract.clone(),
+                    nested_proof: nested_proof.clone(),
                 }],
             )
         })

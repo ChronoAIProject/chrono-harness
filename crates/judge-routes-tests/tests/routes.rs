@@ -16,6 +16,7 @@ fn method(id: &str, args: Vec<String>) -> Method {
         tool: "routes-helper".into(),
         argv: args,
         output_contract: None,
+        nested_proof: None,
     }
 }
 fn p(ops: &[&str]) -> Plan {

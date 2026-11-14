@@ -28,6 +28,7 @@ pub fn load_selected_config_with(
 }
 mod facts_inputs;
 mod json_fields;
+pub mod nested_proof;
 // 严格证明使用工具库拥有的唯一合同；普通 Rust 从原源文件擦除 ghost 声明。
 #[cfg(verus_keep_ghost)]
 pub use vstd::json_value_specs;

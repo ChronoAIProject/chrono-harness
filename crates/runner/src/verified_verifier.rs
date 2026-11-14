@@ -13,6 +13,8 @@ use identifiers::{equal_bytes, equal_text};
 
 #[path = "verified_cargo.rs"]
 pub mod cargo;
+#[path = "verified_nested.rs"]
+pub mod nested;
 #[path = "verified_sources.rs"]
 pub mod sources;
 
@@ -60,6 +62,8 @@ pub struct RegisteredAction {
     pub argv: Vec<String>,
     #[cfg_attr(not(verus_keep_ghost), serde(default))]
     pub output_contract: Option<OutputContract>,
+    #[cfg_attr(not(verus_keep_ghost), serde(default))]
+    pub nested_proof: Option<nested::Declaration>,
 }
 
 /// 字段名和必需字段由外部 Serde 解码；这些真实类型也由证明根拥有。
@@ -263,7 +267,7 @@ pub fn compiler_outputs(output: &str) -> (argument: Vec<u8>)
 pub enum InvocationKind { Edition, CrateName, Unstable, TestHarness, Environment, Search, Extern, Import, Export, Unknown }
 
 pub open spec fn invocation_kind(token: Seq<char>) -> InvocationKind {
-    if token == "--edition=2024"@ { InvocationKind::Edition }
+    if token == "--edition=2024"@ || token == "--edition=2021"@ { InvocationKind::Edition }
     else if token == "--test"@ { InvocationKind::TestHarness }
     else if token == "--crate-name"@ { InvocationKind::CrateName }
     else if token == "-Zunstable-options"@ { InvocationKind::Unstable }
@@ -278,7 +282,7 @@ pub open spec fn invocation_kind(token: Seq<char>) -> InvocationKind {
 pub fn classify_invocation_token(token: &str) -> (kind: InvocationKind)
     ensures kind == invocation_kind(token@),
 {
-    if equal_text(token, "--edition=2024") { InvocationKind::Edition }
+    if equal_text(token, "--edition=2024") || equal_text(token, "--edition=2021") { InvocationKind::Edition }
     else if equal_text(token, "--test") { InvocationKind::TestHarness }
     else if equal_text(token, "--crate-name") { InvocationKind::CrateName }
     else if equal_text(token, "-Zunstable-options") { InvocationKind::Unstable }

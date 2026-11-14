@@ -1049,6 +1049,8 @@ fn strict_consumer_command_boundary_preserves_exact_arguments_streams_and_exit()
             &externs,
             &["/runner/target/deps".into()],
             &f.environment,
+            None,
+            "",
             &mut stdout,
             &mut stderr,
         );
@@ -1064,5 +1066,147 @@ fn strict_consumer_command_boundary_preserves_exact_arguments_streams_and_exit()
                 .unwrap();
         assert_eq!(original["exit_code"], exit);
         assert_eq!(original["operation"], "strict.fixture");
+    }
+}
+
+#[test]
+fn selected_nested_proof_consumes_the_original_child_even_if_a_parent_would_succeed() {
+    use chrono_harness::{nested_proof, verified_verifier as verifier};
+    use std::collections::BTreeMap;
+    let mut f = Fixture::new();
+    f.environment
+        .insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
+    f.environment.insert("RUSTC_BOOTSTRAP".into(), "1".into());
+    let executable = ".chrono-harness/state/mock-component/verus";
+    let destination = f.root.join(executable);
+    fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    fs::copy(env!("CARGO_BIN_EXE_chrono-test-proved-cargo"), &destination).unwrap();
+    let argv: Vec<String> = [
+        "--crate-type=lib",
+        "--no-cheating",
+        "--no-external-by-default",
+        "--num-threads",
+        "2",
+        "--output-json",
+        "--compile",
+        "--emit=link=out,dep-info=out.d",
+        "root",
+        "-o",
+        "out",
+        "-Zchecksum-hash-algorithm=sha256",
+    ]
+    .into_iter()
+    .map(str::to_owned)
+    .collect();
+    let declaration = nested_proof::Declaration {
+        tool: "verus-json-contract".into(),
+        executable: "$COMPONENT/verus".into(),
+        argv: argv.clone(),
+        output_contract: Some(verifier::OutputContract {
+            version: "v".into(),
+            commit: "c".into(),
+        }),
+        timeout_seconds: 10,
+        output_limit_bytes: 1048576,
+    };
+    let consumer = proved_build::dependencies::Consumer {
+        tool: declaration.tool.clone(),
+        executable: executable.into(),
+        argv,
+    };
+    for exit in [0u8, 1u8] {
+        let directory = f.root.join(format!(".chrono-harness/state/nested-{exit}"));
+        fs::create_dir_all(&directory).unwrap();
+        write(&f.root.join("mock.json"), &serde_json::to_vec(&json!([{"argv":consumer.argv,
+            "stdout":include_bytes!("fixtures/verus-success.json").as_slice(), "stderr":b"original child stderr".as_slice(),
+            "writes":[], "exit":exit}])).unwrap());
+        let calls = f.root.join("mock.calls");
+        if calls.exists() {
+            fs::remove_file(calls).unwrap();
+        }
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let result = proved_build::dependencies::execute_consumer(
+            &f.root,
+            &directory,
+            "strict.fixture",
+            &consumer,
+            &BTreeMap::new(),
+            &[],
+            &f.environment,
+            Some(&declaration),
+            ".chrono-harness/state/mock-component",
+            &mut stdout,
+            &mut stderr,
+        );
+        assert_eq!(result.is_ok(), exit == 0);
+        assert_eq!(stderr, b"original child stderr");
+        let original =
+            nested_proof::read_original(&f.root, "strict.fixture", &stdout, 1048576).unwrap();
+        original
+            .validate(&f.root, "strict.fixture", &declaration)
+            .unwrap();
+        assert_eq!(original.process.exit_code, exit as i32);
+        assert!(original.process.owned_work_joined);
+        assert_eq!(
+            original.process.stdout_bytes,
+            include_bytes!("fixtures/verus-success.json")
+        );
+        assert!(nested_proof::read_original(&f.root, "wrong.operation", &stdout, 1048576).is_err());
+        assert!(nested_proof::read_original(&f.root, "strict.fixture", b"{}", 1048576).is_err());
+        let mut duplicate = stdout.clone();
+        duplicate.extend_from_slice(&stdout);
+        assert!(
+            nested_proof::read_original(&f.root, "strict.fixture", &duplicate, 1048576).is_err()
+        );
+        for mutation in [
+            "operation",
+            "executable",
+            "argv",
+            "join",
+            "output",
+            "source",
+            "declaration",
+        ] {
+            let mut changed = original.clone();
+            match mutation {
+                "operation" => changed.operation.push('x'),
+                "executable" => changed.executable.push('x'),
+                "argv" => changed.process.argv[2].push('x'),
+                "join" => changed.process.owned_work_joined = false,
+                "output" => changed.process.stdout_bytes.push(0),
+                "source" => {
+                    changed.resolved_argv[8] = "other".into();
+                    changed.process.argv[9] = "other".into();
+                }
+                "declaration" => changed.declaration.tool.push('x'),
+                _ => unreachable!(),
+            }
+            assert!(
+                changed
+                    .validate(&f.root, "strict.fixture", &declaration)
+                    .is_err(),
+                "{mutation}"
+            );
+        }
+        if exit != 0 {
+            let decoded =
+                serde_json::from_slice::<verifier::CompilerReport>(&original.process.stdout_bytes)
+                    .ok();
+            assert!(
+                verifier::admit_observed_output(
+                    &declaration.output_contract,
+                    &decoded,
+                    &original.resolved_argv,
+                    original.process.exit_code,
+                    false,
+                    &original.compiler_dependency,
+                    1048576,
+                    &original.compiler_artifact
+                )
+                .is_err()
+            );
+        }
+        write(&directory.join("nested-proof-original.json"), b"{}");
+        assert!(nested_proof::read_original(&f.root, "strict.fixture", &stdout, 1048576).is_err());
     }
 }
