@@ -784,7 +784,38 @@
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
             "investigate.verus-tool-contract.consume"
-          ]
+          ],
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2021",
+              "--crate-name",
+              "verus_tool_contract_consume",
+              "--extern",
+              "serde_json",
+              "--export",
+              ".chrono-harness/state/runner-tool-contract-consume.vir",
+              "--emit=link=.chrono-harness/state/runner-tool-contract-consume.rlib,dep-info=.chrono-harness/state/runner-tool-contract-consume.rlib.d",
+              ".chrono-harness/experiments/verus-tool-contract/consume.rs",
+              "-o",
+              ".chrono-harness/state/runner-tool-contract-consume.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.04.24.f8e1704",
+              "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
+          }
         },
         "investigate_tool_contract_reject": {
           "operation": "investigate.verus-tool-contract.reject",

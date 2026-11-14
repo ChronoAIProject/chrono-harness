@@ -100,31 +100,6 @@
           "-Zchecksum-hash-algorithm=sha256"
         ]
       },
-      "investigate.verus-tool-contract.consume": {
-        "tool": "verus-json-contract",
-        "executable": "$COMPONENT/verus",
-        "argv": [
-          "--crate-type=lib",
-          "--no-cheating",
-          "--no-external-by-default",
-          "--num-threads",
-          "2",
-          "--output-json",
-          "--compile",
-          "--edition=2021",
-          "--crate-name",
-          "verus_tool_contract_consume",
-          "--extern",
-          "serde_json",
-          "--export",
-          ".chrono-harness/state/runner-tool-contract-consume.vir",
-          "--emit=link=.chrono-harness/state/runner-tool-contract-consume.rlib,dep-info=.chrono-harness/state/runner-tool-contract-consume.rlib.d",
-          ".chrono-harness/experiments/verus-tool-contract/consume.rs",
-          "-o",
-          ".chrono-harness/state/runner-tool-contract-consume.rlib",
-          "-Zchecksum-hash-algorithm=sha256"
-        ]
-      },
       "investigate.verus-tool-contract.reject": {
         "tool": "verus-json-contract",
         "executable": "$COMPONENT/verus",
