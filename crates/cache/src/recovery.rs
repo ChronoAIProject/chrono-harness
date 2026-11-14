@@ -118,6 +118,11 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
         proof { planner::restore_status_has_match(outcome, requested, matched, prefixes@); }
         assert(matched.is_some());
         let key = matched.unwrap();
+        assert(matched == Some(key));
+        assert(planner::recovery_action_spec(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, None, None, false)
+            == Ok::<planner::RecoveryAction, planner::RecoveryDecisionError>(
+                planner::RecoveryAction::Keep));
         let ghost initial = state;
         let (state, result) = verify(state, key);
         let ghost verified = state;
@@ -129,6 +134,9 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
         };
         let ghost verified_value = value;
         assert(original == Ok::<T, String>(verified_value));
+        assert(initial == initial_state);
+        assert(verify.ensures((initial_state, key),
+            (verified, Ok::<T, String>(verified_value))));
         let (state, status) = read_status(state, &value);
         assert(read_status.ensures((verified, &value), (state, status)));
         let action = planner::recovery_action(outcome, reason, unconfirmed,
@@ -149,6 +157,12 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
             && recovery_cache_final_result(outcome, reason, unconfirmed,
                 outputs_valid, key_valid, method, observed, refresh,
                 Some(verified_value), result));
+        assert(exists|observed_state: S, value: T, observed: Option<&str>|
+            verify.ensures((initial_state, key),
+                (observed_state, Ok::<T, String>(value)))
+            && #[trigger] read_status.ensures((observed_state, &value), (state, observed))
+            && recovery_cache_final_result(outcome, reason, unconfirmed,
+                outputs_valid, key_valid, method, observed, refresh, Some(value), result));
         assert(recovery_cache_decision_result(initial_state, outcome, reason, matched,
             unconfirmed, outputs_valid, key_valid, method, refresh, id,
             verify, read_status, render_error, (state, result)));

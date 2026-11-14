@@ -150,6 +150,12 @@ pub proof fn restore_status_has_match(
     reveal_strlit("miss-or-unavailable"); reveal_strlit("error");
     reveal_strlit("not-attempted"); reveal_strlit("unavailable");
     reveal(restore_status_spec);
+    assert("exact"@.len() == 5);
+    assert("compatible"@.len() == 10);
+    assert("unavailable"@.len() == 11);
+    assert("miss-or-unavailable"@.len() == 19);
+    assert("error"@.len() == 5);
+    assert("not-attempted"@.len() == 13);
     assert("unavailable"@ != "exact"@ && "unavailable"@ != "compatible"@);
     assert("miss-or-unavailable"@ != "exact"@
         && "miss-or-unavailable"@ != "compatible"@);
