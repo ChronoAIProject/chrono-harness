@@ -11,6 +11,7 @@ pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 verus! {
+#[verifier::inline]
 pub open spec fn maintenance_location(path: &str, directory: bool) -> bool {
     let bytes = path.spec_bytes();
     let prefix = ".chrono-harness/state/".spec_bytes();
@@ -33,6 +34,7 @@ pub fn valid_maintenance_location(path: &str, directory: bool) -> (valid: bool)
         && (bytes[bytes.len() - 1] == 47) == directory
 }
 
+#[verifier::inline]
 pub open spec fn maintenance_policy_fields(schema: &str, directory: &str, socket: &str,
     idle: Option<u64>, timer: u64) -> bool
 {

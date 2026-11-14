@@ -194,6 +194,11 @@ fn policy_checks_keep_path_order_and_the_first_complete_error() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn policy_fields_keep_exact_schema_path_and_timer_boundaries() {
     proof {
+        reveal(signal::maintenance_location);
+        reveal(signal::maintenance_policy_fields);
+        reveal_strlit("chrono-unified-maintenance/v1");
+        reveal_strlit("chrono-unified-maintenance/v1\n");
+        reveal_strlit("Chrono-unified-maintenance/v1");
         reveal_strlit(".chrono-harness/state/");
         reveal_strlit(".chrono-harness/state/m");
         reveal_strlit(".chrono-harness/state/m/");
@@ -217,6 +222,33 @@ fn policy_fields_keep_exact_schema_path_and_timer_boundaries() {
         vstd::string::is_ascii_spec_bytes(".chrono-harness/state2/m");
         vstd::string::is_ascii_spec_bytes("");
         unicode_policy_path_bytes();
+        assert(".chrono-harness/state/".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47]);
+        assert(".chrono-harness/state/m".spec_bytes() =~= seq![46u8, 99, 104, 114, 111, 110, 111,
+            45, 104, 97, 114, 110, 101, 115, 115, 47, 115, 116, 97, 116, 101, 47, 109]);
+        let prefix = ".chrono-harness/state/".spec_bytes();
+        assert(prefix.len() == 22);
+        assert(prefix.take(prefix.len() as int) =~= prefix);
+        assert(prefix.last() == 47u8);
+        assert("chrono-unified-maintenance/v1"@.len() == 29);
+        assert("chrono-unified-maintenance/v1\n"@.len() == 30);
+        assert("chrono-unified-maintenance/v1"@[0] == 'c');
+        assert("Chrono-unified-maintenance/v1"@[0] == 'C');
+        assert("chrono-unified-maintenance/v1\n"@ != "chrono-unified-maintenance/v1"@);
+        assert("Chrono-unified-maintenance/v1"@ != "chrono-unified-maintenance/v1"@);
+        assert("".spec_bytes().len() == 0);
+        assert(".chrono-harness/state/m/".spec_bytes().last() == 47u8);
+        assert(".chrono-harness/state/m.sock".spec_bytes().last() == 107u8);
+        assert(".chrono-harness/state2/m/".spec_bytes()[21] == 50u8);
+        assert(".chrono-harness/state2/m".spec_bytes()[21] == 50u8);
+        assert(".chrono-harness/state/m".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m/".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m.sock".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/λ//".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/λ".spec_bytes().take(22) =~= prefix);
+        assert(".chrono-harness/state/m".spec_bytes().last() == 109u8);
+        assert(".chrono-harness/state/λ//".spec_bytes().last() == 47u8);
+        assert(".chrono-harness/state/λ".spec_bytes().last() == 187u8);
         assert(signal::maintenance_location(".chrono-harness/state/", true));
         assert(signal::maintenance_location(".chrono-harness/state/m", false));
         assert(signal::maintenance_location(".chrono-harness/state/λ//", true));

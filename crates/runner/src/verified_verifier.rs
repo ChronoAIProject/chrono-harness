@@ -9,7 +9,9 @@ use vstd::prelude::*;
 pub mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
-use identifiers::{encode_concat, equal_bytes, equal_text};
+#[cfg(verus_keep_ghost)]
+use identifiers::encode_concat;
+use identifiers::{equal_bytes, equal_text};
 
 #[path = "verified_cargo.rs"]
 pub mod cargo;
