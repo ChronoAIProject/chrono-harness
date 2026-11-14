@@ -1,13 +1,66 @@
 //! Explicit per-object producer registrations; no shared mutable catalogue.
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::super::identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+#[cfg(verus_keep_ghost)]
+#[path = "producer/rolling.rs"]
+#[rustfmt::skip]
+pub(crate) mod rolling;
+
+verus! {
+pub enum ProducerNamespaceMember { Owner, Records, Metadata, Disposals, Unknown }
+
+pub fn producer_namespace_member(name: &str) -> (member: ProducerNamespaceMember)
+    ensures match member {
+        ProducerNamespaceMember::Owner => name@ == "objects.json"@,
+        ProducerNamespaceMember::Records => name@ == "producer-records"@,
+        ProducerNamespaceMember::Metadata => name@ == "rolling-metadata"@,
+        ProducerNamespaceMember::Disposals => name@ == "rolling-disposals"@,
+        ProducerNamespaceMember::Unknown => name@ != "objects.json"@
+            && name@ != "producer-records"@ && name@ != "rolling-metadata"@
+            && name@ != "rolling-disposals"@,
+    },
+{
+    if equal_text(name, "objects.json") { ProducerNamespaceMember::Owner }
+    else if equal_text(name, "producer-records") { ProducerNamespaceMember::Records }
+    else if equal_text(name, "rolling-metadata") { ProducerNamespaceMember::Metadata }
+    else if equal_text(name, "rolling-disposals") { ProducerNamespaceMember::Disposals }
+    else { ProducerNamespaceMember::Unknown }
+}
+
+/// An enclosing fixture may retire only after the producer has retired every
+/// object and metadata handoff, with no unowned member in its namespace.
+pub fn producer_namespace_retired(objects_empty: bool, metadata_empty: bool,
+    members_known: bool) -> (retired: bool)
+    ensures retired == (objects_empty && metadata_empty && members_known),
+{
+    objects_empty && metadata_empty && members_known
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use std::sync::Arc;
+#[cfg(not(verus_keep_ghost))]
 mod body;
+#[cfg(not(verus_keep_ghost))]
 mod layout_migration;
-mod rolling;
+#[cfg(not(verus_keep_ghost))]
+pub(crate) mod rolling;
+#[cfg(not(verus_keep_ghost))]
 use body::fingerprint;
 
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct ProducerPolicy {
     pub(super) id: String,
     pub(super) directory: String,
@@ -29,6 +82,7 @@ pub(super) struct ProducerPolicy {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct CacheLease {
     path: String,
     id: String,
@@ -36,6 +90,7 @@ struct CacheLease {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Reference {
     released: bool,
     reason: String,
@@ -44,6 +99,7 @@ struct Reference {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Object {
     path: String,
     identity: String,
@@ -70,6 +126,7 @@ struct Object {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct LegacyRegistry {
     schema: String,
     producer: String,
@@ -79,6 +136,7 @@ struct LegacyRegistry {
 }
 
 // Decode typed members directly while rejecting duplicate declarations.
+#[cfg(not(verus_keep_ghost))]
 fn strict_map<'de, D, T>(d: D) -> Result<BTreeMap<String, T>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -110,6 +168,7 @@ where
 }
 
 // Opaque evidence still needs recursive duplicate detection inside its values.
+#[cfg(not(verus_keep_ghost))]
 fn strict_evidence<'de, D>(d: D) -> Result<BTreeMap<String, Value>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -121,6 +180,7 @@ where
 // producer-written object registrations, never in a shared mutable catalogue.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Owner {
     schema: String,
     producer: String,
@@ -130,12 +190,14 @@ struct Owner {
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct ObjectRecord<T = Object> {
     schema: String,
     owner_sha256: String,
     object: T,
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Loaded {
     producer: String,
     directory_id: String,
@@ -143,6 +205,7 @@ struct Loaded {
     objects: Vec<Arc<Object>>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Store {
     directory: PathBuf,
     owner: Owner,
@@ -155,8 +218,10 @@ struct Store {
 // The physical store already exists. Lock it before examining birth state, so
 // publishing the named lease cannot expose an unlocked, unexplained birth to
 // another ordinary publisher. This gate never creates or adopts an owner file.
+#[cfg(not(verus_keep_ghost))]
 struct DirectoryGate(chrono_harness::ownership::DirectoryLease);
 
+#[cfg(not(verus_keep_ghost))]
 impl DirectoryGate {
     fn acquire(
         directory: &Path,
@@ -190,6 +255,7 @@ impl DirectoryGate {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Store {
     fn partition(directory: &Path, producer: &str, candidate: &str) -> Result<Value, String> {
         Self::partition_observed(directory, producer, candidate, |_| Ok(()))
@@ -692,6 +758,7 @@ impl Store {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
     pub(in crate::automatic) fn partition_producer(
         &self,
@@ -730,12 +797,15 @@ impl Manager {
 }
 
 /// Handle to one exact producer artifact; dropping it never publishes release.
+#[cfg(not(verus_keep_ghost))]
 pub struct RetainedArtifact {
     directory: PathBuf,
     producer: String,
     object: String,
+    maintenance_root: Option<PathBuf>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn generated_paths(paths: &[String]) -> Result<(), String> {
     let mut seen = BTreeSet::new();
     for path in paths {
@@ -769,6 +839,7 @@ fn generated_paths(paths: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl RetainedArtifact {
     /// Test-only interruption seam for the exact conversion producer. The
     /// public lifecycle entry separately verifies coordinator enrollment/policy.
@@ -791,6 +862,7 @@ impl RetainedArtifact {
         producer: &str,
     ) -> Result<(PathBuf, Vec<String>), String> {
         Self::resolve_store(host_root, config_path, producer, false)
+            .map(|(path, outputs, _)| (path, outputs))
     }
 
     fn resolve_store(
@@ -798,7 +870,7 @@ impl RetainedArtifact {
         config_path: &str,
         producer: &str,
         temporary: bool,
-    ) -> Result<(PathBuf, Vec<String>), String> {
+    ) -> Result<(PathBuf, Vec<String>, PathBuf), String> {
         let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
         let (config, bytes) = crate::configuration(&root, config_path)?;
         let mut selected = None;
@@ -827,7 +899,11 @@ impl RetainedArtifact {
                 report["coordinator_root"] = value!(inputs.policy.coordinator_root);
                 report["directory"] = value!(directory);
                 report["generated_outputs"] = value!(declaration.generated_outputs);
-                selected = Some((directory, declaration.generated_outputs.clone()));
+                selected = Some((
+                    directory,
+                    declaration.generated_outputs.clone(),
+                    inputs.policy.coordinator_root.clone(),
+                ));
                 Ok(())
             },
         )?;
@@ -838,6 +914,22 @@ impl RetainedArtifact {
                 .into());
         }
         selected.ok_or("retained producer store was not resolved".into())
+    }
+
+    /// Bind activation to the exact existing owner; never infer a root from directories.
+    pub fn bind_maintenance_owner(
+        &mut self,
+        host_root: &Path,
+        config_path: &str,
+    ) -> Result<(), String> {
+        let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
+        let (directory, _, coordinator) =
+            Self::resolve_store(&root, config_path, &self.producer, false)?;
+        if directory != self.directory {
+            return Err("producer activation owner differs from physical store".into());
+        }
+        self.maintenance_root = Some(coordinator);
+        Ok(())
     }
 
     pub fn begin(
@@ -949,6 +1041,7 @@ impl RetainedArtifact {
             directory: directory.into(),
             producer: producer.into(),
             object,
+            maintenance_root: None,
         })
     }
 
@@ -972,6 +1065,7 @@ impl RetainedArtifact {
             directory: directory.into(),
             producer: producer.into(),
             object,
+            maintenance_root: None,
         })
     }
 
@@ -1094,19 +1188,28 @@ impl RetainedArtifact {
                 receipt: Some(receipt),
             },
         );
-        store.save(i)
+        store.save(i)?;
+        drop(store);
+        if released {
+            if let Some(root) = &self.maintenance_root {
+                chrono_harness::maintenance_signal::announce_adopted(root, "producer-release");
+            }
+        }
+        Ok(())
     }
 }
 
 /// One prospectively enrolled temporary allocation. Source and originals stay
 /// in place after Drop or interruption; only its declared outputs enter drain.
 /// Native consumers use bind_command; engine consumers inherit the same Scope.
+#[cfg(not(verus_keep_ghost))]
 pub struct TemporaryHost {
     path: PathBuf,
     lease: Option<Lease>,
     owner: Option<rolling::Owner>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl TemporaryHost {
     pub fn registered_store(
         host_root: &Path,
@@ -1114,6 +1217,7 @@ impl TemporaryHost {
         producer: &str,
     ) -> Result<(PathBuf, Vec<String>), String> {
         RetainedArtifact::resolve_store(host_root, config_path, producer, true)
+            .map(|(path, outputs, _)| (path, outputs))
     }
 
     pub fn allocate(
@@ -1378,6 +1482,7 @@ impl TemporaryHost {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl ProducerPolicy {
     pub(super) fn directory(&self, coordinator_root: &Path) -> Result<PathBuf, String> {
         no_symlink_parents(coordinator_root, self.directory.trim_end_matches('/'))
@@ -1485,6 +1590,64 @@ impl ProducerPolicy {
             artifact_disposal::paths(r, &root, &head, &names)?;
         }
         Ok(())
+    }
+
+    /// Read the producer's own declarations for the explicit maintenance report.
+    /// This does not import directories, acquire deletion rights or change state.
+    pub(super) fn observe_inventory(
+        &self,
+        inputs: &PolicyInputs,
+        inventory: &mut super::inventory::Report,
+    ) {
+        inventory.record(value!({"kind":"producer-policy","producer":self.id,
+            "owner_root":inputs.policy.coordinator_root,"directory":self.directory,
+            "policy_sha256":sha256(&inputs.anchor_policy_bytes),
+            "generated_outputs":self.generated_outputs,"source_roots":self.source_roots,
+            "temporary":self.temporary,"fixture_bodies":self.fixture_bodies}));
+        let observed = (|| {
+            let directory = self.directory(&inputs.policy.coordinator_root)?;
+            if !directory.exists() || !directory.join("objects.json").exists() {
+                inventory.unknown(&self.id, "no explicit producer registry");
+                inventory.record(value!({"kind":"producer-namespace","producer":self.id,
+                    "path":directory,"members":"unknown","action":"not-executed",
+                    "reason":"no explicit producer registry; historical objects remain untouched"}));
+                return Ok::<(), String>(());
+            }
+            let mut store = Store::open(&directory, &self.id, false)?;
+            let (objects, errors) = store.records()?;
+            for error in errors {
+                inventory.error(&self.id, &error);
+            }
+            // Release the namespace handle before potentially long footprint IO.
+            drop(store);
+            for object in objects {
+                let path = directory.join(&object.path);
+                let measurement = inventory.measure(&path);
+                inventory.record(value!({"kind":"producer-allocation","producer":self.id,
+                    "path":path,"identity":object.identity,"intent":object.intent,
+                    "publication":object.publication,"sealed":object.sealed,
+                    "consumers":object.consumers,"retention_reason":object.retention_reason,
+                    "disposed":object.disposed,"cache_lease":object.cache_lease,
+                    "generated":object.generated,"bodies":object.bodies,"rolling":object.rolling,
+                    "measurement":measurement,"action":"see producer-result original"}));
+                let members: BTreeSet<_> = object
+                    .generated
+                    .keys()
+                    .chain(object.bodies.keys())
+                    .collect();
+                for member in members {
+                    let physical = path.join(member.trim_end_matches('/'));
+                    let measurement = inventory.measure(&physical);
+                    inventory.record(value!({"kind":"producer-artifact","producer":self.id,
+                        "allocation":path,"member":member,"path":physical,
+                        "measurement":measurement,"action":"see producer-result original"}));
+                }
+            }
+            Ok(())
+        })();
+        if let Err(error) = observed {
+            inventory.error(&self.id, error);
+        }
     }
 
     pub(super) fn drain(

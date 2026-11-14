@@ -53,14 +53,34 @@ pub fn missing_cache_observation() -> (observation: MissingCacheObservation)
 mod age;
 #[cfg(not(verus_keep_ghost))]
 mod cache_adoption;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/inventory.rs"]
+pub(crate) mod inventory;
+#[cfg(not(verus_keep_ghost))]
+pub(crate) mod inventory;
 #[cfg(not(verus_keep_ghost))]
 mod migration;
 #[cfg(not(verus_keep_ghost))]
 mod owner_deployment;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/producer.rs"]
+#[rustfmt::skip]
+pub(crate) mod producer;
 #[cfg(not(verus_keep_ghost))]
-mod producer;
+pub(crate) mod producer;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/service.rs"]
+pub(crate) mod service;
 #[cfg(not(verus_keep_ghost))]
-mod retirement;
+pub(crate) mod service;
+#[cfg(all(not(verus_keep_ghost), feature = "producer-birth-test"))]
+pub use inventory::write_record as write_inventory_record;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/retirement.rs"]
+#[rustfmt::skip]
+pub(crate) mod retirement;
+#[cfg(not(verus_keep_ghost))]
+pub(crate) mod retirement;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_lifecycle::{Disposition, select_artifact};
 // Explicit file custody uses these same admission/enrollment capabilities, without
@@ -532,6 +552,47 @@ struct Manager {
     _namespace: Lease,
     _gate: Gate,
 }
+#[cfg(not(verus_keep_ghost))]
+fn open_namespace(
+    inputs: &PolicyInputs,
+    directory: &Path,
+    exclusive: bool,
+    wait: Option<std::time::Duration>,
+) -> Result<Lease, String> {
+    let anchor = &inputs.policy.coordinator_root;
+    let common = &inputs.common;
+    if directory.join("ledger.json").exists() || directory.join("owner.json").exists() {
+        return Err("aggregate cleanup state is retired; preserve originals and partition current enrollments".into());
+    }
+    let namespace = Lease::acquire(
+        &directory.join("deployment.lease"),
+        None,
+        true,
+        exclusive,
+        wait,
+    )?
+    .ok_or("owner deployment is using the enrollment namespace")?;
+    let declaration = value!({"schema":"chrono-worktree-enrollments/v1",
+        "coordinator_root":anchor,"common":common,"deployment_id":namespace.id()});
+    let namespace_path = no_symlink_parents(directory, "namespace.json")?;
+    if !namespace_path.exists() {
+        if let Err(error) = write_json(&namespace_path, &declaration, true) {
+            if fs::read(&namespace_path)
+                .ok()
+                .and_then(|raw| json(&raw).ok())
+                .as_ref()
+                != Some(&declaration)
+            {
+                return Err(error);
+            }
+        }
+    }
+    if json(&fs::read(&namespace_path).map_err(|e| e.to_string())?)? != declaration {
+        return Err("enrollment namespace deployment identity changed; preserve records".into());
+    }
+    Ok(namespace)
+}
+
 #[cfg(not(verus_keep_ghost))]
 fn record_directory(directory: &Path, target: &Path) -> Result<PathBuf, String> {
     let address = target.to_str().ok_or("worktree address is not UTF-8")?;
@@ -1315,6 +1376,24 @@ impl Observation<'_> {
         Ok(addresses)
     }
     fn enrollment_paths(&self) -> Result<Vec<PathBuf>, String> {
+        let mut errors = Vec::new();
+        let paths = self.enrollment_paths_observed(|issue| {
+            // In-progress address retirement can have no owner marker. Preserve
+            // the existing execution selection; diagnostics still expose it.
+            if issue["owner_missing"] != true {
+                errors.push(issue.to_string());
+            }
+        })?;
+        if errors.is_empty() {
+            Ok(paths)
+        } else {
+            Err(errors.join("; "))
+        }
+    }
+    fn enrollment_paths_observed(
+        &self,
+        mut issue: impl FnMut(Value),
+    ) -> Result<Vec<PathBuf>, String> {
         let namespace = no_symlink_parents(&self.directory, "enrollments")?;
         let mut paths = Vec::new();
         let items = match fs::read_dir(namespace) {
@@ -1323,26 +1402,43 @@ impl Observation<'_> {
             Err(e) => return Err(e.to_string()),
         };
         for item in items {
-            let item = item.map_err(|e| e.to_string())?;
-            if !item.file_type().map_err(|e| e.to_string())?.is_dir() {
-                return Err("enrollment namespace contains an unknown member".into());
-            }
-            let marker = item.path().join("owner.json");
-            let raw = match fs::read(&marker) {
-                Ok(raw) => raw,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(e.to_string()),
+            let item = match item {
+                Ok(item) => item,
+                Err(error) => {
+                    issue(value!({"record_path":null,"error":error.to_string()}));
+                    continue;
+                }
             };
-            let owner = json(&raw)?;
-            let path = PathBuf::from(
-                owner["path"]
-                    .as_str()
-                    .ok_or("enrollment declaration lacks its worktree address")?,
-            );
-            if record_directory(&self.directory, &path)? != item.path() {
-                return Err("enrollment declaration address differs from its namespace".into());
+            let observed = (|| {
+                if !item.file_type().map_err(|e| e.to_string())?.is_dir() {
+                    return Err("enrollment namespace contains an unknown member".into());
+                }
+                let marker = no_symlink_parents(&item.path(), "owner.json")?;
+                let raw = match fs::read(marker) {
+                    Ok(raw) => raw,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        issue(value!({"record_path":item.path(),"owner_missing":true,
+                            "error":"enrollment owner marker unavailable; address unknown"}));
+                        return Ok(None);
+                    }
+                    Err(error) => return Err(error.to_string()),
+                };
+                let owner = json(&raw)?;
+                let path = PathBuf::from(
+                    owner["path"]
+                        .as_str()
+                        .ok_or("enrollment declaration lacks its worktree address")?,
+                );
+                if record_directory(&self.directory, &path)? != item.path() {
+                    return Err("enrollment declaration address differs from its namespace".into());
+                }
+                Ok::<_, String>(Some(path))
+            })();
+            match observed {
+                Ok(Some(path)) => paths.push(path),
+                Ok(None) => (),
+                Err(error) => issue(value!({"record_path":item.path(),"error":error})),
             }
-            paths.push(path);
         }
         paths.sort();
         Ok(paths)
@@ -1431,10 +1527,11 @@ impl Observation<'_> {
         let mut empty_records = BTreeSet::new();
         let mut unreadable_records = 0;
         let mut namespace_error = None;
+        let mut namespace_issues = Vec::new();
         // Read only the declared enrollment metadata to select this agent's work.
         // Other agents' physical checkouts are observed only by explicit all-status.
         if all || current.is_some() {
-            match self.enrollment_paths() {
+            match self.enrollment_paths_observed(|issue| namespace_issues.push(issue)) {
                 Ok(paths) => {
                     for path in paths {
                         declared.insert(path.clone());
@@ -1509,7 +1606,19 @@ impl Observation<'_> {
             }
         }
         let mut inventory = value!({});
-        let git_addresses = self.observe_inventory(r, &[], &mut inventory, all, &selected)?;
+        let mut inventory_error = None;
+        let git_addresses = match self.observe_inventory(r, &[], &mut inventory, all, &selected) {
+            Ok(addresses) => addresses,
+            Err(error) => {
+                inventory_error = Some(error);
+                inventory["worktree_inventory"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|row| row["path"].as_str().map(PathBuf::from))
+                    .collect()
+            }
+        };
         for path in git_addresses {
             if path != self.inputs.policy.coordinator_root
                 && (!declared.contains(&path) || empty_records.contains(&path))
@@ -1532,6 +1641,19 @@ impl Observation<'_> {
                 "cleanup_state":"unknown","attention_required":true,
                 "agent_attention_required":false,
                 "next_action":"inspect-enrollment-namespace","error":error}));
+        }
+        if let Some(error) = &inventory_error {
+            rows.push(
+                value!({"path":null,"work_state":"unknown","cleanup_state":"unknown",
+                "attention_required":true,"agent_attention_required":false,
+                "next_action":"inspect-git-inventory","error":error}),
+            );
+        }
+        for issue in &namespace_issues {
+            rows.push(value!({"path":null,"record_path":issue["record_path"],
+                "work_state":"unknown","cleanup_state":"unknown",
+                "attention_required":true,"agent_attention_required":false,
+                "next_action":"inspect-enrollment-namespace","error":issue["error"]}));
         }
         for path in paths {
             let snapshot = self.enrollment_snapshot(&path);
@@ -1632,7 +1754,7 @@ impl Observation<'_> {
                 "physical_present":physical.is_ok(),"git_registered":git.is_some(),
                 "terminal_receipt":entry.and_then(|e| e.terminal.as_ref()).map(|t| &t.receipt),
                 "cleanup_receipt":entry.and_then(|e| e.attempts.last()).and_then(|a| a.receipt.as_ref()),
-                "error":error}));
+                "git_observation":git,"error":error}));
             if let Some(ledger) = snapshot.as_ref().ok().and_then(Option::as_ref) {
                 for pending in &ledger.retired_leases {
                     let agent_attention = pending_for_agent(
@@ -1657,9 +1779,14 @@ impl Observation<'_> {
             "scope":if all {"coordinator"} else if current.is_some() {"target-and-current-agent"} else {"target"},
             "agent":report["agent"],"unknown_creator_records":unknown_creators.len(),
             "unreadable_records":unreadable_records,"namespace_error":namespace_error,
+            "namespace_issues":namespace_issues,"inventory_error":inventory_error,
             "agent_observation_complete":current.is_some() && unknown_creators.is_empty()
-                && unreadable_records == 0 && namespace_error.is_none(),"worktrees":rows});
-        Ok(())
+                && unreadable_records == 0 && namespace_error.is_none() && namespace_issues.is_empty()
+                && inventory_error.is_none(),"worktrees":rows});
+        match inventory_error {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 }
 
@@ -1737,34 +1864,12 @@ impl Manager {
         if directory.join("ledger.json").exists() || directory.join("owner.json").exists() {
             return Err("aggregate cleanup state is retired; preserve originals and partition the current enrollments before adoption".into());
         }
-        let namespace = Lease::acquire(
-            &directory.join("deployment.lease"),
-            None,
-            true,
+        let namespace = open_namespace(
+            &inputs,
+            &directory,
             exclusive_namespace,
             wait.then_some(std::time::Duration::from_secs(r.config.timeout_seconds)),
-        )?
-        .ok_or("owner deployment is using the enrollment namespace")?;
-        let declaration = value!({"schema":"chrono-worktree-enrollments/v1",
-            "coordinator_root":anchor,"common":common,"deployment_id":namespace.id()});
-        let namespace_path = no_symlink_parents(&directory, "namespace.json")?;
-        if !namespace_path.exists() {
-            if let Err(error) = write_json(&namespace_path, &declaration, true) {
-                if fs::read(&namespace_path)
-                    .ok()
-                    .and_then(|raw| json(&raw).ok())
-                    .as_ref()
-                    != Some(&declaration)
-                {
-                    return Err(error);
-                }
-            }
-        }
-        if json(&fs::read(&namespace_path).map_err(|e| e.to_string())?)? != declaration {
-            return Err(
-                "enrollment namespace deployment identity changed; preserve records".into(),
-            );
-        }
+        )?;
         let record_directory = record_directory(&directory, &scope)?;
         fs::create_dir_all(&record_directory).map_err(|e| e.to_string())?;
         let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
@@ -2355,14 +2460,6 @@ impl Manager {
     // Only this worktree's metadata is excluded. Independent report owners
     // and worktrees use their own capabilities; no global release/reload join
     // is required around physical IO or an independent owner's failure.
-    fn outside_enrollment<T>(
-        &mut self,
-        r: &mut Runner,
-        activity: impl FnOnce(&PolicyInputs, &mut Runner) -> Result<T, String>,
-    ) -> Result<T, String> {
-        self.stable(r)?;
-        activity(&self.inputs, r)
-    }
     fn outside_enrollment_readonly<T>(
         &mut self,
         r: &mut Runner,
@@ -3346,158 +3443,6 @@ impl Manager {
         report["terminal_receipt"] = value!(receipt);
         Ok(())
     }
-    fn drain(
-        &mut self,
-        r: &mut Runner,
-        exclude: &[PathBuf],
-        report: &mut Value,
-        all: bool,
-    ) -> Result<(), String> {
-        report["drain"] = value!([]);
-        report["cleanup_failures"] = value!([]);
-        report["producer_drains"] = value!([]);
-        report["output_retention"] = Value::Null;
-        report["maintenance_scope"] = if all {
-            value!({"kind":"declared-enrollments"})
-        } else {
-            value!({"kind":"worktree","path":self.scope})
-        };
-        let mut failures = if all {
-            self.resume_retired_addresses(r, report)?
-        } else {
-            vec![]
-        };
-        self.observe_inventory(r, exclude, report, all, &BTreeSet::new())?;
-        failures.extend(self.drain_entries(r, exclude, report, all)?);
-        if !all {
-            report["cleanup_failures"] = value!(failures);
-            return if failures.is_empty() {
-                Ok(())
-            } else {
-                Err(format!(
-                    "automatic cleanup pending failures: {}",
-                    failures.join("; ")
-                ))
-            };
-        }
-        let (independent, unprotected) = self.outside_enrollment_readonly(r, |manager, r| {
-            let mut failures = Vec::new();
-            let mut unprotected = Vec::new();
-            for path in manager.enrollment_paths()? {
-                if path == manager.scope {
-                    continue;
-                }
-                let opened = Self::open_metadata(
-                    r,
-                    &manager.inputs.policy.coordinator_root,
-                    &manager.inputs.config_path,
-                    &manager.inputs.anchor_config_bytes,
-                    &manager._gate.token,
-                    &path,
-                    false,
-                    false,
-                );
-                match opened {
-                    Ok(Some(mut owner)) => {
-                        if let Err(error) = owner.restore_absent_policy(r) {
-                            failures.push(format!("{}: {error}", path.display()));
-                            report["drain"]
-                                .as_array_mut()
-                                .unwrap()
-                                .push(value!({"path":path,"status":"failed","error":error}));
-                            continue;
-                        }
-                        match owner.drain_entries(r, exclude, report, true) {
-                            Ok(pending) => failures.extend(pending),
-                            Err(error) => {
-                                failures.push(format!("{}: {error}", path.display()));
-                                continue;
-                            }
-                        }
-                        if let Err(error) = owner.retire_empty_address(r, report) {
-                            failures.push(format!("{}: {error}", path.display()));
-                        }
-                    }
-                    Ok(None) => return Err("cleanup policy disappeared during maintenance".into()),
-                    Err(error)
-                        if error.contains("enrollment metadata is busy")
-                            || error.contains("enrollment metadata remains busy") =>
-                    {
-                        unprotected.push(path.clone());
-                        report["drain"].as_array_mut().unwrap().push(
-                            value!({"path":path,"status":"preserved","preserved_reason":error}),
-                        );
-                    }
-                    Err(error) => {
-                        unprotected.push(path.clone());
-                        failures.push(format!("{}: {error}", path.display()));
-                        report["drain"]
-                            .as_array_mut()
-                            .unwrap()
-                            .push(value!({"path":path,"status":"failed","error":error}));
-                    }
-                }
-            }
-            Ok((failures, unprotected))
-        })?;
-        failures.extend(independent);
-        let producer_failures = self.outside_enrollment(r, |inputs, _| {
-        let mut failures = vec![];
-        for producer in inputs.anchor_policy.retained_producers.clone() {
-            let (config, bytes) = crate::configuration(
-                &inputs.policy.coordinator_root,
-                &inputs.config_path,
-            )?;
-            let root = &inputs.policy.coordinator_root;
-            let result = start::with_report(
-                root,
-                &inputs.config_path,
-                config,
-                &bytes,
-                "producer-cleanup",
-                "cleaned",
-                |r, _, attempt| {
-                    attempt["producer_objects"] = value!([]);
-                    producer.drain(inputs, r, attempt)
-                },
-            )?;
-            if result["status"] != "cleaned" {
-                failures.push(format!("producer {}: {}", producer.id, result["error"]));
-            }
-            let path = result["report_path"]
-                .as_str()
-                .ok_or("producer drain report path")?;
-            let bytes = crate::recovery::state_bytes(root, path)?;
-            report["producer_drains"].as_array_mut().unwrap().push(value!({"producer":producer.id,
-                "status":result["status"],"error":result["error"],"receipt":{"path":path,"sha256":sha256(&bytes)},
-                "input":crate::recovery::retained_input(root, path, &bytes, "receipt")}));
-        }
-        Ok(failures)
-        })?;
-        failures.extend(producer_failures);
-        // All declared ledgers must establish their original consumers before
-        // this cross-object pass. Unknown metadata defers only that dependent
-        // pass; independent worktree and producer maintenance has already run.
-        report["output_retention"] = if unprotected.is_empty() {
-            value!(self.outside_enrollment(r, |inputs, _| {
-                chrono_harness::retained_artifacts::retention::maintain_explicit_adopted(
-                    &inputs.policy.coordinator_root,
-                )
-            })?)
-        } else {
-            value!({"status":"preserved","reason":"enrollment original protection unavailable",
-                "unprotected_enrollments":unprotected})
-        };
-        report["cleanup_failures"] = value!(failures);
-        if failures.is_empty() {
-            Ok(())
-        } else {
-            Err(format!(
-                "automatic cleanup pending failures: {}",
-                failures.join("; ")
-            ))
-        }
-    }
     fn drain_entries(
         &mut self,
         r: &mut Runner,
@@ -4078,25 +4023,6 @@ impl Manager {
         });
         self.save()
     }
-    /// Entry-local refusals remain in the drain report and immutable receipts.
-    /// Coordinator/state publication failures still prevent admission.
-    fn drain_for_admission(
-        &mut self,
-        r: &mut Runner,
-        exclude: &[PathBuf],
-        report: &mut Value,
-    ) -> Result<(), String> {
-        match self.drain(r, exclude, report, false) {
-            Err(_)
-                if report["cleanup_failures"]
-                    .as_array()
-                    .is_some_and(|f| !f.is_empty()) =>
-            {
-                Ok(())
-            }
-            result => result,
-        }
-    }
     fn execute_entry(
         &mut self,
         r: &mut Runner,
@@ -4319,7 +4245,7 @@ impl Manager {
     }
 }
 
-/// Runs while the admission gate is held through drain, creation and enrollment.
+/// Only the named destination is excluded through creation and enrollment.
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn create(
     r: &mut Runner,
@@ -4350,7 +4276,6 @@ pub(crate) fn create(
     };
     manager.protect_reports(r, &o.root)?;
     manager.preflight_birth(r, &destination)?;
-    manager.drain_for_admission(r, &[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
@@ -4358,6 +4283,9 @@ pub(crate) fn create(
     manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"],"creator_agent":crate::AgentIdentity::from_report(report)?}))?;
     report["cleanup_enrollment"] = value!({"coordinator_root":manager.inputs.policy.coordinator_root,"state_directory":manager.inputs.policy.state_directory,"kind":"birth"});
     manager.observe_attention(r, report, false)?;
+    report["drain"] = value!([]);
+    report["cleanup_failures"] = value!([]);
+    report["maintenance_request"] = service::handoff(&manager.inputs, "birth");
     Ok(())
 }
 
@@ -4497,8 +4425,16 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         "use" | "check" | "bootstrap" => "used",
         _ => return Err("unknown lifecycle operation".into()),
     };
+    if operation == "maintain" {
+        return service::maintain(
+            &invoking,
+            config_path,
+            "explicit",
+            values.get("--report-consumer").copied(),
+        );
+    }
     let mut _use_guard = None;
-    start::with_report_for_consumer(
+    let result = start::with_report_for_consumer(
         &invoking,
         config_path,
         config,
@@ -4536,6 +4472,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 manager.adopt_live_policy(r)?;
             }
             manager.inputs.report_source(report);
+            report["drain"] = value!([]);
+            report["cleanup_failures"] = value!([]);
+            report["producer_drains"] = value!([]);
+            report["output_retention"] = Value::Null;
             match operation.as_str() {
                 "deploy-owner" => manager.deploy_owner(
                     r,
@@ -4545,11 +4485,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     values["--stage-sha256"],
                     report,
                 ),
-                "maintain" => {
-                    let result = manager.drain(r, &[invoking.clone()], report, true);
-                    manager.observe_attention(r, report, true)?;
-                    result
-                }
                 "import" => {
                     manager.enroll(
                     r,
@@ -4590,13 +4525,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    let result = manager.drain(r, &[invoking.clone()], report, false);
                     manager.observe_attention(r, report, false)?;
-                    result
+                    report["maintenance_request"] = service::handoff(&manager.inputs, "finish");
+                    Ok(())
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
-                    manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
                     if manager.current_entry(target).is_none()
                         && target == &manager.inputs.policy.coordinator_root
                         && manager.inputs.policy.main_cache_only
@@ -4822,6 +4756,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         .push(value!(receipt));
                     manager.ledger.entries[i].uses.retain(|s| s != token);
                     manager.save()?;
+                    report["maintenance_request"] =
+                        service::handoff(&manager.inputs, "use-completed");
                     if process.failure.is_some() || process.exit_code != 0 {
                         report["managed_command_failed"] = value!(true);
                         return Err(format!(
@@ -4832,20 +4768,29 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(error) = artifact_error {
                         return Err(error);
                     }
-                    let mut post_use_cleanup = value!({});
-                    let cleanup = manager.drain_for_admission(
-                        r,
-                        &[invoking.clone(), target.clone()],
-                        &mut post_use_cleanup,
-                    );
-                    report["post_use_cleanup"] = post_use_cleanup;
-                    cleanup?;
                     Ok(())
                 }
                 _ => unreachable!(),
             }
         },
-    )
+    );
+    drop(_use_guard.take());
+    if let Ok(report) = &result {
+        if matches!(
+            operation.as_str(),
+            "finish" | "use" | "check" | "bootstrap" | "import" | "migrate"
+        ) {
+            // The original result and its necessary sealing have returned before activation.
+            let root = report["lifecycle_coordinator_root"].as_str().unwrap_or("");
+            if !root.is_empty() {
+                chrono_harness::maintenance_signal::announce_adopted(
+                    Path::new(root),
+                    "published-handoff",
+                );
+            }
+        }
+    }
+    result
 }
 
 /// Warnings are a projection of the already-persisted report, never new state.
