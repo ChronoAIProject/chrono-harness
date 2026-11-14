@@ -363,9 +363,8 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
                 .ok_or("actions object required")?
                 .values()
             {
-                let action: chrono_harness::verified_verifier::RegisteredAction =
-                    serde_json::from_value(a.clone()).map_err(|e| e.to_string())?;
-                chrono_harness::verified_verifier::validate_contract(&action.output_contract)?;
+                let action =
+                    chrono_judge_registration::execution::method(format!("{prefix}:{name}"), a)?;
                 let operation = action.operation.as_str();
                 id(operation)?;
                 let tool = action.tool.as_str();

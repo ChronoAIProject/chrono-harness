@@ -54,18 +54,6 @@ impl PartialEq for OutputContract {
 
 impl Eq for OutputContract {}
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
-pub struct RegisteredAction {
-    pub operation: String,
-    pub tool: String,
-    pub argv: Vec<String>,
-    #[cfg_attr(not(verus_keep_ghost), serde(default))]
-    pub output_contract: Option<OutputContract>,
-    #[cfg_attr(not(verus_keep_ghost), serde(default))]
-    pub nested_proof: Option<nested::Declaration>,
-}
-
 /// 字段名和必需字段由外部 Serde 解码；这些真实类型也由证明根拥有。
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
 pub struct CompilerReport {

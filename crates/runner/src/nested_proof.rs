@@ -5,7 +5,16 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Read, path::Path};
 
-pub use verifier::nested::Declaration;
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Declaration {
+    pub tool: String,
+    pub executable: String,
+    pub argv: Vec<String>,
+    pub output_contract: Option<verifier::OutputContract>,
+    pub timeout_seconds: u64,
+    pub output_limit_bytes: usize,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

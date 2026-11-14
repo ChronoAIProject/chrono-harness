@@ -7,17 +7,6 @@ use vstd::prelude::*;
 
 verus! {
 
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
-pub struct Declaration {
-    pub tool: String,
-    pub executable: String,
-    pub argv: Vec<String>,
-    pub output_contract: Option<super::OutputContract>,
-    pub timeout_seconds: u64,
-    pub output_limit_bytes: usize,
-}
-
 pub open spec fn option_resolved(
     declared: Seq<String>, resolved: Seq<String>,
     before: &super::InvocationOption, after: &super::InvocationOption,

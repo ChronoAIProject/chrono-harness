@@ -360,6 +360,11 @@ proof fn invocation_token_literals()
     reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
     reveal_strlit("-L"); reveal_strlit("--extern");
     reveal_strlit("--import"); reveal_strlit("--export");
+    assert("--test"@.len() == 6);
+    assert("--edition=2024"@.len() == 14);
+    assert("--edition=2021"@.len() == 14);
+    assert("--test"@ != "--edition=2024"@);
+    assert("--test"@ != "--edition=2021"@);
     assert("--crate-name"@.len() != "--edition=2024"@.len());
     assert("-Zunstable-options"@.len() != "--edition=2024"@.len());
     assert("-Zunstable-options"@.len() != "--crate-name"@.len());
