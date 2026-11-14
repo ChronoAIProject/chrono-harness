@@ -132,6 +132,7 @@ fn tree(root: &Path, name: &str) -> String {
 mod retention_state;
 
 #[path = "support/retention_frontier.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod retention_frontier;
 #[cfg(not(verus_keep_ghost))]
 fn ledger(root: &Path) -> Value {
