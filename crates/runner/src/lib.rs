@@ -24,6 +24,7 @@ pub mod initial;
 pub mod input_file;
 pub mod observation;
 pub mod ownership;
+pub mod maintenance_signal;
 pub mod prepared;
 #[cfg(unix)]
 pub mod process_fds;

@@ -61,6 +61,8 @@ mod owner_deployment;
 mod producer;
 #[cfg(not(verus_keep_ghost))]
 mod inventory;
+#[cfg(not(verus_keep_ghost))]
+pub(crate) mod service;
 #[cfg(all(not(verus_keep_ghost), feature = "producer-birth-test"))]
 pub use inventory::write_record as write_inventory_record;
 #[cfg(not(verus_keep_ghost))]
@@ -536,6 +538,47 @@ struct Manager {
     _namespace: Lease,
     _gate: Gate,
 }
+#[cfg(not(verus_keep_ghost))]
+fn open_namespace(
+    inputs: &PolicyInputs,
+    directory: &Path,
+    exclusive: bool,
+    wait: Option<std::time::Duration>,
+) -> Result<Lease, String> {
+    let anchor = &inputs.policy.coordinator_root;
+    let common = &inputs.common;
+    if directory.join("ledger.json").exists() || directory.join("owner.json").exists() {
+        return Err("aggregate cleanup state is retired; preserve originals and partition current enrollments".into());
+    }
+    let namespace = Lease::acquire(
+        &directory.join("deployment.lease"),
+        None,
+        true,
+        exclusive,
+        wait,
+    )?
+        .ok_or("owner deployment is using the enrollment namespace")?;
+    let declaration = value!({"schema":"chrono-worktree-enrollments/v1",
+        "coordinator_root":anchor,"common":common,"deployment_id":namespace.id()});
+    let namespace_path = no_symlink_parents(directory, "namespace.json")?;
+    if !namespace_path.exists() {
+        if let Err(error) = write_json(&namespace_path, &declaration, true) {
+            if fs::read(&namespace_path)
+                .ok()
+                .and_then(|raw| json(&raw).ok())
+                .as_ref()
+                != Some(&declaration)
+            {
+                return Err(error);
+            }
+        }
+    }
+    if json(&fs::read(&namespace_path).map_err(|e| e.to_string())?)? != declaration {
+        return Err("enrollment namespace deployment identity changed; preserve records".into());
+    }
+    Ok(namespace)
+}
+
 #[cfg(not(verus_keep_ghost))]
 fn record_directory(directory: &Path, target: &Path) -> Result<PathBuf, String> {
     let address = target.to_str().ok_or("worktree address is not UTF-8")?;
@@ -1786,34 +1829,8 @@ impl Manager {
         if directory.join("ledger.json").exists() || directory.join("owner.json").exists() {
             return Err("aggregate cleanup state is retired; preserve originals and partition the current enrollments before adoption".into());
         }
-        let namespace = Lease::acquire(
-            &directory.join("deployment.lease"),
-            None,
-            true,
-            exclusive_namespace,
-            wait.then_some(std::time::Duration::from_secs(r.config.timeout_seconds)),
-        )?
-        .ok_or("owner deployment is using the enrollment namespace")?;
-        let declaration = value!({"schema":"chrono-worktree-enrollments/v1",
-            "coordinator_root":anchor,"common":common,"deployment_id":namespace.id()});
-        let namespace_path = no_symlink_parents(&directory, "namespace.json")?;
-        if !namespace_path.exists() {
-            if let Err(error) = write_json(&namespace_path, &declaration, true) {
-                if fs::read(&namespace_path)
-                    .ok()
-                    .and_then(|raw| json(&raw).ok())
-                    .as_ref()
-                    != Some(&declaration)
-                {
-                    return Err(error);
-                }
-            }
-        }
-        if json(&fs::read(&namespace_path).map_err(|e| e.to_string())?)? != declaration {
-            return Err(
-                "enrollment namespace deployment identity changed; preserve records".into(),
-            );
-        }
+        let namespace = open_namespace(&inputs, &directory, exclusive_namespace,
+            wait.then_some(std::time::Duration::from_secs(r.config.timeout_seconds)))?;
         let record_directory = record_directory(&directory, &scope)?;
         fs::create_dir_all(&record_directory).map_err(|e| e.to_string())?;
         let kernel = policy.schema == "chrono-worktree-automatic-cleanup/v2";
@@ -2404,14 +2421,6 @@ impl Manager {
     // Only this worktree's metadata is excluded. Independent report owners
     // and worktrees use their own capabilities; no global release/reload join
     // is required around physical IO or an independent owner's failure.
-    fn outside_enrollment<T>(
-        &mut self,
-        r: &mut Runner,
-        activity: impl FnOnce(&PolicyInputs, &mut Runner) -> Result<T, String>,
-    ) -> Result<T, String> {
-        self.stable(r)?;
-        activity(&self.inputs, r)
-    }
     fn outside_enrollment_readonly<T>(
         &mut self,
         r: &mut Runner,
@@ -3395,181 +3404,12 @@ impl Manager {
         report["terminal_receipt"] = value!(receipt);
         Ok(())
     }
-    fn drain(
-        &mut self,
-        r: &mut Runner,
-        exclude: &[PathBuf],
-        report: &mut Value,
-        all: bool,
-        mut inventory: Option<&mut inventory::Report>,
-    ) -> Result<(), String> {
-        report["drain"] = value!([]);
-        report["cleanup_failures"] = value!([]);
-        report["producer_drains"] = value!([]);
-        report["output_retention"] = Value::Null;
-        report["maintenance_scope"] = if all {
-            value!({"kind":"declared-enrollments"})
-        } else {
-            value!({"kind":"worktree","path":self.scope})
-        };
-        let mut failures = if all {
-            self.resume_retired_addresses(r, report)?
-        } else {
-            vec![]
-        };
-        self.observe_inventory(r, exclude, report, all, &BTreeSet::new())?;
-        failures.extend(self.drain_entries(r, exclude, report, all, inventory.as_deref_mut())?);
-        if !all {
-            report["cleanup_failures"] = value!(failures);
-            return if failures.is_empty() {
-                Ok(())
-            } else {
-                Err(format!(
-                    "automatic cleanup pending failures: {}",
-                    failures.join("; ")
-                ))
-            };
-        }
-        let (independent, unprotected) = self.outside_enrollment_readonly(r, |manager, r| {
-            let mut failures = Vec::new();
-            let mut unprotected = Vec::new();
-            for path in manager.enrollment_paths()? {
-                if path == manager.scope {
-                    continue;
-                }
-                let opened = Self::open_metadata(
-                    r,
-                    &manager.inputs.policy.coordinator_root,
-                    &manager.inputs.config_path,
-                    &manager.inputs.anchor_config_bytes,
-                    &manager._gate.token,
-                    &path,
-                    false,
-                    false,
-                );
-                match opened {
-                    Ok(Some(mut owner)) => {
-                        if let Err(error) = owner.restore_absent_policy(r) {
-                            failures.push(format!("{}: {error}", path.display()));
-                            report["drain"]
-                                .as_array_mut()
-                                .unwrap()
-                                .push(value!({"path":path,"status":"failed","error":error}));
-                            continue;
-                        }
-                        match owner.drain_entries(r, exclude, report, true, inventory.as_deref_mut()) {
-                            Ok(pending) => failures.extend(pending),
-                            Err(error) => {
-                                failures.push(format!("{}: {error}", path.display()));
-                                continue;
-                            }
-                        }
-                        if let Err(error) = owner.retire_empty_address(r, report) {
-                            failures.push(format!("{}: {error}", path.display()));
-                        }
-                    }
-                    Ok(None) => return Err("cleanup policy disappeared during maintenance".into()),
-                    Err(error)
-                        if error.contains("enrollment metadata is busy")
-                            || error.contains("enrollment metadata remains busy") =>
-                    {
-                        unprotected.push(path.clone());
-                        report["drain"].as_array_mut().unwrap().push(
-                            value!({"path":path,"status":"preserved","preserved_reason":error}),
-                        );
-                    }
-                    Err(error) => {
-                        unprotected.push(path.clone());
-                        failures.push(format!("{}: {error}", path.display()));
-                        report["drain"]
-                            .as_array_mut()
-                            .unwrap()
-                            .push(value!({"path":path,"status":"failed","error":error}));
-                    }
-                }
-            }
-            Ok((failures, unprotected))
-        })?;
-        failures.extend(independent);
-        let producer_failures = self.outside_enrollment(r, |inputs, _| {
-        let mut failures = vec![];
-        for producer in inputs.anchor_policy.retained_producers.clone() {
-            let (config, bytes) = crate::configuration(
-                &inputs.policy.coordinator_root,
-                &inputs.config_path,
-            )?;
-            let root = &inputs.policy.coordinator_root;
-            let result = start::with_report(
-                root,
-                &inputs.config_path,
-                config,
-                &bytes,
-                "producer-cleanup",
-                "cleaned",
-                |r, _, attempt| {
-                    attempt["producer_objects"] = value!([]);
-                    if let Some(inventory) = inventory.as_deref_mut() {
-                        producer.observe_inventory(inputs, inventory);
-                    }
-                    producer.drain(inputs, r, attempt)
-                },
-            )?;
-            if result["status"] != "cleaned" {
-                failures.push(format!("producer {}: {}", producer.id, result["error"]));
-            }
-            let path = result["report_path"]
-                .as_str()
-                .ok_or("producer drain report path")?;
-            let bytes = crate::recovery::state_bytes(root, path)?;
-            report["producer_drains"].as_array_mut().unwrap().push(value!({"producer":producer.id,
-                "status":result["status"],"error":result["error"],"receipt":{"path":path,"sha256":sha256(&bytes)},
-                "input":crate::recovery::retained_input(root, path, &bytes, "receipt")}));
-        }
-        Ok(failures)
-        })?;
-        failures.extend(producer_failures);
-        // All declared ledgers must establish their original consumers before
-        // this cross-object pass. Unknown metadata defers only that dependent
-        // pass; independent worktree and producer maintenance has already run.
-        report["output_retention"] = if unprotected.is_empty() {
-            value!(self.outside_enrollment(r, |inputs, _| {
-                if let Some(inventory_report) = inventory.as_deref_mut() {
-                    chrono_harness::retained_artifacts::retention::Inventory::adopted(
-                        &inputs.policy.coordinator_root,
-                    )?.map(|owner| owner.maintain_explicit_observed(|row| {
-                        inventory_report.retention(row.clone());
-                        Ok(())
-                    })).transpose()
-                } else {
-                    chrono_harness::retained_artifacts::retention::maintain_explicit_adopted(
-                        &inputs.policy.coordinator_root,
-                    )
-                }
-            })?)
-        } else {
-            if let Some(inventory) = inventory.as_deref_mut() {
-                inventory.error("retention", "original protection unavailable; retention not executed");
-            }
-            value!({"status":"preserved","reason":"enrollment original protection unavailable",
-                "unprotected_enrollments":unprotected})
-        };
-        report["cleanup_failures"] = value!(failures);
-        if failures.is_empty() {
-            Ok(())
-        } else {
-            Err(format!(
-                "automatic cleanup pending failures: {}",
-                failures.join("; ")
-            ))
-        }
-    }
     fn drain_entries(
         &mut self,
         r: &mut Runner,
         exclude: &[PathBuf],
         report: &mut Value,
         maintenance: bool,
-        inventory: Option<&mut inventory::Report>,
     ) -> Result<Vec<String>, String> {
         // Selection and execution must use this checkout's committed choices;
         // the coordinator's thresholds can differ or be absent.
@@ -3577,9 +3417,6 @@ impl Manager {
         // enrolled checkout. Its existing directory is not a policy consumer.
         if crate::verified_lifecycle::enrolled_policy_required(self.ledger.entries.len()) {
             self.adopt_cleanup_policy(r, maintenance)?;
-        }
-        if let Some(inventory) = inventory {
-            inventory.artifacts(self);
         }
         self.reconcile_published_results()?;
         let mut failures = self.rotate_history(r, report)?;
@@ -4147,25 +3984,6 @@ impl Manager {
         });
         self.save()
     }
-    /// Entry-local refusals remain in the drain report and immutable receipts.
-    /// Coordinator/state publication failures still prevent admission.
-    fn drain_for_admission(
-        &mut self,
-        r: &mut Runner,
-        exclude: &[PathBuf],
-        report: &mut Value,
-    ) -> Result<(), String> {
-        match self.drain(r, exclude, report, false, None) {
-            Err(_)
-                if report["cleanup_failures"]
-                    .as_array()
-                    .is_some_and(|f| !f.is_empty()) =>
-            {
-                Ok(())
-            }
-            result => result,
-        }
-    }
     fn execute_entry(
         &mut self,
         r: &mut Runner,
@@ -4388,7 +4206,7 @@ impl Manager {
     }
 }
 
-/// Runs while the admission gate is held through drain, creation and enrollment.
+/// Only the named destination is excluded through creation and enrollment.
 #[cfg(not(verus_keep_ghost))]
 pub(crate) fn create(
     r: &mut Runner,
@@ -4419,7 +4237,6 @@ pub(crate) fn create(
     };
     manager.protect_reports(r, &o.root)?;
     manager.preflight_birth(r, &destination)?;
-    manager.drain_for_admission(r, &[o.root.clone(), destination.clone()], report)?;
     manager.stable(r)?;
     manager.preflight_birth(r, &destination)?;
     create(r, report)?;
@@ -4427,6 +4244,9 @@ pub(crate) fn create(
     manager.enroll(r,Path::new(report["destination"].as_str().ok_or("birth destination")?),"birth",value!({"source_root":o.root,"report_path":report["report_path"],"operation":report["operation"],"base":report["base"],"token":report["lock_reason"],"creator_agent":crate::AgentIdentity::from_report(report)?}))?;
     report["cleanup_enrollment"] = value!({"coordinator_root":manager.inputs.policy.coordinator_root,"state_directory":manager.inputs.policy.state_directory,"kind":"birth"});
     manager.observe_attention(r, report, false)?;
+    report["drain"] = value!([]);
+    report["cleanup_failures"] = value!([]);
+    report["maintenance_request"] = service::handoff(&manager.inputs, "birth");
     Ok(())
 }
 
@@ -4566,8 +4386,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
         "use" | "check" | "bootstrap" => "used",
         _ => return Err("unknown lifecycle operation".into()),
     };
+    if operation == "maintain" {
+        return service::maintain(&invoking, config_path, "explicit", values.get("--report-consumer").copied());
+    }
     let mut _use_guard = None;
-    start::with_report_for_consumer(
+    let result = start::with_report_for_consumer(
         &invoking,
         config_path,
         config,
@@ -4605,6 +4428,10 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 manager.adopt_live_policy(r)?;
             }
             manager.inputs.report_source(report);
+            report["drain"] = value!([]);
+            report["cleanup_failures"] = value!([]);
+            report["producer_drains"] = value!([]);
+            report["output_retention"] = Value::Null;
             match operation.as_str() {
                 "deploy-owner" => manager.deploy_owner(
                     r,
@@ -4614,24 +4441,6 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     values["--stage-sha256"],
                     report,
                 ),
-                "maintain" => {
-                    let mut inventory = inventory::Report::begin(
-                        &manager.inputs.policy.coordinator_root, report,
-                    )?;
-                    inventory.worktrees(&manager, r, report, "before");
-                    let result = manager.drain(r, &[invoking.clone()], report, true, Some(&mut inventory));
-                    inventory.worktrees(&manager, r, report, "after");
-                    let observed = inventory.finish(report);
-                    if let Err(error) = &observed {
-                        report["complete_inventory"]["status"] = value!("incomplete");
-                        report["complete_inventory"]["report_error"] = value!(error);
-                    }
-                    match (result, observed) {
-                        (Ok(()), Ok(())) => Ok(()),
-                        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
-                        (Err(cleanup), Err(inventory)) => Err(format!("{cleanup}; {inventory}")),
-                    }
-                }
                 "import" => {
                     manager.enroll(
                     r,
@@ -4672,13 +4481,12 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         token,
                         report,
                     )?;
-                    let result = manager.drain(r, &[invoking.clone()], report, false, None);
                     manager.observe_attention(r, report, false)?;
-                    result
+                    report["maintenance_request"] = service::handoff(&manager.inputs, "finish");
+                    Ok(())
                 }
                 "use" | "check" | "bootstrap" => {
                     let target = target.as_ref().unwrap();
-                    manager.drain_for_admission(r, &[invoking.clone(), target.clone()], report)?;
                     if manager.current_entry(target).is_none()
                         && target == &manager.inputs.policy.coordinator_root
                         && manager.inputs.policy.main_cache_only
@@ -4904,6 +4712,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                         .push(value!(receipt));
                     manager.ledger.entries[i].uses.retain(|s| s != token);
                     manager.save()?;
+                    report["maintenance_request"] = service::handoff(&manager.inputs, "use-completed");
                     if process.failure.is_some() || process.exit_code != 0 {
                         report["managed_command_failed"] = value!(true);
                         return Err(format!(
@@ -4914,20 +4723,23 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                     if let Some(error) = artifact_error {
                         return Err(error);
                     }
-                    let mut post_use_cleanup = value!({});
-                    let cleanup = manager.drain_for_admission(
-                        r,
-                        &[invoking.clone(), target.clone()],
-                        &mut post_use_cleanup,
-                    );
-                    report["post_use_cleanup"] = post_use_cleanup;
-                    cleanup?;
                     Ok(())
                 }
                 _ => unreachable!(),
             }
         },
-    )
+    );
+    drop(_use_guard.take());
+    if let Ok(report) = &result {
+        if matches!(operation.as_str(), "finish" | "use" | "check" | "bootstrap" | "import" | "migrate") {
+            // The original result and its necessary sealing have returned before activation.
+            let root = report["lifecycle_coordinator_root"].as_str().unwrap_or("");
+            if !root.is_empty() {
+                chrono_harness::maintenance_signal::announce_adopted(Path::new(root), "published-handoff");
+            }
+        }
+    }
+    result
 }
 
 /// Warnings are a projection of the already-persisted report, never new state.

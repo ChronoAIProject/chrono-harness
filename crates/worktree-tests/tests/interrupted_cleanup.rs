@@ -357,12 +357,11 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
                 "linked caller must not retain an unused local publication"
             );
         }
-        let mut passes = vec![&report];
+        let passes = vec![&report];
         if operation == "use" {
             assert_eq!(report["managed_process"]["exit_code"], 0);
-            assert!(report["post_use_cleanup"].is_object());
-            assert!(report["post_use_cleanup"].get("producer_objects").is_none());
-            passes.push(&report["post_use_cleanup"]);
+            assert!(report.get("post_use_cleanup").is_none());
+            assert_eq!(report["maintenance_request"]["disposal"], "not-attempted");
         }
         let dependencies: Vec<_> = passes
             .iter()
@@ -397,7 +396,7 @@ fn caller_report_consumer_protects_primary_and_coordinator_publication() {
                 .collect::<std::collections::BTreeSet<_>>()
                 .len(),
             dependencies.len(),
-            "admission and post-use cleanup retain distinct original operations"
+            "business and maintenance retain their own original operations"
         );
         let managed_receipt = if operation == "use" {
             let receipt = &report["managed_use_receipt"];
@@ -2110,6 +2109,9 @@ fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
         &["--path", target.to_str().unwrap(), "--dispose-evidence"],
     );
     assert_eq!(code, 0, "{report} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(report_cleanup_code, 0, "{report_cleanup} {report_cleanup_error}");
     assert!(!target.exists());
 }
 

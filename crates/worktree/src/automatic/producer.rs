@@ -734,6 +734,7 @@ pub struct RetainedArtifact {
     directory: PathBuf,
     producer: String,
     object: String,
+    maintenance_root: Option<PathBuf>,
 }
 
 fn generated_paths(paths: &[String]) -> Result<(), String> {
@@ -791,6 +792,7 @@ impl RetainedArtifact {
         producer: &str,
     ) -> Result<(PathBuf, Vec<String>), String> {
         Self::resolve_store(host_root, config_path, producer, false)
+            .map(|(path, outputs, _)| (path, outputs))
     }
 
     fn resolve_store(
@@ -798,7 +800,7 @@ impl RetainedArtifact {
         config_path: &str,
         producer: &str,
         temporary: bool,
-    ) -> Result<(PathBuf, Vec<String>), String> {
+    ) -> Result<(PathBuf, Vec<String>, PathBuf), String> {
         let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
         let (config, bytes) = crate::configuration(&root, config_path)?;
         let mut selected = None;
@@ -827,7 +829,7 @@ impl RetainedArtifact {
                 report["coordinator_root"] = value!(inputs.policy.coordinator_root);
                 report["directory"] = value!(directory);
                 report["generated_outputs"] = value!(declaration.generated_outputs);
-                selected = Some((directory, declaration.generated_outputs.clone()));
+                selected = Some((directory, declaration.generated_outputs.clone(), inputs.policy.coordinator_root.clone()));
                 Ok(())
             },
         )?;
@@ -838,6 +840,15 @@ impl RetainedArtifact {
                 .into());
         }
         selected.ok_or("retained producer store was not resolved".into())
+    }
+
+    /// Bind activation to the exact existing owner; never infer a root from directories.
+    pub fn bind_maintenance_owner(&mut self, host_root: &Path, config_path: &str) -> Result<(), String> {
+        let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
+        let (directory, _, coordinator) = Self::resolve_store(&root, config_path, &self.producer, false)?;
+        if directory != self.directory { return Err("producer activation owner differs from physical store".into()); }
+        self.maintenance_root = Some(coordinator);
+        Ok(())
     }
 
     pub fn begin(
@@ -949,6 +960,7 @@ impl RetainedArtifact {
             directory: directory.into(),
             producer: producer.into(),
             object,
+            maintenance_root: None,
         })
     }
 
@@ -972,6 +984,7 @@ impl RetainedArtifact {
             directory: directory.into(),
             producer: producer.into(),
             object,
+            maintenance_root: None,
         })
     }
 
@@ -1094,7 +1107,14 @@ impl RetainedArtifact {
                 receipt: Some(receipt),
             },
         );
-        store.save(i)
+        store.save(i)?;
+        drop(store);
+        if released {
+            if let Some(root) = &self.maintenance_root {
+                chrono_harness::maintenance_signal::announce_adopted(root, "producer-release");
+            }
+        }
+        Ok(())
     }
 }
 
@@ -1114,6 +1134,7 @@ impl TemporaryHost {
         producer: &str,
     ) -> Result<(PathBuf, Vec<String>), String> {
         RetainedArtifact::resolve_store(host_root, config_path, producer, true)
+            .map(|(path, outputs, _)| (path, outputs))
     }
 
     pub fn allocate(

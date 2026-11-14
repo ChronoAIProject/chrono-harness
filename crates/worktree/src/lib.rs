@@ -164,7 +164,7 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote|retire-evidence --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree status [--path WORKTREE]\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH] [--adopt-fixtures STATE_PATH] [--partition-producer ID]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. No idle scheduler or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote|retire-evidence --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree maintenance-service [--host-root COORDINATOR]\nchrono-worktree status [--path WORKTREE]\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH] [--adopt-fixtures STATE_PATH] [--partition-producer ID]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. Unified maintenance uses adopted OS socket activation; idle/timer policy is in maintenance.json. No PR/merge verdict.\n".into(), stderr: String::new() };
     }
     if args.first().map(String::as_str) == Some("check-inputs") {
         return match check_inputs::dispatch(args) {
@@ -180,7 +180,9 @@ pub fn run(args: &[String]) -> CliOutput {
             },
         };
     }
-    let result = if matches!(
+    let result = if args.first().map(String::as_str) == Some("maintenance-service") {
+        automatic::service::dispatch(args)
+    } else if matches!(
         args.first().map(String::as_str),
         Some(
             "finish"
@@ -230,6 +232,8 @@ pub fn run(args: &[String]) -> CliOutput {
                         | "rebound"
                         | "finished"
                         | "maintained"
+                        | "maintenance-requested"
+                        | "maintenance-idle-exit"
                         | "imported"
                         | "migrated"
                         | "owner-deployed"
@@ -311,3 +315,15 @@ pub fn reconstruct(options: Start, plan_path: &str) -> Result<serde_json::Value,
     let plan = reconstruct::read(&options.root, plan_path)?;
     start::create(options, config, bytes, Some(plan))
 }
+
+#[doc(hidden)]
+#[cfg(unix)]
+pub use automatic::service::serve as serve_maintenance_socket;
+
+#[doc(hidden)]
+#[cfg(feature = "producer-birth-test")]
+pub use automatic::service::with_observer as with_maintenance_observer;
+
+#[doc(hidden)]
+#[cfg(all(unix, feature = "producer-birth-test"))]
+pub use automatic::service::run_with_socket as run_maintenance_service_socket;

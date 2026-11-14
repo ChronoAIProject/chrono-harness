@@ -140,6 +140,8 @@ fn private_fixture_retirement_observes_actual_release_not_test_success() {
             fixture.retain_diagnostic().unwrap();
         }
         let result = fixture.finish(state == "failed").unwrap();
+        let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+        assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
         assert_eq!(result["status"], "finished", "{state}: {result}");
         assert_eq!(
             retired(),
@@ -216,6 +218,7 @@ fn private_fixture_retirement_preserves_corrupt_and_pending_metadata_originals()
     // Keep the current metadata retention policy: physical disposal alone
     // cannot authorize removal of its original metadata before that consumer ends.
     assert_eq!(fixture.finish(false).unwrap()["status"], "finished");
+    assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(
         !chrono_worktree::TemporaryHost::retired_fixture_store(&store, "test-allocation").unwrap()
     );
@@ -326,6 +329,8 @@ fn rolling_directory_reclaims_released_fixture_as_one_owned_artifact() {
     fs::write(&survivor, b"keep external bytes").unwrap();
     std::os::unix::fs::symlink(&survivor, path.join("external link")).unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert_eq!(result["status"], "finished", "{result}");
     assert!(
         !path.exists(),
@@ -379,6 +384,8 @@ fn rolling_directory_diagnostics_have_a_finite_window_without_permanent_referenc
     fs::copy(source, &destination).unwrap();
     fixture.retain_diagnostic().unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert_eq!(result["status"], "finished", "{result}");
     assert_eq!(
         fs::read(destination).unwrap(),
@@ -417,6 +424,8 @@ fn rolling_directory_recovers_metadata_after_record_handoff_and_partial_disposal
     let path = fixture.path().to_owned();
     let store = path.parent().unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert_eq!(result["status"], "finished", "{result}");
     assert!(
         !path.exists(),
@@ -467,6 +476,8 @@ fn rolling_directory_waits_for_real_capability_and_retention_window() {
     fs::write(path.join("result.bin"), b"retained while read").unwrap();
     let reader = fixture.capability().unwrap();
     let result = fixture.finish(false).unwrap();
+    let (cleanup_code, cleanup, cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(cleanup_code, 0, "{cleanup} {cleanup_error}");
     assert!(
         path.exists(),
         "live capability must exclude disposal: {result}"

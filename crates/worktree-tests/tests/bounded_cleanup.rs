@@ -22,6 +22,7 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
         assert_eq!(fs::read(h.root.join("output λ/cache")).unwrap(), b"rebuilt");
+        assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(!h.root.join("nested/cache").exists());
         fs::create_dir_all(h.root.join("nested/cache")).unwrap();
         fs::write(h.root.join("nested/cache/temporary"), b"disposable").unwrap();
@@ -50,8 +51,10 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
     }
     fs::create_dir_all(h.root.join("nested")).unwrap();
     std::os::unix::fs::symlink(&outside, h.root.join("nested/cache")).unwrap();
-    let (code, failed, _) = h.auto("finish", &[]);
-    assert_ne!(code, 0, "{failed}");
+    let (code, failed, handoff_error) = h.auto("finish", &[]);
+    assert_eq!(code, 0, "{failed} {handoff_error}");
+    let (code, cleanup, _) = h.auto("maintain", &[]);
+    assert_ne!(code, 0, "{cleanup}");
     assert!(h.root.join("output λ/cache").is_file());
     assert_eq!(
         h.ledger()["entries"][0]["enrollment"]["cache_release"],
@@ -79,6 +82,7 @@ fn reusable_cache_survives_separate_operations_until_explicit_release() {
         "an old finish cannot release a new generation"
     );
     assert_eq!(h.auto("finish", &[]).0, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!h.root.join("output λ").exists());
 }
 
@@ -114,6 +118,9 @@ fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
     assert!(!target.join("output λ").exists());
     assert!(target.join("payload").is_file());
     assert!(target.join(".chrono-harness/state/evidence").is_file());
@@ -164,6 +171,9 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
         &["--path", target.to_str().unwrap(), "--artifacts-only"],
     );
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
     let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
     assert_eq!(entry["status"], "retained");
     assert_eq!(
@@ -172,7 +182,7 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
         "{finished}"
     );
     assert!(
-        finished["cache_history_rotation"]
+        finished_cleanup["cache_history_rotation"]
             .as_array()
             .unwrap()
             .iter()
@@ -560,6 +570,9 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
             &["--path", target.to_str().unwrap(), "--artifacts-only"],
         );
         assert_eq!(code, 0, "{} {error}", cleaned["error"]);
+        // 原业务交接与实际清理分别核原结果。
+        let (cleaned_cleanup_code, cleaned_cleanup, cleaned_cleanup_error) = h.auto("maintain", &[]);
+        assert_eq!(cleaned_cleanup_code, 0, "{cleaned_cleanup} {cleaned_cleanup_error}");
         let cleanup_seconds = began.elapsed().as_secs_f64();
         for project in ["producer", "tests"] {
             assert!(
@@ -664,6 +677,7 @@ fn main_live_installation_test_and_cache_save_consumers_protect_real_cargo_outpu
         .unwrap();
         assert!(child.wait_with_output().unwrap().status.success());
         assert_eq!(h.auto("finish", &[]).0, 0);
+        assert_eq!(h.auto("maintain", &[]).0, 0);
         assert!(!h.root.join("independent/tests/target").exists());
         if stage == "installation" {
             assert!(
@@ -795,13 +809,16 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
     assert_eq!(imported["managed_process"], Value::Null);
     let (code, released, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{released} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (released_cleanup_code, released_cleanup, released_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(released_cleanup_code, 0, "{released_cleanup} {released_cleanup_error}");
     let descriptor = &released["main_cache_release"];
     let raw = fs::read(h.root.join(descriptor["path"].as_str().unwrap())).unwrap();
     assert_eq!(sha256(&raw), descriptor["sha256"]);
     let release = json(&raw).unwrap();
     assert_eq!(release["path"], value!(h.root));
     assert_eq!(release["task_completion"], "not-claimed");
-    assert_eq!(released["drain"].as_array().unwrap().len(), 1);
+    assert_eq!(released_cleanup["drain"].as_array().unwrap().len(), 1);
     assert!(!h.root.join("output λ").exists());
     assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
     assert_eq!(git(&h.root, &["show-ref"]), refs);
@@ -855,6 +872,9 @@ fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
     .unwrap();
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
     assert!(!h.root.join("output λ").exists());
     assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
     assert_eq!(git(&h.root, &["show-ref"]), refs);
@@ -892,10 +912,13 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
     assert!(!h.root.join("output λ").exists());
     assert!(h.root.join("nested/cache/unknown-history").exists());
     assert!(
-        drain_report(&finished["drain"][0])
+        drain_report(&finished_cleanup["drain"][0])
             .to_string()
             .contains("pre-existing output has no adopted consumer release")
     );
@@ -926,6 +949,7 @@ fn missing_main_artifact_ownership_fails_closed_instead_of_reporting_empty_clean
     assert!(h.root.join("output λ/cache").exists());
     fs::write(ledger_path, original).unwrap();
     assert_eq!(h.auto("finish", &[]).0, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
 }
 
 #[test]
@@ -945,6 +969,9 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     let refs = git(&h.root, &["show-ref"]);
     let (code, finished, error) = h.auto("finish", &[]);
     assert_eq!(code, 0, "{finished} {error}");
+    // 原业务交接与实际清理分别核原结果。
+    let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
+    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
     assert_eq!(git(&h.root, &["show-ref"]), refs);
     assert!(!h.root.join("output λ").exists());
     assert!(h.ledger()["entries"][0]["terminal"].is_null());

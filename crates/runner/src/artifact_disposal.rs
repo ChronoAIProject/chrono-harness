@@ -155,11 +155,22 @@ pub struct ArtifactFootprint {
 
 /// Measure only the caller's exact object. Block allocation is not physical savings.
 pub fn artifact_footprint(path: &Path) -> Result<ArtifactFootprint, String> {
+    footprint(path, false).map(|(footprint, _)| footprint)
+}
+
+/// A diagnostic can lstat retained sockets without reading from or disposing
+/// them. All effects keep the strict contract above and in dispose_entry.
+/// The second value counts these observed socket entries explicitly.
+pub fn observed_artifact_footprint(path: &Path) -> Result<(ArtifactFootprint, u64), String> {
+    footprint(path, true)
+}
+
+fn footprint(path: &Path, observe_sockets: bool) -> Result<(ArtifactFootprint, u64), String> {
     match fs::symlink_metadata(path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(ArtifactFootprint {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((ArtifactFootprint {
             allocated_bytes: if cfg!(unix) { Some(0) } else { None },
             ..Default::default()
-        }),
+        }, 0)),
         Err(e) => Err(e.to_string()),
         Ok(m) => {
             #[cfg(unix)]
@@ -177,9 +188,11 @@ pub fn artifact_footprint(path: &Path) -> Result<ArtifactFootprint, String> {
                 allocated_bytes: allocated,
                 ..Default::default()
             };
+            let mut sockets = 0u64;
             if m.is_dir() {
                 for entry in fs::read_dir(path).map_err(|e| e.to_string())? {
-                    let child = artifact_footprint(&entry.map_err(|e| e.to_string())?.path())?;
+                    let (child, child_sockets) = footprint(&entry.map_err(|e| e.to_string())?.path(), observe_sockets)?;
+                    sockets = sockets.checked_add(child_sockets).ok_or("artifact socket count overflow")?;
                     result.logical_bytes = result
                         .logical_bytes
                         .checked_add(child.logical_bytes)
@@ -199,9 +212,18 @@ pub fn artifact_footprint(path: &Path) -> Result<ArtifactFootprint, String> {
                 result.logical_bytes = m.len();
                 result.file_entries = 1;
             } else {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::FileTypeExt;
+                    if observe_sockets && m.file_type().is_socket() {
+                        result.logical_bytes = m.len();
+                        result.file_entries = 1;
+                        return Ok((result, 1));
+                    }
+                }
                 return Err("artifact contains a special file; preserve it".into());
             }
-            Ok(result)
+            Ok((result, sockets))
         }
     }
 }

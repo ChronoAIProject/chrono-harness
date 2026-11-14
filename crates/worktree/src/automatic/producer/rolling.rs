@@ -255,7 +255,9 @@ impl TemporaryHost {
                 drop(store);
                 drop(self.lease.take());
                 report["producer_objects"] = value!([]);
-                declaration.drain_selected(&inputs, r, report, Some(&path))
+                report["maintenance_request"] = super::super::service::handoff(&inputs, "producer-finish");
+                report["disposal"] = value!("not-attempted");
+                Ok(())
             },
         )
     }

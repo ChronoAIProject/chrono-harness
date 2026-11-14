@@ -37,6 +37,13 @@ pub use automatic_verification::{
 
 verus! {
 
+/// Pending events and due timers take precedence over an idle observation.
+pub fn maintenance_idle_exit(event_pending: bool, timer_due: bool, idle_due: bool) -> (exit: bool)
+    ensures exit == (!event_pending && !timer_due && idle_due),
+{
+    !event_pending && !timer_due && idle_due
+}
+
 /// An address left by failed admission has no checkout policy consumer.
 pub fn enrolled_policy_required(entries: usize) -> (required: bool)
     ensures required <==> entries > 0,

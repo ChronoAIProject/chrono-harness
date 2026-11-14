@@ -1,7 +1,7 @@
-# 显式维护的完整清单
+# 维护轮次的完整清单
 
-使用方是每轮清理后核对磁盘占用、保留原因和真实效果的维护者。唯一操作仍为
-`chrono-worktree maintain`；普通 use／check／bootstrap 不承担完整清单。
+使用方是每轮清理后核对磁盘占用、保留原因和真实效果的维护者。唯一轮次实现由 `chrono-worktree maintain` 与统一服务的 event／timer 共用；
+普通 use／check／bootstrap 不承担完整清单。
 本次只准备源码、Rust/mock 预期和登记，未运行编译、测试、证明或生产维护；
 修改前的 red 尚未观察。源码提交不代表可运行、已接受、已交付或稳定。
 
@@ -21,7 +21,7 @@
    报告不能发布完整或成功。测试在 Rust 中模拟 Git 等外部程序边界。
 6. 完整清单沿现役 lifecycle-original 的引用和有限保留合同发布；
    中断的未完成原件继续保护，最终报告接住引用后释放临时恢复责任。
-   不建立权威库存账本、后台任务或新调度器，不提高现有预算。
+   报告本身不建立权威库存账本或后台任务；执行进程复用统一维护与 OS 调度，不提高现有预算。
 
 ## 必要性和成本
 
@@ -66,7 +66,7 @@
 
 | 文件 | 负责输入 → 输出和使用方 | 依赖／成本／操作 |
 | --- | --- | --- |
-| `crates/worktree/src/automatic/inventory.rs` | 已有状态、采用政策和原结果 → 显式维护原件 | worktree、footprint、retention；成本未知；只由 maintain 调用 |
+| `crates/worktree/src/automatic/inventory.rs` | 已有状态、采用政策和原结果 → 显式维护原件 | worktree、footprint、retention；成本未知；只由实际维护轮次调用 |
 | `crates/worktree/src/automatic.rs` | Git／enrollment／采用政策 → 同一 status 分类、维护与报告连接 | worktree；原生命周期证明与直接 Rust/mock 测试待执行；普通入口不生成全量原件 |
 | `crates/worktree/src/automatic/producer.rs` | 原 Store 和精确成员 → producer 声明投影 | worktree；沿现役生产者回执，不创造处置权；成本未知 |
 | `crates/worktree/src/recovery.rs` | 父报告原件引用 → 原有 retention 依赖和 recovery 交接 | worktree／runner；中断与保留回归待执行 |
@@ -84,3 +84,7 @@
 本阶段没有执行选测或判官，也不手填最终选中列表。源码改动不表示相关证明已经覆盖
 JSON、文件系统、流式写入或整个维护事务。后续须核原 stdout／stderr、退出和 owned work
 收束，再由调用方完成其余已批准的独立评审、交付及真实宿主验收。
+
+统一维护增量采用固定 f6ad4ac6cb3fd1f976d9c794a1ad58de9ee7dfe3 的此来源，未重建另一份库存。每个实际后台／定时／显式轮次都调用原 JSONL 生产者；声明在原地址排除下复制，完整 footprint IO 在释放 enrollment metadata 后执行，实际动作重新取得原保护。事件接受不创建虚构轮次或完整报告。源阶段仍未执行原 300 地址、>64 KiB、完整 producer／retention、IO 和父恢复引用验收；原有限保留与增量成本义务不变，见 [统一维护](unified-maintenance.md)。
+
+统一服务的 OS 激活 socket 由原 footprint 负责位置以观察模式只做 lstat，`retained_socket_entries` 单列数量；不连接、不读取 socket，不授予处置权。实际 dispose 继续使用严格模式，拒绝 socket、FIFO 等 special file；未知类型和 IO 错误仍是原错误，不报零。

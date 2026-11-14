@@ -69,7 +69,8 @@ impl Report {
             enumeration_complete: true, measurements_complete: true, errors: vec![],
             io_error: None, artifact_addresses: BTreeSet::new(), worktree_addresses: BTreeSet::new(),
         };
-        report.record(value!({"kind":"scope","source":"explicit-maintain",
+        report.record(value!({"kind":"scope","source":"maintenance-round",
+            "trigger":parent["maintenance_trigger"],
             "coordinator_root":root,"parent_report":parent_path,
             "window_started_unix_millis":report.started,"atomic":false,
             "physical_release_bytes":null,"aggregation":"overlapping scopes; do not sum",
@@ -125,8 +126,9 @@ impl Report {
                 Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => "absent",
                 Err(e) => return Err(e.to_string()),
             };
-            let footprint = artifact_disposal::artifact_footprint(path)?;
-            Ok::<_, String>((presence, footprint))
+            super::service::observe_boundary("footprint", path);
+            let (footprint, sockets) = chrono_harness::artifact_disposal::observed_artifact_footprint(path)?;
+            Ok::<_, String>((presence, footprint, sockets))
         })();
         let finished = timestamp();
         let mut measurement = value!({"unit":"bytes","path":path,
@@ -136,9 +138,10 @@ impl Report {
             "window_finished_unix_millis":finished.as_ref().ok(),
             "freshness":"this-round-non-atomic","physical_release_bytes":null});
         match (footprint, started, finished) {
-            (Ok((presence, footprint)), Ok(_), Ok(_)) => {
+            (Ok((presence, footprint, sockets)), Ok(_), Ok(_)) => {
                 measurement["presence"] = value!(presence);
                 measurement["footprint"] = value!(footprint);
+                measurement["retained_socket_entries"] = value!(sockets);
             }
             (result, start, end) => {
                 let error = result.err().or_else(|| start.err()).or_else(|| end.err()).unwrap();
@@ -152,9 +155,10 @@ impl Report {
         measurement
     }
 
-    pub(super) fn worktrees(&mut self, manager: &Manager, r: &mut Runner, parent: &mut Value, phase: &str) {
+    pub(super) fn worktrees(&mut self, observation: &Observation<'_>, r: &mut Runner, parent: &mut Value, phase: &str) {
+        let observation_owner = observation;
         let mut observation = value!({});
-        if let Err(error) = manager.observe_attention(r, &mut observation, true) {
+        if let Err(error) = observation_owner.observe_attention(r, &mut observation, true) {
             self.error("worktree-status", error);
             if observation["worktree_status"].is_null() { return; }
         }
@@ -184,16 +188,11 @@ impl Report {
         }
     }
 
-    pub(super) fn artifacts(&mut self, manager: &Manager) {
-        let entry = manager.ledger.entries.iter().find(|e| e.status != "disposed")
-            .or_else(|| manager.ledger.entries.last());
-        let root = match entry {
-            Some(entry) => entry.path.as_path(),
-            None if manager.scope == manager.inputs.policy.coordinator_root => &manager.scope,
-            None => return,
-        };
+    pub(super) fn artifacts(&mut self, snapshot: &ArtifactSnapshot) {
+        let entry = snapshot.entry.as_ref();
+        let root = &snapshot.root;
         self.artifact_addresses.insert(root.into());
-        for artifact in &manager.inputs.policy.artifacts {
+        for artifact in &snapshot.artifacts {
             let path = root.join(artifact.path.trim_end_matches('/'));
             let measurement = self.measure(&path);
             let disposition = match &artifact.disposition {
@@ -203,8 +202,8 @@ impl Report {
                 Disposition::EvidenceRetain => "evidence-retain",
             };
             self.record(value!({"kind":"worktree-artifact","worktree":root,"path":path,
-                "source":{"policy_sha256":sha256(&manager.inputs.policy_bytes),
-                    "policy_path":manager.inputs.policy_path,"source_head":manager.inputs.source_head},
+                "source":{"policy_sha256":snapshot.policy_sha256,
+                    "policy_path":snapshot.policy_path,"source_head":snapshot.source_head},
                 "owner":"worktree-lifecycle","disposition":disposition,
                 "cleanup_state":entry.map(|e| &e.status),"cleanup_progress":entry.and_then(|e| e.cleanup.as_ref()),
                 "uses":entry.map(|e| &e.uses),"ownership":entry.and_then(|e| e.ownership.as_ref()),
@@ -311,5 +310,25 @@ impl Report {
         } else {
             Err(format!("maintenance inventory incomplete: {}", self.errors.join("; ")))
         }
+    }
+}
+
+/// Copied declarations are observations, never a lease or effect authorization.
+pub(super) struct ArtifactSnapshot {
+    root: PathBuf,
+    artifacts: Vec<Artifact>,
+    entry: Option<Entry>,
+    policy_sha256: String,
+    policy_path: String,
+    source_head: String,
+}
+impl ArtifactSnapshot {
+    pub(super) fn from_owner(manager: &Manager) -> Self {
+        let entry = manager.ledger.entries.iter().find(|e| e.status != "disposed")
+            .or_else(|| manager.ledger.entries.last()).cloned();
+        Self { root: entry.as_ref().map(|e| e.path.clone()).unwrap_or_else(|| manager.scope.clone()),
+            artifacts: manager.inputs.policy.artifacts.clone(), entry,
+            policy_sha256: sha256(&manager.inputs.policy_bytes),
+            policy_path: manager.inputs.policy_path.clone(), source_head: manager.inputs.source_head.clone() }
     }
 }

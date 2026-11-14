@@ -799,10 +799,8 @@ fn joined_command_body(outcome: &str) {
             root.join("joined-body.bin").exists(),
             "ordinary use does not sweep fixture producers"
         );
-        assert!(
-            report["post_use_cleanup"]["producer_drains"].is_array(),
-            "{report}"
-        );
+        assert!(report.get("post_use_cleanup").is_none(), "{report}");
+        assert_eq!(report["maintenance_request"]["disposal"], "not-attempted");
         let (code, maintenance, error) = h.auto("maintain", &[]);
         assert_eq!(code, 0, "{maintenance} {error}");
         assert_eq!(
