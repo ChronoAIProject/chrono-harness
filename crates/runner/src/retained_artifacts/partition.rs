@@ -1344,16 +1344,15 @@ impl Inventory {
                         r.output.is_some(),
                         initial.as_ref() == Some(&r.id),
                         retained_dependencies.contains(&r.id),
-                    )
-                        && !r.output.as_ref().is_some_and(|output| {
-                            metadata_only_retirement(
-                                retiring_report.as_ref() == Some(&r.id),
-                                output.phase == "disposing",
-                                output.manifest.sealed,
-                                output.manifest.entries.is_empty(),
-                                !output.references.is_empty(),
-                            )
-                        })
+                    ) && !r.output.as_ref().is_some_and(|output| {
+                        metadata_only_retirement(
+                            retiring_report.as_ref() == Some(&r.id),
+                            output.phase == "disposing",
+                            output.manifest.sealed,
+                            output.manifest.entries.is_empty(),
+                            !output.references.is_empty(),
+                        )
+                    })
                 })
                 .map(|r| r.path.clone())
                 .collect();
