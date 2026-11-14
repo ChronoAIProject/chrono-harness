@@ -3,12 +3,88 @@
 use chrono_harness::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
 pub fn fixture_recovery_has_room(completed_rounds: usize) -> (room: bool)
     ensures room == (completed_rounds < 8),
 {
     completed_rounds < 8
+}
+
+// 单报告 fixture 的首轮必须含原件，后续轮次按轮前持久引用精确计数。
+pub fn report_component_inventory_matches(completed_rounds: usize,
+    current_references: Option<usize>, observed: Option<u64>) -> (matches: bool)
+    ensures matches == (completed_rounds < 4
+        && ((current_references == Some(1usize) && observed == Some(2u64))
+            || (completed_rounds > 0 && current_references == Some(0usize)
+                && observed == Some(1u64)))),
+{
+    completed_rounds < 4
+        && ((current_references == Some(1usize) && observed == Some(2u64))
+            || (completed_rounds > 0 && current_references == Some(0usize)
+                && observed == Some(1u64)))
+}
+
+// 原件还有独立入向引用时，只在本轮仍读取它的情况下报告未知剩余量。
+pub fn shared_original_scope_matches(current_references: Option<usize>, retired: bool,
+    complete: Option<bool>, remaining_is_null: bool, remaining: Option<u64>) -> (matches: bool)
+    ensures matches == ((current_references == Some(1usize) && complete == Some(false)
+        && remaining_is_null && remaining == None::<u64>)
+        || (current_references == Some(0usize) && complete == Some(true)
+            && !remaining_is_null && remaining == Some(if retired { 0u64 } else { 1u64 }))),
+{
+    (current_references == Some(1usize) && complete == Some(false)
+        && remaining_is_null && remaining == None::<u64>)
+        || (current_references == Some(0usize) && complete == Some(true)
+            && !remaining_is_null && remaining == Some(if retired { 0u64 } else { 1u64 }))
+}
+
+fn expect_component(actual: bool) requires actual, {
+    if !actual { panic!(); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn component_inventory_requires_the_current_edge_and_original_four_round_limit() {
+    expect_component(report_component_inventory_matches(0, Some(1), Some(2)));
+    expect_component(!report_component_inventory_matches(0, Some(0), Some(1)));
+    expect_component(report_component_inventory_matches(1, Some(1), Some(2)));
+    expect_component(report_component_inventory_matches(1, Some(0), Some(1)));
+    expect_component(report_component_inventory_matches(2, Some(0), Some(1)));
+    expect_component(report_component_inventory_matches(3, Some(1), Some(2)));
+    expect_component(report_component_inventory_matches(3, Some(0), Some(1)));
+    expect_component(!report_component_inventory_matches(4, Some(1), Some(2)));
+    expect_component(!report_component_inventory_matches(4, Some(0), Some(1)));
+    expect_component(!report_component_inventory_matches(usize::MAX, Some(0), Some(1)));
+    expect_component(!report_component_inventory_matches(1, Some(1), Some(1)));
+    expect_component(!report_component_inventory_matches(1, Some(0), Some(2)));
+    expect_component(!report_component_inventory_matches(1, Some(0), Some(0)));
+    expect_component(!report_component_inventory_matches(1, Some(1), None));
+    expect_component(!report_component_inventory_matches(1, None, Some(1)));
+    expect_component(!report_component_inventory_matches(1, None, None));
+    expect_component(!report_component_inventory_matches(1, Some(2), Some(3)));
+    expect_component(!report_component_inventory_matches(1, Some(usize::MAX), Some(1)));
+    expect_component(!report_component_inventory_matches(1, Some(1), Some(u64::MAX)));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn component_scope_preserves_unknown_and_counts_only_the_remaining_report() {
+    expect_component(shared_original_scope_matches(Some(1), false, Some(false), true, None));
+    expect_component(shared_original_scope_matches(Some(1), true, Some(false), true, None));
+    expect_component(!shared_original_scope_matches(Some(1), false, Some(true), true, None));
+    expect_component(!shared_original_scope_matches(Some(1), false, Some(false), false, None));
+    expect_component(!shared_original_scope_matches(Some(1), false, Some(false), true, Some(0)));
+    expect_component(shared_original_scope_matches(Some(0), false, Some(true), false, Some(1)));
+    expect_component(shared_original_scope_matches(Some(0), true, Some(true), false, Some(0)));
+    expect_component(!shared_original_scope_matches(Some(0), false, Some(true), false, Some(0)));
+    expect_component(!shared_original_scope_matches(Some(0), true, Some(true), false, Some(1)));
+    expect_component(!shared_original_scope_matches(Some(0), true, Some(false), true, None));
+    expect_component(!shared_original_scope_matches(Some(0), true, None, false, Some(0)));
+    expect_component(!shared_original_scope_matches(Some(0), true, Some(true), true, Some(0)));
+    expect_component(!shared_original_scope_matches(None, true, Some(true), false, Some(0)));
+    expect_component(!shared_original_scope_matches(Some(2), true, Some(true), false, Some(0)));
+    expect_component(!shared_original_scope_matches(Some(0), true, Some(true), false, Some(u64::MAX)));
 }
 }
 
@@ -6586,12 +6662,26 @@ fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisit
         .collect();
     let mut rounds = Vec::new();
     for _ in 0..4 {
+        let report_before: Value = serde_json::from_slice(
+            &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+        )
+        .unwrap();
+        let references = report_before["output"]["references"]
+            .as_array()
+            .map(Vec::len);
         let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
         );
-        assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
+        assert!(
+            report_component_inventory_matches(
+                rounds.len(),
+                references,
+                round["metadata_inventory_entries"].as_u64()
+            ),
+            "before: {report_before}; round: {round}"
+        );
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
         if output_retired(h.path(), &report_id) {
@@ -6691,6 +6781,13 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
     let role_before = fs::read(&role).unwrap();
     let mut rounds = Vec::new();
     for _ in 0..4 {
+        let report_before: Value = serde_json::from_slice(
+            &fs::read(retention_state::object_path(h.path(), selected)).unwrap(),
+        )
+        .unwrap();
+        let references = report_before["output"]["references"]
+            .as_array()
+            .map(Vec::len);
         let round = inventory(h.path())
             .maintain_originals(&[selected.clone()])
             .unwrap();
@@ -6698,12 +6795,28 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
         );
-        assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
-        assert_eq!(round["scope"]["complete"], false, "{round}");
-        assert_eq!(round["remaining_outputs"], Value::Null, "{round}");
+        assert!(
+            report_component_inventory_matches(
+                rounds.len(),
+                references,
+                round["metadata_inventory_entries"].as_u64()
+            ),
+            "before: {report_before}; round: {round}"
+        );
+        let retired = output_retired(h.path(), selected);
+        assert!(
+            shared_original_scope_matches(
+                references,
+                retired,
+                round["scope"]["complete"].as_bool(),
+                round["remaining_outputs"].is_null(),
+                round["remaining_outputs"].as_u64()
+            ),
+            "before: {report_before}; retired: {retired}; round: {round}"
+        );
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
-        if output_retired(h.path(), &selected) {
+        if retired {
             break;
         }
     }
@@ -6788,12 +6901,26 @@ fn released_report_with_busy_retained_original(test: &str, consumer: bool) {
             .unwrap();
     let mut rounds = Vec::new();
     for _ in 0..4 {
+        let report_before: Value = serde_json::from_slice(
+            &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+        )
+        .unwrap();
+        let references = report_before["output"]["references"]
+            .as_array()
+            .map(Vec::len);
         let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
         );
-        assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
+        assert!(
+            report_component_inventory_matches(
+                rounds.len(),
+                references,
+                round["metadata_inventory_entries"].as_u64()
+            ),
+            "before: {report_before}; round: {round}"
+        );
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
         if output_retired(h.path(), &report_id) {
