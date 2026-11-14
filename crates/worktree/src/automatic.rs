@@ -3433,9 +3433,6 @@ impl Manager {
         )?;
         self.save()?;
         report["terminal_receipt"] = value!(receipt);
-        report["terminal_input"] =
-            self.retained_input(&receipt.path, &self.receipt(&receipt)?, "receipt");
-        crate::recovery::bind_report_inputs(&self.inputs.policy.coordinator_root, report)?;
         Ok(())
     }
     fn drain_entries(

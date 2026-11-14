@@ -1416,12 +1416,28 @@ fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() 
             assert_eq!(report["worktree_inventory"], value!([]));
         } else {
             assert_eq!(report["cleanup_failures"], value!([]));
-            assert!(
-                report["worktree_status"]["inventory_error"]
-                    .as_str()
-                    .unwrap()
-                    .contains("original inventory failure")
+            // Target admission failed before the optional status projection.
+            // The original command error and its exact process result remain.
+            assert!(report["worktree_status"].is_null());
+            let failed = report["processes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|row| row["process"]["exit_code"] == 71)
+                .unwrap();
+            assert_eq!(
+                failed["argv"],
+                value!([
+                    "--no-replace-objects",
+                    "worktree",
+                    "list",
+                    "--porcelain",
+                    "-z"
+                ])
             );
+            let process = chrono_harness::full::expand_process(&failed["process"]).unwrap();
+            assert_eq!(process["stderr"], "original inventory failure\n");
+            assert_eq!(process["owned_work_joined"], true);
         }
         assert!(report["managed_process"].is_null());
         let mut after = h.ledger();
@@ -2028,6 +2044,13 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
     output(&target);
     let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
+    // The real consumer must be registered before a zero-retention round can
+    // release the unconsumed finish report and its terminal dependency.
+    let finished_path = finished["report_path"].as_str().unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory
+        .reference_paths("fixture-finish-consumer", &[finished_path.into()])
+        .unwrap();
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
     assert_eq!(
@@ -2625,11 +2648,6 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
         .as_str()
         .unwrap()
         .to_owned();
-    let finished_path = finished["report_path"].as_str().unwrap();
-    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
-    inventory
-        .reference_paths("fixture-finish-consumer", &[finished_path.into()])
-        .unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
     assert!(h.ledger()["entries"].as_array().unwrap().is_empty());
