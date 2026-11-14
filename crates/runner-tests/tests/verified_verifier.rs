@@ -391,13 +391,13 @@ fn named_argument_identity_and_payload_boundaries_are_independent() {
         reveal_strlit("=x"); reveal_strlit("a=x"); reveal_strlit("ab=x");
         reveal_strlit("a=\0x");
     }
-    let equals_in_payload = policy::valid_named_invocation_value(b"a=x=y");
+    let equals_in_payload = policy::valid_named_invocation_value("a=x=y".as_bytes());
     let unicode_payload = policy::valid_named_invocation_value("a=路径".as_bytes());
-    let empty_payload = policy::valid_named_invocation_value(b"a=");
-    let empty_name = policy::valid_named_invocation_value(b"=x");
-    let control_payload = policy::valid_named_invocation_value(b"a=\0x");
-    let same_name = policy::same_invocation_input_name(b"a=x", b"a=x=y");
-    let prefix_name = policy::same_invocation_input_name(b"a=x", b"ab=x");
+    let empty_payload = policy::valid_named_invocation_value("a=".as_bytes());
+    let empty_name = policy::valid_named_invocation_value("=x".as_bytes());
+    let control_payload = policy::valid_named_invocation_value("a=\0x".as_bytes());
+    let same_name = policy::same_invocation_input_name("a=x".as_bytes(), "a=x=y".as_bytes());
+    let prefix_name = policy::same_invocation_input_name("a=x".as_bytes(), "ab=x".as_bytes());
     expect_verifier_true(equals_in_payload && unicode_payload && same_name);
     expect_verifier_true(!empty_payload && !empty_name && !control_payload && !prefix_name);
 }
