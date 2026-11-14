@@ -779,7 +779,7 @@ pub fn summarize_recovery<'a, A, R>(
         let cache = &caches[index];
         summary = summarize_recovery_artifacts(
             summary.observe_cache(cache.status, cache.outcome), cache.artifacts, &read,
-            Ghost(model),
+            #[cfg(verus_keep_ghost)] Ghost(model),
         );
         proof {
             recovery_any_prefix_step(caches@, index as int,

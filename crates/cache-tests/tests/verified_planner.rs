@@ -833,7 +833,7 @@ fn recovery_aggregate_handles_no_caches_and_failed_cache_without_artifacts() {
     let caches: [policy::RecoveryCacheObservation<Option<&str>>; 0] = [];
     let summary = policy::summarize_recovery(&caches,
         recovery_observed_artifact,
-        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+        #[cfg(verus_keep_ghost)] Ghost(|status: Option<&str>| policy::recovery_text(status)));
     expect_restore_text(summary.status(false), "not-required");
     recovery_failure_precedes_cache_effects(&summary);
     if summary.warning(Some("recovered")) { panic!("empty recovery warned"); }
@@ -844,7 +844,7 @@ fn recovery_aggregate_handles_no_caches_and_failed_cache_without_artifacts() {
     }];
     let summary = policy::summarize_recovery(&caches,
         recovery_observed_artifact,
-        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+        #[cfg(verus_keep_ghost)] Ghost(|status: Option<&str>| policy::recovery_text(status)));
     proof {
         assert(policy::recovery_cache_changed(caches@[0]));
         assert(policy::recovery_cache_warns(caches@[0],
@@ -875,7 +875,7 @@ fn recovery_aggregate_combines_first_cache_change_and_last_artifact_removal() {
     ];
     let summary = policy::summarize_recovery(&caches,
         recovery_observed_artifact,
-        Ghost(model));
+        #[cfg(verus_keep_ghost)] Ghost(model));
     proof {
         assert(policy::recovery_cache_changed(caches@[0]));
         assert(model(caches@[2].artifacts@[2]) == Some("removed"@));
@@ -904,7 +904,7 @@ fn recovery_aggregate_combines_first_artifact_removal_and_last_cache_change() {
     ];
     let summary = policy::summarize_recovery(&caches,
         recovery_observed_artifact,
-        Ghost(model));
+        #[cfg(verus_keep_ghost)] Ghost(model));
     proof {
         assert(policy::recovery_cache_changed(caches@[2]));
         assert(model(caches@[0].artifacts@[0]) == Some("removed"@));
@@ -945,7 +945,7 @@ fn recovery_aggregate_keeps_unknown_case_nul_and_unicode_text_exact() {
     ];
     let summary = policy::summarize_recovery(&caches,
         recovery_observed_artifact,
-        Ghost(|status: Option<&str>| policy::recovery_text(status)));
+        #[cfg(verus_keep_ghost)] Ghost(|status: Option<&str>| policy::recovery_text(status)));
     expect_restore_text(summary.status(false), "not-required");
     if summary.warning(Some("recovered")) { panic!("inexact recovery text counted as an effect"); }
 }
