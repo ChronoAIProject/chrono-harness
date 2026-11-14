@@ -1,4 +1,7 @@
 //! 原件交接的请求边界、精确成员与局部释放；IO 仍归保留所有者。
+#[cfg(verus_keep_ghost)]
+#[path = "retention.rs"]
+pub mod accounting;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
