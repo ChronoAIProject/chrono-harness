@@ -1,4 +1,8 @@
 //! 原件交接的请求边界、精确成员与局部释放；IO 仍归保留所有者。
+#[cfg(not(verus_keep_ghost))]
+pub use crate::retained_artifacts::retention::partition::metadata_only_retirement;
+#[cfg(verus_keep_ghost)]
+pub use accounting::partition::metadata_only_retirement;
 #[cfg(verus_keep_ghost)]
 #[path = "retention.rs"]
 pub mod accounting;

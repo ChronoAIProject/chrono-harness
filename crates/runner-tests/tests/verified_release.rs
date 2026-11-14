@@ -297,6 +297,17 @@ fn maintenance_paths_keep_partial_originals_and_skip_only_records_without_an_ori
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn only_empty_retiring_reports_with_pending_edges_can_skip_path_exclusion() {
+    expect_true(policy::metadata_only_retirement(true, true, true, true, true));
+    expect_true(!policy::metadata_only_retirement(false, true, true, true, true));
+    expect_true(!policy::metadata_only_retirement(true, false, true, true, true));
+    expect_true(!policy::metadata_only_retirement(true, true, false, true, true));
+    expect_true(!policy::metadata_only_retirement(true, true, true, false, true));
+    expect_true(!policy::metadata_only_retirement(true, true, true, true, false));
+    expect_true(!policy::metadata_only_retirement(false, false, false, false, false));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn terminal_limits_keep_equal_bytes_and_reject_count_and_overflow() {
     let first = policy::terminal_budget(0, 0, 10, 1, 10);
     let full_count = policy::terminal_budget(1, 0, 1, 1, 10);

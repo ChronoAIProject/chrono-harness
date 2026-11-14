@@ -41,8 +41,7 @@ mod manifest;
 #[cfg(not(verus_keep_ghost))]
 use manifest::Manifest;
 #[path = "partition.rs"]
-#[cfg(not(verus_keep_ghost))]
-mod partition;
+pub(crate) mod partition;
 #[cfg(not(verus_keep_ghost))]
 use partition::Gate;
 #[cfg(not(verus_keep_ghost))]
@@ -2894,6 +2893,9 @@ impl Inventory {
                     Err(e) => return Err(e.to_string()),
                     Ok(_) => (),
                 }
+                if !gate.excludes_path(&o.path) {
+                    return Err("retiring report path reappeared; preserve replacement".into());
+                }
                 if identity(&root)? != o.identity {
                     return Err("output identity changed; preserve replacement".into());
                 }
@@ -3176,6 +3178,11 @@ impl Inventory {
                         if !l.outputs[i].references.is_empty() {
                             self.save(&l, &gate)?;
                             protected.push(json!({"id":id,"reason":"report bytes absent; bounded reference detachment resumes on ordinary entry"}));
+                            continue;
+                        }
+                        if !gate.excludes_path(&o.path) {
+                            self.save(&l, &gate)?;
+                            protected.push(json!({"id":id,"reason":"report edges detached; final retirement requires path exclusion"}));
                             continue;
                         }
                     }

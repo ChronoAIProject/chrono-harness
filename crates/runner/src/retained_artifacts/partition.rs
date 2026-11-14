@@ -2,15 +2,38 @@
 //! mutable inventory. Multi-record exclusion is limited to actual graph edges.
 //! These synchronous mutations have no descendant owner. Their local leases
 //! end on return even while an unrelated fork holds incidental fd copies.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Only pending metadata edges of an already empty retiring report can advance
+/// without physical path exclusion. Final address retirement still needs it.
+pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
+    entries_empty: bool, pending_references: bool) -> (metadata_only: bool)
+    ensures metadata_only == (retiring && disposing && sealed && entries_empty
+        && pending_references),
+{
+    retiring && disposing && sealed && entries_empty && pending_references
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use crate::ownership::DirectoryLease;
+#[cfg(not(verus_keep_ghost))]
 use crate::verified_release as verified;
 
 // A sweep observes independently bounded rounds. These counts describe actual
 // observations, not a deduplicated inventory or a new source of deletion rights.
+#[cfg(not(verus_keep_ghost))]
 struct SweepReport {
     value: Value,
 }
+#[cfg(not(verus_keep_ghost))]
 impl SweepReport {
     fn new(policy: &Policy) -> Self {
         Self {
@@ -118,6 +141,7 @@ impl SweepReport {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Object {
@@ -138,6 +162,7 @@ pub(super) struct Object {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Role {
     observation: Option<ObservationOrder>,
     schema: String,
@@ -152,6 +177,7 @@ struct Role {
 /// One actual request, qualified by its enrolled producer output rather than a clock.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct ObservationToken {
     pub role: String,
     pub epoch: String,
@@ -159,6 +185,7 @@ pub struct ObservationToken {
     pub attempt: u64,
     pub original: OriginalIdentity,
 }
+#[cfg(not(verus_keep_ghost))]
 impl ObservationToken {
     pub fn binding(&self) -> verified::ObservationBinding<'_> {
         verified::ObservationBinding {
@@ -174,6 +201,7 @@ impl ObservationToken {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct ObservationOrder {
     epoch: String,
     issued: u64,
@@ -182,21 +210,28 @@ struct ObservationOrder {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 struct Address {
     path: String,
     output: Option<String>,
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Gate {
     leases: Vec<DirectoryLease>,
     objects: RefCell<BTreeMap<String, Object>>,
     roles: RefCell<BTreeMap<String, Role>>,
     paths: BTreeMap<String, PathBuf>,
+    exclusive_paths: BTreeSet<String>,
     maintenance: bool,
     retiring_report: Option<String>,
     retained_dependencies: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Gate {
+    pub(super) fn excludes_path(&self, path: &str) -> bool {
+        self.exclusive_paths.contains(path)
+    }
     pub(super) fn retiring_report(&self, id: &str) -> bool {
         self.retiring_report.as_deref() == Some(id)
     }
@@ -226,6 +261,7 @@ impl Gate {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Inventory {
     /// Reserve one request under only this object's existing consumer metadata.
     /// Membership protects the actual pending output, including unknown tasks.
@@ -1131,6 +1167,7 @@ impl Inventory {
             verified::gate_discovery(membership_only, maintenance, wait, birth.is_some());
         let discover_under_lease = discovery.object_excluded;
         let (mut leases, mut path_dirs) = self.path_gates(paths, wait, true, false)?;
+        let mut exclusive_paths: BTreeSet<String> = paths.iter().cloned().collect();
         let mut selected: BTreeSet<String> = ids.iter().cloned().collect();
         let occupied = self.path_ids(&path_dirs, false)?;
         if birth.is_some() && !occupied.is_empty() {
@@ -1308,6 +1345,15 @@ impl Inventory {
                         initial.as_ref() == Some(&r.id),
                         retained_dependencies.contains(&r.id),
                     )
+                        && !r.output.as_ref().is_some_and(|output| {
+                            metadata_only_retirement(
+                                retiring_report.as_ref() == Some(&r.id),
+                                output.phase == "disposing",
+                                output.manifest.sealed,
+                                output.manifest.entries.is_empty(),
+                                !output.references.is_empty(),
+                            )
+                        })
                 })
                 .map(|r| r.path.clone())
                 .collect();
@@ -1315,6 +1361,7 @@ impl Inventory {
                 self.path_gates(&target_paths, wait, !discover_under_lease, false)?;
             leases.extend(additional);
             path_dirs.extend(dirs);
+            exclusive_paths.extend(target_paths);
         }
         let mut role_records = BTreeMap::new();
         for (role, expected) in observed_roles {
@@ -1449,6 +1496,7 @@ impl Inventory {
             objects: RefCell::new(records),
             roles: RefCell::new(role_records),
             paths: path_dirs,
+            exclusive_paths,
             maintenance,
             retiring_report,
             retained_dependencies,
@@ -1824,6 +1872,7 @@ impl Inventory {
         Ok(())
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn finalized(record: &Object) -> bool {
     verified::original_finalized(
         record.retired_leases.len(),
@@ -1833,6 +1882,7 @@ fn finalized(record: &Object) -> bool {
             .map(|output| (output.manifest.sealed, output.phase.as_str())),
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn objects_reference(outputs: &[OutputRecord], source: &str, target: &str) -> bool {
     outputs
         .iter()
