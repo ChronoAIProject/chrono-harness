@@ -54,7 +54,8 @@ pub open spec fn resolution_matches(
         && declared[before.output as int]@ == resolved[after.output as int]@
         && before.options.len() <= after.options.len()
         && (forall|i: int| 0 <= i < before.options.len() ==>
-            option_resolved(declared, resolved, #[trigger] &before.options[i], &after.options[i]))
+            (#[trigger] before.options[i]).value < declared.len() && after.options[i].value < resolved.len()
+                && option_resolved(declared, resolved, &before.options[i], &after.options[i]))
         && (forall|i: int| before.options.len() <= i < after.options.len() ==>
             (#[trigger] after.options[i]).kind == InvocationKind::Search)
 }
@@ -67,7 +68,8 @@ pub open spec fn resolution_allowed(declared: Seq<String>, resolved: Seq<String>
         && declared[super::invocation_output(declared)]@ == resolved[super::invocation_output(resolved)]@
         && before.len() <= after.len()
         && (forall|i: int| 0 <= i < before.len() ==>
-            option_resolved(declared, resolved, #[trigger] &before[i], &after[i]))
+            (#[trigger] before[i]).value < declared.len() && after[i].value < resolved.len()
+                && option_resolved(declared, resolved, &before[i], &after[i]))
         && (forall|i: int| before.len() <= i < after.len() ==>
             (#[trigger] after[i]).kind == InvocationKind::Search)
 }
@@ -101,7 +103,8 @@ pub fn validate_resolution(declared: &Vec<String>, resolved: &Vec<String>)
         invariant 0 <= i <= before.options.len() <= after.options.len(),
             super::invocation_matches(&before, declared@), super::invocation_matches(&after, resolved@),
             forall|j: int| 0 <= j < i ==>
-                option_resolved(declared@, resolved@, #[trigger] &before.options[j], &after.options[j]),
+                (#[trigger] before.options[j]).value < declared.len() && after.options[j].value < resolved.len()
+                    && option_resolved(declared@, resolved@, &before.options[j], &after.options[j]),
         decreases before.options.len() - i,
     {
         if before.options[i].value >= declared.len() || after.options[i].value >= resolved.len() {
@@ -116,7 +119,8 @@ pub fn validate_resolution(declared: &Vec<String>, resolved: &Vec<String>)
         invariant before.options.len() <= i <= after.options.len(),
             super::invocation_matches(&before, declared@), super::invocation_matches(&after, resolved@),
             forall|j: int| 0 <= j < before.options.len() ==>
-                option_resolved(declared@, resolved@, #[trigger] &before.options[j], &after.options[j]),
+                (#[trigger] before.options[j]).value < declared.len() && after.options[j].value < resolved.len()
+                    && option_resolved(declared@, resolved@, &before.options[j], &after.options[j]),
             forall|j: int| before.options.len() <= j < i ==>
                 (#[trigger] after.options[j]).kind == InvocationKind::Search,
         decreases after.options.len() - i,
@@ -126,6 +130,7 @@ pub fn validate_resolution(declared: &Vec<String>, resolved: &Vec<String>)
         }
         i += 1;
     }
+    assert(resolution_matches(declared@, resolved@, &before, &after));
     Ok(())
 }
 
