@@ -3941,7 +3941,10 @@ fn unfinished_creation_policy_migration_preserves_state_and_reaches_existing_rec
             assert_eq!(receipt["effects"], "metadata-binding-only");
             assert_eq!(receipt["completion"], "not-established");
             assert_eq!(receipt["outputs_preserved"], 1);
-            assert_eq!(receipt["roots_preserved"], json!(if domain { 1 } else { 0 }));
+            assert_eq!(
+                receipt["roots_preserved"],
+                json!(if domain { 1 } else { 0 })
+            );
             assert_eq!(receipt["scope"]["complete"], false);
             let mut expected = before.clone();
             expected["policy_sha256"] = json!(chrono_harness::sha256(&current));
@@ -4016,7 +4019,12 @@ fn unfinished_creation_policy_migration_preserves_state_and_reaches_existing_rec
                     .unwrap();
                 assert_eq!(
                     resumed,
-                    (id.clone(), path.into(), "publishing".into(), outcome.clone())
+                    (
+                        id.clone(),
+                        path.into(),
+                        "publishing".into(),
+                        outcome.clone()
+                    )
                 );
                 assert_eq!(maintain_fixture_to(h.path(), 1), 1);
                 assert_eq!(ledger(h.path())["outputs"][0]["outcome"], outcome);
@@ -4244,10 +4252,7 @@ fn unfinished_creation_policy_migration_preserves_dependencies_and_mixed_binding
     }
     let mut h = host(256, 16);
     h.disable_cleanup(true);
-    eprintln!(
-        "mixed creation migration originals: {}",
-        h.path().display()
-    );
+    eprintln!("mixed creation migration originals: {}", h.path().display());
     let dependency_path = tree(h.path(), "required-input");
     fs::write(
         h.path().join(&dependency_path).join("original"),
@@ -4320,8 +4325,9 @@ fn unfinished_creation_policy_migration_preserves_dependencies_and_mixed_binding
             let mut dependency: Value = serde_json::from_slice(dependency_bytes).unwrap();
             let mut third_policy = policy.clone();
             third_policy["keep_seconds"] = json!(7200);
-            dependency["policy_sha256"] =
-                json!(chrono_harness::sha256(&serde_json::to_vec(&third_policy).unwrap()));
+            dependency["policy_sha256"] = json!(chrono_harness::sha256(
+                &serde_json::to_vec(&third_policy).unwrap()
+            ));
             fs::write(dependency_record, serde_json::to_vec(&dependency).unwrap()).unwrap();
         } else {
             fs::rename(dependency_record, &parked).unwrap();
