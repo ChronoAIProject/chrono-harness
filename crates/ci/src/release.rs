@@ -1,21 +1,45 @@
 //! Explicit native-release workflow projection; commands remain host-owned.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+pub fn publisher_success_gate(explicit_always: bool, needs_publisher: bool) -> (required: bool)
+    ensures required == (!explicit_always && needs_publisher),
+{
+    !explicit_always && needs_publisher
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::{action, output_preflight, scalar, shell, write_file};
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, no_symlink_parents, relative_path};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::Value;
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub const SCHEMA: &str = "chrono-github-release/v1";
+#[cfg(not(verus_keep_ghost))]
 pub const UNITS_SCHEMA: &str = "chrono-github-release/v2";
+#[cfg(not(verus_keep_ghost))]
 const MARKER: &str = "# chrono-ci: owned github-release/v1\n";
+#[cfg(not(verus_keep_ghost))]
 const ADOPTED: &str = ".chrono-harness/ci/release.json";
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Config {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub delivery: Option<Delivery>,
@@ -37,6 +61,7 @@ pub struct Config {
 /// 宿主选择成功落地 CI 与唯一发布作业；普通构建继续只读。
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Delivery {
     pub workflow: String,
     pub branch: String,
@@ -47,6 +72,7 @@ pub struct Delivery {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Job {
     pub id: String,
     pub runs_on: String,
@@ -66,11 +92,13 @@ pub struct Job {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Download {
     pub job: String,
     pub directory: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn decode_config(bytes: &[u8]) -> Result<Config, String> {
     let value: Value = decode(bytes)?;
     if value["schema"] == SCHEMA
@@ -90,6 +118,7 @@ pub(crate) fn decode_config(bytes: &[u8]) -> Result<Config, String> {
     Ok(c)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn literal(value: &str) -> Result<(), String> {
     if !crate::verified_literals::valid_literal(value.as_bytes()) {
         return Err("release settings must be literal single-line values".into());
@@ -97,6 +126,7 @@ fn literal(value: &str) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn validate(c: &Config) -> Result<(), String> {
     if let Some(delivery) = &c.delivery {
         if !super::verified_literals::delivery_mode(&c.schema, c.push_branches.len()) {
@@ -271,6 +301,7 @@ pub(crate) fn validate(c: &Config) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn render(c: &Config) -> Result<String, String> {
     validate(c)?;
     // Reuse only identical, explicitly registered downloads. Aliases retain one
@@ -387,6 +418,7 @@ pub fn render(c: &Config) -> Result<String, String> {
     Ok(output)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn render_unit<'a>(
     output: &mut String,
     c: &Config,
@@ -408,6 +440,15 @@ fn render_unit<'a>(
                     format!("always() && (inputs.channel == 'stable' || success()) && {condition}");
             } else if delivery.promotion_build_jobs.contains(&job.id) {
                 condition.push_str(" && inputs.channel != 'stable'");
+            } else if publisher_success_gate(job.always, job.needs.contains(&delivery.publisher)) {
+                // 正式晋升跳过构建祖先；普通消费者只核显式直接依赖。
+                let dependencies = job
+                    .needs
+                    .iter()
+                    .map(|id| format!("needs.{id}.result == 'success'"))
+                    .collect::<Vec<_>>()
+                    .join(" && ");
+                condition = format!("always() && {dependencies} && {condition}");
             }
         }
     }
@@ -543,6 +584,7 @@ fn render_unit<'a>(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn generate(root: &Path, c: &Config, verify: bool) -> Result<bool, String> {
     super::cache::validate_registry(root, c.persistent_cache.as_ref())?;
     let output = render(c)?;
@@ -559,6 +601,7 @@ pub(crate) fn generate(root: &Path, c: &Config, verify: bool) -> Result<bool, St
     Ok(!same)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn init(root: &Path, incoming: Config) -> Result<bool, String> {
     let target = no_symlink_parents(root, ADOPTED)?;
     let existing = target.exists();
