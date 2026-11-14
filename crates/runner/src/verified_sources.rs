@@ -866,9 +866,23 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         let length = content.len() as u64;
         let raw_path = copy_range(path.as_slice(), 0, path.len());
         let raw_digest = copy_range(digest.as_slice(), 0, digest.len());
+        let ghost previous_candidate = candidate@;
+        let ghost previous_modes = modes@;
+        assert(registered_source(registry.files.entries@, normalized@));
+        assert(regular_mode(mode@));
         compiled.push(SourceBinding { path: raw_path, sha256: raw_digest, length });
         candidate.push(SourceBinding { path: normalized, sha256: digest, length });
         modes.push(mode);
+        proof {
+            assert forall|j: int| 0 <= j < i + 1 implies
+                registered_source(registry.files.entries@, (#[trigger] candidate[j]).path@)
+                    && regular_mode(modes[j]@) by {
+                if j < i {
+                    assert(candidate@[j] == previous_candidate[j]);
+                    assert(modes@[j] == previous_modes[j]);
+                }
+            }
+        }
         i += 1;
     }
     if !admit_source_metadata(&compiled, &candidate, args[parsed.source].as_str().as_bytes())

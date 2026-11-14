@@ -499,7 +499,7 @@ pub fn paired_import(args: &Vec<String>, i: usize, end: usize) -> (paired: bool)
         invariant 7 <= j <= end < args.len(), i + 1 < args.len(),
             invocation_kind(args[i as int]@) == InvocationKind::Import,
             forall|k: int| 7 <= k < j && args[k]@ == "--extern"@ && k + 1 < end ==>
-                !same_input_name(vstd::utf8::encode_utf8(args[k + 1]@), vstd::utf8::encode_utf8(args[i + 1]@)),
+                ! #[trigger] same_input_name(vstd::utf8::encode_utf8(args[k + 1]@), vstd::utf8::encode_utf8(args[i + 1]@)),
         decreases end - j,
     {
         if equal_text(args[j].as_str(), "--extern") && j + 1 < end
