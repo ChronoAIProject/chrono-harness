@@ -472,3 +472,35 @@ consume 实际使用上述同一组件和原严格 flags，诊断为 `consume.rs
 调用方固定并提交干净候选后，下一 assignment 仅沿原 `chrono-worktree use --operation <ID> --path <work_target>` 执行 `investigate.verus-tool-contract.consume` → `investigate.verus-tool-contract.reject`，每项最多一次，前置失败停止后继。原登记仍要求整 crate、`--no-cheating`、`--no-external-by-default`、两线程、原预算、实际编译和 SHA-256 dep-info。consume 必须完整证明原合同并实际生成成功 rlib，新的 dep-info 必须绑定同源 helper 与新消费者；仅消失本次 VIR 错误不足以通过。reject 必须使用同一组件真实非零，诊断确实是 `repository_assumption` 的 `assume(false)` 被 no-cheating 拒绝；其他失败不得算负向通过。若输入／工具／组件身份漂移，先报告复用前提失效，不能悄悄重建或更改假设。
 
 本轮未执行编译、证明、探针、格式化、bootstrap、check 或任何受治理 operation；严格正向／负向仍未验收。没有 Git／GitHub、state 写入、生命周期操作或委派；全部自有静态命令取得原生退出状态，无后台任务。成本和新语法实际接受结果未测。typed 完整资格、warehouse、完整仓内源证明与实际编译绑定、正式 DELTA、integration→dev 和落地仍待完成，全 goal 保持 active。本 chunk 不触发正式 review；有限修复批次及适用检查完成后仍须 mandatory review triplet。必要失败原件沿既有 check-original／evidence-retain 的使用方、2026-11-21 复核及释放条件保留，旧 cleanup／handoff 未知交调用方处理。
+
+
+## AE：复用成功组件后的严格正反向结果
+
+固定执行候选为 `7e06910a43a0689bde3633f93540129e915b2dbe`／tree `586105e979541cafd68389722840adcf25c4ba2c`。调用方已独立核定完整索引、提交字节和干净树；本轮定向原生 status 前后都观察到同一 HEAD，操作及依赖采集结束前未改任何跟踪文件。本文原 103,345 字节／SHA-256 `396341036fce087900ea5d87924ac1a68f8a04d4becc3dd60e7960a9caa428b3` 全部保留为前缀。本节是唯一文档追加，不是正式 DELTA、review、warehouse 准入或交付。
+
+**本轮 raw 严格正反向已验收。** 沿登记 `chrono-worktree use --operation <ID> --path /Users/macstudio2/chrono-spec-current-dev`，consume、reject 各一次；没有重跑 build／extract／patch／repair，没有改源码、登记、fixture、flags、两线程、2,400 秒或每流 67,108,864 字节。复用 AC 成功 build 原报告及三个组件产物：前后字节与 AC 相同，105 条构建源码校验和全部匹配，11 项既有固定缓存输入匹配；工具／宏／Z3／Rust 字节未变。操作前目标 uses 为空，原登记租约可非阻塞独占取得并释放；AC 的 55 项及原失败 consume 的 42 项唯一进程均有原生 joined 记录。没有新增执行、等待或保留机制。
+
+原件仍由协调宿主 `/Users/macstudio2/chrono-harness/.chrono-harness/state/worktrees/` 保存；下表双流路径为报告名加 `.process/stdout`／`.process/stderr`。
+
+| 操作／原报告 | 原生结果及原件字节／SHA-256 |
+| --- | --- |
+| consume：`use-44453-1794635710202422000-0.json` | use／工具均退出 0，55 项唯一进程全部 joined；报告 531,713／`3e51eae38537e98be9eaaca24af6383e969efa9b01f56ff8ad61f6ae9c4a6f1f`；stdout 14,731／`c74cd588d7f900bedfdcb40b3c7e9079526829631740b161443e2c10ab80cb5f`；stderr 0／`e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`。 |
+| reject：`use-62365-1794635842740187000-0.json` | use 退出 2、工具真实退出 1，42 项唯一进程全部 joined；报告 450,739／`57bf00b7ea08587af11edecb1092af62f49b38209290e9d1aa456dabae42951a`；stdout 768／`ba66f1c530acff1a6e3af8127c225ac9b02f1b826a2a194c23ab60dbed83241d`；stderr 230／`ab5b92862665748efc8d56da967c64299cd6cfd89d4252d5c3e6e5029a631b12`。 |
+
+consume 原 stdout 报告 `success:true`、整 crate、11 verified／0 errors，保留 `--no-cheating`、`--no-external-by-default`、`--compile` 和 SHA-256 dep-info。原先不存在的 rlib 由本次成功操作生成；本次三个产物如下，reject 后字节未变，不能与 AC 失败 VIR／dep-info 混用。
+
+| 本次产物（`.chrono-harness/state/` 下） | 字节／SHA-256 |
+| --- | --- |
+| `verus-tool-contract-20261114-consume.rlib` | 171,752／`7e0764bd6aba78fe71dae614dbfcd82f3ddb50b5fcfae48962a79b78448b2ac1` |
+| `verus-tool-contract-20261114-consume.vir` | 51,738／`283d5bbdaa3f0a3a1ce14b9f3db49aab40115fd1004fc58f8eb86cdffdc9c94a` |
+| `verus-tool-contract-20261114-consume.rlib.d` | 945／`f53fb925697d6d4edfead050e86315aeed4890af94f5c9ca391a5c9b45e51c93` |
+
+新 dep-info 的两条源码校验和精确绑定当前 `consume.rs` 的 3,042 字节／`c515184b707dde87e8740af1790859848cf3a7e0b32fa87353c18fe47e3debb3` 和同源 `json_fields.rs` 的 806 字节／`02037b054f66041341605c64c00e43d88a934a6c5a48b1afa7454c515ead97cc`。原函数签名、前后条件、全文／借用／对象／集合状态断言和独立预期均未改；不是仅凭旧错误消失判成功。实际 managed result 的 PATH 摘要为 `ff91a4c3ca52b0bb71eaa4c0bb040da0aae7936dcaca80286dab41f4f8622f7e`，与原生 effective PATH 的实际字节及 result 相符，确含现有 `/Users/macstudio2/.cargo/bin`；相对 AC 的 managed 环境只有 PATH 字节变化。两次新操作实际环境相同，intent／launch／result 环境绑定一致，原 stdout 均报告固定 Verus `f8e17045c4ac17a02e566b8997070f2eecc255be` 与 `1.95.0-aarch64-apple-darwin`。
+
+reject 的原诊断为 `assume/admit not allowed with --no-cheating`，明确定位 `fixtures/reject.rs:9:13` 的 `proof { assume(false); }`，原 stdout 也点名 `verus_tool_contract_reject::repository_assumption`，不是名称、类型或其他前置错误。原 stdout 保留 `success:false`、`encountered-error:true`、`encountered-vir-error:true`；未报告 verified／errors 数量，不补 0。故意非法 fixture 按现役 data 合同消费，其真实非零不包装成成功 ProofAdmission，也不豁免仓内真实逻辑。
+
+交接定向 status 原报告为 `status-68507-1794635918875622000-0.json`，退出 0、32 项唯一进程全部 joined；目标仍 active、`report_handoff_pending:true`，旧 cleanup 失败仍由调用方处理，不据此推导删除权。本轮全部自有原生任务已终结，没有 finish／maintain／migrate／删除或委派；未直接调用 Git、改索引／引用或访问 GitHub，受管入口内部的 Git 读取仍见原报告。按各自 launch→result 文件时间近似计，consume 为 9.783 秒，reject 为 1.158 秒；这是业务原件时间窗口，不是 CPU、完整 use／CI 或生命周期总成本，后者未测。
+
+详细输入／工具／组件、原报告／intent／launch／result／双流摘要、joined 与环境绑定由本次 runner attempt `6af7f6a6079db12198010da3/attempt-1/result.json` 引用。AC 原成功 build 与失败 consume 的报告、双流和必要诊断仍按既有 check-original／evidence-retain 保留，已核旧身份且诊断消费完成的失败临时 VIR／dep-info 由原生产者正常替换；没有另建永久备份或总账。原件供工程、调用方和 review 使用，2026-11-21 复核，调试／验收义务结束且无活使用方后才由调用方释放。
+
+下一差异回到既有生产所有者：完整 typed compiler／source／context／report／rlib／dep-info／VIR／宏／传递输入资格、warehouse 迁移、全部仓内 adapter／generation／独立预期证明与实际编译绑定、适用行为验收、正式 DELTA、原生 integration→dev 和落地仍须完成。特别是本轮未执行 `facts_configs` 的 runner 整 crate 证明与其行为操作，不能把严格实验根成功推广为这些范围成功。全 SPEC goal 保持 active；本 chunk 不触发 formalreview，有限批次及适用实际工作完成后仍需 mandatory review triplet。
