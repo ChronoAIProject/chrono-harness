@@ -59,6 +59,31 @@ worktree-tests 为 8，judge-workflow-tests、pr-tests 为 2，其余不加参�
 继续使用既有接口；完整恢复 IO／保留事务、外围字段解释及全部编译调用绑定仍未完成。
 本批只完成这些动作判断，构建、证明、CI 和完整生命周期成本未测。
 
+## 缓存恢复的单个输出删除
+
+`recovery.rs` 的 `remove_recovery_output` 直接承担实际删除操作的选择与结果：
+先观察一次 metadata；目录优先调用 `remove_dir_all`，否则普通文件调用 `remove_file`。
+两种标志都不成立时返回原不支持类型错误，不调用删除；metadata 的错误种类恰为
+本次 Rust 的 `NotFound` 时返回 `absent`，其他 metadata 错误完整返回。
+实际删除成功才返回 `removed`，失败完整返回原错误文本，不尝试另一种删除。
+同源合同关联实际观察、选中的调用、传递的状态和最终结果。
+
+生产回调只转交以下外部接口，不选择恢复政策：固定 Rust 标准库
+`fs::symlink_metadata`、`Metadata::is_dir`／`is_file` 提供原观察；
+`io::Error::kind`、同一 `ErrorKind` 的 `u32` 判别值转换及 `Display::to_string`
+提供原种类和原文本。`NotFound` 的判别值也来自同一枚举，不写死平台数值。
+`fs::remove_dir_all`／`remove_file` 返回实际删除结果；标准 `Result::map`／`map_err`
+仅对原成功或错误变体应用点名的字段投影。每个回调原样返回收到的 `PathBuf`，
+Verus 将该返回状态交给唯一选中的删除回调；这些标准接口仍是明确外部合同。
+没有增加仓内受信实现、`assume`、`external_body`、工具依赖或证明过滤。
+
+独立 Verus 预期以实际调用轨迹核对先观察、只选一种删除、目录优先、其他类型拒绝、
+两种不同的缺失种类值，以及 metadata／目录删除／文件删除的首错和完整空、Unicode、
+NUL、换行载荷。同一预期作为普通 Rust 测试运行，原未过滤恢复测试继续验真实输出。
+沿用现有 FILEMAP 根、`verify.cache-planner`／`verify.cache-planner-tests` 与原预算。
+这里只完成单个输出的删除组合；路径准入、整组选集、JSON 报告更新、保留事务和完整
+编译／调用绑定仍有各自义务，不把整个恢复循环或全仓列为已证明。完整成本未测。
+
 ## 缓存恢复错误文本
 
 `recovery.rs` 的 `recovery_decision_error` 用同源 Verus 为两个恢复错误选择完整前缀，
