@@ -4213,6 +4213,7 @@ fn publish_owned_with(
     write_content: impl FnOnce(&mut fs::File) -> Result<(), String>,
     consumer: Option<(&str, bool)>,
 ) -> Result<bool, String> {
+    let began = Instant::now();
     let Some(inventory) = Inventory::adopted(root)? else {
         return Ok(false);
     };
@@ -4222,7 +4223,21 @@ fn publish_owned_with(
     if length > inventory.policy.max_output_bytes {
         return Err("output byte capacity exceeded before writing".into());
     }
+    tracing::debug!(
+        event_id = "retention.original.adopted",
+        producer,
+        path,
+        elapsed_seconds = began.elapsed().as_secs_f64(),
+        "original publication policy admission returned"
+    );
     let _writer = inventory.address_gate("writer", path)?;
+    tracing::debug!(
+        event_id = "retention.original.writer_acquired",
+        producer,
+        path,
+        elapsed_seconds = began.elapsed().as_secs_f64(),
+        "original publication writer acquisition returned"
+    );
     let target = no_symlink_parents(root, path)?;
     fs::create_dir_all(target.parent().ok_or("original parent")?).map_err(|e| e.to_string())?;
     match fs::symlink_metadata(&target) {
@@ -4237,6 +4252,13 @@ fn publish_owned_with(
                 }
             }
             // Reuse leaves the first immutable operation outcome intact.
+            tracing::debug!(
+                event_id = "retention.original.reused",
+                producer,
+                path,
+                elapsed_seconds = began.elapsed().as_secs_f64(),
+                "existing original qualification returned"
+            );
             return Ok(true);
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
@@ -4248,9 +4270,23 @@ fn publish_owned_with(
         false,
         json!({"publication":"started","outcome":"not-established"}),
     )?;
+    tracing::debug!(
+        event_id = "retention.original.reserved",
+        producer,
+        path,
+        elapsed_seconds = began.elapsed().as_secs_f64(),
+        "original publication reservation returned"
+    );
     let role =
         consumer.map(|(prefix, release)| (format!("{prefix}:{}", publication.id()), release));
     publication.materialize_for_consumer(role.as_ref().map(|(role, _)| role.as_str()))?;
+    tracing::debug!(
+        event_id = "retention.original.materialized",
+        producer,
+        path,
+        elapsed_seconds = began.elapsed().as_secs_f64(),
+        "original publication materialization returned"
+    );
     publication.check_length(length)?;
     let mut file = fs::OpenOptions::new()
         .write(true)
@@ -4258,10 +4294,24 @@ fn publish_owned_with(
         .map_err(|e| e.to_string())?;
     write_content(&mut file)?;
     file.sync_all().map_err(|e| e.to_string())?;
+    tracing::debug!(
+        event_id = "retention.original.content_synced",
+        producer,
+        path,
+        elapsed_seconds = began.elapsed().as_secs_f64(),
+        "original publication content synchronization returned"
+    );
     match role {
         Some((role, true)) => publication.complete_releasing_consumer(outcome, &role)?,
         _ => publication.complete(outcome)?,
     }
+    tracing::debug!(
+        event_id = "retention.original.completion_returned",
+        producer,
+        path,
+        elapsed_seconds = began.elapsed().as_secs_f64(),
+        "original publication completion method returned"
+    );
     Ok(true)
 }
 
