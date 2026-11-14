@@ -12,10 +12,30 @@ pub struct Config {
     pub operation: String,
     pub bootstrap_profile: String,
     pub receipt: String,
-    pub component_producer_root: String,
-    pub component_producer: cargo::Identity,
-    pub component_dependency: cargo::Identity,
+    pub component: ComponentConfig,
     pub consumers: BTreeMap<String, Consumer>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ComponentConfig {
+    pub checksum: String,
+    pub patch: String,
+    pub source: String,
+    pub receipt: String,
+    pub archive_root: String,
+    pub argv: Vec<String>,
+    pub files: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Component {
+    pub inputs: String,
+    pub directory: String,
+    pub operation: execution::Operation,
+    pub files: Vec<cargo::Identity>,
+    pub externs: BTreeMap<String, String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -37,6 +57,7 @@ struct Observation {
     externs: BTreeMap<String, String>,
     search: Vec<String>,
     unresolved: Vec<String>,
+    component: Component,
 }
 
 fn key(environment: &bindings::Environment, inputs: &[cargo::Identity]) -> Result<String, String> {
@@ -174,23 +195,51 @@ pub fn collect(
     let library = root_library.ok_or("missing runner library compiler-artifact")?;
     let mut root_inputs = Vec::new();
     for artifact in &artifacts {
-        if artifact.target.kind != ["lib"] {
-            unresolved.push(format!("macro/build-script dep-info and loaded tool domain not bound: {}:{}", artifact.package_id, artifact.target.name));
-            continue;
+        let mut outputs: Vec<PathBuf> = artifact.filenames.iter().map(PathBuf::from).collect();
+        let first = outputs.first().ok_or("empty compiler filenames")?.clone();
+        // Cargo publishes the root rlib without a hash, while rustc's dep-info names
+        // the hashed sibling of the reported rmeta. Check the alias bytes explicitly.
+        if let Some(meta) = outputs.iter().find(|p| p.extension() == Some(OsStr::new("rmeta"))).cloned() {
+            let hashed = meta.with_extension("rlib");
+            let published = outputs.iter().find(|p| p.extension() == Some(OsStr::new("rlib"))).ok_or("missing rlib")?;
+            if *published != hashed {
+                let actual = identity(&hashed)?;
+                let alias = identity(published)?;
+                if !cargo::content_matches(&actual.sha256, actual.length, &alias.sha256, alias.length) {
+                    return Err("E_VERUS_DEPENDENCIES: published root differs from compiler library".into());
+                }
+                observe(&mut files, &hashed)?;
+                outputs = vec![hashed, meta];
+            }
         }
-        let first = artifact.filenames.first().ok_or("empty library filenames")?;
-        let directory = Path::new(first).parent().ok_or("missing library directory")?;
-        let paths = cargo::compiler_library_paths(directory.as_os_str().as_encoded_bytes(),
-            artifact.target.name.as_bytes(), &artifact.filenames, artifact.executable.is_some())
-            .ok_or("E_VERUS_DEPENDENCIES: unsupported actual compiler library shape")?;
-        let dependency = PathBuf::from(std::str::from_utf8(&paths.dependency).map_err(|e| e.to_string())?);
-        let outputs = paths.outputs.iter().map(|p| std::str::from_utf8(p).map(PathBuf::from).map_err(|e| e.to_string()))
-            .collect::<Result<Vec<_>, _>>()?;
-        // 同一现役 checksum 判法，不把 fresh 或文件存在当作编译来源。
-        super::bind_dependency(Path::new(&artifact.manifest_path), &dependency, &outputs,
-            &[PathBuf::from(&artifact.target.src_path)])?;
+        let directory = outputs[0].parent().ok_or("missing compiler output directory")?;
+        let text = directory.to_str().ok_or("non UTF-8 search path")?.to_owned();
+        if !search.contains(&text) { search.push(text); }
+        let dependency = if artifact.target.kind == ["lib"] {
+            let names = outputs.iter().map(|p| p.to_str().map(str::to_owned).ok_or("non UTF-8 output")).collect::<Result<Vec<_>, _>>()?;
+            let paths = cargo::compiler_library_paths(directory.as_os_str().as_encoded_bytes(),
+                artifact.target.name.as_bytes(), &names, artifact.executable.is_some())
+                .ok_or("E_VERUS_DEPENDENCIES: unsupported actual compiler library shape")?;
+            PathBuf::from(std::str::from_utf8(&paths.dependency).map_err(|e| e.to_string())?)
+        } else if artifact.target.kind == ["proc-macro"] {
+            let stem = first.file_stem().and_then(|s| s.to_str()).and_then(|s| s.strip_prefix("lib"))
+                .ok_or("invalid proc macro output")?;
+            directory.join(format!("{stem}.d"))
+        } else {
+            unresolved.push(format!("build-script source/generated/native compilation inputs not qualified: {}:{}", artifact.package_id, artifact.target.name));
+            continue;
+        };
         observe(&mut files, &dependency)?;
         let raw = bounded(&dependency)?;
+        if raw.windows(b"# checksum:".len()).any(|w| w == b"# checksum:") {
+            super::bind_dependency(Path::new(&artifact.manifest_path), &dependency, &outputs,
+                &[PathBuf::from(&artifact.target.src_path)])
+                .map_err(|e| format!("{e}; unit={}; dep-info={}", artifact.target.name, dependency.display()))?;
+        } else {
+            // Explicit --target does not apply target rustflags to host macro units.
+            // Preserve their real dep-info and current bytes, without granting origin qualification.
+            unresolved.push(format!("host unit has no compiler checksum producer: {}:{}", artifact.package_id, artifact.target.name));
+        }
         let encoded = chrono_harness::verified_verifier::sources::encode_path(dependency.with_extension("").as_os_str().as_encoded_bytes());
         let inputs = chrono_harness::verified_verifier::sources::compiler_dependency_paths(&raw, &encoded)
             .ok_or("invalid compiler dependency header")?;
@@ -201,9 +250,12 @@ pub fn collect(
             observe(&mut files, &path)?;
             loaded.push(path);
         }
-        if std::ptr::eq(*artifact, library) { root_inputs = loaded; }
-        let text = directory.to_str().ok_or("non UTF-8 search path")?.to_owned();
-        if !search.contains(&text) { search.push(text); }
+        if std::ptr::eq(*artifact, library) {
+            if !raw.windows(b"# checksum:".len()).any(|w| w == b"# checksum:") {
+                return Err("E_VERUS_DEPENDENCIES: runner target has no compiler checksum input binding".into());
+            }
+            root_inputs = loaded;
+        }
     }
     let mut externs = BTreeMap::new();
     for dependency in node["deps"].as_array().ok_or("missing resolved dependencies")? {
@@ -266,45 +318,92 @@ pub fn execute_consumer(
     Ok(())
 }
 
-pub fn validate_component(root: &Path, config: &Config, externs: &BTreeMap<String, String>) -> Result<(), String> {
-    let producer = &config.component_producer;
-    let storage = Path::new(&config.component_producer_root);
-    let relative = Path::new(&producer.path).strip_prefix(storage).map_err(|e| e.to_string())?
-        .to_str().ok_or("non UTF-8 component original path")?;
-    let _guard = retention::read_guard(storage, relative)?;
-    unchanged(std::slice::from_ref(producer))?;
-    let report: Value = chrono_harness::json(&bounded(Path::new(&producer.path))?)?;
-    let process = &report["managed_process"];
-    if process["exit_code"] != 0 || !process["failure"].is_null() || process["owned_work_joined"] != true {
-        return Err("E_VERUS_DEPENDENCIES: component original process is not successful and joined".into());
+/// Raw component observations are not ProofAdmission. Recheck the original
+/// process, streams, exact extern instances, output and compiler checksums.
+pub fn validate_component(root: &Path, component: &Component, externs: &BTreeMap<String, String>, source: &Path, contract: &chrono_harness::verified_verifier::OutputContract) -> Result<(), String> {
+    unchanged(&component.files)?;
+    if component.externs != *externs || component.operation.exit_code != 0 {
+        return Err("E_VERUS_DEPENDENCIES: component compiled instances differ or producer failed".into());
     }
-    let cwd = process["cwd"].as_str().ok_or("missing component cwd")?;
-    let argv = process["argv"].as_array().ok_or("missing component producer argv")?;
-    let dependency_path = profile::path(root, &config.component_dependency.path, b".chrono-harness/state/")?;
-    let actual = identity(&dependency_path)?;
-    if !cargo::content_matches(&actual.sha256, actual.length, &config.component_dependency.sha256, config.component_dependency.length) {
-        return Err("E_VERUS_DEPENDENCIES: component dep-info differs from retained input".into());
+    let output = original_stream(root, &component.operation.stdout)?;
+    original_stream(root, &component.operation.stderr)?;
+    let report: chrono_harness::verified_verifier::CompilerReport = serde_json::from_slice(&output).map_err(|e| e.to_string())?;
+    if !chrono_harness::verified_verifier::accepts_report(&report, contract) {
+        return Err("E_VERUS_DEPENDENCIES: component original report rejected".into());
     }
-    let raw = bounded(&dependency_path)?;
-    let encoded = chrono_harness::verified_verifier::sources::encode_path(config.component_dependency.path.as_bytes());
-    let inputs = chrono_harness::verified_verifier::sources::compiler_dependency_paths(&raw, &encoded)
-        .ok_or("component compiler dependency header rejected")?;
-    for pair in argv.windows(2) {
-        if pair[0] != "--extern" { continue; }
-        let value = pair[1].as_str().ok_or("invalid component extern")?;
-        let (name, path) = value.split_once('=').ok_or("component extern has no producer path")?;
-        let expected = Path::new(cwd).join(path);
-        let current = Path::new(externs.get(name).ok_or("component dependency absent from runner graph")?);
-        let before = identity(&expected).map_err(|error| format!("E_VERUS_DEPENDENCIES: component original extern {name} unavailable: {}; {error}", expected.display()))?;
-        let after = identity(current)?;
-        if !cargo::content_matches(&before.sha256, before.length, &after.sha256, after.length) {
-            return Err(format!("E_VERUS_DEPENDENCIES: component and runner use different compiled instances of {name}"));
-        }
-        if !inputs.iter().any(|p| Path::new(cwd).join(std::str::from_utf8(p).unwrap_or("")) == expected) {
-            return Err(format!("E_VERUS_DEPENDENCIES: component dep-info has no binary input binding for {name}; argv and equal versions do not supply that origin"));
-        }
-    }
+    let directory = profile::path(root, &component.directory, b".chrono-harness/state/")?;
+    let mut required = vec![source.to_path_buf()];
+    required.push(PathBuf::from(externs.get("serde_json").ok_or("missing current serde_json")?));
+    super::bind_dependency(&root.join("Cargo.toml"), &directory.join("libvstd.rlib.d"),
+        &[directory.join("libvstd.rlib")], &required)?;
     Ok(())
+}
+
+fn component(
+    root: &Path, build: &BuildConfig, config: &ComponentConfig, externs: &BTreeMap<String, String>,
+    search: &[String], environment: &bindings::Environment,
+    stdout: &mut (impl Write + Send), stderr: &mut (impl Write + Send),
+) -> Result<Component, BuildFailure> {
+    let checksum = profile::read(root, &config.checksum, b".chrono-harness/ci/")?;
+    let text = std::str::from_utf8(&checksum).map_err(|e| e.to_string())?;
+    let (expected, archive) = text.trim_end_matches('\n').split_once("  ").ok_or("invalid archive checksum record")?;
+    let archive = profile::path(root, archive, b".chrono-harness/cache/")?;
+    let archive_id = identity(&archive)?;
+    if archive_id.sha256 != expected { return Err("E_VERUS_DEPENDENCIES: cached Verus archive checksum differs".into()); }
+    let patch = profile::path(root, &config.patch, b".chrono-harness/experiments/")?;
+    let source = profile::path(root, &config.source, b"")?;
+    let inputs = chrono_harness::wire::digest(&(config, &archive_id, identity(&patch)?, identity(&source)?, externs))?;
+    let receipt = profile::path(root, &config.receipt, b"")?;
+    if receipt.try_exists().map_err(|e| e.to_string())? {
+        let reference: cargo::Identity = serde_json::from_slice(&bounded(&receipt)?).map_err(|e| e.to_string())?;
+        unchanged(std::slice::from_ref(&reference))?;
+        let prior: Component = serde_json::from_slice(&bounded(Path::new(&reference.path))?).map_err(|e| e.to_string())?;
+        if prior.inputs == inputs {
+            let _guard = retention::read_guard(root, &prior.directory)?;
+            validate_component(root, &prior, externs, &source, &build.output_contract)?;
+            return Ok(prior);
+        }
+    }
+    // Separate immutable slot: the prior AC/AE bytes and their consumers remain intact.
+    let directory = tempfile::Builder::new().prefix("runner-verus-").tempdir_in(root.join(".chrono-harness/state")).map_err(|e| e.to_string())?.keep();
+    let relative = directory.strip_prefix(root).map_err(|e| e.to_string())?.to_str().ok_or("non UTF-8 component")?.to_owned();
+    let publication = retention::begin_adopted(root, "check-original", &directory,
+        json!({"owner":"runner dependency producer","status":"in-progress"}))?;
+    let consumer = format!("runner-dependencies:{relative}");
+    let retained = publication.as_ref().map(|p| p.protect_consumer(&consumer)).transpose()?;
+    writeln!(stderr, "{}", json!({"reason":"chrono-runner-component-original", "path":relative,"consumer":consumer,"original":retained})).map_err(|e| e.to_string())?;
+    let result = (|| {
+        let run = |index, tool: &str, argv: Vec<String>, stdout: &mut _, stderr: &mut _| -> Result<execution::Operation, BuildFailure> {
+            let executable = if tool == "verus" { directory.join("verus") } else {
+                chrono_harness::resolve_program(root, tool, environment.get(OsStr::new("PATH")).and_then(|s| s.to_str()))?
+            };
+            let method = execution::Method { owner:build.owner.clone(), operation:"prepare.ci-generation-dependency.runner".into(), tool:tool.into(), argv, output_contract:None };
+            let operation = execution::run_operation(root, &directory, index, &method, &executable, environment, stdout, stderr)?;
+            persist(&directory.join(format!("operation-{index}.json")), &operation)?;
+            if operation.exit_code != 0 { return Err(BuildFailure { message:format!("component {tool} failed"), exit_code:Some(operation.exit_code) }); }
+            Ok(operation)
+        };
+        run(0, "tar", vec!["-x".into(),"-f".into(),archive.to_str().ok_or("non UTF-8 archive")?.into(),"-s".into(),format!("|^{}|{relative}|",config.archive_root),"--no-same-owner".into()], stdout, stderr)?;
+        run(1, "patch", vec!["-f".into(),"-F".into(),"0".into(),"-p1".into(),"-d".into(),relative.clone(),"-i".into(),patch.to_str().ok_or("non UTF-8 patch")?.into()], stdout, stderr)?;
+        let argv = config.argv.iter().map(|s| s.replace("$COMPONENT", &relative)).collect::<Vec<_>>();
+        let operation = run(2, "verus", arguments(&argv, externs, search)?, stdout, stderr)?;
+        let mut files = BTreeMap::new();
+        for name in &config.files { observe(&mut files, &directory.join(name))?; }
+        observe(&mut files, &source)?;
+        observe(&mut files, &patch)?;
+        observe(&mut files, &archive)?;
+        let component = Component { inputs, directory:relative.clone(), operation, files:files.into_values().collect(), externs:externs.clone() };
+        validate_component(root, &component, externs, &source, &build.output_contract)?;
+        persist(&directory.join("component.json"), &component)?;
+        persist(&receipt, &identity(&directory.join("component.json"))?)?;
+        Ok(component)
+    })();
+    if let Some(publication) = publication {
+        publication.complete(json!({"owner":"runner dependency producer", "consumer":consumer,
+            "status":if result.is_ok() {"observed"} else {"failed"},
+            "retention":"caller releases after last consumer/diagnosis; review within seven days"}))?;
+    }
+    result
 }
 
 pub(super) fn run(
@@ -366,12 +465,12 @@ pub(super) fn run(
         let (mut files, externs, search, unresolved) = collect(&profile::path(root, &build.target, b"")?, &graph, &output, &manifest)?;
         files.extend(inputs);
         unchanged(&files)?;
-        let observation = Observation { schema: "chrono-runner-dependencies/v1".into(), inputs: input_key, metadata, build: operation, files, externs, search, unresolved };
+        let component = component(root, &build, &config.component, &externs, &search, &environment, stdout, stderr)?;
+        let observation = Observation { component, schema: "chrono-runner-dependencies/v1".into(), inputs: input_key, metadata, build: operation, files, externs, search, unresolved };
         persist(&directory.join("dependencies.json"), &observation)?;
         persist(&receipt, &identity(&directory.join("dependencies.json"))?)?;
-        writeln!(stdout, "{}", json!({"reason":"chrono-runner-dependencies", "receipt":config.receipt, "status":"observed-incomplete", "unresolved":observation.unresolved})).map_err(|e| e.to_string())?;
-        // Cargo exit 0 是原观察；完整域尚未建立，准备操作不得报告合格成功。
-        return Err("E_VERUS_DEPENDENCIES: dependency observations retained; loaded compiler/native domain remains unqualified".into());
+        writeln!(stdout, "{}", json!({"reason":"chrono-runner-dependencies", "receipt":config.receipt, "status":"observed", "formal_qualification":"unavailable", "unresolved":observation.unresolved})).map_err(|e| e.to_string())?;
+        return Ok(());
     }
     let operation = consumer;
     let consumer = config.consumers.get(operation).ok_or("unregistered dependency consumer")?;
@@ -395,10 +494,14 @@ pub(super) fn run(
     if observation.externs != externs || observation.search != search || observation.unresolved != unresolved {
         return Err("E_VERUS_DEPENDENCIES: receipt differs from actual Cargo originals".into());
     }
-    validate_component(root, config, &observation.externs)?;
-    // 不接受可手填的 readiness 标志。当前 collect 会如实保留工具/原生域缺口。
-    if !unresolved.is_empty() {
-        return Err(format!("E_VERUS_DEPENDENCIES: strict consumer {operation} is blocked by {unresolved:?}").into());
-    }
-    execute_consumer(root, directory, operation, consumer, &externs, &search, &environment, stdout, stderr)
+    let _component_guard = retention::read_guard(root, &observation.component.directory)?;
+    validate_component(root, &observation.component, &observation.externs, &profile::path(root, &config.component.source, b"")?, &build.output_contract)?;
+    // These are registered raw investigations. Known typed qualification gaps are
+    // retained in the observation; they cannot issue a formal ProofAdmission.
+    let consumer = Consumer {
+        tool: consumer.tool.clone(),
+        executable: consumer.executable.replace("$COMPONENT", &observation.component.directory),
+        argv: consumer.argv.iter().map(|s| s.replace("$COMPONENT", &observation.component.directory)).collect(),
+    };
+    execute_consumer(root, directory, operation, &consumer, &externs, &search, &environment, stdout, stderr)
 }

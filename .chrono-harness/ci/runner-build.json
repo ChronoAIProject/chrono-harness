@@ -31,20 +31,10 @@
     "operation": "prepare.ci-generation-dependency.runner",
     "bootstrap_profile": ".chrono-harness/ci/bootstrap-core.json",
     "receipt": "crates/runner/target/.chrono-runner-dependencies.json",
-    "component_producer": {
-      "path": "/Users/macstudio2/chrono-harness/.chrono-harness/state/worktrees/use-53527-1794633613411773000-0.json",
-      "sha256": "5c56b582b3269b409581125d5a87be3ce5e03f416673eb2831c836beb48c8486",
-      "length": 713756
-    },
-    "component_dependency": {
-      "path": ".chrono-harness/state/verus-tool-contract-20261114/libvstd.rlib.d",
-      "sha256": "1367c34867875d31e5995dcc1746dcc4bcb1b640266799ce681ed8f21d2c4d4d",
-      "length": 41485
-    },
     "consumers": {
       "investigate.ci-generation-dependency.runner": {
         "tool": "verus-json-contract",
-        "executable": ".chrono-harness/state/verus-tool-contract-20261114/verus",
+        "executable": "$COMPONENT/verus",
         "argv": [
           "--crate-type=lib",
           "--no-cheating",
@@ -60,7 +50,7 @@
           "--env-set",
           "CARGO_PKG_VERSION=0.1.0",
           "--extern",
-          "verus_builtin_macros=.chrono-harness/state/verus-tool-contract-20261114/libverus_builtin_macros.dylib",
+          "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
           "--extern",
           "chrono_identifiers",
           "--extern",
@@ -94,7 +84,7 @@
       },
       "verify.runner-json-adapters-tests": {
         "tool": "verus-json-contract",
-        "executable": ".chrono-harness/state/verus-tool-contract-20261114/verus",
+        "executable": "$COMPONENT/verus",
         "argv": [
           "--crate-type=lib",
           "--no-cheating",
@@ -111,7 +101,7 @@
           "--extern",
           "serde_json",
           "--extern",
-          "verus_builtin_macros=.chrono-harness/state/verus-tool-contract-20261114/libverus_builtin_macros.dylib",
+          "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
           "--import",
           "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
           "--emit=link=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapter-tests.rlib,dep-info=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapter-tests.rlib.d",
@@ -123,7 +113,7 @@
       },
       "investigate.ci-generation-dependency.consumer": {
         "tool": "verus-json-contract",
-        "executable": ".chrono-harness/state/verus-tool-contract-20261114/verus",
+        "executable": "$COMPONENT/verus",
         "argv": [
           "--crate-type=lib",
           "--no-cheating",
@@ -157,7 +147,7 @@
       },
       "investigate.ci-generation-dependency.missing": {
         "tool": "verus-json-contract",
-        "executable": ".chrono-harness/state/verus-tool-contract-20261114/verus",
+        "executable": "$COMPONENT/verus",
         "argv": [
           "--crate-type=lib",
           "--no-cheating",
@@ -190,6 +180,47 @@
         ]
       }
     },
-    "component_producer_root": "/Users/macstudio2/chrono-harness"
+    "component": {
+      "checksum": ".chrono-harness/ci/verus-macos-arm64.sha256",
+      "patch": ".chrono-harness/experiments/verus-tool-contract/vstd.patch",
+      "source": "crates/runner/src/json_value_specs.rs",
+      "receipt": "crates/runner/target/.chrono-runner-component.json",
+      "archive_root": "verus-arm64-macos",
+      "argv": [
+        "--crate-type=lib",
+        "--crate-name",
+        "vstd",
+        "--is-vstd",
+        "--num-threads",
+        "2",
+        "--output-json",
+        "--compile",
+        "--edition=2021",
+        "--cfg",
+        "feature=\"std\"",
+        "--cfg",
+        "feature=\"alloc\"",
+        "--extern",
+        "serde_json",
+        "--export",
+        "$COMPONENT/vstd.vir",
+        "--emit=link=$COMPONENT/libvstd.rlib,dep-info=$COMPONENT/libvstd.rlib.d",
+        "$COMPONENT/vstd/vstd.rs",
+        "-o",
+        "$COMPONENT/libvstd.rlib",
+        "-Zchecksum-hash-algorithm=sha256",
+        "-Zbinary-dep-depinfo"
+      ],
+      "files": [
+        "verus",
+        "rust_verify",
+        "z3",
+        "libverus_builtin_macros.dylib",
+        "libverus_builtin.rlib",
+        "libvstd.rlib",
+        "libvstd.rlib.d",
+        "vstd.vir"
+      ]
+    }
   }
 }
