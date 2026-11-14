@@ -38,6 +38,21 @@ pub open spec fn recovery_cache_final_result<T>(outcome: Option<&str>, reason: &
     }
 }
 
+pub open spec fn recovery_verified_decision_result<S, T, V, R>(initial: S,
+    outcome: Option<&str>, reason: &str, key: &str, unconfirmed: bool,
+    outputs_valid: bool, key_valid: bool, method: Option<&str>, refresh: bool,
+    verify: V, read_status: R,
+    out: (S, Result<(planner::RecoveryAction, Option<T>), String>)) -> bool
+    where V: FnOnce(S, &str) -> (S, Result<T, String>),
+        R: FnOnce(S, &T) -> (S, Option<&str>),
+{
+    exists|verified: S, value: T, status: Option<&str>|
+        verify.ensures((initial, key), (verified, Ok::<T, String>(value)))
+        && #[trigger] read_status.ensures((verified, &value), (out.0, status))
+        && recovery_cache_final_result(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, status, refresh, Some(value), out.1)
+}
+
 pub open spec fn recovery_cache_decision_result<S, T, V, R, E>(initial: S,
     outcome: Option<&str>, reason: &str, matched: Option<&str>, unconfirmed: bool,
     outputs_valid: bool, key_valid: bool, method: Option<&str>, refresh: bool, id: &str,
@@ -64,18 +79,37 @@ pub open spec fn recovery_cache_decision_result<S, T, V, R, E>(initial: S,
                         (verified, Err::<T, String>(error)))
                     && out == (verified,
                         Err::<(planner::RecoveryAction, Option<T>), String>(error)))
-                    || (exists|verified: S, value: T, status: Option<&str>|
-                        verify.ensures((initial, key), (verified, Ok::<T, String>(value)))
-                        && #[trigger] read_status.ensures((verified, &value), (out.0, status))
-                        && recovery_cache_final_result(outcome, reason, unconfirmed,
-                            outputs_valid, key_valid, method, status, refresh,
-                            Some(value), out.1)),
+                    || recovery_verified_decision_result(initial, outcome, reason, key,
+                        unconfirmed, outputs_valid, key_valid, method, refresh,
+                        verify, read_status, out),
             }
         } else {
             out.0 == initial && recovery_cache_final_result(outcome, reason, unconfirmed,
                 outputs_valid, key_valid, method, None, refresh, None::<T>, out.1)
         },
     }
+}
+
+proof fn recovery_verified_composes<S, T, V, R, E>(initial: S,
+    outcome: Option<&str>, reason: &str, key: &str, unconfirmed: bool,
+    outputs_valid: bool, key_valid: bool, method: Option<&str>, refresh: bool, id: &str,
+    verify: V, read_status: R, render_error: E,
+    out: (S, Result<(planner::RecoveryAction, Option<T>), String>))
+    where V: FnOnce(S, &str) -> (S, Result<T, String>),
+        R: FnOnce(S, &T) -> (S, Option<&str>),
+        E: FnOnce(S, [&str; 2]) -> (S, String),
+    requires planner::recovery_action_spec(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, None, None, false)
+            == Ok::<planner::RecoveryAction, planner::RecoveryDecisionError>(
+                planner::RecoveryAction::Keep),
+        planner::content_verification_applies_spec(method, reason),
+        recovery_verified_decision_result(initial, outcome, reason, key,
+            unconfirmed, outputs_valid, key_valid, method, refresh, verify, read_status, out),
+    ensures recovery_cache_decision_result(initial, outcome, reason, Some(key),
+        unconfirmed, outputs_valid, key_valid, method, refresh, id,
+        verify, read_status, render_error, out),
+{
+    reveal(recovery_cache_decision_result);
 }
 
 /// 从同一原生观察计算原因、按需核验及最终动作，保留原核验值和首错。
@@ -95,7 +129,7 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
             outputs_valid, key_valid, method, refresh, id, verify, read_status, render_error,
             (out.0, out.2)),
 {
-    reveal_with_fuel(recovery_cache_decision_result, 3);
+    reveal(recovery_cache_decision_result);
     reveal(recovery_cache_final_result);
     proof {
         reveal_strlit("exact"); reveal_strlit("compatible");
@@ -164,9 +198,14 @@ pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
             && recovery_cache_final_result(outcome, reason, unconfirmed,
                 outputs_valid, key_valid, method, observed, refresh, Some(value), result));
         assert(planner::content_verification_applies_spec(method, reason));
-        assert(recovery_cache_decision_result(initial_state, outcome, reason, matched,
-            unconfirmed, outputs_valid, key_valid, method, refresh, id,
-            verify, read_status, render_error, (state, result)));
+        assert(recovery_verified_decision_result(initial_state, outcome, reason, key,
+            unconfirmed, outputs_valid, key_valid, method, refresh,
+            verify, read_status, (state, result)));
+        proof {
+            recovery_verified_composes(initial_state, outcome, reason, key,
+                unconfirmed, outputs_valid, key_valid, method, refresh, id,
+                verify, read_status, render_error, (state, result));
+        }
         (state, reason, result)
     } else {
         let action = planner::recovery_action(outcome, reason, unconfirmed,
