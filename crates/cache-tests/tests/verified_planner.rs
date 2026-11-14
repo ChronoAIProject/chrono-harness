@@ -25,6 +25,195 @@ mod probe;
 
 verus! {
 
+struct RecoveryContentObservation {
+    payload: String,
+    status: String,
+}
+
+fn recovery_content_verify(mut trace: Vec<(u8, String)>, key: &str,
+    payload: &str, status: &str, error: Option<&str>)
+    -> (out: (Vec<(u8, String)>, Result<RecoveryContentObservation, String>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 0, out.0@.last().1@ == key@,
+        match out.1 {
+            Ok(value) => error is None && value.payload@ == payload@ && value.status@ == status@,
+            Err(value) => match error { Some(error) => value@ == error@, None => false },
+        },
+{
+    let ghost previous = trace@;
+    trace.push((0, key.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    (trace, match error {
+        Some(error) => Err(error.to_string()),
+        None => Ok(RecoveryContentObservation { payload: payload.to_string(), status: status.to_string() }),
+    })
+}
+
+fn recovery_content_status<'a>(mut trace: Vec<(u8, String)>, value: &'a RecoveryContentObservation)
+    -> (out: (Vec<(u8, String)>, Option<&'a str>))
+    ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+        out.0@.last().0 == 1, out.0@.last().1@ == value.payload@,
+        match out.1 { Some(status) => status@ == value.status@, None => false },
+{
+    let ghost previous = trace@;
+    trace.push((1, value.payload.clone()));
+    assert(trace@.drop_last() =~= previous);
+    (trace, Some(value.status.as_str()))
+}
+
+fn recovery_exact_content_case(key: &str, payload: &str, status: &str, error: Option<&str>)
+    requires key.spec_bytes().len() > 0,
+{
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual, payload, status, error);
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some(key), Some(key), &[], true, true, true, Some("producer-manifest/v1"),
+        true, "cache/λ\0\n", verify, recovery_content_status);
+    expect_restore_text(reason, "exact");
+    expect_cache_true(trace.len() == if error.is_some() { 1 } else { 2 });
+    expect_cache_true(trace[0].0 == 0);
+    expect_restore_text(trace[0].1.as_str(), key);
+    match result {
+        Err(actual) => match error {
+            Some(expected) => expect_restore_text(actual.as_str(), expected),
+            None => expect_cache_true(false),
+        },
+        Ok((action, value)) => {
+            expect_cache_true(error.is_none());
+            expect_cache_true(trace[1].0 == 1);
+            expect_restore_text(trace[1].1.as_str(), payload);
+            match value {
+                Some(value) => {
+                    expect_restore_text(value.payload.as_str(), payload);
+                    expect_restore_text(value.status.as_str(), status);
+                },
+                None => expect_cache_true(false),
+            }
+            if status == "matched" {
+                match action { policy::RecoveryAction::Keep => (), _ => expect_cache_true(false) }
+            } else {
+                match action { policy::RecoveryAction::Discard => (), _ => expect_cache_true(false) }
+            }
+        },
+    }
+}
+
+#[test]
+fn recovery_decision_preserves_exact_keys_payloads_and_first_verification_errors() {
+    recovery_exact_content_case("key", "", "matched", None);
+    recovery_exact_content_case("key/λ\0\n", "payload/λ\0\n", "matched", None);
+    recovery_exact_content_case("\0", "full payload", "Matched", None);
+    recovery_exact_content_case("key", "untouched", "matched\0", None);
+    recovery_exact_content_case("key", "untouched", "matched", Some(""));
+    recovery_exact_content_case("key/λ\0\n", "untouched", "matched", Some("error/λ\0\n"));
+}
+
+fn recovery_compatible_content_case(refresh: bool) {
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "payload/λ\0\n", "matched", None);
+    let prefixes = [Some(""), None, Some("prefix/λ")];
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("different"), Some("prefix/λ\0\n"), &prefixes, true, true, true,
+        Some("producer-manifest/v1"), refresh, "id", verify, recovery_content_status);
+    expect_restore_text(reason, "compatible");
+    expect_cache_true(trace.len() == 2);
+    expect_restore_text(trace[0].1.as_str(), "prefix/λ\0\n");
+    expect_restore_text(trace[1].1.as_str(), "payload/λ\0\n");
+    match result {
+        Err(_) => expect_cache_true(false),
+        Ok((action, value)) => {
+            expect_cache_true(value.is_some());
+            if refresh {
+                match action { policy::RecoveryAction::Refresh => (), _ => expect_cache_true(false) }
+            } else {
+                match action { policy::RecoveryAction::Keep => (), _ => expect_cache_true(false) }
+            }
+        },
+    }
+}
+
+#[test]
+fn recovery_decision_verifies_compatible_prefix_before_optional_refresh() {
+    recovery_compatible_content_case(false);
+    recovery_compatible_content_case(true);
+}
+
+fn recovery_rejected_content_case(outcome: Option<&str>, outputs: bool, key: bool,
+    expected: &str)
+    requires expected@ == if match outcome { Some(outcome) => outcome@ == "success"@, None => false } {
+            "E_CACHE_RECOVERY: malformed restore outputs for cache/λ\0\n"@
+        } else { "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n"@ },
+        match outcome { Some(outcome) => outcome@ == "success"@ ==> (!outputs || !key), None => true },
+        match outcome { Some(outcome) => outcome@ != "failure"@ && outcome@ != "skipped"@, None => true },
+{
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "payload", "matched", Some("must not be called"));
+    let (trace, _, result) = policy::decide_recovery_cache(Vec::new(), outcome,
+        Some("key"), Some("key"), &[], true, outputs, key,
+        Some("producer-manifest/v1"), true, "cache/λ\0\n", verify, recovery_content_status);
+    expect_cache_true(trace.is_empty());
+    match result {
+        Err(actual) => expect_restore_text(actual.as_str(), expected),
+        Ok(_) => expect_cache_true(false),
+    }
+}
+
+#[test]
+fn recovery_decision_rejects_original_outcome_and_shape_before_verification() {
+    recovery_rejected_content_case(None, false, false,
+        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n");
+    recovery_rejected_content_case(Some("cancelled"), false, false,
+        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n");
+    recovery_rejected_content_case(Some("Success"), true, true,
+        "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for cache/λ\0\n");
+    recovery_rejected_content_case(Some("success"), false, true,
+        "E_CACHE_RECOVERY: malformed restore outputs for cache/λ\0\n");
+    recovery_rejected_content_case(Some("success"), true, false,
+        "E_CACHE_RECOVERY: malformed restore outputs for cache/λ\0\n");
+}
+
+#[test]
+fn recovery_decision_missing_key_discards_and_unregistered_method_keeps_without_callbacks() {
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "payload", "matched", Some("must not be called"));
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("key"), None, &[], true, true, true, Some("producer-manifest/v1"),
+        true, "id", verify, recovery_content_status);
+    expect_cache_true(trace.is_empty());
+    expect_restore_text(reason, "miss-or-unavailable");
+    match result {
+        Ok((policy::RecoveryAction::Discard, None)) => (),
+        _ => expect_cache_true(false),
+    }
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "payload", "matched", Some("must not be called"));
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("key"), Some("key"), &[], true, true, true, Some("Producer-manifest/v1"),
+        true, "id", verify, recovery_content_status);
+    expect_cache_true(trace.is_empty());
+    expect_restore_text(reason, "exact");
+    match result {
+        Ok((policy::RecoveryAction::Keep, None)) => (),
+        _ => expect_cache_true(false),
+    }
+    let verify = |trace, actual: &str| recovery_content_verify(trace, actual,
+        "original/λ\0\n", "ignored", None);
+    let read = |trace, value: &RecoveryContentObservation| {
+        let (trace, _) = recovery_content_status(trace, value);
+        (trace, None::<&str>)
+    };
+    let (trace, reason, result) = policy::decide_recovery_cache(Vec::new(), Some("success"),
+        Some("key"), Some("key"), &[], true, true, true, Some("producer-manifest/v1"),
+        true, "id", verify, read);
+    expect_cache_true(trace.len() == 2);
+    expect_restore_text(reason, "exact");
+    expect_restore_text(trace[1].1.as_str(), "original/λ\0\n");
+    match result {
+        Ok((policy::RecoveryAction::Discard, Some(value))) =>
+            expect_restore_text(value.payload.as_str(), "original/λ\0\n"),
+        _ => expect_cache_true(false),
+    }
+}
+
 fn recovery_preflight_case(enabled: bool, consumer: Option<&str>, prepare_error: Option<&str>,
     differs: bool, attempt_error: Option<&str>, decode_error: Option<&str>,
     object: bool, payload: &str)
