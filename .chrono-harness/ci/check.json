@@ -255,7 +255,8 @@
         "judge-projects",
         "judge-registration",
         "judge-routes",
-        "runner"
+        "runner",
+        "worktree"
       ]
     },
     "facts_config": ".chrono-harness/config.json",
