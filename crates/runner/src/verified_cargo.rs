@@ -292,6 +292,23 @@ pub fn retain_attempt(succeeded: bool, cache_rejected: bool) -> (retain: bool)
     ensures retain == (!succeeded || cache_rejected),
 { !succeeded || cache_rejected }
 
+/// 普通 Cargo 依赖生产流：0=尚无根、1=唯一根、2=成功终态。
+/// 事件为 note/非根产物/根产物/成功终态；其它事件均拒绝。
+pub fn dependency_step(phase: u8, event: u8) -> (next: Option<u8>)
+    ensures next == (
+        if phase > 1 { None }
+        else if event <= 1 { Some(phase) }
+        else if event == 2 && phase == 0 { Some(1u8) }
+        else if event == 3 && phase == 1 { Some(2u8) }
+        else { None }),
+{
+    if phase > 1 { None }
+    else if event <= 1 { Some(phase) }
+    else if event == 2 && phase == 0 { Some(1u8) }
+    else if event == 3 && phase == 1 { Some(2u8) }
+    else { None }
+}
+
 pub fn selected_dependency(name: &[u8], prefix: &[u8]) -> (selected: bool)
     ensures selected == dependency_name(name@, prefix@),
 {

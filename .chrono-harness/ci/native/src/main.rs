@@ -103,6 +103,13 @@ fn run() -> Result<(), BuildFailure> {
                 &mut std::io::stderr(),
             )
         }
+        [host, config, command, consumer] if command == "runner-dependencies" => {
+            let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
+            proved_build::dependencies(
+                &root, config, consumer, &environment,
+                &mut std::io::stdout(), &mut std::io::stderr(),
+            )
+        }
         [command, host, checksum, curl, headers, url] if command == "download" => {
             let root = std::fs::canonicalize(Path::new(host)).map_err(|error| error.to_string())?;
             let archive =
@@ -163,6 +170,9 @@ fn main() -> ExitCode {
             ) =>
         {
             (Some(host), operation.to_str().unwrap())
+        }
+        [host, _, operation, _] if operation.to_str() == Some("runner-dependencies") => {
+            (Some(host), "runner-dependencies")
         }
         [host, _] => (Some(host), "bootstrap"),
         _ => (None, ""),

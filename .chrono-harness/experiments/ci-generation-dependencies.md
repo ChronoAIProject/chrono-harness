@@ -4,9 +4,11 @@
 
 ## 当前候选及边界
 
-基线为干净 `ff006c4e08b7585ac484e583299d65a60d36c35e`。候选保留三处原源码所有者、真实调用、借用和顺序；不改 CAPACITY、lifetime、cfg、program 分类、错误优先级或生产选择。源码库存仍是下面七个具体实现块和 `verified_git_binding` 内两个既有泛型选择适配器，没有发现另外的直接实现或本地实现生成宏。这不是全部 proc-macro／cfg 宇宙的证明。
+本阶段 AP 的固定源码基线为 `f6a982cb1e542f229d96aacbca6b6e630aef7e49`／tree `0b11a81f8cc5693963a64264fae472d64b031616`，工作树和分支沿用调用方指定的隔离候选。以下 adapter 语义表及原断言继续有效；本阶段只准备 runner 自属 Cargo 依赖生产和消费前拒绝，没有执行构建、测试、证明或业务。当前源码尚未封存或验收。
 
-最近一次原登记 runner 严格整 crate 操作在 `f6014b489acb20cf10fb03fc932f7cda5214011f` 上退出 1：`verified_verifier.rs:486、499` 的 `matches!` 参数含 `@`，报解析错误；原报告保存在协调宿主的 `.chrono-harness/state/worktrees/use-99323-1794641849909207000-0.json` 及其 `.json.process/`。结果为 success false、0 verified，未生成 runner rlib／VIR，旧 dep-info 不可用，adapter 后继未派发。当前只把这两处规格分类判断等价改成枚举不等／等值表达式，保留全部条件、断言、错误优先级和资格门；未执行修后验证。AC 的 1,557 verified、AE 的 11 verified 及严格 reject 原件不重跑、不重建；runner 整 crate、实际编译绑定、独立 adapter 预期、正式资格、DELTA 与 integration／dev 落地仍未完成。
+最近一次实际 runner 是 AN：11 份登记 extern 不存在，并报告不能找到 vstd；304 个编译错误后真实退出 1，`success:false`、整 crate、0 verified／0 errors。原件是协调宿主 `.chrono-harness/state/worktrees/use-29600-1794645686633816000-0.json`（509,533 字节／`877328db933c6b087df4993508d46701a46a8c445328fe044172b37092ccd023`）。为何丢失仍未知，不能把级联诊断当成 CAPACITY 或 AC 损坏的证据。AO 已核 runner 借用测试项目私有 target，且 runner／ci-tests 的 serde_json feature 与 profile 不同；版本号、旧 hash 表或 fresh 都不能建立生产／保管关系。
+
+调用方随后用已核本树工具完成 status／migrate，原 enrollment EX 排除仅覆盖该协议登记的旧租约使用方；没有处置或 terminal handoff。AN 历史 managed descendant join 仍 unknown，`report_handoff_pending:true`、18 个未知所有者及原件继续保护。本阶段不重复生命周期操作。AC 的 1,557 verified、AE 的 11 verified 及严格 reject 事实继续保留，不扩大为 runner 成功；组件不下载、解包、patch 或重建。AP 的实际源码候选和未支持关系见末节。
 
 | 具体实现及实际使用方 | 候选规格不变量 |
 | --- | --- |
@@ -548,3 +550,30 @@ const CAPACITY: usize = 4096;
 下一次原严格 runner 的可证伪验收必须沿原登记一次执行并取得同次完整 `success:true`、整 crate、无 panic／其他错误、rlib、dep-info、VIR、完整源码 checksum 及工具／宏／依赖绑定；任何同族下一成员 panic、后续解析／类型／证明错误、partial dep-info 或缺少任一绑定都继续拒绝。只有该 runner 合格后，才可按既有依赖派发 adapter 操作；raw 成功仍不替代 typed qualification、真实 CI prepare／generation／effect／recovery、正式 DELTA 或 integration／dev 落地。
 
 本节未执行构建、Cargo、Verus、测试、格式化、bootstrap、check、Git／GitHub、生命周期或其他 worker；未修改工具、缓存、state、失败 `.d`、既有成功组件、JSON 合同或独立预期。剩余完整 SPEC、runner 同源证明和实际编译绑定、adapter／generation 传递依赖、typed qualification、正式 DELTA、integration／dev 交付与落地均保持未完成；全 goal 保持 active。阻断记录：trigger=`严格真实 runner 在 erasure 初始化前请求 CAPACITY 的 THIR`；trigger_actor=`固定 Verus f8e17045 查询执行程序`；trigger_path=`ordinary-operation`；mechanism_family=`verus-erasure-context-before-const-thir`；独立 recorded occurrence=`use-68541-1794643059119974000-0.json` 及其 stdout／stderr 原件。
+
+
+## AP：runner 自属依赖生产候选与尚不支持的装载闭包
+
+**产品与宿主政策同时变化，且均未执行验证。** `proved_build` 内新增专属依赖生产 helper，复用原执行器、双流／退出原件、原子发布及 check-original 保留；没有新执行器、等待器或保管总账。普通 Cargo `metadata --locked --filter-platform` 和 `build --lib --locked --profile=dev --target <登记原生target> --jobs 1` 使用 runner manifest／lock、自属 target、现役 bootstrap 工具绑定和已有 Cargo 源缓存。普通编译不以前置完整 runner 证明为条件；这次编译也不提供仓内源码证明豁免。
+
+准备操作实际选择 Cargo resolve 根、完整库目标与原 JSON compiler-artifact，从同次 root dep-info 选择直接装载的编译实例，复用现役 checksum 判法绑定库、源码和传递二进制；记录宏／构建脚本产物及 Cargo 明确声明的唯一 static archive。原 metadata、Cargo stdout／stderr、实际 argv、工具／配置／环境摘要、产物和来源缺口归原构建负责方保存。缺文件、错 target、重复／缺根、缺成功终态、失败记录、未知形状、错 checksum 或多实例均拒绝；不扫描 target 找 hash。独立 JSON 接口样本是测试数据，不是生产成功回执。
+
+runner-build 的四个当前消费者模板保留完整 strict flags、整 crate 根、lifetime、原 import／export／emit 和输出地址；只有 ci-tests 私有固定路径改成由同次 Cargo 生产记录解析的 extern 名字。generation consumer／missing 同步指向 AC 组件；工具宏仍由真实工具所有者负责，不把普通 Cargo 编译的宏当成同一实例。现役 projects 只保留各活动一个入口，正式 source-only／typed qualification guard 与 ProofAdmission 均未放宽；包装 action 及普通 Cargo 记录不能成为正式证明贡献。
+
+| 负责位置 | 输入、输出、实际使用方与验收 |
+| --- | --- |
+| runner Cargo 项目 | manifest／lock、Cargo 实际 feature／profile／target 及源码；自属 target 中的实际编译库给原严格 runner／adapter／generation。原 `build.runner` 的 identifiers 证明和二进制合同保留。 |
+| host-bootstrap-native `proved_build` | 已有绑定、profile、Cargo resolve／JSON／dep-info；生产原件、解析的 extern 和不完整项。新 Rust 选择／拒绝逻辑由专属未过滤测试消费；Cargo-Verus 整 crate 所有者及测试根另登记真实操作，两份 manifest 显式采用 `package.metadata.verus.verify=true`，不能只靠转发 flags 冒充执行了证明；这些根尚未证明。 |
+| runner `verified_cargo` | 实际 Cargo 事件；流只允许一个根、成功终态最后出现。现有 Verus 根与配对的独立预期共同承担该新状态判断的证明，未运行。 |
+| FILEMAP／projects／macOS 工具表 | 显式源、fixture、根、操作、前置、工具及输出占用。原测试、断言、线程及预算保留；新增检查的必要性终点是新解析／拒绝逻辑的实际消费者，不据目录推断选测。 |
+| 原生命周期和 retention | target 仍为 finish-dispose，state 仍 evidence-retain；准备原件沿 check-original，保留 `runner-dependencies:<目录>` 使用方。调用方在最后实际消费或拒绝诊断结束后释放；2026-11-21 复核用途，不自动删除。 |
+
+**本候选没有实现完整装载资格，当前严格消费明确拒绝。** 这不是已修复／可通过的准备入口：真实准备完成采集且 Cargo 退出 0 时，也只封存 `observed-incomplete` 并返回非零，原 Cargo 退出及双流不变；采集提前失败仍保留已产生的原操作和双流。fresh 的原 compiler producer、宏／build-script dep-info、原生编译源／工具调用、compiler backend／target libraries／linker／配置／SDK 仍缺可消费的完整绑定；现有 Cargo/rustc 入口摘要不足以填补它们。严格消费核原件及当前字节后保留具体错误，不运行尚无资格的 Verus，也没有可手填的 readiness 开关。这些关系仍须在原构建／资格所有者补齐，不能把本候选称为完整生产闭包。
+
+AC 另有可复核的输入缺口：固定成功报告 `use-53527-1794633613411773000-0.json` 的实际 argv 消费旧 serde_json 实例，但 AC 的 41,485 字节 dep-info 只有源码关系，没有 serde_json 二进制输入／checksum 绑定。其旧 rlib 目前缺失；新 runner 同版本库不能证明可替代。候选固定原报告和原 dep-info 身份，从实际 producer argv 取输入关系；缺原字节、不同编译实例或无二进制绑定都拒绝。仍需要原 custodian 提供该实际输入实例及传递域的合格原生产关系，或者下一阶段决定产生绑定新当前实例的新组件；两者成本与可行性均 unknown。本阶段不为沿用历史 hash 建兼容分支，不重建成功组件。
+
+独立预期已写入原 Rust 测试及 Verus 配对：成功选择实际 root／extern 与完整字节；缺终态、重复根／生产者、缺文件、源码漂移、越界 target、缺 native archive、错误／模糊实例必须失败；fresh 和 native archive 存在仍带来源 unknown。AC 的同字节但无二进制绑定、不同编译实例及原 extern 缺失均有独立拒绝预期；extern 展开须完整保留 strict／import／export；门后委托也有 Rust mock 独立核对完整 argv、原双流和零／非零退出，不真正调用 Verus。没有观察这些新增用例修改前失败，也没有 red／green 或运行通过声明。
+
+调用方先核源码 diff／身份／whitespace，固定候选并封存。后续唯一生产入口仍是本树 `chrono-worktree use --operation <已登记ID> --path /Users/macstudio2/chrono-spec-current-dev`：首先 `prepare.ci-generation-dependency.runner`，由现役薄 launcher 的 frontend profile 从候选安装本树前端，再执行专属准备，不部署共享 owner；其后消费者直接复用同一本树前端和生产原件。当前准备预期非零且闭包不合格，故不能派发 runner／adapter。只有来源缺口补齐并另获阶段授权后，才按原 runner → adapter → generation consumer／missing 顺序执行，每项一次，前置失败停止明确后继。原 raw 调查预算仍为 2,400 秒／每流 67,108,864 字节、两线程；正式 native 配对原 900 秒／1 MiB 未抬高，新增全 crate 证明与 fixture 均未执行。Linux 仍缺 AC 组件采用及新 Cargo-Verus 工具登记，不能声称跨平台成功。
+
+本阶段没有 Cargo、Verus、构建、测试、格式化检查、bootstrap、判官、业务 use、生命周期、Git／GitHub 写、共享部署或 worker。新增编译／证明／IO／CI／存储／维护成本均 unknown；复用现有缓存不是已测节省。全部自有源码命令均同步终结，没有后台任务；AN 历史 join 不追认。CAPACITY 家族仍无合格 runner 结果；完整仓内逻辑与独立预期证明、typed compiler／source／context／report／rlib／dep-info／VIR／macro／transitive 资格、真实 CI prepare／generation／effect／recovery、正式 DELTA／三评审、feature→integration→dev 两段交付与落地，以及完整 SPEC 其余目标仍未完成，goal 保持 active。

@@ -21,6 +21,28 @@ fn expect(value: bool)
     requires value,
 { if !value { panic!(); } }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn dependency_stream_requires_exactly_one_root_and_a_last_success() {
+    use policy::cargo::dependency_step;
+    expect(dependency_step(0, 0) == Some(0u8));
+    expect(dependency_step(0, 1) == Some(0u8));
+    expect(dependency_step(0, 2) == Some(1u8));
+    expect(dependency_step(0, 3).is_none());
+    expect(dependency_step(0, 4).is_none());
+    expect(dependency_step(1, 0) == Some(1u8));
+    expect(dependency_step(1, 1) == Some(1u8));
+    expect(dependency_step(1, 2).is_none());
+    expect(dependency_step(1, 3) == Some(2u8));
+    expect(dependency_step(1, 4).is_none());
+    expect(dependency_step(2, 0).is_none());
+    expect(dependency_step(2, 1).is_none());
+    expect(dependency_step(2, 2).is_none());
+    expect(dependency_step(2, 3).is_none());
+    expect(dependency_step(2, 4).is_none());
+    expect(dependency_step(255, 0).is_none());
+    expect(dependency_step(0, 255).is_none());
+}
+
 proof fn library_literal_bytes()
     ensures vstd::utf8::encode_utf8("d/libn-a.rlib"@) == seq![100u8,47,108,105,98,110,45,97,46,114,108,105,98],
         vstd::utf8::encode_utf8("d/libn-a.rmeta"@) == seq![100u8,47,108,105,98,110,45,97,46,114,109,101,116,97],

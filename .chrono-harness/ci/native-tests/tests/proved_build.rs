@@ -604,3 +604,179 @@ fn invalid_original_records_cannot_trigger_cache_recovery() {
         assert_eq!(fs::read_to_string(f.root.join("mock.calls")).unwrap(), "1");
     }
 }
+
+// Cargo JSON 外部接口样本独立成文件。它是测试数据，不是成功生产回执。
+fn dependency_fixture() -> (Fixture, Value, Vec<Value>) {
+    let fixture = Fixture::new();
+    let encoded = include_str!("fixtures/cargo-dependencies.json")
+        .replace("$ROOT", fixture.root.to_str().unwrap());
+    let sample: Value = serde_json::from_str(&encoded).unwrap();
+    let deps = fixture.root.join("app/target/debug/deps");
+    let outputs = vec![deps.join("libapp-02.rlib"), deps.join("libapp-02.rmeta")];
+    for output in &outputs { write(output, b"ordinary Cargo library, not proof"); }
+    dependency(&deps.join("app-02.d"), &outputs,
+        &[fixture.root.join("app/src/main.rs"), deps.join("libidentity-01.rlib")]);
+    (fixture, sample["metadata"].clone(), sample["records"].as_array().unwrap().clone())
+}
+
+fn dependency_output(records: &[Value]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for record in records {
+        serde_json::to_writer(&mut bytes, record).unwrap();
+        bytes.push(b'\n');
+    }
+    bytes
+}
+
+fn collect_dependencies(f: &Fixture, graph: &Value, records: &[Value])
+    -> Result<(Vec<chrono_harness::verified_verifier::cargo::Identity>, std::collections::BTreeMap<String, String>, Vec<String>, Vec<String>), String>
+{
+    proved_build::dependencies::collect(&f.root.join("app/target"), graph,
+        &dependency_output(records), &f.root.join("app/Cargo.toml"))
+}
+
+#[test]
+fn dependencies_select_the_actual_root_loaded_instance_and_keep_sources() {
+    let (f, graph, records) = dependency_fixture();
+    let (files, externs, search, unresolved) = collect_dependencies(&f, &graph, &records).unwrap();
+    assert_eq!(externs.len(), 1);
+    assert_eq!(externs["identity"], f.root.join("app/target/debug/deps/libidentity-01.rlib").to_str().unwrap());
+    assert_eq!(search, vec![f.root.join("app/target/debug/deps").to_str().unwrap().to_owned()]);
+    for path in ["library/Cargo.toml", "library/src/lib.rs", "app/src/main.rs",
+        "app/target/debug/deps/identity-01.d", "app/target/debug/deps/app-02.d",
+        "app/target/debug/deps/libidentity-01.rlib", "app/target/debug/deps/libapp-02.rlib"] {
+        assert!(files.iter().any(|i| Path::new(&i.path) == f.root.join(path)), "missing {path}");
+    }
+    assert!(unresolved.iter().any(|v| v.contains("compiler backend")), "ordinary compile cannot qualify the SDK/compiler domain");
+}
+
+#[test]
+fn dependency_stream_rejects_missing_root_terminal_duplicate_and_trailing_records() {
+    let (f, graph, records) = dependency_fixture();
+    let mut cases = Vec::new();
+    cases.push(records[..2].to_vec());
+    cases.push(vec![records[0].clone(), records[2].clone()]);
+    let mut duplicate = records.clone(); duplicate.insert(2, records[1].clone()); cases.push(duplicate);
+    let mut trailing = records.clone(); trailing.push(records[0].clone()); cases.push(trailing);
+    let mut failed = records.clone(); failed[2]["success"] = json!(false); cases.push(failed);
+    for records in cases { assert!(collect_dependencies(&f, &graph, &records).is_err()); }
+    let mut raw = dependency_output(&records); raw.extend_from_slice(b"{broken");
+    assert!(proved_build::dependencies::collect(&f.root.join("app/target"), &graph, &raw,
+        &f.root.join("app/Cargo.toml")).is_err());
+}
+
+#[test]
+fn missing_changed_wrong_domain_and_ambiguous_producers_are_rejected() {
+    let (f, graph, records) = dependency_fixture();
+    let mut no_producer = records.clone(); no_producer.remove(0);
+    assert!(collect_dependencies(&f, &graph, &no_producer).err().unwrap().contains("actual loaded producers"));
+    let mut duplicate = records.clone(); duplicate.insert(1, records[0].clone());
+    assert!(collect_dependencies(&f, &graph, &duplicate).err().unwrap().contains("2 actual loaded producers"));
+    assert!(proved_build::dependencies::collect(&f.root.join("other-target"), &graph,
+        &dependency_output(&records), &f.root.join("app/Cargo.toml")).err().unwrap().contains("outside runner target"));
+    write(&f.root.join("library/src/lib.rs"), b"changed after compiler checksum");
+    assert!(collect_dependencies(&f, &graph, &records).is_err());
+    fs::remove_file(f.root.join("app/target/debug/deps/libidentity-01.rlib")).unwrap();
+    assert!(collect_dependencies(&f, &graph, &records).is_err());
+}
+
+#[test]
+fn fresh_and_native_outputs_are_observations_with_unresolved_origins() {
+    let (f, graph, mut records) = dependency_fixture();
+    records[0]["fresh"] = json!(true);
+    let archive = f.root.join("app/target/debug/build/native/out/libnative.a");
+    write(&archive, b"native compiler output");
+    records.insert(2, json!({"reason":"build-script-executed", "package_id":"identity@0.1.0",
+        "linked_libs":["static=native"], "linked_paths":[format!("native={}",archive.parent().unwrap().display())],
+        "cfgs":[], "env":[], "out_dir":archive.parent().unwrap()}));
+    let (files, _, _, unresolved) = collect_dependencies(&f, &graph, &records).unwrap();
+    assert!(files.iter().any(|i| Path::new(&i.path) == archive));
+    assert!(unresolved.iter().any(|v| v.contains("fresh unit")));
+    assert!(unresolved.iter().any(|v| v.contains("native tool invocation")));
+    fs::remove_file(&archive).unwrap();
+    assert!(collect_dependencies(&f, &graph, &records).err().unwrap().contains("0 declared producers"));
+}
+
+#[test]
+fn consumer_resolves_names_without_changing_strict_or_import_export_arguments() {
+    use std::collections::BTreeMap;
+    let argv: Vec<String> = ["--no-cheating", "--no-external-by-default", "--compile", "--num-threads", "2",
+        "--extern", "serde_json", "--import", "runner=current.vir", "--export", "out.vir"].iter().map(|s| (*s).into()).collect();
+    let selected = BTreeMap::from([("serde_json".into(), "/runner/target/libserde_json-new.rlib".into())]);
+    let result = proved_build::dependencies::arguments(&argv, &selected, &["/runner/target/deps".into()]).unwrap();
+    assert_eq!(&result[..6], &argv[..6]);
+    assert_eq!(result[6], "serde_json=/runner/target/libserde_json-new.rlib");
+    assert_eq!(&result[7..11], &argv[7..11]);
+    assert_eq!(&result[11..], ["-L", "dependency=/runner/target/deps"]);
+    assert!(proved_build::dependencies::arguments(&argv, &BTreeMap::new(), &[]).is_err());
+    assert!(proved_build::dependencies::arguments(&["--extern".into()], &selected, &[]).is_err());
+}
+
+#[test]
+fn component_requires_the_original_compiled_instance_and_its_binary_binding() {
+    use chrono_harness::verified_verifier::cargo::Identity;
+    use std::collections::BTreeMap;
+    let (f, _, _) = dependency_fixture();
+    let sample: Value = serde_json::from_str(&include_str!("fixtures/cargo-dependencies.json")
+        .replace("$ROOT", f.root.to_str().unwrap())).unwrap();
+    let original = f.root.join(".chrono-harness/state/component-original.json");
+    write(&original, &serde_json::to_vec(&sample["component_process"]).unwrap());
+    let (sha256, length) = chrono_harness::file_identity(&original).unwrap();
+    let dependency_path = ".chrono-harness/state/component.rlib.d";
+    dependency(&f.root.join(dependency_path), &[], &[f.root.join("library/src/lib.rs")]);
+    let raw = fs::read_to_string(f.root.join(dependency_path)).unwrap()
+        .replace(&(escape(&f.root) + "/"), "");
+    write(&f.root.join(dependency_path), raw.as_bytes());
+    let (dependency_sha256, dependency_length) = chrono_harness::file_identity(&f.root.join(dependency_path)).unwrap();
+    let config = proved_build::dependencies::Config {
+        operation: "prepare".into(), bootstrap_profile: "unused".into(), receipt: "unused".into(),
+        component_producer_root: f.root.to_str().unwrap().into(),
+        component_producer: Identity { path:original.to_str().unwrap().into(), sha256, length },
+        component_dependency: Identity { path:dependency_path.into(), sha256:dependency_sha256, length:dependency_length }, consumers: BTreeMap::new(),
+    };
+    let current = f.root.join("app/target/debug/deps/libidentity-01.rlib");
+    let externs = BTreeMap::from([("identity".into(), current.to_str().unwrap().into())]);
+    assert!(proved_build::dependencies::validate_component(&f.root, &config, &externs)
+        .err().unwrap().contains("no binary input binding"));
+    let other = f.root.join("app/target/debug/deps/libidentity-02.rlib");
+    write(&other, b"same package version is a different compiled instance");
+    let different = BTreeMap::from([("identity".into(), other.to_str().unwrap().into())]);
+    assert!(proved_build::dependencies::validate_component(&f.root, &config, &different)
+        .err().unwrap().contains("different compiled instances"));
+    fs::remove_file(&current).unwrap();
+    assert!(proved_build::dependencies::validate_component(&f.root, &config, &externs)
+        .err().unwrap().contains("original extern identity unavailable"));
+}
+
+#[test]
+fn strict_consumer_command_boundary_preserves_exact_arguments_streams_and_exit() {
+    use std::collections::BTreeMap;
+    let mut f = Fixture::new();
+    f.environment.insert("RUSTUP_TOOLCHAIN".into(), "1.95.0".into());
+    f.environment.insert("RUSTC_BOOTSTRAP".into(), "1".into());
+    let executable = ".chrono-harness/state/mock-component/verus";
+    let destination = f.root.join(executable);
+    fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    fs::copy(env!("CARGO_BIN_EXE_chrono-test-proved-cargo"), &destination).unwrap();
+    let consumer = proved_build::dependencies::Consumer { tool:"verus-json-contract".into(), executable:executable.into(),
+        argv:vec!["--no-cheating".into(), "--no-external-by-default".into(), "--compile".into(), "--extern".into(), "identity".into()] };
+    let externs = BTreeMap::from([("identity".into(), "/runner/target/libidentity-current.rlib".into())]);
+    let expected = vec!["--no-cheating", "--no-external-by-default", "--compile", "--extern", "identity=/runner/target/libidentity-current.rlib", "-L", "dependency=/runner/target/deps"];
+    for exit in [0u8, 1u8] {
+        let directory = f.root.join(format!(".chrono-harness/state/consumer-{exit}"));
+        fs::create_dir_all(&directory).unwrap();
+        write(&f.root.join("mock.json"), &serde_json::to_vec(&json!([{"argv":expected,
+            "stdout":b"original compiler stdout".to_vec(), "stderr":b"original compiler stderr".to_vec(), "writes":[], "exit":exit}])).unwrap());
+        let calls = f.root.join("mock.calls");
+        if calls.exists() { fs::remove_file(calls).unwrap(); }
+        let (mut stdout, mut stderr) = (Vec::new(), Vec::new());
+        let result = proved_build::dependencies::execute_consumer(&f.root, &directory, "strict.fixture", &consumer,
+            &externs, &["/runner/target/deps".into()], &f.environment, &mut stdout, &mut stderr);
+        assert_eq!(stdout, b"original compiler stdout");
+        assert_eq!(stderr, b"original compiler stderr");
+        if exit == 0 { assert!(result.is_ok()); } else { assert_eq!(result.err().unwrap().exit_code, Some(1)); }
+        let original: Value = serde_json::from_slice(&fs::read(directory.join("consumer-operation.json")).unwrap()).unwrap();
+        assert_eq!(original["exit_code"], exit);
+        assert_eq!(original["operation"], "strict.fixture");
+    }
+}

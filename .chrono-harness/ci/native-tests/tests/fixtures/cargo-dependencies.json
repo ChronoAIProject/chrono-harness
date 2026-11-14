@@ -1,0 +1,125 @@
+{
+  "metadata": {
+    "resolve": {
+      "root": "app@0.1.0",
+      "nodes": [
+        {
+          "id": "app@0.1.0",
+          "features": [],
+          "deps": [
+            {
+              "name": "identity",
+              "pkg": "identity@0.1.0",
+              "dep_kinds": [
+                {
+                  "kind": null,
+                  "target": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "identity@0.1.0",
+          "features": [],
+          "deps": []
+        }
+      ]
+    },
+    "packages": [
+      {
+        "id": "app@0.1.0",
+        "manifest_path": "$ROOT/app/Cargo.toml",
+        "targets": [
+          {
+            "name": "app",
+            "src_path": "$ROOT/app/src/main.rs",
+            "kind": [
+              "lib"
+            ],
+            "crate_types": [
+              "lib"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "records": [
+    {
+      "reason": "compiler-artifact",
+      "package_id": "identity@0.1.0",
+      "manifest_path": "$ROOT/library/Cargo.toml",
+      "target": {
+        "name": "identity",
+        "src_path": "$ROOT/library/src/lib.rs",
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ]
+      },
+      "profile": {
+        "opt_level": "1",
+        "debuginfo": 2,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "filenames": [
+        "$ROOT/app/target/debug/deps/libidentity-01.rlib",
+        "$ROOT/app/target/debug/deps/libidentity-01.rmeta"
+      ],
+      "executable": null,
+      "fresh": false
+    },
+    {
+      "reason": "compiler-artifact",
+      "package_id": "app@0.1.0",
+      "manifest_path": "$ROOT/app/Cargo.toml",
+      "target": {
+        "name": "app",
+        "src_path": "$ROOT/app/src/main.rs",
+        "kind": [
+          "lib"
+        ],
+        "crate_types": [
+          "lib"
+        ]
+      },
+      "profile": {
+        "opt_level": "1",
+        "debuginfo": 2,
+        "debug_assertions": true,
+        "overflow_checks": true,
+        "test": false
+      },
+      "features": [],
+      "filenames": [
+        "$ROOT/app/target/debug/deps/libapp-02.rlib",
+        "$ROOT/app/target/debug/deps/libapp-02.rmeta"
+      ],
+      "executable": null,
+      "fresh": false
+    },
+    {
+      "reason": "build-finished",
+      "success": true
+    }
+  ],
+  "component_process": {
+    "managed_process": {
+      "exit_code": 0,
+      "failure": null,
+      "owned_work_joined": true,
+      "cwd": "$ROOT",
+      "argv": [
+        "verus",
+        "--extern",
+        "identity=app/target/debug/deps/libidentity-01.rlib"
+      ]
+    }
+  }
+}
