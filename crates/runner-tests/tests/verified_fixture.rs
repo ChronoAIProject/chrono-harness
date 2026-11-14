@@ -42,6 +42,18 @@ fn bounded_fixture_recovery_preserves_the_original_eight_round_limit() {
     expect(!retention::fixture_recovery_has_room(usize::MAX));
 }
 
+#[cfg(verus_keep_ghost)]
+fn reference_scope_excludes_detached_originals_and_their_siblings() {
+    let linked = retention::fixture_reference_scope(true, false);
+    expect(linked.0 == 2 && linked.1);
+    let detached = retention::fixture_reference_scope(false, false);
+    expect(detached.0 == 1 && detached.1);
+    let siblings = retention::fixture_reference_scope(true, true);
+    expect(siblings.0 == 2 && !siblings.1);
+    let detached_siblings = retention::fixture_reference_scope(false, true);
+    expect(detached_siblings.0 == 1 && detached_siblings.1);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn custody_release_requires_original_child_result_and_owner_retirement() {
     expect(isolation::release_custody(true, true));

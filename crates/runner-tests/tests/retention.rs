@@ -10,6 +10,14 @@ pub fn fixture_recovery_has_room(completed_rounds: usize) -> (room: bool)
 {
     completed_rounds < 8
 }
+
+pub fn fixture_reference_scope(linked: bool, original_has_siblings: bool) -> (scope: (u64, bool))
+    ensures
+        scope.0 == if linked { 2u64 } else { 1u64 },
+        scope.1 == (!linked || !original_has_siblings),
+{
+    (if linked { 2 } else { 1 }, !linked || !original_has_siblings)
+}
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -147,6 +155,14 @@ fn bounded_fixture_recovery_has_exactly_eight_rounds() {
     assert!(fixture_recovery_has_room(7));
     assert!(!fixture_recovery_has_room(8));
     assert!(!fixture_recovery_has_room(usize::MAX));
+}
+
+#[test]
+fn fixture_reference_scope_tracks_detachment_and_unvisited_siblings() {
+    assert_eq!(fixture_reference_scope(true, false), (2, true));
+    assert_eq!(fixture_reference_scope(false, false), (1, true));
+    assert_eq!(fixture_reference_scope(true, true), (2, false));
+    assert_eq!(fixture_reference_scope(false, true), (1, true));
 }
 
 #[test]
@@ -5957,12 +5973,22 @@ fn maintenance_keeps_shared_role_members_outside_the_reference_component_unvisit
         .collect();
     let mut rounds = Vec::new();
     for _ in 0..4 {
+        // A prior round may detach the original before final path exclusion.
+        // Observe this fixture's edge before maintenance, not its old closure.
+        let before: Value = serde_json::from_slice(
+            &fs::read(retention_state::object_path(h.path(), &report_id)).unwrap(),
+        )
+        .unwrap();
+        let references = before["output"]["references"].as_array().unwrap();
+        assert!(references.is_empty() || references == &[json!(ids[0])]);
+        let (entries, complete) = fixture_reference_scope(!references.is_empty(), false);
         let round = diagnosed_maintenance_originals(h.path(), &report_id);
         assert!(
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
         );
-        assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
+        assert_eq!(round["metadata_inventory_entries"], entries, "{round}");
+        assert_eq!(round["scope"]["complete"], complete, "{round}");
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
         if output_retired(h.path(), &report_id) {
@@ -6062,6 +6088,13 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
     let role_before = fs::read(&role).unwrap();
     let mut rounds = Vec::new();
     for _ in 0..4 {
+        let before: Value = serde_json::from_slice(
+            &fs::read(retention_state::object_path(h.path(), selected)).unwrap(),
+        )
+        .unwrap();
+        let references = before["output"]["references"].as_array().unwrap();
+        assert!(references.is_empty() || references == &[json!(original_id)]);
+        let (entries, complete) = fixture_reference_scope(!references.is_empty(), true);
         let round = inventory(h.path())
             .maintain_originals(&[selected.clone()])
             .unwrap();
@@ -6069,9 +6102,17 @@ fn released_report_does_not_consume_sibling_reports_of_its_finalized_original() 
             round["accounting_errors"].as_array().unwrap().is_empty(),
             "{round}"
         );
-        assert_eq!(round["metadata_inventory_entries"], 2, "{round}");
-        assert_eq!(round["scope"]["complete"], false, "{round}");
-        assert_eq!(round["remaining_outputs"], Value::Null, "{round}");
+        assert_eq!(round["metadata_inventory_entries"], entries, "{round}");
+        assert_eq!(round["scope"]["complete"], complete, "{round}");
+        if !complete {
+            assert_eq!(round["remaining_outputs"], Value::Null, "{round}");
+        } else {
+            assert_eq!(
+                round["remaining_outputs"],
+                u64::from(!output_retired(h.path(), selected)),
+                "{round}"
+            );
+        }
         assert!(round["nodes"].as_u64().unwrap() <= 256, "{round}");
         rounds.push(round);
         if output_retired(h.path(), &selected) {

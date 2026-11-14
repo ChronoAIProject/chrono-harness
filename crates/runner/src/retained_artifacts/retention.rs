@@ -3926,15 +3926,6 @@ pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
     Inventory::adopted(root)?.map(|i| i.maintain()).transpose()
 }
 
-/// Explicit cross-object maintenance visits each existing declaration once.
-/// Ordinary adopted operations keep the bounded entry above.
-#[cfg(not(verus_keep_ghost))]
-pub fn maintain_explicit_adopted(root: &Path) -> Result<Option<Value>, String> {
-    Inventory::adopted(root)?
-        .map(|i| i.maintain_explicit())
-        .transpose()
-}
-
 /// Enroll a real producer output in the adopted owner, recovering prior released work first.
 #[cfg(not(verus_keep_ghost))]
 pub fn begin_adopted(
