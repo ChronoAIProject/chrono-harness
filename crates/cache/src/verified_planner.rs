@@ -230,6 +230,45 @@ pub fn freshness_decision(
 
 pub enum RecoveryAction { Keep, Discard, Refresh }
 
+pub open spec fn content_verification_applies_spec(method: Option<&str>, reason: &str) -> bool {
+    match method {
+        Some(method) => method@ == "producer-manifest/v1"@
+            && (reason@ == "exact"@ || reason@ == "compatible"@),
+        None => false,
+    }
+}
+
+impl RecoveryAction {
+    pub fn discards_outputs(&self) -> (discard: bool)
+        ensures discard == matches!(self, Self::Discard),
+    {
+        matches!(self, Self::Discard)
+    }
+
+    pub fn refreshes_sources(&self) -> (refresh: bool)
+        ensures refresh == matches!(self, Self::Refresh),
+    {
+        matches!(self, Self::Refresh)
+    }
+
+    pub fn initial_status(&self) -> (status: &'static str)
+        ensures status@ == match self {
+            Self::Discard => "pending"@,
+            Self::Keep | Self::Refresh => "not-required"@,
+        },
+    {
+        if self.discards_outputs() { "pending" } else { "not-required" }
+    }
+
+    pub fn requires_content_verification(&self, method: Option<&str>, reason: &str)
+        -> (required: bool)
+        ensures required <==> matches!(self, Self::Keep)
+            && content_verification_applies_spec(method, reason),
+    {
+        matches!(self, Self::Keep) && content_verification_applies(method, reason)
+    }
+}
+
 pub enum RecoveryDecisionError { UnknownOutcome, MalformedOutputs }
 
 pub open spec fn recovery_action_spec(
@@ -261,11 +300,7 @@ pub open spec fn recovery_action_spec(
         Err(error) => Err(error),
         Ok(true) => Ok(RecoveryAction::Discard),
         Ok(false) => {
-            let verify_content = match content_method {
-                Some(method) => method@ == "producer-manifest/v1"@
-                    && (reason@ == "exact"@ || reason@ == "compatible"@),
-                None => false,
-            };
+            let verify_content = content_verification_applies_spec(content_method, reason);
             let content_matched = match content_status {
                 Some(status) => status@ == "matched"@,
                 None => false,
@@ -309,12 +344,7 @@ pub fn recovery_action(
     if discard {
         return Ok(RecoveryAction::Discard);
     }
-    let verify_content = match content_method {
-        Some(method) => identifiers::equal_text(method, "producer-manifest/v1")
-            && (identifiers::equal_text(reason, "exact")
-                || identifiers::equal_text(reason, "compatible")),
-        None => false,
-    };
+    let verify_content = content_verification_applies(content_method, reason);
     if verify_content && !matches!(content_status, Some(status) if identifiers::equal_text(status, "matched")) {
         return Ok(RecoveryAction::Discard);
     }
@@ -326,11 +356,7 @@ pub fn recovery_action(
 }
 
 pub fn content_verification_applies(method: Option<&str>, reason: &str) -> (applies: bool)
-    ensures applies <==> match method {
-        Some(method) => method@ == "producer-manifest/v1"@
-            && (reason@ == "exact"@ || reason@ == "compatible"@),
-        None => false,
-    },
+    ensures applies == content_verification_applies_spec(method, reason),
 {
     match method {
         Some(method) => identifiers::equal_text(method, "producer-manifest/v1")
