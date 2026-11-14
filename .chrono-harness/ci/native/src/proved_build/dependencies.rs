@@ -723,10 +723,11 @@ fn component(
             stdout,
             stderr,
         )?;
+        let component_path = directory.to_str().ok_or("non UTF-8 component path")?;
         let argv = config
             .argv
             .iter()
-            .map(|s| s.replace("$COMPONENT", directory.to_str().ok_or("non UTF-8 component path")?))
+            .map(|s| s.replace("$COMPONENT", component_path))
             .collect::<Vec<_>>();
         let operation = run(
             2,
