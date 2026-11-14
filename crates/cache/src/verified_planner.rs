@@ -31,8 +31,8 @@ pub use crate::recovery::{
     RecoveryCacheObservation, RecoveryEntryError, RecoveryOption, RecoveryOptions, RecoveryProbe,
     RecoveryRemovalError, RecoveryReplay, RecoverySummary, admit_recovery_paths,
     admit_recovery_replay, complete_recovery_cache, finalize_recovery, parse_recovery_options,
-    recovery_decision_error, remove_recovery_output, run_recovery_removals, select_recovery_entry,
-    summarize_recovery,
+    preflight_recovery, recovery_decision_error, remove_recovery_output, run_recovery_removals,
+    select_recovery_entry, summarize_recovery,
 };
 #[cfg(verus_keep_ghost)]
 pub use attempt::{

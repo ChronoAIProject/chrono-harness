@@ -14,6 +14,111 @@ use vstd::prelude::*;
 
 verus! {
 
+pub open spec fn recovery_preflight_result<S, T, P, V, D, J>(
+    initial: S, enabled: bool, consumer: Option<&str>,
+    prepare: P, attempt: V, decode: D, is_object: J, out: (S, Result<T, String>),
+) -> bool
+    where P: FnOnce(S, &str) -> (S, Result<bool, String>),
+        V: FnOnce(S) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Result<T, String>), J: FnOnce(S, &T) -> (S, bool),
+{
+    if !enabled {
+        out.0 == initial && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: recovery is not registered"@,
+            _ => false,
+        }
+    } else { match consumer {
+        None => out.0 == initial && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: consumer missing"@,
+            _ => false,
+        },
+        Some(consumer) => exists|prepared: S, preparation: Result<bool, String>|
+            #[trigger] prepare.ensures((initial, consumer), (prepared, preparation))
+            && match preparation {
+                Err(error) => out == (prepared, Err::<T, String>(error)),
+                Ok(true) => out.0 == prepared && match out.1 {
+                    Err(error) => error@ ==
+                        "E_CACHE_RECOVERY: original plan differs from current registration or host"@,
+                    _ => false,
+                },
+                Ok(false) => exists|validated: S, validation: Result<(), String>|
+                    #[trigger] attempt.ensures((prepared,), (validated, validation))
+                    && match validation {
+                        Err(error) => out == (validated, Err::<T, String>(error)),
+                        Ok(()) => exists|decoded: S, result: Result<T, String>|
+                            #[trigger] decode.ensures((validated,), (decoded, result))
+                            && match result {
+                                Err(error) => out == (decoded, Err::<T, String>(error)),
+                                Ok(value) => exists|checked: S, object: bool|
+                                    #[trigger] is_object.ensures((decoded, &value), (checked, object))
+                                    && out.0 == checked && if object {
+                                        out.1 == Ok::<T, String>(value)
+                                    } else { match out.1 {
+                                        Err(error) => error@ ==
+                                            "E_CACHE_RECOVERY: native step observations missing"@,
+                                        _ => false,
+                                    } },
+                            },
+                    },
+            },
+    } }
+}
+
+/// 按现役恢复入口的顺序预检；首错直接返回，不再调用后续阶段。
+pub fn preflight_recovery<S, T, P, V, D, J>(
+    state: S, enabled: bool, consumer: Option<&str>,
+    prepare: P, attempt: V, decode: D, is_object: J,
+) -> (out: (S, Result<T, String>))
+    where P: FnOnce(S, &str) -> (S, Result<bool, String>),
+        V: FnOnce(S) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Result<T, String>), J: FnOnce(S, &T) -> (S, bool),
+    requires forall|state: S, consumer: &str| prepare.requires((state, consumer)),
+        forall|state: S| attempt.requires((state,)),
+        forall|state: S| decode.requires((state,)),
+        forall|state: S, value: &T| is_object.requires((state, value)),
+    ensures recovery_preflight_result(state, enabled, consumer,
+        prepare, attempt, decode, is_object, out),
+{
+    if !enabled {
+        return (state, Err("E_CACHE_RECOVERY: recovery is not registered".to_string()));
+    }
+    let consumer_text = match consumer {
+        Some(consumer) => consumer,
+        None => return (state, Err("E_CACHE_RECOVERY: consumer missing".to_string())),
+    };
+    let ghost initial = state;
+    let (state, preparation) = prepare(state, consumer_text);
+    let ghost prepared = state;
+    let ghost prepared_result = preparation;
+    assert(prepare.ensures((initial, consumer_text), (prepared, prepared_result)));
+    match preparation {
+        Err(error) => return (state, Err(error)),
+        Ok(true) => return (state, Err(
+            "E_CACHE_RECOVERY: original plan differs from current registration or host".to_string())),
+        Ok(false) => (),
+    }
+    let (state, validation) = attempt(state);
+    let ghost validated = state;
+    let ghost validated_result = validation;
+    assert(attempt.ensures((prepared,), (validated, validated_result)));
+    match validation {
+        Err(error) => return (state, Err(error)),
+        Ok(()) => (),
+    }
+    let (state, result) = decode(state);
+    let ghost decoded = state;
+    let ghost decoded_result = result;
+    assert(decode.ensures((validated,), (decoded, decoded_result)));
+    let value = match result {
+        Err(error) => return (state, Err(error)),
+        Ok(value) => value,
+    };
+    let (state, object) = is_object(state, &value);
+    assert(is_object.ensures((decoded, &value), (state, object)));
+    (state, if object { Ok(value) }
+        else { Err("E_CACHE_RECOVERY: native step observations missing".to_string()) })
+}
+
 /// 文件系统仅提供原 metadata、错误种类及原错误文本。
 pub open spec fn recovery_removal_result<S, M, D, F>(
     initial: S, not_found: u32, metadata: M, directory: D, file: F,
@@ -1164,28 +1269,26 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let result = (|| -> Result<(), String> {
         let config: super::Config =
             decode(&fs::read(no_symlink_parents(&root, config_path)?).map_err(|e| e.to_string())?)?;
-        if !config.recover_failed_restores {
-            return Err("E_CACHE_RECOVERY: recovery is not registered".into());
-        }
-        let consumer = plan["consumer"]
-            .as_str()
-            .ok_or("E_CACHE_RECOVERY: consumer missing")?;
-        let expected = super::prepare_with_inputs(&root, &config, consumer, Some(&plan["inputs"]))?;
-        // Recovery may use an installed binary after a bootstrap-produced plan.
-        // Revalidate registration, host and selected observations while retaining
-        // the original planner identity. Seal checks the current executable.
-        let mut expected_binding = expected;
-        expected_binding["planner"] = plan["planner"].clone();
-        if expected_binding != plan {
-            return Err(
-                "E_CACHE_RECOVERY: original plan differs from current registration or host".into(),
-            );
-        }
-        super::attempt::validate(&root, &plan, false)?;
-        let steps: Value = decode(steps_raw.as_bytes())?;
-        if !steps.is_object() {
-            return Err("E_CACHE_RECOVERY: native step observations missing".into());
-        }
+        let steps: Value = preflight_recovery(
+            (),
+            config.recover_failed_restores,
+            plan["consumer"].as_str(),
+            |(), consumer| {
+                let prepared =
+                    super::prepare_with_inputs(&root, &config, consumer, Some(&plan["inputs"]))
+                        .map(|mut expected| {
+                            // Recovery keeps the original planner identity; seal checks
+                            // the current executable after the actual producer runs.
+                            expected["planner"] = plan["planner"].clone();
+                            expected != plan
+                        });
+                ((), prepared)
+            },
+            |()| ((), super::attempt::validate(&root, &plan, false)),
+            |()| ((), decode(steps_raw.as_bytes())),
+            |(), steps: &Value| ((), steps.is_object()),
+        )
+        .1?;
         let caches: BTreeMap<_, _> = plan["caches"]
             .as_object()
             .ok_or("E_CACHE_RECOVERY: caches missing")?
