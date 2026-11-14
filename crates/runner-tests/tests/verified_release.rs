@@ -17,6 +17,10 @@ use chrono_harness::retained_artifacts::retention as accounting;
 #[cfg(verus_keep_ghost)]
 use policy::accounting;
 
+#[cfg(verus_keep_ghost)]
+#[path = "support/retention_frontier.rs"]
+mod retention_frontier;
+
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
