@@ -5275,6 +5275,19 @@
       "path": ".chrono-harness/ci/bootstrap-native.sh",
       "test_script": "host-bootstrap-launcher-tests",
       "actions": {
+        "verus-source-vstd-lock": {
+          "operation": "investigate.verus-source.vstd-lock",
+          "tool": "rustup",
+          "argv": [
+            "run",
+            "1.99.1",
+            "cargo",
+            "generate-lockfile",
+            "--offline",
+            "--manifest-path",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/vstd/Cargo.toml"
+          ]
+        },
         "verus-source-version": {
           "operation": "investigate.verus-source.version",
           "tool": "cargo",
