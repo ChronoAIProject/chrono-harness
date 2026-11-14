@@ -59,17 +59,17 @@ pub open spec fn recovery_cache_decision_result<S, T, V, R, E>(initial: S,
             && planner::content_verification_applies_spec(method, reason) {
             match matched {
                 None => false,
-                Some(key) => exists|verified: S, result: Result<T, String>|
-                    #[trigger] verify.ensures((initial, key), (verified, result))
-                    && match result {
-                        Err(error) => out == (verified,
-                            Err::<(planner::RecoveryAction, Option<T>), String>(error)),
-                        Ok(value) => exists|status: Option<&str>|
-                            #[trigger] read_status.ensures((verified, &value), (out.0, status))
-                            && recovery_cache_final_result(outcome, reason, unconfirmed,
-                                outputs_valid, key_valid, method, status, refresh,
-                                Some(value), out.1),
-                    },
+                Some(key) => (exists|verified: S, error: String|
+                    #[trigger] verify.ensures((initial, key),
+                        (verified, Err::<T, String>(error)))
+                    && out == (verified,
+                        Err::<(planner::RecoveryAction, Option<T>), String>(error)))
+                    || (exists|verified: S, value: T, status: Option<&str>|
+                        verify.ensures((initial, key), (verified, Ok::<T, String>(value)))
+                        && #[trigger] read_status.ensures((verified, &value), (out.0, status))
+                        && recovery_cache_final_result(outcome, reason, unconfirmed,
+                            outputs_valid, key_valid, method, status, refresh,
+                            Some(value), out.1)),
             }
         } else {
             out.0 == initial && recovery_cache_final_result(outcome, reason, unconfirmed,

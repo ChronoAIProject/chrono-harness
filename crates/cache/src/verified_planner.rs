@@ -149,11 +149,23 @@ pub proof fn restore_status_has_match(
     reveal_strlit("exact"); reveal_strlit("compatible");
     reveal_strlit("miss-or-unavailable"); reveal_strlit("error");
     reveal_strlit("not-attempted"); reveal_strlit("unavailable");
+    reveal(restore_status_spec);
+    assert("unavailable"@ != "exact"@ && "unavailable"@ != "compatible"@);
+    assert("miss-or-unavailable"@ != "exact"@
+        && "miss-or-unavailable"@ != "compatible"@);
+    assert("error"@[1] != "exact"@[1]);
+    assert("error"@ != "exact"@ && "error"@ != "compatible"@);
+    assert("not-attempted"@ != "exact"@ && "not-attempted"@ != "compatible"@);
     if matched is None {
         match outcome {
-            None => assert(false),
+            None => {
+                assert(restore_status_spec(outcome, requested, matched, prefixes) == "unavailable"@);
+                assert(false);
+            },
             Some(value) => {
                 if value@ == "success"@ {
+                    assert(restore_status_spec(outcome, requested, matched, prefixes)
+                        == "miss-or-unavailable"@);
                     assert(false);
                 } else if value@ == "failure"@ || value@ == "cancelled"@ {
                     assert(false);
