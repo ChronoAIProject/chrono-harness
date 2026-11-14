@@ -381,6 +381,24 @@ fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() 
     c["push_branches"] = json!([]);
     c["jobs"][1]["always"] = json!(false);
     c["delivery"] = json!({"workflow":"landing CI","branch":"dev","publisher":"consumer","promotion_build_jobs":["native"]});
+    let mut frontend = c["jobs"][0].clone();
+    frontend["id"] = json!("frontend");
+    frontend["artifact_name"] = json!("frontend-output");
+    frontend["artifact_directory"] = json!("frontend-out/");
+    c["jobs"].as_array_mut().unwrap().push(frontend);
+    for (id, always) in [("installation", false), ("diagnostics", true)] {
+        let mut job = c["jobs"][1].clone();
+        job["id"] = json!(id);
+        job["artifact_name"] = json!(format!("{id}-output"));
+        job["artifact_directory"] = json!(format!("{id}-out/"));
+        job["needs"] = json!(["consumer", "frontend"]);
+        job["downloads"] = json!([
+            {"job":"consumer","directory":"inputs/consumer/"},
+            {"job":"frontend","directory":"inputs/frontend/"}
+        ]);
+        job["always"] = json!(always);
+        c["jobs"].as_array_mut().unwrap().push(job);
+    }
     let rendered = release::render(&serde_json::from_value(c.clone()).unwrap()).unwrap();
     let yaml: Value = serde_yaml_ng::from_str(&rendered).unwrap();
     assert!(
@@ -397,6 +415,18 @@ fn promotion_skips_only_explicit_build_jobs_and_keeps_the_registered_commands() 
             .contains("always() && (inputs.channel == 'stable' || success())")
     );
     assert_eq!(publisher["needs"], json!(["native"]));
+    // A successful publisher can have skipped build ancestors during promotion.
+    // Installation must check its actual dependencies without implicit success().
+    let installation = yaml["jobs"]["installation"]["if"].as_str().unwrap();
+    assert!(
+        installation.starts_with("${{ always() && needs.consumer.result == 'success' && needs.frontend.result == 'success' && "),
+        "{installation}"
+    );
+    assert!(!installation.contains("success()"), "{installation}");
+    // Explicit always jobs retain their failure-diagnostic behavior.
+    let diagnostics = yaml["jobs"]["diagnostics"]["if"].as_str().unwrap();
+    assert!(diagnostics.starts_with("${{ always() && "));
+    assert!(!diagnostics.contains("needs."), "{diagnostics}");
     assert_eq!(
         yaml["jobs"]["native"]["timeout-minutes"],
         c["jobs"][0]["timeout_minutes"]
