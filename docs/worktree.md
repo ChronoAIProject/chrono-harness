@@ -475,8 +475,9 @@ chrono-worktree resume-rebind --host-root ROOT --config .chrono-harness/worktree
 cleanup 把明确生成目录处置与有限时 Git 检出移除分开。删任何目录前先核全部所选项：两端登记未跟踪产物、不含候选已跟踪路径、缺失或无符号链接祖先的物理目录。原保存工作、分支、检出、未知文件、嵌套工作树检查继续适用。
 
 产物处置明确区分时机：`dispose` 在消费者释放后的普通缓存回收中可删除；
-`finish-dispose` 用于跨操作复用的缓存，普通 bootstrap／check／use 返回及 maintain 保留，
-在明确 finish 或实际检出处置中才选择；检出继续复用时不因创建年龄回收。`retain` 保留，
+`finish-dispose` 用于跨操作复用的缓存，普通 bootstrap／check／use 返回及尚未达到删除阈值的维护保留，
+在明确 finish、实际检出处置，或已采用年龄政策的显式维护核实超过删除阈值并保全源码后选择；
+后者即使因 bin 或必要证据保留检出，也可独立回收这些缓存。`retain` 保留，
 `evidence-retain` 仍须符合原证据释放条件。所有时机都须核原所有权和活消费者。
 主检出的 finish 持久记录缓存释放代际，中断后由同一维护入口恢复；新消费开启新代际，
 旧释放不会授权删除后来复用的缓存。
@@ -549,7 +550,7 @@ FILEMAP 将其登记为宿主数据；同一执行者复用原维护轮次、生
 | 回收条件 | 继续使用各目标自己的年龄、产物时机和有限保留政策；活租约、未知使用方、源码、未保全提交及必要原件不因调度而释放 |
 | 输出和失败 | 原 stdout／stderr／退出码及逐项回执由现有生命周期报告保留；launchd 的退出码不是逐项清理结果。控制台流丢到 `/dev/null`，不增加无限增长的日志副本 |
 | 资源与成本 | 后台、低优先级 IO、nice 10；一轮的工作树遍历和实际回收成本仍由原维护入口承担，总成本未知。报告内部的单轮预算不等于整个 maintain 已有时间上限 |
-| 容量边界 | 这是持续回收触发，不是全库磁盘硬配额。`finish-dispose` 缓存仍在明确 finish 或实际检出处置时回收；持续活跃或未知的内容可能继续增长 |
+| 容量边界 | 这是持续回收触发，不是全库磁盘硬配额。`finish-dispose` 缓存在明确 finish、实际检出处置或已核实到删除年龄且源码保全后回收；持续活跃或未知的内容可能继续增长 |
 | 配置保管 | 实例 plist 及 OS 拥有的 socket 位于 main 的已登记 state，程序不 unlink socket 或按年龄删除它；由本宿主调度保管；当前用户 LaunchAgents 仅保存指向该文件的链接。任务停用并结束、链接移除后，实例即可删除；模板保留在 Git |
 | 程序保管 | 所选程序须来自已交付固定提交的成功源码 bootstrap，并通过适用检查；任务采用期间保留该安装位置、固定来源及必要构建原件。程序所在检出的 bin 仍受原 retain 政策保护，可重建编译缓存按原 finish 释放；停止任务后再交接程序保管 |
 
@@ -635,9 +636,10 @@ v2 政策可显式选择 `age_policy`，例如
 
 普通 use／check／bootstrap 保留正在复用的工作树与缓存，不因创建年龄先保存源码或回收缓存。
 显式 maintain 或明确 finish 后的维护在达到复用年龄时，先把当前源码、原索引和 checkout reflog 的提交保全到真实分支，
-再回收明确登记的普通 dispose 产物；检出继续复用时，finish-dispose 缓存保留，
-仅当前代际的明确 finish 释放可以选择它们。达到删除年龄后，同一维护入口可回收检出及其 finish-dispose 产物；
-保留的 bin、必要证据或其它未解决条件仍会延期删除。源码保全包含未跟踪和忽略的源码，
+再回收明确登记的普通 dispose 产物；仅超过复用阈值时，finish-dispose 缓存继续保留。
+严格超过删除阈值且完成源码保全后，同一维护入口可以回收已声明的 finish-dispose 缓存，
+即使 bin、必要证据或其它保留条件阻止整树移除。产物选择和每次删除前仍核实资格、身份、源码／index 路径与实际排除。
+保留的检出继续 active、terminal 为 null，后续 use 可以重建缓存；没有任务完成声明。源码保全包含未跟踪和忽略的源码，
 生成目录只按已有产物登记排除，不按目录名猜测。保留分支已存在时必须核对原提交，不覆盖。
 
 年龄回收不声明任务成功。原保全、处置意图和中断结果继续保留，重入核原身份并发布独立结果。
@@ -647,6 +649,8 @@ v2 政策可显式选择 `age_policy`，例如
 ### use 与 finish
 
 use 只消费一项已登记项目／脚本操作，沿用 tool、argv、环境、进程限制。在与 finish／处置共用的目标 metadata 租约下记受管使用，调用已有有限进程模块，保留原字节／退出，子进程等待结束后释放使用。子进程非零仍失败，即使用途已安全释放。
+
+本宿主为当前需要显式回收的 runner-tests、ci-tests、inputs-tests、worktree、ci、worktree-tests、judge-filemap-tests 登记 `clean.<项目 ID>-cache` 操作，均以原 Cargo clean、精确 manifest 和 target-dir 回收完整可重建 target，并在 FILEMAP 声明对应输出。调用方先排除其它使用，再通过 use 执行该已登记操作；原包级恢复操作仍只清指定包。清理后核实际目录和占用，缓存清空不发布任务终态。
 
 生命周期结果在存活协调者发布；即使 wrapper 从待处置检出调用，释放后也无结果写入者留在那里。其他自有 gate 忙时，准入／释放在登记进程上限内等待；中断 gate 保留，不按时间过期。
 
@@ -853,7 +857,7 @@ use 结果及 main-cache release 在最终报告交接前，暂存在所属 enro
 
 后续点名 start／reconstruct、受管准入或明确跨目标 maintain，可处置未完成但已无活消费者的缓存，包括成功 use 且无孤儿 token 的情况。EX 允许把孤儿 use 协调为 result-unavailable，同时保留原结果字节。
 
-缓存处置仍保持 `status: active`、`terminal: null`，保留检出、ref、脏／暂存源码、未保留提交、bin、证据。只选两端登记 dispose，拒绝已跟踪／index 路径和符号链接祖先，不创建持久自有 Git worktree 锁。
+缓存处置仍保持 `status: active`、`terminal: null`，保留检出、ref、脏／暂存源码、未保留提交、bin、证据。普通释放只选两端登记 dispose；显式年龄维护在超过删除阈值并保全源码后，还可选择已登记的 finish-dispose。拒绝已跟踪／index 路径和符号链接祖先，不创建持久自有 Git worktree 锁。
 
 成功一轮清 pending 代际，后续 use 重新启用。任何已发布缓存尝试后再准入消费，也开新代际，即使旧尝试中断／失败，仍保留旧 intent／result，允许当前 HEAD／登记绑定用于重建和再回收。
 

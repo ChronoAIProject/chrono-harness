@@ -540,7 +540,10 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     let current = entry(&h, &target);
     assert_eq!(current["status"], "active", "{current}");
     assert!(current["terminal"].is_null(), "{current}");
-    assert_eq!(fs::read_to_string(target.join("payload")).unwrap(), "fresh work");
+    assert_eq!(
+        fs::read_to_string(target.join("payload")).unwrap(),
+        "fresh work"
+    );
     assert_eq!(
         fs::read(target.join(".chrono-harness/state/needed-original")).unwrap(),
         b"needed original\0\xff"
@@ -557,7 +560,12 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     let rebuilt = cache_identity(&target);
     let (code, used, error) = h.auto(
         "use",
-        &["--path", target.to_str().unwrap(), "--operation", "use.consumer"],
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
     );
     assert_eq!(code, 0, "{used} {error}");
     assert_eq!(cache_identity(&target), rebuilt);

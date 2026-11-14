@@ -3211,6 +3211,7 @@ impl Manager {
         i: usize,
         token: &str,
         report: &mut Value,
+        expired_source_preserved: bool,
     ) -> Result<(), String> {
         let e = self.ledger.entries[i].clone();
         let owner = e
@@ -3219,8 +3220,12 @@ impl Manager {
             .ok_or("cache disposal requires kernel ownership")?;
         let head = r.oid(&e.path, "HEAD")?;
         self.check_entry(r, &e, &head, None)?;
+        if expired_source_preserved && !self.age_eligible(&e, true)? {
+            return Err("preserved checkout no longer qualifies for expired cache disposal".into());
+        }
         let release_reusable = crate::verified_lifecycle::reusable_release(
             e.terminal.is_some(),
+            expired_source_preserved,
             owner.generation,
             self.cache_release_generation(&e)?,
         );
@@ -3296,6 +3301,8 @@ impl Manager {
         self.save()?;
         report["cache_intent"] = value!(intent);
         report["cache_generation"] = value!(owner.generation);
+        report["cache_release"] = value!({"reusable":release_reusable,
+            "expired_source_preserved":expired_source_preserved});
         report["destination"] = value!(e.path);
         report["head"] = value!(head);
         report["worktree_removal"] = value!("preserved");
@@ -3311,6 +3318,9 @@ impl Manager {
         self.outside_enrollment_readonly(r, |manager, r| {
             artifact_disposal::dispose(&e.path, &names, &paths, report, || {
                 manager.check_entry(r, &e, &head, None)?;
+                if expired_source_preserved && !manager.age_eligible(&e, true)? {
+                    return Err("checkout no longer qualifies for expired cache disposal".into());
+                }
                 artifact_disposal::paths(r, &e.path, &head, &names)?;
                 Ok(())
             })?;
@@ -3616,7 +3626,7 @@ impl Manager {
                     if age {
                         self.execute_age(r, i, token, attempt)
                     } else if cache {
-                        self.execute_cache(r, i, token, attempt)
+                        self.execute_cache(r, i, token, attempt, false)
                     } else {
                         self.execute_entry(r, i, token, attempt)
                     }

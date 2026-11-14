@@ -247,7 +247,8 @@ impl Manager {
         report["age_policy"] = value!({"reuse_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().reuse_after_seconds,
             "delete_after_seconds":self.inputs.policy.age_policy.as_ref().unwrap().delete_after_seconds,
             "clock":"physical-checkout-creation","task_completion":"not-claimed"});
-        if self.age_eligible(&e, true)? {
+        let expired_source_preserved = self.age_eligible(&e, true)?;
+        if expired_source_preserved {
             let names: Vec<_> = self
                 .inputs
                 .policy
@@ -300,7 +301,7 @@ impl Manager {
             .ok_or("age cache generation overflow")?;
         owner.cache_pending = true;
         self.save()?;
-        self.execute_cache(r, i, token, report)?;
+        self.execute_cache(r, i, token, report, expired_source_preserved)?;
         report["age_outcome"] = value!("reusable-source-preserved");
         Ok(())
     }
