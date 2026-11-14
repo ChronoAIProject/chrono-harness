@@ -44,13 +44,15 @@ pub use automatic_verification::age::reusable_release;
 pub use crate::automatic::inventory::append_action_index;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::service::{
-    maintenance_exclusions, maintenance_idle_exit, validate_activation_sequence,
+    maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
+    validate_activation_sequence,
 };
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::inventory::append_action_index;
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::service::{
-    maintenance_exclusions, maintenance_idle_exit, validate_activation_sequence,
+    maintenance_exclusions, maintenance_idle_exit, maintenance_retention_phase,
+    validate_activation_sequence,
 };
 
 #[cfg(not(verus_keep_ghost))]
