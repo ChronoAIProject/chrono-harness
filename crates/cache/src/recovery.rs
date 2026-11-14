@@ -14,6 +14,254 @@ use vstd::prelude::*;
 
 verus! {
 
+pub open spec fn recovery_decision_parts<'a>(error: planner::RecoveryDecisionError,
+    id: &'a str) -> [&'a str; 2]
+{
+    [match error {
+        planner::RecoveryDecisionError::MalformedOutputs =>
+            "E_CACHE_RECOVERY: malformed restore outputs for ",
+        planner::RecoveryDecisionError::UnknownOutcome =>
+            "E_CACHE_RECOVERY: missing, cancelled or unknown restore outcome for ",
+    }, id]
+}
+
+pub open spec fn recovery_cache_final_result<T>(outcome: Option<&str>, reason: &str,
+    unconfirmed: bool, outputs_valid: bool, key_valid: bool,
+    method: Option<&str>, status: Option<&str>, refresh: bool,
+    verification: Option<T>, out: Result<(planner::RecoveryAction, Option<T>), String>) -> bool
+{
+    match planner::recovery_action_spec(outcome, reason, unconfirmed,
+        outputs_valid, key_valid, method, status, refresh) {
+        Ok(action) => out == Ok::<(planner::RecoveryAction, Option<T>), String>(
+            (action, verification)),
+        Err(_) => false,
+    }
+}
+
+/// 从同一原生观察计算原因、按需核验及最终动作，保留原核验值和首错。
+pub fn decide_recovery_cache<S, T, V, R, E>(state: S, outcome: Option<&str>,
+    requested: Option<&str>, matched: Option<&str>, prefixes: &[Option<&str>],
+    unconfirmed: bool, outputs_valid: bool, key_valid: bool,
+    method: Option<&str>, refresh: bool, id: &str, verify: V, read_status: R, render_error: E,
+) -> (out: (S, &'static str, Result<(planner::RecoveryAction, Option<T>), String>))
+    where V: FnOnce(S, &str) -> (S, Result<T, String>),
+        R: FnOnce(S, &T) -> (S, Option<&str>),
+        E: FnOnce(S, [&str; 2]) -> (S, String),
+    requires forall|state: S, key: &str| verify.requires((state, key)),
+        forall|state: S, value: &T| read_status.requires((state, value)),
+        forall|state: S, parts: [&str; 2]| render_error.requires((state, parts)),
+    ensures out.1@ == planner::restore_status_spec(outcome, requested, matched, prefixes@),
+        match planner::recovery_action_spec(outcome, out.1, unconfirmed,
+            outputs_valid, key_valid, None, None, false) {
+            Err(error) => match out.2 {
+                Err(message) => render_error.ensures(
+                    (state, recovery_decision_parts(error, id)), (out.0, message)),
+                _ => false,
+            },
+            Ok(base) => if matches!(base, planner::RecoveryAction::Keep)
+                && planner::content_verification_applies_spec(method, out.1) {
+                match matched {
+                    None => false,
+                    Some(key) => (exists|verified: S, error: String|
+                        #[trigger] verify.ensures((state, key),
+                            (verified, Err::<T, String>(error)))
+                        && (out.0, out.2) == (verified,
+                            Err::<(planner::RecoveryAction, Option<T>), String>(error)))
+                        || (exists|verified: S, value: T, status: Option<&str>|
+                            verify.ensures((state, key), (verified, Ok::<T, String>(value)))
+                            && #[trigger] read_status.ensures((verified, &value), (out.0, status))
+                            && recovery_cache_final_result(outcome, out.1, unconfirmed,
+                                outputs_valid, key_valid, method, status, refresh,
+                                Some(value), out.2)),
+                }
+            } else {
+                out.0 == state && recovery_cache_final_result(outcome, out.1, unconfirmed,
+                    outputs_valid, key_valid, method, None, refresh, None::<T>, out.2)
+            },
+        },
+{
+    reveal(recovery_cache_final_result);
+    let ghost initial_state = state;
+    let reason = planner::restore_status(outcome, requested, matched, prefixes);
+    let base = match planner::recovery_action(outcome, reason, unconfirmed,
+        outputs_valid, key_valid, None, None, false) {
+        Ok(action) => action,
+        Err(error) => {
+            let parts = recovery_decision_error(&error, id);
+            let (state, message) = render_error(state, parts);
+            return (state, reason, Err(message));
+        },
+    };
+    if base.requires_content_verification(method, reason) {
+        assert(reason@ == "exact"@ || reason@ == "compatible"@);
+        proof { planner::restore_status_has_match(outcome, requested, matched, prefixes@); }
+        assert(matched.is_some());
+        let key = matched.unwrap();
+        assert(matched == Some(key));
+        assert(planner::recovery_action_spec(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, None, None, false)
+            == Ok::<planner::RecoveryAction, planner::RecoveryDecisionError>(
+                planner::RecoveryAction::Keep));
+        let ghost initial = state;
+        let (state, result) = verify(state, key);
+        let ghost verified = state;
+        let ghost original = result;
+        assert(verify.ensures((initial, key), (verified, original)));
+        let value = match result {
+            Ok(value) => value,
+            Err(error) => return (state, reason, Err(error)),
+        };
+        let ghost verified_value = value;
+        assert(original == Ok::<T, String>(verified_value));
+        assert(initial == initial_state);
+        assert(verify.ensures((initial_state, key),
+            (verified, Ok::<T, String>(verified_value))));
+        let (state, status) = read_status(state, &value);
+        assert(read_status.ensures((verified, &value), (state, status)));
+        let action = planner::recovery_action(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, status, refresh);
+        let result = match action {
+            Ok(action) => Ok((action, Some(value))),
+            Err(error) => {
+                assert(false);
+                let parts = recovery_decision_error(&error, id);
+                let (state, message) = render_error(state, parts);
+                return (state, reason, Err(message));
+            },
+        };
+        assert(recovery_cache_final_result(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, status, refresh, Some(verified_value), result));
+        assert(planner::content_verification_applies_spec(method, reason));
+        let out = (state, reason, result);
+        assert(out.0 == state && out.1 == reason && out.2 == result);
+        assert(exists|observed_state: S, value: T, observed: Option<&str>|
+            verify.ensures((initial_state, key),
+                (observed_state, Ok::<T, String>(value)))
+            && #[trigger] read_status.ensures((observed_state, &value), (out.0, observed))
+            && recovery_cache_final_result(outcome, out.1, unconfirmed,
+                outputs_valid, key_valid, method, observed, refresh, Some(value), out.2));
+        out
+    } else {
+        let action = planner::recovery_action(outcome, reason, unconfirmed,
+            outputs_valid, key_valid, method, None, refresh);
+        let result = match action {
+            Ok(action) => Ok((action, None)),
+            Err(error) => {
+                assert(false);
+                let parts = recovery_decision_error(&error, id);
+                let (state, message) = render_error(state, parts);
+                return (state, reason, Err(message));
+            },
+        };
+        (state, reason, result)
+    }
+}
+
+pub open spec fn recovery_preflight_result<S, T, P, V, D, J>(
+    initial: S, enabled: bool, consumer: Option<&str>,
+    prepare: P, attempt: V, decode: D, is_object: J, out: (S, Result<T, String>),
+) -> bool
+    where P: FnOnce(S, &str) -> (S, Result<bool, String>),
+        V: FnOnce(S) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Result<T, String>), J: FnOnce(S, &T) -> (S, bool),
+{
+    if !enabled {
+        out.0 == initial && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: recovery is not registered"@,
+            _ => false,
+        }
+    } else { match consumer {
+        None => out.0 == initial && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: consumer missing"@,
+            _ => false,
+        },
+        Some(consumer) => exists|prepared: S, preparation: Result<bool, String>|
+            #[trigger] prepare.ensures((initial, consumer), (prepared, preparation))
+            && match preparation {
+                Err(error) => out == (prepared, Err::<T, String>(error)),
+                Ok(true) => out.0 == prepared && match out.1 {
+                    Err(error) => error@ ==
+                        "E_CACHE_RECOVERY: original plan differs from current registration or host"@,
+                    _ => false,
+                },
+                Ok(false) => exists|validated: S, validation: Result<(), String>|
+                    #[trigger] attempt.ensures((prepared,), (validated, validation))
+                    && match validation {
+                        Err(error) => out == (validated, Err::<T, String>(error)),
+                        Ok(()) => exists|decoded: S, result: Result<T, String>|
+                            #[trigger] decode.ensures((validated,), (decoded, result))
+                            && match result {
+                                Err(error) => out == (decoded, Err::<T, String>(error)),
+                                Ok(value) => exists|checked: S, object: bool|
+                                    #[trigger] is_object.ensures((decoded, &value), (checked, object))
+                                    && out.0 == checked && if object {
+                                        out.1 == Ok::<T, String>(value)
+                                    } else { match out.1 {
+                                        Err(error) => error@ ==
+                                            "E_CACHE_RECOVERY: native step observations missing"@,
+                                        _ => false,
+                                    } },
+                            },
+                    },
+            },
+    } }
+}
+
+/// 按现役恢复入口的顺序预检；首错直接返回，不再调用后续阶段。
+pub fn preflight_recovery<S, T, P, V, D, J>(
+    state: S, enabled: bool, consumer: Option<&str>,
+    prepare: P, attempt: V, decode: D, is_object: J,
+) -> (out: (S, Result<T, String>))
+    where P: FnOnce(S, &str) -> (S, Result<bool, String>),
+        V: FnOnce(S) -> (S, Result<(), String>),
+        D: FnOnce(S) -> (S, Result<T, String>), J: FnOnce(S, &T) -> (S, bool),
+    requires forall|state: S, consumer: &str| prepare.requires((state, consumer)),
+        forall|state: S| attempt.requires((state,)),
+        forall|state: S| decode.requires((state,)),
+        forall|state: S, value: &T| is_object.requires((state, value)),
+    ensures recovery_preflight_result(state, enabled, consumer,
+        prepare, attempt, decode, is_object, out),
+{
+    if !enabled {
+        return (state, Err("E_CACHE_RECOVERY: recovery is not registered".to_string()));
+    }
+    let consumer_text = match consumer {
+        Some(consumer) => consumer,
+        None => return (state, Err("E_CACHE_RECOVERY: consumer missing".to_string())),
+    };
+    let ghost initial = state;
+    let (state, preparation) = prepare(state, consumer_text);
+    let ghost prepared = state;
+    let ghost prepared_result = preparation;
+    assert(prepare.ensures((initial, consumer_text), (prepared, prepared_result)));
+    match preparation {
+        Err(error) => return (state, Err(error)),
+        Ok(true) => return (state, Err(
+            "E_CACHE_RECOVERY: original plan differs from current registration or host".to_string())),
+        Ok(false) => (),
+    }
+    let (state, validation) = attempt(state);
+    let ghost validated = state;
+    let ghost validated_result = validation;
+    assert(attempt.ensures((prepared,), (validated, validated_result)));
+    match validation {
+        Err(error) => return (state, Err(error)),
+        Ok(()) => (),
+    }
+    let (state, result) = decode(state);
+    let ghost decoded = state;
+    let ghost decoded_result = result;
+    assert(decode.ensures((validated,), (decoded, decoded_result)));
+    let value = match result {
+        Err(error) => return (state, Err(error)),
+        Ok(value) => value,
+    };
+    let (state, object) = is_object(state, &value);
+    assert(is_object.ensures((decoded, &value), (state, object)));
+    (state, if object { Ok(value) }
+        else { Err("E_CACHE_RECOVERY: native step observations missing".to_string()) })
+}
+
 /// 文件系统仅提供原 metadata、错误种类及原错误文本。
 pub open spec fn recovery_removal_result<S, M, D, F>(
     initial: S, not_found: u32, metadata: M, directory: D, file: F,
@@ -220,6 +468,304 @@ pub fn select_recovery_entry<S, T, O, I, R>(
     assert(output.ensures((initial,), (observed, original)));
     assert(recovery_probe_matches(original, not_found,
         "E_CACHE_RECOVERY: result metadata: ", output_checked));
+    out
+}
+
+pub open spec fn recovery_artifact_step<S, V, A>(initial: S, index: usize,
+    path: Option<&str>, validate: &V, append: &A, out: (S, Result<(), String>)) -> bool
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+{
+    match path {
+        None => out.0 == initial && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: artifact path"@,
+            _ => false,
+        },
+        Some(path) => exists|observed: S, result: Result<bool, String>|
+            #[trigger] validate.ensures((initial, path), (observed, result))
+            && match result {
+                Err(error) => out == (observed, Err::<(), String>(error)),
+                Ok(false) => out.0 == observed && match out.1 {
+                    Err(error) => error@ ==
+                        "E_CACHE_RECOVERY: only registered host artifacts may be discarded"@,
+                    _ => false,
+                },
+                Ok(true) => append.ensures((observed, index, path, "pending"), out.0)
+                    && out.1 == Ok::<(), String>(()),
+            },
+    }
+}
+
+fn collect_recovery_artifact<S, V, A>(state: S, index: usize, path: Option<&str>,
+    validate: &V, append: &A) -> (out: (S, Result<(), String>))
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+    requires forall|state: S, path: &str| validate.requires((state, path)),
+        forall|state: S, index: usize, path: &str, status: &'static str|
+            append.requires((state, index, path, status)),
+    ensures recovery_artifact_step(state, index, path, validate, append, out),
+{
+    let path = match path {
+        Some(path) => path,
+        None => return (state, Err("E_CACHE_RECOVERY: artifact path".to_string())),
+    };
+    let ghost initial = state;
+    let (state, result) = validate(state, path);
+    let ghost observed = state;
+    let ghost original = result;
+    let out = match result {
+        Err(error) => (state, Err(error)),
+        Ok(false) => (state, Err(
+            "E_CACHE_RECOVERY: only registered host artifacts may be discarded".to_string())),
+        Ok(true) => (append(state, index, path, "pending"), Ok(())),
+    };
+    assert(validate.ensures((initial, path), (observed, original)));
+    out
+}
+
+pub open spec fn recovery_artifact_prefix<S, V, A>(paths: Seq<Option<&str>>,
+    states: Seq<S>, initial: S, validate: &V, append: &A) -> bool
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+{
+    0 < states.len() <= paths.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] recovery_artifact_step(states[i], i as usize, paths[i],
+                validate, append, (states[i + 1], Ok::<(), String>(())))
+}
+
+/// 顺序验证并登记完整路径；首错保留原状态和错误，不接触后续项。
+pub fn collect_recovery_artifacts<S, V, A>(source: S, artifacts: Option<&[Option<&str>]>,
+    validate: &V, append: &A) -> (out: (S, Result<(), String>))
+    where V: Fn(S, &str) -> (S, Result<bool, String>),
+        A: Fn(S, usize, &str, &'static str) -> S,
+    requires forall|state: S, path: &str| validate.requires((state, path)),
+        forall|state: S, index: usize, path: &str, status: &'static str|
+            append.requires((state, index, path, status)),
+    ensures match artifacts {
+        None => out.0 == source && match out.1 {
+            Err(error) => error@ == "E_CACHE_RECOVERY: artifacts missing"@,
+            _ => false,
+        },
+        Some(paths) => exists|states: Seq<S>|
+            #[trigger] recovery_artifact_prefix(paths@, states, source, validate, append)
+            && match out.1 {
+                Ok(()) => states.len() == paths.len() + 1 && out.0 == states.last(),
+                Err(error) => states.len() <= paths.len()
+                    && recovery_artifact_step(states.last(), (states.len() - 1) as usize,
+                        paths@[states.len() - 1], validate, append,
+                        (out.0, Err::<(), String>(error))),
+            },
+    },
+{
+    let paths = match artifacts {
+        Some(paths) => paths,
+        None => return (source, Err("E_CACHE_RECOVERY: artifacts missing".to_string())),
+    };
+    let mut state = source;
+    let ghost states = seq![source];
+    let mut i = 0;
+    while i < paths.len()
+        invariant i <= paths.len(), states.len() == i + 1, states.last() == state,
+            artifacts == Some(paths),
+            recovery_artifact_prefix(paths@, states, source, validate, append),
+            forall|state: S, path: &str| validate.requires((state, path)),
+            forall|state: S, index: usize, path: &str, status: &'static str|
+                append.requires((state, index, path, status)),
+        decreases paths.len() - i,
+    {
+        let (next, result) = collect_recovery_artifact(state, i, paths[i], validate, append);
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(out.1 == Err::<(), String>(error));
+                assert(recovery_artifact_prefix(paths@, states, source, validate, append));
+                assert(states.len() <= paths@.len());
+                assert(recovery_artifact_step(states.last(), (states.len() - 1) as usize,
+                    paths@[states.len() - 1], validate, append,
+                    (out.0, Err::<(), String>(error))));
+                assert(exists|history: Seq<S>|
+                    #[trigger] recovery_artifact_prefix(paths@, history, source, validate, append)
+                    && match out.1 {
+                        Ok(()) => history.len() == paths.len() + 1 && out.0 == history.last(),
+                        Err(error) => history.len() <= paths.len()
+                            && recovery_artifact_step(history.last(), (history.len() - 1) as usize,
+                                paths@[history.len() - 1], validate, append,
+                                (out.0, Err::<(), String>(error))),
+                    });
+                assert(artifacts is Some);
+                assert(artifacts->Some_0 == paths);
+                assert(match artifacts {
+                    None => false,
+                    Some(input) => exists|history: Seq<S>|
+                        #[trigger] recovery_artifact_prefix(input@, history, source, validate, append)
+                        && match out.1 {
+                            Ok(()) => history.len() == input.len() + 1 && out.0 == history.last(),
+                            Err(error) => history.len() <= input.len()
+                                && recovery_artifact_step(history.last(), (history.len() - 1) as usize,
+                                    input@[history.len() - 1], validate, append,
+                                    (out.0, Err::<(), String>(error))),
+                        },
+                });
+                return out;
+            },
+            Ok(()) => {
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] recovery_artifact_step(states[j], j as usize, paths@[j],
+                            validate, append, (states[j + 1], Ok::<(), String>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(recovery_artifact_step(previous[j], j as usize, paths@[j],
+                                validate, append, (previous[j + 1], Ok::<(), String>(()))) );
+                        }
+                    }
+                }
+                state = next;
+            },
+        }
+        i += 1;
+    }
+    let out = (state, Ok(()));
+    assert(out.1 == Ok::<(), String>(()));
+    assert(states.len() == paths@.len() + 1 && out.0 == states.last());
+    assert(exists|history: Seq<S>|
+        #[trigger] recovery_artifact_prefix(paths@, history, source, validate, append)
+        && match out.1 {
+            Ok(()) => history.len() == paths.len() + 1 && out.0 == history.last(),
+            Err(error) => history.len() <= paths.len()
+                && recovery_artifact_step(history.last(), (history.len() - 1) as usize,
+                    paths@[history.len() - 1], validate, append,
+                    (out.0, Err::<(), String>(error))),
+        });
+    out
+}
+
+pub open spec fn recovery_refresh_step<S, K, T, F, C>(source: S, row: (K, T),
+    apply: &F, complete: &C, out: (S, Result<(), String>)) -> bool
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+{
+    exists|applied: S, result: Result<(), String>|
+        #[trigger] apply.ensures((source, &row.0, row.1), (applied, result))
+        && match result {
+            Err(error) => out == (applied, Err::<(), String>(error)),
+            Ok(()) => complete.ensures((applied, &row.0, "source-times-refreshed"), out.0)
+                && out.1 == Ok::<(), String>(()),
+        }
+}
+
+fn refresh_recovery_source<S, K, T, F, C>(source: S, row: (K, T), apply: &F, complete: &C)
+    -> (out: (S, Result<(), String>))
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+    requires forall|state: S, key: &K, value: T| apply.requires((state, key, value)),
+        forall|state: S, key: &K, status: &'static str| complete.requires((state, key, status)),
+    ensures recovery_refresh_step(source, row, apply, complete, out),
+{
+    let (key, value) = row;
+    let ghost original = value;
+    let (state, result) = apply(source, &key, value);
+    let ghost applied = state;
+    let ghost observed = result;
+    let out = match result {
+        Err(error) => (state, Err(error)),
+        Ok(()) => (complete(state, &key, "source-times-refreshed"), Ok(())),
+    };
+    assert(apply.ensures((source, &key, original), (applied, observed)));
+    out
+}
+
+pub open spec fn recovery_refresh_prefix<S, K, T, F, C>(rows: Seq<(K, T)>,
+    states: Seq<S>, source: S, apply: &F, complete: &C) -> bool
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+{
+    0 < states.len() <= rows.len() + 1 && states[0] == source
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] recovery_refresh_step(states[i], rows[i], apply, complete,
+                (states[i + 1], Ok::<(), String>(())))
+}
+
+/// 消费原准备项，成功后登记缓存终态；首错不登记成功或执行后续项。
+pub fn run_recovery_refreshes<S, K, T, F, C>(source: S, rows: Vec<(K, T)>,
+    apply: &F, complete: &C) -> (out: (S, Result<(), String>))
+    where F: Fn(S, &K, T) -> (S, Result<(), String>),
+        C: Fn(S, &K, &'static str) -> S,
+    requires forall|state: S, key: &K, value: T| apply.requires((state, key, value)),
+        forall|state: S, key: &K, status: &'static str| complete.requires((state, key, status)),
+    ensures exists|states: Seq<S>|
+        #[trigger] recovery_refresh_prefix(rows@, states, source, apply, complete)
+        && match out.1 {
+            Ok(()) => states.len() == rows.len() + 1 && out.0 == states.last(),
+            Err(error) => states.len() <= rows.len()
+                && recovery_refresh_step(states.last(), rows@[states.len() - 1], apply, complete,
+                    (out.0, Err::<(), String>(error))),
+        },
+{
+    let ghost entries = rows@;
+    let count = rows.len();
+    let mut remaining = rows.into_iter();
+    let mut state = source;
+    let ghost states = seq![source];
+    let mut i = 0;
+    while i < count
+        invariant i <= count, count == entries.len(), entries == rows@,
+            remaining@.0 == i, remaining@.1 == entries,
+            states.len() == i + 1, states.last() == state,
+            recovery_refresh_prefix(entries, states, source, apply, complete),
+            forall|state: S, key: &K, value: T| apply.requires((state, key, value)),
+            forall|state: S, key: &K, status: &'static str| complete.requires((state, key, status)),
+        decreases count - i,
+    {
+        let row = remaining.next().unwrap();
+        let (next, result) = refresh_recovery_source(state, row, apply, complete);
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(out.1 == Err::<(), String>(error));
+                assert(recovery_refresh_prefix(rows@, states, source, apply, complete));
+                assert(states.len() <= rows.len());
+                assert(recovery_refresh_step(states.last(), entries[states.len() - 1],
+                    apply, complete, (out.0, Err::<(), String>(error))));
+                assert(exists|history: Seq<S>|
+                    #[trigger] recovery_refresh_prefix(entries, history, source, apply, complete)
+                    && match out.1 {
+                        Ok(()) => history.len() == count + 1 && out.0 == history.last(),
+                        Err(error) => history.len() <= count
+                            && recovery_refresh_step(history.last(), entries[history.len() - 1],
+                                apply, complete, (out.0, Err::<(), String>(error))),
+                    });
+                return out;
+            },
+            Ok(()) => {
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] recovery_refresh_step(states[j], entries[j], apply, complete,
+                            (states[j + 1], Ok::<(), String>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(recovery_refresh_step(previous[j], entries[j], apply, complete,
+                                (previous[j + 1], Ok::<(), String>(()))) );
+                        }
+                    }
+                }
+                state = next;
+            },
+        }
+        i += 1;
+    }
+    let out = (state, Ok(()));
+    assert(exists|history: Seq<S>|
+        #[trigger] recovery_refresh_prefix(entries, history, source, apply, complete)
+        && match out.1 {
+            Ok(()) => history.len() == count + 1 && out.0 == history.last(),
+            Err(error) => history.len() <= count
+                && recovery_refresh_step(history.last(), entries[history.len() - 1],
+                    apply, complete, (out.0, Err::<(), String>(error))),
+        });
     out
 }
 
@@ -440,7 +986,7 @@ pub open spec fn recovery_text(value: Option<&str>) -> Option<Seq<char>> {
 /// 恢复决策的错误分类与完整缓存身份；适配器只按顺序拼接两段原文。
 pub fn recovery_decision_error<'a>(error: &planner::RecoveryDecisionError, id: &'a str)
     -> (parts: [&'a str; 2])
-    ensures parts[1]@ == id@,
+    ensures parts == recovery_decision_parts(*error, id), parts[1]@ == id@,
         parts[0]@ == match error {
             planner::RecoveryDecisionError::MalformedOutputs =>
                 "E_CACHE_RECOVERY: malformed restore outputs for "@,
@@ -671,6 +1217,127 @@ pub fn complete_recovery_cache(status: Option<&str>) -> (out: Option<&'static st
 pub struct RecoverySummary {
     changed: bool,
     warning_effect: bool,
+}
+
+/// 只借用原报告的字段和产物，不复制 JSON 或产物列表。
+pub struct RecoveryCacheObservation<'a, A> {
+    pub status: Option<&'a str>,
+    pub outcome: Option<&'a str>,
+    pub artifacts: &'a [A],
+}
+
+pub open spec fn recovery_cache_changed<A>(cache: RecoveryCacheObservation<A>) -> bool {
+    recovery_text(cache.status) == Some("discarded"@)
+        || recovery_text(cache.status) == Some("source-times-refreshed"@)
+}
+
+pub open spec fn recovery_cache_warns<A>(cache: RecoveryCacheObservation<A>,
+    model: spec_fn(A) -> Option<Seq<char>>) -> bool
+{
+    recovery_text(cache.outcome) == Some("failure"@)
+        || exists|index: int| 0 <= index < cache.artifacts.len()
+            && #[trigger] model(cache.artifacts@[index]) == Some("removed"@)
+}
+
+proof fn recovery_any_prefix_step<A>(items: Seq<A>, index: int, effect: spec_fn(A) -> bool)
+    requires 0 <= index < items.len(),
+    ensures (exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]))
+        == ((exists|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]))
+            || effect(items[index])),
+{
+    if effect(items[index]) {
+        assert(exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]));
+    }
+    if exists|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]) {
+        let prior = choose|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]);
+        assert(effect(items[prior]));
+        assert(exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]));
+    }
+    if exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]) {
+        let prior = choose|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]);
+        if prior < index {
+            assert(exists|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]));
+        } else {
+            assert(prior == index);
+        }
+    }
+}
+
+fn summarize_recovery_artifacts<'a, A, R>(
+    summary: RecoverySummary, artifacts: &'a [A], read: &R,
+    #[cfg(verus_keep_ghost)] Ghost(model): Ghost<spec_fn(A) -> Option<Seq<char>>>,
+) -> (out: RecoverySummary)
+    where R: Fn(&'a A) -> Option<&'a str>,
+    requires forall|artifact: &'a A| read.requires((artifact,)),
+        forall|artifact: &'a A, status: Option<&'a str>|
+            read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+    ensures out.changed() == summary.changed(),
+        out.warning_effect() == (summary.warning_effect()
+            || exists|index: int| 0 <= index < artifacts.len()
+                && #[trigger] model(artifacts@[index]) == Some("removed"@)),
+{
+    let mut out = summary;
+    let mut index = 0usize;
+    while index < artifacts.len()
+        invariant index <= artifacts.len(), out.changed() == summary.changed(),
+            out.warning_effect() == (summary.warning_effect()
+                || exists|prior: int| 0 <= prior < index
+                    && #[trigger] model(artifacts@[prior]) == Some("removed"@)),
+            forall|artifact: &'a A| read.requires((artifact,)),
+            forall|artifact: &'a A, status: Option<&'a str>|
+                read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+        decreases artifacts.len() - index,
+    {
+        let status = read(&artifacts[index]);
+        out = out.observe_artifact(status);
+        index += 1;
+    }
+    out
+}
+
+/// 完整遍历缓存及其原产物；摘要恰好反映全部条目的恢复效果。
+pub fn summarize_recovery<'a, A, R>(
+    caches: &[RecoveryCacheObservation<'a, A>], read: R,
+    #[cfg(verus_keep_ghost)] Ghost(model): Ghost<spec_fn(A) -> Option<Seq<char>>>,
+) -> (out: RecoverySummary)
+    where R: Fn(&'a A) -> Option<&'a str>,
+    requires forall|artifact: &'a A| read.requires((artifact,)),
+        forall|artifact: &'a A, status: Option<&'a str>|
+            read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+    ensures out.changed() == (exists|index: int| 0 <= index < caches.len()
+            && #[trigger] recovery_cache_changed(caches@[index])),
+        out.warning_effect() == (exists|index: int| 0 <= index < caches.len()
+            && #[trigger] recovery_cache_warns(caches@[index], model)),
+{
+    let mut summary = RecoverySummary::new();
+    let mut index = 0usize;
+    while index < caches.len()
+        invariant index <= caches.len(),
+            summary.changed() == (exists|prior: int| 0 <= prior < index
+                && #[trigger] recovery_cache_changed(caches@[prior])),
+            summary.warning_effect() == (exists|prior: int| 0 <= prior < index
+                && #[trigger] recovery_cache_warns(caches@[prior], model)),
+            forall|artifact: &'a A| read.requires((artifact,)),
+            forall|artifact: &'a A, status: Option<&'a str>|
+                read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+        decreases caches.len() - index,
+    {
+        let cache = &caches[index];
+        let observed = summary.observe_cache(cache.status, cache.outcome);
+        #[cfg(verus_keep_ghost)]
+        let next = summarize_recovery_artifacts(observed, cache.artifacts, &read, Ghost(model));
+        #[cfg(not(verus_keep_ghost))]
+        let next = summarize_recovery_artifacts(observed, cache.artifacts, &read);
+        summary = next;
+        proof {
+            recovery_any_prefix_step(caches@, index as int,
+                |cache: RecoveryCacheObservation<A>| recovery_cache_changed(cache));
+            recovery_any_prefix_step(caches@, index as int,
+                |cache: RecoveryCacheObservation<A>| recovery_cache_warns(cache, model));
+        }
+        index += 1;
+    }
+    summary
 }
 
 impl RecoverySummary {
@@ -916,19 +1583,13 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, io::Write, path::Path};
 
 #[cfg(not(verus_keep_ghost))]
-fn restore_status(cache: &Value, restore: &Value) -> &'static str {
-    let prefixes: Vec<_> = cache["restore_keys"]
+fn restore_prefixes(cache: &Value) -> Vec<Option<&str>> {
+    cache["restore_keys"]
         .as_array()
         .into_iter()
         .flatten()
         .map(Value::as_str)
-        .collect();
-    super::verified_planner::restore_status(
-        restore["outcome"].as_str(),
-        cache["key"].as_str(),
-        restore["outputs"]["cache-matched-key"].as_str(),
-        &prefixes,
-    )
+        .collect()
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -1043,28 +1704,26 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
     let result = (|| -> Result<(), String> {
         let config: super::Config =
             decode(&fs::read(no_symlink_parents(&root, config_path)?).map_err(|e| e.to_string())?)?;
-        if !config.recover_failed_restores {
-            return Err("E_CACHE_RECOVERY: recovery is not registered".into());
-        }
-        let consumer = plan["consumer"]
-            .as_str()
-            .ok_or("E_CACHE_RECOVERY: consumer missing")?;
-        let expected = super::prepare_with_inputs(&root, &config, consumer, Some(&plan["inputs"]))?;
-        // Recovery may use an installed binary after a bootstrap-produced plan.
-        // Revalidate registration, host and selected observations while retaining
-        // the original planner identity. Seal checks the current executable.
-        let mut expected_binding = expected;
-        expected_binding["planner"] = plan["planner"].clone();
-        if expected_binding != plan {
-            return Err(
-                "E_CACHE_RECOVERY: original plan differs from current registration or host".into(),
-            );
-        }
-        super::attempt::validate(&root, &plan, false)?;
-        let steps: Value = decode(steps_raw.as_bytes())?;
-        if !steps.is_object() {
-            return Err("E_CACHE_RECOVERY: native step observations missing".into());
-        }
+        let steps: Value = preflight_recovery(
+            (),
+            config.recover_failed_restores,
+            plan["consumer"].as_str(),
+            |(), consumer| {
+                let prepared =
+                    super::prepare_with_inputs(&root, &config, consumer, Some(&plan["inputs"]))
+                        .map(|mut expected| {
+                            // Recovery keeps the original planner identity; seal checks
+                            // the current executable after the actual producer runs.
+                            expected["planner"] = plan["planner"].clone();
+                            expected != plan
+                        });
+                ((), prepared)
+            },
+            |()| ((), super::attempt::validate(&root, &plan, false)),
+            |()| ((), decode(steps_raw.as_bytes())),
+            |(), steps: &Value| ((), steps.is_object()),
+        )
+        .1?;
         let caches: BTreeMap<_, _> = plan["caches"]
             .as_object()
             .ok_or("E_CACHE_RECOVERY: caches missing")?
@@ -1074,51 +1733,34 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         let mut refreshes = vec![];
         for (index, (id, cache)) in caches.into_iter().enumerate() {
             let restore = &steps[format!("cache_{index}_restore")];
-            let reason = restore_status(cache, restore);
+            let prefixes = restore_prefixes(cache);
             let outputs = &restore["outputs"];
             let outputs_is_null_or_object = outputs.is_null() || outputs.is_object();
             let matched_key_is_null_or_string = outputs
                 .get("cache-matched-key")
                 .is_none_or(|key| key.is_null() || key.is_string());
-            let outcome = restore["outcome"].as_str();
-            let base_action = super::verified_planner::recovery_action(
-                outcome,
-                reason,
+            let (_, reason, decision) = decide_recovery_cache(
+                (),
+                restore["outcome"].as_str(),
+                cache["key"].as_str(),
+                outputs["cache-matched-key"].as_str(),
+                &prefixes,
                 config.recover_unconfirmed_restores,
                 outputs_is_null_or_object,
                 matched_key_is_null_or_string,
-                None,
-                None,
-                false,
-            );
-            let base_action =
-                base_action.map_err(|error| recovery_decision_error(&error, id).concat())?;
-            let content_method = cache["content_verification"].as_str();
-            let mut verification = None;
-            if base_action.requires_content_verification(content_method, reason) {
-                let verified = super::content::verify(
-                    &root,
-                    &directory,
-                    id,
-                    cache,
-                    restore["outputs"]["cache-matched-key"].as_str().unwrap(),
-                )?;
-                verification = Some(verified);
-            }
-            let content_status = verification
-                .as_ref()
-                .and_then(|value| value["status"].as_str());
-            let action = super::verified_planner::recovery_action(
-                outcome,
-                reason,
-                config.recover_unconfirmed_restores,
-                outputs_is_null_or_object,
-                matched_key_is_null_or_string,
-                content_method,
-                content_status,
+                cache["content_verification"].as_str(),
                 config.caches[id].refresh_sources,
+                id,
+                |(), key| {
+                    (
+                        (),
+                        super::content::verify(&root, &directory, id, cache, key),
+                    )
+                },
+                |(), value: &Value| ((), value["status"].as_str()),
+                |(), parts| ((), parts.concat()),
             );
-            let action = action.map_err(|error| recovery_decision_error(&error, id).concat())?;
+            let (action, verification) = decision?;
             let discard = action.discards_outputs();
             report["caches"][id] = json!({"restore":restore,"reason":reason,"status":action.initial_status(),"artifacts":[]});
             if let Some(verification) = verification {
@@ -1138,28 +1780,34 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 }
                 continue;
             }
-            let artifacts: BTreeMap<_, _> = cache["artifacts"]
-                .as_object()
-                .ok_or("E_CACHE_RECOVERY: artifacts missing")?
-                .iter()
-                .collect();
-            for (_, artifact) in artifacts {
-                let path = artifact["path"]
-                    .as_str()
-                    .ok_or("E_CACHE_RECOVERY: artifact path")?;
-                let target = super::path(&root, path)?;
-                if !target.starts_with(&root) {
-                    return Err(
-                        "E_CACHE_RECOVERY: only registered host artifacts may be discarded".into(),
-                    );
-                }
-                let position = report["caches"][id]["artifacts"].as_array().unwrap().len();
-                report["caches"][id]["artifacts"]
-                    .as_array_mut()
-                    .unwrap()
-                    .push(json!({"path":path,"status":"pending"}));
-                paths.push((id.clone(), position, path.to_owned()));
-            }
+            let artifacts: Option<Vec<_>> = cache["artifacts"].as_object().map(|artifacts| {
+                artifacts
+                    .values()
+                    .map(|artifact| artifact["path"].as_str())
+                    .collect()
+            });
+            let ((updated, selected), collected) = collect_recovery_artifacts(
+                (std::mem::take(&mut report), std::mem::take(&mut paths)),
+                artifacts.as_deref(),
+                &|state, path| {
+                    let valid = super::path(&root, path).map(|target| target.starts_with(&root));
+                    (state, valid)
+                },
+                &|(mut report, mut paths): (Value, Vec<(String, usize, String)>),
+                  position,
+                  path,
+                  status| {
+                    report["caches"][id]["artifacts"]
+                        .as_array_mut()
+                        .unwrap()
+                        .push(json!({"path":path,"status":status}));
+                    paths.push((id.clone(), position, path.to_owned()));
+                    (report, paths)
+                },
+            );
+            report = updated;
+            paths = selected;
+            collected?;
         }
         // Validate the complete selected set before the first removal, and
         // publish the original plan/restore binding before touching any output.
@@ -1220,28 +1868,37 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
                 cache["status"] = json!(status);
             }
         }
-        for (id, refresh) in refreshes {
-            super::freshness::apply(
-                &root,
-                refresh,
-                &mut report["caches"][&id]["source_freshness"],
-            )?;
-            report["caches"][&id]["status"] = json!("source-times-refreshed");
-        }
+        let (updated, refreshed) = run_recovery_refreshes(
+            std::mem::take(&mut report),
+            refreshes,
+            &|mut report: Value, id: &String, refresh| {
+                let refreshed = super::freshness::apply(
+                    &root,
+                    refresh,
+                    &mut report["caches"][id]["source_freshness"],
+                );
+                (report, refreshed)
+            },
+            &|mut report: Value, id: &String, status| {
+                report["caches"][id]["status"] = json!(status);
+                report
+            },
+        );
+        report = updated;
+        refreshed?;
         Ok(())
     })();
-    let summary = report["caches"].as_object().unwrap().values().fold(
-        RecoverySummary::new(),
-        |summary, cache| {
-            cache["artifacts"].as_array().unwrap().iter().fold(
-                summary.observe_cache(
-                    cache["status"].as_str(),
-                    cache["restore"]["outcome"].as_str(),
-                ),
-                |summary, artifact| summary.observe_artifact(artifact["status"].as_str()),
-            )
-        },
-    );
+    let caches: Vec<_> = report["caches"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|cache| RecoveryCacheObservation {
+            status: cache["status"].as_str(),
+            outcome: cache["restore"]["outcome"].as_str(),
+            artifacts: cache["artifacts"].as_array().unwrap().as_slice(),
+        })
+        .collect();
+    let summary = summarize_recovery(&caches, |artifact| artifact["status"].as_str());
     report["status"] = json!(summary.status(result.is_err()));
     if let Err(error) = &result {
         report["error"] = json!(error);
