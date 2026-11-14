@@ -138,9 +138,10 @@ impl Staged {
         let selected = root.join(".chrono-harness/bin/cargo");
         fs::rename(&selected, parent.join("previous-owner")).unwrap();
         fs::copy(&staged, &selected).unwrap();
-        let mut layout: Value =
-            serde_json::from_slice(include_bytes!("../../../.chrono-harness/ci/fixtures/owner-publication.json"))
-                .unwrap();
+        let mut layout: Value = serde_json::from_slice(include_bytes!(
+            "../../../.chrono-harness/ci/fixtures/owner-publication.json"
+        ))
+        .unwrap();
         let installed = serde_json::to_value(owner::file_binding(&selected).unwrap()).unwrap();
         layout["intent"]["stage"] = self.report["owner_stage"].clone();
         layout["intent"]["replacement"] = installed.clone();
