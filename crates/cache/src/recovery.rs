@@ -718,6 +718,139 @@ impl RecoverySummary {
     { planner::same_attempt("recovered", status) && self.warning_effect }
 }
 
+pub open spec fn recovery_failure(result: Result<(), String>) -> Option<String> {
+    match result { Ok(()) => None, Err(error) => Some(error) }
+}
+
+fn original_recovery_failure(result: Result<(), String>) -> (out: Option<String>)
+    ensures out == recovery_failure(result),
+{
+    match result { Ok(()) => None, Err(error) => Some(error) }
+}
+
+pub open spec fn published_recovery_result<S, O, T, E, W, J, G>(
+    state: S, recovery: Result<(), String>, original: O, warn: bool,
+    warning: W, encode: J, recovery_error: &G, out: (S, Result<T, E>),
+) -> bool
+    where W: FnOnce(S, &O) -> S,
+        J: FnOnce(S, O) -> (S, Result<T, E>), G: Fn(String, O) -> E,
+{
+    match recovery {
+        Err(error) => out.0 == state && exists|rendered: E|
+            #[trigger] recovery_error.ensures((error, original), rendered)
+                && out.1 == Err::<T, E>(rendered),
+        Ok(()) => exists|ready: S|
+            (if warn { warning.ensures((state, &original), ready) }
+                else { ready == state })
+            && #[trigger] encode.ensures((ready, original), out),
+    }
+}
+
+fn finish_published_recovery<S, O, T, E, W, J, G>(
+    state: S, recovery: Result<(), String>, original: O, warn: bool,
+    warning: W, encode: J, recovery_error: &G,
+) -> (out: (S, Result<T, E>))
+    where W: FnOnce(S, &O) -> S,
+        J: FnOnce(S, O) -> (S, Result<T, E>), G: Fn(String, O) -> E,
+    requires forall|state: S, original: &O| warning.requires((state, original)),
+        forall|state: S, original: O| encode.requires((state, original)),
+        forall|error: String, original: O| recovery_error.requires((error, original)),
+    ensures published_recovery_result(state, recovery, original, warn,
+        warning, encode, recovery_error, out),
+{
+    match recovery {
+        Err(error) => {
+            let rendered = recovery_error(error, original);
+            assert(recovery_error.ensures((error, original), rendered));
+            let out = (state, Err(rendered));
+            assert(published_recovery_result(state, recovery, original, warn,
+                warning, encode, recovery_error, out));
+            out
+        },
+        Ok(()) => {
+            let ready = if warn { warning(state, &original) } else { state };
+            assert(if warn { warning.ensures((state, &original), ready) } else { ready == state });
+            let out = encode(ready, original);
+            assert(encode.ensures((ready, original), out));
+            assert(published_recovery_result(state, recovery, original, warn,
+                warning, encode, recovery_error, out));
+            out
+        },
+    }
+}
+
+pub open spec fn recovery_finalization_result<S, O, T, E, R, P, W, J, F, G>(
+    source: S, recovery: Result<(), String>, warn: bool,
+    retain: R, pointer: P, warning: W, encode: J,
+    publication_error: &F, recovery_error: &G, out: (S, Result<T, E>),
+) -> bool
+    where R: FnOnce(S) -> (S, Result<O, String>),
+        P: FnOnce(S, &O) -> (S, Result<(), String>), W: FnOnce(S, &O) -> S,
+        J: FnOnce(S, O) -> (S, Result<T, E>),
+        F: Fn(Option<String>, String) -> E, G: Fn(String, O) -> E,
+{
+    exists|retained: S, observed: Result<O, String>|
+        #[trigger] retain.ensures((source,), (retained, observed))
+        && match observed {
+            Err(error) => out.0 == retained && exists|rendered: E|
+                #[trigger] publication_error.ensures((recovery_failure(recovery), error), rendered)
+                    && out.1 == Err::<T, E>(rendered),
+            Ok(original) => exists|published: S, publication: Result<(), String>|
+                #[trigger] pointer.ensures((retained, &original), (published, publication))
+                && match publication {
+                    Err(error) => out.0 == published && exists|rendered: E|
+                        #[trigger] publication_error.ensures((recovery_failure(recovery), error), rendered)
+                            && out.1 == Err::<T, E>(rendered),
+                    Ok(()) => published_recovery_result(published, recovery, original,
+                        warn, warning, encode, recovery_error, out),
+                },
+        }
+}
+
+/// 保留原报告后发布指针；原恢复失败不报警或编码成功结果。
+pub fn finalize_recovery<S, O, T, E, R, P, W, J, F, G>(
+    source: S, recovery: Result<(), String>, warn: bool,
+    retain: R, pointer: P, warning: W, encode: J,
+    publication_error: &F, recovery_error: &G,
+) -> (out: (S, Result<T, E>))
+    where R: FnOnce(S) -> (S, Result<O, String>),
+        P: FnOnce(S, &O) -> (S, Result<(), String>), W: FnOnce(S, &O) -> S,
+        J: FnOnce(S, O) -> (S, Result<T, E>),
+        F: Fn(Option<String>, String) -> E, G: Fn(String, O) -> E,
+    requires retain.requires((source,)),
+        forall|state: S, original: &O| pointer.requires((state, original)),
+        forall|state: S, original: &O| warning.requires((state, original)),
+        forall|state: S, original: O| encode.requires((state, original)),
+        forall|recovery: Option<String>, error: String| publication_error.requires((recovery, error)),
+        forall|error: String, original: O| recovery_error.requires((error, original)),
+    ensures recovery_finalization_result(source, recovery, warn, retain, pointer,
+        warning, encode, publication_error, recovery_error, out),
+{
+    let (state, retained_result) = retain(source);
+    let ghost retained = state;
+    let ghost observed = retained_result;
+    assert(retain.ensures((source,), (retained, observed)));
+    let original = match retained_result {
+        Err(error) => {
+            let failed = original_recovery_failure(recovery);
+            return (state, Err(publication_error(failed, error)));
+        },
+        Ok(original) => original,
+    };
+    let (state, publication) = pointer(state, &original);
+    let ghost published = state;
+    let ghost published_result = publication;
+    assert(pointer.ensures((retained, &original), (published, published_result)));
+    match publication {
+        Err(error) => {
+            let failed = original_recovery_failure(recovery);
+            (state, Err(publication_error(failed, error)))
+        },
+        Ok(()) => finish_published_recovery(state, recovery, original,
+            warn, warning, encode, recovery_error),
+    }
+}
+
 pub struct RecoveryReplay<'a> {
     pub schema: Option<&'a str>,
     pub plan_fields: Option<usize>,
@@ -1114,33 +1247,40 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         report["error"] = json!(error);
     }
     let raw = serde_json::to_vec(&report).map_err(|e| e.to_string())?;
-    let publication = (|| {
-        let original = super::retain_original(&root, &directory, "cache-recovery", &raw)?;
-        publish_once(
-            &root,
-            &output,
-            &serde_json::to_vec(&original).map_err(|e| e.to_string())?,
-        )?;
-        Ok::<_, String>(original)
-    })();
-    let original = publication.map_err(|publication| {
-        format!(
-            "E_CACHE_RECOVERY: recovery {:?}; publication {publication}",
-            result.as_ref().err()
-        )
-    })?;
-    if let Err(error) = result {
-        return Err(format!("{error}; original {}", original.path));
-    }
-    if summary.warning(report["status"].as_str()) {
-        eprintln!(
-            "W_CACHE_RESTORE_RECOVERED: unusable restore outputs cleared before registered build; original {}",
-            original.path
-        );
-    }
-    Ok(
-        serde_json::to_string(&json!({"report":original,"observation":report,"replayed":false}))
-            .map_err(|e| e.to_string())?
-            + "\n",
+    let warn = summary.warning(report["status"].as_str());
+    finalize_recovery(
+        report,
+        result,
+        warn,
+        |report| {
+            let original = super::retain_original(&root, &directory, "cache-recovery", &raw);
+            (report, original)
+        },
+        |report, original| {
+            let published = serde_json::to_vec(original)
+                .map_err(|error| error.to_string())
+                .and_then(|bytes| publish_once(&root, &output, &bytes));
+            (report, published)
+        },
+        |report, original| {
+            eprintln!(
+                "W_CACHE_RESTORE_RECOVERED: unusable restore outputs cleared before registered build; original {}",
+                original.path
+            );
+            report
+        },
+        |report, original| {
+            let encoded = serde_json::to_string(
+                &json!({"report":original,"observation":report,"replayed":false}),
+            )
+            .map(|text| text + "\n")
+            .map_err(|error| error.to_string());
+            (report, encoded)
+        },
+        &|recovery, publication| {
+            format!("E_CACHE_RECOVERY: recovery {recovery:?}; publication {publication}")
+        },
+        &|error, original: prepared::Original| format!("{error}; original {}", original.path),
     )
+    .1
 }
