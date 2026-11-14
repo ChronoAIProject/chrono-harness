@@ -6,6 +6,12 @@
 不新增缓存索引或清空整个 target。原严格参数、证明资格和失败原件保留不变；
 工具升级后的实际编译、证明和暖缓存消费仍须分别验收。
 
+包含 nested-item 支持的当前工具已通过正式 core 构建，但完整 runner 和
+owner-publication 独立预期根仍触发 `VerusErasureCtxt` 内部错误。Serde 派生的
+实际失败与上游 [#1923](https://github.com/verus-lang/verus/issues/1923)、
+[#2488](https://github.com/verus-lang/verus/issues/2488) 描述一致；nested-item 支持
+没有解决该边界。完整证明保持失败，继续保留原严格参数、派生实现和原始结果。
+
 ## 严格根的实际类型与完整库存
 
 runner 的状态、scope、证明回执、Cargo 观察及源码库存类型，在普通编译和严格
