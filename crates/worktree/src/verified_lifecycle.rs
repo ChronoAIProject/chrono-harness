@@ -44,6 +44,19 @@ pub use automatic_verification::inventory::append_action_index;
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::service::maintenance_idle_exit;
 
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::producer::rolling::{rolling_disposal, rolling_keep};
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::producer::{
+    ProducerNamespaceMember, producer_namespace_member, producer_namespace_retired,
+};
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::producer::rolling::{rolling_disposal, rolling_keep};
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::producer::{
+    ProducerNamespaceMember, producer_namespace_member, producer_namespace_retired,
+};
+
 verus! {
 
 /// An address left by failed admission has no checkout policy consumer.
@@ -51,35 +64,6 @@ pub fn enrolled_policy_required(entries: usize) -> (required: bool)
     ensures required <==> entries > 0,
 {
     entries > 0
-}
-
-pub enum ProducerNamespaceMember { Owner, Records, Metadata, Disposals, Unknown }
-
-pub fn producer_namespace_member(name: &str) -> (member: ProducerNamespaceMember)
-    ensures match member {
-        ProducerNamespaceMember::Owner => name@ == "objects.json"@,
-        ProducerNamespaceMember::Records => name@ == "producer-records"@,
-        ProducerNamespaceMember::Metadata => name@ == "rolling-metadata"@,
-        ProducerNamespaceMember::Disposals => name@ == "rolling-disposals"@,
-        ProducerNamespaceMember::Unknown => name@ != "objects.json"@
-            && name@ != "producer-records"@ && name@ != "rolling-metadata"@
-            && name@ != "rolling-disposals"@,
-    },
-{
-    if equal_text(name, "objects.json") { ProducerNamespaceMember::Owner }
-    else if equal_text(name, "producer-records") { ProducerNamespaceMember::Records }
-    else if equal_text(name, "rolling-metadata") { ProducerNamespaceMember::Metadata }
-    else if equal_text(name, "rolling-disposals") { ProducerNamespaceMember::Disposals }
-    else { ProducerNamespaceMember::Unknown }
-}
-
-/// An enclosing fixture may retire only after the producer has retired every
-/// object and metadata handoff, with no unowned member in its namespace.
-pub fn producer_namespace_retired(objects_empty: bool, metadata_empty: bool,
-    members_known: bool) -> (retired: bool)
-    ensures retired == (objects_empty && metadata_empty && members_known),
-{
-    objects_empty && metadata_empty && members_known
 }
 
 #[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, PartialEq, Eq, serde::Deserialize))]
@@ -163,22 +147,6 @@ pub fn retain_evidence(disposal_authorized: bool, evidence_present: bool) -> (re
     ensures retain <==> (!disposal_authorized && evidence_present),
 {
     !disposal_authorized && evidence_present
-}
-
-pub fn rolling_disposal(owned: bool, expired: bool, released: bool, exclusive: bool) -> (allowed: bool)
-    ensures allowed <==> (owned && expired && released && exclusive),
-{
-    owned && expired && released && exclusive
-}
-
-pub fn rolling_keep(finished: bool, failed: bool, diagnostics: bool,
-    success: u64, failure: u64, interrupted: u64) -> (seconds: u64)
-    ensures
-        !finished ==> seconds == interrupted,
-        finished && (failed || diagnostics) ==> seconds == failure,
-        finished && !failed && !diagnostics ==> seconds == success,
-{
-    if !finished { interrupted } else if failed || diagnostics { failure } else { success }
 }
 
 pub fn accepts_enrollment_branch(kind: &str, registered: bool) -> (accepted: bool)

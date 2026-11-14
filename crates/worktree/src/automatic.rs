@@ -62,8 +62,12 @@ pub(crate) mod inventory;
 mod migration;
 #[cfg(not(verus_keep_ghost))]
 mod owner_deployment;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/producer.rs"]
+#[rustfmt::skip]
+pub(crate) mod producer;
 #[cfg(not(verus_keep_ghost))]
-mod producer;
+pub(crate) mod producer;
 #[cfg(verus_keep_ghost)]
 #[path = "automatic/service.rs"]
 pub(crate) mod service;
