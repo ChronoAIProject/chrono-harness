@@ -314,8 +314,6 @@ fn render_selector_path_error(error: crate::verified_git_binding::SelectorPathEr
 
 verus! {
 
-broadcast use crate::json_value_specs::str_lookup;
-
 #[doc(hidden)]
 pub struct JsonSelectorRows<'a>(pub &'a [Value]);
 
@@ -341,10 +339,10 @@ impl<'a> crate::verified_git_binding::SelectorRows<'a> for JsonSelectorRows<'a> 
         let row = &self.0[index];
         crate::verified_git_binding::SelectorRow {
             fields: row.as_object().map(|map| map.len()),
-            digest: row["sha256"].as_str(),
-            path_present: row.get("path").is_some(),
-            path: row["path"].as_str(),
-            registry_path_present: row.get("registry_path").is_some(),
+            digest: crate::json_fields::field_text(row, "sha256"),
+            path_present: crate::json_fields::field(row, "path").is_some(),
+            path: crate::json_fields::field_text(row, "path"),
+            registry_path_present: crate::json_fields::field(row, "registry_path").is_some(),
         }
     }
 }
@@ -360,7 +358,7 @@ impl<'a> crate::verified_git_binding::SelectorRegistryRows<'a> for JsonSelectorR
     }
 
     fn registry_path(&self, index: usize) -> Option<&'a str> {
-        self.0[index]["registry_path"].as_str()
+        crate::json_fields::field_text(&self.0[index], "registry_path")
     }
 }
 
@@ -398,7 +396,7 @@ impl crate::verified_git_binding::GitTargetRows for JsonTargetRows<'_> {
             GitTargetField::Digest => "sha256",
             GitTargetField::Path => "path",
         };
-        self.0[index][key].as_str()
+        crate::json_fields::field_text(&self.0[index], key)
     }
 }
 

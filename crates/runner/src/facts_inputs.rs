@@ -52,8 +52,6 @@ pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> 
 
 verus! {
 
-broadcast use crate::json_value_specs::str_lookup;
-
 #[doc(hidden)]
 pub struct JsonGuardReferences<'a>(pub &'a [Value]);
 
@@ -70,7 +68,7 @@ impl verified_git_binding::BindingReferenceRows for JsonGuardReferences<'_> {
         self.0.len()
     }
     fn id(&self, index: usize) -> Option<&str> {
-        self.0[index]["id"].as_str()
+        crate::json_fields::field_text(&self.0[index], "id")
     }
 }
 

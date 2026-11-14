@@ -1,8 +1,13 @@
 //! 工具合同的严格使用实验；不提供 runner 或 CI generation 的证明资格。
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
+use vstd::json_value_specs;
 use vstd::json_value_specs as json;
 use vstd::prelude::*;
+
+// 与生产适配器同源；仓内分支不进入工具库的受信边界。
+#[path = "../../../crates/runner/src/json_fields.rs"]
+mod json_fields;
 
 verus! {
 
@@ -16,16 +21,14 @@ pub fn observe_text(value: &Value) -> (out: Option<&str>)
 pub fn observe_field<'a>(value: &'a Value, key: &str) -> (out: Option<&'a Value>)
     ensures out == json::field(value, key@),
 {
-    proof { json::str_lookup(value, key); }
-    value.get(key)
+    json_fields::field(value, key)
 }
 
-// 实际调用泛型 Index，而不是只导入未用的代理。
+// 保留原 Index 的完整文本观察，由生产共用的公开对象查询路径实现。
 pub fn observe_index<'a>(value: &'a Value, key: &str) -> (out: Option<&'a str>)
     ensures out == json::field_text(value, key@),
 {
-    proof { json::str_lookup(value, key); }
-    value[key].as_str()
+    json_fields::field_text(value, key)
 }
 
 pub fn observe_object_size(value: &Value) -> (out: Option<usize>)

@@ -305,8 +305,6 @@ fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
 
 verus! {
 
-broadcast use crate::json_value_specs::str_lookup;
-
 #[doc(hidden)]
 pub struct JsonBindingReferences<'a>(pub &'a [Value]);
 
@@ -324,7 +322,7 @@ impl verified_git_binding::BindingReferenceRows for JsonBindingReferences<'_> {
     }
 
     fn id(&self, index: usize) -> Option<&str> {
-        self.0[index]["id"].as_str()
+        crate::json_fields::field_text(&self.0[index], "id")
     }
 }
 

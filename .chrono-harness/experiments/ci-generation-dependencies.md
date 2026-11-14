@@ -360,3 +360,69 @@ build 必须原命令及 use 零退出、整 crate 验证成功，并取得实�
 runner 当前严格根仍包含本地接口假设，实际改为消费新组件及 typed compiler-input qualification 的差距保留；完整仓内 adapters／driver／独立预期、CI generation 四个生产投影与 prepare／effect／recovery、实际编译绑定、正式 DELTA、原生 integration／dev 和落地仍未完成，不把本次准备当作这些义务已满足。后续源码和资格迁移仍归原所有者，正式 DELTA 仍走既有 `.chrono-harness/bin/chrono-harness check`，不能用本轮静态观察替代。
 
 必要保留沿 X／Y 的 evidence-retain／check-original 所有者：Y 原失败、恢复前根副本及当前候选供工具合同工程、runner 资格工程、调用方和 mandatory review 消费，2026-11-21 复核用途；调试／验收义务未完成不删除。使用方结束、必要证据保全且无活跃使用方后，由调用方走已有生命周期释放。本轮不 finish／maintain／migrate，不增加保留生产者、清理器、缓存或中心化总账。成功构建、证明、实际消费、CI 与总生命周期成本仍未知；不据少量静态读取估算收益。Z 自有工具命令均同步取得终态，无后台任务或委派；终态交接及交付生命周期仍由调用方负责。
+
+## AA：名称绑定修正后的真实组件构建（后继阻断）
+
+在固定候选 `035e27d8ba06ee69455a6c87d9d72dbf3da3a540`／tree `2ff8fe4e18fabab3abc9fe8c959dee47cabc3db9` 上，复用原受保护入口，仅执行一次 `investigate.verus-tool-contract.build`：`use-31874-1794631113734805000-0`。use 退出 2，原 Verus 退出 1；原报告、intent／launch／result 和双流均已核对，42 项唯一进程全部 joined。原 argv、整 crate、std／alloc、两线程、2,400 秒和每流 67,108,864 字节上限不变；没有重复解压、打补丁、下载或修改源码／登记／工具。详细身份、原件路径和有限保留用途见 runner attempt `6af7e5350400a6a725a20142/attempt-1` 的 `observations.json`，原报告由协调宿主的 `.chrono-harness/state/worktrees/use-31874-1794631113734805000-0.json` 保管。
+
+原 stdout 为 403 字节，报告 `success:false`、`encountered-error:true`、`encountered-vir-error:true`，没有报告 verified／errors 数量，不能沿用旧运行的 0。原 stderr 为 852 字节：唯一合同源第 25 行 `ExJsonIndex` 的 `external_trait_specification trait bound mismatch`，真实 trait 比代理多出 `serde_json::value::index::private::Sealed` bound。本次未再报告 Z 所修的名称／宏解析错误，但没有取得完整证明或编译成功。固定 serde_json 1.0.151 的实际 dep-info 所指 `src/value/index.rs:37` 确为 `pub trait Index: private::Sealed`，第 135—140 行在私有模块定义 sealed 合同；这是当前错误的源码依据，不是另一个已验证修法。
+
+实际 managed PATH 与报告有效值的摘要匹配，首个可解析 rustup 是既有安装；intent／launch／result／报告的程序、参数与环境绑定一致。原 stdout 确认 Verus `f8e17045c4ac17a02e566b8997070f2eecc255be`、Rust `1.95.0-aarch64-apple-darwin`。当前合同、根、备份、归档、依赖及旧 rlib／VIR 摘要未变。新增 `libvstd.rlib.d` 为 41,485 字节，SHA-256 `321872a749c9008d810b629eeff133223159f5499d285af2d232006b448a0919`；其 105 条源码校验和共覆盖 1,428,366 字节，均与当前文件相符。它在 VIR 失败前已产生，不能赋予旧 rlib／VIR 新成功资格，也不构成完整编译输入资格。
+
+由于 build 前置失败，没有派发 consume 或 reject；两者的源码、全部断言、预算、线程、整 crate 和严格 flags 原样保留。这里不是 `repository_assumption::assume(false)` 的严格拒绝结果，不能生成成功 ProofAdmission。下一修正归唯一 JSON 外部合同及工具源码准备的现有所有者：核对固定 Verus 对 sealed 外部 trait 的受支持表达，使真实泛型 `Value::get`／`Index` 合同与实际 supertrait 一致；私有 bound 不能仅靠补一个不可访问路径认定修好。保留同源合同、真实适配器与独立预期，不增加仓内信任豁免；修正并固定新输入后仍沿 Z 的 build → consume → reject 前置关系验收。本 assignment 不修该新错误、不重跑。
+
+结束时原生 targeted status 退出 0，32 项进程全部 joined，目标 uses 为空、工作仍 active；`report_handoff_pending:true`／`recover-result-handoff`、既有 cleanup identity 提醒和 18 项 unknown creator 仍交调用方处理，不授予删除权。managed launch 至 result 原文件 mtime 窗口为 22.273100335 秒，含发布开销；双流共 1,255 字节，非 CPU、峰值内存或全流程成本。原失败、新 dep-info 和观察由既有 evidence-retain／check-original 所有者保留，供工具合同工程、runner 资格工程、调用方及 review 消费，2026-11-21 复核用途，调试／验收义务结束并保全必要证据后再由调用方释放。没有执行正式 DELTA、bootstrap、Git／GitHub、finish／maintain／migrate 或委派；完整编译输入资格、真实 warehouse 消费迁移、全部生产路径及适配器／独立预期证明、integration／dev 落地和完整 SPEC 仍未完成，全 goal 保持 active。
+
+## AB：现役字符串字段读取迁移准备（未执行）
+
+起点沿 AA 的固定 HEAD／tree；进入本节前本文为 80,914 字节、SHA-256 `0bdb33f9b7ec206a301c0c2b78c5195cc8f5e3f1eb8176e5639ef24abdff507d`，全部原字节保留为前缀。AB 只准备源码与必要登记，不执行任何受治理操作。AA 的 trait 匹配失败、未报告 verified／errors 数量、旧 rlib／VIR 无新成功资格及 105 条源码校验和 dep-info 的失败资格不变。
+
+**先定义行为承诺，再改实现。** 对任意 `&Value` 和任意完整 `&str` 键，字段读取必须返回原对象的同一成员借用；非对象（含数组）或缺键返回 None；存在但 null／错类型仍返回 Some，文本观察才返回 None。文本读取保留空串、Unicode、组合字符、NUL、换行和全文，不把前缀或归一化文字当身份。对象数量仍区分非对象与空对象；借用树键、集合 fresh／旧状态保持原合同。原 `consume.rs` 的所有函数签名、requires／ensures 和 assert、`json_adapters.rs` 全部原字节及非法 fixture 必须保留。新仓内分支必须在同源 Verus 中证明；上述承诺由原独立预期及严格正向根验收，本轮不手填成功。
+
+选择公开 `Value::as_object` → `Map<String, Value>::get<Q>` → `Value::as_str`，把共同分支放在 runner 的 `json_fields.rs`，生产适配器与严格正向根直接包含同一程序源。这个程序不进入 vstd，不使用 `external_body`。唯一外部合同仍在 `json_value_specs.rs`；Map::get 保留真实泛型 Q、`String: Borrow<Q>` 和 `Q: ?Sized + Ord + Eq + Hash`，只对现役 str 查询补完整成员模型，其他 Q 保持不透明。原 Value::get／Index 的通用声明不是产品要求；其必要的字符串行为由以上公开 API 覆盖，不能仅删除探针。尚未迁移的其他仓内 JSON 调用仍是整 crate 证明义务，不因本节取得资格。
+
+### 使用方、固定依据与最小表示
+
+| 实际使用链／当前输入 | 原 API → 候选 API／模型；现役可观察验收 |
+| --- | --- |
+| `facts_binding::declaration` → `unique_binding_reference` → `JsonBindingReferences::id`，工具／输入行及 `id` | `Value["id"].as_str` → `json_fields::field_text`，仍对应 `field_text(row, "id")`；缺失／歧义引用判断及原 reference 独立预期。 |
+| `facts_inputs::declaration` → `git_guard_reference` → `JsonGuardReferences::id`，guard 输入行 | 同上；保留 guard 唯一引用的原输入、全文和顺序，未把整个 declaration 宣称已证明。 |
+| `facts_configs::identity_targets` → `collect_identity_paths` → `JsonSelectorRows::row`，sha256／path／registry_path | 三项文本与存在性改用同源 helper；`as_object`／Map::len 仍给 fields。`field` 区分缺键和 Some(null)，原 selector 独立预期保留。 |
+| 同一 identity 链 → `validate_identity_registry_paths` → `SelectorRegistryRows::registry_path` | registry_path 的完整文本改用同源 helper；原 registry 路径预期不变。这是同一 struct 的第二个现役 trait 实现。 |
+| `facts_configs::resolve_target` → `select_git_target` → `JsonTargetRows::text`，digest／path | 两种动态选择键都交同源 helper，仍对应原 `text_at`／`field_text`；原 target 独立预期保留。 |
+| 捕获配置解析 → `select_captured_target` → `CapturedRegistry::contains_path` | 原 BTreeMap::contains_key、`string_map_borrow`、String 顺序合同全部不变；原不同存储／全文／前缀／组合 Unicode 预期不变。 |
+| `identity_targets` → `collect_identity_paths` → `SeenSelectorText::record` | 原 BTreeSet::insert、`str_set_membership`、fresh 与完整旧 set 状态证明不变；原重复／空串／先前成员预期不变。 |
+| 严格正向根 `observe_field`／`observe_index`、missing／present_nontext 等原边界 | 根以 `#[path]` 包含生产 `json_fields.rs`；field 返回原 Value 借用，原 Index 路径的文本投影仍是 field_text。所有原签名、前后条件、断言及树集合证明保持不变；不是把探针改成只看文本或仅空值。 |
+
+未发现仓内在研或现役调用者要求本合同按抽象 `I: serde_json::value::Index` 实现通用算法；被迁移的调用均为 str 字段键。**这不表示仓库没有其他 Value::get／Index 调用。**例如三个 facts 文件的外层解析仍有具体字符串、`&String` 和数组索引调用，保持原执行代码；它们及完整 warehouse 的证明／合同迁移仍未完成，不能把此处的消费者清单扩称全仓已封闭。`json_adapters.rs` 三个真实 Rust 边界用例及 Verus 驱动全部 10,272 字节不变；它们最终仍须由原未过滤操作验收。
+
+固定 serde_json 1.0.151：`value/index.rs:37,85,119,135,213` 分别给 sealed trait、str 对象查询、引用转交、私有定义和 Null 回退；`value/mod.rs:305,366,492` 给 get 转交、对象与文本变体；`map.rs:73—86` 给公开 get 的完整 Q 签名与原 map 转交。三文件摘要沿 S，AB 重核；str 对数组／非对象返回 None，因此新路径与现役字符串语义相同，保留全部成员借用而不构造替代 JSON。
+
+固定 Verus 的 `rust_to_vir_func.rs:982—1055` 比较完整泛型签名和 predicates，`2593—2626` 只过滤 Destruct、特定 SliceSealed、内置 Sealed；`attributes.rs:641—662` 没有任意私有 sealed bound 豁免参数。其缓存源码 blob 分别为 `e6f51ee2695116a2fe5abb2f93693f1fdf3ce414`／`6957de2bcd1ea161a2cde82acf647a58bbea24ff`，AB 按既有固定 `f8e17045c4ac17a02e566b8997070f2eecc255be` tree 表核字节相符。原 assume_specification 权威文档也要求包括泛型／bounds 的相同签名；因此不把 `Value::get::<&str>` 单态假设当支持路径，不补不可引用的私有路径，不推广内置 SliceIndex 特例，不用 extension／sealed 属性掩盖 mismatch。这里未证明未来工具普遍不可能支持该 trait。
+
+公开 Map::get 的所有 bounds 已有固定 vstd 负责：`std_specs/core.rs:90,122` 的 Hash／Borrow 和 `cmp.rs:31,116` 的 Eq／Ord，三个缓存源码均匹配上述固定 tree 的 blob；`std_specs/hash.rs:963—978` 已用同类 `Q: ?Sized`／Borrow／Hash 的泛型 get 合同。只补 serde_json 的外部成员观察，复用成熟 Rust API 与现有 Verus 泛型方式；没有编译器 fork、第三方依赖、新 trait 框架或仓内受信包装器。新 helper 仅含不可变查询及文本投影两个必要分支，供以上当前使用方共用，防止把逻辑复制进各适配器和探针。原对象／文本、Map::len 和全部树集合模型保留。
+
+### 候选身份、静态范围与后续验收
+
+**可见警告：产品源码与宿主 FILEMAP 方法登记同时变更。** FILEMAP 只增加 helper 的 program 行、runner 原整 crate 证明根及 runner／runner-tests／严格消费边，成本仍 unmeasured；未改政策判法、projects、原 argv、预算、线程、分类约束或成功条件。新 helper 通过 runner 根的私有模块及正向根的同源 path 消费，不加入 vstd patch。新增仓内逻辑没有 external_body／assume／admit、cfg 隐藏或证明范围豁免。
+
+| 文件 | before 字节／SHA-256 → after 字节／SHA-256 |
+| --- | --- |
+| `crates/runner/src/json_value_specs.rs` | 4,342／`3b96fe12eae53aa04968ff1fb37812ef56728c7b609b5333110f57b120f9709a` → 3,768／`49cbbc1615e471987d61a563b560a40d257ab5f07c30a88960ae06eafa594b33` |
+| `crates/runner/src/json_fields.rs` | 原不存在 → 806／`02037b054f66041341605c64c00e43d88a934a6c5a48b1afa7454c515ead97cc` |
+| `crates/runner/src/lib.rs` | 103,735／`b14086671d1b2aefaac7f574afd170a40e11b2c12d6bdefc40004ee685da804b` → 103,752／`fa77c66c80fdef155d251e8d63c6e37871a5beaf7e76561949e5c1873952dcb3` |
+| `crates/runner/src/facts_binding.rs` | 37,295／`51bc92fa661cf4125c687ef64aba9261a44c37fc4d94c6559cda88fafa46d92b` → 37,267／`928bf085f71266d05ad86d97007d01dfd02f2693e0d97d5ddc41ca852f364fe5` |
+| `crates/runner/src/facts_inputs.rs` | 4,556／`23d50449bc1c8e6b210cfe3015fd4d9968d2830e1e513e7bce1fe58ef6e2026c` → 4,528／`0a4a7475ffb3b2dea47bc76b86197d86bc3b3ffb813e2621a685695a814f164f` |
+| `crates/runner/src/facts_configs.rs` | 17,344／`9e2ced63be3c985da2ae684ed5810c69f12d69dd49b53eac6dd2f80e39c7fbfd` → 17,432／`134e3fef236db4387862fc47448682c9128678a2cca65346b77ee7410c4a608d` |
+| `.chrono-harness/experiments/verus-tool-contract/consume.rs` | 2,875／`19e99403b1d47774c3503b479db142c92e668668a584843a51272c722b1e8f67` → 3,026／`ac06b5ccd086fd99a62dd0a93ec2bf12b2450045b0f70e81b322bfaa7933b428` |
+| `.chrono-harness/FILEMAP.json` | 274,011／`e1e32c95a8343cde62e07fc9a6f98366fb05a67a005a22a6f5f2b9818773f056` → 274,471／`91042394c44a9ea1bba526a8b8fbd3c039e1c7cb70ba73179133d27132107a82` |
+
+本文自身最终字节与摘要由 AB result envelope 列出，避免自引用摘要。静态核对限于净改动反向重建原摘要、完整 AA 前缀、JSON 可读取、唯一 FILEMAP 行／原证明操作、真实模块路径、独立预期与 fixture／projects／组件根／备份／失败 dep-info 保持原摘要，以及上述固定源码对应。没有运行 Verus、Cargo、fmt、build／consume／reject、check、bootstrap 或生命周期操作，不能报告这些成功。Map::get 的新签名匹配、全部库求解、helper 与适配器证明、普通 Rust 擦除编译及实际消费者行为仍未知；不得用源码推断声称修复已验证。
+
+AA dep-info 原字节继续保留；它记录的唯一合同仍为旧 4,342 字节／`3b96fe12eae53aa04968ff1fb37812ef56728c7b609b5333110f57b120f9709a`，与本候选 3,768 字节／`49cbbc1615e471987d61a563b560a40d257ab5f07c30a88960ae06eafa594b33` 已不同。它只解释 AA 的旧输入，不能描述新候选，更不能取得成功资格。新 helper 不属于 vstd 源；后续 consume 自己的新 dep-info 必须绑定它。
+
+调用方先封存本次九文件输入及干净候选；下一 assignment 沿现役 `chrono-worktree use --operation <ID> --path <work_target>`，依次 build → consume → reject（ID 沿 Z）。无需 extract／patch／repair，不直接改 state。build 仍消费唯一合同、保留完整 vstd 根、固定 serde_json rlib／传递依赖、原工具／宏／Rust／Z3，保留 std／alloc、整 crate、两线程、2,400 秒及每流 67,108,864 字节。必须完整原生证明与编译成功、原程序及 use 零退出，并取得同次新 rlib／VIR／dep-info 与输入绑定后，才取得下游执行前提。旧发行产物及 AA dep-info 均不能填补该前提。
+
+consume 必须在同次新组件下，用原严格 flags 整 crate 证明并实际编译，dep-info 必须含本仓同一个 `json_fields.rs`；所有原后置条件、边界断言和状态承诺必须通过。任一 bound／名称／类型错误、返回关系或原断言失败均证伪候选；失败保留原输入／双流／退出，不抬预算或重复运行。reject 必须同组件下真实非零且确为仓内 `assume/admit not allowed with --no-cheating`，前置错误不算严格拒绝。fixture 保持 data 身份及原非法 Verus 输入，不宣称其成功证明。runner、原 adapter-tests 和未过滤测试仍须由正式 DELTA 共同验收，不能以新正向根成功代替。
+
+必要保留归原 evidence-retain／check-original 所有者，使用方仍为工具合同工程、runner 资格工程、调用方与 review；AA 失败及 dep-info 保留至调试／验收义务结束，2026-11-21 复核用途，随后按已有生命周期释放。没有新增永久证据生产者。新函数、模块包含和登记的完整构建／证明／CI／存储／维护与运行成本未知；既有预算不变，没有测量收益。全部 warehouse 迁移、typed compiler-input 资格、完整 CI generation 生产与恢复链、正式 DELTA、原生 integration／dev 及落地验收仍是 active 全 goal 义务。本轮不交付、不清理；自有静态命令均已取得原生终态，无后台任务或委派（一次无关范围过大的只读文件名枚举已中止并取得 exit 130），交接生命周期由调用方负责。
