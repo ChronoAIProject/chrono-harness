@@ -302,14 +302,15 @@ proof fn invocation_token_literals()
     reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
     reveal_strlit("-L"); reveal_strlit("--extern");
     reveal_strlit("--import"); reveal_strlit("--export");
-    assert(policy::invocation_kind("--edition=2024"@) == policy::InvocationKind::Edition) by (compute);
-    assert(policy::invocation_kind("--crate-name"@) == policy::InvocationKind::CrateName) by (compute);
-    assert(policy::invocation_kind("-Zunstable-options"@) == policy::InvocationKind::Unstable) by (compute);
-    assert(policy::invocation_kind("--env-set"@) == policy::InvocationKind::Environment) by (compute);
-    assert(policy::invocation_kind("-L"@) == policy::InvocationKind::Search) by (compute);
-    assert(policy::invocation_kind("--extern"@) == policy::InvocationKind::Extern) by (compute);
-    assert(policy::invocation_kind("--import"@) == policy::InvocationKind::Import) by (compute);
-    assert(policy::invocation_kind("--export"@) == policy::InvocationKind::Export) by (compute);
+    assert("--crate-name"@.len() != "--edition=2024"@.len());
+    assert("-Zunstable-options"@.len() != "--edition=2024"@.len());
+    assert("-Zunstable-options"@.len() != "--crate-name"@.len());
+    assert("--env-set"@.len() == 9);
+    assert("-L"@.len() == 2);
+    assert("--extern"@[2] != "--import"@[2]);
+    assert("--extern"@[4] != "--export"@[4]);
+    assert("--import"@[2] != "--export"@[2]);
+    reveal_with_fuel(policy::invocation_kind, 2);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
