@@ -1407,12 +1407,20 @@ fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() 
         if command == "maintain" {
             assert_eq!(report["complete_inventory"]["status"], "incomplete");
             assert!(report["complete_inventory"]["path"].is_string());
-            assert!(report["cleanup_failures"].to_string().contains("original inventory failure"));
+            assert!(
+                report["cleanup_failures"]
+                    .to_string()
+                    .contains("original inventory failure")
+            );
             assert_eq!(report["worktree_inventory"], value!([]));
         } else {
             assert_eq!(report["cleanup_failures"], value!([]));
-            assert!(report["worktree_status"]["inventory_error"].as_str().unwrap()
-                .contains("original inventory failure"));
+            assert!(
+                report["worktree_status"]["inventory_error"]
+                    .as_str()
+                    .unwrap()
+                    .contains("original inventory failure")
+            );
         }
         assert!(report["managed_process"].is_null());
         assert_eq!(h.ledger(), ledger);
@@ -1687,7 +1695,10 @@ fn automatic_attention_persists_across_commands_and_stops_after_verified_removal
     assert_eq!(code, 0, "{finished} {stderr}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists());
     let (code, status, stderr) = h.auto("status", &[]);
     assert_eq!(code, 0, "{status} {stderr}");
@@ -1831,7 +1842,10 @@ fn automatic_attention_keeps_retained_terminal_work_visible_and_scopes_ordinary_
     assert_eq!(code, 0, "{report} {stderr}");
     // 原业务交接与实际清理分别核原结果。
     let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(report_cleanup_code, 0, "{report_cleanup} {report_cleanup_error}");
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     assert!(target.exists());
     let row = attention_row(&report_cleanup, &target);
     assert_eq!(row["work_state"], "terminal");
@@ -1876,7 +1890,10 @@ fn automatic_finish_absent_evidence_does_not_retain_the_whole_checkout() {
     assert_eq!(code, 0, "{report} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(report_cleanup_code, 0, "{report_cleanup} {report_cleanup_error}");
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     assert!(
         !target.exists(),
         "absent evidence cannot keep an otherwise disposable checkout"
@@ -1912,7 +1929,10 @@ fn automatic_maintenance_resumes_retained_checkout_after_evidence_release() {
     assert_eq!(code, 0, "{report} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(report_cleanup_code, 0, "{report_cleanup} {report_cleanup_error}");
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     assert!(target.exists());
     assert_eq!(h.ledger()["entries"][0]["status"], "retained");
     let progress = h.ledger()["entries"][0]["cleanup"].clone();
@@ -1990,7 +2010,10 @@ fn retained_checkout_keeps_its_cleanup_original_until_the_responsibility_is_rele
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     let entry = h.ledger()["entries"][0].clone();
     assert_eq!(entry["status"], "retained");
     assert_eq!(entry["cleanup"]["stage"], "retained");
@@ -2223,7 +2246,10 @@ fn terminal_history_rotation_preserves_current_work_and_releases_only_disposed_r
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists());
     let disposed = h.ledger()["entries"]
         .as_array()
@@ -2285,7 +2311,10 @@ fn retired_address_preserves_directory_consumers_and_unknown_members() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     let directory = h.record_directory(&target);
     let before = fs::read(directory.join("ledger.json")).unwrap();
     let reader = DirectoryLease::acquire(&directory, false, None)
@@ -2328,7 +2357,10 @@ fn interrupted_address_retirement_preserves_changed_members_then_resumes_origina
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     let directory = h.record_directory(&target);
     fs::write(directory.join("fixture-consumer"), b"owned by this fixture").unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
@@ -2476,8 +2508,12 @@ fn terminal_history_count_and_byte_limits_release_verified_generations_before_th
         let (code, finished, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
         assert_eq!(code, 0, "{finished} {error}");
         // 原业务交接与实际清理分别核原结果。
-        let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-        assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+        let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) =
+            h.auto("maintain", &[]);
+        assert_eq!(
+            finished_cleanup_code, 0,
+            "{finished_cleanup} {finished_cleanup_error}"
+        );
         assert!(!target.exists());
     }
     assert_eq!(h.ledger()["entries"].as_array().unwrap().len(), 2);
@@ -2553,7 +2589,10 @@ fn automatic_originals_follow_enrollment_and_report_consumers_after_history_rota
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists());
     let terminal = h.ledger()["entries"][0]["terminal"]["receipt"]["path"]
         .as_str()
@@ -2721,7 +2760,10 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists());
     let (_code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(
@@ -2802,7 +2844,10 @@ fn terminal_history_rotation_preserves_live_consumers_and_changed_originals() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     let entry = h.ledger()["entries"][0].clone();
     let lease = chrono_harness::ownership::Lease::acquire(
         &h.root.join(entry["ownership"]["path"].as_str().unwrap()),
@@ -3318,7 +3363,10 @@ fn explicit_current_custody_accepts_an_existing_client_branch_without_claiming_b
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists());
     assert_eq!(h.ledger()["entries"][0]["status"], "disposed");
     assert!(!git(&h.root, &["worktree", "list", "--porcelain"]).contains(target.to_str().unwrap()));
@@ -3572,7 +3620,10 @@ fn detached_finish_removes_only_the_enrolled_checkout_and_keeps_all_branches() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists(), "{finished}");
     assert_eq!(git(&h.root, &["for-each-ref", "refs/heads/"]), branches);
     let row = finished_cleanup["drain"]
@@ -3651,7 +3702,10 @@ fn automatic_partial_failure_preserves_independent_start_and_explicit_retry() {
             &["--path", target.to_str().unwrap(), "--dispose-evidence"],
         );
         assert_eq!(code, 0, "{failed} {e}");
-        assert!(target.exists(), "finish only records the original terminal responsibility");
+        assert!(
+            target.exists(),
+            "finish only records the original terminal responsibility"
+        );
         let (code, failed, e) = h.auto("maintain", &[]);
         assert_ne!(code, 0, "{failed} {e}");
         let original = &drain_report(&failed["drain"][0]);
@@ -3716,7 +3770,10 @@ fn automatic_retries_keep_original_evidence_without_recursive_growth() {
             &["--path", target.to_str().unwrap(), "--dispose-evidence"],
         );
         assert_eq!(code, 0, "{failed} {error}");
-        assert!(target.exists(), "finish only records the original terminal responsibility");
+        assert!(
+            target.exists(),
+            "finish only records the original terminal responsibility"
+        );
         let (code, failed, error) = h.auto("maintain", &[]);
         assert_ne!(code, 0, "{failed} {error}");
         let report = &drain_report(&failed["drain"][0]);
@@ -4255,7 +4312,10 @@ fn automatic_filesystem_partial_failure_retries_under_original_owned_lock() {
         &["--path", target.to_str().unwrap(), "--dispose-evidence"],
     );
     assert_eq!(code, 0, "{r} {e}");
-    assert!(target.exists(), "finish only records the original terminal responsibility");
+    assert!(
+        target.exists(),
+        "finish only records the original terminal responsibility"
+    );
     let (code, r, e) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{r} {e}");
     let original = &drain_report(&r["drain"][0]);

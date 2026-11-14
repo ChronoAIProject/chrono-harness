@@ -955,7 +955,9 @@ fn retain_command_result_exported(
             destination.display()
         )
     });
-    receipt.bind_maintenance_owner(producer_root, ".chrono-harness/worktree.json").unwrap();
+    receipt
+        .bind_maintenance_owner(producer_root, ".chrono-harness/worktree.json")
+        .unwrap();
     receipt.seal().unwrap();
     if let Some(export) = export {
         receipt

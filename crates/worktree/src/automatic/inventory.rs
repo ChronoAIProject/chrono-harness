@@ -24,7 +24,9 @@ pub fn write_record(
 ) -> Result<(), String> {
     let mut bytes = serde_json::to_vec(row).map_err(|e| e.to_string())?;
     bytes.push(b'\n');
-    let total = bytes_written.checked_add(bytes.len() as u64).ok_or("inventory byte overflow")?;
+    let total = bytes_written
+        .checked_add(bytes.len() as u64)
+        .ok_or("inventory byte overflow")?;
     within_limit(total)?;
     output.write_all(&bytes).map_err(|e| e.to_string())?;
     *bytes_written = total;
@@ -51,11 +53,17 @@ pub(super) struct Report {
 
 impl Report {
     pub(super) fn begin(root: &Path, parent: &mut Value) -> Result<Self, String> {
-        let parent_path = parent["report_path"].as_str().ok_or("maintenance report path")?.to_owned();
+        let parent_path = parent["report_path"]
+            .as_str()
+            .ok_or("maintenance report path")?
+            .to_owned();
         let path = format!("{parent_path}.inventory.jsonl");
         let physical = no_symlink_parents(root, &path)?;
         let publication = retention::create_adopted(
-            root, "lifecycle-original", &physical, false,
+            root,
+            "lifecycle-original",
+            &physical,
+            false,
             value!({"operation":"maintenance-inventory","status":"not-established"}),
         )?;
         parent["complete_inventory"] = value!({"schema":"chrono-maintenance-inventory/v1",
@@ -63,11 +71,23 @@ impl Report {
             "member_enumeration_complete":false,"measurements_complete":false,
             "publication_complete":false});
         let mut report = Self {
-            root: root.into(), path,
-            output: fs::OpenOptions::new().write(true).open(physical).map_err(|e| e.to_string())?,
-            publication, bytes: 0, rows: 0, began: Instant::now(), started: timestamp()?,
-            enumeration_complete: true, measurements_complete: true, errors: vec![],
-            io_error: None, artifact_addresses: BTreeSet::new(), worktree_addresses: BTreeSet::new(),
+            root: root.into(),
+            path,
+            output: fs::OpenOptions::new()
+                .write(true)
+                .open(physical)
+                .map_err(|e| e.to_string())?,
+            publication,
+            bytes: 0,
+            rows: 0,
+            began: Instant::now(),
+            started: timestamp()?,
+            enumeration_complete: true,
+            measurements_complete: true,
+            errors: vec![],
+            io_error: None,
+            artifact_addresses: BTreeSet::new(),
+            worktree_addresses: BTreeSet::new(),
         };
         report.record(value!({"kind":"scope","source":"maintenance-round",
             "trigger":parent["maintenance_trigger"],
@@ -85,12 +105,18 @@ impl Report {
             return;
         }
         let publication = &self.publication;
-        let written = write_record(&mut self.output, &row, &mut self.bytes, &mut self.rows, |total| {
-            if let Some(publication) = publication {
-                publication.check_length(total)?;
-            }
-            Ok(())
-        });
+        let written = write_record(
+            &mut self.output,
+            &row,
+            &mut self.bytes,
+            &mut self.rows,
+            |total| {
+                if let Some(publication) = publication {
+                    publication.check_length(total)?;
+                }
+                Ok(())
+            },
+        );
         if let Err(error) = written {
             self.io_error = Some(error);
         }
@@ -100,16 +126,20 @@ impl Report {
         self.enumeration_complete = false;
         self.measurements_complete = false;
         let error = error.to_string();
-        self.record(value!({"kind":"enumeration-error","scope":scope,"error":error,
-            "members":"unknown","action":"not-established"}));
+        self.record(
+            value!({"kind":"enumeration-error","scope":scope,"error":error,
+            "members":"unknown","action":"not-established"}),
+        );
         self.errors.push(format!("{scope}: {error}"));
     }
 
     pub(super) fn unknown(&mut self, scope: &str, reason: &str) {
         self.enumeration_complete = false;
         self.measurements_complete = false;
-        self.record(value!({"kind":"unknown-declarations","scope":scope,"reason":reason,
-            "members":null,"action":"not-established"}));
+        self.record(
+            value!({"kind":"unknown-declarations","scope":scope,"reason":reason,
+            "members":null,"action":"not-established"}),
+        );
     }
 
     pub(super) fn measure(&mut self, path: &Path) -> Value {
@@ -121,13 +151,16 @@ impl Report {
             absolute(parent, true)?;
             let before = fs::symlink_metadata(path);
             let presence = match before {
-                Ok(ref m) if m.file_type().is_symlink() => return Err("inventory root is a symbolic link".into()),
+                Ok(ref m) if m.file_type().is_symlink() => {
+                    return Err("inventory root is a symbolic link".into());
+                }
                 Ok(_) => "present",
                 Err(ref e) if e.kind() == std::io::ErrorKind::NotFound => "absent",
                 Err(e) => return Err(e.to_string()),
             };
             super::service::observe_boundary("footprint", path);
-            let (footprint, sockets) = chrono_harness::artifact_disposal::observed_artifact_footprint(path)?;
+            let (footprint, sockets) =
+                chrono_harness::artifact_disposal::observed_artifact_footprint(path)?;
             Ok::<_, String>((presence, footprint, sockets))
         })();
         let finished = timestamp();
@@ -144,7 +177,11 @@ impl Report {
                 measurement["retained_socket_entries"] = value!(sockets);
             }
             (result, start, end) => {
-                let error = result.err().or_else(|| start.err()).or_else(|| end.err()).unwrap();
+                let error = result
+                    .err()
+                    .or_else(|| start.err())
+                    .or_else(|| end.err())
+                    .unwrap();
                 self.measurements_complete = false;
                 self.errors.push(format!("{}: {error}", path.display()));
                 measurement["freshness"] = value!("unknown");
@@ -155,12 +192,20 @@ impl Report {
         measurement
     }
 
-    pub(super) fn worktrees(&mut self, observation: &Observation<'_>, r: &mut Runner, parent: &mut Value, phase: &str) {
+    pub(super) fn worktrees(
+        &mut self,
+        observation: &Observation<'_>,
+        r: &mut Runner,
+        parent: &mut Value,
+        phase: &str,
+    ) {
         let observation_owner = observation;
         let mut observation = value!({});
         if let Err(error) = observation_owner.observe_attention(r, &mut observation, true) {
             self.error("worktree-status", error);
-            if observation["worktree_status"].is_null() { return; }
+            if observation["worktree_status"].is_null() {
+                return;
+            }
         }
         let status = &observation["worktree_status"];
         parent["worktree_status"] = status.clone();
@@ -218,7 +263,8 @@ impl Report {
             if row["record"]["output"].is_object() {
                 if let Some(path) = row["record"]["path"].as_str() {
                     row["measurement"] = self.measure(&self.root.join(path));
-                    row["measurement"]["scope"] = value!("current physical path; declaration identity is separate");
+                    row["measurement"]["scope"] =
+                        value!("current physical path; declaration identity is separate");
                 }
             } else if let Some(path) = row["record"]["metadata_path"].as_str() {
                 row["measurement"] = self.measure(Path::new(path));
@@ -231,11 +277,18 @@ impl Report {
         if row["kind"] == "enumeration-error" {
             self.error("retention-namespace", &row["error"]);
         }
-        if row["kind"] == "round" && (!row["error"].is_null()
-            || row["original"]["accounting_errors"].as_array().is_some_and(|v| !v.is_empty())) {
+        if row["kind"] == "round"
+            && (!row["error"].is_null()
+                || row["original"]["accounting_errors"]
+                    .as_array()
+                    .is_some_and(|v| !v.is_empty()))
+        {
             self.enumeration_complete = false;
             self.measurements_complete = false;
-            self.errors.push(format!("retention round {}: original error retained", row["address"]));
+            self.errors.push(format!(
+                "retention round {}: original error retained",
+                row["address"]
+            ));
         }
         self.record(value!({"kind":"retention","owner":"runner-retention","observation":row}));
     }
@@ -243,9 +296,14 @@ impl Report {
     pub(super) fn finish(mut self, parent: &mut Value) -> Result<(), String> {
         let worktrees = std::mem::take(&mut self.worktree_addresses);
         for path in worktrees {
-            let results: Vec<_> = parent["drain"].as_array().into_iter().flatten().enumerate()
+            let results: Vec<_> = parent["drain"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .enumerate()
                 .filter(|(_, row)| row["path"].as_str().is_some_and(|p| Path::new(p) == path))
-                .map(|(index, _)| format!("/drain/{index}")).collect();
+                .map(|(index, _)| format!("/drain/{index}"))
+                .collect();
             self.record(value!({"kind":"worktree-action","path":path,
                 "execution":if results.is_empty() {"not-executed"} else {"see original results"},
                 "selection":if results.is_empty() {"not-selected-or-not-reached"} else {"responsible-owner-result"},
@@ -255,11 +313,18 @@ impl Report {
             self.record(value!({"kind":"producer-result","original":row}));
         }
         // An unavailable adopted policy leaves this address's declarations unknown.
-        for row in parent["worktree_status"]["worktrees"].as_array().into_iter().flatten() {
+        for row in parent["worktree_status"]["worktrees"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
             if row["record_kind"].is_null() {
                 if let Some(path) = row["path"].as_str() {
                     if !self.artifact_addresses.contains(Path::new(path)) {
-                        self.unknown(path, "no observable adopted artifact policy; do not infer declarations");
+                        self.unknown(
+                            path,
+                            "no observable adopted artifact policy; do not infer declarations",
+                        );
                     }
                 }
             }
@@ -276,10 +341,12 @@ impl Report {
             "window_started_unix_millis":self.started,"window_finished_unix_millis":finished,
             "elapsed_millis":u64::try_from(self.began.elapsed().as_millis()).ok(),
             "publication_complete":false,"errors":self.errors,"physical_release_bytes":null});
-        self.record(value!({"kind":"completion","data_rows":self.rows,"data_bytes":self.bytes,
+        self.record(
+            value!({"kind":"completion","data_rows":self.rows,"data_bytes":self.bytes,
             "member_enumeration_complete":descriptor["member_enumeration_complete"],
             "measurements_complete":descriptor["measurements_complete"],
-            "window_finished_unix_millis":finished,"errors":self.errors}));
+            "window_finished_unix_millis":finished,"errors":self.errors}),
+        );
         parent["complete_inventory"] = descriptor;
         parent["complete_inventory"]["rows"] = value!(self.rows);
         if let Err(error) = self.output.sync_all() {
@@ -308,7 +375,10 @@ impl Report {
         if self.errors.is_empty() {
             Ok(())
         } else {
-            Err(format!("maintenance inventory incomplete: {}", self.errors.join("; ")))
+            Err(format!(
+                "maintenance inventory incomplete: {}",
+                self.errors.join("; ")
+            ))
         }
     }
 }
@@ -324,11 +394,23 @@ pub(super) struct ArtifactSnapshot {
 }
 impl ArtifactSnapshot {
     pub(super) fn from_owner(manager: &Manager) -> Self {
-        let entry = manager.ledger.entries.iter().find(|e| e.status != "disposed")
-            .or_else(|| manager.ledger.entries.last()).cloned();
-        Self { root: entry.as_ref().map(|e| e.path.clone()).unwrap_or_else(|| manager.scope.clone()),
-            artifacts: manager.inputs.policy.artifacts.clone(), entry,
+        let entry = manager
+            .ledger
+            .entries
+            .iter()
+            .find(|e| e.status != "disposed")
+            .or_else(|| manager.ledger.entries.last())
+            .cloned();
+        Self {
+            root: entry
+                .as_ref()
+                .map(|e| e.path.clone())
+                .unwrap_or_else(|| manager.scope.clone()),
+            artifacts: manager.inputs.policy.artifacts.clone(),
+            entry,
             policy_sha256: sha256(&manager.inputs.policy_bytes),
-            policy_path: manager.inputs.policy_path.clone(), source_head: manager.inputs.source_head.clone() }
+            policy_path: manager.inputs.policy_path.clone(),
+            source_head: manager.inputs.source_head.clone(),
+        }
     }
 }

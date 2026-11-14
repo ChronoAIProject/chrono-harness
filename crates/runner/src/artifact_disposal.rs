@@ -167,10 +167,13 @@ pub fn observed_artifact_footprint(path: &Path) -> Result<(ArtifactFootprint, u6
 
 fn footprint(path: &Path, observe_sockets: bool) -> Result<(ArtifactFootprint, u64), String> {
     match fs::symlink_metadata(path) {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((ArtifactFootprint {
-            allocated_bytes: if cfg!(unix) { Some(0) } else { None },
-            ..Default::default()
-        }, 0)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((
+            ArtifactFootprint {
+                allocated_bytes: if cfg!(unix) { Some(0) } else { None },
+                ..Default::default()
+            },
+            0,
+        )),
         Err(e) => Err(e.to_string()),
         Ok(m) => {
             #[cfg(unix)]
@@ -191,8 +194,11 @@ fn footprint(path: &Path, observe_sockets: bool) -> Result<(ArtifactFootprint, u
             let mut sockets = 0u64;
             if m.is_dir() {
                 for entry in fs::read_dir(path).map_err(|e| e.to_string())? {
-                    let (child, child_sockets) = footprint(&entry.map_err(|e| e.to_string())?.path(), observe_sockets)?;
-                    sockets = sockets.checked_add(child_sockets).ok_or("artifact socket count overflow")?;
+                    let (child, child_sockets) =
+                        footprint(&entry.map_err(|e| e.to_string())?.path(), observe_sockets)?;
+                    sockets = sockets
+                        .checked_add(child_sockets)
+                        .ok_or("artifact socket count overflow")?;
                     result.logical_bytes = result
                         .logical_bytes
                         .checked_add(child.logical_bytes)

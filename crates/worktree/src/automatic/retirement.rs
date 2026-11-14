@@ -251,14 +251,31 @@ impl Manager {
         )
     }
 
-    fn resume_address(&self, r: &mut Runner, directory: &Path,
-        gate: &DirectoryLease, held: Option<&Lease>, report: &mut Value) -> Result<(), String> {
-        resume_address(&self.inputs, &self.directory, &self._namespace, r, directory, gate, held, report)
+    fn resume_address(
+        &self,
+        r: &mut Runner,
+        directory: &Path,
+        gate: &DirectoryLease,
+        held: Option<&Lease>,
+        report: &mut Value,
+    ) -> Result<(), String> {
+        resume_address(
+            &self.inputs,
+            &self.directory,
+            &self._namespace,
+            r,
+            directory,
+            gate,
+            held,
+            report,
+        )
     }
 }
 
 pub(super) fn resume_address(
-    inputs: &PolicyInputs, owner_directory: &Path, namespace: &Lease,
+    inputs: &PolicyInputs,
+    owner_directory: &Path,
+    namespace: &Lease,
     r: &mut Runner,
     directory: &Path,
     gate: &DirectoryLease,
@@ -312,9 +329,8 @@ pub(super) fn resume_address(
         }
         held.stable()?;
     } else if !absent(&metadata)? {
-        acquired =
-            Lease::acquire(&metadata, Some(&retirement.admission_id), false, true, None)?
-                .ok_or("retiring enrollment still has live metadata consumers")?;
+        acquired = Lease::acquire(&metadata, Some(&retirement.admission_id), false, true, None)?
+            .ok_or("retiring enrollment still has live metadata consumers")?;
         acquired.stable()?;
     }
     inputs.stable(r)?;
@@ -390,7 +406,9 @@ pub(super) fn resume_address(
 // The declared enrollment namespace is the inventory, as in retention's
 // transaction owner. No source/output directory discovery supplies members.
 pub(super) fn resume_retired_addresses(
-    inputs: &PolicyInputs, owner_directory: &Path, namespace: &Lease,
+    inputs: &PolicyInputs,
+    owner_directory: &Path,
+    namespace: &Lease,
     r: &mut Runner,
     report: &mut Value,
 ) -> Result<Vec<String>, String> {
@@ -407,9 +425,9 @@ pub(super) fn resume_retired_addresses(
         let entry = entry.map_err(|error| error.to_string())?;
         let directory = entry.path();
         if !entry
-                .file_type()
-                .map_err(|error| error.to_string())?
-                .is_dir()
+            .file_type()
+            .map_err(|error| error.to_string())?
+            .is_dir()
         {
             continue;
         }
@@ -441,7 +459,16 @@ pub(super) fn resume_retired_addresses(
                 );
                 Ok(())
             } else {
-                resume_address(inputs, owner_directory, namespace, r, &directory, &gate, None, report)
+                resume_address(
+                    inputs,
+                    owner_directory,
+                    namespace,
+                    r,
+                    &directory,
+                    &gate,
+                    None,
+                    report,
+                )
             }
         })();
         if let Err(error) = result {

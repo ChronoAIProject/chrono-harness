@@ -16,45 +16,86 @@ fn original(h: &EnrollmentOriginalsFixture, report: &Value) -> Vec<Value> {
     let bytes = fs::read(h.root.join(path)).unwrap();
     assert_eq!(descriptor["receipt"]["sha256"], sha256(&bytes));
     assert_eq!(descriptor["byte_length"], bytes.len());
-    bytes.split(|b| *b == b'\n').filter(|line| !line.is_empty())
-        .map(|line| json(line).unwrap()).collect()
+    bytes
+        .split(|b| *b == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| json(line).unwrap())
+        .collect()
 }
 
 #[test]
 fn explicit_inventory_keeps_the_whole_union_beyond_the_sample_ceiling() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::imported();
-    let paths: Vec<_> = (0..300).map(|i| h.root.join(format!("git-only-{i}"))).collect();
+    let paths: Vec<_> = (0..300)
+        .map(|i| h.root.join(format!("git-only-{i}")))
+        .collect();
     configure_inventory(&h, &paths, None);
     let ledger = fs::read(h.record.join("ledger.json")).unwrap();
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     let rows = original(&h, &report);
-    let members: Vec<_> = rows.iter().filter(|r| r["kind"] == "worktree"
-        && r["phase"] == "before" && r["state"]["record_kind"].is_null()).collect();
-    let actual: BTreeSet<_> = members.iter().map(|r| PathBuf::from(r["state"]["path"].as_str().unwrap())).collect();
-    let expected: BTreeSet<_> = paths.into_iter().chain([h.root.clone(), h.target.clone()]).collect();
+    let members: Vec<_> = rows
+        .iter()
+        .filter(|r| {
+            r["kind"] == "worktree" && r["phase"] == "before" && r["state"]["record_kind"].is_null()
+        })
+        .collect();
+    let actual: BTreeSet<_> = members
+        .iter()
+        .map(|r| PathBuf::from(r["state"]["path"].as_str().unwrap()))
+        .collect();
+    let expected: BTreeSet<_> = paths
+        .into_iter()
+        .chain([h.root.clone(), h.target.clone()])
+        .collect();
     assert_eq!(actual, expected);
     assert_eq!(members.len(), expected.len());
     assert!(serde_json::to_vec(&rows).unwrap().len() > 65536);
-    assert!(members.iter().any(|r| r["state"]["path"] == value!(h.target)
-        && r["state"]["git_registered"] == false));
+    assert!(
+        members.iter().any(
+            |r| r["state"]["path"] == value!(h.target) && r["state"]["git_registered"] == false
+        )
+    );
     assert!(rows.iter().any(|r| r["kind"] == "unknown-declarations"));
-    assert_eq!(report["complete_inventory"]["member_enumeration_complete"], false);
+    assert_eq!(
+        report["complete_inventory"]["member_enumeration_complete"],
+        false
+    );
     assert_eq!(fs::read(h.record.join("ledger.json")).unwrap(), ledger);
     let state = retention_state::snapshot(&h.root);
-    let parent = state["outputs"].as_array().unwrap().iter()
-        .find(|o| o["path"] == report["report_path"]).unwrap();
-    let child = state["outputs"].as_array().unwrap().iter()
-        .find(|o| o["path"] == report["complete_inventory"]["path"]).unwrap();
-    assert!(parent["references"].as_array().unwrap().contains(&child["id"]));
-    let recovery = format!("recovery:{}", report["complete_inventory"]["path"].as_str().unwrap());
+    let parent = state["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == report["report_path"])
+        .unwrap();
+    let child = state["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|o| o["path"] == report["complete_inventory"]["path"])
+        .unwrap();
+    assert!(
+        parent["references"]
+            .as_array()
+            .unwrap()
+            .contains(&child["id"])
+    );
+    let recovery = format!(
+        "recovery:{}",
+        report["complete_inventory"]["path"].as_str().unwrap()
+    );
     assert!(state["roots"].get(recovery).is_none(), "{state}");
 }
 
 #[test]
 fn measurement_failure_is_unknown_and_keeps_the_original_failure() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::imported();
     let external = tempfile::tempdir().unwrap();
     fs::write(external.path().join("source"), b"unique work").unwrap();
@@ -64,18 +105,32 @@ fn measurement_failure_is_unknown_and_keeps_the_original_failure() {
     let (code, report) = h.invoke("maintain", false);
     assert_ne!(code, 0, "{report}");
     let rows = original(&h, &report);
-    let row = rows.iter().find(|r| r["kind"] == "worktree" && r["phase"] == "before"
-        && r["state"]["path"] == value!(link)).unwrap();
+    let row = rows
+        .iter()
+        .find(|r| {
+            r["kind"] == "worktree" && r["phase"] == "before" && r["state"]["path"] == value!(link)
+        })
+        .unwrap();
     assert_eq!(row["measurement"]["freshness"], "unknown");
     assert_eq!(row["measurement"]["footprint"], Value::Null);
-    assert!(row["measurement"]["error"].as_str().unwrap().contains("symbolic link"));
+    assert!(
+        row["measurement"]["error"]
+            .as_str()
+            .unwrap()
+            .contains("symbolic link")
+    );
     assert_eq!(report["complete_inventory"]["measurements_complete"], false);
-    assert_eq!(fs::read(external.path().join("source")).unwrap(), b"unique work");
+    assert_eq!(
+        fs::read(external.path().join("source")).unwrap(),
+        b"unique work"
+    );
 }
 
 #[test]
 fn adopted_policy_lists_retained_and_unselected_artifacts_with_real_measurements() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::new();
     let config = json(&fs::read(h.root.join(POLICY)).unwrap()).unwrap();
     let mut policy = json(&fs::read(h.root.join(AUTO_POLICY)).unwrap()).unwrap();
@@ -87,11 +142,15 @@ fn adopted_policy_lists_retained_and_unselected_artifacts_with_real_measurements
     let (code, report) = h.invoke("maintain", false);
     assert_eq!(code, 0, "{report}");
     let rows = original(&h, &report);
-    let artifacts: Vec<_> = rows.iter().filter(|row| row["kind"] == "worktree-artifact"
-        && row["worktree"] == value!(h.target)).collect();
+    let artifacts: Vec<_> = rows
+        .iter()
+        .filter(|row| row["kind"] == "worktree-artifact" && row["worktree"] == value!(h.target))
+        .collect();
     assert_eq!(artifacts.len(), 2);
-    let dispositions: BTreeSet<_> = artifacts.iter()
-        .map(|row| row["disposition"].as_str().unwrap()).collect();
+    let dispositions: BTreeSet<_> = artifacts
+        .iter()
+        .map(|row| row["disposition"].as_str().unwrap())
+        .collect();
     assert_eq!(dispositions, BTreeSet::from(["retain", "evidence-retain"]));
     for artifact in artifacts {
         assert_eq!(artifact["measurement"]["unit"], "bytes");
@@ -105,15 +164,23 @@ fn adopted_policy_lists_retained_and_unselected_artifacts_with_real_measurements
 
 #[test]
 fn inventory_enumeration_failure_is_preserved_and_target_status_stays_local() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::imported();
     configure_inventory(&h, &[], Some("original inventory failure"));
     let (code, report) = h.invoke("maintain", false);
     assert_ne!(code, 0);
-    assert_eq!(report["complete_inventory"]["member_enumeration_complete"], false);
+    assert_eq!(
+        report["complete_inventory"]["member_enumeration_complete"],
+        false
+    );
     let rows = original(&h, &report);
     assert!(rows.iter().any(|r| r["kind"] == "enumeration-error"));
-    assert!(rows.iter().any(|r| r["kind"] == "worktree" && r["state"]["path"] == value!(h.target)));
+    assert!(
+        rows.iter()
+            .any(|r| r["kind"] == "worktree" && r["state"]["path"] == value!(h.target))
+    );
     configure_inventory(&h, &[], None);
     let (_, status) = h.invoke("status", true);
     assert!(status["complete_inventory"].is_null());
@@ -122,7 +189,9 @@ fn inventory_enumeration_failure_is_preserved_and_target_status_stays_local() {
 
 #[test]
 fn missing_owner_marker_is_an_unknown_member_and_does_not_hide_known_addresses() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = EnrollmentOriginalsFixture::imported();
     let unknown = h.record.parent().unwrap().join("unknown-address");
     fs::create_dir(&unknown).unwrap();
@@ -130,17 +199,28 @@ fn missing_owner_marker_is_an_unknown_member_and_does_not_hide_known_addresses()
     let (code, report) = h.invoke("maintain", false);
     assert_ne!(code, 0);
     let rows = original(&h, &report);
-    assert!(rows.iter().any(|r| r["kind"] == "worktree" && r["phase"] == "before"
+    assert!(rows.iter().any(|r| r["kind"] == "worktree"
+        && r["phase"] == "before"
         && r["state"]["path"] == value!(h.target)));
-    assert!(rows.iter().any(|r| r["kind"] == "worktree" && r["state"]["path"].is_null()
+    assert!(rows.iter().any(|r| r["kind"] == "worktree"
+        && r["state"]["path"].is_null()
         && r["state"]["record_path"] == value!(unknown)));
-    assert_eq!(report["complete_inventory"]["member_enumeration_complete"], false);
-    assert_eq!(fs::read(unknown.join("ledger.json")).unwrap(), b"preserved unknown work");
+    assert_eq!(
+        report["complete_inventory"]["member_enumeration_complete"],
+        false
+    );
+    assert_eq!(
+        fs::read(unknown.join("ledger.json")).unwrap(),
+        b"preserved unknown work"
+    );
 }
 
 #[test]
 fn inventory_writer_preserves_partial_io_and_rejects_the_existing_byte_limit() {
-    struct Failing { bytes: Vec<u8>, remaining: usize }
+    struct Failing {
+        bytes: Vec<u8>,
+        remaining: usize,
+    }
     impl std::io::Write for Failing {
         fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
             if self.remaining == 0 {
@@ -151,19 +231,35 @@ fn inventory_writer_preserves_partial_io_and_rejects_the_existing_byte_limit() {
             self.remaining -= n;
             Ok(n)
         }
-        fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
     }
-    let mut output = Failing { bytes: vec![], remaining: 7 };
+    let mut output = Failing {
+        bytes: vec![],
+        remaining: 7,
+    };
     let (mut bytes, mut rows) = (0, 0);
-    let error = chrono_worktree::write_inventory_record(&mut output,
-        &value!({"member":"preserve partial bytes"}), &mut bytes, &mut rows, |_| Ok(())).unwrap_err();
+    let error = chrono_worktree::write_inventory_record(
+        &mut output,
+        &value!({"member":"preserve partial bytes"}),
+        &mut bytes,
+        &mut rows,
+        |_| Ok(()),
+    )
+    .unwrap_err();
     assert!(error.contains("original report IO failure"));
     assert_eq!(output.bytes.len(), 7);
     assert_eq!((bytes, rows), (0, 0));
     let mut output = Vec::new();
-    let error = chrono_worktree::write_inventory_record(&mut output,
-        &value!({"member":"not written"}), &mut bytes, &mut rows,
-        |_| Err("existing publication byte limit".into())).unwrap_err();
+    let error = chrono_worktree::write_inventory_record(
+        &mut output,
+        &value!({"member":"not written"}),
+        &mut bytes,
+        &mut rows,
+        |_| Err("existing publication byte limit".into()),
+    )
+    .unwrap_err();
     assert_eq!(error, "existing publication byte limit");
     assert!(output.is_empty());
 }

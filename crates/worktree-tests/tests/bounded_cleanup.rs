@@ -120,7 +120,10 @@ fn linked_finish_reclaims_reusable_outputs_while_preserving_needed_evidence() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.join("output λ").exists());
     assert!(target.join("payload").is_file());
     assert!(target.join(".chrono-harness/state/evidence").is_file());
@@ -173,7 +176,10 @@ fn linked_terminal_handoff_rotates_completed_cache_generations() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     let entry = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap()["entries"][0].clone();
     assert_eq!(entry["status"], "retained");
     assert_eq!(
@@ -571,8 +577,12 @@ fn independent_cargo_main_and_linked_cleanup_and_rebuild_measurements() {
         );
         assert_eq!(code, 0, "{} {error}", cleaned["error"]);
         // 原业务交接与实际清理分别核原结果。
-        let (cleaned_cleanup_code, cleaned_cleanup, cleaned_cleanup_error) = h.auto("maintain", &[]);
-        assert_eq!(cleaned_cleanup_code, 0, "{cleaned_cleanup} {cleaned_cleanup_error}");
+        let (cleaned_cleanup_code, cleaned_cleanup, cleaned_cleanup_error) =
+            h.auto("maintain", &[]);
+        assert_eq!(
+            cleaned_cleanup_code, 0,
+            "{cleaned_cleanup} {cleaned_cleanup_error}"
+        );
         let cleanup_seconds = began.elapsed().as_secs_f64();
         for project in ["producer", "tests"] {
             assert!(
@@ -811,7 +821,10 @@ fn explicit_main_import_releases_unproduced_outputs_without_claiming_execution()
     assert_eq!(code, 0, "{released} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (released_cleanup_code, released_cleanup, released_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(released_cleanup_code, 0, "{released_cleanup} {released_cleanup_error}");
+    assert_eq!(
+        released_cleanup_code, 0,
+        "{released_cleanup} {released_cleanup_error}"
+    );
     let descriptor = &released["main_cache_release"];
     let raw = fs::read(h.root.join(descriptor["path"].as_str().unwrap())).unwrap();
     assert_eq!(sha256(&raw), descriptor["sha256"]);
@@ -874,7 +887,10 @@ fn main_cache_finish_preserves_source_index_refs_bin_and_evidence() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!h.root.join("output λ").exists());
     assert_eq!(fs::read(h.root.join(".git/index")).unwrap(), index);
     assert_eq!(git(&h.root, &["show-ref"]), refs);
@@ -914,7 +930,10 @@ fn main_first_enrollment_preserves_unknown_historical_registered_outputs() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!h.root.join("output λ").exists());
     assert!(h.root.join("nested/cache/unknown-history").exists());
     assert!(
@@ -971,7 +990,10 @@ fn main_cache_ownership_protects_refs_across_branch_change_and_detached_head() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert_eq!(git(&h.root, &["show-ref"]), refs);
     assert!(!h.root.join("output λ").exists());
     assert!(h.ledger()["entries"][0]["terminal"].is_null());

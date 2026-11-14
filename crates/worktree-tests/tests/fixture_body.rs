@@ -49,24 +49,43 @@ fn copy(store: &Path, allocation: &Path, name: &str) -> PathBuf {
 
 #[test]
 fn explicit_inventory_lists_live_producer_allocation_and_every_copied_member() {
-    if !chrono_git_boundary::isolated_git() { return; }
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
     let h = host();
     let (store, allocation) = allocation(&h);
     let first = copy(&store, allocation.path(), "first.bin");
     let second = copy(&store, allocation.path(), "second.bin");
     let (code, report, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{report} {error}");
-    let bytes = fs::read(h.root.join(report["complete_inventory"]["path"].as_str().unwrap())).unwrap();
-    let rows: Vec<_> = bytes.split(|b| *b == b'\n').filter(|line| !line.is_empty())
-        .map(|line| json(line).unwrap()).collect();
+    let bytes = fs::read(
+        h.root
+            .join(report["complete_inventory"]["path"].as_str().unwrap()),
+    )
+    .unwrap();
+    let rows: Vec<_> = bytes
+        .split(|b| *b == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| json(line).unwrap())
+        .collect();
     assert!(rows.iter().any(|row| row["kind"] == "producer-allocation"
-        && row["path"] == value!(allocation.path()) && row["bodies"]["first.bin"].is_object()));
-    let members: std::collections::BTreeSet<_> = rows.iter()
-        .filter(|row| row["kind"] == "producer-artifact" && row["allocation"] == value!(allocation.path()))
-        .map(|row| row["member"].as_str().unwrap()).collect();
-    assert_eq!(members, std::collections::BTreeSet::from(["first.bin", "second.bin"]));
-    assert!(rows.iter().any(|row| row["kind"] == "producer-result"
-        && row["original"]["producer"] == "test-allocation"));
+        && row["path"] == value!(allocation.path())
+        && row["bodies"]["first.bin"].is_object()));
+    let members: std::collections::BTreeSet<_> = rows
+        .iter()
+        .filter(|row| {
+            row["kind"] == "producer-artifact" && row["allocation"] == value!(allocation.path())
+        })
+        .map(|row| row["member"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        members,
+        std::collections::BTreeSet::from(["first.bin", "second.bin"])
+    );
+    assert!(
+        rows.iter().any(|row| row["kind"] == "producer-result"
+            && row["original"]["producer"] == "test-allocation")
+    );
     assert_eq!(fs::read(first).unwrap(), [0, 255, 7, 8]);
     assert_eq!(fs::read(second).unwrap(), [0, 255, 7, 8]);
     assert!(allocation.path().join("first.bin").exists());

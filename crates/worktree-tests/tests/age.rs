@@ -260,8 +260,12 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     let (code, maintained, error) = h.auto("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{maintained} {error}");
     // 原业务交接与实际清理分别核原结果。
-    let (maintained_cleanup_code, maintained_cleanup, maintained_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(maintained_cleanup_code, 0, "{maintained_cleanup} {maintained_cleanup_error}");
+    let (maintained_cleanup_code, maintained_cleanup, maintained_cleanup_error) =
+        h.auto("maintain", &[]);
+    assert_eq!(
+        maintained_cleanup_code, 0,
+        "{maintained_cleanup} {maintained_cleanup_error}"
+    );
     assert!(!target.exists());
     assert_eq!(git(&h.root, &["rev-parse", &reference]), head);
     let disposed = json(&fs::read(h.ledger_path(&target)).unwrap()).unwrap();
@@ -429,7 +433,10 @@ fn detached_age_reuse_preserves_source_and_index_without_moving_other_branches()
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists(), "{finished}");
     assert_eq!(git(&h.root, &["rev-parse", "dev"]), dev);
     assert_eq!(show(&saved["retained_ref"]), "current detached source");
@@ -507,7 +514,10 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(target.exists());
     assert!(!target.join("output λ").exists(), "{finished}");
     assert_eq!(

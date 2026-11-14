@@ -400,7 +400,10 @@ fn interrupted_removal_restores_target_config_even_when_cleanup_policy_is_identi
         &["--path", target.to_str().unwrap(), "--dispose-evidence"],
     );
     assert_eq!(code, 0, "{failed} {error}");
-    assert!(target.exists(), "business handoff does not perform the failing removal");
+    assert!(
+        target.exists(),
+        "business handoff does not perform the failing removal"
+    );
     let (code, failed, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{failed} {error}");
     assert!(!target.exists());
@@ -429,7 +432,10 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
     assert_eq!(code, 0, "{report} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(report_cleanup_code, 0, "{report_cleanup} {report_cleanup_error}");
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     let prior = h.ledger()["entries"][0].clone();
     assert_eq!(prior["status"], "retained");
     let terminal = h
@@ -452,7 +458,10 @@ fn policy_migration_retains_terminal_evidence_and_requires_a_new_finish() {
     assert_eq!(code, 0, "{report} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(report_cleanup_code, 0, "{report_cleanup} {report_cleanup_error}");
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     assert!(!target.join("output λ").exists());
     assert_eq!(fs::read(terminal).unwrap(), bytes);
     assert_eq!(
@@ -1314,7 +1323,10 @@ fn checkout_and_policy_adoption_share_one_generation_and_cleanup_uses_current_br
     assert_eq!(code, 0, "{finished} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (finished_cleanup_code, finished_cleanup, finished_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(finished_cleanup_code, 0, "{finished_cleanup} {finished_cleanup_error}");
+    assert_eq!(
+        finished_cleanup_code, 0,
+        "{finished_cleanup} {finished_cleanup_error}"
+    );
     assert!(!target.exists(), "{finished}");
     assert_eq!(
         git(&h.root, &["rev-parse", "integration/migrating"]),

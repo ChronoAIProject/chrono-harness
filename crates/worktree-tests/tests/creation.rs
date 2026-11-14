@@ -182,7 +182,6 @@ fn fixture_git() -> PathBuf {
 }
 mod age;
 mod automatic;
-mod unified_maintenance;
 mod bounded_cleanup;
 mod check_inputs;
 mod evidence_retirement;
@@ -193,6 +192,7 @@ mod owner_deployment;
 mod policy_migration;
 mod rebind;
 mod temporary;
+mod unified_maintenance;
 mod verified_attention;
 mod verified_lifecycle;
 mod verified_owner_publication;

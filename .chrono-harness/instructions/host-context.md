@@ -139,6 +139,6 @@ retention 明确登记 `bootstrap-owner-stage` 的 `.chrono-harness/bin/owner-st
 
 ## 统一维护采用变更
 
-**产品与宿主政策一起修改，尚未生成或采用。** 用户明确要求统一维护进程，取代原同步清理／无 daemon 文案。唯一政策源是 [maintenance.json](../maintenance.json)，提出 300 秒 idle、3600 秒 timer，idle=null 可选常驻；OS 模板归 [maintenance.launchd.plist](../maintenance.launchd.plist)。普通入口先完成必要原件和既有责任交接，实际激活状态以独立 stderr 事件收据报告；事件收据不证明轮次或回收完成。业务不等待全局清理，必要同对象身份、租约和封存仍保留。
+**产品与宿主政策一起修改，已运行正式生成，尚未采用真实服务。** 用户明确要求统一维护进程，取代原同步清理／无 daemon 文案。唯一政策源是 [maintenance.json](../maintenance.json)，提出 300 秒 idle、3600 秒 timer，idle=null 可选常驻；OS 模板归 [maintenance.launchd.plist](../maintenance.launchd.plist)。普通入口先完成必要原件和既有责任交接，实际激活状态以独立 stderr 事件收据报告；事件收据不证明轮次或回收完成。业务不等待全局清理，必要同对象身份、租约和封存仍保留。
 
 统一执行入口及部署合同归 [工作树说明](../../docs/worktree.md#统一维护的业务边界)，独立预期与验证边界归 [统一维护](../../docs/unified-maintenance.md)。后续容量交接后运行现役 generate、固定候选的全部适用检查，再独立评审及 feature→integration→dev 交付。调用方排除旧程序、保留原状态并采用固定程序／政策／OS 配置后，核真实缺席激活、驻留事件／timer、idle／再唤醒、单实例和未结束维护中的 main／linked 业务进展，以及至少三次连续实际定时完成轮次、真实释放到期回收、恢复和同范围占用。源码不能代替这些结果，成本目前 unknown。

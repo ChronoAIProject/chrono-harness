@@ -2111,7 +2111,10 @@ fn kernel_generation_rearms_and_normal_finish_retains_original_nonzero_exit() {
     assert_eq!(code, 0, "{report} {error}");
     // 原业务交接与实际清理分别核原结果。
     let (report_cleanup_code, report_cleanup, report_cleanup_error) = h.auto("maintain", &[]);
-    assert_eq!(report_cleanup_code, 0, "{report_cleanup} {report_cleanup_error}");
+    assert_eq!(
+        report_cleanup_code, 0,
+        "{report_cleanup} {report_cleanup_error}"
+    );
     assert!(!target.exists());
 }
 

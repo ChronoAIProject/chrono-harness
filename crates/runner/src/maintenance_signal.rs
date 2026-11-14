@@ -2,7 +2,11 @@
 use crate::{decode, no_symlink_parents, relative_path, sha256};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::{cell::Cell, fs, path::{Path, PathBuf}};
+use std::{
+    cell::Cell,
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub const POLICY_PATH: &str = ".chrono-harness/maintenance.json";
 
@@ -24,8 +28,11 @@ impl Policy {
             || !self.state_directory.ends_with('/')
             || !self.socket.starts_with(".chrono-harness/state/")
             || self.socket.ends_with('/')
-            || self.timer_seconds == 0 || self.idle_seconds == Some(0)
-        { return Err("invalid explicit maintenance policy".into()); }
+            || self.timer_seconds == 0
+            || self.idle_seconds == Some(0)
+        {
+            return Err("invalid explicit maintenance policy".into());
+        }
         Ok(())
     }
     pub fn socket_path(&self, root: &Path) -> Result<PathBuf, String> {
@@ -51,10 +58,15 @@ thread_local! { static IN_ROUND: Cell<usize> = const { Cell::new(0) }; }
 /// The guard is local to the executing thread and never suppresses callers.
 pub struct RoundGuard;
 impl RoundGuard {
-    pub fn enter() -> Self { IN_ROUND.with(|depth| depth.set(depth.get() + 1)); Self }
+    pub fn enter() -> Self {
+        IN_ROUND.with(|depth| depth.set(depth.get() + 1));
+        Self
+    }
 }
 impl Drop for RoundGuard {
-    fn drop(&mut self) { IN_ROUND.with(|depth| depth.set(depth.get() - 1)); }
+    fn drop(&mut self) {
+        IN_ROUND.with(|depth| depth.set(depth.get() - 1));
+    }
 }
 
 /// A datagram is an activation hint, not an acknowledgement from the executor.
@@ -68,7 +80,9 @@ pub fn request_adopted(root: &Path, reason: &str) -> Value {
         return receipt;
     }
     let request = (|| {
-        let Some((policy, bytes)) = adopted(root)? else { return Ok(false); };
+        let Some((policy, bytes)) = adopted(root)? else {
+            return Ok(false);
+        };
         receipt["policy_sha256"] = json!(sha256(&bytes));
         let socket = policy.socket_path(root)?;
         receipt["socket"] = json!(socket);
@@ -76,9 +90,15 @@ pub fn request_adopted(root: &Path, reason: &str) -> Value {
         Ok::<_, String>(true)
     })();
     match request {
-        Ok(true) => { receipt["status"] = json!("requested"); receipt["accepted"] = json!(true); }
+        Ok(true) => {
+            receipt["status"] = json!("requested");
+            receipt["accepted"] = json!(true);
+        }
         Ok(false) => receipt["status"] = json!("not-adopted"),
-        Err(error) => { receipt["status"] = json!("wake-failed"); receipt["error"] = json!(error); }
+        Err(error) => {
+            receipt["status"] = json!("wake-failed");
+            receipt["error"] = json!(error);
+        }
     }
     receipt
 }
@@ -86,11 +106,15 @@ pub fn request_adopted(root: &Path, reason: &str) -> Value {
 #[cfg(unix)]
 pub fn send(socket: &Path, bytes: &[u8]) -> Result<(), String> {
     use std::os::unix::net::UnixDatagram;
-    if bytes.is_empty() || bytes.len() > 64 { return Err("maintenance hint exceeds 64 bytes".into()); }
+    if bytes.is_empty() || bytes.len() > 64 {
+        return Err("maintenance hint exceeds 64 bytes".into());
+    }
     let sender = UnixDatagram::unbound().map_err(|e| e.to_string())?;
     sender.set_nonblocking(true).map_err(|e| e.to_string())?;
     let sent = sender.send_to(bytes, socket).map_err(|e| e.to_string())?;
-    if sent != bytes.len() { return Err("incomplete maintenance datagram".into()); }
+    if sent != bytes.len() {
+        return Err("incomplete maintenance datagram".into());
+    }
     Ok(())
 }
 #[cfg(not(unix))]
@@ -101,7 +125,10 @@ pub fn send(_: &Path, _: &[u8]) -> Result<(), String> {
 /// Void APIs retain their original result and expose activation separately.
 pub fn announce_adopted(root: &Path, reason: &str) {
     let receipt = request_adopted(root, reason);
-    if !matches!(receipt["status"].as_str(), Some("not-adopted" | "maintenance-internal-no-new-event")) {
+    if !matches!(
+        receipt["status"].as_str(),
+        Some("not-adopted" | "maintenance-internal-no-new-event")
+    ) {
         eprintln!("W_MAINTENANCE_ACTIVATION: {}", receipt);
     }
 }

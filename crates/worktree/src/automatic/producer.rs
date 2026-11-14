@@ -829,7 +829,11 @@ impl RetainedArtifact {
                 report["coordinator_root"] = value!(inputs.policy.coordinator_root);
                 report["directory"] = value!(directory);
                 report["generated_outputs"] = value!(declaration.generated_outputs);
-                selected = Some((directory, declaration.generated_outputs.clone(), inputs.policy.coordinator_root.clone()));
+                selected = Some((
+                    directory,
+                    declaration.generated_outputs.clone(),
+                    inputs.policy.coordinator_root.clone(),
+                ));
                 Ok(())
             },
         )?;
@@ -843,10 +847,17 @@ impl RetainedArtifact {
     }
 
     /// Bind activation to the exact existing owner; never infer a root from directories.
-    pub fn bind_maintenance_owner(&mut self, host_root: &Path, config_path: &str) -> Result<(), String> {
+    pub fn bind_maintenance_owner(
+        &mut self,
+        host_root: &Path,
+        config_path: &str,
+    ) -> Result<(), String> {
         let root = fs::canonicalize(host_root).map_err(|e| e.to_string())?;
-        let (directory, _, coordinator) = Self::resolve_store(&root, config_path, &self.producer, false)?;
-        if directory != self.directory { return Err("producer activation owner differs from physical store".into()); }
+        let (directory, _, coordinator) =
+            Self::resolve_store(&root, config_path, &self.producer, false)?;
+        if directory != self.directory {
+            return Err("producer activation owner differs from physical store".into());
+        }
         self.maintenance_root = Some(coordinator);
         Ok(())
     }
@@ -1510,7 +1521,11 @@ impl ProducerPolicy {
 
     /// Read the producer's own declarations for the explicit maintenance report.
     /// This does not import directories, acquire deletion rights or change state.
-    pub(super) fn observe_inventory(&self, inputs: &PolicyInputs, inventory: &mut super::inventory::Report) {
+    pub(super) fn observe_inventory(
+        &self,
+        inputs: &PolicyInputs,
+        inventory: &mut super::inventory::Report,
+    ) {
         inventory.record(value!({"kind":"producer-policy","producer":self.id,
             "owner_root":inputs.policy.coordinator_root,"directory":self.directory,
             "policy_sha256":sha256(&inputs.anchor_policy_bytes),
@@ -1542,7 +1557,11 @@ impl ProducerPolicy {
                     "disposed":object.disposed,"cache_lease":object.cache_lease,
                     "generated":object.generated,"bodies":object.bodies,"rolling":object.rolling,
                     "measurement":measurement,"action":"see producer-result original"}));
-                let members: BTreeSet<_> = object.generated.keys().chain(object.bodies.keys()).collect();
+                let members: BTreeSet<_> = object
+                    .generated
+                    .keys()
+                    .chain(object.bodies.keys())
+                    .collect();
                 for member in members {
                     let physical = path.join(member.trim_end_matches('/'));
                     let measurement = inventory.measure(&physical);

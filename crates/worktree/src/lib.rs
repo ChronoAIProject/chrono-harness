@@ -2,10 +2,10 @@
 mod artifact_disposal;
 pub use artifact_disposal::{ArtifactFootprint, artifact_footprint};
 mod automatic;
-pub use automatic::{RetainedArtifact, TemporaryHost};
 #[cfg(feature = "producer-birth-test")]
 #[doc(hidden)]
 pub use automatic::write_inventory_record;
+pub use automatic::{RetainedArtifact, TemporaryHost};
 mod check_inputs;
 mod evidence_retirement;
 mod maintenance;

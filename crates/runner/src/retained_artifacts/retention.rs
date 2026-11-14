@@ -2056,7 +2056,8 @@ impl Inventory {
             self.stable(&gate)?;
             drop(gate);
             let mut receipt = receipt;
-            receipt["maintenance_request"] = crate::maintenance_signal::request_adopted(&self.root, "retention-release");
+            receipt["maintenance_request"] =
+                crate::maintenance_signal::request_adopted(&self.root, "retention-release");
             return Ok(receipt);
         }
         if l.roots.get(&role) != Some(&ids) {
@@ -2072,7 +2073,8 @@ impl Inventory {
         drop(_leases);
         drop(gate);
         let mut receipt = receipt;
-        receipt["maintenance_request"] = crate::maintenance_signal::request_adopted(&self.root, "retention-release");
+        receipt["maintenance_request"] =
+            crate::maintenance_signal::request_adopted(&self.root, "retention-release");
         Ok(receipt)
     }
     /// A terminal caller preserves an exact original outside the retired host.

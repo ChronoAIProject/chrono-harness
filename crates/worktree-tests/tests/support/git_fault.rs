@@ -879,7 +879,10 @@ fn enrollment_originals(config: &Value, arguments: &[OsString]) {
                 root.display()
             );
             for path in config["inventory_paths"].as_array().into_iter().flatten() {
-                print!("worktree {}\0HEAD {head}\0detached\0\0", path.as_str().unwrap());
+                print!(
+                    "worktree {}\0HEAD {head}\0detached\0\0",
+                    path.as_str().unwrap()
+                );
             }
         }
         ["show", spec] => io::stdout().write_all(&blob(spec)).unwrap(),

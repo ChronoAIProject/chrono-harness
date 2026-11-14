@@ -692,9 +692,13 @@ impl Inventory {
                     // reader refuse non-files, links and oversized metadata.
                     "objects" => {
                         if observer.is_some() {
-                            self.with_round_budget(|| self.partition_round_inventory(
-                                observed, Some(std::slice::from_ref(&address)), true,
-                            ))
+                            self.with_round_budget(|| {
+                                self.partition_round_inventory(
+                                    observed,
+                                    Some(std::slice::from_ref(&address)),
+                                    true,
+                                )
+                            })
                         } else {
                             self.maintain_round(observed, Some(std::slice::from_ref(&address)))
                         }
@@ -705,11 +709,17 @@ impl Inventory {
                 };
                 if let Some(observer) = observer.as_deref_mut() {
                     if let Ok(round) = &mut round {
-                        if let Some(declarations) = round.as_object_mut().unwrap().remove("inventory_declarations") {
+                        if let Some(declarations) = round
+                            .as_object_mut()
+                            .unwrap()
+                            .remove("inventory_declarations")
+                        {
                             for record in declarations.as_array().unwrap() {
-                                observer(&json!({"kind":"declaration-state","namespace":namespace,
+                                observer(
+                                    &json!({"kind":"declaration-state","namespace":namespace,
                                     "address":record["id"],"source_round":address,"record":record,
-                                    "freshness":"state observed before original round; path measured after it"}))?;
+                                    "freshness":"state observed before original round; path measured after it"}),
+                                )?;
                             }
                         }
                     }
@@ -732,9 +742,11 @@ impl Inventory {
 
     fn inventory_declaration(record: &Object, directory: &Path) -> Value {
         let output = record.output.as_ref().map(|o| {
-            let allocated = o.manifest.entries.iter().try_fold(0u64, |sum, e| {
-                sum.checked_add(e.allocated_bytes?)
-            });
+            let allocated = o
+                .manifest
+                .entries
+                .iter()
+                .try_fold(0u64, |sum, e| sum.checked_add(e.allocated_bytes?));
             json!({"id":o.id,"producer":o.producer,"identity":o.identity,
                 "phase":o.phase,"tree":o.tree,"expires":o.expires,
                 "outcome":o.outcome,"observed_return":o.observed_return,
@@ -888,21 +900,38 @@ impl Inventory {
                 // Reuse exactly the records already loaded by this bounded
                 // component. No second metadata read, graph or round budget.
                 let declarations: Vec<_> = if report_inventory {
-                    gate.objects.borrow().values().map(|record| {
-                        Self::inventory_declaration(record,
-                            &self.directory.join("objects").join(&record.id))
-                    }).collect()
-                } else { vec![] };
+                    gate.objects
+                        .borrow()
+                        .values()
+                        .map(|record| {
+                            Self::inventory_declaration(
+                                record,
+                                &self.directory.join("objects").join(&record.id),
+                            )
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
                 seen.extend(owned.iter().cloned());
                 self.maintain_locked(observed, &gate).map(|round| {
                     let observations = gate.measurements(self.policy.max_output_bytes);
-                    (round, owned, observations, gate.unvisited_relations.clone(), declarations)
+                    (
+                        round,
+                        owned,
+                        observations,
+                        gate.unvisited_relations.clone(),
+                        declarations,
+                    )
                 })
             })();
             match attempted {
                 Ok((round, owned, observations, unvisited, declarations)) => {
                     if report_inventory {
-                        result["inventory_declarations"].as_array_mut().unwrap().extend(declarations);
+                        result["inventory_declarations"]
+                            .as_array_mut()
+                            .unwrap()
+                            .extend(declarations);
                     }
                     measurements.extend(observations);
                     unvisited_relations.extend(unvisited);
