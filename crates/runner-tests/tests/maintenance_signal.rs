@@ -27,6 +27,110 @@ fn hint_length_keeps_the_original_nonempty_64_byte_boundary() {
         || !signal::valid_hint_length(64) || signal::valid_hint_length(65)
         || signal::valid_hint_length(usize::MAX) { panic!(); }
 }
+
+fn expect_hint(actual: bool)
+    requires actual,
+{
+    if !actual { panic!(); }
+}
+
+fn expect_hint_text(actual: &str, expected: &str)
+    requires actual@ == expected@,
+{
+    if actual.to_string() != expected.to_string() { panic!(); }
+}
+
+fn hint_send_case<'a>(payload: &'a str, bytes: usize, failure: u8, sent: usize) {
+    let open = |mut trace: Vec<(u8, &'a str, bool)>|
+        -> (out: (Vec<(u8, &'a str, bool)>, Result<&'a str, String>))
+        ensures out.0@ == trace@.push((0, payload, false)),
+            if failure == 1 { match out.1 {
+                Err(error) => error@ == payload@, _ => false,
+            } } else { out.1 == Ok::<&'a str, String>(payload) },
+    {
+        trace.push((0, payload, false));
+        (trace, if failure == 1 { Err(payload.to_string()) } else { Ok(payload) })
+    };
+    let nonblocking = |mut trace: Vec<(u8, &'a str, bool)>, socket: &&'a str, enabled: bool|
+        -> (out: (Vec<(u8, &'a str, bool)>, Result<(), String>))
+        ensures out.0@ == trace@.push((1, *socket, enabled)),
+            if failure == 2 { match out.1 {
+                Err(error) => error@ == payload@, _ => false,
+            } } else { out.1 == Ok::<(), String>(()) },
+    {
+        trace.push((1, *socket, enabled));
+        (trace, if failure == 2 { Err(payload.to_string()) } else { Ok(()) })
+    };
+    let send = |mut trace: Vec<(u8, &'a str, bool)>, socket: &'a str|
+        -> (out: (Vec<(u8, &'a str, bool)>, Result<usize, String>))
+        ensures out.0@ == trace@.push((2, socket, false)),
+            if failure == 3 { match out.1 {
+                Err(error) => error@ == payload@, _ => false,
+            } } else { out.1 == Ok::<usize, String>(sent) },
+    {
+        trace.push((2, socket, false));
+        (trace, if failure == 3 { Err(payload.to_string()) } else { Ok(sent) })
+    };
+    let (trace, result) = signal::send_hint(Vec::new(), bytes, open, nonblocking, send);
+    if bytes == 0 || bytes > 64 {
+        expect_hint(trace.len() == 0);
+        match result {
+            Err(error) => expect_hint(error == "maintenance hint exceeds 64 bytes".to_string()),
+            Ok(()) => expect_hint(false),
+        }
+    } else {
+        let count = if failure == 1 { 1 } else if failure == 2 { 2 } else { 3 };
+        expect_hint(trace.len() == count);
+        expect_hint(trace[0].0 == 0 && !trace[0].2);
+        expect_hint_text(trace[0].1, payload);
+        if failure != 1 {
+            expect_hint(trace[1].0 == 1 && trace[1].2);
+            expect_hint_text(trace[1].1, payload);
+            if failure != 2 {
+                expect_hint(trace[2].0 == 2 && !trace[2].2);
+                expect_hint_text(trace[2].1, payload);
+            }
+        }
+        if failure == 1 || failure == 2 || failure == 3 {
+            match result {
+                Err(error) => expect_hint(error == payload.to_string()),
+                Ok(()) => expect_hint(false),
+            }
+        } else if sent == bytes {
+            expect_hint(result.is_ok());
+        } else {
+            match result {
+                Err(error) => expect_hint(error == "incomplete maintenance datagram".to_string()),
+                Ok(()) => expect_hint(false),
+            }
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn hint_send_keeps_order_nonblocking_and_the_complete_original_error() {
+    hint_send_case("", 1, 1, 1);
+    hint_send_case("原错/λ\0\n", 64, 1, 64);
+    hint_send_case("原错/λ\0\n", 64, 2, 64);
+    hint_send_case("原错/λ\0\n", 64, 3, 64);
+    hint_send_case("原提示/λ\0\n", 1, 0, 1);
+    hint_send_case("原提示/λ\0\n", 64, 0, 64);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn hint_send_rejects_invalid_lengths_without_opening_or_sending() {
+    hint_send_case("retained", 0, 0, 0);
+    hint_send_case("retained", 65, 1, 65);
+    hint_send_case("retained", usize::MAX, 3, usize::MAX);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn hint_send_requires_the_exact_observed_length() {
+    hint_send_case("retained", 1, 0, 0);
+    hint_send_case("retained", 64, 0, 1);
+    hint_send_case("retained", 64, 0, 65);
+    hint_send_case("retained", 1, 0, usize::MAX);
+}
 }
 
 #[cfg(not(verus_keep_ghost))]

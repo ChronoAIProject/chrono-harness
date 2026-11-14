@@ -1,5 +1,25 @@
 # Verus 实施范围
 
+## 维护激活消息的完整发送顺序
+
+`maintenance_signal.rs` 的真实 Unix `send` 直接调用同源 Verus `send_hint`：
+消息长度必须在 1–64 字节内，才创建临时 socket；先成功启用非阻塞模式，再发送一次。
+创建、配置或发送失败都立即保留原错误全文，后续阶段不再调用；实际发送长度必须
+精确等于原消息长度，否则拒绝。回调关系同时绑定原 socket、阶段输入和完整状态。
+
+独立 Verus 预期同时作为 Rust 测试运行，核全部失败阶段、完整调用轨迹、配置参数
+必须为 `true`、原 socket 身份、完整错误文本、0／1／64／65／usize::MAX 边界及
+少发／多发拒绝，含空串、Unicode、NUL 和换行载荷。沿用 `verify.runner-limits`、
+`verify.runner-limits-tests` 的严格整 crate 证明及原未过滤 runner／worktree 行为入口。
+
+外部接口逐项限定为现役 Rust `UnixDatagram::unbound` 返回原 socket 或 IO 错误，
+`set_nonblocking` 消费 Verus 传入的 `true` 并报告实际结果，`send_to` 消费同一原消息
+切片和原 socket 路径并返回实际发送字节数或错误，以及 `Error::to_string` 保留其文本。
+这些接口不证明 OS 一定接受提示或执行维护；成功发送也不证明维护轮次或回收完成。
+政策准入、线程抑制、激活收据及服务状态仍有自身证明义务，本范围不表示整文件或
+全仓已证明。没有新增依赖、仓内受信函数、证明入口、线程或预算，也没有新增运行时
+容器、消息副本或 IO；完整构建、验证、运行、CI 和存储成本未测。
+
 ## 缓存恢复的完整源码刷新循环
 
 真实恢复入口直接调用 `run_recovery_refreshes`，按准备项的原顺序消费完整缓存 ID
