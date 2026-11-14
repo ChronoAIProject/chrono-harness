@@ -302,6 +302,14 @@ proof fn invocation_token_literals()
     reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
     reveal_strlit("-L"); reveal_strlit("--extern");
     reveal_strlit("--import"); reveal_strlit("--export");
+    assert(policy::invocation_kind("--edition=2024"@) == policy::InvocationKind::Edition) by (compute);
+    assert(policy::invocation_kind("--crate-name"@) == policy::InvocationKind::CrateName) by (compute);
+    assert(policy::invocation_kind("-Zunstable-options"@) == policy::InvocationKind::Unstable) by (compute);
+    assert(policy::invocation_kind("--env-set"@) == policy::InvocationKind::Environment) by (compute);
+    assert(policy::invocation_kind("-L"@) == policy::InvocationKind::Search) by (compute);
+    assert(policy::invocation_kind("--extern"@) == policy::InvocationKind::Extern) by (compute);
+    assert(policy::invocation_kind("--import"@) == policy::InvocationKind::Import) by (compute);
+    assert(policy::invocation_kind("--export"@) == policy::InvocationKind::Export) by (compute);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -373,6 +381,10 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
         assert(policy::fresh_extension(args@, 17));
         assert(policy::fresh_extension(args@, 19));
         assert(policy::fresh_extension(args@, 21));
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("producer=producer.rlib"@), 0, 61) == 8);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("producer=producer.vir"@), 0, 61) == 8);
+        assert(vstd::utf8::encode_utf8("producer=producer.rlib"@).take(8)
+            =~= vstd::utf8::encode_utf8("producer=producer.vir"@).take(8));
         assert(policy::same_input_name(vstd::utf8::encode_utf8(args[18]@),
             vstd::utf8::encode_utf8(args[20]@)));
         assert(policy::import_has_extern(args@, 19, 23));
@@ -409,6 +421,19 @@ fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
     expect_verifier_true(process_error && qualification_error);
     let mut conflicting = args;
     conflicting[18] = "other=wrong.rlib".to_string();
+    proof {
+        reveal_strlit("other=wrong.rlib"); reveal_strlit("other=other.rlib");
+        vstd::utf8::is_ascii_chars_encode_utf8("other=wrong.rlib"@);
+        reveal_with_fuel(policy::sources::next_byte, 6);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("other=wrong.rlib"@), 0, 61) == 5);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("other=other.rlib"@), 0, 61) == 5);
+        assert(vstd::utf8::encode_utf8("other=wrong.rlib"@).take(5)
+            =~= vstd::utf8::encode_utf8("other=other.rlib"@).take(5));
+        assert(policy::conflicting_extension(conflicting@, 15, 17));
+        assert(!policy::fresh_extension(conflicting@, 17));
+        reveal_with_fuel(policy::invocation_extensions, 16);
+        assert(!policy::verifier_arguments(conflicting@));
+    }
     let duplicate_name = policy::parse_verifier_arguments(&conflicting);
     expect_verifier_true(duplicate_name.is_none());
 }
