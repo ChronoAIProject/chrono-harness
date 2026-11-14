@@ -25,6 +25,280 @@ mod probe;
 
 verus! {
 
+pub open spec fn removal_event(trace: Seq<(u8, usize, String)>, previous: Seq<(u8, usize, String)>,
+    kind: u8, index: usize, payload: Seq<char>) -> bool {
+    trace.len() == previous.len() + 1 && trace.drop_last() == previous
+        && trace.last().0 == kind && trace.last().1 == index && trace.last().2@ == payload
+}
+
+pub open spec fn removal_trace_prefix(trace: Seq<(u8, usize, String)>, count: int) -> bool {
+    0 <= count && trace.len() == 1 + 2 * count
+        && trace[0].0 == 0 && trace[0].1 == 0 && trace[0].2@ == ""@
+        && forall|i: int| 0 <= i < count ==>
+            #[trigger] trace[1 + 2 * i].0 == 1 && trace[1 + 2 * i].1 == i
+                && trace[1 + 2 * i].2@ == ""@
+                && trace[2 + 2 * i].0 == 2 && trace[2 + 2 * i].1 == i
+                && trace[2 + 2 * i].2@ == if i % 2 == 0 { "removed"@ } else { "absent"@ }
+}
+
+pub open spec fn removal_success(next: Seq<(u8, usize, String)>,
+    previous: Seq<(u8, usize, String)>, index: int) -> bool {
+    next.len() == previous.len() + 2 && next.subrange(0, previous.len() as int) == previous
+        && next[previous.len() as int].0 == 1 && next[previous.len() as int].1 == index
+        && next[previous.len() as int].2@ == ""@
+        && next[previous.len() as int + 1].0 == 2 && next[previous.len() as int + 1].1 == index
+        && next[previous.len() as int + 1].2@ == if index % 2 == 0 { "removed"@ } else { "absent"@ }
+}
+
+proof fn removal_trace_step(previous: Seq<(u8, usize, String)>, next: Seq<(u8, usize, String)>, end: int)
+    requires 0 < end, removal_trace_prefix(previous, end - 1),
+        removal_success(next, previous, end - 1),
+    ensures removal_trace_prefix(next, end),
+{
+        assert forall|i: int| 0 <= i < end implies
+            #[trigger] next[1 + 2 * i].0 == 1 && next[1 + 2 * i].1 == i
+                && next[1 + 2 * i].2@ == ""@
+                && next[2 + 2 * i].0 == 2 && next[2 + 2 * i].1 == i
+                && next[2 + 2 * i].2@ == if i % 2 == 0 { "removed"@ } else { "absent"@ } by {
+            if i < end - 1 {
+                assert(previous[1 + 2 * i].0 == 1);
+                assert(previous[2 + 2 * i].2@ == if i % 2 == 0 { "removed"@ } else { "absent"@ });
+                assert(next[1 + 2 * i] == previous[1 + 2 * i]);
+                assert(next[2 + 2 * i] == previous[2 + 2 * i]);
+            }
+        }
+}
+
+fn recovery_removals_case(paths: &Vec<(String, usize, String)>, fail_at: usize,
+    raw_error: &str, publish_ok: bool)
+    requires paths.len() <= 3, fail_at <= paths.len(),
+{
+    let trace = Vec::<(u8, usize, String)>::new();
+    let ghost initial = trace;
+    let publish = |mut trace: Vec<(u8, usize, String)>|
+        -> (out: (Vec<(u8, usize, String)>, Result<(), String>))
+        ensures removal_event(out.0@, trace@, 0u8, 0usize, ""@),
+            if publish_ok { out.1 == Ok::<(), String>(()) }
+            else { match out.1 { Err(error) => error@ == raw_error@, _ => false } },
+    {
+        let ghost previous = trace@;
+        trace.push((0, 0, "".to_string()));
+        assert(trace@.drop_last() =~= previous);
+        (trace, if publish_ok { Ok(()) } else { Err(raw_error.to_string()) })
+    };
+    let remove = |mut trace: Vec<(u8, usize, String)>, index: usize|
+        -> (out: (Vec<(u8, usize, String)>, Result<&'static str, String>))
+        requires index < paths.len(),
+        ensures removal_event(out.0@, trace@, 1u8, index, ""@),
+            if index == fail_at { match out.1 { Err(error) => error@ == raw_error@, _ => false } }
+            else { match out.1 {
+                Ok(status) => status@ == if index % 2 == 0 { "removed"@ } else { "absent"@ },
+                _ => false,
+            } },
+    {
+        let ghost previous = trace@;
+        trace.push((1, index, "".to_string()));
+        assert(trace@.drop_last() =~= previous);
+        (trace, if index == fail_at { Err(raw_error.to_string()) }
+            else if index % 2 == 0 { Ok("removed") } else { Ok("absent") })
+    };
+    let success = |mut trace: Vec<(u8, usize, String)>, index: usize, status: &'static str|
+        -> (out: Vec<(u8, usize, String)>)
+        ensures removal_event(out@, trace@, 2u8, index, status@),
+    {
+        let ghost previous = trace@;
+        trace.push((2, index, status.to_string()));
+        assert(trace@.drop_last() =~= previous);
+        trace
+    };
+    let failure = |mut trace: Vec<(u8, usize, String)>, index: usize, error: &String|
+        -> (out: Vec<(u8, usize, String)>)
+        ensures removal_event(out@, trace@, 3u8, index, error@),
+    {
+        let ghost previous = trace@;
+        trace.push((3, index, error.clone()));
+        assert(trace@.drop_last() =~= previous);
+        trace
+    };
+    let (trace, result) = policy::run_recovery_removals(
+        trace, paths, publish, &remove, &success, &failure);
+    proof {
+        let (published, published_result) = choose|published: Vec<(u8, usize, String)>,
+            published_result: Result<(), String>|
+            #[trigger] publish.ensures((initial,), (published, published_result))
+            && match published_result {
+                Err(error) => trace == published && match result {
+                    Err(parts) => parts.0@ == ""@ && parts.1 == error
+                        && parts.2@ == ""@ && parts.3@ == ""@,
+                    _ => false,
+                },
+                Ok(()) => policy::recovery_paths_result(paths@, published,
+                    &remove, &success, &failure, (trace, result)),
+            };
+        if publish_ok {
+            let states = choose|states: Seq<Vec<(u8, usize, String)>>|
+                #[trigger] policy::recovery_removal_prefix(paths@, states, published,
+                    &remove, &success, &failure)
+                && match result {
+                    Ok(()) => states.len() == paths.len() + 1 && trace == states.last(),
+                    Err(error) => states.len() <= paths.len()
+                        && policy::recovery_removal_step(states.last(),
+                            (states.len() - 1) as usize, &paths@[states.len() - 1].2,
+                            &remove, &success, &failure, (trace, Err::<(), policy::RecoveryRemovalError>(error))),
+                };
+            assert forall|i: int| 0 <= i < states.len() - 1 implies i != fail_at
+                && removal_success(states[i + 1]@, #[trigger] states[i]@, i) by {
+                assert(policy::recovery_removal_step(states[i], i as usize, &paths@[i].2,
+                    &remove, &success, &failure, (states[i + 1], Ok::<(), policy::RecoveryRemovalError>(()))));
+                let (observed, removed) = choose|observed: Vec<(u8, usize, String)>,
+                    removed: Result<&'static str, String>|
+                    #[trigger] remove.ensures((states[i], i as usize), (observed, removed))
+                    && match removed {
+                        Ok(status) => success.ensures((observed, i as usize, status), states[i + 1]),
+                        Err(_) => false,
+                    };
+                assert(i != fail_at);
+                assert(states[i + 1]@.subrange(0, states[i]@.len() as int) =~= states[i]@) by {
+                    assert forall|k: int| 0 <= k < states[i]@.len() implies
+                        states[i + 1]@[k] == states[i]@[k] by {
+                        assert(observed@[k] == states[i]@[k]);
+                        assert(states[i + 1]@[k] == observed@[k]);
+                    }
+                }
+                assert(removal_success(states[i + 1]@, states[i]@, i));
+            }
+            let i = states.len() - 1;
+            if i > 0 {
+                assert(removal_success(states[1]@, states[0]@, 0));
+                removal_trace_step(states[0]@, states[1]@, 1);
+            }
+            if i > 1 {
+                assert(removal_success(states[2]@, states[1]@, 1));
+                removal_trace_step(states[1]@, states[2]@, 2);
+            }
+            if i > 2 {
+                assert(removal_success(states[3]@, states[2]@, 2));
+                removal_trace_step(states[2]@, states[3]@, 3);
+            }
+            assert(removal_trace_prefix(states.last()@, i));
+            match &result {
+                Ok(()) => {
+                    if fail_at < paths.len() {
+                        assert(removal_success(states[fail_at as int + 1]@,
+                            states[fail_at as int]@, fail_at as int));
+                    }
+                    assert(fail_at == paths.len());
+                    assert(removal_trace_prefix(trace@, paths.len() as int));
+                },
+                Err(error) => {
+                    let (observed, removed) = choose|observed: Vec<(u8, usize, String)>,
+                        removed: Result<&'static str, String>|
+                        #[trigger] remove.ensures((states.last(), i as usize), (observed, removed))
+                        && match removed {
+                            Ok(_) => false,
+                            Err(original) => failure.ensures((observed, i as usize, &original), trace)
+                                && error.0@ == "E_CACHE_RECOVERY: "@ && error.1 == paths@[i].2
+                                && error.2@ == ": "@ && error.3 == original,
+                        };
+                    assert(i == fail_at);
+                    assert(trace@.len() == 3 + 2 * fail_at);
+                    assert(trace@[1 + 2 * fail_at].0 == 1);
+                    assert(trace@[2 + 2 * fail_at].0 == 3);
+                    assert(trace@[2 + 2 * fail_at].1 == fail_at);
+                    assert(trace@[2 + 2 * fail_at].2@ == raw_error@);
+                    assert forall|j: int| 0 <= j < fail_at implies
+                        #[trigger] trace@[1 + 2 * j].0 == 1 && trace@[1 + 2 * j].1 == j
+                            && trace@[2 + 2 * j].0 == 2 && trace@[2 + 2 * j].1 == j
+                            && trace@[2 + 2 * j].2@ == if j % 2 == 0 { "removed"@ } else { "absent"@ } by {
+                        assert(states.last()@[1 + 2 * j].0 == 1);
+                        assert(states.last()@[2 + 2 * j].2@ == if j % 2 == 0 { "removed"@ } else { "absent"@ });
+                        assert(trace@[1 + 2 * j] == states.last()@[1 + 2 * j]);
+                        assert(trace@[2 + 2 * j] == states.last()@[2 + 2 * j]);
+                    }
+                },
+            }
+        }
+    }
+    if !publish_ok {
+        expect_cache_true(trace.len() == 1);
+        expect_cache_true(trace[0].0 == 0);
+        match result { Err(parts) => {
+                expect_restore_text(parts.0, "");
+                expect_restore_text(parts.1.as_str(), raw_error);
+                expect_restore_text(parts.2, "");
+                expect_restore_text(parts.3.as_str(), "");
+            },
+            _ => expect_cache_true(false) }
+    } else {
+        let count = if fail_at < paths.len() { fail_at } else { paths.len() };
+        let mut i = 0;
+        while i < count
+            invariant 0 <= i <= count, count <= paths.len(), count <= 3,
+                trace@.len() >= 1 + 2 * count,
+                forall|j: int| 0 <= j < count ==>
+                    #[trigger] trace@[1 + 2 * j].0 == 1 && trace@[1 + 2 * j].1 == j
+                        && trace@[2 + 2 * j].0 == 2 && trace@[2 + 2 * j].1 == j
+                        && trace@[2 + 2 * j].2@ == if j % 2 == 0 { "removed"@ } else { "absent"@ },
+            decreases count - i,
+        {
+            expect_cache_true(trace[1 + 2 * i].0 == 1);
+            expect_cache_true(trace[1 + 2 * i].1 == i);
+            expect_cache_true(trace[2 + 2 * i].0 == 2);
+            expect_cache_true(trace[2 + 2 * i].1 == i);
+            expect_restore_text(trace[2 + 2 * i].2.as_str(),
+                if i % 2 == 0 { "removed" } else { "absent" });
+            i += 1;
+        }
+        if fail_at < paths.len() {
+            expect_cache_true(trace.len() == 3 + 2 * fail_at);
+            expect_cache_true(trace[2 + 2 * fail_at].0 == 3);
+            expect_cache_true(trace[2 + 2 * fail_at].1 == fail_at);
+            expect_restore_text(trace[2 + 2 * fail_at].2.as_str(), raw_error);
+            match result { Err(parts) => {
+                    expect_restore_text(parts.0, "E_CACHE_RECOVERY: ");
+                    expect_restore_text(parts.1.as_str(), paths[fail_at].2.as_str());
+                    expect_restore_text(parts.2, ": ");
+                    expect_restore_text(parts.3.as_str(), raw_error);
+                },
+                _ => expect_cache_true(false) }
+        } else {
+            expect_cache_true(trace.len() == 1 + 2 * paths.len());
+            expect_cache_true(result.is_ok());
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_removals_publish_before_empty_or_complete_deletion() {
+    let mut paths = Vec::new();
+    recovery_removals_case(&paths, 0, "", true);
+    paths.push(("first".to_string(), 9, "first/path".to_string()));
+    recovery_removals_case(&paths, 1, "", true);
+    paths.push(("second".to_string(), 0, "second/λ\0\n".to_string()));
+    paths.push(("first".to_string(), 2, "".to_string()));
+    recovery_removals_case(&paths, 3, "unused", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_removals_stop_after_first_middle_or_last_failure() {
+    let mut paths = Vec::new();
+    paths.push(("first".to_string(), 9, "first/path".to_string()));
+    paths.push(("second".to_string(), 0, "second/λ\0\n".to_string()));
+    paths.push(("first".to_string(), 2, "".to_string()));
+    recovery_removals_case(&paths, 0, "denied", true);
+    recovery_removals_case(&paths, 1, "error/λ\0\n", true);
+    recovery_removals_case(&paths, 2, "", true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn recovery_removals_do_not_delete_after_failed_intent_publication() {
+    let mut paths = Vec::new();
+    recovery_removals_case(&paths, 0, "publish/λ\0\n", false);
+    paths.push(("first".to_string(), 0, "first".to_string()));
+    recovery_removals_case(&paths, 0, "", false);
+    recovery_removals_case(&paths, 1, "publish denied", false);
+}
+
 fn recovery_entry_case(
     output_probe: policy::RecoveryProbe, intent_probe: policy::RecoveryProbe,
     replay_result: Result<u64, String>, not_found: u32, intent_path: &str,

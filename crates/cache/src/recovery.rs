@@ -223,6 +223,168 @@ pub fn select_recovery_entry<S, T, O, I, R>(
     out
 }
 
+pub type RecoveryRemovalError = (&'static str, String, &'static str, String);
+
+pub open spec fn recovery_removal_step<S, R, C, F>(
+    state: S, index: usize, path: &String, remove: &R, success: &C, failure: &F,
+    out: (S, Result<(), RecoveryRemovalError>),
+) -> bool
+    where R: Fn(S, usize) -> (S, Result<&'static str, String>),
+        C: Fn(S, usize, &'static str) -> S, F: Fn(S, usize, &String) -> S,
+{
+    exists|observed: S, removed: Result<&'static str, String>|
+        #[trigger] remove.ensures((state, index), (observed, removed))
+        && match removed {
+            Ok(status) => success.ensures((observed, index, status), out.0)
+                && out.1 == Ok::<(), RecoveryRemovalError>(()),
+            Err(error) => failure.ensures((observed, index, &error), out.0)
+                && match out.1 {
+                    Err(parts) => parts.0@ == "E_CACHE_RECOVERY: "@ && parts.1 == *path
+                        && parts.2@ == ": "@ && parts.3 == error,
+                    _ => false,
+                },
+        }
+}
+
+fn remove_recovery_row<S, R, C, F>(
+    state: S, index: usize, path: &String, remove: &R, success: &C, failure: &F,
+) -> (out: (S, Result<(), RecoveryRemovalError>))
+    where R: Fn(S, usize) -> (S, Result<&'static str, String>),
+        C: Fn(S, usize, &'static str) -> S, F: Fn(S, usize, &String) -> S,
+    requires remove.requires((state, index)),
+        forall|state: S, index: usize, status: &'static str| success.requires((state, index, status)),
+        forall|state: S, index: usize, error: &String| failure.requires((state, index, error)),
+    ensures recovery_removal_step(state, index, path, remove, success, failure, out),
+{
+    let ghost initial = state;
+    let (state, removed) = remove(state, index);
+    let ghost observed = state;
+    let ghost original = removed;
+    let out = match removed {
+        Ok(status) => (success(state, index, status), Ok(())),
+        Err(error) => {
+            let state = failure(state, index, &error);
+            (state, Err(("E_CACHE_RECOVERY: ", path.clone(), ": ", error)))
+        },
+    };
+    assert(remove.ensures((initial, index), (observed, original)));
+    out
+}
+
+pub open spec fn recovery_removal_prefix<S, R, C, F>(
+    paths: Seq<(String, usize, String)>, states: Seq<S>, initial: S,
+    remove: &R, success: &C, failure: &F,
+) -> bool
+    where R: Fn(S, usize) -> (S, Result<&'static str, String>),
+        C: Fn(S, usize, &'static str) -> S, F: Fn(S, usize, &String) -> S,
+{
+    0 < states.len() <= paths.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] recovery_removal_step(states[i], i as usize, &paths[i].2,
+                remove, success, failure, (states[i + 1], Ok::<(), RecoveryRemovalError>(())))
+}
+
+pub open spec fn recovery_paths_result<S, R, C, F>(
+    paths: Seq<(String, usize, String)>, initial: S,
+    remove: &R, success: &C, failure: &F, out: (S, Result<(), RecoveryRemovalError>),
+) -> bool
+    where R: Fn(S, usize) -> (S, Result<&'static str, String>),
+        C: Fn(S, usize, &'static str) -> S, F: Fn(S, usize, &String) -> S,
+{
+    exists|states: Seq<S>| #[trigger] recovery_removal_prefix(paths, states, initial,
+        remove, success, failure)
+        && match out.1 {
+            Ok(()) => states.len() == paths.len() + 1 && out.0 == states.last(),
+            Err(error) => states.len() <= paths.len()
+                && recovery_removal_step(states.last(), (states.len() - 1) as usize,
+                    &paths[states.len() - 1].2, remove, success, failure,
+                    (out.0, Err::<(), RecoveryRemovalError>(error))),
+        }
+}
+
+pub open spec fn recovery_removals_result<S, P, R, C, F>(
+    initial: S, paths: Seq<(String, usize, String)>, publish: P,
+    remove: &R, success: &C, failure: &F, out: (S, Result<(), RecoveryRemovalError>),
+) -> bool
+    where P: FnOnce(S) -> (S, Result<(), String>),
+        R: Fn(S, usize) -> (S, Result<&'static str, String>),
+        C: Fn(S, usize, &'static str) -> S, F: Fn(S, usize, &String) -> S,
+{
+    exists|published: S, result: Result<(), String>|
+        #[trigger] publish.ensures((initial,), (published, result))
+        && match result {
+            Err(error) => out.0 == published && match out.1 {
+                Err(parts) => parts.0@ == ""@ && parts.1 == error
+                    && parts.2@ == ""@ && parts.3@ == ""@,
+                _ => false,
+            },
+            Ok(()) => recovery_paths_result(paths, published, remove, success, failure, out),
+        }
+}
+
+/// 先发布一次原意图，再按完整原顺序删除；首错记录后立即返回。
+pub fn run_recovery_removals<S, P, R, C, F>(
+    source: S, paths: &Vec<(String, usize, String)>, publish: P,
+    remove: &R, success: &C, failure: &F,
+) -> (out: (S, Result<(), RecoveryRemovalError>))
+    where P: FnOnce(S) -> (S, Result<(), String>),
+        R: Fn(S, usize) -> (S, Result<&'static str, String>),
+        C: Fn(S, usize, &'static str) -> S, F: Fn(S, usize, &String) -> S,
+    requires publish.requires((source,)),
+        forall|state: S, index: usize| index < paths.len() ==> remove.requires((state, index)),
+        forall|state: S, index: usize, status: &'static str| success.requires((state, index, status)),
+        forall|state: S, index: usize, error: &String| failure.requires((state, index, error)),
+    ensures recovery_removals_result(source, paths@, publish, remove, success, failure, out),
+{
+    let published_observation = publish(source);
+    let (mut state, result) = published_observation;
+    let ghost published = state;
+    let ghost publication = result;
+    assert(publish.ensures((source,), (published, publication)));
+    match result { Err(error) => { return (state, Err(("", error, "", "".to_string()))); }, Ok(()) => {} }
+    assert(publication is Ok);
+    let ghost states = seq![published];
+    let mut i = 0;
+    while i < paths.len()
+        invariant 0 <= i <= paths.len(), states.len() == i + 1, states.last() == state,
+            recovery_removal_prefix(paths@, states, published, remove, success, failure),
+            publish.ensures((source,), (published, publication)), publication is Ok,
+            forall|state: S, index: usize| index < paths.len() ==> remove.requires((state, index)),
+            forall|state: S, index: usize, status: &'static str| success.requires((state, index, status)),
+            forall|state: S, index: usize, error: &String| failure.requires((state, index, error)),
+        decreases paths.len() - i,
+    {
+        let (next, result) = remove_recovery_row(state, i, &paths[i].2, remove, success, failure);
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(recovery_paths_result(paths@, published, remove, success, failure, out));
+                assert(recovery_removals_result(source, paths@, publish, remove, success, failure, out));
+                return out;
+            },
+            Ok(()) => {
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] recovery_removal_step(states[j], j as usize, &paths@[j].2,
+                            remove, success, failure, (states[j + 1], Ok::<(), RecoveryRemovalError>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(recovery_removal_step(previous[j], j as usize, &paths@[j].2,
+                                remove, success, failure, (previous[j + 1], Ok::<(), RecoveryRemovalError>(()))) );
+                        }
+                    }
+                }
+                state = next;
+            },
+        }
+        i += 1;
+    }
+    let out = (state, Ok(()));
+    assert(recovery_paths_result(paths@, published, remove, success, failure, out));
+    out
+}
+
 pub enum RecoveryOption {
     HostRoot,
     Config,
@@ -868,44 +1030,58 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         }
         // Validate the complete selected set before the first removal, and
         // publish the original plan/restore binding before touching any output.
-        publish_once(
-            &root,
-            &intent_path,
-            &serde_json::to_vec(&report).map_err(|e| e.to_string())?,
-        )?;
-        for (id, position, path) in paths {
-            let removed = (|| -> Result<&str, String> {
-                let target = super::path(&root, &path)?;
-                remove_recovery_output(
-                    target,
-                    std::io::ErrorKind::NotFound as u32,
-                    |target| {
-                        let result = fs::symlink_metadata(&target)
-                            .map(|metadata| (metadata.is_dir(), metadata.is_file()))
-                            .map_err(|error| (error.kind() as u32, error.to_string()));
-                        (target, result)
-                    },
-                    |target| {
-                        let result = fs::remove_dir_all(&target).map_err(|error| error.to_string());
-                        (target, result)
-                    },
-                    |target| {
-                        let result = fs::remove_file(&target).map_err(|error| error.to_string());
-                        (target, result)
-                    },
-                )
-                .1
-            })();
-            let row = &mut report["caches"][&id]["artifacts"][position];
-            match removed {
-                Ok(status) => row["status"] = json!(status),
-                Err(error) => {
-                    row["status"] = json!("failed");
-                    row["error"] = json!(error);
-                    return Err(format!("E_CACHE_RECOVERY: {path}: {error}"));
-                }
-            }
-        }
+        let (updated, removed) = run_recovery_removals(
+            std::mem::take(&mut report),
+            &paths,
+            |report| {
+                let published = serde_json::to_vec(&report)
+                    .map_err(|error| error.to_string())
+                    .and_then(|bytes| publish_once(&root, &intent_path, &bytes));
+                (report, published)
+            },
+            &|report, index| {
+                let removed = super::path(&root, &paths[index].2).map(|target| {
+                    remove_recovery_output(
+                        target,
+                        std::io::ErrorKind::NotFound as u32,
+                        |target| {
+                            let result = fs::symlink_metadata(&target)
+                                .map(|metadata| (metadata.is_dir(), metadata.is_file()))
+                                .map_err(|error| (error.kind() as u32, error.to_string()));
+                            (target, result)
+                        },
+                        |target| {
+                            let result =
+                                fs::remove_dir_all(&target).map_err(|error| error.to_string());
+                            (target, result)
+                        },
+                        |target| {
+                            let result =
+                                fs::remove_file(&target).map_err(|error| error.to_string());
+                            (target, result)
+                        },
+                    )
+                    .1
+                });
+                (report, removed.and_then(std::convert::identity))
+            },
+            &|mut report, index, status| {
+                let (id, position, _) = &paths[index];
+                report["caches"][id]["artifacts"][*position]["status"] = json!(status);
+                report
+            },
+            &|mut report, index, error| {
+                let (id, position, _) = &paths[index];
+                let row = &mut report["caches"][id]["artifacts"][*position];
+                row["status"] = json!("failed");
+                row["error"] = json!(error);
+                report
+            },
+        );
+        report = updated;
+        removed.map_err(|(prefix, path, separator, error)| {
+            [prefix, path.as_str(), separator, error.as_str()].concat()
+        })?;
         for cache in report["caches"].as_object_mut().unwrap().values_mut() {
             if let Some(status) = complete_recovery_cache(cache["status"].as_str()) {
                 cache["status"] = json!(status);
