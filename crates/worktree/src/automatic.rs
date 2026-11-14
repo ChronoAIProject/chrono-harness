@@ -53,14 +53,20 @@ pub fn missing_cache_observation() -> (observation: MissingCacheObservation)
 mod age;
 #[cfg(not(verus_keep_ghost))]
 mod cache_adoption;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/inventory.rs"]
+pub(crate) mod inventory;
 #[cfg(not(verus_keep_ghost))]
-mod inventory;
+pub(crate) mod inventory;
 #[cfg(not(verus_keep_ghost))]
 mod migration;
 #[cfg(not(verus_keep_ghost))]
 mod owner_deployment;
 #[cfg(not(verus_keep_ghost))]
 mod producer;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/service.rs"]
+pub(crate) mod service;
 #[cfg(not(verus_keep_ghost))]
 pub(crate) mod service;
 #[cfg(all(not(verus_keep_ghost), feature = "producer-birth-test"))]

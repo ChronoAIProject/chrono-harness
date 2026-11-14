@@ -4,6 +4,10 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "maintenance_signal.rs"]
+pub mod maintenance_signal;
+
 verus! {
 
 pub const MAX_OUTPUT_BYTES: usize = 67_108_864;

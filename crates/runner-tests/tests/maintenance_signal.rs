@@ -1,7 +1,28 @@
 #![cfg(unix)]
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy::maintenance_signal as signal;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn hint_length_keeps_the_original_nonempty_64_byte_boundary() {
+    if signal::valid_hint_length(0) || !signal::valid_hint_length(1)
+        || !signal::valid_hint_length(64) || signal::valid_hint_length(65)
+        || signal::valid_hint_length(usize::MAX) { panic!(); }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::maintenance_signal::{self as signal, Policy, RoundGuard};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, os::unix::net::UnixDatagram, time::Duration};
 
+#[cfg(not(verus_keep_ghost))]
 fn host() -> (tempfile::TempDir, std::path::PathBuf) {
     let host = tempfile::tempdir().unwrap();
     let root = host.path();
@@ -23,6 +44,7 @@ fn host() -> (tempfile::TempDir, std::path::PathBuf) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_executor_accepts_an_os_queued_hint_without_a_response() {
     let (host, path) = host();
     let os = UnixDatagram::bind(path).unwrap();
@@ -37,6 +59,7 @@ fn absent_executor_accepts_an_os_queued_hint_without_a_response() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn missing_or_invalid_activation_reports_failure_without_touching_original_state() {
     let (host, _) = host();
     let original = host.path().join(".chrono-harness/state/original.json");
@@ -49,6 +72,7 @@ fn missing_or_invalid_activation_reports_failure_without_touching_original_state
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn a_full_os_queue_reports_wake_failure_without_waiting_for_an_executor() {
     let (host, path) = host();
     let _os = UnixDatagram::bind(&path).unwrap();
@@ -63,6 +87,7 @@ fn a_full_os_queue_reports_wake_failure_without_waiting_for_an_executor() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn retained_activation_sockets_are_measurable_but_never_disposable_files() {
     let (host, path) = host();
     let _os = UnixDatagram::bind(&path).unwrap();
@@ -97,6 +122,7 @@ fn retained_activation_sockets_are_measurable_but_never_disposable_files() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn maintenance_report_publication_does_not_wake_itself_or_suppress_other_threads() {
     let (host, path) = host();
     let os = UnixDatagram::bind(path).unwrap();

@@ -1,13 +1,32 @@
 //! One executor per physical coordinator. Events never carry business authority.
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Pending events and due timers take precedence over an idle observation.
+pub fn maintenance_idle_exit(event_pending: bool, timer_due: bool, idle_due: bool) -> (exit: bool)
+    ensures exit == (!event_pending && !timer_due && idle_due),
+{
+    !event_pending && !timer_due && idle_due
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::maintenance_signal::{self as signal, Policy as ServicePolicy, RoundGuard};
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 use std::os::{
     fd::{AsRawFd, FromRawFd},
     unix::net::UnixDatagram,
 };
+#[cfg(not(verus_keep_ghost))]
 use std::time::{Duration, Instant};
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn handoff(inputs: &PolicyInputs, reason: &str) -> Value {
     value!({"schema":"chrono-maintenance-handoff/v1","reason":reason,
         "coordinator_root":inputs.policy.coordinator_root,"responsibility":"existing-owner-state",
@@ -15,6 +34,7 @@ pub(super) fn handoff(inputs: &PolicyInputs, reason: &str) -> Value {
         "round_completion":"not-established","disposal":"not-attempted"})
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn service_policy(r: &mut Runner, inputs: &PolicyInputs) -> Result<Option<ServicePolicy>, String> {
     let root = &inputs.policy.coordinator_root;
     let Some((policy, bytes)) = signal::adopted(root)? else {
@@ -40,12 +60,14 @@ fn service_policy(r: &mut Runner, inputs: &PolicyInputs) -> Result<Option<Servic
 }
 
 /// Singleton is independent of enrollment metadata and is never acquired by business.
+#[cfg(not(verus_keep_ghost))]
 fn singleton(root: &Path, directory: &str) -> Result<Option<Lease>, String> {
     let directory = no_symlink_parents(root, directory.trim_end_matches('/'))?;
     fs::create_dir_all(&directory).map_err(|e| e.to_string())?;
     Lease::acquire(&directory.join("maintenance.lease"), None, true, true, None)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn maintain(
     root: &Path,
     config_path: &str,
@@ -55,6 +77,7 @@ pub(super) fn maintain(
     round(root, config_path, trigger, None, None, consumer)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn round(
     root: &Path,
     config_path: &str,
@@ -126,6 +149,7 @@ fn round(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn run_round(
     r: &mut Runner,
     token: &str,
@@ -322,6 +346,7 @@ fn run_round(
 }
 
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn activated_socket() -> Result<UnixDatagram, String> {
     #[cfg(target_os = "macos")]
     {
@@ -378,6 +403,7 @@ fn activated_socket() -> Result<UnixDatagram, String> {
 /// Narrow, injectable service loop used by the Rust socket boundary expectations.
 /// The supplied round must join its work; this function owns no detached tasks.
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 pub fn serve(
     socket: &UnixDatagram,
     policy: &ServicePolicy,
@@ -450,7 +476,7 @@ pub fn serve(
                     .ok_or("idle deadline overflow")
             })
             .transpose()?;
-        if crate::verified_lifecycle::maintenance_idle_exit(
+        if maintenance_idle_exit(
             messages != 0,
             timer_due,
             idle.is_some_and(|deadline| now >= deadline),
@@ -480,6 +506,7 @@ pub fn serve(
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
     let mut root = PathBuf::from(".");
     let mut config_path = ".chrono-harness/worktree.json".to_string();
@@ -509,6 +536,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
 }
 
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn run_service(
     root: &Path,
     config_path: &str,
@@ -555,6 +583,7 @@ fn run_service(
 
 /// Rust OS-provider mock exercises the production singleton and round path.
 #[cfg(all(unix, feature = "producer-birth-test"))]
+#[cfg(not(verus_keep_ghost))]
 pub fn run_with_socket(
     root: &Path,
     config_path: &str,
@@ -565,10 +594,12 @@ pub fn run_with_socket(
 }
 
 #[cfg(feature = "producer-birth-test")]
+#[cfg(not(verus_keep_ghost))]
 thread_local! {
     static BOUNDARY: std::cell::RefCell<Option<Box<dyn FnMut(&str, &Path)>>> = const { std::cell::RefCell::new(None) };
 }
 #[cfg(feature = "producer-birth-test")]
+#[cfg(not(verus_keep_ghost))]
 pub fn with_observer<T>(observer: impl FnMut(&str, &Path) + 'static, run: impl FnOnce() -> T) -> T {
     struct Reset;
     impl Drop for Reset {
@@ -585,6 +616,7 @@ pub fn with_observer<T>(observer: impl FnMut(&str, &Path) + 'static, run: impl F
     let _reset = Reset;
     run()
 }
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn observe_boundary(kind: &str, path: &Path) {
     #[cfg(feature = "producer-birth-test")]
     BOUNDARY.with(|slot| {

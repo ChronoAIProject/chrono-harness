@@ -853,7 +853,8 @@ fn enrollment_originals_unknown_metadata_defers_only_global_original_maintenance
     let h = EnrollmentOriginalsFixture::new();
     fs::create_dir(h.record.join("gate.lock")).unwrap();
     let (code, report) = h.invoke("maintain", false);
-    assert_eq!(code, 0, "{report}");
+    assert_eq!(code, 2, "{report}");
+    assert_eq!(report["complete_inventory"]["status"], "incomplete");
     assert!(
         h.root.join(&h.original).is_file(),
         "busy metadata has unverified consumers: {report}"
@@ -1423,7 +1424,19 @@ fn automatic_inventory_command_failure_is_fatal_for_maintenance_and_admission() 
             );
         }
         assert!(report["managed_process"].is_null());
-        assert_eq!(h.ledger(), ledger);
+        let mut after = h.ledger();
+        // Failure progress is durable state, not a mutation of work or custody.
+        if command == "maintain" {
+            assert_eq!(after["entries"][0]["cleanup"]["stage"], "failed");
+            assert!(
+                after["entries"][0]["cleanup"]["detail"]
+                    .as_str()
+                    .unwrap()
+                    .contains("original inventory failure")
+            );
+            after["entries"][0]["cleanup"] = ledger["entries"][0]["cleanup"].clone();
+        }
+        assert_eq!(after, ledger);
         assert!(target.join("output λ/data").exists());
     }
 }
@@ -2321,7 +2334,8 @@ fn retired_address_preserves_directory_consumers_and_unknown_members() {
         .unwrap()
         .unwrap();
     let (code, maintained, error) = h.auto("maintain", &[]);
-    assert_eq!(code, 0, "{maintained} {error}");
+    assert_eq!(code, 2, "{maintained} {error}");
+    assert_eq!(maintained["complete_inventory"]["status"], "incomplete");
     assert_eq!(fs::read(directory.join("ledger.json")).unwrap(), before);
     drop(reader);
     let foreign = directory.join("unknown-work");
@@ -2453,6 +2467,11 @@ fn retired_capability_failure_keeps_the_creators_original_responsibility_visible
     );
     let (code, finished, error) = invoke("finish", &["--path", target.to_str().unwrap()]);
     assert_eq!(code, 0, "{finished} {error}");
+    // Finish only hands off; reach actual checkout disposal before injecting
+    // the retired-capability fault, without retiring the capability itself.
+    let (code, disposed, error) = invoke("maintain", &[]);
+    assert_eq!(code, 0, "{disposed} {error}");
+    assert!(!target.exists());
     let identity = chrono_harness::ownership::identity(&lease).unwrap();
     fs::write(&lease, b"unknown capability bytes").unwrap();
     let (code, maintained, error) = invoke("maintain", &[]);
@@ -4453,7 +4472,14 @@ fn automatic_staged_source_inside_artifact_and_unauthorized_evidence_remain() {
             "finish",
             &["--path", target.to_str().unwrap(), "--dispose-evidence"],
         );
-        assert_ne!(code, 0, "{fault}: {r} {e}");
+        if fault == "staged-source" {
+            assert_eq!(code, 0, "{fault}: {r} {e}");
+            assert_eq!(r["disposal"], "not-attempted");
+            let (code, cleanup, error) = h.auto("maintain", &[]);
+            assert_ne!(code, 0, "{fault}: {cleanup} {error}");
+        } else {
+            assert_ne!(code, 0, "{fault}: {r} {e}");
+        }
         assert!(target.join("output λ/data").exists());
     }
 }

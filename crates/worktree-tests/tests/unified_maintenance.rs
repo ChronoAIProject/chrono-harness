@@ -1,12 +1,45 @@
 //! Independent expectations for the unified owner's business/maintenance boundary.
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_worktree::verified_lifecycle as policy;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
+verus! {
+fn expect(actual: bool) requires actual { if !actual { panic!(); } }
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_pending_work_wins_every_idle_boundary() {
+    expect(!policy::maintenance_idle_exit(false, false, false));
+    expect(policy::maintenance_idle_exit(false, false, true));
+    expect(!policy::maintenance_idle_exit(false, true, false));
+    expect(!policy::maintenance_idle_exit(false, true, true));
+    expect(!policy::maintenance_idle_exit(true, false, false));
+    expect(!policy::maintenance_idle_exit(true, false, true));
+    expect(!policy::maintenance_idle_exit(true, true, false));
+    expect(!policy::maintenance_idle_exit(true, true, true));
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 #[path = "support/fixture_coordinator.rs"]
 mod chrono_git_boundary;
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 use std::os::unix::net::UnixDatagram;
+#[cfg(not(verus_keep_ghost))]
 use std::sync::mpsc;
+#[cfg(not(verus_keep_ghost))]
 use std::time::Duration;
 
+#[cfg(not(verus_keep_ghost))]
 fn blocked_round_keeps_business_progress(boundary: &str) {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -25,11 +58,9 @@ fn blocked_round_keeps_business_progress(boundary: &str) {
     assert_eq!(code, 0, "{handoff} {error}");
     assert!(unrelated.exists(), "handoff is not physical cleanup");
     assert!(handoff["drain"].as_array().unwrap().is_empty());
-    let blocked_path = if boundary == "footprint" {
-        h.root.join("output λ")
-    } else {
-        unrelated.clone()
-    };
+    // Hold the first actual full-footprint IO, before unrelated members consume
+    // the readiness window. This is the same production measurement boundary.
+    let blocked_path = (boundary != "footprint").then(|| unrelated.clone());
     let kind = boundary.to_owned();
     let root = h.root.clone();
     let (entered, ready) = mpsc::sync_channel(0);
@@ -38,10 +69,11 @@ fn blocked_round_keeps_business_progress(boundary: &str) {
         let mut once = false;
         chrono_worktree::with_maintenance_observer(
             move |actual, path| {
-                if !once && actual == kind && path == blocked_path {
+                if !once && actual == kind && blocked_path.as_ref().is_none_or(|p| path == p) {
                     once = true;
-                    entered.send(()).unwrap();
-                    resume.recv().unwrap();
+                    if entered.send(path.to_owned()).is_ok() {
+                        let _ = resume.recv();
+                    }
                 }
             },
             || {
@@ -116,15 +148,18 @@ fn blocked_round_keeps_business_progress(boundary: &str) {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn legitimate_main_and_linked_business_progress_during_unrelated_disposition() {
     blocked_round_keeps_business_progress("disposition");
 }
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn legitimate_main_and_linked_business_progress_during_full_footprint_io() {
     blocked_round_keeps_business_progress("footprint");
 }
 
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn policy(idle: Option<u64>, timer: u64) -> chrono_harness::maintenance_signal::Policy {
     chrono_harness::maintenance_signal::Policy {
         schema: "chrono-unified-maintenance/v1".into(),
@@ -137,6 +172,7 @@ fn policy(idle: Option<u64>, timer: u64) -> chrono_harness::maintenance_signal::
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn merged_events_and_new_events_during_a_round_are_observed_without_empty_retry() {
     let (executor, sender) = UnixDatagram::pair().unwrap();
     sender.send(b"first").unwrap();
@@ -159,6 +195,7 @@ fn merged_events_and_new_events_during_a_round_are_observed_without_empty_retry(
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn resident_service_handles_timer_and_preserves_original_round_failure() {
     let (executor, _sender) = UnixDatagram::pair().unwrap();
     let mut rounds = Vec::new();
@@ -182,6 +219,7 @@ fn resident_service_handles_timer_and_preserves_original_round_failure() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn long_rounds_do_not_hide_missed_resident_timer_opportunities() {
     let (executor, _sender) = UnixDatagram::pair().unwrap();
     let (_io_owner, unfinished_io) = mpsc::channel::<()>();
@@ -214,6 +252,7 @@ fn long_rounds_do_not_hide_missed_resident_timer_opportunities() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn idle_exit_leaves_os_owned_socket_usable_for_later_activation() {
     let (executor, sender) = UnixDatagram::pair().unwrap();
     let mut first = Vec::new();
@@ -237,6 +276,7 @@ fn idle_exit_leaves_os_owned_socket_usable_for_later_activation() {
 // Unix socket path limits are fixed OS inputs. Use a short private fixture
 // path instead of changing any production limits or following a root alias.
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn socket_host(mode: &str) -> Host {
     let directory = tempfile::Builder::new()
         .prefix("um-")
@@ -249,6 +289,7 @@ fn socket_host(mode: &str) -> Host {
 }
 
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn adopt_activation(h: &Host) -> std::path::PathBuf {
     let policy = chrono_harness::maintenance_signal::Policy {
         schema: "chrono-unified-maintenance/v1".into(),
@@ -273,6 +314,7 @@ fn adopt_activation(h: &Host) -> std::path::PathBuf {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn explicit_competitor_requests_the_resident_executor_without_a_parallel_round() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -356,6 +398,7 @@ fn explicit_competitor_requests_the_resident_executor_without_a_parallel_round()
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn wake_failure_preserves_successful_business_and_its_original_streams() {
     if !chrono_git_boundary::isolated_git() {
         return;
@@ -385,6 +428,7 @@ fn wake_failure_preserves_successful_business_and_its_original_streams() {
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn wake_failure_keeps_the_original_business_failure_and_stderr() {
     if !chrono_git_boundary::isolated_git() {
         return;

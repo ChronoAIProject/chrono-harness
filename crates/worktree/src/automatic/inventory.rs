@@ -1,8 +1,28 @@
 //! One explicit maintain's diagnostic original, never a membership or deletion authority.
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Preserve each matching action's original index, including repeated addresses.
+pub fn append_action_index(mut indices: Vec<usize>, matches: bool, index: usize)
+    -> (out: Vec<usize>)
+    ensures out@ == if matches { indices@.push(index) } else { indices@ },
+{
+    if matches { indices.push(index); }
+    indices
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::retained_artifacts::retention::{self, Publication};
+#[cfg(not(verus_keep_ghost))]
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+#[cfg(not(verus_keep_ghost))]
 fn timestamp() -> Result<u64, String> {
     u64::try_from(
         SystemTime::now()
@@ -15,6 +35,7 @@ fn timestamp() -> Result<u64, String> {
 
 /// The actual report write boundary; callers retain partial bytes on IO failure.
 #[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
 pub fn write_record(
     output: &mut impl Write,
     row: &Value,
@@ -34,6 +55,7 @@ pub fn write_record(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct Report {
     root: PathBuf,
     path: String,
@@ -51,6 +73,7 @@ pub(super) struct Report {
     worktree_addresses: BTreeSet<PathBuf>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Report {
     pub(super) fn begin(root: &Path, parent: &mut Value) -> Result<Self, String> {
         let parent_path = parent["report_path"]
@@ -200,7 +223,7 @@ impl Report {
         phase: &str,
     ) {
         let observation_owner = observation;
-        let mut observation = value!({});
+        let mut observation = value!({"agent":parent["agent"]});
         if let Err(error) = observation_owner.observe_attention(r, &mut observation, true) {
             self.error("worktree-status", error);
             if observation["worktree_status"].is_null() {
@@ -296,18 +319,7 @@ impl Report {
     pub(super) fn finish(mut self, parent: &mut Value) -> Result<(), String> {
         let worktrees = std::mem::take(&mut self.worktree_addresses);
         for path in worktrees {
-            let results: Vec<_> = parent["drain"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .enumerate()
-                .filter(|(_, row)| row["path"].as_str().is_some_and(|p| Path::new(p) == path))
-                .map(|(index, _)| format!("/drain/{index}"))
-                .collect();
-            self.record(value!({"kind":"worktree-action","path":path,
-                "execution":if results.is_empty() {"not-executed"} else {"see original results"},
-                "selection":if results.is_empty() {"not-selected-or-not-reached"} else {"responsible-owner-result"},
-                "parent_report_pointers":results}));
+            self.record(worktree_action(&path, &parent["drain"]));
         }
         for row in parent["producer_drains"].as_array().into_iter().flatten() {
             self.record(value!({"kind":"producer-result","original":row}));
@@ -384,6 +396,7 @@ impl Report {
 }
 
 /// Copied declarations are observations, never a lease or effect authorization.
+#[cfg(not(verus_keep_ghost))]
 pub(super) struct ArtifactSnapshot {
     root: PathBuf,
     artifacts: Vec<Artifact>,
@@ -392,6 +405,7 @@ pub(super) struct ArtifactSnapshot {
     policy_path: String,
     source_head: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl ArtifactSnapshot {
     pub(super) fn from_owner(manager: &Manager) -> Self {
         let entry = manager
@@ -413,4 +427,26 @@ impl ArtifactSnapshot {
             source_head: manager.inputs.source_head.clone(),
         }
     }
+}
+
+/// Project all original actions; pointers refer to the unchanged published parent.
+#[cfg(not(verus_keep_ghost))]
+#[doc(hidden)]
+pub fn worktree_action(path: &Path, drain: &Value) -> Value {
+    let mut indices = Vec::new();
+    for (index, row) in drain.as_array().into_iter().flatten().enumerate() {
+        indices = append_action_index(
+            indices,
+            row["path"].as_str().is_some_and(|p| Path::new(p) == path),
+            index,
+        );
+    }
+    let results: Vec<_> = indices
+        .into_iter()
+        .map(|index| format!("/drain/{index}"))
+        .collect();
+    value!({"kind":"worktree-action","path":path,
+        "execution":if results.is_empty() {"not-executed"} else {"see original results"},
+        "selection":if results.is_empty() {"not-selected-or-not-reached"} else {"responsible-owner-result"},
+        "parent_report_pointers":results})
 }

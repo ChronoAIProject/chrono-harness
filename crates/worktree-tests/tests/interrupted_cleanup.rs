@@ -615,10 +615,10 @@ fn linked_report_keeps_producer_originals_until_publication_without_consumer() {
             "linked creation preserves unrelated coordinator reports"
         );
     }
-    let drains = report["producer_drains"].as_array().unwrap();
+    assert_eq!(report["maintenance_request"]["disposal"], "not-attempted");
     assert!(
-        drains.is_empty(),
-        "creation must not sweep unrelated producers"
+        report["producer_drains"].is_null(),
+        "creation has no producer execution"
     );
     let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(&h.root)
         .unwrap()
@@ -1115,10 +1115,22 @@ fn unrelated_policy_drift_retains_failure_and_allows_independent_admission() {
     assert!(start["drain"].as_array().unwrap().is_empty());
     let (code, maintenance, error) = h.auto("maintain", &[]);
     assert_ne!(code, 0, "{maintenance} {error}");
-    let receipt = maintenance["drain"][0]["receipt"].clone();
-    let receipt_path = h.root.join(receipt["path"].as_str().unwrap());
+    let failed = maintenance["drain"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["path"] == value!(a))
+        .unwrap();
+    assert_eq!(failed["status"], "failed");
+    assert!(
+        failed["receipt"].is_null(),
+        "owner admission ran no child cleanup"
+    );
+    assert!(failed["error"].as_str().unwrap().contains("policy"));
+    // This failure belongs to the published parent; preserve its exact bytes.
+    let receipt_path = h.root.join(maintenance["report_path"].as_str().unwrap());
     let original = fs::read(&receipt_path).unwrap();
-    assert_eq!(sha256(&original), receipt["sha256"]);
+    assert_eq!(json(&original).unwrap(), maintenance);
     install_inner(&b, "checked", "check warning\n", 0);
     let (code, used, error) = h.auto(
         "use",
@@ -2155,7 +2167,8 @@ fn admission_owner_death_keeps_git_mutation_and_native_hook_protected() {
     assert!(!start.wait().unwrap().success());
     for release in ["release-mutation", "release-hook"] {
         let (code, report, error) = h.auto("maintain", &[]);
-        assert_eq!(code, 0, "{report} {error}");
+        assert_eq!(code, 2, "{report} {error}");
+        assert_eq!(report["complete_inventory"]["status"], "incomplete");
         let preserved = report["drain"]
             .as_array()
             .unwrap()

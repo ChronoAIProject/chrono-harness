@@ -35,14 +35,16 @@ pub use automatic_verification::{
     known_absent_enrollment, missing_cache_observation,
 };
 
-verus! {
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::inventory::append_action_index;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::automatic::service::maintenance_idle_exit;
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::inventory::append_action_index;
+#[cfg(verus_keep_ghost)]
+pub use automatic_verification::service::maintenance_idle_exit;
 
-/// Pending events and due timers take precedence over an idle observation.
-pub fn maintenance_idle_exit(event_pending: bool, timer_due: bool, idle_due: bool) -> (exit: bool)
-    ensures exit == (!event_pending && !timer_due && idle_due),
-{
-    !event_pending && !timer_due && idle_due
-}
+verus! {
 
 /// An address left by failed admission has no checkout policy consumer.
 pub fn enrolled_policy_required(entries: usize) -> (required: bool)

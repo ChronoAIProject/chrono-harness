@@ -4,6 +4,9 @@ pub use artifact_disposal::{ArtifactFootprint, artifact_footprint};
 mod automatic;
 #[cfg(feature = "producer-birth-test")]
 #[doc(hidden)]
+pub use automatic::inventory::worktree_action as inventory_worktree_action;
+#[cfg(feature = "producer-birth-test")]
+#[doc(hidden)]
 pub use automatic::write_inventory_record;
 pub use automatic::{RetainedArtifact, TemporaryHost};
 mod check_inputs;

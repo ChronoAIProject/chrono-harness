@@ -240,6 +240,9 @@ fn cache_history_releases_old_generations_and_their_owned_originals() {
     for round in 0..3 {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
+        assert!(used["drain"].as_array().unwrap().is_empty());
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
         if round == 1 {
             let entry = h.ledger()["entries"][0].clone();
             let attempt = entry["cache_attempts"][0].clone();
@@ -348,6 +351,9 @@ fn cache_history_preserves_unknown_time_live_consumers_and_changed_originals() {
     for _ in 0..3 {
         let (code, used, error) = h.auto("use", &["--operation", "use.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
+        assert!(used["drain"].as_array().unwrap().is_empty());
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
     }
     assert_eq!(h.auto("maintain", &[]).0, 0);
     let mut ledger = h.ledger();
@@ -747,11 +753,13 @@ fn main_same_entry_recovers_interruption_and_protects_live_descendant_and_second
         "joined",
     )
     .unwrap();
-    // Ordinary use retries until the actual final descriptor closes; no PID/age decision.
+    // Business continues; actual maintenance retries until the final descriptor closes.
     let began = std::time::Instant::now();
     loop {
         let (code, used, error) = h.auto("use", &["--operation", "test.consumer"]);
         assert_eq!(code, 0, "{used} {error}");
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
         if !h.root.join("output λ").exists() {
             break;
         }
@@ -1154,5 +1162,6 @@ fn main_historical_custody_publication_retry_and_partial_disposal_preserve_origi
     assert_eq!(h.auto("use", &["--operation", "use.consumer"]).0, 0);
     assert!(h.root.join("output λ/cache").exists());
     assert_eq!(h.auto("use", &["--operation", "test.consumer"]).0, 0);
+    assert_eq!(h.auto("maintain", &[]).0, 0);
     assert!(!h.root.join("output λ").exists());
 }

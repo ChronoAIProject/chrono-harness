@@ -2379,6 +2379,15 @@ fn joined_fixture_case_removes_outer_custody_only_after_all_producers_retire() {
             );
             let result = fixture.finish(false).unwrap();
             assert_eq!(result["status"], "finished", "{result}");
+            assert!(path.exists(), "producer finish only hands off");
+            let result = chrono_worktree::run(&[
+                "maintain".into(),
+                "--host-root".into(),
+                fixture_coordinator::root().to_str().unwrap().into(),
+                "--config".into(),
+                POLICY.into(),
+            ]);
+            assert_eq!(result.exit_code, 0, "{} {}", result.stdout, result.stderr);
             assert!(!path.exists());
         }
         return;

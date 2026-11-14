@@ -16,19 +16,15 @@ use vstd::vpanic as panic;
 #[path = "automatic.rs"]
 mod automatic_boundaries;
 
+#[cfg(verus_keep_ghost)]
+#[path = "complete_inventory.rs"]
+mod inventory_boundaries;
+#[cfg(verus_keep_ghost)]
+#[path = "unified_maintenance.rs"]
+mod maintenance_boundaries;
+
 verus! {
 
-#[cfg_attr(not(verus_keep_ghost), test)]
-fn maintenance_pending_work_wins_every_idle_boundary() {
-    expect(!policy::maintenance_idle_exit(false, false, false));
-    expect(policy::maintenance_idle_exit(false, false, true));
-    expect(!policy::maintenance_idle_exit(false, true, false));
-    expect(!policy::maintenance_idle_exit(false, true, true));
-    expect(!policy::maintenance_idle_exit(true, false, false));
-    expect(!policy::maintenance_idle_exit(true, false, true));
-    expect(!policy::maintenance_idle_exit(true, true, false));
-    expect(!policy::maintenance_idle_exit(true, true, true));
-}
 
 fn report_scope_case(operation: &str, publication: Option<u8>,
     result: Result<(u8, u8), (u32, u64)>, expected: u8)

@@ -1238,7 +1238,12 @@ fn checkout_migration_keeps_live_unjoined_and_terminal_work_protected() {
     let terminal = fs::read(h.ledger_path(&target)).unwrap();
     let (code, refused, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
     assert_ne!(code, 0, "{refused} {error}");
-    assert!(refused["error"].as_str().unwrap().contains("pending work"));
+    assert!(
+        refused["error"]
+            .as_str()
+            .unwrap()
+            .contains("pending terminal disposal")
+    );
     assert_eq!(fs::read(h.ledger_path(&target)).unwrap(), terminal);
 }
 

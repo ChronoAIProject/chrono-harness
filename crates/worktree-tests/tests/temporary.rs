@@ -256,6 +256,12 @@ fn rolling_directory_managed_operation_owns_all_products_and_keeps_original_fail
         assert_eq!(process["stderr"], "original artifact diagnostic");
         let allocation = PathBuf::from(process["stdout"].as_str().unwrap());
         assert_eq!(report["artifact_directory"]["path"], value!(allocation));
+        assert!(
+            allocation.exists(),
+            "handoff does not dispose producer output"
+        );
+        let (code, maintained, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{maintained} {error}");
         if failed {
             assert_eq!(
                 fs::read(allocation.join("arbitrary products/original.bin")).unwrap(),
