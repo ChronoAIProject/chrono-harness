@@ -5275,6 +5275,32 @@
       "path": ".chrono-harness/ci/bootstrap-native.sh",
       "test_script": "host-bootstrap-launcher-tests",
       "actions": {
+        "verus-source-acquire": {
+          "operation": "investigate.verus-source.acquire",
+          "tool": "git",
+          "argv": [
+            "clone",
+            "--revision=6ae5f7b97c6403789fc1f12117ea8b2f0092289c",
+            "--depth=1",
+            "--no-tags",
+            "https://github.com/verus-lang/verus.git",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9"
+          ]
+        },
+        "verus-source-toolchain": {
+          "operation": "investigate.verus-source.toolchain",
+          "tool": "rustup",
+          "argv": [
+            "toolchain",
+            "install",
+            "1.99.1",
+            "--profile",
+            "minimal",
+            "--component",
+            "rustfmt,rustc-dev,llvm-tools",
+            "--no-self-update"
+          ]
+        },
         "execute": {
           "operation": "host.bootstrap-core",
           "tool": "bash",

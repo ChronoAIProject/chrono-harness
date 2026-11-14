@@ -412,6 +412,15 @@
         "--version"
       ],
       "expected_version": null
+    },
+    {
+      "id": "rustup",
+      "program": "rustup",
+      "resolution": "PATH-once",
+      "version_argv": [
+        "--version"
+      ],
+      "expected_version": null
     }
   ],
   "environment": {
