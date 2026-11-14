@@ -3913,9 +3913,7 @@ impl Publication {
 /// Ordinary adopted owners share this entry. Unknown legacy outputs remain protected.
 #[cfg(not(verus_keep_ghost))]
 pub fn maintain_adopted(root: &Path) -> Result<Option<Value>, String> {
-    Inventory::adopted(root)?
-        .map(|i| i.maintain())
-        .transpose()
+    Inventory::adopted(root)?.map(|i| i.maintain()).transpose()
 }
 
 /// Explicit cross-object maintenance visits each existing declaration once.
