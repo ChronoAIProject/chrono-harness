@@ -1,17 +1,53 @@
+#![allow(unexpected_cfgs)]
+
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+fn initial_query_requires_unknown(deliberate_timeout: bool, actual_timeout: bool) -> (unknown: bool)
+    ensures unknown == (deliberate_timeout || actual_timeout),
+{
+    deliberate_timeout || actual_timeout
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn timeout_requires_a_successful_initial_observation() {
+    let deliberate = initial_query_requires_unknown(true, false);
+    let actual = initial_query_requires_unknown(false, true);
+    let both = initial_query_requires_unknown(true, true);
+    let neither = initial_query_requires_unknown(false, false);
+    assert(deliberate);
+    assert(actual);
+    assert(both);
+    assert(!neither);
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{fs, io::Write, process::Command};
+#[cfg(not(verus_keep_ghost))]
 use tempfile::TempDir;
 
 #[path = "../../runner-tests/tests/support/isolated_capability.rs"]
+#[cfg(not(verus_keep_ghost))]
 mod isolated_capability;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::retained_artifacts::retention::Inventory;
+#[cfg(not(verus_keep_ghost))]
 use isolated_capability::isolated_capability_test;
 
+#[cfg(not(verus_keep_ghost))]
 const HEAD: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+#[cfg(not(verus_keep_ghost))]
 const OTHER: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 #[test]
 #[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
 fn cli_read_only_stdout_returns_native_publication_failure() {
     let expected = chrono_pr::run(&["--help".into()]);
     assert_eq!(expected.exit_code, 0);
@@ -79,15 +115,19 @@ fn cli_read_only_stdout_returns_native_publication_failure() {
     root.disable_cleanup(false);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn snapshot() -> Value {
     serde_json::from_str(include_str!("fixtures/snapshot.json")).unwrap()
 }
+#[cfg(not(verus_keep_ghost))]
 fn api(value: Value) -> Value {
     json!({"prefix":["api","graphql"],"stdout":value.to_string()})
 }
+#[cfg(not(verus_keep_ghost))]
 fn watch(exit: i32) -> Value {
     json!({"prefix":["pr","checks"],"stdout":"native wait result\n","exit":exit})
 }
+#[cfg(not(verus_keep_ghost))]
 fn pending() -> Value {
     let mut s = snapshot();
     s["data"]["repository"]["object"]["statusCheckRollup"]["contexts"]["nodes"][0]["status"] =
@@ -97,9 +137,11 @@ fn pending() -> Value {
     s
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Host {
     root: TempDir,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Drop for Host {
     fn drop(&mut self) {
         if std::thread::panicking() {
@@ -112,6 +154,7 @@ impl Drop for Host {
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 impl Host {
     fn new(steps: Vec<Value>) -> Self {
         let host = Self {
@@ -176,6 +219,7 @@ impl Host {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn status_passes_only_for_the_bound_head_and_required_success() {
     let h = Host::new(vec![api(snapshot())]);
     let (code, r) = h.status();
@@ -190,6 +234,7 @@ fn status_passes_only_for_the_bound_head_and_required_success() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn adopted_runtime_logging_preserves_query_wait_and_api_failure_results() {
     for (command, steps, exit, outcome, calls) in [
         ("pr-status", vec![api(snapshot())], 0, "passed", 1),
@@ -265,6 +310,7 @@ fn adopted_runtime_logging_preserves_query_wait_and_api_failure_results() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unavailable_child_exit_keeps_the_original_operation_unknown() {
     if !isolated_capability_test("unavailable_child_exit_keeps_the_original_operation_unknown") {
         return;
@@ -327,6 +373,7 @@ fn unavailable_child_exit_keeps_the_original_operation_unknown() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failure_skipped_and_missing_checks_cannot_pass() {
     for state in [
         "FAILURE",
@@ -353,6 +400,7 @@ fn failure_skipped_and_missing_checks_cannot_pass() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn stale_and_closed_are_distinct_from_check_failure() {
     let mut s = snapshot();
     s["data"]["repository"]["pullRequest"]["headRefOid"] = json!(OTHER);
@@ -367,6 +415,7 @@ fn stale_and_closed_are_distinct_from_check_failure() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rejects_incomplete_or_ambiguous_remote_facts() {
     for pointer in [
         "/data/repository/nameWithOwner",
@@ -400,6 +449,7 @@ fn rejects_incomplete_or_ambiguous_remote_facts() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn latest_rerun_and_legacy_status_are_supported() {
     let mut s = snapshot();
     let nodes = s["data"]["repository"]["object"]["statusCheckRollup"]["contexts"]["nodes"]
@@ -418,6 +468,7 @@ fn latest_rerun_and_legacy_status_are_supported() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unknown_states_wrong_commits_and_incomplete_latest_sets_are_errors() {
     for (pointer, value) in [
         (
@@ -448,6 +499,7 @@ fn unknown_states_wrong_commits_and_incomplete_latest_sets_are_errors() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn draft_creation_is_explicit_and_readback_failure_preserves_the_pr_number() {
     let mut draft = snapshot();
     draft["data"]["repository"]["pullRequest"]["isDraft"] = json!(true);
@@ -479,6 +531,7 @@ fn draft_creation_is_explicit_and_readback_failure_preserves_the_pr_number() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_auth_failure_and_failed_readback_remain_unknown() {
     let h = Host::new(vec![api(pending()), watch(4)]);
     let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
@@ -495,6 +548,7 @@ fn native_auth_failure_and_failed_readback_remain_unknown() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn watch_joins_one_native_wait_and_rechecks_identity() {
     let h = Host::new(vec![api(pending()), watch(0), api(snapshot())]);
     let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
@@ -522,6 +576,7 @@ fn watch_joins_one_native_wait_and_rechecks_identity() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn native_exit_alone_never_certifies_success_and_terminal_needs_no_wait() {
     let h = Host::new(vec![api(pending()), watch(0), api(pending())]);
     let (code, r) = h.run(&["pr-watch", "--pr", "42", "--head-sha", HEAD]);
@@ -535,6 +590,7 @@ fn native_exit_alone_never_certifies_success_and_terminal_needs_no_wait() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn api_failure_retains_original_output_without_retry() {
     let h = Host::new(vec![
         json!({"prefix":["api","graphql"],"stdout":"partial\n","stderr":"HTTP 403\n","exit":1}),
@@ -558,14 +614,17 @@ fn api_failure_retains_original_output_without_retry() {
     assert_eq!(h.status().0, 2);
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn resolve() -> Value {
     api(
         json!({"data":{"repository":{"nameWithOwner":"example/host","ref":{"target":{"oid":HEAD}}}}}),
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn list(items: Value) -> Value {
     json!({"prefix":["pr","list"],"stdout":items.to_string()})
 }
+#[cfg(not(verus_keep_ghost))]
 fn open_args() -> Vec<&'static str> {
     vec![
         "pr-open",
@@ -581,6 +640,7 @@ fn open_args() -> Vec<&'static str> {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn opens_once_with_literal_text_and_verifies_the_created_pr() {
     let h = Host::new(vec![
         resolve(),
@@ -607,6 +667,7 @@ fn opens_once_with_literal_text_and_verifies_the_created_pr() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn rerunning_open_reuses_existing_pr_without_mutation() {
     let h = Host::new(vec![
         resolve(),
@@ -625,6 +686,7 @@ fn rerunning_open_reuses_existing_pr_without_mutation() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn ambiguous_creation_failures_and_changed_readback_keep_identity() {
     let h = Host::new(vec![
         resolve(),
@@ -645,6 +707,7 @@ fn ambiguous_creation_failures_and_changed_readback_keep_identity() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn invalid_arguments_and_config_do_no_remote_work() {
     for args in [
         vec!["pr-status", "--pr", "0", "--head-sha", HEAD],
@@ -677,6 +740,7 @@ fn invalid_arguments_and_config_do_no_remote_work() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn timeout_and_output_limits_preserve_the_original_local_receipt() {
     for initial_timeout in [false, true] {
         let mut initial = api(pending());
@@ -708,7 +772,8 @@ fn timeout_and_output_limits_preserve_the_original_local_receipt() {
         );
         // The same deadline also bounds the initial query. Without its real
         // successful exit, even response bytes cannot establish a pending PR.
-        if initial_timeout || first["failure"] == "process timed out" {
+        if initial_query_requires_unknown(initial_timeout, first["failure"] == "process timed out")
+        {
             assert_eq!(code, 2, "{r}");
             assert_eq!(r["outcome"], "unknown", "{r}");
             assert_eq!(r["observed_head"], Value::Null, "{r}");
@@ -754,6 +819,7 @@ fn timeout_and_output_limits_preserve_the_original_local_receipt() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn completed_command_keeps_durable_intent_originals_and_open_object_state() {
     let h = Host::new(vec![api(snapshot())]);
     let (code, result) = h.status();
@@ -804,6 +870,7 @@ fn completed_command_keeps_durable_intent_originals_and_open_object_state() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_or_unregistered_state_never_dispatches() {
     for failure in [
         "missing-policy",
@@ -842,6 +909,7 @@ fn absent_or_unregistered_state_never_dispatches() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn final_publication_failure_keeps_original_process_but_cannot_pass() {
     let mut step = api(snapshot());
     step["block_result"] = json!(true);
@@ -871,6 +939,7 @@ fn final_publication_failure_keeps_original_process_but_cannot_pass() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn merged_state_requires_and_retains_the_actual_merge_identity() {
     let mut merged = snapshot();
     merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
@@ -887,6 +956,7 @@ fn merged_state_requires_and_retains_the_actual_merge_identity() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn receipt_publication_failure_returns_the_actual_unsaved_receipt_bytes() {
     let mut step = api(snapshot());
     step["block_receipt"] = json!(true);
@@ -915,6 +985,7 @@ fn receipt_publication_failure_returns_the_actual_unsaved_receipt_bytes() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continues_a_known_operation_and_keeps_command_and_object_facts_separate() {
     let mut merged = snapshot();
     merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
@@ -952,6 +1023,7 @@ fn continues_a_known_operation_and_keeps_command_and_object_facts_separate() {
     );
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn maintain_after_diagnostics(h: &Host) -> Value {
     let future = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -970,6 +1042,7 @@ fn maintain_after_diagnostics(h: &Host) -> Value {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continuation_releases_only_its_prior_record_after_a_durable_handoff() {
     if !isolated_capability_test(
         "continuation_releases_only_its_prior_record_after_a_durable_handoff",
@@ -1109,6 +1182,7 @@ fn continuation_releases_only_its_prior_record_after_a_durable_handoff() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continuation_rejects_missing_changed_or_mismatched_originals_before_dispatch() {
     for case in ["pr", "head", "config", "missing", "changed", "unregistered"] {
         let h = Host::new(vec![api(snapshot())]);
@@ -1158,6 +1232,7 @@ fn continuation_rejects_missing_changed_or_mismatched_originals_before_dispatch(
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continuation_requires_joined_process_work_in_each_sealed_receipt_before_dispatch() {
     for joined in [
         Some(json!(true)),
@@ -1261,6 +1336,7 @@ fn continuation_requires_joined_process_work_in_each_sealed_receipt_before_dispa
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn failed_continuation_separates_auth_publication_and_actual_closed_object() {
     if !isolated_capability_test(
         "failed_continuation_separates_auth_publication_and_actual_closed_object",
@@ -1329,6 +1405,7 @@ fn failed_continuation_separates_auth_publication_and_actual_closed_object() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continuation_rejects_a_live_producer_even_when_result_bytes_exist() {
     if !isolated_capability_test(
         "continuation_rejects_a_live_producer_even_when_result_bytes_exist",
@@ -1365,6 +1442,7 @@ fn continuation_rejects_a_live_producer_even_when_result_bytes_exist() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn returned_pr_receipt_binds_durable_launch_without_retaining_credentials() {
     let h = Host::new(vec![api(snapshot())]);
     let (code, result) = h.status();
@@ -1416,6 +1494,7 @@ fn returned_pr_receipt_binds_durable_launch_without_retaining_credentials() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unregistered_process_originals_refuse_dispatch() {
     let h = Host::new(vec![api(snapshot())]);
     let path = h.root.path().join(".chrono-harness/retention.json");
@@ -1438,6 +1517,7 @@ fn unregistered_process_originals_refuse_dispatch() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_operation() {
     if !isolated_capability_test(
         "enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_operation",
@@ -1583,6 +1663,7 @@ fn enclosing_interruption_preserves_live_launch_partial_streams_and_unknown_oper
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continuation_recovers_the_originals_handoff_before_releasing_the_prior_operation() {
     if !isolated_capability_test(
         "continuation_recovers_the_originals_handoff_before_releasing_the_prior_operation",
@@ -1669,6 +1750,7 @@ fn continuation_recovers_the_originals_handoff_before_releasing_the_prior_operat
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continuation_requires_available_unchanged_actual_process_originals_before_dispatch() {
     for failure in ["missing", "modified", "replaced"] {
         let h = Host::new(vec![api(snapshot()), api(snapshot())]);
@@ -1710,6 +1792,7 @@ fn continuation_requires_available_unchanged_actual_process_originals_before_dis
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn continuation_can_recheck_a_terminal_operation_after_its_original_handoff() {
     let mut merged = snapshot();
     merged["data"]["repository"]["pullRequest"]["state"] = json!("MERGED");
@@ -1733,6 +1816,7 @@ fn continuation_can_recheck_a_terminal_operation_after_its_original_handoff() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn object_custody_moves_across_head_changes_and_keeps_another_pr() {
     if !isolated_capability_test("object_custody_moves_across_head_changes_and_keeps_another_pr") {
         return;
@@ -1799,6 +1883,7 @@ fn object_custody_moves_across_head_changes_and_keeps_another_pr() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn object_custody_preserves_a_real_reader_then_rolls_after_release() {
     if !isolated_capability_test("object_custody_preserves_a_real_reader_then_rolls_after_release")
     {
@@ -1845,6 +1930,7 @@ fn object_custody_preserves_a_real_reader_then_rolls_after_release() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn object_custody_does_not_regress_when_an_older_query_returns_last() {
     if !isolated_capability_test("object_custody_does_not_regress_when_an_older_query_returns_last")
     {
@@ -1921,6 +2007,7 @@ fn object_custody_does_not_regress_when_an_older_query_returns_last() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn object_custody_failed_complete_query_rolls_without_ending_the_open_pr() {
     if !isolated_capability_test(
         "object_custody_failed_complete_query_rolls_without_ending_the_open_pr",
@@ -1977,6 +2064,7 @@ fn object_custody_failed_complete_query_rolls_without_ending_the_open_pr() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn object_custody_failed_publication_stays_unknown_after_a_new_complete_observation() {
     if !isolated_capability_test(
         "object_custody_failed_publication_stays_unknown_after_a_new_complete_observation",
@@ -2038,6 +2126,7 @@ fn object_custody_failed_publication_stays_unknown_after_a_new_complete_observat
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn watch_final_api_failure_keeps_the_valid_open_fact_until_newer_custody() {
     if !isolated_capability_test(
         "watch_final_api_failure_keeps_the_valid_open_fact_until_newer_custody",
@@ -2078,6 +2167,7 @@ fn watch_final_api_failure_keeps_the_valid_open_fact_until_newer_custody() {
 
 #[cfg(unix)]
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
     if !isolated_capability_test(
         "watch_final_query_is_ordered_after_a_query_during_its_native_wait",
@@ -2176,6 +2266,7 @@ fn watch_final_query_is_ordered_after_a_query_during_its_native_wait() {
 }
 
 #[test]
+#[cfg(not(verus_keep_ghost))]
 fn unverified_create_keeps_unknown_originals_after_an_independent_observation() {
     if !isolated_capability_test(
         "unverified_create_keeps_unknown_originals_after_an_independent_observation",
