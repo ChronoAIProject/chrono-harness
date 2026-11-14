@@ -5275,6 +5275,46 @@
       "path": ".chrono-harness/ci/bootstrap-native.sh",
       "test_script": "host-bootstrap-launcher-tests",
       "actions": {
+        "verus-source-version": {
+          "operation": "investigate.verus-source.version",
+          "tool": "cargo",
+          "argv": [
+            "-Zunstable-options",
+            "-C",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source",
+            "run",
+            "--locked",
+            "--release",
+            "--package",
+            "verus",
+            "--",
+            "--version"
+          ]
+        },
+        "verus-source-vstd": {
+          "operation": "investigate.verus-source.vstd",
+          "tool": "cargo",
+          "argv": [
+            "-Zunstable-options",
+            "-C",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source",
+            "run",
+            "--locked",
+            "--release",
+            "--package",
+            "cargo-verus",
+            "--",
+            "verus",
+            "build",
+            "--locked",
+            "--release",
+            "--manifest-path",
+            "vstd/Cargo.toml",
+            "--",
+            "--num-threads",
+            "2"
+          ]
+        },
         "verus-source-bootstrap": {
           "operation": "investigate.verus-source.bootstrap",
           "tool": "bash",

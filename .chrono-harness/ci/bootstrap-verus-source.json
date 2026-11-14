@@ -9,7 +9,9 @@
   "operations": [
     "investigate.verus-source.z3-download",
     "investigate.verus-source.z3-extract",
-    "investigate.verus-source.build"
+    "investigate.verus-source.build",
+    "investigate.verus-source.version",
+    "investigate.verus-source.vstd"
   ],
   "install": [],
   "participation": {
