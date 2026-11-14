@@ -180,7 +180,7 @@ runner 的 `require_registered_input_evidence` 另外仍拒绝非空扩展编译
 
 ## S：真实 vstd 源码候选与严格使用实验
 
-S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d018fae4044760eb96a20a4bb4` 准备本节候选，不重查 R 已解决的普通 proxy／import 类。目的仍是七个实际适配器及 generation 所需的真实外部 JSON／全文合同。**S 的初始登记不完整；T 在派发前被拒绝，U 的当前修正仍待封存和原生准入。没有构建或运行正反向输入，端到端能力为 ASSUMED-UNVERIFIED。** 不据此宣称严格成功、完整 family、正式 ProofAdmission 或交付。
+S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d018fae4044760eb96a20a4bb4` 准备本节候选，不重查 R 已解决的普通 proxy／import 类。目的仍是七个实际适配器及 generation 所需的真实外部 JSON／全文合同。**U 的登记修正已封存，V 的原生 extract／patch 成功；build 因执行环境找不到 rustup 而失败，组件验证／编译与严格正反向结果仍未知，端到端能力为 ASSUMED-UNVERIFIED。** 不据此宣称严格成功、完整 family、正式 ProofAdmission 或交付。
 
 **可见变更警告：同时增加工具库源码补丁、Verus 实验程序和宿主实验方法登记。** 原安装工具、产品源码、正式证明操作和准入判断均未修改。旧安装 vstd 没有这里的 JSON／全文模型关系；候选是真实 vstd 源码的一项显式扩展。新增构建、证明、CI、存储和维护成本尚未实测，不因候选使用原二进制的版本字符串就沿用旧库资格。
 
@@ -234,20 +234,22 @@ S 从干净 `986004dc222143d373babf2318907f32f1a9ce59`／tree `fafde2b6eaa6b2d01
 
 T 在封存 `b11d7b936d30320f185c8538c56f741f6e5786c6`／tree `e7f2d25f6382ae17dfc1394dcbc90b0c65ac535c` 上的原生 `status-7081-1794624176321927000-0` 和一次 extract use `use-14172-1794624253437090000-0` 均退出 2：`filemap: .chrono-harness/experiments/verus-tool-contract/consume.rs: E_VERUS_COVERAGE: proof root operation is not registered`。原件分别为 `.chrono-harness/state/worktrees/status-7081-1794624176321927000-0.json` 与 `.chrono-harness/state/worktrees/use-14172-1794624253437090000-0.json`。两个报告各保留 25 项已加入的 Git 读取进程；未取得 use、未派发任何实验操作、未启动 tar／Verus。raw positive／negative 均未知；这不是预期的 assume 拒绝，也不是历史 cleanup identity 失败。原件按本节既有使用方和 2026-11-21 用途复核条件保留，不复制日志或另建账本。
 
-U 只准备候选，未重跑原输入或任何 status／use、准备／证明操作。已有原生 CLI 的实际登记解析从固定提交读取，正式 check 还要求干净候选；本轮没有另造脏目录解析器，也不把 JSON 解码或源码核对称为原生登记通过。调用方先封存完整变更，再以 `.chrono-harness/bin/chrono-worktree use --operation investigate.verus-tool-contract.extract --path /Users/macstudio2/chrono-spec-current-dev` 核验新候选的实际准入；成功后才按上表逐项执行 patch、build、consume、reject，每项等待并核原结果，任一前置失败只停止其依赖项。旧 T 输入不重跑。
+调用方将 U 候选封存为 `aa05ad5a9db737b37d59358328ae7d241628b48f`／tree `224b3fcd56aac6b10afca4b51dd54639e0c3f9d1`。V 在干净候选上按登记入口各执行一次 extract、patch、build：`use-97286-1794626151313205000-0` 与 `use-9426-1794626320608184000-0` 的原命令及 use 均退出 0；`use-13366-1794626388739537000-0` 的 Verus wrapper 退出 128，use 退出 2。三项原报告及各自 `.json.process/` 的 stdout、stderr、launch、result 由实际生命周期所有者保存在 `/Users/macstudio2/chrono-harness/.chrono-harness/state/worktrees/`；操作 cwd 和政策候选始终是本工作树，未编辑协调者源码或状态。三项任务均已等待结束并核对原件；旧 T 输入、canonical 和 bootstrap 未重跑。
 
-正式 DELTA 仍走 `.chrono-harness/bin/chrono-harness check`，所选证明和原未过滤测试由登记负责。当前正向 action 的 bash 转交、extern／新组件及缺少 typed 资格仍受现役工具合同限制；补入计划成员不使其自动满足 `root_planned` 或实际编译绑定，不能添加虚假 `output_contract`。候选原生登记／extract 准入尚未验收，后续任何前置或工具资格错误仍是失败。新增组带来额外正向验证义务；完整构建、运行、CI、存储和维护成本未知。
+extract 的全部 168 个解压文件匹配缓存发行包，108 个真实 vstd 源文件共 1,429,187 字节；patch 只改变根，摘要符合上表，合同路径解析到唯一现有源。build 原 stdout 为空，完整 470 字节 stderr 报告 `verus: rustup not found, or not executable`，随后 `failed to execute rust_verify`。原 managed PATH 摘要为 `06328d66d5306076888bcacdaad76a6ea49dbbe27f4b731b5a86f3276111ff06`，其各目录没有 rustup；现有可执行 `/Users/macstudio2/.cargo/bin/rustup` 的 SHA-256 为 `63752a1919a3a4793173ec70f8f212621a7ce38ba6a246095984482f4de20f9f`，原 Rust 1.95.0 编译器也存在。最小准备条件归现有工具／环境所有者：通过当前登记的 PATH 继承机制提供该已有 rustup，绑定改变后的真实环境输入，再交调用方封存／派发。不得据错误中的安装建议下载工具、修改全局配置、绕过 wrapper 或原地重复本次失败。
+
+正式 DELTA 仍走 `.chrono-harness/bin/chrono-harness check`，所选证明和原未过滤测试由登记负责。当前正向 action 的 bash 转交、extern／新组件及缺少 typed 资格仍受现役工具合同限制；补入计划成员不使其自动满足 `root_planned` 或实际编译绑定，不能添加虚假 `output_contract`。当前候选已通过普通操作的原生登记准入并实际派发 extract；这不证明正式证明计划合格。新增组带来额外正向验证义务；完整构建、运行、CI、存储和维护成本未知。
 
 ### 执行前固定的预期、范围与剩余义务
 
 正向根必须整 crate 零退出、验证成功且实际编译出新库和 dep-info。其函数没有把实际外部调用换成仓内假实现：get 的完整成员关系、Index 缺键无文本、object 的真实成员数、String→str 借用和集合插入均由调用后的证明义务使用。边界分别要求：缺键得到 None；存在但非文本时 get 为 Some 而文本为 None；任意全文相等（包括不同存储、Unicode、NUL、换行）有相同成员关系；insert 的 fresh 与此前全文成员关系互补并保全实际旧 set。JSON 模型前提只是外部观察条件，不证明 JSON 构造或解析；原 `json_adapters.rs` 的实际空／null／错类型／前缀／组合 Unicode／重复插入预期继续保留，由后续原未过滤操作消费。
 
-反向根必须在确实消费同一新库的前提下，因仓内 `assume` 被严格检查拒绝；缺文件、类型错误、其他前置失败、无输出或超时均不是这一预期的通过证据。反向原非零结果继续是失败原件，不安装“失败就成功”的包装。当前组件尚未构建，因此两个结果均未知；本轮真实工具探针数为零。准备后由调用方封存并另行委派，不运行 canonical／bootstrap，也不把上述待执行项记成已完成。
+反向根必须在确实消费同一新库的前提下，因仓内 `assume` 被严格检查拒绝；缺文件、类型错误、其他前置失败、无输出或超时均不是这一预期的通过证据。反向原非零结果继续是失败原件，不安装“失败就成功”的包装。V 的 build 失败后，rlib／VIR 仍逐字节等于解压旧库，dep-info 不存在；六项正反向输出仍不存在。consume／reject 均未尝试，仓内严格探针为零，两个结果保持未知；128 不是预期 assume 拒绝。调用方恢复所需环境、核对已保留组件与输入后，后续仍须按 build → consume → reject 的原登记依赖逐项取得新原件，不重复 extract／patch 或把单项计划当作自动准备组件。
 
 本候选只试验一个真实工具库载体：源码层面的 family 依据是所有所需声明由真实 vstd 所有，消费者仍走未放宽的严格检查；它**尚未**提供全 family 的实测成功。可证伪条件是：新组件完整准备成功后，实际使用这些合同的正向严格根仍拒绝或无法证明关系，或相同严格路径不再拒绝仓内 assume。失败须先读原输入／stdout／stderr／退出，不重跑 R 的普通 import 拒绝，也不逐项修改仓内编译参数来伪造覆盖。
 
 真实 serde_json／标准文本模型仍是逐项列出的外部假设，不是已机械精化的库实现。正向 raw 成功也不证明全部 runner／adapter-tests／generation、完整生产编译绑定或 ProofAdmission。后续仍须在原所有者完成唯一合同的实际消费迁移、68 个受影响未分类文件与六个旧整文件映射、完整 producer／argv／cwd／env／rlib／dep-info／VIR／宏及必要传递输入资格、generation 四生产投影与 prepare／effect／recovery、正式 DELTA、integration／dev 和实际落地。
 
-产物沿现有 state 的 evidence-retain 与 check-original 所有者保管；不新增保留生产者、总账或清理器。使用方是工具合同工程、runner 资格工程、调用方与 mandatory review。原失败保留到调试／验收义务完成；新组件及原件在这些使用方结束、已保全必要证据且无活使用方后由调用方通过现有生命周期／保留所有者回收，2026-11-21 复核用途，不因日期自行删除。新增运行总成本未知；本轮只量取上表输入字节，没有用预算、重复运行或降低目标换取成功。
+产物沿现有 state 的 evidence-retain 与 check-original 所有者保管；不新增保留生产者、总账或清理器。使用方是工具合同工程、runner 资格工程、调用方与 mandatory review。原失败保留到调试／验收义务完成；新组件及原件在这些使用方结束、已保全必要证据且无活使用方后由调用方通过现有生命周期／保留所有者回收，2026-11-21 复核用途，不因日期自行删除。V 取得三项原结果，未单独测量构建 CPU、峰值内存或全流程用时，完整构建／CI／存储／维护总成本仍未知；没有用预算、重复运行或降低目标换取成功。
 
-R 的普通 proxy／import 源码调查没有待执行的新登记操作；S 的五项真实组件操作仍按上表前置关系等待执行。验证总成本未知。全部受影响源码的实质证明、generation 四个真实投影与 prepare／effect／recovery、正式 DELTA、原生 integration／dev、平台与生命周期义务继续未完成。保留使用方和复核条件沿用本文既有声明；本节不新增运行账本、执行器、缓存或永久证据副本。
+R 的普通 proxy／import 源码调查没有待执行的新登记操作；本次登记准入类已有真实正向观察，组件构建仍受上述工具环境前置阻断，工具载体和编译资格类未取得新结论。验证总成本未知。全部受影响源码的实质证明、generation 四个真实投影与 prepare／effect／recovery、正式 DELTA、原生 integration／dev、平台与生命周期义务继续未完成。保留使用方和复核条件沿用本文既有声明；本节不新增运行账本、执行器、缓存或永久证据副本。
