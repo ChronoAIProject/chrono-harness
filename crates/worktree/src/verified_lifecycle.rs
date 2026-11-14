@@ -11,6 +11,14 @@ use chrono_harness::verified_identifiers as identifiers;
 pub use identifiers::equal_text;
 
 #[cfg(verus_keep_ghost)]
+#[path = "maintenance.rs"]
+mod maintenance_verification;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::maintenance::retained_reference_ancestor_required;
+#[cfg(verus_keep_ghost)]
+pub use maintenance_verification::retained_reference_ancestor_required;
+
+#[cfg(verus_keep_ghost)]
 #[path = "start.rs"]
 mod start_verification;
 #[cfg(not(verus_keep_ghost))]

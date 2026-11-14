@@ -435,7 +435,6 @@ impl Manager {
                     reference,
                     head,
                     &Retention::Ancestor,
-                    false,
                 )?;
                 if e.path.exists() {
                     if !self.age_eligible(&e, true)? {

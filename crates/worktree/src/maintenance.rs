@@ -1,24 +1,52 @@
 //! Explicit saved-state maintenance; this produces observations, never judge verdicts.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Exact references need no ancestry query. Only terminal recovery accepts advances.
+pub fn retained_reference_ancestor_required(reference_matches: bool, allow_advance: bool)
+    -> (out: Result<bool, String>)
+    ensures if reference_matches { out == Ok::<bool, String>(false) }
+        else if allow_advance { out == Ok::<bool, String>(true) }
+        else { out.is_err() && out->Err_0@ == "retained reference changed"@ },
+{
+    if reference_matches { Ok(false) }
+    else if allow_advance { Ok(true) }
+    else { Err("retained reference changed".to_string()) }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     recovery::{self, ExpectedResult, state_bytes},
     start::{self, Runner},
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{decode, facts, json, relative_path, sha256};
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::Registrations;
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Receipt {
     path: String,
     sha256: String,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(tag = "operation", rename_all = "lowercase", deny_unknown_fields)]
 enum Plan {
@@ -103,6 +131,7 @@ enum Plan {
         allow_absent_ref: bool,
     },
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum Retention {
@@ -110,6 +139,7 @@ pub(crate) enum Retention {
     SameTree,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn run(args: &[String]) -> Result<Value, String> {
     if args.len() != 7 {
         return Err("usage: chrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote --host-root ROOT --config POLICY --plan STATE_PATH".into());
@@ -490,6 +520,7 @@ pub(crate) fn run(args: &[String]) -> Result<Value, String> {
         },
     )
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn artifacts(registrations: &Registrations, paths: &[&str]) -> Result<(), String> {
     let paths: Vec<_> = paths.iter().map(|p| (*p).to_string()).collect();
     if !chrono_judge_registration::nonartifact_paths(registrations.config(), &paths).is_empty() {
@@ -497,14 +528,17 @@ pub(crate) fn artifacts(registrations: &Registrations, paths: &[&str]) -> Result
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn physical(r: &mut Runner, root: &Path, args: &[&str]) -> Result<PathBuf, String> {
     let path = r.text(root, args)?;
     fs::canonicalize(root.join(path.trim())).map_err(|e| e.to_string())
 }
+#[cfg(not(verus_keep_ghost))]
 fn common(r: &mut Runner, root: &Path) -> Result<PathBuf, String> {
     physical(r, root, &["rev-parse", "--git-common-dir"])
 }
 // HEAD is Git's reserved detached checkout spelling, never a local branch name.
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn checkout_reference(branch: &str) -> String {
     if branch == "HEAD" {
         "HEAD".into()
@@ -512,6 +546,7 @@ pub(crate) fn checkout_reference(branch: &str) -> String {
         format!("refs/heads/{branch}")
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn matches_checkout_reference(row: &BTreeMap<String, String>, reference: &str) -> bool {
     if reference == "HEAD" {
         row.contains_key("detached") && !row.contains_key("branch")
@@ -520,6 +555,7 @@ pub(crate) fn matches_checkout_reference(row: &BTreeMap<String, String>, referen
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn identity(
     r: &mut Runner,
     root: &Path,
@@ -568,12 +604,14 @@ pub(crate) fn identity(
     }
     Ok(observed)
 }
+#[cfg(not(verus_keep_ghost))]
 fn field<'a>(v: &'a Value, name: &str) -> Result<&'a str, String> {
     v[name]
         .as_str()
         .filter(|s| !s.is_empty())
         .ok_or_else(|| format!("original report lacks {name}"))
 }
+#[cfg(not(verus_keep_ghost))]
 fn failed_report(
     root: &Path,
     config_path: &str,
@@ -608,6 +646,7 @@ fn failed_report(
     }
     Ok((original, bytes))
 }
+#[cfg(not(verus_keep_ghost))]
 fn recover(
     r: &mut Runner,
     root: &Path,
@@ -635,6 +674,7 @@ fn recover(
         Ok(())
     })
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn release_reconciled(
     r: &mut Runner,
     root: &Path,
@@ -680,6 +720,7 @@ pub(crate) fn release_reconciled(
     report["context"] = value!({"base":base,"candidate":null,"branch_ref":branch});
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn retained_commit_reachable(
     r: &mut Runner,
     root: &Path,
@@ -700,7 +741,28 @@ pub(crate) fn retained_commit_reachable(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn saved_commit(
+    r: &mut Runner,
+    root: &Path,
+    head: &str,
+    retained_ref: &str,
+    retained_commit: &str,
+    retention: &Retention,
+) -> Result<(), String> {
+    saved_commit_with_reference(
+        r,
+        root,
+        head,
+        retained_ref,
+        retained_commit,
+        retention,
+        false,
+    )
+}
+
+#[cfg(not(verus_keep_ghost))]
+pub(crate) fn saved_commit_with_reference(
     r: &mut Runner,
     root: &Path,
     head: &str,
@@ -732,10 +794,8 @@ pub(crate) fn saved_commit(
     for oid in &oids {
         facts::full_oid(oid)?;
     }
-    if oids[0] != retained_commit {
-        if !allow_retained_ref_advance {
-            return Err("retained reference changed".into());
-        }
+    if retained_reference_ancestor_required(oids[0] == retained_commit, allow_retained_ref_advance)?
+    {
         retained_commit_reachable(r, root, retained_commit, oids[0])?;
     }
     if oids[1] != head {
@@ -757,6 +817,7 @@ pub(crate) fn saved_commit(
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct Cleanup {
     pub(crate) path: PathBuf,
     pub(crate) branch: String,
@@ -769,12 +830,13 @@ pub(crate) struct Cleanup {
     pub(crate) remove_branch: bool,
     pub(crate) allow_absent_worktree: bool,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Cleanup {
     fn disposal_paths(&self, r: &mut Runner, target: &Path) -> Result<Vec<PathBuf>, String> {
         crate::artifact_disposal::paths(r, target, &self.head, &self.discard_artifacts)
     }
     fn saved(&self, r: &mut Runner, root: &Path) -> Result<(), String> {
-        saved_commit(
+        saved_commit_with_reference(
             r,
             root,
             &self.head,
@@ -967,6 +1029,7 @@ impl Cleanup {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn cleanup_fetch(
     r: &mut Runner,
     root: &Path,
@@ -1017,6 +1080,7 @@ fn cleanup_fetch(
         },
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn cleanup_fetch_ref(
     r: &mut Runner,
     root: &Path,
@@ -1044,7 +1108,6 @@ fn cleanup_fetch_ref(
         retained_ref,
         retained_commit,
         &Retention::Ancestor,
-        false,
     )?;
     let symbolic = r.command(root, &["symbolic-ref", "--quiet", fetch_ref])?;
     if symbolic.exit_code != 1 {
@@ -1065,7 +1128,6 @@ fn cleanup_fetch_ref(
                 retained_ref,
                 retained_commit,
                 &Retention::Ancestor,
-                false,
             )?;
             report["fetch_ref_removal"] = value!("attempted-unverified");
             r.git(root, &["update-ref", "--no-deref", "-d", fetch_ref, head])?;
@@ -1091,7 +1153,6 @@ fn cleanup_fetch_ref(
         retained_ref,
         retained_commit,
         &Retention::Ancestor,
-        false,
     )?;
     stable()
 }

@@ -4112,7 +4112,7 @@ impl Manager {
         if e.path.exists() {
             self.check_entry(r, &e, &t.head, None)?;
             if preserved.is_none() {
-                if let Err(error) = maintenance::saved_commit(
+                if let Err(error) = maintenance::saved_commit_with_reference(
                     r,
                     &self.inputs.policy.coordinator_root,
                     &t.head,
