@@ -5275,6 +5275,64 @@
       "path": ".chrono-harness/ci/bootstrap-native.sh",
       "test_script": "host-bootstrap-launcher-tests",
       "actions": {
+        "verus-source-bootstrap": {
+          "operation": "investigate.verus-source.bootstrap",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus-source.json"
+          ]
+        },
+        "verus-source-z3-download": {
+          "operation": "investigate.verus-source.z3-download",
+          "tool": "bootstrap-native",
+          "argv": [
+            "download",
+            ".",
+            ".chrono-harness/ci/verus-source-z3.sha256",
+            "/usr/bin/curl",
+            ".chrono-harness/state/verus-source-z3.headers",
+            "https://github.com/Z3Prover/z3/releases/download/z3-4.16.0/z3-4.16.0-arm64-osx-15.7.3.zip"
+          ]
+        },
+        "verus-source-z3-extract": {
+          "operation": "investigate.verus-source.z3-extract",
+          "tool": "tar",
+          "argv": [
+            "-x",
+            "-f",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/z3-4.16.0-arm64-macos.zip",
+            "-s",
+            "|^z3-4.16.0-arm64-osx-15.7.3/bin/z3$|.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/z3|",
+            "--no-same-owner",
+            "z3-4.16.0-arm64-osx-15.7.3/bin/z3"
+          ]
+        },
+        "verus-source-build": {
+          "operation": "investigate.verus-source.build",
+          "tool": "cargo",
+          "argv": [
+            "-Zunstable-options",
+            "-C",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source",
+            "build",
+            "--locked",
+            "--release",
+            "-p",
+            "rust_verify",
+            "-p",
+            "verus",
+            "-p",
+            "cargo-verus",
+            "-p",
+            "verus_builtin",
+            "-p",
+            "verus_builtin_macros",
+            "-p",
+            "verus_state_machines_macros"
+          ]
+        },
         "verus-source-acquire": {
           "operation": "investigate.verus-source.acquire",
           "tool": "git",
