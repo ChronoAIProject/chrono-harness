@@ -956,9 +956,19 @@ fn root_metadata_input_selects_only_the_rlib_from_its_same_cargo_artifact() {
     let (f, graph, records) = dependency_fixture();
     let deps = f.root.join("app/target/debug/deps");
     let outputs = [deps.join("libapp-02.rlib"), deps.join("libapp-02.rmeta")];
-    dependency(&deps.join("app-02.d"), &outputs, &[f.root.join("app/src/main.rs"), deps.join("libidentity-01.rmeta")]);
+    dependency(
+        &deps.join("app-02.d"),
+        &outputs,
+        &[
+            f.root.join("app/src/main.rs"),
+            deps.join("libidentity-01.rmeta"),
+        ],
+    );
     let (_, externs, _, _) = collect_dependencies(&f, &graph, &records).unwrap();
-    assert_eq!(externs["identity"], deps.join("libidentity-01.rlib").to_str().unwrap());
+    assert_eq!(
+        externs["identity"],
+        deps.join("libidentity-01.rlib").to_str().unwrap()
+    );
     let mut wrong_pair = records.clone();
     wrong_pair[0]["filenames"][1] = json!(deps.join("libidentity-02.rmeta"));
     write(&deps.join("libidentity-02.rmeta"), b"another compilation");

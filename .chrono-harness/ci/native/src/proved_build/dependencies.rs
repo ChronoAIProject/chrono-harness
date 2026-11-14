@@ -420,9 +420,16 @@ pub fn collect(
             for path in &artifact.filenames {
                 // rustc may consume Cargo's rmeta output while the raw linker
                 // needs the paired rlib from the very same compiler-artifact.
-                if path.ends_with(".rlib") && (root_inputs.contains(&PathBuf::from(path))
-                    || (artifact.filenames.contains(&PathBuf::from(path).with_extension("rmeta").to_string_lossy().into_owned())
-                        && root_inputs.contains(&PathBuf::from(path).with_extension("rmeta")))) {
+                if path.ends_with(".rlib")
+                    && (root_inputs.contains(&PathBuf::from(path))
+                        || (artifact.filenames.contains(
+                            &PathBuf::from(path)
+                                .with_extension("rmeta")
+                                .to_string_lossy()
+                                .into_owned(),
+                        ) && root_inputs
+                            .contains(&PathBuf::from(path).with_extension("rmeta"))))
+                {
                     matches.push(path.clone());
                 }
             }
@@ -535,9 +542,19 @@ pub fn validate_component(
             "E_VERUS_DEPENDENCIES: component compiled instances differ or producer failed".into(),
         );
     }
-    let expected_extern = format!("serde_json={}", externs.get("serde_json").ok_or("missing current serde_json")?);
-    let actual_externs = component.operation.argv.windows(2)
-        .filter(|pair| pair[0] == "--extern").map(|pair| pair[1].as_str()).collect::<Vec<_>>();
+    let expected_extern = format!(
+        "serde_json={}",
+        externs
+            .get("serde_json")
+            .ok_or("missing current serde_json")?
+    );
+    let actual_externs = component
+        .operation
+        .argv
+        .windows(2)
+        .filter(|pair| pair[0] == "--extern")
+        .map(|pair| pair[1].as_str())
+        .collect::<Vec<_>>();
     if actual_externs != [expected_extern.as_str()] {
         return Err("E_VERUS_DEPENDENCIES: component actual extern invocation differs".into());
     }
@@ -661,7 +678,7 @@ fn component(
                 &method,
                 &executable,
                 environment,
-                stdout,
+                std::io::sink(),
                 stderr,
             )?;
             persist(
@@ -709,7 +726,7 @@ fn component(
         let argv = config
             .argv
             .iter()
-            .map(|s| s.replace("$COMPONENT", &relative))
+            .map(|s| s.replace("$COMPONENT", directory.to_str().ok_or("non UTF-8 component path")?))
             .collect::<Vec<_>>();
         let operation = run(
             2,
@@ -863,7 +880,7 @@ pub(super) fn run(
             ]),
             Path::new(&tools.cargo.path),
             &environment,
-            &mut *stdout,
+            &mut std::io::sink(),
             &mut *stderr,
         )?;
         persist(&directory.join("metadata-operation.json"), &metadata)?;
@@ -899,7 +916,7 @@ pub(super) fn run(
             ]),
             Path::new(&tools.cargo.path),
             &environment,
-            &mut *stdout,
+            &mut std::io::sink(),
             &mut *stderr,
         )?;
         persist(&directory.join("build-operation.json"), &operation)?;

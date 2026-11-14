@@ -185,8 +185,9 @@
       "actions": {
         "investigate_generation_dependency": {
           "operation": "investigate.ci-generation-dependency.runner",
-          "tool": "bootstrap-native",
+          "tool": "bash",
           "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -451,8 +452,9 @@
       "actions": {
         "verify_json_adapters": {
           "operation": "verify.runner-json-adapters-tests",
-          "tool": "bootstrap-native",
+          "tool": "bash",
           "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -1140,8 +1142,9 @@
       "actions": {
         "investigate_generation_consumer": {
           "operation": "investigate.ci-generation-dependency.consumer",
-          "tool": "bootstrap-native",
+          "tool": "bash",
           "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
@@ -1150,8 +1153,9 @@
         },
         "investigate_generation_missing": {
           "operation": "investigate.ci-generation-dependency.missing",
-          "tool": "bootstrap-native",
+          "tool": "bash",
           "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
             ".",
             ".chrono-harness/ci/runner-build.json",
             "runner-dependencies",
