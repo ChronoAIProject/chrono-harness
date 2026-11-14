@@ -25,6 +25,30 @@ pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
     match text { Some(value) => Some(value@), None => None }
 }
 
+/// Addressed metadata already excludes reservation changes. Existing
+/// capabilities still require actual exclusion; migration never creates one.
+pub struct MigrationCustody<'a> {
+    pub admitted: bool,
+    pub acquire: bool,
+    pub expected: Option<&'a str>,
+}
+
+pub fn migration_custody<'a>(phase: &str, lease_id: &'a str, missing: bool)
+    -> (custody: MigrationCustody<'a>)
+    ensures custody.admitted == (phase@ == "reserving"@ || lease_id@.len() > 0),
+        custody.acquire == (lease_id@.len() > 0 || !missing),
+        recovery_text(custody.expected) == if lease_id@.len() == 0 {
+            None
+        } else { Some(lease_id@) },
+{
+    let attached = !lease_id.is_empty();
+    MigrationCustody {
+        admitted: attached || identifiers::equal_text(phase, "reserving"),
+        acquire: attached || !missing,
+        expected: if attached { Some(lease_id) } else { None },
+    }
+}
+
 fn same_recovery_text(left: Option<&str>, right: Option<&str>) -> (same: bool)
     ensures same == (recovery_text(left) == recovery_text(right)),
 {

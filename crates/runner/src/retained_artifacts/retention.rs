@@ -977,21 +977,36 @@ impl Inventory {
                 seen.extend(l.outputs.iter().map(|output| output.id.clone()));
                 let mut owners = Vec::new();
                 for output in &l.outputs {
-                    if matches!(output.phase.as_str(), "reserving" | "creating") {
-                        return Err("recover reserved output before policy migration".into());
+                    let capability = self.directory.join(&output.lease);
+                    let missing = match fs::symlink_metadata(&capability) {
+                        Ok(_) => false,
+                        Err(error) if error.kind() == std::io::ErrorKind::NotFound => true,
+                        Err(error) => return Err(error.to_string()),
+                    };
+                    let custody = crate::verified_release::migration_custody(
+                        &output.phase,
+                        &output.lease_id,
+                        missing,
+                    );
+                    if !custody.admitted {
+                        return Err(
+                            "output capability identity is unknown; preserve original".into()
+                        );
+                    }
+                    if !custody.acquire {
+                        // Reservation preceded capability creation. Its original
+                        // metadata exclusion remains held by gate throughout.
+                        continue;
                     }
                     owners.push(
-                        Lease::acquire(
-                            &self.directory.join(&output.lease),
-                            Some(&output.lease_id),
-                            false,
-                            true,
-                            None,
-                        )?
-                        .ok_or("live output producer/consumer prevents retention migration")?,
+                        Lease::acquire(&capability, custody.expected, false, true, None)?
+                            .ok_or("live output producer/consumer prevents retention migration")?,
                     );
                 }
                 if publish {
+                    for owner in &owners {
+                        owner.stable()?;
+                    }
                     self.partition_rebind_policy(&gate)?;
                     preserved.extend(l.outputs.iter().map(|output| output.id.clone()));
                     roots.extend(l.roots.keys().cloned());
