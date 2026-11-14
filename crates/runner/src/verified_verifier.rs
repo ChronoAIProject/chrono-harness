@@ -386,7 +386,7 @@ pub open spec fn extension_value_valid(args: Seq<String>, i: int, end: int) -> b
                     named_invocation_value(vstd::utf8::encode_utf8(args[i + 1]@)),
                 InvocationKind::Search => {
                     let value = vstd::utf8::encode_utf8(args[i + 1]@);
-                    sources::prefix_at(value, 0, b"dependency="@)
+                    sources::prefix_at(value, 0, vstd::utf8::encode_utf8("dependency="@))
                         && invocation_value(value.skip(11))
                 },
                 InvocationKind::Export => invocation_value(vstd::utf8::encode_utf8(args[i + 1]@)),
@@ -408,8 +408,9 @@ pub fn valid_extension_value(args: &Vec<String>, i: usize, end: usize) -> (valid
         InvocationKind::Environment | InvocationKind::Extern | InvocationKind::Import =>
             valid_named_invocation_value(args[i + 1].as_str().as_bytes()),
         InvocationKind::Search => {
+            proof { reveal_strlit("dependency="); }
             let value = args[i + 1].as_str().as_bytes();
-            if !sources::matches_at(value, 0, b"dependency=") { return false; }
+            if !sources::matches_at(value, 0, "dependency=".as_bytes()) { return false; }
             let path = sources::copy_range(value, 11, value.len());
             valid_invocation_value(path.as_slice())
         },
