@@ -1,29 +1,109 @@
 //! Produce real Git worktrees and observations; governance remains with the judges.
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+verus! {
+pub fn successful_report_status(status: Option<&str>) -> (successful: bool)
+    ensures successful == match status {
+        None => false,
+        Some(text) => text@ == "created"@
+                || text@ == "reconstructed"@
+                || text@ == "recovered"@
+                || text@ == "cleaned"@
+                || text@ == "observed"@
+                || text@ == "rebound"@
+                || text@ == "finished"@
+                || text@ == "maintained"@
+                || text@ == "maintenance-requested"@
+                || text@ == "maintenance-idle-exit"@
+                || text@ == "imported"@
+                || text@ == "migrated"@
+                || text@ == "owner-deployed"@
+                || text@ == "used"@,
+    },
+{
+    match status {
+        None => false,
+        Some(text) => equal_text(text, "created")
+            || equal_text(text, "reconstructed")
+            || equal_text(text, "recovered")
+            || equal_text(text, "cleaned")
+            || equal_text(text, "observed")
+            || equal_text(text, "rebound")
+            || equal_text(text, "finished")
+            || equal_text(text, "maintained")
+            || equal_text(text, "maintenance-requested")
+            || equal_text(text, "maintenance-idle-exit")
+            || equal_text(text, "imported")
+            || equal_text(text, "migrated")
+            || equal_text(text, "owner-deployed")
+            || equal_text(text, "used"),
+    }
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 mod artifact_disposal;
+#[cfg(not(verus_keep_ghost))]
 pub use artifact_disposal::{ArtifactFootprint, artifact_footprint};
+#[cfg(not(verus_keep_ghost))]
 mod automatic;
+#[cfg(feature = "producer-birth-test")]
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
+pub use automatic::inventory::worktree_action as inventory_worktree_action;
+#[cfg(feature = "producer-birth-test")]
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
+pub use automatic::write_inventory_record;
+#[cfg(not(verus_keep_ghost))]
 pub use automatic::{RetainedArtifact, TemporaryHost};
+#[cfg(not(verus_keep_ghost))]
 mod check_inputs;
+#[cfg(not(verus_keep_ghost))]
 mod evidence_retirement;
+#[cfg(not(verus_keep_ghost))]
 mod maintenance;
+#[cfg(not(verus_keep_ghost))]
 mod ownership;
+#[cfg(not(verus_keep_ghost))]
 mod rebind;
+#[cfg(not(verus_keep_ghost))]
 mod rebind_inputs;
+#[cfg(not(verus_keep_ghost))]
 mod rebind_resume;
+#[cfg(not(verus_keep_ghost))]
 mod rebind_steps;
+#[cfg(not(verus_keep_ghost))]
 mod reconstruct;
+#[cfg(not(verus_keep_ghost))]
 mod recovery;
+#[cfg(not(verus_keep_ghost))]
 mod remote;
+#[cfg(not(verus_keep_ghost))]
 mod start;
 #[allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_attention;
 #[allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_lifecycle;
 #[allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_owner_publication;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{CliOutput, decode, no_symlink_parents, relative_path};
+#[cfg(not(verus_keep_ghost))]
 mod fetch_recovery;
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     fs,
@@ -32,6 +112,7 @@ use std::{
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Git {
     pub program: String,
     pub expected_version: Option<String>,
@@ -39,12 +120,14 @@ pub struct Git {
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Environment {
     pub inherit: Vec<String>,
     pub values: BTreeMap<String, String>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Config {
     pub schema: String,
     #[serde(default)]
@@ -65,10 +148,12 @@ pub struct Config {
 }
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub(crate) struct AgentIdentity {
     id: String,
     environment: String,
 }
+#[cfg(not(verus_keep_ghost))]
 impl AgentIdentity {
     fn valid(&self) -> bool {
         !self.id.is_empty()
@@ -115,6 +200,7 @@ impl AgentIdentity {
         Ok(Some(identity))
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub struct Start {
     pub root: PathBuf,
     pub config_path: String,
@@ -123,6 +209,7 @@ pub struct Start {
     pub destination: PathBuf,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn arguments(args: &[String]) -> Result<(Start, Option<String>), String> {
     let reconstruction = args.first().map(String::as_str) == Some("reconstruct");
     if (!reconstruction && args.first().map(String::as_str) != Some("start"))
@@ -152,6 +239,7 @@ fn arguments(args: &[String]) -> Result<(Start, Option<String>), String> {
         values.get("--plan").map(|v| (*v).to_string()),
     ))
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn run(args: &[String]) -> CliOutput {
     if args == ["--version"] {
         return CliOutput {
@@ -161,7 +249,7 @@ pub fn run(args: &[String]) -> CliOutput {
         };
     }
     if args == ["--help"] {
-        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote|retire-evidence --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree status [--path WORKTREE]\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH] [--adopt-fixtures STATE_PATH] [--partition-producer ID]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. No idle scheduler or PR/merge verdict.\n".into(), stderr: String::new() };
+        return CliOutput { exit_code: 0, stdout: "chrono-worktree start --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION\nchrono-worktree reconstruct --host-root ROOT --config PATH --kind feature|integration --name TASK --path DESTINATION --plan STATE_PATH\nchrono-worktree inspect-rebind|rebind|resume-rebind|recover|recover-interrupted|cleanup|cleanup-fetch|cleanup-fetch-interrupted|cleanup-remote|retire-evidence --host-root ROOT --config PATH --plan STATE_PATH\nchrono-worktree finish [--path WORKTREE] [--dispose-evidence] [--artifacts-only] [--retained-commit OID]\nchrono-worktree maintain\nchrono-worktree maintenance-service [--host-root COORDINATOR]\nchrono-worktree status [--path WORKTREE]\nchrono-worktree import --path WORKTREE\nchrono-worktree migrate --path WORKTREE [--adopt-cache STATE_PATH] [--adopt-fixtures STATE_PATH] [--partition-producer ID]\nchrono-worktree use [--path WORKTREE] --operation REGISTERED_OPERATION\nLifecycle commands default to --host-root . --config .chrono-harness/worktree.json; require explicit automatic-cleanup adoption. Unified maintenance uses adopted OS socket activation; idle/timer policy is in maintenance.json. No PR/merge verdict.\n".into(), stderr: String::new() };
     }
     if args.first().map(String::as_str) == Some("check-inputs") {
         return match check_inputs::dispatch(args) {
@@ -177,7 +265,9 @@ pub fn run(args: &[String]) -> CliOutput {
             },
         };
     }
-    let result = if matches!(
+    let result = if args.first().map(String::as_str) == Some("maintenance-service") {
+        automatic::service::dispatch(args)
+    } else if matches!(
         args.first().map(String::as_str),
         Some(
             "finish"
@@ -216,23 +306,7 @@ pub fn run(args: &[String]) -> CliOutput {
     };
     match result {
         Ok(report) => CliOutput {
-            exit_code: if matches!(
-                report["status"].as_str(),
-                Some(
-                    "created"
-                        | "reconstructed"
-                        | "recovered"
-                        | "cleaned"
-                        | "observed"
-                        | "rebound"
-                        | "finished"
-                        | "maintained"
-                        | "imported"
-                        | "migrated"
-                        | "owner-deployed"
-                        | "used"
-                )
-            ) {
+            exit_code: if successful_report_status(report["status"].as_str()) {
                 0
             } else {
                 2
@@ -247,6 +321,7 @@ pub fn run(args: &[String]) -> CliOutput {
         },
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn configuration(root: &Path, config_path: &str) -> Result<(Config, Vec<u8>), String> {
     relative_path(config_path)?;
     if !config_path.starts_with(".chrono-harness/") {
@@ -293,6 +368,7 @@ fn configuration(root: &Path, config_path: &str) -> Result<(Config, Vec<u8>), St
     relative_path(config.report_directory.trim_end_matches('/'))?;
     Ok((config, bytes))
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn start(options: Start) -> Result<serde_json::Value, String> {
     if !matches!(options.kind.as_str(), "feature" | "integration") || options.name.is_empty() {
         return Err("invalid worktree branch kind/name".into());
@@ -300,6 +376,7 @@ pub fn start(options: Start) -> Result<serde_json::Value, String> {
     let (config, bytes) = configuration(&options.root, &options.config_path)?;
     start::create(options, config, bytes, None)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn reconstruct(options: Start, plan_path: &str) -> Result<serde_json::Value, String> {
     if !matches!(options.kind.as_str(), "feature" | "integration") || options.name.is_empty() {
         return Err("invalid worktree branch kind/name".into());
@@ -308,3 +385,18 @@ pub fn reconstruct(options: Start, plan_path: &str) -> Result<serde_json::Value,
     let plan = reconstruct::read(&options.root, plan_path)?;
     start::create(options, config, bytes, Some(plan))
 }
+
+#[doc(hidden)]
+#[cfg(unix)]
+#[cfg(not(verus_keep_ghost))]
+pub use automatic::service::serve as serve_maintenance_socket;
+
+#[doc(hidden)]
+#[cfg(feature = "producer-birth-test")]
+#[cfg(not(verus_keep_ghost))]
+pub use automatic::service::with_observer as with_maintenance_observer;
+
+#[doc(hidden)]
+#[cfg(all(unix, feature = "producer-birth-test"))]
+#[cfg(not(verus_keep_ghost))]
+pub use automatic::service::run_with_socket as run_maintenance_service_socket;

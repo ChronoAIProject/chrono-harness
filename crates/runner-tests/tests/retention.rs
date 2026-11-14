@@ -220,6 +220,124 @@ fn explicit_maintenance_reaches_expired_tail_after_retained_metadata_prefix() {
             b"required original"
         );
     }
+    // Complete members and raw outcomes have a real maintenance-report
+    // consumer even when the unchanged compact sample omits observations.
+    let mut observations = Vec::new();
+    let sweep = inventory(h.path())
+        .maintain_explicit_observed(|row| {
+            observations.push(row.clone());
+            Ok(())
+        })
+        .unwrap();
+    let declared: std::collections::BTreeSet<_> = observations
+        .iter()
+        .filter(|row| row["kind"] == "declaration" && row["namespace"] == "objects")
+        .map(|row| row["address"].as_str().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        declared,
+        addresses
+            .iter()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+    );
+    assert!(serde_json::to_vec(&observations).unwrap().len() > 65536);
+    assert!(sweep["samples"]["payload_bytes"].as_u64().unwrap() <= 65536);
+    assert!(
+        observations
+            .iter()
+            .any(|row| row["kind"] == "round" && row["namespace"] == "objects")
+    );
+}
+
+#[test]
+fn explicit_inventory_observer_keeps_damaged_live_and_unexecuted_members() {
+    if !isolated_capability_test(
+        "explicit_inventory_observer_keeps_damaged_live_and_unexecuted_members",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let mut ids = std::collections::BTreeMap::new();
+    for name in ["expired", "retained", "damaged"] {
+        let path = format!(".chrono-harness/state/fixtures/{name}");
+        fs::write(h.path().join(&path), b"original").unwrap();
+        let publication = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        ids.insert(name, publication.id().to_owned());
+        publication.complete(json!({"exit":7})).unwrap();
+    }
+    inventory(h.path())
+        .reference("actual-user", &[ids["retained"].clone()])
+        .unwrap();
+    let live_path = ".chrono-harness/state/fixtures/live";
+    fs::write(h.path().join(live_path), b"live producer").unwrap();
+    let live = inventory(h.path())
+        .begin("fixture", live_path, json!(null))
+        .unwrap();
+    let damaged = retention_state::object_path(h.path(), &ids["damaged"]);
+    fs::write(&damaged, b"original malformed declaration").unwrap();
+    let mut rows = Vec::new();
+    inventory(h.path())
+        .maintain_explicit_observed(|row| {
+            rows.push(row.clone());
+            Ok(())
+        })
+        .unwrap();
+    let declared: std::collections::BTreeSet<_> = rows
+        .iter()
+        .filter(|row| row["kind"] == "declaration" && row["namespace"] == "objects")
+        .map(|row| row["address"].as_str().unwrap().to_owned())
+        .collect();
+    let expected: std::collections::BTreeSet<_> = ids
+        .values()
+        .cloned()
+        .chain([live.id().to_owned()])
+        .collect();
+    assert_eq!(declared, expected);
+    assert!(rows.iter().any(|row| {
+        row["address"] == ids["damaged"]
+            && row["kind"] == "round"
+            && row["original"]["accounting_errors"]
+                .as_array()
+                .is_some_and(|errors| !errors.is_empty())
+    }));
+    assert_eq!(
+        fs::read(&damaged).unwrap(),
+        b"original malformed declaration"
+    );
+    assert_eq!(
+        fs::read(h.path().join(live_path)).unwrap(),
+        b"live producer"
+    );
+    assert_eq!(
+        fs::read(h.path().join(".chrono-harness/state/fixtures/retained")).unwrap(),
+        b"original"
+    );
+    let error = inventory(h.path())
+        .maintain_explicit_observed(|_| Err("original report IO failure".into()))
+        .unwrap_err();
+    assert_eq!(error, "original report IO failure");
+    // Missing declaration namespaces are reported as incomplete, never zero.
+    let owner = inventory(h.path());
+    fs::remove_dir_all(
+        h.path()
+            .join(".chrono-harness/state/output-retention-v1/roles"),
+    )
+    .unwrap();
+    let mut rows = Vec::new();
+    owner
+        .maintain_explicit_observed(|row| {
+            rows.push(row.clone());
+            Ok(())
+        })
+        .unwrap();
+    assert!(
+        rows.iter()
+            .any(|row| row["kind"] == "enumeration-error" && row["namespace"] == "roles")
+    );
+    drop(live);
 }
 
 #[test]

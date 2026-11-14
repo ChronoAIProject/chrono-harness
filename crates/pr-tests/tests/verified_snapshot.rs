@@ -2,6 +2,10 @@
 #![allow(unexpected_cfgs)]
 
 #[cfg(verus_keep_ghost)]
+#[path = "lifecycle.rs"]
+mod lifecycle;
+
+#[cfg(verus_keep_ghost)]
 #[path = "../../pr/src/verified_snapshot.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
