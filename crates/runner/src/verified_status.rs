@@ -2652,6 +2652,7 @@ pub fn parse_git_index_rows<'a>(rows: &[&'a str]) -> (out: Result<GitIndexInvent
             git_index_prefix_valid(rows@, i as int),
             git_index_prefix_rows(parsed@, rows@, i as int),
             git_index_inventory_stages(stages@, parsed@),
+            stages@.dom().finite(),
         decreases rows.len() - i,
     {
         let row = match parse_git_index_row(rows[i]) {
@@ -2662,7 +2663,6 @@ pub fn parse_git_index_rows<'a>(rows: &[&'a str]) -> (out: Result<GitIndexInvent
             },
         };
         let ghost before = stages@;
-        proof { vstd::std_specs::btree::axiom_btree_map_view_finite_dom(stages); }
         match record_git_index_stage(&mut stages, row.path, row.stage) {
             Err(message) => {
                 proof { git_index_duplicate_error(before, parsed@, rows@, i as int, row.bytes()); }
@@ -4421,6 +4421,7 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitInvent
             0 <= i <= rows.len(),
             git_tree_prefix_valid(rows@, i as int),
             git_tree_prefix_map(tree@, rows@, i as int),
+            tree@.dom().finite(),
         decreases rows.len() - i,
     {
         let row = match parse_git_tree_row(rows[i]) {
@@ -4433,7 +4434,6 @@ pub fn parse_git_tree_rows<'a>(rows: &[&'a str]) -> (out: Result<Tree, GitInvent
         let key = TreePath::from_text(row.path);
         let ghost inserted = key;
         let ghost before = tree@;
-        proof { vstd::std_specs::btree::axiom_btree_map_view_finite_dom(tree); }
         let result = insert_git_tree_entry(&mut tree, key, row.mode, row.oid, row.kind);
         match result {
             Err(message) => {
