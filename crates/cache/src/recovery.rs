@@ -673,6 +673,125 @@ pub struct RecoverySummary {
     warning_effect: bool,
 }
 
+/// 只借用原报告的字段和产物，不复制 JSON 或产物列表。
+pub struct RecoveryCacheObservation<'a, A> {
+    pub status: Option<&'a str>,
+    pub outcome: Option<&'a str>,
+    pub artifacts: &'a [A],
+}
+
+pub open spec fn recovery_cache_changed<A>(cache: RecoveryCacheObservation<A>) -> bool {
+    recovery_text(cache.status) == Some("discarded"@)
+        || recovery_text(cache.status) == Some("source-times-refreshed"@)
+}
+
+pub open spec fn recovery_cache_warns<A>(cache: RecoveryCacheObservation<A>,
+    model: spec_fn(A) -> Option<Seq<char>>) -> bool
+{
+    recovery_text(cache.outcome) == Some("failure"@)
+        || exists|index: int| 0 <= index < cache.artifacts.len()
+            && #[trigger] model(cache.artifacts@[index]) == Some("removed"@)
+}
+
+proof fn recovery_any_prefix_step<A>(items: Seq<A>, index: int, effect: spec_fn(A) -> bool)
+    requires 0 <= index < items.len(),
+    ensures (exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]))
+        == ((exists|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]))
+            || effect(items[index])),
+{
+    if effect(items[index]) {
+        assert(exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]));
+    }
+    if exists|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]) {
+        let prior = choose|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]);
+        assert(effect(items[prior]));
+        assert(exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]));
+    }
+    if exists|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]) {
+        let prior = choose|prior: int| 0 <= prior < index + 1 && #[trigger] effect(items[prior]);
+        if prior < index {
+            assert(exists|prior: int| 0 <= prior < index && #[trigger] effect(items[prior]));
+        } else {
+            assert(prior == index);
+        }
+    }
+}
+
+fn summarize_recovery_artifacts<'a, A, R>(
+    summary: RecoverySummary, artifacts: &'a [A], read: &R,
+    #[cfg(verus_keep_ghost)] Ghost(model): Ghost<spec_fn(A) -> Option<Seq<char>>>,
+) -> (out: RecoverySummary)
+    where R: Fn(&'a A) -> Option<&'a str>,
+    requires forall|artifact: &'a A| read.requires((artifact,)),
+        forall|artifact: &'a A, status: Option<&'a str>|
+            read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+    ensures out.changed() == summary.changed(),
+        out.warning_effect() == (summary.warning_effect()
+            || exists|index: int| 0 <= index < artifacts.len()
+                && #[trigger] model(artifacts@[index]) == Some("removed"@)),
+{
+    let mut out = summary;
+    let mut index = 0usize;
+    while index < artifacts.len()
+        invariant index <= artifacts.len(), out.changed() == summary.changed(),
+            out.warning_effect() == (summary.warning_effect()
+                || exists|prior: int| 0 <= prior < index
+                    && #[trigger] model(artifacts@[prior]) == Some("removed"@)),
+            forall|artifact: &'a A| read.requires((artifact,)),
+            forall|artifact: &'a A, status: Option<&'a str>|
+                read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+        decreases artifacts.len() - index,
+    {
+        let status = read(&artifacts[index]);
+        out = out.observe_artifact(status);
+        index += 1;
+    }
+    out
+}
+
+/// 完整遍历缓存及其原产物；摘要恰好反映全部条目的恢复效果。
+pub fn summarize_recovery<'a, A, R>(
+    caches: &[RecoveryCacheObservation<'a, A>], read: R,
+    #[cfg(verus_keep_ghost)] Ghost(model): Ghost<spec_fn(A) -> Option<Seq<char>>>,
+) -> (out: RecoverySummary)
+    where R: Fn(&'a A) -> Option<&'a str>,
+    requires forall|artifact: &'a A| read.requires((artifact,)),
+        forall|artifact: &'a A, status: Option<&'a str>|
+            read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+    ensures out.changed() == (exists|index: int| 0 <= index < caches.len()
+            && #[trigger] recovery_cache_changed(caches@[index])),
+        out.warning_effect() == (exists|index: int| 0 <= index < caches.len()
+            && #[trigger] recovery_cache_warns(caches@[index], model)),
+{
+    let mut summary = RecoverySummary::new();
+    let mut index = 0usize;
+    while index < caches.len()
+        invariant index <= caches.len(),
+            summary.changed() == (exists|prior: int| 0 <= prior < index
+                && #[trigger] recovery_cache_changed(caches@[prior])),
+            summary.warning_effect() == (exists|prior: int| 0 <= prior < index
+                && #[trigger] recovery_cache_warns(caches@[prior], model)),
+            forall|artifact: &'a A| read.requires((artifact,)),
+            forall|artifact: &'a A, status: Option<&'a str>|
+                read.ensures((artifact,), status) ==> recovery_text(status) == model(*artifact),
+        decreases caches.len() - index,
+    {
+        let cache = &caches[index];
+        summary = summarize_recovery_artifacts(
+            summary.observe_cache(cache.status, cache.outcome), cache.artifacts, &read,
+            Ghost(model),
+        );
+        proof {
+            recovery_any_prefix_step(caches@, index as int,
+                |cache: RecoveryCacheObservation<A>| recovery_cache_changed(cache));
+            recovery_any_prefix_step(caches@, index as int,
+                |cache: RecoveryCacheObservation<A>| recovery_cache_warns(cache, model));
+        }
+        index += 1;
+    }
+    summary
+}
+
 impl RecoverySummary {
     pub closed spec fn changed(&self) -> bool { self.changed }
     pub closed spec fn warning_effect(&self) -> bool { self.warning_effect }
@@ -1230,18 +1349,17 @@ pub(crate) fn dispatch(args: &[String]) -> Result<String, String> {
         }
         Ok(())
     })();
-    let summary = report["caches"].as_object().unwrap().values().fold(
-        RecoverySummary::new(),
-        |summary, cache| {
-            cache["artifacts"].as_array().unwrap().iter().fold(
-                summary.observe_cache(
-                    cache["status"].as_str(),
-                    cache["restore"]["outcome"].as_str(),
-                ),
-                |summary, artifact| summary.observe_artifact(artifact["status"].as_str()),
-            )
-        },
-    );
+    let caches: Vec<_> = report["caches"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|cache| RecoveryCacheObservation {
+            status: cache["status"].as_str(),
+            outcome: cache["restore"]["outcome"].as_str(),
+            artifacts: cache["artifacts"].as_array().unwrap().as_slice(),
+        })
+        .collect();
+    let summary = summarize_recovery(&caches, |artifact| artifact["status"].as_str());
     report["status"] = json!(summary.status(result.is_err()));
     if let Err(error) = &result {
         report["error"] = json!(error);
