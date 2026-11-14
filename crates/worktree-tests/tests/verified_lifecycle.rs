@@ -18,6 +18,93 @@ mod automatic_boundaries;
 
 verus! {
 
+fn report_scope_case(operation: &str, publication: Option<u8>,
+    result: Result<(u8, u8), (u32, u64)>, expected: u8)
+    requires expected <= 3,
+        expected == 0 ==> operation@ == "maintain"@ && publication.is_none(),
+        expected == 1 ==> operation@ == "maintain"@ && publication.is_some(),
+        expected == 2 ==> operation@ != "maintain"@ && publication.is_some(),
+        expected == 3 ==> operation@ != "maintain"@ && publication.is_none(),
+{
+    let outputs = |state: (u8, u8, u8), publication: u8|
+        -> (out: ((u8, u8, u8), Result<(u8, u8), (u32, u64)>))
+        ensures out.0 == (state.0, 1u8, publication), out.1 == result,
+    { ((state.0, 1u8, publication), result) };
+    let inputs = |state: (u8, u8, u8), publication: u8|
+        -> (out: ((u8, u8, u8), Result<(u8, u8), (u32, u64)>))
+        ensures out.0 == (state.0, 2u8, publication), out.1 == result,
+    { ((state.0, 2u8, publication), result) };
+    let caller = |state: (u8, u8, u8)|
+        -> (out: ((u8, u8, u8), Result<(u8, u8), (u32, u64)>))
+        ensures out.0 == (state.0, 3u8, 0u8), out.1 == result,
+    { ((state.0, 3u8, 0u8), result) };
+    let (state, actual) = policy::select_report_input_scope(
+        (91u8, 0u8, 0u8), operation, publication, outputs, inputs, caller);
+    expect(state.0 == 91);
+    expect(state.1 == expected);
+    match publication {
+        Some(publication) => expect(state.2 == publication),
+        None => expect(state.2 == 0),
+    }
+    if expected == 0 {
+        match actual {
+            Ok(None) => {},
+            _ => expect(false),
+        }
+    } else {
+        match (result, actual) {
+            (Ok(scope), Ok(Some(actual))) => {
+                expect(actual.0 == scope.0);
+                expect(actual.1 == scope.1);
+            },
+            (Err(error), Err(actual)) => {
+                expect(actual.0 == error.0);
+                expect(actual.1 == error.1);
+            },
+            _ => expect(false),
+        }
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn maintenance_retains_published_outputs_and_preserves_their_original_result() {
+    report_scope_case("maintain", Some(0), Ok((17, 39)), 1);
+    report_scope_case("maintain", Some(255), Err((u32::MAX, u64::MAX)), 1);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn unpublished_maintenance_calls_no_input_or_output_scope_even_on_callback_error() {
+    report_scope_case("maintain", None, Ok((17, 39)), 0);
+    report_scope_case("maintain", None, Err((u32::MAX, u64::MAX)), 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn ordinary_published_activity_retains_only_its_publication_inputs() {
+    proof {
+        reveal_strlit("use"); reveal_strlit("bootstrap"); reveal_strlit("maintain");
+        assert("use"@.len() != "maintain"@.len());
+        assert("bootstrap"@.len() != "maintain"@.len());
+    }
+    report_scope_case("use", Some(0), Ok((17, 39)), 2);
+    report_scope_case("bootstrap", Some(255), Err((u32::MAX, u64::MAX)), 2);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn ordinary_unpublished_activity_retains_the_original_caller_inputs() {
+    proof {
+        reveal_strlit("maintain"); reveal_strlit(""); reveal_strlit("maintain\0");
+        reveal_strlit("Maintain"); reveal_strlit("维护");
+        assert(""@.len() != "maintain"@.len());
+        assert("maintain\0"@.len() != "maintain"@.len());
+        assert("Maintain"@[0] != "maintain"@[0]);
+        assert("维护"@.len() != "maintain"@.len());
+    }
+    report_scope_case("", None, Ok((17, 39)), 3);
+    report_scope_case("maintain\0", None, Err((u32::MAX, u64::MAX)), 3);
+    report_scope_case("Maintain", None, Ok((255, 0)), 3);
+    report_scope_case("维护", None, Err((0, 0)), 3);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn empty_admission_has_no_policy_consumer_and_nonempty_enrollments_keep_the_check() {
     expect(!policy::enrolled_policy_required(0));
