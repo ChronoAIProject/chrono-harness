@@ -15,6 +15,243 @@ use std::collections::BTreeSet;
 use vstd::prelude::*;
 
 verus! {
+#[derive(Clone, Copy)]
+pub enum CompositionEndpoint { Base, Candidate }
+
+impl CompositionEndpoint {
+    pub fn name(self) -> (name: &'static str)
+        ensures name@ == match self { Self::Base => "base"@, Self::Candidate => "candidate"@ },
+    {
+        match self { Self::Base => "base", Self::Candidate => "candidate" }
+    }
+}
+
+pub enum CompositionMergeError<'a> {
+    Environment(CompositionEndpoint),
+    Files(String),
+    Conflict(CompositionEndpoint, &'a str),
+}
+
+pub open spec fn composition_merge_files_prefix<'a, S, V: 'a, P, W>(
+    initial: S, endpoint: CompositionEndpoint, rows: Seq<(&'a str, &'a V)>,
+    states: Seq<S>, prior: &P, write: &W) -> bool
+    where P: Fn(&S, CompositionEndpoint, &'a str, &'a V) -> Option<bool>,
+        W: Fn(S, CompositionEndpoint, &'a str, &'a V) -> S,
+{
+    0 < states.len() <= rows.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            (exists|same: Option<bool>|
+                #[trigger] prior.ensures((&states[i], endpoint, rows[i].0, rows[i].1), same)
+                && same != Some(false))
+            && #[trigger] write.ensures((states[i], endpoint, rows[i].0, rows[i].1), states[i + 1])
+}
+
+pub open spec fn composition_merge_files_result<'a, S, V: 'a, P, W>(
+    initial: S, endpoint: CompositionEndpoint, rows: Seq<(&'a str, &'a V)>,
+    prior: &P, write: &W, out: (S, Result<(), CompositionMergeError<'a>>)) -> bool
+    where P: Fn(&S, CompositionEndpoint, &'a str, &'a V) -> Option<bool>,
+        W: Fn(S, CompositionEndpoint, &'a str, &'a V) -> S,
+{
+    exists|states: Seq<S>|
+        #[trigger] composition_merge_files_prefix(initial, endpoint, rows, states, prior, write)
+        && out.0 == states.last() && match out.1 {
+            Ok(()) => states.len() == rows.len() + 1,
+            Err(error) => states.len() <= rows.len()
+                && error == CompositionMergeError::Conflict(endpoint, rows[states.len() - 1].0)
+                && prior.ensures((&states.last(), endpoint, rows[states.len() - 1].0,
+                    rows[states.len() - 1].1), Some(false)),
+        }
+}
+
+/// Merge in original map order, preserving successful writes and stopping before the first conflict.
+pub fn merge_composition_files<'a, S, V: 'a, P, W>(
+    initial: S, endpoint: CompositionEndpoint, rows: &[(&'a str, &'a V)],
+    prior: &P, write: &W) -> (out: (S, Result<(), CompositionMergeError<'a>>))
+    where P: Fn(&S, CompositionEndpoint, &'a str, &'a V) -> Option<bool>,
+        W: Fn(S, CompositionEndpoint, &'a str, &'a V) -> S,
+    requires forall|state: &S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+            prior.requires((state, endpoint, id, value)),
+        forall|state: S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+            write.requires((state, endpoint, id, value)),
+    ensures composition_merge_files_result(initial, endpoint, rows@, prior, write, out),
+{
+    let mut state = initial;
+    let ghost states = seq![initial];
+    let mut i = 0usize;
+    while i < rows.len()
+        invariant i <= rows.len(), states.len() == i + 1, states.last() == state,
+            composition_merge_files_prefix(initial, endpoint, rows@, states, prior, write),
+            forall|state: &S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+                prior.requires((state, endpoint, id, value)),
+            forall|state: S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+                write.requires((state, endpoint, id, value)),
+        decreases rows.len() - i,
+    {
+        let (id, value) = rows[i];
+        let same = prior(&state, endpoint, id, value);
+        assert(prior.ensures((&state, endpoint, id, value), same));
+        if same == Some(false) {
+            let out = (state, Err(CompositionMergeError::Conflict(endpoint, id)));
+            assert(composition_merge_files_result(initial, endpoint, rows@, prior, write, out));
+            return out;
+        }
+        let ghost before = state;
+        assert(before == states.last());
+        let next = write(state, endpoint, id, value);
+        assert(write.ensures((before, endpoint, id, value), next));
+        proof {
+            let previous = states;
+            states = states.push(next);
+            assert forall|j: int| 0 <= j < states.len() - 1 implies
+                (exists|same: Option<bool>|
+                    #[trigger] prior.ensures((&states[j], endpoint, rows@[j].0, rows@[j].1), same)
+                    && same != Some(false))
+                && #[trigger] write.ensures((states[j], endpoint, rows@[j].0, rows@[j].1), states[j + 1]) by {
+                if j < previous.len() - 1 {
+                    assert(write.ensures((previous[j], endpoint, rows@[j].0, rows@[j].1), previous[j + 1]));
+                    assert(exists|same: Option<bool>|
+                        #[trigger] prior.ensures((&previous[j], endpoint, rows@[j].0, rows@[j].1), same)
+                        && same != Some(false));
+                } else {
+                    assert(j == i);
+                    assert(before == previous[j]);
+                    assert(prior.ensures((&before, endpoint, rows@[j].0, rows@[j].1), same));
+                }
+            }
+            assert(composition_merge_files_prefix(initial, endpoint, rows@, states, prior, write));
+        }
+        state = next;
+        i += 1;
+    }
+    (state, Ok(()))
+}
+
+pub open spec fn composition_merge_initialization<'a, S, T, P, I>(
+    initial: S, endpoint: CompositionEndpoint, snapshot: &'a T,
+    present: &P, initialize: &I, out: S) -> bool
+    where P: Fn(&S, CompositionEndpoint) -> bool,
+        I: Fn(S, CompositionEndpoint, &'a T) -> S,
+{
+    exists|already: bool| #[trigger] present.ensures((&initial, endpoint), already)
+        && if already { out == initial }
+            else { initialize.ensures((initial, endpoint, snapshot), out) }
+}
+
+#[verifier::opaque]
+pub open spec fn composition_merge_endpoint_result<'a, S, T, V: 'a, P, I, E, F, R, W>(
+    initial: S, endpoint: CompositionEndpoint, snapshot: Option<&'a T>,
+    present: &P, initialize: &I, environment: &E, files: &F, prior: &R, write: &W,
+    out: (S, Result<(), CompositionMergeError<'a>>)) -> bool
+    where P: Fn(&S, CompositionEndpoint) -> bool,
+        I: Fn(S, CompositionEndpoint, &'a T) -> S,
+        E: Fn(&S, CompositionEndpoint, &'a T) -> bool,
+        F: Fn(&'a T) -> Result<Vec<(&'a str, &'a V)>, String>,
+        R: Fn(&S, CompositionEndpoint, &'a str, &'a V) -> Option<bool>,
+        W: Fn(S, CompositionEndpoint, &'a str, &'a V) -> S,
+{
+    match snapshot {
+        None => out.0 == initial && out.1 == Ok::<(), CompositionMergeError<'a>>(()),
+        Some(snapshot) => exists|initialized: S|
+            #[trigger] composition_merge_initialization(initial, endpoint, snapshot, present, initialize, initialized)
+            && exists|same: bool|
+                #[trigger] environment.ensures((&initialized, endpoint, snapshot), same)
+                && if !same {
+                    out.0 == initialized && out.1 == Err::<(), CompositionMergeError<'a>>(
+                        CompositionMergeError::Environment(endpoint))
+                } else { exists|rows: Result<Vec<(&'a str, &'a V)>, String>|
+                    #[trigger] files.ensures((snapshot,), rows) && match rows {
+                        Err(error) => out.0 == initialized && out.1 == Err::<(), CompositionMergeError<'a>>(
+                            CompositionMergeError::Files(error)),
+                        Ok(rows) => composition_merge_files_result(initialized, endpoint, rows@, prior, write, out),
+                    }
+                },
+    }
+}
+
+/// Missing endpoints are skipped; initialize before environment admission and file iteration.
+pub fn merge_composition_endpoint<'a, S, T, V: 'a, P, I, E, F, R, W>(
+    initial: S, endpoint: CompositionEndpoint, snapshot: Option<&'a T>,
+    present: &P, initialize: &I, environment: &E, files: &F, prior: &R, write: &W)
+    -> (out: (S, Result<(), CompositionMergeError<'a>>))
+    where P: Fn(&S, CompositionEndpoint) -> bool,
+        I: Fn(S, CompositionEndpoint, &'a T) -> S,
+        E: Fn(&S, CompositionEndpoint, &'a T) -> bool,
+        F: Fn(&'a T) -> Result<Vec<(&'a str, &'a V)>, String>,
+        R: Fn(&S, CompositionEndpoint, &'a str, &'a V) -> Option<bool>,
+        W: Fn(S, CompositionEndpoint, &'a str, &'a V) -> S,
+    requires forall|state: &S, endpoint: CompositionEndpoint| present.requires((state, endpoint)),
+        forall|state: S, endpoint: CompositionEndpoint, snapshot: &'a T|
+            initialize.requires((state, endpoint, snapshot)),
+        forall|state: &S, endpoint: CompositionEndpoint, snapshot: &'a T|
+            environment.requires((state, endpoint, snapshot)),
+        forall|snapshot: &'a T| files.requires((snapshot,)),
+        forall|state: &S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+            prior.requires((state, endpoint, id, value)),
+        forall|state: S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+            write.requires((state, endpoint, id, value)),
+    ensures composition_merge_endpoint_result(initial, endpoint, snapshot,
+        present, initialize, environment, files, prior, write, out),
+{
+    reveal(composition_merge_endpoint_result);
+    let snapshot = match snapshot {
+        None => return (initial, Ok(())),
+        Some(snapshot) => snapshot,
+    };
+    let already = present(&initial, endpoint);
+    assert(present.ensures((&initial, endpoint), already));
+    let state = if already { initial } else { initialize(initial, endpoint, snapshot) };
+    assert(already || initialize.ensures((initial, endpoint, snapshot), state));
+    assert(composition_merge_initialization(initial, endpoint, snapshot, present, initialize, state));
+    let same = environment(&state, endpoint, snapshot);
+    assert(environment.ensures((&state, endpoint, snapshot), same));
+    if !same { return (state, Err(CompositionMergeError::Environment(endpoint))); }
+    let rows = files(snapshot);
+    assert(files.ensures((snapshot,), rows));
+    match rows {
+        Err(error) => (state, Err(CompositionMergeError::Files(error))),
+        Ok(rows) => merge_composition_files(state, endpoint, rows.as_slice(), prior, write),
+    }
+}
+
+/// Base completes before candidate; an error retains the exact first endpoint result.
+pub fn merge_composition_part<'a, S, T, V: 'a, P, I, E, F, R, W>(
+    initial: S, base: Option<&'a T>, candidate: Option<&'a T>,
+    present: &P, initialize: &I, environment: &E, files: &F, prior: &R, write: &W)
+    -> (out: (S, Result<(), CompositionMergeError<'a>>))
+    where P: Fn(&S, CompositionEndpoint) -> bool,
+        I: Fn(S, CompositionEndpoint, &'a T) -> S,
+        E: Fn(&S, CompositionEndpoint, &'a T) -> bool,
+        F: Fn(&'a T) -> Result<Vec<(&'a str, &'a V)>, String>,
+        R: Fn(&S, CompositionEndpoint, &'a str, &'a V) -> Option<bool>,
+        W: Fn(S, CompositionEndpoint, &'a str, &'a V) -> S,
+    requires forall|state: &S, endpoint: CompositionEndpoint| present.requires((state, endpoint)),
+        forall|state: S, endpoint: CompositionEndpoint, snapshot: &'a T|
+            initialize.requires((state, endpoint, snapshot)),
+        forall|state: &S, endpoint: CompositionEndpoint, snapshot: &'a T|
+            environment.requires((state, endpoint, snapshot)),
+        forall|snapshot: &'a T| files.requires((snapshot,)),
+        forall|state: &S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+            prior.requires((state, endpoint, id, value)),
+        forall|state: S, endpoint: CompositionEndpoint, id: &'a str, value: &'a V|
+            write.requires((state, endpoint, id, value)),
+    ensures exists|state: S, result: Result<(), CompositionMergeError<'a>>|
+        #[trigger] composition_merge_endpoint_result(initial, CompositionEndpoint::Base, base,
+            present, initialize, environment, files, prior, write, (state, result))
+        && match result {
+            Err(error) => out.0 == state && out.1 == Err::<(), CompositionMergeError<'a>>(error),
+            Ok(()) => composition_merge_endpoint_result(state, CompositionEndpoint::Candidate, candidate,
+                present, initialize, environment, files, prior, write, out),
+        },
+{
+    let (state, result) = merge_composition_endpoint(initial, CompositionEndpoint::Base, base,
+        present, initialize, environment, files, prior, write);
+    match result {
+        Err(error) => (state, Err(error)),
+        Ok(()) => merge_composition_endpoint(state, CompositionEndpoint::Candidate, candidate,
+            present, initialize, environment, files, prior, write),
+    }
+}
+
 pub open spec fn optional_text_is(text: Option<&str>, expected: Seq<char>) -> bool {
     match text { Some(text) => text@ == expected, None => false, }
 }
@@ -551,36 +788,47 @@ pub fn compose(
                 import_source(root, source, config, base, candidate, &old, &new),
             )
         },
-        &|mut pair, part: Value| {
-            let merged = (|| {
-                for name in ["base", "candidate"] {
-                    let Some(snapshot) = part.get(name) else {
-                        continue;
-                    };
-                    if pair.get(name).is_none() {
-                        pair[name] = snapshot.clone();
-                        pair[name]["files"] = value!({});
-                    }
-                    if pair[name]["environment"] != snapshot["environment"] {
-                        return Err(format!(
-                            "E_COMPOSE_ENVIRONMENT: {name} conflicting originals"
-                        ));
-                    }
-                    for (id, file) in snapshot["files"].as_object().ok_or("snapshot files")? {
-                        let observed = file.clone();
-                        if pair[name]["files"]
-                            .get(id)
-                            .is_some_and(|prior| prior != &observed)
-                        {
-                            return Err(format!(
-                                "E_COMPOSE_CONFLICT: {name} overlapping input {id}"
-                            ));
-                        }
-                        pair[name]["files"][id] = observed;
-                    }
-                }
-                Ok(())
-            })();
+        &|pair, part: Value| {
+            let (pair, merged) = merge_composition_part(
+                pair,
+                part.get("base"),
+                part.get("candidate"),
+                &|pair: &Value, endpoint: CompositionEndpoint| pair.get(endpoint.name()).is_some(),
+                &|mut pair: Value, endpoint: CompositionEndpoint, snapshot: &Value| {
+                    pair[endpoint.name()] = snapshot.clone();
+                    pair[endpoint.name()]["files"] = value!({});
+                    pair
+                },
+                &|pair: &Value, endpoint: CompositionEndpoint, snapshot: &Value| {
+                    pair[endpoint.name()]["environment"] == snapshot["environment"]
+                },
+                &|snapshot: &Value| {
+                    snapshot["files"]
+                        .as_object()
+                        .ok_or_else(|| "snapshot files".to_string())
+                        .map(|files| files.iter().map(|(id, file)| (id.as_str(), file)).collect())
+                },
+                &|pair: &Value, endpoint: CompositionEndpoint, id: &str, file: &Value| {
+                    pair[endpoint.name()]["files"]
+                        .get(id)
+                        .map(|prior| prior == file)
+                },
+                &|mut pair: Value, endpoint: CompositionEndpoint, id: &str, file: &Value| {
+                    pair[endpoint.name()]["files"][id] = file.clone();
+                    pair
+                },
+            );
+            let merged = merged.map_err(|error| match error {
+                CompositionMergeError::Environment(endpoint) => format!(
+                    "E_COMPOSE_ENVIRONMENT: {} conflicting originals",
+                    endpoint.name()
+                ),
+                CompositionMergeError::Files(error) => error,
+                CompositionMergeError::Conflict(endpoint, id) => format!(
+                    "E_COMPOSE_CONFLICT: {} overlapping input {id}",
+                    endpoint.name()
+                ),
+            });
             (pair, merged)
         },
     );
