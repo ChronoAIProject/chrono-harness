@@ -1,3 +1,20 @@
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -3,6 +3,13 @@
+ use std::borrow::Cow;
+
+ verus! {
++
++#[verifier::external_trait_specification]
++pub trait ExExpected {
++    type ExternalTraitSpecificationFor: serde::de::Expected;
++
++    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error>;
++}
+
+ // This opaque boundary does not promise decoded text, allocation, or ownership.
+ pub assume_specification<'a>[serde::__private229::from_utf8_lossy](
 diff --git a/source/rust_verify_test/tests/serde_expected.rs b/source/rust_verify_test/tests/serde_expected.rs
 new file mode 100644
 --- /dev/null

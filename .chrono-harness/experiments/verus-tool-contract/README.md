@@ -225,6 +225,8 @@ DepTracker 写入 Cargo 环境依赖，变更会失效原指纹；同址依赖�
 
 同一完整回归入口新增 `serde_expected` 库存，复用相同 Serde、vstd、线程、严格参数
 和缓存；不放行仓内 impl，不授予完整 Serde、编译输入或正式工具资格。
+实际声明位于真实 vstd 的既有 `serde_specs`，逐字保留 trait 的 self／Formatter 借用
+和原 `Result` 类型；不增加 requires、ensures、supertrait 或格式化成功假设。
 **外部 trait 合同与宿主验证登记同时修改。** 新增构建、证明与回归成本未知，
 先核原失败，再实现合同并重建同源 vstd，最后核真实完整根及全部保留回归。
 
