@@ -308,9 +308,13 @@ fn read_failure_preserves_the_original_error() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn classified_sources_retain_origin_without_reading_or_granting_continuity() {
-    let base = side("a", "a/x"); let mut current = side("b", "b/x");
+    let base = side("a", "a/x");
+    let mut classified = file("b/x"); classified.classified = true;
+    let current = c::Endpoint {
+        projects: vec![c::ProjectRoot { id: "p".to_string(), root: "b".to_string() }],
+        files: vec![classified], outputs: Vec::new(), reference_syntax: Vec::new(),
+    };
     proof { names(); single_move(&base, &current); }
-    current.files[0].classified = true;
     proof { reveal(c::assessment); }
     // 任何源码读取都会返回原错误；已分类路径应只取得来源。
     let evidence = c::assess(&base, &current, &vec!["b/x".to_string()], &FailedRead {});
