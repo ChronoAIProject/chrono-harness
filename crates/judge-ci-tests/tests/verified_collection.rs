@@ -26,6 +26,54 @@ use vstd::vpanic as panic;
 verus! {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn direct_snapshot_versions_two_three_and_four_select_v2() {
+    let two = policy::select_snapshot_schema(Some(2), false);
+    let three = policy::select_snapshot_schema(Some(3), false);
+    let four = policy::select_snapshot_schema(Some(4), false);
+    let two_ok = source_identifiers::equal_text(two, "chrono-input-snapshot/v2");
+    let three_ok = source_identifiers::equal_text(three, "chrono-input-snapshot/v2");
+    let four_ok = source_identifiers::equal_text(four, "chrono-input-snapshot/v2");
+    expect_continuity_bool(two_ok && three_ok && four_ok);
+}
+
+fn direct_unknown_snapshot_version_selects_v1(version: u64)
+    requires version != 2, version != 3, version != 4,
+{
+    let actual = policy::select_snapshot_schema(Some(version), false);
+    let exact = source_identifiers::equal_text(actual, "chrono-input-snapshot/v1");
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn direct_snapshot_missing_zero_one_five_and_maximum_select_v1() {
+    let missing = policy::select_snapshot_schema(None, false);
+    let missing_ok = source_identifiers::equal_text(missing, "chrono-input-snapshot/v1");
+    expect_continuity_bool(missing_ok);
+    direct_unknown_snapshot_version_selects_v1(0);
+    direct_unknown_snapshot_version_selects_v1(1);
+    direct_unknown_snapshot_version_selects_v1(5);
+    direct_unknown_snapshot_version_selects_v1(u64::MAX);
+}
+
+fn selected_snapshot_ignores_any_direct_version(version: Option<u64>) {
+    let actual = policy::select_snapshot_schema(version, true);
+    let exact = source_identifiers::equal_text(actual, "chrono-input-snapshot/v3");
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selected_snapshot_uses_v3_for_missing_known_and_boundary_versions() {
+    selected_snapshot_ignores_any_direct_version(None);
+    selected_snapshot_ignores_any_direct_version(Some(0));
+    selected_snapshot_ignores_any_direct_version(Some(1));
+    selected_snapshot_ignores_any_direct_version(Some(2));
+    selected_snapshot_ignores_any_direct_version(Some(3));
+    selected_snapshot_ignores_any_direct_version(Some(4));
+    selected_snapshot_ignores_any_direct_version(Some(5));
+    selected_snapshot_ignores_any_direct_version(Some(u64::MAX));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn registered_action_references_require_the_real_tool_with_no_profile_fallback() {
     let missing = policy::action_tool_allowed(true, false, false);
     let stale_copy = policy::action_tool_allowed(true, false, true);
