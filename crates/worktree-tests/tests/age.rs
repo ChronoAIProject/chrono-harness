@@ -308,6 +308,11 @@ fn maintenance_selects_creation_age_from_each_targets_adopted_policy() {
         let head = commit(&target);
         let (code, report, error) = h.auto("migrate", &["--path", target.to_str().unwrap()]);
         assert_eq!(code, 0, "{report} {error}");
+        let staged = coordinator.is_none() && expired;
+        if staged {
+            fs::write(target.join("payload"), "staged current source").unwrap();
+            git(&target, &["add", "payload"]);
+        }
         output(&target);
         temporary_output(&target);
         older_than(&target, 3);
@@ -335,6 +340,25 @@ fn maintenance_selects_creation_age_from_each_targets_adopted_policy() {
                 .unwrap();
             assert!(reference.starts_with("refs/heads/preserved/target-age/"));
             assert_eq!(git(&h.root, &["rev-parse", reference]).trim(), head.trim());
+            let saved = &original["source_preservation"];
+            if staged {
+                assert_eq!(saved["retained_ref"], saved["index_ref"]);
+                assert_eq!(saved["head"], saved["index_commit"]);
+                assert_ne!(saved["head"], saved["original_head"]);
+                assert_eq!(
+                    git(
+                        &h.root,
+                        &[
+                            "show",
+                            &format!("{}:payload", saved["index_ref"].as_str().unwrap())
+                        ]
+                    ),
+                    "staged current source"
+                );
+            } else {
+                assert_eq!(saved["index_ref"], saved["original_ref"]);
+                assert_eq!(saved["retained_ref"], saved["original_ref"]);
+            }
         } else {
             assert!(target.join("output λ/cache").exists());
             assert!(!target.join("nested/cache").exists());
@@ -469,6 +493,14 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
     assert_eq!(original_result["age_outcome"], "reusable-source-preserved");
     let reference = saved["retained_ref"].as_str().unwrap().to_owned();
     let head = saved["head"].as_str().unwrap().to_owned();
+    // Working bytes still match HEAD, but the newly staged original must survive.
+    fs::write(
+        target.join("payload"),
+        "staged during repeated preservation",
+    )
+    .unwrap();
+    git(&target, &["add", "payload"]);
+    fs::write(target.join("payload"), "current-source").unwrap();
     temporary_output(&target);
     let (code, maintained, error) = h.auto("maintain", &[]);
     assert_eq!(code, 0, "{maintained} {error}");
@@ -480,6 +512,21 @@ fn real_creation_age_reuse_and_expiry_preserve_source_index_and_branches() {
             .find(|row| row["path"] == value!(target) && !row["receipt"].is_null())
             .unwrap(),
     );
+    let repeated_source = &repeated["source_preservation"];
+    assert_eq!(repeated_source["head"], head);
+    assert_eq!(
+        repeated_source["retained_ref"],
+        repeated_source["original_ref"]
+    );
+    assert_ne!(
+        repeated_source["index_ref"],
+        repeated_source["original_ref"]
+    );
+    assert_eq!(
+        show(&repeated_source["index_ref"], "payload"),
+        "staged during repeated preservation"
+    );
+    assert_eq!(show(&saved["index_ref"], "payload"), "staged-original");
     for reference in saved["reflog_refs"].as_object().unwrap().keys() {
         assert!(
             repeated["processes"]
@@ -856,11 +903,23 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
         b"needed original\0\xff"
     );
     let observations = maintained["drain"].as_array().unwrap();
-    assert!(
-        observations
-            .iter()
-            .map(drain_report)
-            .any(|r| !r["age_deletion_deferred"].is_null())
+    let preserved = observations
+        .iter()
+        .map(drain_report)
+        .find(|r| !r["age_deletion_deferred"].is_null())
+        .expect("needed evidence must defer checkout deletion");
+    let saved = &preserved["source_preservation"];
+    assert_eq!(saved["index_ref"], saved["original_ref"]);
+    assert_ne!(saved["retained_ref"], saved["original_ref"]);
+    assert_eq!(
+        git(
+            &h.root,
+            &[
+                "show",
+                &format!("{}:payload", saved["retained_ref"].as_str().unwrap())
+            ]
+        ),
+        "fresh work"
     );
     // A later operation can rebuild this cache without reopening or finishing work.
     output(&target);
