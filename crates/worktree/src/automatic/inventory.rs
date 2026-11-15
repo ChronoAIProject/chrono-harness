@@ -33,6 +33,13 @@ fn timestamp() -> Result<u64, String> {
     .map_err(|e| e.to_string())
 }
 
+/// Construct the output used by the complete maintenance inventory.
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
+pub fn inventory_writer<W: Write>(output: W) -> W {
+    output
+}
+
 /// The actual report write boundary; callers retain partial bytes on IO failure.
 #[doc(hidden)]
 #[cfg(not(verus_keep_ghost))]
@@ -119,10 +126,12 @@ impl Report {
         let mut report = Self {
             root: root.into(),
             path,
-            output: fs::OpenOptions::new()
-                .write(true)
-                .open(physical)
-                .map_err(|e| e.to_string())?,
+            output: inventory_writer(
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(physical)
+                    .map_err(|e| e.to_string())?,
+            ),
             publication,
             bytes: 0,
             rows: 0,

@@ -301,6 +301,68 @@ fn inventory_writer_preserves_partial_io_and_rejects_the_existing_byte_limit() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn inventory_batches_small_records_without_losing_members_or_changing_the_limit() {
+    use std::io::Write;
+    #[derive(Clone, Default)]
+    struct Counted(std::rc::Rc<std::cell::RefCell<(usize, Vec<u8>)>>);
+    impl Write for Counted {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            let mut state = self.0.borrow_mut();
+            state.0 += 1;
+            state.1.extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+    let counted = Counted::default();
+    let mut output = chrono_worktree::inventory_writer(counted.clone());
+    let expected: Vec<_> = (0..10_000).map(|i| value!({"member": i})).collect();
+    let (mut bytes, mut rows) = (0, 0);
+    for row in &expected {
+        chrono_worktree::write_inventory_record(
+            &mut output,
+            row,
+            &mut bytes,
+            &mut rows,
+            |_| Ok(()),
+        )
+        .unwrap();
+    }
+    let before_rejection = (bytes, rows);
+    assert_eq!(
+        chrono_worktree::write_inventory_record(
+            &mut output,
+            &value!({"member": "over limit"}),
+            &mut bytes,
+            &mut rows,
+            |_| Err("existing publication byte limit".into()),
+        )
+        .unwrap_err(),
+        "existing publication byte limit"
+    );
+    assert_eq!((bytes, rows), before_rejection);
+    output.flush().unwrap();
+    let state = counted.0.borrow();
+    let actual: Vec<_> = state
+        .1
+        .split(|b| *b == b'\n')
+        .filter(|r| !r.is_empty())
+        .map(|r| json(r).unwrap())
+        .collect();
+    assert_eq!(actual, expected);
+    assert_eq!(bytes as usize, state.1.len());
+    assert_eq!(rows, 10_000);
+    assert!(
+        state.0 < 100,
+        "each small record still reaches the underlying writer: {} writes",
+        state.0
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn ordinary_completed_parent_expands_all_actions_and_original_receipts() {
     let parent = json(include_bytes!("fixtures/maintenance-repeat-actions.json")).unwrap();
     let drain = parent["drain"].as_array().unwrap();

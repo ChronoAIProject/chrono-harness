@@ -57,6 +57,10 @@ mod automatic;
 #[cfg(feature = "producer-birth-test")]
 #[doc(hidden)]
 #[cfg(not(verus_keep_ghost))]
+pub use automatic::inventory::inventory_writer;
+#[cfg(feature = "producer-birth-test")]
+#[doc(hidden)]
+#[cfg(not(verus_keep_ghost))]
 pub use automatic::inventory::worktree_action as inventory_worktree_action;
 #[cfg(feature = "producer-birth-test")]
 #[doc(hidden)]
