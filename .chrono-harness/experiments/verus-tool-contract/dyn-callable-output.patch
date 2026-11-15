@@ -263,7 +263,7 @@
 +                || (principal_kind == ClosureKind::FnMut && kind == ClosureKind::Fn) { continue }
 +            let impl_path = Arc::new(crate::ast::PathX {
 +                krate: CrateId::Internal,
-+                segments: Arc::new(vec![Arc::new(format!("impl_dyn_callable&%{principal_kind}&%{kind}"))]),
++                segments: Arc::new(vec![crate::ast::Segment::T(Arc::new(format!("impl_dyn_callable&%{principal_kind}&%{kind}")), 0)]),
 +            });
 +            let trait_implx = crate::ast::TraitImplX {
 +                impl_path: impl_path.clone(), typ_params: typ_params.clone(), typ_bounds: typ_bounds.clone(),
