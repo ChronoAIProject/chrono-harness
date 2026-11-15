@@ -182,13 +182,6 @@ pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistryS
 /// The caller binds acquisition to its immutable endpoint and retains any
 /// process observations; this helper performs no disk or Git acquisition.
 #[cfg(not(verus_keep_ghost))]
-pub fn registry_snapshot_with(
-    path: &str,
-    read: impl FnMut(&str) -> Result<Vec<u8>, String>,
-) -> Result<RegistrySnapshot, String> {
-    registry_snapshot_with_target(path, None, read)
-}
-#[cfg(not(verus_keep_ghost))]
 fn registry_snapshot_with_target<F>(
     path: &str,
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
