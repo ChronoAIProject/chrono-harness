@@ -5275,6 +5275,34 @@
       "path": ".chrono-harness/ci/bootstrap-native.sh",
       "test_script": "host-bootstrap-launcher-tests",
       "actions": {
+        "verus-source-regression-check": {
+          "operation": "investigate.verus-source.regression-check",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus-source-regression.json"
+          ]
+        },
+        "verus-source-regression": {
+          "operation": "investigate.verus-source.regression",
+          "tool": "cargo",
+          "argv": [
+            "-Zunstable-options",
+            "-C",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source",
+            "test",
+            "--locked",
+            "--offline",
+            "--release",
+            "--package",
+            "rust_verify_test",
+            "--test",
+            "nested_extern_crate",
+            "--",
+            "--test-threads=1"
+          ]
+        },
         "verus-source-check": {
           "operation": "investigate.verus-source.check",
           "tool": "bash",
