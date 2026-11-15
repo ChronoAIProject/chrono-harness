@@ -35,9 +35,14 @@ fn configure_inventory(h: &EnrollmentOriginalsFixture, paths: &[PathBuf], error:
 
 #[cfg(not(verus_keep_ghost))]
 fn original(h: &EnrollmentOriginalsFixture, report: &Value) -> Vec<Value> {
+    original_at(&h.root, report)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn original_at(root: &Path, report: &Value) -> Vec<Value> {
     let descriptor = &report["complete_inventory"];
     let path = descriptor["path"].as_str().unwrap();
-    let bytes = fs::read(h.root.join(path)).unwrap();
+    let bytes = fs::read(root.join(path)).unwrap();
     assert_eq!(descriptor["receipt"]["sha256"], sha256(&bytes));
     assert_eq!(descriptor["byte_length"], bytes.len());
     bytes
@@ -348,4 +353,351 @@ fn ordinary_completed_parent_expands_all_actions_and_original_receipts() {
         }
     }
     assert_eq!(expanded_indices, (0..drain.len()).collect());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn repeated_retention_records_expand_without_losing_observations_or_measurements() {
+    let base = value!({"id":"output-a","path":"state/report.json",
+        "metadata_path":"/owner/objects/output-a/record.json",
+        "output":{"identity":"device:inode:file","phase":"released",
+            "outcome":{"diagnostic":"x".repeat(4096)}},
+        "roles":["consumer:live"],"incoming":["output-parent"]});
+    let originals: Vec<_> = (0..32)
+        .map(|i| {
+            let mut record = base.clone();
+            match i {
+                7 => record["roles"] = value!([]),
+                11 => record["incoming"] = value!([]),
+                19 => record["output"]["identity"] = value!("device:new-inode:file"),
+                _ => {}
+            }
+            value!({"kind":"declaration-state","source_round":format!("round-{i}"),
+            "address":"output-a","record":record,
+            "measurement":{"window_started_unix_millis":i,"allocated_bytes":i*512},
+            "error":if i == 23 {value!("original unknown result")} else {Value::Null}})
+        })
+        .collect();
+    let mut index = std::collections::BTreeMap::new();
+    let mut encoded = vec![value!({"kind":"scope"})];
+    for original in &originals {
+        let mut row = original.clone();
+        chrono_worktree::compact_inventory_retention_record(
+            &mut row,
+            &mut index,
+            encoded.len() as u64 + 1,
+        )
+        .unwrap();
+        encoded.push(row);
+    }
+    assert_eq!(index.len(), 4);
+    assert_eq!(encoded.len(), originals.len() + 1);
+    for (offset, expected) in originals.iter().enumerate() {
+        let line = offset + 2;
+        let mut expanded = encoded[offset + 1].clone();
+        if let Some(reference) = expanded["record_ref"].as_u64() {
+            assert!(reference > 0 && reference < line as u64);
+            let first = &encoded[reference as usize - 1];
+            assert!(first["record"].is_object());
+            assert!(first["record_ref"].is_null());
+            expanded.as_object_mut().unwrap().remove("record_ref");
+            expanded["record"] = first["record"].clone();
+        }
+        assert_eq!(&expanded, expected, "line {line}");
+    }
+    assert_eq!(encoded[2]["record_ref"], 2);
+    for offset in [7, 11, 19] {
+        assert!(encoded[offset + 1]["record"].is_object());
+    }
+    let before = serde_json::to_vec(&originals).unwrap().len();
+    let after = serde_json::to_vec(&encoded).unwrap().len();
+    assert!(before > 65536);
+    assert!(after < before / 2, "before={before} after={after}");
+    let mut unrelated = value!({"kind":"round","error":"original failure"});
+    let expected = unrelated.clone();
+    chrono_worktree::compact_inventory_retention_record(&mut unrelated, &mut index, 100).unwrap();
+    assert_eq!(unrelated, expected);
+    let mut unknown = value!({"kind":"declaration-state","record":null,"error":"unknown"});
+    let expected = unknown.clone();
+    chrono_worktree::compact_inventory_retention_record(&mut unknown, &mut index, 101).unwrap();
+    assert_eq!(unknown, expected);
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn linked_retention_host(name: &str) -> (Host, PathBuf) {
+    use chrono_harness::retained_artifacts::retention::POLICY_PATH;
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    adopt_lifecycle_retention(&h);
+    let path = h.root.join(POLICY_PATH);
+    let mut policy = json(&fs::read(&path).unwrap()).unwrap();
+    policy["max_related_outputs"] = value!(512);
+    policy["max_summaries"] = value!(128);
+    policy["max_bytes_per_round"] = value!(67108864);
+    policy["max_millis_per_round"] = value!(25);
+    policy["max_output_bytes"] = value!(1073741824);
+    policy["max_manifest_nodes"] = value!(16384);
+    policy["max_metadata_bytes_per_round"] = value!(67108864);
+    fs::write(path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join(name);
+    let (code, report, error) = h.invoke("feature", name, &target);
+    assert_eq!(code, 0, "{report} {error}");
+    fs::create_dir_all(target.join(".chrono-harness/state/worktrees")).unwrap();
+    (h, target)
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn unified_maintenance_reclaims_linked_outputs_and_measures_their_actual_root() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let (h, target) = linked_retention_host("linked-retention");
+    let inventory = Inventory::adopted(&target).unwrap().unwrap();
+    let expired = ".chrono-harness/state/worktrees/linked-expired.bin";
+    let protected = ".chrono-harness/state/worktrees/linked-protected.bin";
+    let live = ".chrono-harness/state/worktrees/linked-live.bin";
+    for path in [expired, protected, live] {
+        fs::write(target.join(path), b"linked original").unwrap();
+    }
+    fs::write(h.root.join(protected), b"a different coordinator file").unwrap();
+    for path in [expired, protected] {
+        Inventory::adopted(&target)
+            .unwrap()
+            .unwrap()
+            .begin("lifecycle-original", path, value!(null))
+            .unwrap()
+            .complete(value!({"status":"failed","error":"original failure"}))
+            .unwrap();
+    }
+    inventory
+        .reference_paths("needed-failure", &[protected.into()])
+        .unwrap();
+    let live_publication = Inventory::adopted(&target)
+        .unwrap()
+        .unwrap()
+        .begin("lifecycle-original", live, value!(null))
+        .unwrap();
+    let source = fs::read(target.join("payload")).unwrap();
+    let mut observed = Vec::new();
+    for attempt in 0..8 {
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        let rows = original_at(&h.root, &report);
+        let measured = rows
+            .iter()
+            .find(|row| {
+                row["kind"] == "retention"
+                    && row["source_root"] == value!(target)
+                    && row["observation"]["kind"] == "declaration-state"
+                    && row["observation"]["record"]["path"] == protected
+            })
+            .expect("the coordinator must enumerate the linked retention owner");
+        assert_eq!(
+            measured["observation"]["measurement"]["footprint"]["logical_bytes"],
+            15
+        );
+        assert_eq!(
+            fs::read(target.join(protected)).unwrap(),
+            b"linked original"
+        );
+        assert_eq!(fs::read(target.join(live)).unwrap(), b"linked original");
+        assert_eq!(
+            fs::read(h.root.join(protected)).unwrap(),
+            b"a different coordinator file"
+        );
+        assert_eq!(fs::read(target.join("payload")).unwrap(), source);
+        observed.push(report);
+        if !target.join(expired).exists() {
+            break;
+        }
+        assert!(
+            attempt < 7,
+            "bounded owner maintenance did not reclaim the expired linked output: {observed:?}"
+        );
+    }
+    assert!(!target.join(expired).exists());
+    drop(live_publication);
+    inventory.reference_paths("needed-failure", &[]).unwrap();
+    drop(inventory);
+    // A later coordinator round must reopen the same owner and continue after release.
+    for attempt in 0..8 {
+        let (code, report, error) = h.auto("maintain", &[]);
+        assert_eq!(code, 0, "{report} {error}");
+        if !target.join(protected).exists() {
+            break;
+        }
+        assert!(
+            attempt < 7,
+            "released linked original was not reclaimed: {report}"
+        );
+    }
+    assert!(!target.join(protected).exists());
+    assert_eq!(fs::read(target.join("payload")).unwrap(), source);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn broken_linked_retention_preserves_unknown_bytes_and_keeps_coordinator_work() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::POLICY_PATH;
+    let (h, target) = linked_retention_host("broken-linked-retention");
+    fs::write(target.join(POLICY_PATH), b"unknown retention policy\n").unwrap();
+    let source = fs::read(target.join("payload")).unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    assert_ne!(
+        code, 0,
+        "a linked policy failure must remain visible: {report} {error}"
+    );
+    let rows = original_at(&h.root, &report);
+    assert!(rows.iter().any(|row| row["kind"] == "retention"
+        && row["source_root"] == value!(h.root)
+        && row["observation"]["kind"] == "declaration"));
+    assert!(rows.iter().any(|row| {
+        row["kind"] == "enumeration-error"
+            && row["scope"]
+                .as_str()
+                .is_some_and(|scope| scope.contains(target.to_str().unwrap()))
+    }));
+    assert_eq!(
+        fs::read(target.join(POLICY_PATH)).unwrap(),
+        b"unknown retention policy\n"
+    );
+    assert_eq!(fs::read(target.join("payload")).unwrap(), source);
+    assert_eq!(
+        report["complete_inventory"]["member_enumeration_complete"],
+        false
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn explicit_maintenance_writes_local_record_references_and_keeps_live_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, create_adopted};
+    let h = EnrollmentOriginalsFixture::imported();
+    let owner = Inventory::adopted(&h.root).unwrap().unwrap();
+    let leaf_path = h.root.join(".chrono-harness/state/required-leaf.json");
+    let leaf = create_adopted(&h.root, "lifecycle-original", &leaf_path, false, value!({}))
+        .unwrap()
+        .unwrap();
+    fs::write(&leaf_path, b"required leaf").unwrap();
+    let leaf_id = leaf.id().to_owned();
+    leaf.complete_sealed(value!({"status":"passed"})).unwrap();
+    // Two independent leaves reach the same rooted parent. After their real
+    // handoff below, only that parent owns their continued retention.
+    let peer_path = h.root.join(".chrono-harness/state/required-peer.json");
+    let peer = create_adopted(&h.root, "lifecycle-original", &peer_path, false, value!({}))
+        .unwrap()
+        .unwrap();
+    fs::write(&peer_path, b"required peer").unwrap();
+    let peer_id = peer.id().to_owned();
+    peer.complete_sealed(value!({"status":"passed"})).unwrap();
+    let parent_path = h.root.join(".chrono-harness/state/required-parent.json");
+    let parent = create_adopted(
+        &h.root,
+        "lifecycle-original",
+        &parent_path,
+        false,
+        value!({}),
+    )
+    .unwrap()
+    .unwrap();
+    fs::write(&parent_path, b"required parent").unwrap();
+    let parent_id = parent.id().to_owned();
+    owner
+        .dependencies(&parent_id, &[leaf_id.clone(), peer_id.clone()])
+        .unwrap();
+    parent.complete_sealed(value!({"status":"passed"})).unwrap();
+    owner
+        .reference("actual-inventory-consumer", &[parent_id.clone()])
+        .unwrap();
+    // create_adopted keeps a recovery root for each lifecycle original. Release
+    // the leaves' temporary roots only after the parent and its consumer have
+    // taken custody, just as the actual lifecycle report publisher does.
+    for path in [&leaf_path, &peer_path] {
+        let relative = path.strip_prefix(&h.root).unwrap().to_str().unwrap();
+        owner
+            .reference_paths(&format!("recovery:{relative}"), &[])
+            .unwrap();
+    }
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(
+        report["complete_inventory"]["schema"],
+        "chrono-maintenance-inventory/v2"
+    );
+    let rows = original(&h, &report);
+    let mut references = 0;
+    let mut members = BTreeSet::new();
+    for (offset, row) in rows.iter().enumerate() {
+        let observation = &row["observation"];
+        if observation["kind"] != "declaration-state" {
+            continue;
+        }
+        let record = if let Some(line) = observation["record_ref"].as_u64() {
+            assert!(line > 0 && line < (offset + 1) as u64);
+            let first = &rows[line as usize - 1]["observation"];
+            assert!(first["record_ref"].is_null());
+            assert!(first["record"].is_object());
+            assert!(observation["record"].is_null());
+            assert!(observation["measurement"].is_object());
+            references += 1;
+            &first["record"]
+        } else {
+            &observation["record"]
+        };
+        members.insert(record["id"].as_str().unwrap().to_owned());
+    }
+    assert!(references > 0);
+    assert!(members.contains(&leaf_id));
+    assert!(members.contains(&peer_id));
+    assert!(members.contains(&parent_id));
+    assert_eq!(fs::read(&leaf_path).unwrap(), b"required leaf");
+    assert_eq!(fs::read(&peer_path).unwrap(), b"required peer");
+    assert_eq!(fs::read(&parent_path).unwrap(), b"required parent");
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn replaced_linked_attachment_cannot_authorize_retention_cleanup() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::Inventory;
+    let (h, target) = linked_retention_host("replaced-linked-retention");
+    let expired = ".chrono-harness/state/worktrees/linked-expired.bin";
+    fs::write(target.join(expired), b"foreign original").unwrap();
+    Inventory::adopted(&target)
+        .unwrap()
+        .unwrap()
+        .begin("lifecycle-original", expired, value!(null))
+        .unwrap()
+        .complete(value!({"status":"failed","error":"original failure"}))
+        .unwrap();
+    let source = fs::read(target.join("payload")).unwrap();
+    let attachment = fs::read(target.join(".git")).unwrap();
+    let foreign = b"gitdir: /unknown/foreign-owner\n";
+    fs::write(target.join(".git"), foreign).unwrap();
+    let (code, report, error) = h.auto("maintain", &[]);
+    // Restore the fixture's actual attachment after capturing the foreign bytes.
+    let observed_attachment = fs::read(target.join(".git")).unwrap();
+    fs::write(target.join(".git"), attachment).unwrap();
+    assert_ne!(code, 0, "{report} {error}");
+    assert_eq!(observed_attachment, foreign);
+    assert_eq!(fs::read(target.join(expired)).unwrap(), b"foreign original");
+    assert_eq!(fs::read(target.join("payload")).unwrap(), source);
+    let rows = original_at(&h.root, &report);
+    assert!(!rows.iter().any(|row| {
+        row["kind"] == "retention"
+            && row["source_root"] == value!(target)
+            && row["observation"]["kind"] == "declaration-state"
+    }));
 }
