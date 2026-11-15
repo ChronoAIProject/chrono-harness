@@ -284,6 +284,17 @@ impl Reader {
         relative_path(path)?;
         self.blob_with_reuse(root, oid, path)
     }
+    /// 只读取显式输入。固定、已绑定端点复用原批量获取及回执；其他端点沿原逐项读取。
+    pub fn blobs(&self, root: &Path, oid: &str, paths: &[String]) -> Result<Vec<Vec<u8>>, String> {
+        if !self.can_reuse_oid(oid) {
+            return paths
+                .iter()
+                .map(|path| self.blob(root, oid, path))
+                .collect();
+        }
+        self.immutable_blobs(root, oid, paths)
+            .map(|rows| rows.into_iter().map(|(_, bytes)| bytes).collect())
+    }
     pub fn parents(&self, root: &Path, oid: &str) -> Result<Vec<String>, String> {
         full_oid(oid)?;
         let bytes = self.git(root, &["cat-file", "commit", oid])?;

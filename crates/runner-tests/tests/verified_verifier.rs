@@ -503,7 +503,7 @@ impl policy::sources::DependencyRead for UnavailableSources {
 impl policy::sources::CandidateSourceRead for UnavailableSources {
     fn text(&self, path: &[u8]) -> Result<String, String> { Err("decode".to_string()) }
     fn mode(&self, path: &str) -> Option<String> { None }
-    fn blob(&self, path: &str) -> Result<Vec<u8>, String> { Err("blob".to_string()) }
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String> { Err("blob".to_string()) }
     fn digest(&self, bytes: &[u8]) -> Vec<u8> { Vec::new() }
 }
 
@@ -1842,12 +1842,17 @@ impl policy::sources::CandidateSourceRead for BoundSources {
     fn mode(&self, path: &str) -> Option<String> {
         (path == "root").then(|| "100644".to_string())
     }
-    fn blob(&self, path: &str) -> Result<Vec<u8>, String> {
-        if path == "root" {
-            Ok(b"source".to_vec())
-        } else {
-            Err("absent".to_string())
-        }
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String> {
+        paths
+            .iter()
+            .map(|path| {
+                if path == "root" {
+                    Ok(b"source".to_vec())
+                } else {
+                    Err("absent".to_string())
+                }
+            })
+            .collect()
     }
     fn digest(&self, bytes: &[u8]) -> Vec<u8> {
         use sha2::{Digest, Sha256};
@@ -1860,6 +1865,118 @@ impl policy::CompilerReportRead for BoundSources {
     fn decode(&self, bytes: &[u8]) -> Option<CompilerReport> {
         serde_json::from_slice(bytes).ok()
     }
+}
+
+#[cfg(not(verus_keep_ghost))]
+struct BatchSources {
+    requests: std::cell::RefCell<Vec<Vec<String>>>,
+    response: Result<Vec<Vec<u8>>, String>,
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl policy::sources::CandidateSourceRead for BatchSources {
+    fn text(&self, path: &[u8]) -> Result<String, String> {
+        BoundSources.text(path)
+    }
+    fn mode(&self, path: &str) -> Option<String> {
+        matches!(path, "root" | "other").then(|| "100644".to_string())
+    }
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String> {
+        self.requests.borrow_mut().push(paths.clone());
+        self.response.clone()
+    }
+    fn digest(&self, bytes: &[u8]) -> Vec<u8> {
+        BoundSources.digest(bytes)
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn compiler_source_batch_preserves_aliases_order_and_rejects_incomplete_or_wrong_bytes() {
+    use policy::sources::CandidateSourceRead;
+    let first = b"source".to_vec();
+    let second = b"second".to_vec();
+    let a = String::from_utf8(BoundSources.digest(&first)).unwrap();
+    let b = String::from_utf8(BoundSources.digest(&second)).unwrap();
+    let dependency = Some(Ok(format!(
+        "out.d: a/../root other ./root\n\nout: a/../root other ./root\n\na/../root:\n\nother:\n\n./root:\n\n# checksum:sha256={a} file_len:6 a/../root\n# checksum:sha256={b} file_len:6 other\n# checksum:sha256={a} file_len:6 ./root\n"
+    ).into_bytes()));
+    let registry = |other: bool| {
+        Ok(policy::sources::source_registry(
+            if other {
+                vec!["root", "other"]
+            } else {
+                vec!["root"]
+            }
+            .into_iter()
+            .map(|path| policy::sources::SourceFile {
+                path: path.to_string(),
+                verification: None,
+            })
+            .collect(),
+            None,
+        ))
+    };
+    let complete = vec![first.clone(), second.clone(), first.clone()];
+    for (response, error) in [
+        (Ok(complete.clone()), None),
+        (
+            Ok(vec![first.clone(), second.clone()]),
+            Some("response count mismatch"),
+        ),
+        (
+            Ok(vec![
+                first.clone(),
+                second.clone(),
+                first.clone(),
+                first.clone(),
+            ]),
+            Some("response count mismatch"),
+        ),
+        (
+            Ok(vec![second.clone(), first.clone(), first.clone()]),
+            Some("checksums differ"),
+        ),
+        (
+            Err("original batch failure".to_string()),
+            Some("original batch failure"),
+        ),
+    ] {
+        let io = BatchSources {
+            requests: Default::default(),
+            response,
+        };
+        let result =
+            policy::sources::bind_compiler_sources(&arguments(), &dependency, &registry(true), &io);
+        assert_eq!(*io.requests.borrow(), vec![vec!["root", "other", "root"]]);
+        match error {
+            None => {
+                let accepted = result.unwrap().unwrap();
+                assert_eq!(
+                    accepted
+                        .candidate
+                        .iter()
+                        .map(|s| s.path.as_slice())
+                        .collect::<Vec<_>>(),
+                    vec![b"root".as_slice(), b"other".as_slice(), b"root".as_slice()]
+                );
+            }
+            Some(message) => assert!(result.err().unwrap().contains(message)),
+        }
+    }
+    let io = BatchSources {
+        requests: Default::default(),
+        response: Ok(complete),
+    };
+    let error =
+        policy::sources::bind_compiler_sources(&arguments(), &dependency, &registry(false), &io)
+            .err()
+            .unwrap();
+    assert!(error.contains("not an explicit candidate file"));
+    assert!(
+        io.requests.borrow().is_empty(),
+        "admit all paths before reading any source"
+    );
 }
 
 #[cfg(not(verus_keep_ghost))]

@@ -27,9 +27,9 @@ impl CandidateSourceRead for CandidateIo<'_> {
         self.tree.get(path).map(|entry| entry.0.clone())
     }
 
-    fn blob(&self, path: &str) -> Result<Vec<u8>, String> {
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String> {
         self.reader
-            .blob(&self.request.host_root, &self.request.candidate, path)
+            .blobs(&self.request.host_root, &self.request.candidate, paths)
     }
 
     fn digest(&self, bytes: &[u8]) -> Vec<u8> {

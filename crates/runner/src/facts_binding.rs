@@ -773,8 +773,12 @@ impl Reader {
     ) -> Result<Vec<(String, Vec<u8>)>, String> {
         let mut bytes = BTreeMap::new();
         let mut pending = vec![];
+        let mut unique = BTreeSet::new();
         for path in paths {
             crate::relative_path(path)?;
+            if !unique.insert(path) {
+                continue;
+            }
             if self
                 .blobs
                 .borrow()
@@ -812,7 +816,7 @@ impl Reader {
             .map(|path| {
                 (
                     path.clone(),
-                    bytes.remove(path).expect("acquired explicit registry"),
+                    bytes.get(path).expect("acquired explicit registry").clone(),
                 )
             })
             .collect())

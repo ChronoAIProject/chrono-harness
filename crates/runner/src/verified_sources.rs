@@ -734,7 +734,8 @@ pub fn validate_source_declaration(file: &SourceFile) -> (out: Result<(), String
 pub trait CandidateSourceRead {
     fn text(&self, path: &[u8]) -> Result<String, String>;
     fn mode(&self, path: &str) -> Option<String>;
-    fn blob(&self, path: &str) -> Result<Vec<u8>, String>;
+    /// 按输入顺序返回全部原字节；调用方独立核对数量及逐项摘要。
+    fn blobs(&self, paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String>;
     fn digest(&self, bytes: &[u8]) -> Vec<u8>;
 }
 
@@ -815,15 +816,15 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         Some(paths) => paths,
         None => { return Err("E_VERUS_SOURCES: invalid compiler dependency target".to_string()); },
     };
-    let mut compiled: Vec<SourceBinding> = Vec::new();
-    let mut candidate: Vec<SourceBinding> = Vec::new();
+    let mut names: Vec<String> = Vec::new();
+    let mut normalized_paths: Vec<Vec<u8>> = Vec::new();
     let mut modes: Vec<String> = Vec::new();
     let mut i = 0;
     while i < paths.len()
         invariant 0 <= i <= paths.len(),
-            compiled.len() == i, candidate.len() == i, modes.len() == i,
+            names.len() == i, normalized_paths.len() == i, modes.len() == i,
             forall|j: int| 0 <= j < i ==>
-                registered_source(registry.files.entries@, (#[trigger] candidate[j]).path@)
+                registered_source(registry.files.entries@, (#[trigger] normalized_paths[j])@)
                     && regular_mode(modes[j]@),
         decreases paths.len() - i,
     {
@@ -848,10 +849,35 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
             && !super::identifiers::equal_text(mode.as_str(), "100755") {
             return Err("E_VERUS_SOURCES: candidate source is not a regular file".to_string());
         }
-        let content = match io.blob(name.as_str()) {
-            Ok(content) => content,
-            Err(error) => { return Err(error); },
-        };
+        names.push(name);
+        normalized_paths.push(normalized);
+        modes.push(mode);
+        i += 1;
+    }
+    let contents = match io.blobs(&names) {
+        Ok(contents) => contents,
+        Err(error) => { return Err(error); },
+    };
+    if contents.len() != paths.len() {
+        return Err("E_VERUS_SOURCES: candidate source response count mismatch".to_string());
+    }
+    let mut compiled: Vec<SourceBinding> = Vec::new();
+    let mut candidate: Vec<SourceBinding> = Vec::new();
+    let mut i = 0;
+    while i < paths.len()
+        invariant 0 <= i <= paths.len(),
+            compiled.len() == i, candidate.len() == i,
+            names.len() == paths.len(), normalized_paths.len() == paths.len(),
+            modes.len() == paths.len(), contents.len() == paths.len(),
+            forall|j: int| 0 <= j < paths.len() ==>
+                registered_source(registry.files.entries@, (#[trigger] normalized_paths[j])@)
+                    && regular_mode(modes[j]@),
+            forall|j: int| 0 <= j < i ==> (#[trigger] candidate[j]).path@ == normalized_paths[j]@,
+        decreases paths.len() - i,
+    {
+        let content = &contents[i];
+        let path = &paths[i];
+        let normalized = copy_range(normalized_paths[i].as_slice(), 0, normalized_paths[i].len());
         let digest = io.digest(content.as_slice());
         if !super::identifiers::valid_digest(digest.as_slice()) {
             return Err("E_VERUS_SOURCES: invalid observed source digest".to_string());
@@ -861,7 +887,6 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         let raw_digest = copy_range(digest.as_slice(), 0, digest.len());
         compiled.push(SourceBinding { path: raw_path, sha256: raw_digest, length });
         candidate.push(SourceBinding { path: normalized, sha256: digest, length });
-        modes.push(mode);
         i += 1;
     }
     if !admit_source_metadata(&compiled, &candidate, args[8].as_str().as_bytes())
