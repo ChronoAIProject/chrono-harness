@@ -960,6 +960,7 @@ impl Inventory {
             paths: directories,
             exclusive_paths: paths.iter().cloned().collect(),
             maintenance: false,
+            partial_membership: false,
             retiring_report: None,
             retained_dependencies: BTreeSet::new(),
             unvisited_relations: BTreeSet::new(),
