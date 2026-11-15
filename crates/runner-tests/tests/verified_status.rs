@@ -53,13 +53,19 @@ fn acquired_source_bytes_preserve_order_duplicates_empty_and_missing_paths()
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let mut bytes: std::collections::BTreeMap<String, Vec<u8>> = std::collections::BTreeMap::new();
     bytes.insert("root".to_string(), vec![0u8, 255u8, 10u8]);
     bytes.insert("other".to_string(), Vec::new());
     let paths = vec!["root".to_string(), "other".to_string(), "root".to_string()];
     let rows = policy::ordered_acquired_blobs(paths.as_slice(), &bytes).unwrap();
     expect_status_true(rows.len() == 3);
+    proof {
+        assert(bytes.deep_view().contains_key(paths@[0]@));
+        assert(bytes.deep_view().contains_key(paths@[1]@));
+        assert(rows@[0].0@ == paths@[0]@);
+        assert(rows@[1].0@ == paths@[1]@);
+    }
     expect_status_text(rows[0].0.as_str(), "root");
     expect_status_text(rows[1].0.as_str(), "other");
     expect_status_text(rows[2].0.as_str(), "root");
@@ -2133,11 +2139,12 @@ fn registry_snapshot_completion_keeps_complete_documents_and_identity()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = "a/entry\0\n".to_owned();
     let effective = "b/目标é\0\n".to_owned();
     proof {
@@ -2162,7 +2169,7 @@ fn registry_snapshot_completion_keeps_complete_documents_and_identity()
             expect_status_text(snapshot.effective_path.as_str(), effective.as_str());
             expect_status_true(snapshot.bytes.len() == 2 && snapshot.values.len() == 2);
             registry_fixture_maps(&snapshot.bytes, &snapshot.values);
-    expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], u64::MAX);
+            expect_registry_pair(&snapshot.bytes, &snapshot.values, &entry, &[0u8, 255, 10], u64::MAX);
             expect_registry_pair(&snapshot.bytes, &snapshot.values, &effective, &[17u8, 0, 254], 0u64);
             match snapshot.selection {
                 Some(value) => { expect_status_true(value == 71u64); },
@@ -3462,6 +3469,8 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
     proof {
         assert(references.map_values(|row: (&policy::TreePath, &policy::TreeEntry)| *row.0)
             =~= all.map_values(|row: (policy::TreePath, policy::TreeEntry)| row.0));
+        assert(all.map_values(|row: (policy::TreePath, policy::TreeEntry)| row.0)
+            =~= all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0));
     }
     let ghost consumed: int = 0;
     let ghost expected = choose|key: policy::TreePath| tree@.contains_key(key)
@@ -4661,6 +4670,7 @@ fn checkout_physical_plan_marks_missing_stage_zero_without_a_file_probe() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn checkout_physical_plan_preserves_probe_order_and_complete_entry_fields() {
     proof {
+        policy::tree_path_obeys_cmp();
         reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("0");
         broadcast use vstd::string::is_ascii_spec_bytes;
         assert(vstd::string::is_ascii("a") && vstd::string::is_ascii("b"));
@@ -4678,6 +4688,11 @@ fn checkout_physical_plan_preserves_probe_order_and_complete_entry_fields() {
     let ghost ka = key_a;
     expect_tree_insert_ok(policy::insert_git_tree_entry(&mut tree,
         key_a, "a-mode", "a-oid", "a-kind"));
+    proof {
+        assert(ka@ == "a"@ && kb@ == "b"@);
+        assert(ka != kb);
+        assert(tree@.dom() =~= set![ka, kb]);
+    }
     let mut stages = policy::GitIndexStages::new();
     expect_status_true(policy::record_git_index_stage(&mut stages, "b", "0").is_ok());
     expect_status_true(policy::record_git_index_stage(&mut stages, "a", "0").is_ok());
@@ -4920,6 +4935,7 @@ fn index_stage_insertion_keeps_all_paths_and_stages(a: &str, b: &str)
         policy::git_index_stage_obeys_cmp();
         vstd::utf8::encode_utf8_decode_utf8(a@);
         vstd::utf8::encode_utf8_decode_utf8(b@);
+        assert(a.spec_bytes() != b.spec_bytes());
         reveal_strlit("0"); reveal_strlit("1"); reveal_strlit("2"); reveal_strlit("3");
         broadcast use vstd::string::is_ascii_spec_bytes;
         assert(vstd::string::is_ascii("0") && vstd::string::is_ascii("1")
@@ -7534,6 +7550,26 @@ proof fn registry_fixture_map_get<V>(map: &std::collections::BTreeMap<String, V>
     }
 }
 
+// 文字键投影与标准库深视图保留同一键域及完整值；不把不同 String 存储当成不同路径。
+proof fn registry_fixture_deep_map<V: DeepView>(map: std::collections::BTreeMap<String, V>)
+    requires policy::registry_map_unique(map@),
+    ensures map.deep_view() == Map::new(policy::registry_map(map@).dom(),
+        |text: Seq<char>| policy::registry_map(map@)[text].deep_view()),
+{
+    reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
+    broadcast use Set::lemma_map_contains;
+    assert(map.deep_view().dom() =~= policy::registry_map(map@).dom());
+    assert forall|text: Seq<char>| #[trigger] policy::registry_map(map@).contains_key(text)
+        implies map.deep_view()[text] == policy::registry_map(map@)[text].deep_view() by {
+        let key = choose|key: String| map@.contains_key(key) && key@ == text;
+        policy::registry_map_value(map@, key);
+        let stored = choose|stored: String| map@.contains_key(stored) && stored.deep_view() == text;
+        assert(stored == key);
+    }
+    assert(map.deep_view() =~= Map::new(policy::registry_map(map@).dom(),
+        |text: Seq<char>| policy::registry_map(map@)[text].deep_view()));
+}
+
 fn registry_fixture_maps(bytes: &std::collections::BTreeMap<String, Vec<u8>>,
     values: &std::collections::BTreeMap<String, u64>)
     requires vstd::laws_cmp::obeys_cmp::<String>(),
@@ -7541,6 +7577,8 @@ fn registry_fixture_maps(bytes: &std::collections::BTreeMap<String, Vec<u8>>,
         vstd::std_specs::btree::btree_map_inv(values),
         policy::registry_map(bytes@).len() == bytes@.len(),
         policy::registry_map(values@).len() == values@.len(),
+        registry_sequence_bytes(policy::registry_map(bytes@)) == bytes.deep_view(),
+        policy::registry_map(values@) == values.deep_view(),
         forall|key: String| #[trigger] bytes@.contains_key(key) ==>
             policy::registry_map(bytes@).contains_key(key@)
                 && policy::registry_map(bytes@)[key@] == bytes@[key],
@@ -7552,6 +7590,9 @@ fn registry_fixture_maps(bytes: &std::collections::BTreeMap<String, Vec<u8>>,
     policy::btree_map_compare_invariant(values);
     proof {
         policy::registry_map_ordered(*bytes); policy::registry_map_ordered(*values);
+        registry_fixture_deep_map(*bytes); registry_fixture_deep_map(*values);
+        assert(registry_sequence_bytes(policy::registry_map(bytes@)) =~= bytes.deep_view());
+        assert(policy::registry_map(values@) =~= values.deep_view());
         assert forall|key: String| #[trigger] bytes@.contains_key(key) implies
             policy::registry_map(bytes@).contains_key(key@)
                 && policy::registry_map(bytes@)[key@] == bytes@[key] by {
@@ -7601,23 +7642,28 @@ fn registry_parse_batch_empty_preserves_both_existing_maps()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let key = "已有/é\0\n".to_owned();
     let mut bytes = std::collections::BTreeMap::new();
     let mut values = std::collections::BTreeMap::new();
     bytes.insert(key.clone(), vec![0u8, 255, 10]);
     values.insert(key.clone(), u64::MAX);
+    let expected: Vec<String> = Vec::new();
+    let originals: Vec<(String, Vec<u8>)> = Vec::new();
     proof {
-        assert(policy::registry_decoder_admissible(Seq::<String>::empty(),
-            Seq::<(String, Vec<u8>)>::empty(), never_decode_registry,
-            |raw: Seq<u8>| registry_decode_model(raw)));
+        let model = |raw: Seq<u8>| registry_decode_model(raw);
+        assert(policy::registry_decoder_admissible(expected@,
+            originals@, never_decode_registry, model));
+        assert(exists|model: spec_fn(Seq<u8>) -> Result<u64, Seq<char>>|
+            policy::registry_decoder_admissible(expected@, originals@, never_decode_registry, model));
     }
     registry_fixture_maps(&bytes, &values);
-    let result = policy::registry_parse_batch(&[], Vec::new(), bytes, values,
+    let result = policy::registry_parse_batch(&expected, originals, bytes, values,
         never_decode_registry);
     match result {
         Ok((bytes, values)) => {
@@ -7649,13 +7695,16 @@ fn registry_parse_batch_missing_rows_rejects_before_decoding()
 fn registry_parse_batch_extra_rows_rejects_before_path_or_decode()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
+    let expected: Vec<String> = Vec::new();
     let originals = vec![("unexpected".to_owned(), Vec::new())];
     proof {
-        assert(policy::registry_decoder_admissible(Seq::<String>::empty(),
-            originals@, never_decode_registry,
-            |raw: Seq<u8>| registry_decode_model(raw)));
+        let model = |raw: Seq<u8>| registry_decode_model(raw);
+        assert(policy::registry_decoder_admissible(expected@,
+            originals@, never_decode_registry, model));
+        assert(exists|model: spec_fn(Seq<u8>) -> Result<u64, Seq<char>>|
+            policy::registry_decoder_admissible(expected@, originals@, never_decode_registry, model));
     }
-    let result = policy::registry_parse_batch(&[], originals,
+    let result = policy::registry_parse_batch(&expected, originals,
         std::collections::BTreeMap::new(), std::collections::BTreeMap::new(),
         never_decode_registry);
     expect_registry_batch_error(result, "registry acquisition count mismatch");
@@ -7726,11 +7775,12 @@ fn registry_parse_batch_success_preserves_full_bytes_and_unrelated_entries()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     proof {
         reveal_strlit("entry"); reveal_strlit("../目录/é\0\n");
         assert("entry"@.len() != "../目录/é\0\n"@.len());
@@ -7763,11 +7813,12 @@ fn registry_parse_batch_duplicate_keys_replace_both_maps_in_order()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     proof { reveal_with_fuel(policy::registry_batch_fold, 4); }
     let key = "same".to_owned();
     let mut bytes = std::collections::BTreeMap::new();
@@ -7967,11 +8018,12 @@ fn registry_read_sequence_empty_keeps_initial_maps_and_reader()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let key = "旧/é".to_owned();
     let mut bytes = std::collections::BTreeMap::new();
     let mut values = std::collections::BTreeMap::new();
@@ -8067,11 +8119,12 @@ fn registry_read_sequence_preserves_original_bytes_and_unrelated_entries()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     proof { registry_sequence_fixture_texts(); reveal_with_fuel(registry_sequence_expected, 4); }
     let old = "旧/é".to_owned();
     let key = "../目录/é\0\n".to_owned();
@@ -8693,11 +8746,12 @@ fn registry_snapshot_initial_same_path_keeps_entry_document()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = ".chrono-harness/入口é\0\n.json".to_owned();
     let same_text = ".chrono-harness/入口é\0\n.json".to_owned();
     let snapshot = policy::registry_snapshot_initial(
@@ -8717,11 +8771,12 @@ fn registry_snapshot_initial_distinct_paths_keep_both_complete_documents()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = ".chrono-harness/入口\0\n".to_owned();
     let effective = ".chrono-harness/目标é\0\n".to_owned();
     proof {
@@ -8751,11 +8806,12 @@ fn registry_snapshot_initial_empty_identity_preserves_entry_and_selection()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = "".to_owned();
     let original = Vec::new();
     let expected: &[u8] = &[];
@@ -8780,11 +8836,12 @@ fn registry_snapshot_initial_paths_remain_literal_and_case_sensitive()
     requires vstd::laws_cmp::obeys_cmp::<String>(),
 {
     proof {
+        reveal(vstd::std_specs::btree::btree_map_deep_view_impl);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
         registry_fixture_empty_map::<Vec<u8>>(); registry_fixture_empty_map::<u64>();
     }
-    broadcast use Set::lemma_map_contains;
+    broadcast use {Set::lemma_map_contains, vstd::std_specs::btree::group_btree_axioms};
     let entry = "../A/é\0\n".to_owned();
     let effective = "../a/é\0\n".to_owned();
     let original = Vec::new();
