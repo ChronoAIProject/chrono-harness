@@ -320,6 +320,11 @@ SeqAccess、MapAccess、EnumAccess 和 VariantAccess。接口依据当前 Cargo 
 Serde／serde_core 1.0.229 std 配置，不复制派生实现或为仓内方法添加 external_body。
 `serde-deserialization.patch` 顺序应用在 `serde-serialization.patch` 后。
 
+八个 trait 声明固定 std 配置下的八十个公开方法，保留真实生命周期、泛型、关联值／错误
+类型、Variant 相等约束及原参数。结果与修改后的状态保持不透明，不增加 requires／ensures。
+没有当前调用的隐藏 `__deserialize_content_v1` 和 `__private_visit_untagged_option`
+尚未声明，不能据本批声称支持这两个内部入口或全部 Serde 行为。
+
 先登记八项独立 Rust／Verus 预期：反序列化和 Visitor 的真实参数转交、种子／默认访问及
 原关联错误类型、正确的本地实现和真实结构／枚举派生、无依据成功／失败断言，以及错误
 Deserialize／Visitor 本地实现均须实际因 assertion failed 拒绝。未声明接口不算预期拒绝。
