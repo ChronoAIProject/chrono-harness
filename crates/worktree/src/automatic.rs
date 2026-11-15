@@ -1976,8 +1976,8 @@ impl Manager {
             scope,
             exclusive_namespace,
             wait,
-            recover_published_results,
             true,
+            recover_published_results,
         )
         .map(Some)
     }
@@ -1988,8 +1988,8 @@ impl Manager {
         scope: &Path,
         exclusive_namespace: bool,
         wait: bool,
-        recover_published_results: bool,
         protect: bool,
+        recover_published_results: bool,
     ) -> Result<Self, String> {
         let scope = absolute(scope, true)?;
         let policy = &inputs.policy;
@@ -4207,7 +4207,15 @@ impl Manager {
         self.ledger.entries[i].cleanup = Some(CleanupProgress {
             stage,
             detail: detail.into(),
-            report_path: report["report_path"].as_str().map(str::to_owned),
+            // A whole-round report is still being published while unrelated
+            // business completes. Progress consumes only the observation, not
+            // that publisher's path. Actual cleanup children retain their own
+            // sealed original when they return through this same boundary.
+            report_path: if report["operation"] == "maintain" {
+                None
+            } else {
+                report["report_path"].as_str().map(str::to_owned)
+            },
         });
         self.save()
     }
@@ -4657,8 +4665,8 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 target.as_deref().unwrap_or(&invoking),
                 operation == "deploy-owner",
                 true,
-                false,
                 !handoff,
+                false,
             )?;
             manager.restore_absent_policy(r)?;
             if !matches!(operation.as_str(), "maintain" | "import") {

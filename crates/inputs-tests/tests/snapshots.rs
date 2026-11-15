@@ -16,6 +16,439 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 
 verus! {
+struct CompositionImportFixture {
+    id: u64,
+    blob_error: bool,
+    admission_error: bool,
+}
+
+fn fixture_import_lookup(mut trace: CompositionTrace, id: &str)
+    -> (out: (CompositionTrace, Option<usize>))
+    ensures out.0@ == trace@.push((0u64, 1u8)),
+        out.1 == if id@ == "缺失输入\0\n"@ { None } else { Some(7usize) },
+{
+    trace.push((0, 1));
+    let declared = if composition_text::equal_text(id, "缺失输入\0\n") { None }
+        else { Some(7) };
+    (trace, declared)
+}
+
+fn fixture_import_blob(mut trace: CompositionTrace, file: &CompositionImportFixture)
+    -> (out: (CompositionTrace, Result<(u64, bool), String>))
+    ensures out.0@ == trace@.push((file.id, 2u8)),
+        if file.blob_error { match out.1 {
+            Err(error) => error@ == "blob 原错\0\n"@, _ => false,
+        } } else { out.1 == Ok::<(u64, bool), String>((file.id, file.admission_error)) },
+{
+    trace.push((file.id, 2));
+    (trace, if file.blob_error { Err("blob 原错\0\n".to_string()) }
+        else { Ok((file.id, file.admission_error)) })
+}
+
+fn fixture_import_admit(mut trace: CompositionTrace, declared: usize, observed: &(u64, bool))
+    -> (out: (CompositionTrace, Result<(), String>))
+    ensures out.0@ == trace@.push((observed.0, 3u8)),
+        if declared != 7 { match out.1 {
+            Err(error) => error@ == "declaration 原错\0\n"@, _ => false,
+        } } else if observed.1 { match out.1 {
+            Err(error) => error@ == "admission 原错\0\n"@, _ => false,
+        } } else { out.1 == Ok::<(), String>(()) },
+{
+    trace.push((observed.0, 3));
+    (trace, if declared != 7 { Err("declaration 原错\0\n".to_string()) }
+        else if observed.1 { Err("admission 原错\0\n".to_string()) }
+        else { Ok(()) })
+}
+
+fn fixture_import_write(mut trace: CompositionTrace, _id: &str, observed: (u64, bool))
+    -> (out: CompositionTrace)
+    ensures out@ == trace@.push((observed.0, 4u8)),
+{
+    trace.push((observed.0, 4));
+    trace
+}
+
+spec fn fixture_import_step_expected(initial: CompositionTrace, id: &str,
+    file: &CompositionImportFixture,
+    out: (CompositionTrace, Result<(), policy::composition::CompositionImportError>)) -> bool
+{
+    let missing = id@ == "缺失输入\0\n"@;
+    let located = initial@.push((0u64, 1u8));
+    let loaded = located.push((file.id, 2u8));
+    let admitted = loaded.push((file.id, 3u8));
+    out.0@ == if missing { located } else if file.blob_error { loaded }
+        else if file.admission_error { admitted } else { admitted.push((file.id, 4u8)) }
+    && if missing { match out.1 {
+        Err(policy::composition::CompositionImportError::Unregistered(error_id)) => error_id@ == id@,
+        _ => false,
+    } } else if file.blob_error { match out.1 {
+        Err(policy::composition::CompositionImportError::Blob(error)) => error@ == "blob 原错\0\n"@,
+        _ => false,
+    } } else if file.admission_error { match out.1 {
+        Err(policy::composition::CompositionImportError::Admission(error_id, error)) =>
+            error_id@ == id@ && error@ == "admission 原错\0\n"@,
+        _ => false,
+    } } else { out.1 == Ok::<(), policy::composition::CompositionImportError>(()) }
+}
+
+proof fn fixture_import_step_bound(initial: CompositionTrace, id: &str,
+    file: &CompositionImportFixture,
+    out: (CompositionTrace, Result<(), policy::composition::CompositionImportError>))
+    requires policy::composition::composition_import_file_result(initial, id, file,
+        &fixture_import_lookup, &fixture_import_blob, &fixture_import_admit, &fixture_import_write, out),
+    ensures fixture_import_step_expected(initial, id, file, out),
+{
+    reveal(policy::composition::composition_import_file_result);
+}
+
+proof fn fixture_import_prefix_step<'a>(initial: CompositionTrace,
+    rows: Seq<(&'a str, &'a CompositionImportFixture)>, states: Seq<CompositionTrace>, index: int)
+    requires policy::composition::composition_import_files_prefix(initial, rows, states,
+        &fixture_import_lookup, &fixture_import_blob, &fixture_import_admit, &fixture_import_write),
+        0 <= index < states.len() - 1,
+    ensures fixture_import_step_expected(states[index], rows[index].0, rows[index].1,
+        (states[index + 1], Ok::<(), policy::composition::CompositionImportError<'a>>(()))),
+{
+    reveal(policy::composition::composition_import_files_prefix);
+    fixture_import_step_bound(states[index], rows[index].0, rows[index].1,
+        (states[index + 1], Ok::<(), policy::composition::CompositionImportError<'a>>(())));
+}
+
+spec fn fixture_import_successes(rows: Seq<(&str, &CompositionImportFixture)>, count: int)
+    -> Seq<(u64, u8)>
+    decreases count,
+{
+    if count <= 0 { Seq::empty() } else {
+        fixture_import_successes(rows, count - 1)
+            + seq![(0u64, 1u8), (rows[count - 1].1.id, 2u8),
+                (rows[count - 1].1.id, 3u8), (rows[count - 1].1.id, 4u8)]
+    }
+}
+
+proof fn fixture_import_prefix_trace(initial: CompositionTrace,
+    rows: Seq<(&str, &CompositionImportFixture)>, states: Seq<CompositionTrace>, count: int)
+    requires policy::composition::composition_import_files_prefix(initial, rows, states,
+        &fixture_import_lookup, &fixture_import_blob, &fixture_import_admit, &fixture_import_write),
+        0 <= count < states.len(),
+    ensures states[count]@ == initial@ + fixture_import_successes(rows, count),
+    decreases count,
+{
+    reveal(policy::composition::composition_import_files_prefix);
+    if count > 0 {
+        fixture_import_prefix_trace(initial, rows, states, count - 1);
+        fixture_import_prefix_step(initial, rows, states, count - 1);
+        assert(states[count]@ =~= initial@ + fixture_import_successes(rows, count));
+    } else { assert(initial@ + Seq::<(u64, u8)>::empty() =~= initial@); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_empty_files_skip_every_stage() {
+    use policy::composition::*;
+    let rows: Vec<(&str, &CompositionImportFixture)> = Vec::new();
+    let (trace, result) = import_composition_files(vec![(u64::MAX, 0u8)], rows.as_slice(),
+        &fixture_import_lookup, &fixture_import_blob, &fixture_import_admit, &fixture_import_write);
+    let expected = [(u64::MAX, 0u8)];
+    assert(trace@ == expected@);
+    assert(result.is_ok());
+    composition_trace(&expected, trace.as_slice());
+    if result.is_err() { panic!(); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_file_preserves_successful_stage_order() {
+    use policy::composition::*;
+    reveal(composition_import_file_result);
+    let file = CompositionImportFixture { id: u64::MAX, blob_error: false, admission_error: false };
+    let (trace, result) = import_composition_file(vec![(29u64, 0u8)], "", &file,
+        &fixture_import_lookup, &fixture_import_blob, &fixture_import_admit, &fixture_import_write);
+    proof {
+        reveal_strlit(""); reveal_strlit("缺失输入\0\n");
+        assert(""@.len() != "缺失输入\0\n"@.len());
+    }
+    let expected = [(29u64, 0u8), (0u64, 1u8), (u64::MAX, 2u8), (u64::MAX, 3u8), (u64::MAX, 4u8)];
+    assert(trace@ =~= expected@);
+    assert(result.is_ok());
+    composition_trace(&expected, trace.as_slice());
+    if result.is_err() { panic!(); }
+}
+
+fn composition_import_files_case(stop: usize, failure: u8)
+    requires stop < 3, failure <= 3,
+{
+    use policy::composition::*;
+    let first = CompositionImportFixture { id: 11,
+        blob_error: stop == 0 && (failure == 1 || failure == 2),
+        admission_error: stop == 0 && failure != 0 };
+    let middle = CompositionImportFixture { id: u64::MAX,
+        blob_error: stop == 1 && (failure == 1 || failure == 2),
+        admission_error: stop == 1 && failure != 0 };
+    let last = CompositionImportFixture { id: 47,
+        blob_error: stop == 2 && (failure == 1 || failure == 2),
+        admission_error: stop == 2 && failure != 0 };
+    let first_id = if stop == 0 && failure == 1 { "缺失输入\0\n" } else { "" };
+    let middle_id = if stop == 1 && failure == 1 { "缺失输入\0\n" } else { "输入\0\n" };
+    let last_id = if stop == 2 && failure == 1 { "缺失输入\0\n" } else { "缺失输入" };
+    let rows = [(first_id, &first), (middle_id, &middle), (last_id, &last)];
+    let initial = vec![(17u64, 0u8)];
+    let ghost before = initial;
+    let (trace, result) = import_composition_files(initial, &rows,
+        &fixture_import_lookup, &fixture_import_blob, &fixture_import_admit, &fixture_import_write);
+    let ghost outcome = result;
+    proof {
+        reveal_strlit(""); reveal_strlit("输入\0\n"); reveal_strlit("缺失输入");
+        reveal_strlit("缺失输入\0\n");
+        assert(""@.len() != "缺失输入\0\n"@.len());
+        assert("输入\0\n"@.len() != "缺失输入\0\n"@.len());
+        assert("缺失输入"@.len() != "缺失输入\0\n"@.len());
+        assert forall|i: int| 0 <= i < 3 implies
+            (rows@[i].0@ == "缺失输入\0\n"@) == (failure == 1 && i == stop)
+            && rows@[i].1.blob_error == ((failure == 1 || failure == 2) && i == stop)
+            && rows@[i].1.admission_error == (failure != 0 && i == stop) by {
+            if i == 0 { } else if i == 1 { } else { assert(i == 2); }
+        }
+        let states = choose|states: Seq<CompositionTrace>|
+            #[trigger] composition_import_files_prefix(before, rows@, states,
+                &fixture_import_lookup, &fixture_import_blob, &fixture_import_admit, &fixture_import_write)
+            && match outcome {
+                Ok(()) => states.len() == rows@.len() + 1 && trace == states.last(),
+                Err(error) => states.len() <= rows@.len()
+                    && composition_import_file_result(states.last(), rows@[states.len() - 1].0,
+                        rows@[states.len() - 1].1, &fixture_import_lookup, &fixture_import_blob,
+                        &fixture_import_admit, &fixture_import_write,
+                        (trace, Err::<(), CompositionImportError>(error))),
+            };
+        reveal(composition_import_files_prefix);
+        let count = states.len() - 1;
+        fixture_import_prefix_trace(before, rows@, states, count);
+        if failure != 0 && count > stop {
+            fixture_import_prefix_step(before, rows@, states, stop as int);
+            assert(false);
+        }
+        match outcome {
+            Ok(()) => { assert(failure == 0); },
+            Err(error) => {
+                fixture_import_step_bound(states.last(), rows@[count].0, rows@[count].1,
+                    (trace, Err::<(), CompositionImportError>(error)));
+                assert(failure != 0 && count == stop);
+            },
+        }
+        reveal_with_fuel(fixture_import_successes, 4);
+    }
+    if failure == 0 {
+        composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3), (11, 4),
+            (0, 1), (u64::MAX, 2), (u64::MAX, 3), (u64::MAX, 4),
+            (0, 1), (47, 2), (47, 3), (47, 4)], trace.as_slice());
+    } else if stop == 0 {
+        if failure == 1 { composition_trace(&[(17, 0), (0, 1)], trace.as_slice()); }
+        else if failure == 2 { composition_trace(&[(17, 0), (0, 1), (11, 2)], trace.as_slice()); }
+        else { composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3)], trace.as_slice()); }
+    } else if stop == 1 {
+        if failure == 1 { composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3), (11, 4),
+            (0, 1)], trace.as_slice()); }
+        else if failure == 2 { composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3), (11, 4),
+            (0, 1), (u64::MAX, 2)], trace.as_slice()); }
+        else { composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3), (11, 4),
+            (0, 1), (u64::MAX, 2), (u64::MAX, 3)], trace.as_slice()); }
+    } else {
+        assert(stop == 2);
+        if failure == 1 { composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3), (11, 4),
+            (0, 1), (u64::MAX, 2), (u64::MAX, 3), (u64::MAX, 4), (0, 1)], trace.as_slice()); }
+        else if failure == 2 { composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3), (11, 4),
+            (0, 1), (u64::MAX, 2), (u64::MAX, 3), (u64::MAX, 4), (0, 1), (47, 2)], trace.as_slice()); }
+        else { composition_trace(&[(17, 0), (0, 1), (11, 2), (11, 3), (11, 4),
+            (0, 1), (u64::MAX, 2), (u64::MAX, 3), (u64::MAX, 4), (0, 1), (47, 2), (47, 3)], trace.as_slice()); }
+    }
+    match result {
+        Ok(()) => { assert(failure == 0); if failure != 0 { panic!(); } },
+        Err(CompositionImportError::Unregistered(id)) => {
+            let same = composition_text::equal_text(id, rows[stop].0);
+            assert(failure == 1 && same);
+            if failure != 1 || !same { panic!(); }
+        },
+        Err(CompositionImportError::Blob(error)) => {
+            let same = composition_text::equal_text(error.as_str(), "blob 原错\0\n");
+            assert(failure == 2 && same);
+            if failure != 2 || !same { panic!(); }
+        },
+        Err(CompositionImportError::Admission(id, error)) => {
+            let same_id = composition_text::equal_text(id, rows[stop].0);
+            let same_error = composition_text::equal_text(error.as_str(), "admission 原错\0\n");
+            assert(failure == 3 && same_id && same_error);
+            if failure != 3 || !same_id || !same_error { panic!(); }
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_files_keep_complete_success_prefix() {
+    composition_import_files_case(1, 0);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_files_stop_at_every_first_failure() {
+    let mut stop = 0usize;
+    while stop < 3
+        invariant stop <= 3,
+        decreases 3 - stop,
+    {
+        composition_import_files_case(stop, 1);
+        composition_import_files_case(stop, 2);
+        composition_import_files_case(stop, 3);
+        stop += 1;
+    }
+}
+
+fn fixture_import_render(parts: [&str; 6], expected: [&str; 6], message: &str) -> (out: String)
+    requires forall|i: int| 0 <= i < 6 ==> parts@[i]@ == expected@[i]@,
+    ensures out@ == message@,
+{
+    let mut i = 0usize;
+    while i < 6
+        invariant i <= 6, forall|j: int| 0 <= j < 6 ==> parts@[j]@ == expected@[j]@,
+        decreases 6 - i,
+    {
+        let same = composition_text::equal_text(parts[i], expected[i]);
+        assert(same);
+        if !same { panic!(); }
+        i += 1;
+    }
+    message.to_string()
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_error_messages_keep_full_endpoint_id_and_suffix() {
+    use policy::composition::*;
+    let unregistered = CompositionImportError::Unregistered("输入\0\n").render("端点\0\n",
+        &|parts: [&str; 6]| -> (out: String)
+            requires parts@[0]@ == "E_COMPOSE_INPUT: "@, parts@[1]@ == "端点\0\n"@,
+                parts@[2]@ == " unregistered "@, parts@[3]@ == "输入\0\n"@,
+                parts@[4]@ == ""@, parts@[5]@ == ""@,
+            ensures out@ == "E_COMPOSE_INPUT: 端点\0\n unregistered 输入\0\n"@,
+        {
+            fixture_import_render(parts, ["E_COMPOSE_INPUT: ", "端点\0\n", " unregistered ",
+                "输入\0\n", "", ""], "E_COMPOSE_INPUT: 端点\0\n unregistered 输入\0\n")
+        });
+    let blob = CompositionImportError::Blob("blob 原错\0\n".to_string()).render("base",
+        &|_parts: [&str; 6]| -> String requires false, { panic!(); });
+    let admission = CompositionImportError::Admission("", "admission 原错\0\n".to_string())
+        .render("candidate", &|parts: [&str; 6]| -> (out: String)
+            requires parts@[0]@ == "E_COMPOSE_INPUT: "@, parts@[1]@ == "candidate"@,
+                parts@[2]@ == " "@, parts@[3]@ == "admission 原错\0\n"@,
+                parts@[4]@ == " "@, parts@[5]@ == ""@,
+            ensures out@ == "E_COMPOSE_INPUT: candidate admission 原错\0\n "@,
+        {
+            fixture_import_render(parts, ["E_COMPOSE_INPUT: ", "candidate", " ",
+                "admission 原错\0\n", " ", ""], "E_COMPOSE_INPUT: candidate admission 原错\0\n ")
+        });
+    let same_unregistered = composition_text::equal_text(unregistered.as_str(),
+        "E_COMPOSE_INPUT: 端点\0\n unregistered 输入\0\n");
+    let same_blob = composition_text::equal_text(blob.as_str(), "blob 原错\0\n");
+    let same_admission = composition_text::equal_text(admission.as_str(),
+        "E_COMPOSE_INPUT: candidate admission 原错\0\n ");
+    assert(same_unregistered && same_blob && same_admission);
+    if !same_unregistered || !same_blob || !same_admission { panic!(); }
+}
+
+pub struct CompositionInputFixture<'a> {
+    pub ids: &'a [Option<&'a str>],
+}
+
+impl<'a> policy::composition::CompositionInputRows for CompositionInputFixture<'a> {
+    open spec fn count(&self) -> nat { self.ids@.len() }
+    open spec fn id_at(&self, index: int) -> Option<&str> { self.ids@[index] }
+
+    fn len(&self) -> (out: usize)
+        ensures out == self.count(),
+    { self.ids.len() }
+
+    fn id(&self, index: usize) -> (out: Option<&str>)
+        ensures out == self.id_at(index as int),
+    { self.ids[index] }
+}
+
+proof fn fixture_first_input<R: policy::composition::CompositionInputRows>(
+    rows: &R, expected: Seq<char>, first: usize, actual: Option<usize>)
+    requires policy::composition::first_composition_input(rows, expected, Some(first)),
+        policy::composition::first_composition_input(rows, expected, actual),
+    ensures actual == Some(first),
+{
+    use policy::composition::*;
+    match actual {
+        None => { assert(!composition_input_matches(rows, first as int, expected)); },
+        Some(index) => {
+            if index < first { assert(!composition_input_matches(rows, index as int, expected)); }
+            else if first < index { assert(!composition_input_matches(rows, first as int, expected)); }
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_lookup_preserves_first_match_and_complete_id() {
+    use policy::composition::*;
+    let ids = [None, Some("input"), Some("输入\0\n"), Some("input"), Some("")];
+    let rows = CompositionInputFixture { ids: &ids };
+    let ordinary = find_composition_input(&rows, "input");
+    let unicode = find_composition_input(&rows, "输入\0\n");
+    let empty = find_composition_input(&rows, "");
+    let case = find_composition_input(&rows, "Input");
+    let prefix = find_composition_input(&rows, "输入");
+    proof {
+        reveal_strlit("input"); reveal_strlit("输入\0\n"); reveal_strlit("");
+        reveal_strlit("Input"); reveal_strlit("输入");
+        assert("input"@.len() == 5);
+        assert("输入\0\n"@.len() == 4);
+        assert(""@.len() == 0);
+        assert("input"@ != "输入\0\n"@);
+        assert("input"@ != ""@);
+        assert("输入\0\n"@ != ""@);
+        assert(composition_input_matches(&rows, 2, "输入\0\n"@));
+        assert forall|j: int| 0 <= j < 2 implies
+            !composition_input_matches(&rows, j, "输入\0\n"@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else { assert(j == 1); assert(rows.id_at(j).unwrap()@ == "input"@); }
+        }
+        assert(composition_input_matches(&rows, 4, ""@));
+        assert forall|j: int| 0 <= j < 4 implies
+            !composition_input_matches(&rows, j, ""@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else if j == 1 { assert(rows.id_at(j).unwrap()@ == "input"@); }
+            else if j == 2 { assert(rows.id_at(j).unwrap()@ == "输入\0\n"@); }
+            else { assert(j == 3); assert(rows.id_at(j).unwrap()@ == "input"@); }
+        }
+        fixture_first_input(&rows, "input"@, 1, ordinary);
+        fixture_first_input(&rows, "输入\0\n"@, 2, unicode);
+        fixture_first_input(&rows, ""@, 4, empty);
+        assert("Input"@.len() == 5);
+        assert("输入"@.len() == 2);
+        assert("input"@ != "Input"@) by { assert("input"@[0] != "Input"@[0]); }
+        assert forall|j: int| 0 <= j < 5 implies
+            !composition_input_matches(&rows, j, "Input"@)
+            && !composition_input_matches(&rows, j, "输入"@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else if j == 1 || j == 3 { assert(rows.id_at(j).unwrap()@ == "input"@); }
+            else if j == 2 { assert(rows.id_at(j).unwrap()@ == "输入\0\n"@); }
+            else { assert(j == 4); assert(rows.id_at(j).unwrap()@ == ""@); }
+        }
+        if let Some(index) = case { assert(!composition_input_matches(&rows, index as int, "Input"@)); }
+        if let Some(index) = prefix { assert(!composition_input_matches(&rows, index as int, "输入"@)); }
+    }
+    assert(ordinary == Some(1usize));
+    assert(unicode == Some(2usize));
+    assert(empty == Some(4usize));
+    assert(case.is_none());
+    assert(prefix.is_none());
+    if ordinary != Some(1) || unicode != Some(2) || empty != Some(4)
+        || case.is_some() || prefix.is_some() { panic!(); }
+    let no_ids: [Option<&str>; 0] = [];
+    let no_rows = CompositionInputFixture { ids: &no_ids };
+    let missing = find_composition_input(&no_rows, "input");
+    assert(missing.is_none());
+    if missing.is_some() { panic!(); }
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn composition_merge_rejects_environment_before_files() {
     use policy::composition::*;
@@ -2078,10 +2511,10 @@ struct CompositionSourceFixture {
     failure: u8,
 }
 
-type CompositionSourceTrace = Vec<(u64, u8)>;
+type CompositionTrace = Vec<(u64, u8)>;
 
-fn fixture_source_hash(mut trace: CompositionSourceTrace, row: &CompositionSourceFixture)
-    -> (out: (CompositionSourceTrace, Result<String, String>))
+fn fixture_source_hash(mut trace: CompositionTrace, row: &CompositionSourceFixture)
+    -> (out: (CompositionTrace, Result<String, String>))
     ensures out.0@ == trace@.push((row.id, 1u8)),
         if row.failure == 1 { match out.1 {
             Err(error) => error@ == "hash 原错\0\n"@, _ => false,
@@ -2093,8 +2526,8 @@ fn fixture_source_hash(mut trace: CompositionSourceTrace, row: &CompositionSourc
     (trace, result)
 }
 
-fn fixture_source_import(mut trace: CompositionSourceTrace, row: &CompositionSourceFixture)
-    -> (out: (CompositionSourceTrace, Result<((u64, bool), u64), String>))
+fn fixture_source_import(mut trace: CompositionTrace, row: &CompositionSourceFixture)
+    -> (out: (CompositionTrace, Result<((u64, bool), u64), String>))
     ensures out.0@ == trace@.push((row.id, 2u8)),
         if row.failure == 2 { match out.1 {
             Err(error) => error@ == "import 原错\0\n"@, _ => false,
@@ -2106,8 +2539,8 @@ fn fixture_source_import(mut trace: CompositionSourceTrace, row: &CompositionSou
     (trace, result)
 }
 
-fn fixture_source_merge(mut trace: CompositionSourceTrace, part: (u64, bool))
-    -> (out: (CompositionSourceTrace, Result<(), String>))
+fn fixture_source_merge(mut trace: CompositionTrace, part: (u64, bool))
+    -> (out: (CompositionTrace, Result<(), String>))
     ensures out.0@ == trace@.push((part.0, 3u8)),
         if part.1 { match out.1 {
             Err(error) => error@ == "merge 原错\0\n"@, _ => false,
@@ -2118,9 +2551,9 @@ fn fixture_source_merge(mut trace: CompositionSourceTrace, part: (u64, bool))
 }
 
 spec fn fixture_source_step_expected(
-    initial: policy::composition::CompositionSources<CompositionSourceTrace, u64>,
+    initial: policy::composition::CompositionSources<CompositionTrace, u64>,
     row: &CompositionSourceFixture,
-    out: (policy::composition::CompositionSources<CompositionSourceTrace, u64>, Result<(), String>),
+    out: (policy::composition::CompositionSources<CompositionTrace, u64>, Result<(), String>),
 ) -> bool {
     let duplicate = initial.seen@.contains(row.digest);
     let stops_before_import = row.failure == 1 || duplicate;
@@ -2144,9 +2577,9 @@ spec fn fixture_source_step_expected(
 }
 
 proof fn fixture_source_step_bound(
-    initial: policy::composition::CompositionSources<CompositionSourceTrace, u64>,
+    initial: policy::composition::CompositionSources<CompositionTrace, u64>,
     row: &CompositionSourceFixture,
-    out: (policy::composition::CompositionSources<CompositionSourceTrace, u64>, Result<(), String>),
+    out: (policy::composition::CompositionSources<CompositionTrace, u64>, Result<(), String>),
 )
     requires policy::composition::composition_source_step_result(initial, row,
         &fixture_source_hash, &fixture_source_import, &fixture_source_merge, out),
@@ -2160,8 +2593,8 @@ proof fn fixture_source_step_bound(
 
 proof fn fixture_source_prefix_step(
     rows: Seq<CompositionSourceFixture>,
-    states: Seq<policy::composition::CompositionSources<CompositionSourceTrace, u64>>,
-    initial: policy::composition::CompositionSources<CompositionSourceTrace, u64>, i: int,
+    states: Seq<policy::composition::CompositionSources<CompositionTrace, u64>>,
+    initial: policy::composition::CompositionSources<CompositionTrace, u64>, i: int,
 )
     requires policy::composition::composition_sources_prefix(rows, states, initial,
         &fixture_source_hash, &fixture_source_import, &fixture_source_merge),
@@ -2173,7 +2606,7 @@ proof fn fixture_source_prefix_step(
     reveal(policy::composition::composition_sources_prefix);
 }
 
-fn composition_source_trace(expected: &[(u64, u8)], actual: &[(u64, u8)])
+fn composition_trace(expected: &[(u64, u8)], actual: &[(u64, u8)])
     requires actual@ =~= expected@,
 {
     let same_length = actual.len() == expected.len();
@@ -2218,7 +2651,7 @@ fn composition_sources_case(failure: u8, duplicate: bool)
         &fixture_source_hash, &fixture_source_import, &fixture_source_merge);
     let ghost outcome = result;
     proof {
-        let states = choose|states: Seq<CompositionSources<CompositionSourceTrace, u64>>|
+        let states = choose|states: Seq<CompositionSources<CompositionTrace, u64>>|
             #[trigger] composition_sources_prefix(rows@, states, original,
                 &fixture_source_hash, &fixture_source_import, &fixture_source_merge)
             && match outcome {
@@ -2278,16 +2711,16 @@ fn composition_sources_case(failure: u8, duplicate: bool)
         }
     }
     if failure == 1 || duplicate {
-        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1)], progress.state.as_slice());
+        composition_trace(&[(11, 1), (11, 2), (11, 3), (29, 1)], progress.state.as_slice());
     } else if failure == 2 {
-        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2)], progress.state.as_slice());
+        composition_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2)], progress.state.as_slice());
     } else if failure == 0 {
-        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3),
+        composition_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3),
             (47, 1), (47, 2), (47, 3)], progress.state.as_slice());
     } else {
         assert(progress.state@ == seq![(11u64, 1u8), (11u64, 2u8), (11u64, 3u8),
             (29u64, 1u8), (29u64, 2u8), (29u64, 3u8)]);
-        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3)], progress.state.as_slice());
+        composition_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3)], progress.state.as_slice());
     }
     let expected_originals = if failure == 1 || duplicate || failure == 2 { 1usize }
         else if failure == 0 { 3usize } else { 2usize };
@@ -2342,7 +2775,7 @@ fn composition_sources_empty_inventory_keeps_exact_initial_state()
     use policy::composition::*;
     let mut trace = Vec::new();
     trace.push((u64::MAX, u8::MAX));
-    let initial = CompositionSources::<CompositionSourceTrace, u64>::new(trace);
+    let initial = CompositionSources::<CompositionTrace, u64>::new(trace);
     let ghost original = initial;
     assert(original.state@ == seq![(u64::MAX, u8::MAX)]);
     let rows: Vec<CompositionSourceFixture> = Vec::new();
@@ -2350,7 +2783,7 @@ fn composition_sources_empty_inventory_keeps_exact_initial_state()
         &fixture_source_hash, &fixture_source_import, &fixture_source_merge);
     let ghost outcome = result;
     proof {
-        let states = choose|states: Seq<CompositionSources<CompositionSourceTrace, u64>>|
+        let states = choose|states: Seq<CompositionSources<CompositionTrace, u64>>|
             #[trigger] composition_sources_prefix(rows@, states, original,
                 &fixture_source_hash, &fixture_source_import, &fixture_source_merge)
             && match outcome {
@@ -2363,7 +2796,7 @@ fn composition_sources_empty_inventory_keeps_exact_initial_state()
         assert(states.len() == 1 && progress == original);
         assert(progress.state@ == seq![(u64::MAX, u8::MAX)]);
     }
-    composition_source_trace(&[(u64::MAX, u8::MAX)], progress.state.as_slice());
+    composition_trace(&[(u64::MAX, u8::MAX)], progress.state.as_slice());
     let no_originals = progress.originals.len() == 0;
     assert(no_originals);
     if !no_originals { panic!(); }
