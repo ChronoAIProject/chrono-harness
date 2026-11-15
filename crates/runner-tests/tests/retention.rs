@@ -606,6 +606,76 @@ fn enrollment_original_membership_fits_the_native_256_descriptor_limit() {
 }
 
 #[test]
+#[cfg(unix)]
+fn actual_enrollment_width_preserves_370_originals_under_256_descriptors() {
+    if !isolated_capability_test(
+        "actual_enrollment_width_preserves_370_originals_under_256_descriptors",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(512);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let mut paths = Vec::new();
+    for n in 0..370 {
+        let path = format!(".chrono-harness/state/fixtures/pending-use-{n}.json");
+        fs::write(h.path().join(&path), n.to_string()).unwrap();
+        inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit":0}))
+            .unwrap();
+        paths.push(path);
+    }
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+        0
+    );
+    limit.rlim_cur = limit.rlim_cur.min(256);
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
+    inventory(h.path())
+        .reference_paths("actual-enrollment", &paths)
+        .unwrap();
+    let protected = ledger(h.path());
+    assert_eq!(
+        protected["roots"]["actual-enrollment"]
+            .as_array()
+            .unwrap()
+            .len(),
+        370
+    );
+    inventory(h.path())
+        .reference_paths("actual-enrollment", &paths[185..])
+        .unwrap();
+    let released = ledger(h.path());
+    let members = released["roots"]["actual-enrollment"].as_array().unwrap();
+    assert_eq!(members.len(), 185);
+    for (n, path) in paths.iter().enumerate() {
+        let output = released["outputs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|output| output["path"] == *path)
+            .unwrap();
+        assert_eq!(members.contains(&output["id"]), n >= 185);
+        assert_eq!(
+            fs::read_to_string(h.path().join(path)).unwrap(),
+            n.to_string()
+        );
+    }
+    inventory(h.path())
+        .reference_paths("actual-enrollment", &[])
+        .unwrap();
+    assert!(ledger(h.path())["roots"].get("actual-enrollment").is_none());
+}
+
+#[test]
 fn path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity() {
     if !isolated_capability_test(
         "path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity",
