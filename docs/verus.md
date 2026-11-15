@@ -1,5 +1,25 @@
 # Verus 实施范围
 
+## 清理原结果的缓存分类与终态优先级
+
+`worktree/src/verified_lifecycle.rs::observed_cleanup_result` 直接拥有维护原结果的
+缓存分类、`cleaned` 判断和清理阶段选择。`reusable-source-preserved` 始终属于缓存
+结果；已有缓存活动只有精确的到期整树退役观察才退出此类。缺失、非字符串和未知
+观察保持原合同。失败结果优先判为失败；已有 `terminal` 交接成功后，按实际移除
+观察进入 `disposed` 或 `retained`，缓存释放本身不产生新的任务完成权。
+
+真实维护入口只投影原 JSON 字段，消费同一返回值更新原缓存结果与清理状态，
+不再在适配器里组合缓存资格、终态排除或成功判断。复用原 `cleanup_result`，
+独立 Verus 预期同时普通运行，覆盖终态／未交接、复用／到期、实际缺失、失败
+优先级、缺字段、空串及 Unicode／NUL／换行的完整字面判断。原年龄清理回归保留。
+
+外部接口限定为固定 Serde 的字段索引与 `Value::as_str`：只投影原字符串，缺失或
+非字符串为 None；字符串观察沿固定 vstd 合同。原件读取、JSON 编解码、缓存尝试
+持久化、真实 fixture 驱动和完整维护事务仍有自身证明义务，不登记为外部公理。
+沿现有生命周期两项严格整 crate 根与原未过滤 worktree core／adoption 入口验收，
+没有新增依赖、受信函数、证明入口、过滤、线程或预算；全仓覆盖门仍未完成，
+完整构建、证明、CI、运行和存储成本未测。
+
 ## 缓存收据的原件发布顺序
 
 `cache/src/attempt.rs::record_cache_attempt` 拥有实际收据记录的完整顺序：先编码同一
