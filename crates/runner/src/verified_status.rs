@@ -113,11 +113,17 @@ pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>
 {
     broadcast use vstd::std_specs::btree::group_btree_axioms;
     btree_map_compare_invariant(bytes);
+    proof {
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        assert(vstd::laws_cmp::obeys_cmp_deep_eq::<String>());
+    }
     let mut rows: Vec<(String, Vec<u8>)> = Vec::new();
     let mut i = 0;
     while i < paths.len()
         invariant vstd::laws_cmp::obeys_cmp::<String>(),
             vstd::std_specs::btree::btree_map_inv(bytes),
+            vstd::laws_cmp::obeys_cmp_deep_eq::<String>(),
             0 <= i <= paths.len(), acquired_rows_prefix(paths@, bytes.deep_view(), rows@, i as int),
         decreases paths.len() - i,
     {
@@ -2053,33 +2059,19 @@ pub open spec fn tree_entry_fields(entry: &TreeEntry) -> TreeEntryFields {
     (entry.mode@, entry.oid@, entry.kind@)
 }
 
-/// 标准迭代器的完整、严格有序库存连接实际 map 键与全文身份。
-/// 只创建迭代器，不遍历或复制库存。
-fn tree_keys_have_unique_text<V>(tree: &BTreeMap<TreePath, V>)
-    ensures forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
-        tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@ ==> a == b,
-{
-    proof { tree_path_obeys_cmp(); }
-    btree_map_compare_invariant(tree);
-    proof {
-        assert forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
-            tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@
-                implies a == b by {
-            assert(a.order_spec(&b) is Equal);
-        }
-    }
-}
-
 /// Git tree 的实际插入状态：完整构造条目，原路径已存在时保留原重复诊断。
 /// 沿用原 insert 的更新顺序；失败时该路径也已替换，调用方丢弃整棵候选树。
 pub fn insert_git_tree_entry(
     tree: &mut Tree, path: TreePath, mode: &str, oid: &str, kind: &str,
 ) -> (out: Result<(), String>)
     ensures
-        final(tree)@.contains_key(path),
-        final(tree)@ == old(tree)@.insert(path, final(tree)@[path]),
-        tree_entry_fields(&final(tree)@[path]) == (mode@, oid@, kind@),
-        out.is_ok() == !old(tree)@.contains_key(path),
+        out.is_ok() ==> final(tree)@.contains_key(path)
+            && final(tree)@ == old(tree)@.insert(path, final(tree)@[path])
+            && tree_entry_fields(&final(tree)@[path]) == (mode@, oid@, kind@),
+        out.is_err() ==> exists|stored: TreePath| (#[trigger] old(tree)@.contains_key(stored))
+            && stored@ == path@ && final(tree)@.contains_key(stored)
+            && final(tree)@ == old(tree)@.insert(stored, final(tree)@[stored])
+            && tree_entry_fields(&final(tree)@[stored]) == (mode@, oid@, kind@),
         out.is_ok() == !(exists|key: TreePath| (#[trigger] old(tree)@.contains_key(key)) && key@ == path@),
         match out {
             Ok(()) => true,
@@ -2087,29 +2079,32 @@ pub fn insert_git_tree_entry(
         },
 {
     proof { tree_path_obeys_cmp(); }
+    btree_map_compare_invariant(tree);
     let ghost before = tree@;
     let entry = TreeEntry {
         mode: mode.to_owned(), oid: oid.to_owned(), kind: kind.to_owned(),
     };
     let previous = tree.insert(path, entry);
-    tree_keys_have_unique_text(tree);
-    proof {
-        if exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@ {
-            let key = choose|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@;
-            assert(tree@.contains_key(key));
-            assert(tree@.contains_key(path));
-            assert(key == path);
-            assert(before.contains_key(path));
-        }
-        if before.contains_key(path) {
-            assert(exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@);
-        }
-        assert(before.contains_key(path) ==
-            (exists|key: TreePath| (#[trigger] before.contains_key(key)) && key@ == path@));
-    }
     match previous {
-        Some(_) => Err("duplicate Git tree path".to_owned()),
-        None => Ok(()),
+        Some(old_entry) => {
+            proof {
+                let stored = choose|stored: TreePath| (#[trigger] before.contains_key(stored))
+                    && path.cmp_spec(&stored) is Equal && old_entry == before[stored]
+                    && tree@ == before.insert(stored, entry);
+                vstd::utf8::encode_utf8_decode_utf8(path@);
+                vstd::utf8::encode_utf8_decode_utf8(stored@);
+                assert(stored@ == path@);
+            }
+            Err("duplicate Git tree path".to_owned())
+        },
+        None => {
+            proof {
+                assert forall|key: TreePath| (#[trigger] before.contains_key(key)) implies key@ != path@ by {
+                    assert(!(path.cmp_spec(&key) is Equal));
+                }
+            }
+            Ok(())
+        },
     }
 }
 
@@ -2376,6 +2371,7 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
             None => {
                 proof {
                     git_index_stage_obeys_cmp();
+                    vstd::laws_cmp::lemma_ref_obeys_cmp_spec::<GitIndexStage>();
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
                     assert(keys@ == all.unref());
                     assert forall|i: int, j: int| 0 <= i < j < keys.len()
@@ -2393,29 +2389,11 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
     }
 }
 
-fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
-    ensures forall|a: GitIndexStage, b: GitIndexStage|
-        #![trigger stages@.contains_key(a), stages@.contains_key(b)]
-        stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b) ==> a == b,
-{
-    proof { git_index_stage_obeys_cmp(); }
-    btree_map_compare_invariant(stages);
-    proof {
-        assert forall|a: GitIndexStage, b: GitIndexStage|
-            #![trigger stages@.contains_key(a), stages@.contains_key(b)]
-            stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b)
-                implies a == b by {
-            assert(a.order_spec(&b) is Equal);
-        }
-    }
-}
-
 /// 实际插入保持原索引集合；仅完整路径和 stage 都重复时返回原错误。
 pub fn record_git_index_stage<'a>(stages: &mut GitIndexStages<'a>, path: &'a str, stage: &'a str)
     -> (out: Result<(), String>)
     ensures
-        final(stages)@ == old(stages)@.insert(GitIndexStage { path, stage }, ()),
-        out.is_ok() == !old(stages)@.contains_key(GitIndexStage { path, stage }),
+        out.is_ok() ==> final(stages)@ == old(stages)@.insert(GitIndexStage { path, stage }, ()),
         out.is_ok() == !(exists|key: GitIndexStage| (#[trigger] old(stages)@.contains_key(key))
             && key.path.spec_bytes() == path.spec_bytes()
             && key.stage.spec_bytes() == stage.spec_bytes()),
@@ -2423,26 +2401,21 @@ pub fn record_git_index_stage<'a>(stages: &mut GitIndexStages<'a>, path: &'a str
         match out { Ok(()) => true, Err(message) => message@ == "duplicate Git index stage"@ },
 {
     proof { git_index_stage_obeys_cmp(); }
+    btree_map_compare_invariant(stages);
     let key = GitIndexStage { path, stage };
     let ghost before = stages@;
     let previous = stages.insert(key, ());
-    git_index_stage_keys_have_unique_text(stages);
-    proof {
-        if exists|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
-            && old_key.same(&key) {
-            let old_key = choose|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
-                && old_key.same(&key);
-            assert(stages@.contains_key(old_key));
-            assert(stages@.contains_key(key));
-            assert(old_key == key);
-            assert(before.contains_key(key));
-        }
-        if before.contains_key(key) {
-            assert(exists|old_key: GitIndexStage| (#[trigger] before.contains_key(old_key))
-                && old_key.same(&key));
-        }
+    match previous {
+        None => { Ok(()) },
+        Some(()) => {
+            proof {
+                let stored = choose|stored: GitIndexStage| (#[trigger] before.contains_key(stored))
+                    && key.cmp_spec(&stored) is Equal && stages@ == before.insert(stored, ());
+                assert(before.insert(stored, ()) =~= before);
+            }
+            Err("duplicate Git index stage".to_owned())
+        },
     }
-    match previous { None => Ok(()), Some(()) => Err("duplicate Git index stage".to_owned()) }
 }
 
 #[cfg(verus_keep_ghost)]
@@ -2850,31 +2823,45 @@ pub fn record_checkout_owned_change(changes: &mut CheckoutChanges, path: String)
             + if checkout_change_has_path(old(changes)@, path@) { 0int } else { 1int },
 {
     proof { tree_path_obeys_cmp(); }
+    btree_map_compare_invariant(changes);
     let key = TreePath::from_owned(path);
     let ghost before = changes@;
-    changes.insert(key, ());
-    tree_keys_have_unique_text(changes);
+    let previous = changes.insert(key, ());
+    match previous {
+        Some(()) => {
+            proof {
+                let stored = choose|stored: TreePath| (#[trigger] before.contains_key(stored))
+                    && key.cmp_spec(&stored) is Equal && changes@ == before.insert(stored, ());
+                vstd::utf8::encode_utf8_decode_utf8(key@);
+                vstd::utf8::encode_utf8_decode_utf8(stored@);
+                assert(stored@ == path@);
+                assert(changes@ =~= before);
+                assert(checkout_change_has_path(before, path@));
+            }
+        },
+        None => {
+            proof {
+                assert forall|stored: TreePath| (#[trigger] before.contains_key(stored)) implies stored@ != path@ by {
+                    assert(!(key.cmp_spec(&stored) is Equal));
+                }
+                assert(!checkout_change_has_path(before, path@));
+            }
+        },
+    }
     proof {
-        if checkout_change_has_path(before, path@) {
-            let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == path@;
-            assert(changes@.contains_key(found));
-            assert(changes@.contains_key(key));
-            assert(found == key);
-            assert(before.contains_key(key));
-        }
-        if before.contains_key(key) { assert(checkout_change_has_path(before, path@)); }
-        assert(before.contains_key(key) == checkout_change_has_path(before, path@));
         assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
             == (checkout_change_has_path(before, text) || text == path@) by {
-            if checkout_change_has_path(changes@, text) {
-                let found = choose|found: TreePath| (#[trigger] changes@.contains_key(found)) && found@ == text;
-                if found != key { assert(before.contains_key(found)); }
+            if previous.is_none() {
+                if checkout_change_has_path(changes@, text) {
+                    let found = choose|found: TreePath| (#[trigger] changes@.contains_key(found)) && found@ == text;
+                    if found != key { assert(before.contains_key(found)); }
+                }
+                if checkout_change_has_path(before, text) {
+                    let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == text;
+                    assert(changes@.contains_key(found));
+                }
+                if text == path@ { assert(changes@.contains_key(key)); }
             }
-            if checkout_change_has_path(before, text) {
-                let found = choose|found: TreePath| (#[trigger] before.contains_key(found)) && found@ == text;
-                assert(changes@.contains_key(found));
-            }
-            if text == path@ { assert(changes@.contains_key(key)); }
         }
     }
 }
@@ -2981,7 +2968,9 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
             None => {
                 proof {
                     tree_path_obeys_cmp();
+                    vstd::laws_cmp::lemma_ref_obeys_cmp_spec::<TreePath>();
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
+                    assert(paths.len() == all.len());
                     assert forall|text: Seq<char>| #[trigger] checkout_change_has_path(changes@, text)
                         == (exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text) by {
                         if checkout_change_has_path(changes@, text) {
