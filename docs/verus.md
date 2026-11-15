@@ -440,6 +440,8 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 每个文件的原字节都由同一个固定 Reader 读取；读取错误保留全文及原次序。
 `assessment` 定义每条选择路径的完整返回结果，`assess` 保留全部判断或首个原读取错误。
 库存门和完整计划消费同一个不可手填的 `Continuity` 值，且不改变影响选择。
+选择路径为空时，观察适配器直接返回已证明的空证据，不额外解码两端登记或读取 Git 树；
+库存和完整计划仍执行原判断，空证据不提供任何文件的来源或连续性资格。
 
 源码比较逐字节核对非引用内容。仅支持现役 Rust `#[path]`、`include_bytes!`、Cargo `path`、
 以 `CARGO_MANIFEST_DIR` 为基准的两种 join 写法；宿主特定形式只读当前固定 FILEMAP 的

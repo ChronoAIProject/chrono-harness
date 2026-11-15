@@ -1151,6 +1151,10 @@ pub fn observe(
     candidate: (&str, &serde_json::Value, &serde_json::Value, Vec<String>),
     paths: &Vec<String>,
 ) -> Result<Continuity, String> {
+    // 空选择没有连续性义务；不为无使用方的证据读取登记或 Git 树。
+    if paths.is_empty() {
+        return Ok(Continuity::empty());
+    }
     let base = previous
         .as_ref()
         .map(|(oid, files, projects, outputs)| {
