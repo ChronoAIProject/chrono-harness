@@ -658,7 +658,9 @@ fn ordinary_handoff_keeps_each_sealed_reports_inputs_out_of_the_callers_relation
         .unwrap();
         for (path, bytes) in [(&path, bytes), (&report_path, report_bytes)] {
             fs::write(h.root.join(path), &bytes).unwrap();
-            inventory
+            Inventory::adopted(&h.root)
+                .unwrap()
+                .unwrap()
                 .begin("lifecycle-original", path, value!(null))
                 .unwrap()
                 .complete_sealed(value!({"status":"used"}))
