@@ -5297,6 +5297,7 @@
             "--release",
             "--package",
             "rust_verify_test",
+            "--no-fail-fast",
             "--test",
             "arrays",
             "--test",

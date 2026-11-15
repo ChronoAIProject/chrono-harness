@@ -1,9 +1,9 @@
 diff --git a/source/rust_verify_test/tests/literal_patterns.rs b/source/rust_verify_test/tests/literal_patterns.rs
 new file mode 100644
-index 0000000..3d89fdc
+index 0000000..e0d7f08
 --- /dev/null
 +++ b/source/rust_verify_test/tests/literal_patterns.rs
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,142 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
@@ -40,11 +40,16 @@ index 0000000..3d89fdc
 +
 +        fn wrong(s: &str) {
 +            match s {
-+                "unit" => { assert(s@[3] == 'x'); } // FAILS
++                "unit" => {
++                    assert(s@[3] == 'x'); // FAILS
++                }
 +                _ => {},
 +            }
 +        }
-+    } => Err(err) => assert_one_fails(err)
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
 +}
 +
 +test_verify_one_file_with_options! {
@@ -55,11 +60,16 @@ index 0000000..3d89fdc
 +
 +        fn wrong(s: &str) {
 +            match s {
-+                "" => { assert(s@.len() > 0); } // FAILS
++                "" => {
++                    assert(s@.len() > 0); // FAILS
++                }
 +                _ => {},
 +            }
 +        }
-+    } => Err(err) => assert_one_fails(err)
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
 +}
 +
 +test_verify_one_file_with_options! {
@@ -107,11 +117,16 @@ index 0000000..3d89fdc
 +
 +        fn wrong(s: &[u8]) {
 +            match s {
-+                b"\0\xff" => { assert(s@[1] == 0u8); } // FAILS
++                b"\0\xff" => {
++                    assert(s@[1] == 0u8); // FAILS
++                }
 +                _ => {},
 +            }
 +        }
-+    } => Err(err) => assert_one_fails(err)
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
 +}
 +
 +test_verify_one_file_with_options! {
