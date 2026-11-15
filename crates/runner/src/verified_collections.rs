@@ -44,6 +44,9 @@ pub fn btree_set_compare_invariant<K: Ord>(set: &BTreeSet<K>)
         assert(vstd::laws_cmp::obeys_cmp::<&K>());
         let rows = iterator.remaining();
         vstd::std_specs::btree::axiom_increasing_seq_meaning(rows);
+        assert(vstd::std_specs::btree::increasing_seq(rows));
+        assert forall|i: int, j: int| 0 <= i < j < rows.len() implies
+            <&K as OrdSpec>::cmp_spec(&rows[i], &rows[j]) is Less by {}
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_partial_cmp_spec_properties);
         assert forall|a: K, b: K| #![trigger set@.contains(a), set@.contains(b)]
@@ -51,8 +54,13 @@ pub fn btree_set_compare_invariant<K: Ord>(set: &BTreeSet<K>)
                 implies !(a.cmp_spec(&b) is Equal) by {
             let i = choose|i: int| 0 <= i < rows.len() && rows.unref()[i] == a;
             let j = choose|j: int| 0 <= j < rows.len() && rows.unref()[j] == b;
-            if i < j { assert(rows[i].cmp_spec(&rows[j]) is Less); }
-            else if j < i { assert(rows[j].cmp_spec(&rows[i]) is Less); }
+            if i < j {
+                assert(<&K as OrdSpec>::cmp_spec(&rows[i], &rows[j]) is Less);
+                assert(a.cmp_spec(&b) is Less);
+            } else if j < i {
+                assert(<&K as OrdSpec>::cmp_spec(&rows[j], &rows[i]) is Less);
+                assert(b.cmp_spec(&a) is Less);
+            }
         }
     }
 }
