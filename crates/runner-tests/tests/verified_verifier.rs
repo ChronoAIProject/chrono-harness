@@ -287,14 +287,11 @@ fn arguments() -> (out: Vec<String>)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn ordinary_operations_do_not_decode_their_business_output() {
-    let raw = [0u8, 255, 17];
-    let ignored = policy::proof_stdout(&None, &raw);
-    expect_verifier_true(ignored.len() == 0);
     let ordinary = policy::admit_output(&None, &None, &Vec::new(), i32::MIN, true);
     expect_verifier_true(ordinary.is_ok());
-    let selected = policy::proof_stdout(&contract(), &raw);
-    assert(selected@ == raw@);
-    expect_verifier_bytes(&selected, &raw);
+    let unrelated = policy::admit_output(&None, &report(verification()),
+        &Vec::new(), i32::MIN, true);
+    expect_verifier_true(unrelated.is_ok());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -1833,6 +1830,67 @@ fn first_file_error_and_later_roots_are_not_skipped() {
 }
 #[cfg(not(verus_keep_ghost))]
 struct BoundSources;
+
+#[cfg(not(verus_keep_ghost))]
+struct NoReportSources;
+
+#[cfg(not(verus_keep_ghost))]
+impl policy::sources::CandidateSourceRead for NoReportSources {
+    fn text(&self, _path: &[u8]) -> Result<String, String> {
+        panic!("普通操作不能读取证明源码")
+    }
+    fn mode(&self, _path: &str) -> Option<String> {
+        panic!("普通操作不能读取证明源码")
+    }
+    fn blobs(&self, _paths: &Vec<String>) -> Result<Vec<Vec<u8>>, String> {
+        panic!("普通操作不能读取证明源码")
+    }
+    fn digest(&self, _bytes: &[u8]) -> Vec<u8> {
+        panic!("普通操作不能读取证明源码")
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+impl policy::CompilerReportRead for NoReportSources {
+    fn decode(&self, _bytes: &[u8]) -> Option<CompilerReport> {
+        panic!("普通操作不能调用 Verus 报告解码器")
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn ordinary_success_never_calls_the_report_decoder_or_source_reader() {
+    let args = vec![];
+    let methods = vec![policy::ProofInvocation {
+        operation: "ordinary",
+        argv: &args,
+        output_contract: &None,
+        output_limit_bytes: 4096,
+    }];
+    let argv = vec!["tool".to_string()];
+    for stdout in [&b""[..], &b"ordinary output"[..], &[0, 255, 17][..]] {
+        let original = Some(policy::ProofProcess {
+            operation: "ordinary",
+            argv: &argv,
+            stdout,
+            exit: 0,
+            failed: false,
+            dependency: &None,
+            artifact: &None,
+        });
+        let admitted = policy::bind_operation_output(
+            "passed",
+            "ordinary",
+            &methods,
+            original,
+            &Err("普通操作不需要证明登记".into()),
+            &NoReportSources,
+            |message, path| format!("{message}{path}"),
+        )
+        .unwrap();
+        assert!(admitted.is_none());
+    }
+}
 
 #[cfg(not(verus_keep_ghost))]
 impl policy::sources::CandidateSourceRead for BoundSources {
