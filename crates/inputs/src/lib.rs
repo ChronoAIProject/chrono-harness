@@ -16,6 +16,8 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
 };
+const BLOB_DIRECTORY: &str = ".chrono-harness/state/inputs/blobs";
+
 fn state(root: &Path, path: &str) -> Result<PathBuf, String> {
     if !chrono_harness::verified_paths::valid_host_state_path(path.as_bytes()) {
         return Err("E_INPUT_PATH: output/reference must be within host state".into());
@@ -39,8 +41,7 @@ fn publish(root: &Path, path: &str, v: &Value) -> Result<(), String> {
     Ok(())
 }
 fn store(root: &Path, input: &Path) -> Result<Value, String> {
-    let directory = ".chrono-harness/state/inputs/blobs";
-    let dir = state(root, directory)?;
+    let dir = state(root, BLOB_DIRECTORY)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     if !fs::metadata(input)
         .map_err(|e| format!("E_INPUT_READ: {}: {e}", input.display()))?
@@ -55,7 +56,16 @@ fn store(root: &Path, input: &Path) -> Result<Value, String> {
     }
     let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
     let (sha256, length) = copy_hashed(file, &mut tmp)?;
-    let path = format!("{directory}/{sha256}");
+    publish_blob(root, tmp, sha256, length)
+}
+// The caller hashes all bytes written to its private temporary file before publication.
+fn publish_blob(
+    root: &Path,
+    tmp: tempfile::NamedTempFile,
+    sha256: String,
+    length: u64,
+) -> Result<Value, String> {
+    let path = format!("{BLOB_DIRECTORY}/{sha256}");
     let target = state(root, &path)?;
     if target.exists() {
         if file_identity(&target)? != (sha256.clone(), length) {

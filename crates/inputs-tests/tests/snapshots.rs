@@ -1087,6 +1087,108 @@ fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_
         .as_str()
         .unwrap();
     assert_eq!(fs::read(d.path().join(retained)).unwrap(), original);
+    // Imported descriptors use only their explicit relocated transport. The
+    // source capture blobs are gone before composition publishes them again.
+    let upload = ".chrono-harness/state/composition-upload/";
+    let download = ".chrono-harness/state/composition-download/";
+    let pair_path = ".chrono-harness/state/constituent.json";
+    let mut artifacts = serde_json::Map::new();
+    artifacts.insert(
+        pair_path.into(),
+        chrono_harness::retained_artifacts::stage(d.path(), &d.path().join(pair_path), upload)
+            .unwrap(),
+    );
+    let mut blobs = Vec::new();
+    for snapshot in [&captured, &current] {
+        let blob = snapshot["files"]["data"]["blob"].as_str().unwrap();
+        let bytes = fs::read(d.path().join(blob)).unwrap();
+        artifacts.insert(
+            blob.into(),
+            chrono_harness::retained_artifacts::stage(d.path(), &d.path().join(blob), upload)
+                .unwrap(),
+        );
+        fs::remove_file(d.path().join(blob)).unwrap();
+        blobs.push((blob, bytes));
+    }
+    fs::rename(d.path().join(upload), d.path().join(download)).unwrap();
+    fs::write(
+        d.path().join(manifest),
+        serde_json::to_vec(&value!({"schema":"chrono-input-composition/v1","sources":[{
+            "pair":{"path":pair_path,"sha256":sha256(&original)},
+            "artifacts":artifacts,
+            "transport":{"source_directory":upload,"directory":download}
+        }]}))
+        .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        chrono_inputs::compose(
+            d.path(),
+            CONFIG,
+            &base,
+            &candidate,
+            manifest,
+            ".chrono-harness/state/transport-composed.json",
+            ".chrono-harness/state/transport-receipt.json",
+        )
+        .unwrap(),
+        pair
+    );
+    for (blob, bytes) in &blobs {
+        assert_eq!(fs::read(d.path().join(blob)).unwrap(), *bytes);
+    }
+    // Neither a damaged content address nor a damaged transported original can
+    // be overwritten or published as a successful composition.
+    let (blob, bytes) = &blobs[0];
+    fs::write(d.path().join(blob), b"damaged destination").unwrap();
+    let error = chrono_inputs::compose(
+        d.path(),
+        CONFIG,
+        &base,
+        &candidate,
+        manifest,
+        ".chrono-harness/state/collision-composed.json",
+        ".chrono-harness/state/collision-receipt.json",
+    )
+    .unwrap_err();
+    assert!(error.contains("E_INPUT_BLOB"), "{error}");
+    assert_eq!(
+        fs::read(d.path().join(blob)).unwrap(),
+        b"damaged destination"
+    );
+    fs::remove_file(d.path().join(blob)).unwrap();
+    let storage = artifacts[*blob]["storage"].as_str().unwrap();
+    let transported = d.path().join(format!(
+        "{download}{}",
+        storage.strip_prefix(upload).unwrap()
+    ));
+    fs::write(&transported, b"damaged original").unwrap();
+    let error = chrono_inputs::compose(
+        d.path(),
+        CONFIG,
+        &base,
+        &candidate,
+        manifest,
+        ".chrono-harness/state/damaged-composed.json",
+        ".chrono-harness/state/damaged-receipt.json",
+    )
+    .unwrap_err();
+    assert!(error.contains("original artifact digest/length"), "{error}");
+    assert!(!d.path().join(blob).exists());
+    for case in ["collision", "damaged"] {
+        assert!(
+            !d.path()
+                .join(format!(".chrono-harness/state/{case}-composed.json"))
+                .exists()
+        );
+        assert!(
+            !d.path()
+                .join(format!(".chrono-harness/state/{case}-receipt.json"))
+                .exists()
+        );
+    }
+    fs::write(transported, bytes).unwrap();
+    fs::write(d.path().join(blob), bytes).unwrap();
     for (case, expected) in [
         ("coverage", "E_COMPOSE_COVERAGE"),
         ("environment", "E_COMPOSE_ENVIRONMENT"),
