@@ -2,8 +2,6 @@
 #![allow(unexpected_cfgs)]
 #[path = "../../worktree-tests/tests/support/cargo_model.rs"]
 mod cargo;
-#[path = "../../worktree-tests/tests/support/consumer.rs"]
-mod worktree_consumer;
 #[cfg(verus_keep_ghost)]
 #[path = "support/cli_child.rs"]
 mod cli_child;
@@ -29,6 +27,8 @@ mod protocol;
 #[cfg(verus_keep_ghost)]
 #[path = "retention.rs"]
 mod retention;
+#[path = "../../worktree-tests/tests/support/consumer.rs"]
+mod worktree_consumer;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
