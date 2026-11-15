@@ -4195,18 +4195,14 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
     if !chrono_git_boundary::isolated_git() {
         return;
     }
-    use std::{
-        thread,
-        time::{Duration, Instant},
-    };
     let h = Host::new("payload");
     h.automatic("evidence-retain");
     native_consumer(&h, "managed-child");
     let target = h.parent.join("in-use");
     assert_eq!(h.invoke("feature", "in-use", &target).0, 0);
     output(&target);
-    let mut child = h
-        .auto_command(
+    let mut child = super::interrupted_cleanup::CapturedChild::spawn(
+        &mut h.auto_command(
             "use",
             &[
                 "--path",
@@ -4214,20 +4210,13 @@ fn automatic_managed_real_child_blocks_finish_and_exit_releases_use() {
                 "--operation",
                 "use.consumer",
             ],
-        )
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    let began = Instant::now();
-    while !target.join(".chrono-harness/state/ready").exists()
-        && began.elapsed() < Duration::from_secs(10)
-    {
-        if child.try_wait().unwrap().is_some() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(20));
-    }
+        ),
+        &h.root,
+    );
+    child.release_on_drop(target.join(".chrono-harness/state/release"));
+    // Input preparation precedes the consumer. Use its registered process
+    // bounds and retain the wrapper's complete result, as other managed tests do.
+    child.await_managed_file(&target.join(".chrono-harness/state/ready"));
     let ready = target.join(".chrono-harness/state/ready").exists();
     // Join the wrapper before asserting, including its failure path. A missing
     // readiness marker must expose the real wrapper result and retain its receipt.

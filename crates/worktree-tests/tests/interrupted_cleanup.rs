@@ -1348,7 +1348,7 @@ impl CapturedChild {
             release_before_drop: None,
         }
     }
-    fn release_on_drop(&mut self, path: PathBuf) {
+    pub(super) fn release_on_drop(&mut self, path: PathBuf) {
         self.release_before_drop = Some(path);
     }
     pub(super) fn kill(&mut self) -> std::io::Result<()> {
