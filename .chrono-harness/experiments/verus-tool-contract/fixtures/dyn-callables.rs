@@ -1,7 +1,7 @@
 use vstd::prelude::*;
 
 verus! {
-    trait ResultKind {
+    pub trait ResultKind {
         spec fn byte_result() -> bool;
     }
 
