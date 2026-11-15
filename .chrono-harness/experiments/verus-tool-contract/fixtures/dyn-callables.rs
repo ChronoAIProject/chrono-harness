@@ -46,6 +46,16 @@ verus! {
         let dynamic: &mut dyn FnMut(u8) -> Result<u8, u8> = &mut observer;
     }
 
+    pub fn invoke_report(
+        observer: &mut dyn FnMut(&u8) -> Result<(), u8>,
+        value: &u8,
+    ) -> (result: Result<(), u8>)
+        requires call_requires_unsized(&*old(observer), (value,)),
+        ensures call_ensures_unsized(&*old(observer), (value,), result),
+    {
+        observer(value)
+    }
+
     pub fn sized_callback<T: FnMut(u8) -> u8>(mut observer: T, value: u8) -> (result: u8)
         requires
             observer.requires((value,)),

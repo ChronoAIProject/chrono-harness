@@ -577,7 +577,7 @@
  )
      requires
 -        call_requires::<Args, F>(mut_ref_current(f), args),
-+        call_requires_unsized::<Args, F>(&*f, args),
++        call_requires_unsized::<Args, F>(&*old(f), args),
      ensures
          #[trigger] call_requires::<Args, &mut F>(f, args),
  ;
@@ -594,7 +594,7 @@
          #[trigger] call_ensures::<Args, &mut F>(f, args, output),
      ensures
 -        call_ensures::<Args, F>(mut_ref_current(f), args, output),
-+        call_ensures_unsized::<Args, F>(&*f, args, output),
++        call_ensures_unsized::<Args, F>(&*old(f), args, output),
  ;
  
  pub broadcast axiom fn axiom_fn_mut_call_opens_invariants<
@@ -610,7 +610,7 @@
              F,
              I,
 -        >(mut_ref_current(f), args),
-+        >(&*f, args),
++        >(&*old(f), args),
  ;
  
  pub broadcast group group_function_axioms {
