@@ -141,10 +141,15 @@ fn explicit_quota_observes_more_members_than_one_address_budget() {
         let file = d
             .path()
             .join(format!(".chrono-harness/state/fixtures/quota-{i}"));
-        let output =
-            retained_artifacts::retention::create_adopted(d.path(), "fixture", &file, false, json!({}))
-                .unwrap()
-                .unwrap();
+        let output = retained_artifacts::retention::create_adopted(
+            d.path(),
+            "fixture",
+            &file,
+            false,
+            json!({}),
+        )
+        .unwrap()
+        .unwrap();
         fs::write(&file, b"cache").unwrap();
         output.complete(json!({"status":"passed"})).unwrap();
         files.push(file);
@@ -197,10 +202,15 @@ fn unknown_quota_member_preserves_other_outputs_until_its_scope_is_known() {
         let file = d
             .path()
             .join(format!(".chrono-harness/state/fixtures/unknown-quota-{i}"));
-        let output =
-            retained_artifacts::retention::create_adopted(d.path(), "fixture", &file, false, json!({}))
-                .unwrap()
-                .unwrap();
+        let output = retained_artifacts::retention::create_adopted(
+            d.path(),
+            "fixture",
+            &file,
+            false,
+            json!({}),
+        )
+        .unwrap()
+        .unwrap();
         first.get_or_insert_with(|| output.id().to_owned());
         fs::write(&file, b"required original").unwrap();
         output.complete(json!({"status":"passed"})).unwrap();
@@ -251,13 +261,10 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     }
     // A sibling reader shares this parent. Cleanup can retire obsolete leaf
     // metadata without requesting an exclusive lease on this populated parent.
-    let parent_reader = chrono_harness::ownership::DirectoryLease::acquire(
-        &parent_address,
-        false,
-        None,
-    )
-    .unwrap()
-    .unwrap();
+    let parent_reader =
+        chrono_harness::ownership::DirectoryLease::acquire(&parent_address, false, None)
+            .unwrap()
+            .unwrap();
     let round = owner.maintain_explicit().unwrap();
     assert!(!h.path().join(obsolete).exists(), "{round}");
     assert!(
