@@ -16,6 +16,106 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 
 verus! {
+pub struct CompositionInputFixture<'a> {
+    pub ids: &'a [Option<&'a str>],
+}
+
+impl<'a> policy::composition::CompositionInputRows for CompositionInputFixture<'a> {
+    open spec fn count(&self) -> nat { self.ids@.len() }
+    open spec fn id_at(&self, index: int) -> Option<&str> { self.ids@[index] }
+
+    fn len(&self) -> (out: usize)
+        ensures out == self.count(),
+    { self.ids.len() }
+
+    fn id(&self, index: usize) -> (out: Option<&str>)
+        ensures out == self.id_at(index as int),
+    { self.ids[index] }
+}
+
+proof fn fixture_first_input<R: policy::composition::CompositionInputRows>(
+    rows: &R, expected: Seq<char>, first: usize, actual: Option<usize>)
+    requires policy::composition::first_composition_input(rows, expected, Some(first)),
+        policy::composition::first_composition_input(rows, expected, actual),
+    ensures actual == Some(first),
+{
+    use policy::composition::*;
+    match actual {
+        None => { assert(!composition_input_matches(rows, first as int, expected)); },
+        Some(index) => {
+            if index < first { assert(!composition_input_matches(rows, index as int, expected)); }
+            else if first < index { assert(!composition_input_matches(rows, first as int, expected)); }
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_import_lookup_preserves_first_match_and_complete_id() {
+    use policy::composition::*;
+    let ids = [None, Some("input"), Some("输入\0\n"), Some("input"), Some("")];
+    let rows = CompositionInputFixture { ids: &ids };
+    let ordinary = find_composition_input(&rows, "input");
+    let unicode = find_composition_input(&rows, "输入\0\n");
+    let empty = find_composition_input(&rows, "");
+    let case = find_composition_input(&rows, "Input");
+    let prefix = find_composition_input(&rows, "输入");
+    proof {
+        reveal_strlit("input"); reveal_strlit("输入\0\n"); reveal_strlit("");
+        reveal_strlit("Input"); reveal_strlit("输入");
+        assert("input"@.len() == 5);
+        assert("输入\0\n"@.len() == 4);
+        assert(""@.len() == 0);
+        assert("input"@ != "输入\0\n"@);
+        assert("input"@ != ""@);
+        assert("输入\0\n"@ != ""@);
+        assert(composition_input_matches(&rows, 2, "输入\0\n"@));
+        assert forall|j: int| 0 <= j < 2 implies
+            !composition_input_matches(&rows, j, "输入\0\n"@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else { assert(j == 1); assert(rows.id_at(j).unwrap()@ == "input"@); }
+        }
+        assert(composition_input_matches(&rows, 4, ""@));
+        assert forall|j: int| 0 <= j < 4 implies
+            !composition_input_matches(&rows, j, ""@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else if j == 1 { assert(rows.id_at(j).unwrap()@ == "input"@); }
+            else if j == 2 { assert(rows.id_at(j).unwrap()@ == "输入\0\n"@); }
+            else { assert(j == 3); assert(rows.id_at(j).unwrap()@ == "input"@); }
+        }
+        fixture_first_input(&rows, "input"@, 1, ordinary);
+        fixture_first_input(&rows, "输入\0\n"@, 2, unicode);
+        fixture_first_input(&rows, ""@, 4, empty);
+        assert("Input"@.len() == 5);
+        assert("输入"@.len() == 2);
+        assert("input"@ != "Input"@) by { assert("input"@[0] != "Input"@[0]); }
+        assert forall|j: int| 0 <= j < 5 implies
+            !composition_input_matches(&rows, j, "Input"@)
+            && !composition_input_matches(&rows, j, "输入"@) by {
+            assert(rows.id_at(j) == rows.ids@[j]);
+            if j == 0 { assert(rows.id_at(j).is_none()); }
+            else if j == 1 || j == 3 { assert(rows.id_at(j).unwrap()@ == "input"@); }
+            else if j == 2 { assert(rows.id_at(j).unwrap()@ == "输入\0\n"@); }
+            else { assert(j == 4); assert(rows.id_at(j).unwrap()@ == ""@); }
+        }
+        if let Some(index) = case { assert(!composition_input_matches(&rows, index as int, "Input"@)); }
+        if let Some(index) = prefix { assert(!composition_input_matches(&rows, index as int, "输入"@)); }
+    }
+    assert(ordinary == Some(1usize));
+    assert(unicode == Some(2usize));
+    assert(empty == Some(4usize));
+    assert(case.is_none());
+    assert(prefix.is_none());
+    if ordinary != Some(1) || unicode != Some(2) || empty != Some(4)
+        || case.is_some() || prefix.is_some() { panic!(); }
+    let no_ids: [Option<&str>; 0] = [];
+    let no_rows = CompositionInputFixture { ids: &no_ids };
+    let missing = find_composition_input(&no_rows, "input");
+    assert(missing.is_none());
+    if missing.is_some() { panic!(); }
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn composition_merge_rejects_environment_before_files() {
     use policy::composition::*;
