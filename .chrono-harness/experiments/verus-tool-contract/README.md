@@ -478,7 +478,7 @@ loop_isolation_boundary、mut_refs_loops 和 exec_termination 六个完整目标
 静态变量沿现有 exec static 路径翻译；宏内的显式模式要求、初始化体、前置条件、
 模式隔离及已有 ensures 检查继续保留，不新增静态值等于初始化表达式的假设。
 
-先登记四份独立证明输入，均由现有 native bootstrap 直接执行生产 Verus 方法，
+登记五份独立证明输入，均由现有 native bootstrap 直接执行生产 Verus 方法，
 不增加启动外部编译器的测试驱动。每份原报告分别保留完整双流和退出状态：
 
 | `investigate.verus-source.*-check` | 输入与预期 |
@@ -487,8 +487,9 @@ loop_isolation_boundary、mut_refs_loops 和 exec_termination 六个完整目标
 | `static-precondition-check` | 初始化调用违反已声明前置条件，必须实际收到 precondition not satisfied |
 | `static-spec-read-check` | proof 中读取执行态变量，必须实际收到 cannot read static with mode exec |
 | `static-opaque-value-check` | 无 ensures 时从初始化值推导等式，必须实际收到 assertion failed |
+| `static-mode-required-check` | `verus!` 内未写模式，仍须实际收到 explicitly mark the static item as exec |
 
-三个拒绝输入的 bootstrap 非零是预期诊断原件，不能报告成 bootstrap 通过。
+四个拒绝输入的 bootstrap 非零是预期诊断原件，不能报告成 bootstrap 通过。
 成功输入先观察修改前的语法拒绝，再应用候选并沿同一入口复验。最后沿原
 `investigate.verus-source.json-check` 复验完整 runner；局部输入成功不能代替完整根。
 外部工具与宿主证明登记同时修改，新增翻译、证明、IO 与维护成本未知。

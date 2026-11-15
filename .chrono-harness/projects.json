@@ -5588,6 +5588,53 @@
             ".chrono-harness/ci/bootstrap-verus-source-static-opaque-value.json"
           ]
         },
+        "verus-source-static-mode-required": {
+          "operation": "investigate.verus-source.static-mode-required",
+          "tool": "cargo",
+          "argv": [
+            "--config",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/.cargo/config.toml",
+            "run",
+            "--locked",
+            "--offline",
+            "--release",
+            "--manifest-path",
+            ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/Cargo.toml",
+            "--package",
+            "verus",
+            "--",
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--edition=2024",
+            "--extern",
+            "verus_builtin_macros=.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/target-verus/release/libverus_builtin_macros.dylib",
+            "--extern",
+            "serde=.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/runner-dependencies/debug/deps/libserde-da85fb7ff7ebe563.rlib",
+            "--extern",
+            "serde_json=.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/runner-dependencies/debug/deps/libserde_json-929c08a8879c0e3b.rlib",
+            "-L",
+            "dependency=.chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/runner-dependencies/debug/deps",
+            "--emit=link=.chrono-harness/state/verus-source-static-mode-required.rlib,dep-info=.chrono-harness/state/verus-source-static-mode-required.rlib.d",
+            ".chrono-harness/experiments/verus-tool-contract/fixtures/static-mode-required.rs",
+            "-o",
+            ".chrono-harness/state/verus-source-static-mode-required.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ]
+        },
+        "verus-source-static-mode-required-check": {
+          "operation": "investigate.verus-source.static-mode-required-check",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-verus-source-static-mode-required.json"
+          ]
+        },
         "verus-source-json-check": {
           "operation": "investigate.verus-source.json-check",
           "tool": "bash",

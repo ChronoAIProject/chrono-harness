@@ -20,6 +20,8 @@
     }
   },
   "files": [
+    {"path":".chrono-harness/ci/bootstrap-verus-source-static-mode-required.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}],"verification":{"role":"data","roots":[]}},
+    {"path":".chrono-harness/experiments/verus-tool-contract/fixtures/static-mode-required.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:host-bootstrap-native"}],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/experiments/verus-tool-contract/rust-statics-exec.patch","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/ci/bootstrap-verus-source-statics.json","owner":"host-bootstrap-native","surface":"membership","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"script:host-bootstrap-launcher"},{"kind":"runtime-input","to":"project:host-bootstrap-native"},{"kind":"test-execution","to":"test:host-bootstrap-native-tests"}],"verification":{"role":"data","roots":[]}},
     {"path":".chrono-harness/experiments/verus-tool-contract/fixtures/statics.rs","owner":"host-bootstrap-native","surface":"product","cost":"unmeasured","edges":[{"kind":"runtime-input","to":"project:host-bootstrap-native"}],"verification":{"role":"data","roots":[]}},
