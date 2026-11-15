@@ -19,4 +19,11 @@ verus! {
         let output = observer(value);
         assert(output == 7);
     }
+
+    pub fn unsupported_mutable_result(observer: &mut dyn FnMut(u8) -> u8, value: u8)
+        requires call_requires_unsized(&*old(observer), (value,)),
+    {
+        let output = observer(value);
+        assert(output == 7);
+    }
 }

@@ -31,8 +31,8 @@ verus! {
         observer: &mut dyn FnMut(u8) -> Result<u8, u8>,
         value: u8,
     ) -> (result: Result<u8, u8>)
-        requires old(observer).requires((value,)),
-        ensures old(observer).ensures((value,), result),
+        requires call_requires_unsized(&*old(observer), (value,)),
+        ensures call_ensures_unsized(&*old(observer), (value,), result),
     {
         let result = observer(value);
         match result {
@@ -44,5 +44,14 @@ verus! {
     pub fn coerce() {
         let mut observer = |value: u8| -> Result<u8, u8> { Err(value) };
         let dynamic: &mut dyn FnMut(u8) -> Result<u8, u8> = &mut observer;
+    }
+
+    pub fn sized_callback<T: FnMut(u8) -> u8>(mut observer: T, value: u8) -> (result: u8)
+        requires
+            observer.requires((value,)),
+            forall|output: u8| observer.ensures((value,), output) ==> output <= 10,
+        ensures result <= 10,
+    {
+        observer(value)
     }
 }

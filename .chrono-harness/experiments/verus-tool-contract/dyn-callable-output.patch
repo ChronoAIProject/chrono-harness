@@ -477,3 +477,140 @@
              CommandBatch::new(
                  "Datatypes",
                  vir::datatype_to_air::datatypes_and_primitives_to_air(
+--- a/source/builtin/src/lib.rs
++++ b/source/builtin/src/lib.rs
+@@ -2167,6 +2167,32 @@
+ pub fn call_opens_invariants<Args: core::marker::Tuple, F: FnOnce<Args>, I>(
+     _f: F,
+     _args: Args,
++) -> I {
++    unimplemented!();
++}
++
++/// The current callable's contract, read through a shared reference so that F
++/// may be unsized. These use the same predicates as the by-value forms above.
++#[cfg(verus_keep_ghost)]
++#[rustc_diagnostic_item = "verus::verus_builtin::call_requires_unsized"]
++pub fn call_requires_unsized<Args: core::marker::Tuple, F: ?Sized + FnOnce<Args>>(
++    _f: &F, _args: Args,
++) -> bool {
++    unimplemented!();
++}
++
++#[cfg(verus_keep_ghost)]
++#[rustc_diagnostic_item = "verus::verus_builtin::call_ensures_unsized"]
++pub fn call_ensures_unsized<Args: core::marker::Tuple, F: ?Sized + FnOnce<Args>>(
++    _f: &F, _args: Args, _output: F::Output,
++) -> bool {
++    unimplemented!();
++}
++
++#[cfg(verus_keep_ghost)]
++#[rustc_diagnostic_item = "verus::verus_builtin::call_opens_invariants_unsized"]
++pub fn call_opens_invariants_unsized<Args: core::marker::Tuple, F: ?Sized + FnOnce<Args>, I>(
++    _f: &F, _args: Args,
+ ) -> I {
+     unimplemented!();
+ }
+--- a/source/rust_verify/src/fn_call_to_vir.rs
++++ b/source/rust_verify/src/fn_call_to_vir.rs
+@@ -2298,20 +2298,23 @@
+         VerusItem::BuiltinFunction(
+             re @ (BuiltinFunctionItem::CallRequires
+             | BuiltinFunctionItem::CallEnsures
+-            | BuiltinFunctionItem::CallOpensInvariants),
++            | BuiltinFunctionItem::CallOpensInvariants
++            | BuiltinFunctionItem::CallRequiresUnsized
++            | BuiltinFunctionItem::CallEnsuresUnsized
++            | BuiltinFunctionItem::CallOpensInvariantsUnsized),
+         ) => {
+             record_spec_fn(bctx, expr);
+ 
+             let bsf = match re {
+-                BuiltinFunctionItem::CallRequires => {
++                BuiltinFunctionItem::CallRequires | BuiltinFunctionItem::CallRequiresUnsized => {
+                     assert!(args.len() == 2);
+                     BuiltinSpecFun::ClosureReq
+                 }
+-                BuiltinFunctionItem::CallEnsures => {
++                BuiltinFunctionItem::CallEnsures | BuiltinFunctionItem::CallEnsuresUnsized => {
+                     assert!(args.len() == 3);
+                     BuiltinSpecFun::ClosureEns
+                 }
+-                BuiltinFunctionItem::CallOpensInvariants => {
++                BuiltinFunctionItem::CallOpensInvariants | BuiltinFunctionItem::CallOpensInvariantsUnsized => {
+                     assert!(args.len() == 2);
+                     BuiltinSpecFun::ClosureOpensInvariants
+                 }
+--- a/source/rust_verify/src/verus_items.rs
++++ b/source/rust_verify/src/verus_items.rs
+@@ -423,6 +423,9 @@
+     CallRequires,
+     CallEnsures,
+     CallOpensInvariants,
++    CallRequiresUnsized,
++    CallEnsuresUnsized,
++    CallOpensInvariantsUnsized,
+     ConstrainType,
+     GetFutureOutputType,
+     ProofWithCallee,
+@@ -787,6 +790,9 @@
+         ("verus::verus_builtin::call_requires",           VerusItem::BuiltinFunction(BuiltinFunctionItem::CallRequires)),
+         ("verus::verus_builtin::call_ensures",            VerusItem::BuiltinFunction(BuiltinFunctionItem::CallEnsures)),
+         ("verus::verus_builtin::call_opens_invariants",   VerusItem::BuiltinFunction(BuiltinFunctionItem::CallOpensInvariants)),
++        ("verus::verus_builtin::call_requires_unsized",   VerusItem::BuiltinFunction(BuiltinFunctionItem::CallRequiresUnsized)),
++        ("verus::verus_builtin::call_ensures_unsized",    VerusItem::BuiltinFunction(BuiltinFunctionItem::CallEnsuresUnsized)),
++        ("verus::verus_builtin::call_opens_invariants_unsized", VerusItem::BuiltinFunction(BuiltinFunctionItem::CallOpensInvariantsUnsized)),
+         ("verus::verus_builtin::constrain_type",          VerusItem::BuiltinFunction(BuiltinFunctionItem::ConstrainType)),
+         ("verus::verus_builtin::get_future_output_type",  VerusItem::BuiltinFunction(BuiltinFunctionItem::GetFutureOutputType)),
+         ("verus::verus_builtin::proof_with_callee",       VerusItem::BuiltinFunction(BuiltinFunctionItem::ProofWithCallee)),
+--- a/source/vstd/function.rs
++++ b/source/vstd/function.rs
+@@ -182,19 +182,19 @@
+             f.ensures(args, output) ==> #[trigger] R::ens(args, output),
+ ;
+ 
+-pub broadcast axiom fn axiom_fn_mut_call_requires<Args: core::marker::Tuple, F: FnMut<Args>>(
++pub broadcast axiom fn axiom_fn_mut_call_requires<Args: core::marker::Tuple, F: ?Sized + FnMut<Args>>(
+     f: &mut F,
+     args: Args,
+ )
+     requires
+-        call_requires::<Args, F>(mut_ref_current(f), args),
++        call_requires_unsized::<Args, F>(&*f, args),
+     ensures
+         #[trigger] call_requires::<Args, &mut F>(f, args),
+ ;
+ 
+ // The output contract concerns the callable's current value. The reference may
+ // outlive the call and be used to replace the callable, so its future is unconstrained.
+-pub broadcast axiom fn axiom_fn_mut_call_ensures<Args: core::marker::Tuple, F: FnMut<Args>>(
++pub broadcast axiom fn axiom_fn_mut_call_ensures<Args: core::marker::Tuple, F: ?Sized + FnMut<Args>>(
+     f: &mut F,
+     args: Args,
+     output: F::Output,
+@@ -202,20 +202,20 @@
+     requires
+         #[trigger] call_ensures::<Args, &mut F>(f, args, output),
+     ensures
+-        call_ensures::<Args, F>(mut_ref_current(f), args, output),
++        call_ensures_unsized::<Args, F>(&*f, args, output),
+ ;
+ 
+ pub broadcast axiom fn axiom_fn_mut_call_opens_invariants<
+     Args: core::marker::Tuple,
+-    F: FnMut<Args>,
++    F: ?Sized + FnMut<Args>,
+     I,
+ >(f: &mut F, args: Args)
+     ensures
+-        #[trigger] call_opens_invariants::<Args, &mut F, I>(f, args) == call_opens_invariants::<
++        #[trigger] call_opens_invariants::<Args, &mut F, I>(f, args) == call_opens_invariants_unsized::<
+             Args,
+             F,
+             I,
+-        >(mut_ref_current(f), args),
++        >(&*f, args),
+ ;
+ 
+ pub broadcast group group_function_axioms {

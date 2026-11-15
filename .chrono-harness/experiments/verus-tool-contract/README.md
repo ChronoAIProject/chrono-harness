@@ -532,6 +532,11 @@ Rust 原始签名、强制转换、执行及 ghost 借用检查和实际编译�
 动态类型显式保存 FnOnce 的 Output，类型相等、访问、递归检查、冲突模型和 SMT
 身份都消费它；普通 trait 参数不混入 Output。Fn／FnMut 的继承链复用原 FnOnce
 返回类型模型，转换使用具体 Self 的关联类型，不补充动态调用的前后置条件。
+按值的 `call_requires`／`call_ensures`／`call_opens_invariants` 只能读取 Sized，
+因此增加通过 `&F` 读取同一谓词的 unsized 形式，参照现有 `has_resolved_unsized`。
+现有三项 FnMut 借用合同改为可读取 unsized 的当前值；不约束引用的未来值，
+也不创建某次调用可以成功或返回指定值的事实。可变正例用当前回调的明确合同，
+另验原 Sized 泛型调用；共享及可变负例都必须拒绝缺少前置条件和任意结果。
 普通关联类型仍拒绝。VIR 格式已变，旧 vstd 不能充当本工具的输入；先构建工具，
 再沿现有 `vstd-refresh` 失效并重新验证同源 vstd，其他缓存继续复用。
 
