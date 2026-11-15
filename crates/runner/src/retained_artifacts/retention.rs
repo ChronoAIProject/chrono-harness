@@ -2324,12 +2324,9 @@ impl Inventory {
         }
         let round = self.maintain_at(observed)?;
         let quota = &round["terminal_quotas"][producer];
-        Ok(
-            json!({"schema":"chrono-retained-producer-maintenance/v1","producer":producer,
+        Ok(json!({"schema":"chrono-retained-producer-maintenance/v1",
             "quota_scope_complete":quota["scope_complete"],"quota_errors":quota["errors"],
-            "quota_expired":quota["expired"],"terminal_limits":self.policy.terminal_limits.get(producer),
-            "round":round,"completion":"not-established"}),
-        )
+            "quota_expired":quota["expired"],"round":round}))
     }
     fn terminal_quota(&self, producer: &str, observed: u64) -> Result<Value, String> {
         let (mut outputs, mut complete, mut errors) = self.producer_snapshot(producer)?;
