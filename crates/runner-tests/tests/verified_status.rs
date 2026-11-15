@@ -29,19 +29,20 @@ verus! {
 fn fixed_source_read_selects_only_the_eligible_path_and_preserves_inputs() {
     let batched = policy::fixed_source_read::select_fixed_source_read(
         true, (7u8, 9u8),
-        |_: (u8, u8)| -> (u8, u8) requires false, { panic!() },
+        |_input: (u8, u8)| -> (u8, u8) requires false, { panic!() },
         |input: (u8, u8)| -> (out: (u8, u8)) ensures out == input, { input },
     );
     expect_status_true(batched.0 == 7 && batched.1 == 9);
     let fallback = policy::fixed_source_read::select_fixed_source_read(
         false, (3u8, 5u8),
         |input: (u8, u8)| -> (out: (u8, u8)) ensures out == input, { input },
-        |_: (u8, u8)| -> (u8, u8) requires false, { panic!() },
+        |_input: (u8, u8)| -> (u8, u8) requires false, { panic!() },
     );
     expect_status_true(fallback.0 == 3 && fallback.1 == 5);
 }
 
-#[cfg_attr(not(verus_keep_ghost), test)]
+#[cfg(not(verus_keep_ghost))]
+#[test]
 fn acquired_source_bytes_preserve_order_duplicates_empty_and_missing_paths() {
     let mut bytes: std::collections::BTreeMap<String, Vec<u8>> = std::collections::BTreeMap::new();
     bytes.insert("root".to_string(), vec![0u8, 255u8, 10u8]);
