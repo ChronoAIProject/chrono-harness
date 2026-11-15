@@ -844,6 +844,65 @@ fn actual_enrollment_width_preserves_370_originals_under_256_descriptors() {
 }
 
 #[test]
+fn durable_consumer_shrink_prunes_stale_members_without_admitting_new_outputs() {
+    if !isolated_capability_test(
+        "durable_consumer_shrink_prunes_stale_members_without_admitting_new_outputs",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["max_related_outputs"] = json!(4);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inventory = inventory(h.path());
+    let mut paths = Vec::new();
+    for n in 0..5 {
+        let path = format!(".chrono-harness/state/fixtures/committed-handoff-{n}.json");
+        fs::write(h.path().join(&path), n.to_string()).unwrap();
+        inventory
+            .begin("fixture", &path, json!(null))
+            .unwrap()
+            .complete(json!({"exit":0}))
+            .unwrap();
+        paths.push(path);
+    }
+    let role = "durable-current-inputs";
+    inventory.reference_paths(role, &paths[..4]).unwrap();
+    let before = ledger(h.path());
+    assert!(
+        inventory
+            .reference_paths(role, &paths[3..])
+            .unwrap_err()
+            .contains("related retention graph capacity")
+    );
+    assert_eq!(ledger(h.path())["roots"][role], before["roots"][role]);
+    // The domain has durably stopped reading the first three originals.
+    // Pruning cannot install the newly requested fifth output.
+    inventory.prune_reference_paths(role, &paths[3..]).unwrap();
+    let pruned = ledger(h.path());
+    let fourth = pruned["outputs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|output| output["path"] == paths[3])
+        .unwrap()["id"]
+        .clone();
+    assert_eq!(pruned["roots"][role], json!([fourth]));
+    // An interrupted caller resumes admission using the ordinary bounded API.
+    inventory.reference_paths(role, &paths[3..]).unwrap();
+    assert_eq!(ledger(h.path())["roots"][role].as_array().unwrap().len(), 2);
+    inventory.prune_reference_paths(role, &paths[3..]).unwrap();
+    assert_eq!(ledger(h.path())["roots"][role].as_array().unwrap().len(), 2);
+    for path in paths {
+        assert!(
+            h.path().join(path).exists(),
+            "membership updates never dispose originals"
+        );
+    }
+}
+
+#[test]
 fn path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity() {
     if !isolated_capability_test(
         "path_consumer_updates_preserve_dependencies_beyond_its_membership_capacity",
