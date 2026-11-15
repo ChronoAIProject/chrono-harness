@@ -239,7 +239,12 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     if !isolated_capability_test("retired_metadata_does_not_exclude_a_populated_parent_address") {
         return;
     }
-    let h = host(256, 16);
+    let mut h = host(256, 16);
+    h.disable_cleanup(true);
+    eprintln!(
+        "retention fixture originals (retired_metadata_does_not_exclude_a_populated_parent_address): {}",
+        h.path().display()
+    );
     let policy_path = h.path().join(POLICY_PATH);
     let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
     policy["metadata_keep_seconds"] = json!(0);
@@ -269,7 +274,13 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
         chrono_harness::ownership::DirectoryLease::acquire(&parent_address, false, None)
             .unwrap()
             .unwrap();
-    let round = owner.maintain_explicit().unwrap();
+    use chrono_diagnostics::logging::{Level, Logger};
+    let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
+    // 本例只核共享父路径下的退役，不依赖维护与元数据更新是否跨过秒边界。
+    let round = logger
+        .run(|| owner.maintain_originals_at(std::slice::from_ref(&id), u64::MAX))
+        .unwrap();
+    logger.finish().expect("retired metadata diagnostics");
     assert!(!h.path().join(obsolete).exists(), "{round}");
     assert!(
         !h.path()
@@ -286,6 +297,7 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     parent_reader.stable().unwrap();
     drop(parent_reader);
     current.complete(json!({"exit": 0})).unwrap();
+    h.disable_cleanup(false);
 }
 #[cfg(not(verus_keep_ghost))]
 fn maintenance(root: &Path) -> Value {
@@ -3989,19 +4001,24 @@ fn published_output_scope_keeps_child_reports_without_accumulating_their_inputs(
     }
     // Each child has four actual capabilities. The parent holds one live
     // report capability, with three durable edges to the child reports.
-    assert_eq!(maintain_fixture_to(h.path(), 14), 14);
+    use chrono_diagnostics::logging::{Level, Logger};
+    let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
+    assert_eq!(logger.run(|| maintain_fixture_to(h.path(), 14)), 14);
     assert!(!h.path().join(unrelated).exists());
     for path in groups.iter().flatten().chain(reports.iter()) {
         assert!(h.path().join(path).is_dir());
     }
     parent.complete(json!({"exit": 0})).unwrap();
     drop(caller);
-    assert_eq!(maintain_fixture_to(h.path(), 1), 1);
+    assert_eq!(logger.run(|| maintain_fixture_to(h.path(), 1)), 1);
     assert!(h.path().join(&unknown).is_dir());
     inventory(h.path())
         .reference_paths("unfinished-domain-owner", &[])
         .unwrap();
-    assert_eq!(maintain_fixture_to(h.path(), 0), 0);
+    assert_eq!(logger.run(|| maintain_fixture_to(h.path(), 0)), 0);
+    logger
+        .finish()
+        .expect("published output retention diagnostics");
     h.disable_cleanup(false);
 }
 
