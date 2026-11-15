@@ -50,9 +50,9 @@
 +            extern crate core as local_core;
 +            verus! {
 +                fn invalid() -> (out: local_core::primitive::u8)
-+                    ensures out == 7,
++                    ensures out == 7, // FAILS
 +                {
-+                    8
++                    8 // FAILS
 +                }
 +            }
 +        };
