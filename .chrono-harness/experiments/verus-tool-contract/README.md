@@ -313,5 +313,20 @@ Serde 生成的 `const _: ()` 是占位常量项，不是 rustc 的 `AnonConst`�
 以及具名常量的拒绝对照；
 真实结构／枚举派生仍由原 Serde 回归验收，不跳过初始化体或降低纯表达式要求。
 
+## Serde 反序列化接口
+
+完整 workflow 根的实际 Deserialize 派生仍需要 Deserializer、Visitor、DeserializeSeed、
+SeqAccess、MapAccess、EnumAccess 和 VariantAccess。接口依据当前 Cargo 原件选定的
+Serde／serde_core 1.0.229 std 配置，不复制派生实现或为仓内方法添加 external_body。
+`serde-deserialization.patch` 顺序应用在 `serde-serialization.patch` 后。
+
+先登记八项独立 Rust／Verus 预期：反序列化和 Visitor 的真实参数转交、种子／默认访问及
+原关联错误类型、正确的本地实现和真实结构／枚举派生、无依据成功／失败断言，以及错误
+Deserialize／Visitor 本地实现均须实际因 assertion failed 拒绝。未声明接口不算预期拒绝。
+同一完整登记回归只追加这个目标，保留原库存、严格选项、线程和 ignored。
+
+**外部接口合同与宿主验证登记同时修改。** 新增构建、证明及回归成本未知，继续复用
+同一源码、依赖、工具链和编译缓存。完整根、正式资格及实际调用绑定仍须分别验收。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。

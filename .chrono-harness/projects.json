@@ -5327,6 +5327,8 @@
             "--test",
             "serde_serialization",
             "--test",
+            "serde_deserialization",
+            "--test",
             "traits_dyn",
             "--test",
             "traits_extend_ensures",
