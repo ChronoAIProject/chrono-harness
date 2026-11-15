@@ -1,7 +1,121 @@
+diff --git a/source/rust_verify/src/rust_to_vir_expr.rs b/source/rust_verify/src/rust_to_vir_expr.rs
+--- a/source/rust_verify/src/rust_to_vir_expr.rs
++++ b/source/rust_verify/src/rust_to_vir_expr.rs
+@@ -3557,7 +3557,11 @@
+                 }
+                 Arc::new(vec![])
+             } else {
+-                header.decrease.clone()
++                if header.decrease.is_empty() && !allow_no_decreases {
++                    infer_option_loop_decrease(bctx, &body, *header_span)?
++                } else {
++                    header.decrease.clone()
++                }
+             };
+             if expr_vattrs.auto_decreases && allow_no_decreases {
+                 // Filter out auto_decreases invariants if we're not checking for termination
+@@ -3668,6 +3672,16 @@
+                 }
+                 _ => (Some(expr_to_vir_consume(bctx, cond)?), body),
+             };
++            let decrease = if header.decrease.is_empty()
++                && !expr_vattrs.assume_termination
++                && !crate::attributes::get_allow_exec_allows_no_decreases_clause_walk_parents(
++                    bctx.ctxt.tcx, bctx.fun_id,
++                )
++            {
++                infer_option_loop_decrease(bctx, &body, *header_span)?
++            } else {
++                header.decrease.clone()
++            };
+             Ok(ExprOrPlace::Expr(bctx.spanned_typed_new(
+                 *header_span,
+                 &expr_typ()?,
+@@ -3680,7 +3694,7 @@
+                     cond,
+                     body,
+                     invs: header.loop_invariants(),
+-                    decrease: header.decrease,
++                    decrease,
+                     atomic_call: header.atomic_call_loop,
+                     known_no_back_edge: false,
+                     source: vir::ast::LoopSource::Loop,
+@@ -5391,6 +5405,60 @@
+ /// corresponds to the one that is intended for any source
+ /// code that the syntax macro might emit.
+ /// (After this point, we use the Label to identify the loop.)
++/// Supply a candidate ranking function, never a termination assumption.
++/// Only Option locals declared outside this body participate. The ordinary
++/// loop checker must still prove that every back edge decreases the sum.
++fn infer_option_loop_decrease(
++    bctx: &BodyCtxt<'_>,
++    body: &vir::ast::Expr,
++    span: Span,
++) -> Result<vir::ast::Exprs, VirErr> {
++    let mut slots: Vec<(VarIdent, Typ, Dt)> = Vec::new();
++    vir::ast_visitor::expr_visitor_check(body, &mut |scope, expr| {
++        if let ExprX::Assign { place, .. } = &expr.x {
++            if let PlaceX::Local(local) = &place.x {
++                if scope.get(local).is_none()
++                    && !slots.iter().any(|(name, _, _)| name == local)
++                {
++                    if let TypX::Datatype(Dt::Path(path), _, _) = &*place.typ {
++                        if path.krate == CrateId::Core
++                            && path.segments.len() == 2
++                            && path.segments[0].is_name("option")
++                            && path.segments[1].is_name("Option")
++                        {
++                            slots.push((local.clone(), place.typ.clone(), Dt::Path(path.clone())));
++                        }
++                    }
++                }
++            }
++        }
++        Ok::<(), VirErr>(())
++    })?;
++    if slots.is_empty() {
++        return Ok(Arc::new(vec![]));
++    }
++    let int_typ = vir::ast_util::int_typ();
++    let zero = bctx.spanned_typed_new(span, &int_typ, ExprX::Const(vir::ast_util::const_int_from_usize(0)));
++    let one = bctx.spanned_typed_new(span, &int_typ, ExprX::Const(vir::ast_util::const_int_from_usize(1)));
++    let mut sum = zero.clone();
++    for (local, typ, datatype) in slots {
++        let value = bctx.spanned_typed_new(span, &typ, ExprX::Var(local));
++        bctx.erasure_info.borrow_mut().local_hir_vir_ids.push((None, value.span.id));
++        let vacant = bctx.spanned_typed_new(
++            span, &bool_typ(),
++            ExprX::UnaryOpr(UnaryOpr::IsVariant { datatype, variant: str_ident("None") }, value),
++        );
++        let count = bctx.spanned_typed_new(
++            span, &int_typ, ExprX::If(vacant, one.clone(), Some(zero.clone())),
++        );
++        sum = bctx.spanned_typed_new(
++            span, &int_typ,
++            ExprX::Binary(BinaryOp::Arith(ArithOp::Add(OverflowBehavior::Allow)), sum, count),
++        );
++    }
++    Ok(Arc::new(vec![sum]))
++}
++
+ fn loop_isolation_boundary_check(
+     span: Span,
+     block: &vir::ast::Expr,
 diff --git a/source/rust_verify_test/tests/serde_deserialization.rs b/source/rust_verify_test/tests/serde_deserialization.rs
 --- a/source/rust_verify_test/tests/serde_deserialization.rs
 +++ b/source/rust_verify_test/tests/serde_deserialization.rs
-@@ -297,3 +297,100 @@
+@@ -216,8 +216,10 @@
+             }
+         }
+         #[derive(serde::Deserialize)]
++        #[serde(deny_unknown_fields)]
+         struct Record { count: u64, flag: bool }
+         #[derive(serde::Deserialize)]
++        #[serde(deny_unknown_fields)]
+         enum Choice { Unit, Tuple(u64), Record { flag: bool } }
+         fn forward<'de, D: Deserializer<'de>>(d: D) -> Result<Record, D::Error> {
+             Record::deserialize(d)
+@@ -297,3 +299,119 @@
          assert_one_fails(err);
      }
  }
@@ -93,7 +207,7 @@ diff --git a/source/rust_verify_test/tests/serde_deserialization.rs b/source/rus
 +        fn wrong() {
 +            let mut slot: Option<u64> = None;
 +            loop
-+                decreases 0,
++                decreases 0int,
 +            {
 +                if slot.is_some() { break; }
 +                slot = Some(7);
@@ -101,4 +215,23 @@ diff --git a/source/rust_verify_test/tests/serde_deserialization.rs b/source/rus
 +        }
 +    } => Err(err) => assert_vir_error_msg(err, "decreases not satisfied")
 +}
++
++test_verify_one_file_with_options! {
++    #[test] serde_open_record_cannot_assume_arbitrary_map_access_is_finite
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        #[derive(serde::Deserialize)]
++        struct Record { count: u64, flag: bool }
++    } => Err(err) => assert_vir_error_msg(err, "decreases not satisfied")
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_open_enum_cannot_assume_arbitrary_map_access_is_finite
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        #[derive(serde::Deserialize)]
++        enum Choice { Unit, Tuple(u64), Record { flag: bool } }
++    } => Err(err) => assert_vir_error_msg(err, "decreases not satisfied")
++}
++
 +
