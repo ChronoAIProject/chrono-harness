@@ -694,6 +694,25 @@ impl Inventory {
         self.stable(gate)?;
         fs::remove_dir(directory).map_err(|e| e.to_string())
     }
+
+    fn path_metadata_occupied(&self, directory: &Path, path: &str) -> Result<bool, String> {
+        let address: Address = self
+            .read_metadata(&no_symlink_parents(directory, "address.json")?)?
+            .ok_or("path metadata declaration missing")?;
+        if address.path != path {
+            return Err("path metadata identity differs".into());
+        }
+        Ok(address.output.is_some()
+            || fs::read_dir(directory)
+                .map_err(|e| e.to_string())?
+                .any(|entry| {
+                    entry.map_or(true, |entry| {
+                        entry.file_name() != "address.json"
+                            && entry.file_name() != "address.pending"
+                    })
+                }))
+    }
+
     fn prune_object(&self, id: &str, observed: u64, nodes: &mut usize) -> Result<(), String> {
         let directory = self.object_directory(id)?;
         let Some(gate) = DirectoryLease::acquire_local(&directory, true, None)? else {
@@ -724,26 +743,30 @@ impl Inventory {
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => record.prune_path = next,
                 Err(e) => return Err(e.to_string()),
                 Ok(_) => {
+                    // A populated ancestor cannot be removed. Observe it under
+                    // a shared lease so sibling publishers can keep using it.
+                    // This only abandons pruning; it grants no removal right.
+                    let Some(observation) =
+                        DirectoryLease::acquire_local(&path_directory, false, None)?
+                    else {
+                        return Ok(());
+                    };
+                    let occupied = self.path_metadata_occupied(&path_directory, &path)?;
+                    self.stable(&observation)?;
+                    drop(observation);
+                    if occupied {
+                        record.prune_path = None;
+                        self.write_metadata(&directory.join("record.json"), &record)?;
+                        break;
+                    }
                     let Some(path_gate) =
                         DirectoryLease::acquire_local(&path_directory, true, None)?
                     else {
                         return Ok(());
                     };
-                    let address: Address = self
-                        .read_metadata(&no_symlink_parents(&path_directory, "address.json")?)?
-                        .ok_or("path metadata declaration missing")?;
-                    if address.path != path {
-                        return Err("path metadata identity differs".into());
-                    }
-                    let has_children = fs::read_dir(&path_directory)
-                        .map_err(|e| e.to_string())?
-                        .any(|entry| {
-                            entry.map_or(true, |entry| {
-                                entry.file_name() != "address.json"
-                                    && entry.file_name() != "address.pending"
-                            })
-                        });
-                    if address.output.is_some() || has_children {
+                    // The shared observation may already be stale. Recheck the
+                    // actual mapping and members under the original exclusion.
+                    if self.path_metadata_occupied(&path_directory, &path)? {
                         record.prune_path = None;
                     } else {
                         self.remove_metadata_directory(
