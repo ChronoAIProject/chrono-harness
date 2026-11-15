@@ -349,3 +349,139 @@ fn ordinary_completed_parent_expands_all_actions_and_original_receipts() {
     }
     assert_eq!(expanded_indices, (0..drain.len()).collect());
 }
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn repeated_retention_records_expand_without_losing_observations_or_measurements() {
+    let base = value!({"id":"output-a","path":"state/report.json",
+        "metadata_path":"/owner/objects/output-a/record.json",
+        "output":{"identity":"device:inode:file","phase":"released",
+            "outcome":{"diagnostic":"x".repeat(4096)}},
+        "roles":["consumer:live"],"incoming":["output-parent"]});
+    let originals: Vec<_> = (0..32)
+        .map(|i| {
+            let mut record = base.clone();
+            match i {
+                7 => record["roles"] = value!([]),
+                11 => record["incoming"] = value!([]),
+                19 => record["output"]["identity"] = value!("device:new-inode:file"),
+                _ => {}
+            }
+            value!({"kind":"declaration-state","source_round":format!("round-{i}"),
+            "address":"output-a","record":record,
+            "measurement":{"window_started_unix_millis":i,"allocated_bytes":i*512},
+            "error":if i == 23 {value!("original unknown result")} else {Value::Null}})
+        })
+        .collect();
+    let mut index = std::collections::BTreeMap::new();
+    let mut encoded = vec![value!({"kind":"scope"})];
+    for original in &originals {
+        let mut row = original.clone();
+        chrono_worktree::compact_inventory_retention_record(
+            &mut row,
+            &mut index,
+            encoded.len() as u64 + 1,
+        )
+        .unwrap();
+        encoded.push(row);
+    }
+    assert_eq!(index.len(), 4);
+    assert_eq!(encoded.len(), originals.len() + 1);
+    for (offset, expected) in originals.iter().enumerate() {
+        let line = offset + 2;
+        let mut expanded = encoded[offset + 1].clone();
+        if let Some(reference) = expanded["record_ref"].as_u64() {
+            assert!(reference > 0 && reference < line as u64);
+            let first = &encoded[reference as usize - 1];
+            assert!(first["record"].is_object());
+            assert!(first["record_ref"].is_null());
+            expanded.as_object_mut().unwrap().remove("record_ref");
+            expanded["record"] = first["record"].clone();
+        }
+        assert_eq!(&expanded, expected, "line {line}");
+    }
+    assert_eq!(encoded[2]["record_ref"], 2);
+    for offset in [7, 11, 19] {
+        assert!(encoded[offset + 1]["record"].is_object());
+    }
+    let before = serde_json::to_vec(&originals).unwrap().len();
+    let after = serde_json::to_vec(&encoded).unwrap().len();
+    assert!(before > 65536);
+    assert!(after < before / 2, "before={before} after={after}");
+    let mut unrelated = value!({"kind":"round","error":"original failure"});
+    let expected = unrelated.clone();
+    chrono_worktree::compact_inventory_retention_record(&mut unrelated, &mut index, 100).unwrap();
+    assert_eq!(unrelated, expected);
+    let mut unknown = value!({"kind":"declaration-state","record":null,"error":"unknown"});
+    let expected = unknown.clone();
+    chrono_worktree::compact_inventory_retention_record(&mut unknown, &mut index, 101).unwrap();
+    assert_eq!(unknown, expected);
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn explicit_maintenance_writes_local_record_references_and_keeps_live_originals() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, create_adopted};
+    let h = EnrollmentOriginalsFixture::imported();
+    let owner = Inventory::adopted(&h.root).unwrap().unwrap();
+    let leaf_path = h.root.join(".chrono-harness/state/required-leaf.json");
+    let leaf = create_adopted(&h.root, "lifecycle-original", &leaf_path, false, value!({}))
+        .unwrap()
+        .unwrap();
+    fs::write(&leaf_path, b"required leaf").unwrap();
+    let leaf_id = leaf.id().to_owned();
+    leaf.complete_sealed(value!({"status":"passed"})).unwrap();
+    let parent_path = h.root.join(".chrono-harness/state/required-parent.json");
+    let parent = create_adopted(
+        &h.root,
+        "lifecycle-original",
+        &parent_path,
+        false,
+        value!({}),
+    )
+    .unwrap()
+    .unwrap();
+    fs::write(&parent_path, b"required parent").unwrap();
+    let parent_id = parent.id().to_owned();
+    owner.dependencies(&parent_id, &[leaf_id.clone()]).unwrap();
+    parent.complete_sealed(value!({"status":"passed"})).unwrap();
+    owner
+        .reference("actual-inventory-consumer", &[parent_id.clone()])
+        .unwrap();
+    let (code, report) = h.invoke("maintain", false);
+    assert_eq!(code, 0, "{report}");
+    assert_eq!(
+        report["complete_inventory"]["schema"],
+        "chrono-maintenance-inventory/v2"
+    );
+    let rows = original(&h, &report);
+    let mut references = 0;
+    let mut members = BTreeSet::new();
+    for (offset, row) in rows.iter().enumerate() {
+        let observation = &row["observation"];
+        if observation["kind"] != "declaration-state" {
+            continue;
+        }
+        let record = if let Some(line) = observation["record_ref"].as_u64() {
+            assert!(line > 0 && line < (offset + 1) as u64);
+            let first = &rows[line as usize - 1]["observation"];
+            assert!(first["record_ref"].is_null());
+            assert!(first["record"].is_object());
+            assert!(observation["record"].is_null());
+            assert!(observation["measurement"].is_object());
+            references += 1;
+            &first["record"]
+        } else {
+            &observation["record"]
+        };
+        members.insert(record["id"].as_str().unwrap().to_owned());
+    }
+    assert!(references > 0);
+    assert!(members.contains(&leaf_id));
+    assert!(members.contains(&parent_id));
+    assert_eq!(fs::read(&leaf_path).unwrap(), b"required leaf");
+    assert_eq!(fs::read(&parent_path).unwrap(), b"required parent");
+}
