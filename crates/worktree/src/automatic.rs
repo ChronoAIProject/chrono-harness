@@ -2319,10 +2319,13 @@ impl Manager {
                     return Err("import policy original does not bind this adoption".into());
                 }
                 self.verify_inputs(&report)?;
-                binding.head = report["policy_source_commit"]
-                    .as_str()
-                    .ok_or("import policy original lacks its fixed policy source commit")?
-                    .into();
+                binding.head = crate::verified_lifecycle::imported_policy_source_commit(
+                    report.get("policy_source_commit").is_some(),
+                    report["policy_source_commit"].as_str(),
+                    report["source_commit"].as_str(),
+                )
+                .ok_or("import policy original lacks a valid fixed policy source commit")?
+                .into();
                 facts::full_oid(&binding.head)?;
                 let config_sha256 = report["config_sha256"]
                     .as_str()
