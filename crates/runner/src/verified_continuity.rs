@@ -9,7 +9,12 @@ verus! {
 
 /// 来自同一固定 projects 库存的原 ID 和根；不从目录发现项目。
 #[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-pub struct ProjectRoot { pub id: String, pub root: String }
+pub struct ProjectRoot {
+    pub id: String,
+    // projects 允许无源码根的登记；空值只记录缺失，不能参与搬迁匹配。
+    #[cfg_attr(not(verus_keep_ghost), serde(default))]
+    pub root: String,
+}
 
 /// JSON/树适配器只投影原字段；metadata 是 owner、surface、cost、edges、
 /// symlink、projection 的原值编码，不含 path 和独立核对的 verification。
@@ -49,6 +54,7 @@ pub open spec fn project_match(
     base: Seq<ProjectRoot>, current: Seq<ProjectRoot>, i: int, j: int, path: Seq<u8>,
 ) -> bool {
     0 <= i < base.len() && 0 <= j < current.len()
+        && base[i].root@.len() > 0 && current[j].root@.len() > 0
         && base[i].id@ == current[j].id@
         && base[i].root@ != current[j].root@
         && (path == vstd::utf8::encode_utf8(base[i].root@)
@@ -114,6 +120,7 @@ pub fn relocate(path: &[u8], base: &Vec<ProjectRoot>, current: &Vec<ProjectRoot>
             decreases current.len() - j,
         {
             if super::super::equal_text(base[i].id.as_str(), current[j].id.as_str())
+                && !base[i].root.as_str().is_empty() && !current[j].root.as_str().is_empty()
                 && !super::super::equal_text(base[i].root.as_str(), current[j].root.as_str())
                 && (equal_bytes(path, base[i].root.as_str().as_bytes()) || below(path, base[i].root.as_str().as_bytes())) {
                 proof {

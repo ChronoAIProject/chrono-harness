@@ -1,22 +1,93 @@
-//! Explicit CI policy: fixed Git snapshots, registered old/new impact graph, candidate operations.
+#![allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+
+pub open spec fn source_pipeline_result<S, P, C, N, T, R, E, O, V>(
+    initial: S, previous: P, candidate: C, paths: N, observe: O, validate: V,
+    out: (S, Result<R, E>),
+) -> bool
+    where O: FnOnce(S, P, C, N) -> (S, Result<T, E>),
+        V: FnOnce(S, T) -> (S, Result<R, E>),
+{
+    exists|observed: (S, Result<T, E>)|
+        observe.ensures((initial, previous, candidate, paths), observed)
+        && match observed.1 {
+            Err(error) => out.0 == observed.0 && out.1 == Err::<R, E>(error),
+            Ok(evidence) => validate.ensures((observed.0, evidence), out),
+        }
+}
+
+/// 原两端和所选路径只观察一次；验证只接收该次观察的完整原结果。
+pub fn with_source_continuity<S, P, C, N, T, R, E, O, V>(
+    state: S, previous: P, candidate: C, paths: N, observe: O, validate: V,
+) -> (out: (S, Result<R, E>))
+    where O: FnOnce(S, P, C, N) -> (S, Result<T, E>),
+        V: FnOnce(S, T) -> (S, Result<R, E>),
+    requires forall|s: S, p: P, c: C, n: N| observe.requires((s, p, c, n)),
+        forall|s: S, evidence: T| validate.requires((s, evidence)),
+    ensures source_pipeline_result(state, previous, candidate, paths, observe, validate, out),
+{
+    let ghost initial = state;
+    let ghost p = previous;
+    let ghost c = candidate;
+    let ghost n = paths;
+    let observed = observe(state, previous, candidate, paths);
+    let ghost observation = observed;
+    let (state, result) = observed;
+    let out = match result {
+        Err(error) => (state, Err(error)),
+        Ok(evidence) => validate(state, evidence),
+    };
+    proof {
+        assert(observe.ensures((initial, p, c, n), observation));
+        assert(exists|observed: (S, Result<T, E>)|
+            observe.ensures((initial, p, c, n), observed)
+            && match observed.1 {
+                Err(error) => out.0 == observed.0 && out.1 == Err::<R, E>(error),
+                Ok(evidence) => validate.ensures((observed.0, evidence), out),
+            });
+    }
+    out
+}
+
+} // verus!
+
+// Explicit CI policy: fixed Git snapshots, registered old/new impact graph, candidate operations.
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     CheckConfig, CheckResult, PROTOCOL, Request, Response, Status, decode, json, relative_path,
     sha256,
 };
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_filemap::graph::{self, Edge, EdgeKind, Seed};
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as object};
+#[cfg(not(verus_keep_ghost))]
 use std::collections::{BTreeMap, BTreeSet};
+#[cfg(not(verus_keep_ghost))]
 use std::fs;
+#[cfg(not(verus_keep_ghost))]
 use std::path::Path;
+#[cfg(not(verus_keep_ghost))]
 mod collect;
+#[cfg(not(verus_keep_ghost))]
 pub use collect::{UnitOriginals, unit_originals};
+#[cfg(not(verus_keep_ghost))]
 mod source_binding;
+#[cfg(not(verus_keep_ghost))]
 mod units;
 #[allow(unexpected_cfgs)]
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_collection;
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[cfg(not(verus_keep_ghost))]
 pub enum ExecutionDiagnostics {
     #[serde(rename = "chrono-log-stderr/v1")]
     StderrV1,
@@ -24,11 +95,13 @@ pub enum ExecutionDiagnostics {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct CollectionLimits {
     pub manifest_bytes: u64,
     pub report_bytes: u64,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Default for CollectionLimits {
     fn default() -> Self {
         Self {
@@ -40,6 +113,7 @@ impl Default for CollectionLimits {
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
 pub struct Policy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution_diagnostics: Option<ExecutionDiagnostics>,
@@ -74,6 +148,7 @@ pub struct Policy {
     pub operation_output_limit_bytes: usize,
 }
 #[derive(Debug)]
+#[cfg(not(verus_keep_ghost))]
 struct Snapshot {
     registry: Value,
     tools: BTreeMap<String, Value>,
@@ -97,17 +172,21 @@ struct Snapshot {
     execute: BTreeMap<String, String>,
     scheduling: Option<chrono_judge_registration::execution::Scheduling>,
 }
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::facts::{Reader, utf8};
+#[cfg(not(verus_keep_ghost))]
 fn text<'a>(v: &'a Value, k: &str) -> Result<&'a str, String> {
     v.get(k)
         .and_then(Value::as_str)
         .ok_or_else(|| format!("missing/string field {k}"))
 }
+#[cfg(not(verus_keep_ghost))]
 fn array<'a>(v: &'a Value, k: &str) -> Result<&'a Vec<Value>, String> {
     v.get(k)
         .and_then(Value::as_array)
         .ok_or_else(|| format!("missing/array field {k}"))
 }
+#[cfg(not(verus_keep_ghost))]
 fn strings(v: &Value) -> Result<Vec<String>, String> {
     v.as_array()
         .ok_or("expected string array")?
@@ -119,27 +198,32 @@ fn strings(v: &Value) -> Result<Vec<String>, String> {
         })
         .collect()
 }
+#[cfg(not(verus_keep_ghost))]
 fn id(s: &str) -> Result<(), String> {
     if !chrono_harness::verified_identifiers::valid_id(s.as_bytes()) {
         return Err(format!("invalid ID {s:?}"));
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn full_oid(s: &str) -> Result<(), String> {
     if !chrono_harness::verified_identifiers::valid_oid(s.as_bytes()) {
         return Err(format!("expected full nonzero lowercase OID: {s}"));
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn verify_oid(reader: &Reader, root: &Path, oid: &str) -> Result<(), String> {
     full_oid(oid)?;
     reader.verify_oid(root, oid)?;
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn at(reader: &Reader, root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
     relative_path(path)?;
     reader.blob(root, oid, path)
 }
+#[cfg(not(verus_keep_ghost))]
 fn tree(
     reader: &Reader,
     root: &Path,
@@ -162,6 +246,7 @@ fn tree(
         })
         .collect()
 }
+#[cfg(not(verus_keep_ghost))]
 fn policy(c: &CheckConfig) -> Result<Policy, String> {
     chrono_harness::units::reference_publication(c)?;
     if !matches!(
@@ -221,6 +306,7 @@ fn policy(c: &CheckConfig) -> Result<Policy, String> {
     units::validate(c, &p)?;
     Ok(p)
 }
+#[cfg(not(verus_keep_ghost))]
 fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Snapshot, String> {
     let fm = json(&at(reader, root, oid, &p.filemap)?)?;
     let registration = p
@@ -543,6 +629,7 @@ fn snapshot(reader: &Reader, root: &Path, oid: &str, mut p: Policy) -> Result<Sn
     units::assignments(&snapshot)?;
     Ok(snapshot)
 }
+#[cfg(not(verus_keep_ghost))]
 fn clean(reader: &Reader, root: &Path, candidate: &str, p: &Policy) -> Result<(), String> {
     if utf8(reader.git(root, &["rev-parse", "HEAD"])?)?.trim() != candidate {
         return Err("checkout HEAD does not equal candidate".into());
@@ -568,6 +655,7 @@ fn clean(reader: &Reader, root: &Path, candidate: &str, p: &Policy) -> Result<()
     }
     Ok(())
 }
+#[cfg(not(verus_keep_ghost))]
 fn changed<T: PartialEq>(a: &BTreeMap<String, T>, b: &BTreeMap<String, T>) -> BTreeSet<String> {
     a.keys()
         .chain(b.keys())
@@ -576,6 +664,7 @@ fn changed<T: PartialEq>(a: &BTreeMap<String, T>, b: &BTreeMap<String, T>) -> BT
         .collect()
 }
 // Scoped CI owns legacy seeds and selections; it consumes only shared union/closure mechanics.
+#[cfg(not(verus_keep_ghost))]
 fn ci_impact(
     old: Option<&Snapshot>,
     new: &Snapshot,
@@ -787,6 +876,7 @@ fn ci_impact(
     (paths, selected, explanation, affected)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn judge(req: &Request) -> Response {
     #[cfg(unix)]
     let sink = chrono_harness::NativeOutput::new(std::io::stderr());
@@ -797,6 +887,7 @@ pub fn judge(req: &Request) -> Response {
 
 /// Explicit sink adoption; the sealed host profile still selects diagnostics.
 /// Child streams and verdicts do not pass through this diagnostic sink.
+#[cfg(not(verus_keep_ghost))]
 pub fn judge_with_diagnostic_sink<W: std::io::Write + Send + 'static>(
     req: &Request,
     sink: W,
@@ -878,6 +969,7 @@ pub fn judge_with_diagnostic_sink<W: std::io::Write + Send + 'static>(
     response
 }
 // Shared DELTA planning. Collection acquisition consumes requirements, never an admission result.
+#[cfg(not(verus_keep_ghost))]
 struct Inventory {
     config: CheckConfig,
     p: Policy,
@@ -905,6 +997,7 @@ struct Inventory {
 /// The acquisition callback is used only for necessary historical conversion.
 /// Registration names the decoder test units; the collector reads DELTA-required
 /// reports separately after the shared selection owner returns its requirements.
+#[cfg(not(verus_keep_ghost))]
 pub fn full_collection_requirements_with_inputs(
     root: &Path,
     profile: &str,
@@ -971,11 +1064,10 @@ pub fn full_collection_requirements_with_inputs(
             serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
         let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
             serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?;
-        let continuity = chrono_harness::verified_verifier::sources::continuity::observe(
-            &reader,
-            &req.candidate.root,
+        with_source_continuity(
+            (),
             Some((
-                &req.base.commit,
+                req.base.commit.as_str(),
                 old.filemap(),
                 old.projects(),
                 chrono_harness::facts::artifact_directories(old.config())?
@@ -984,7 +1076,7 @@ pub fn full_collection_requirements_with_inputs(
                     .collect(),
             )),
             (
-                &req.candidate.commit,
+                req.candidate.commit.as_str(),
                 r.filemap(),
                 r.projects(),
                 chrono_harness::facts::artifact_directories(r.config())?
@@ -996,15 +1088,33 @@ pub fn full_collection_requirements_with_inputs(
                 &registry.files,
                 &impact.closure.reached.keys().cloned().collect(),
             ),
-        )?;
-        chrono_judge_routes::validate_proof_plan(
-            &registry,
-            previous_registry.as_ref().map(Some).map_err(String::as_str),
-            &impact.closure.reached.keys().cloned().collect(),
-            &methods,
-            &operations,
-            &continuity,
-        )?;
+            |state, previous, candidate, paths| {
+                (
+                    state,
+                    chrono_harness::verified_verifier::sources::continuity::observe(
+                        &reader,
+                        &req.candidate.root,
+                        previous,
+                        candidate,
+                        paths,
+                    ),
+                )
+            },
+            |state, continuity| {
+                (
+                    state,
+                    chrono_judge_routes::validate_proof_plan(
+                        &registry,
+                        previous_registry.as_ref().map(Some).map_err(String::as_str),
+                        &impact.closure.reached.keys().cloned().collect(),
+                        &methods,
+                        &operations,
+                        &continuity,
+                    ),
+                )
+            },
+        )
+        .1?;
         let units = serde_json::from_value(r.config()["execution_units"]["units"].clone())
             .map_err(|e| e.to_string())?;
         Ok(
@@ -1017,6 +1127,7 @@ pub fn full_collection_requirements_with_inputs(
 /// Full scheduling reads complete trees and registry/semantic blobs, never exports host sources,
 /// captures SDK inputs, or launches a historical decoder. Unsupported historical registries fail.
 /// External effective-input changes remain the final full collection owner's obligation.
+#[cfg(not(verus_keep_ghost))]
 pub fn full_scheduling_requirements(
     root: &Path,
     profile: &str,
@@ -1071,9 +1182,8 @@ pub fn full_scheduling_requirements(
         serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
     let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
         serde_json::from_value(current.filemap().clone()).map_err(|error| error.to_string())?;
-    let continuity = chrono_harness::verified_verifier::sources::continuity::observe(
-        &reader,
-        root,
+    with_source_continuity(
+        (),
         Some((
             base,
             old.filemap(),
@@ -1096,15 +1206,29 @@ pub fn full_scheduling_requirements(
             &registry.files,
             &impact.closure.reached.keys().cloned().collect(),
         ),
-    )?;
-    chrono_judge_routes::validate_proof_plan(
-        &registry,
-        previous_registry.as_ref().map(Some).map_err(String::as_str),
-        &impact.closure.reached.keys().cloned().collect(),
-        &methods,
-        &operations,
-        &continuity,
-    )?;
+        |state, previous, candidate, paths| {
+            (
+                state,
+                chrono_harness::verified_verifier::sources::continuity::observe(
+                    &reader, root, previous, candidate, paths,
+                ),
+            )
+        },
+        |state, continuity| {
+            (
+                state,
+                chrono_judge_routes::validate_proof_plan(
+                    &registry,
+                    previous_registry.as_ref().map(Some).map_err(String::as_str),
+                    &impact.closure.reached.keys().cloned().collect(),
+                    &methods,
+                    &operations,
+                    &continuity,
+                ),
+            )
+        },
+    )
+    .1?;
     Ok(
         object!({"required_units":chrono_harness::units::required(&units, &selected),"global_selected":selected,"changed_paths":delta.iter().map(|d| &d.path).collect::<Vec<_>>(),"git_facts":reader.observation(),"input_scope":"git-and-declarations; final-effective-input-admission-required"}),
     )
@@ -1112,6 +1236,7 @@ pub fn full_scheduling_requirements(
 
 /// Scheduling uses the same scoped inventory without requiring a materialized host checkout.
 /// Registry bytes are still bound to the fixed candidate; this grants no check admission.
+#[cfg(not(verus_keep_ghost))]
 pub fn scheduling_requirements(
     root: &Path,
     profile: &str,
@@ -1149,6 +1274,7 @@ pub fn scheduling_requirements(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn collection_requirements(
     root: &Path,
     profile: &str,
@@ -1195,11 +1321,13 @@ pub fn collection_requirements(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct Profile {
     bytes: Vec<u8>,
     config: CheckConfig,
     policy: Policy,
 }
+#[cfg(not(verus_keep_ghost))]
 impl Profile {
     fn load(req: &Request) -> Result<Self, String> {
         if req.protocol != units::scope_protocol(req) || req.request_id.is_empty() {
@@ -1228,6 +1356,7 @@ impl Profile {
         })
     }
 }
+#[cfg(not(verus_keep_ghost))]
 fn inventory(
     req: &Request,
     reader: &mut Reader,
@@ -1246,6 +1375,7 @@ fn inventory(
         Profile::load(req)?,
     )
 }
+#[cfg(not(verus_keep_ghost))]
 fn inventory_profile(
     req: &Request,
     reader: &mut Reader,
@@ -1608,9 +1738,9 @@ fn inventory_profile(
             .as_ref()
             .map(|snapshot| object!({"files":snapshot.files.values().collect::<Vec<_>>()}));
         let current_files = object!({"files":new.files.values().collect::<Vec<_>>()});
-        let continuity = chrono_harness::verified_verifier::sources::continuity::observe(
-            reader,
-            root,
+        let registry = new.source_registry.as_ref().map_err(Clone::clone)?;
+        with_source_continuity(
+            (),
             req.base
                 .as_deref()
                 .zip(old.as_ref())
@@ -1624,27 +1754,41 @@ fn inventory_profile(
                     )
                 }),
             (
-                &req.candidate,
+                req.candidate.as_str(),
                 &current_files,
                 &new.registry,
                 new.policy.artifacts.clone(),
             ),
             &chrono_harness::verified_verifier::sources::continuity_paths(
-                &new.source_registry.as_ref().map_err(Clone::clone)?.files,
+                &registry.files,
                 &affected.iter().cloned().collect(),
             ),
-        )?;
-        chrono_judge_routes::validate_proof_plan(
-            new.source_registry.as_ref().map_err(Clone::clone)?,
-            old.as_ref()
-                .map(|snapshot| snapshot.source_registry.as_ref())
-                .transpose()
-                .map_err(String::as_str),
-            &affected,
-            &methods,
-            &operations,
-            &continuity,
-        )?;
+            |state, previous, candidate, paths| {
+                (
+                    state,
+                    chrono_harness::verified_verifier::sources::continuity::observe(
+                        reader, root, previous, candidate, paths,
+                    ),
+                )
+            },
+            |state, continuity| {
+                (
+                    state,
+                    chrono_judge_routes::validate_proof_plan(
+                        registry,
+                        old.as_ref()
+                            .map(|snapshot| snapshot.source_registry.as_ref())
+                            .transpose()
+                            .map_err(String::as_str),
+                        &affected,
+                        &methods,
+                        &operations,
+                        &continuity,
+                    ),
+                )
+            },
+        )
+        .1?;
     }
     Ok(Inventory {
         config,
@@ -1666,6 +1810,7 @@ fn inventory_profile(
         methods,
     })
 }
+#[cfg(not(verus_keep_ghost))]
 fn operation_state_path(req: &Request, config: &CheckConfig) -> Result<String, String> {
     let report = req
         .scope
@@ -1679,6 +1824,7 @@ fn operation_state_path(req: &Request, config: &CheckConfig) -> Result<String, S
     ))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn prepare_plan(
     req: &Request,
     config: &CheckConfig,
@@ -1699,6 +1845,7 @@ fn prepare_plan(
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn execute_plan(
     req: &Request,
     plan: &chrono_judge_routes::Execution,
@@ -1718,6 +1865,7 @@ fn execute_plan(
     chrono_judge_projects::execute(plan)
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn evaluate(
     req: &Request,
     reader: &mut Reader,

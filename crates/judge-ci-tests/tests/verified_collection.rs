@@ -1,12 +1,25 @@
 //! 独立边界预期直接消费生产集合判断，Cargo 与 Verus 共用源码。
 #![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
 #[path = "../../judge-ci/src/verified_collection.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as source_identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_verifier as source_verifier;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
+#[cfg(not(verus_keep_ghost))]
+use chrono_judge_ci::verified_collection as policy;
 use policy::result_types::{CheckResult, Status};
 #[cfg(verus_keep_ghost)]
+use policy::source_verifier;
+#[cfg(verus_keep_ghost)]
+use policy::source_verifier::identifiers as source_identifiers;
+#[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::vpanic as panic;
 
 verus! {
 
@@ -460,3 +473,119 @@ fn registered_inventory_preserves_empty_lists_and_exact_declared_names() {
 }
 
 }
+
+verus! {
+
+fn expect_continuity_bool(actual: bool)
+    requires actual,
+{ if !actual { panic!(); } }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn continuity_pipeline_preserves_both_endpoints_paths_and_observed_evidence() {
+    let (trace, result) = policy::with_source_continuity(
+        Vec::<u8>::new(), 11u8, 22u8, 33u8,
+        |mut state: Vec<u8>, previous: u8, candidate: u8, paths: u8| -> (out: (Vec<u8>, Result<(u8,u8,u8), String>))
+            ensures out.0@ == state@.push(1u8).push(previous).push(candidate).push(paths),
+                out.1 == Ok::<(u8,u8,u8), String>((previous,candidate,paths)),
+        {
+            state.push(1); state.push(previous); state.push(candidate); state.push(paths);
+            (state, Ok((previous,candidate,paths)))
+        },
+        |mut state: Vec<u8>, evidence: (u8,u8,u8)| -> (out: (Vec<u8>, Result<(u8,u8,u8), String>))
+            ensures out.0@ == state@.push(2u8).push(evidence.0).push(evidence.1).push(evidence.2),
+                out.1 == Ok::<(u8,u8,u8), String>(evidence),
+        {
+            state.push(2); state.push(evidence.0); state.push(evidence.1); state.push(evidence.2);
+            (state, Ok(evidence))
+        },
+    );
+    expect_continuity_bool(trace.len() == 8);
+    expect_continuity_bool(trace[0] == 1 && trace[1] == 11 && trace[2] == 22 && trace[3] == 33);
+    expect_continuity_bool(trace[4] == 2 && trace[5] == 11 && trace[6] == 22 && trace[7] == 33);
+    let exact = match result { Ok(value) => value.0 == 11 && value.1 == 22 && value.2 == 33, Err(_) => false };
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn continuity_observation_failure_keeps_the_first_error_and_skips_validation() {
+    let (trace, result) = policy::with_source_continuity(
+        Vec::<u8>::new(), (), (), (),
+        |mut state: Vec<u8>, _previous: (), _candidate: (), _paths: ()| -> (out: (Vec<u8>, Result<u8, String>))
+            ensures out.0@ == state@.push(1u8),
+                match out.1 { Err(error) => error@ == "原读取错误\0é"@, Ok(_) => false },
+        { state.push(1); (state, Err("原读取错误\0é".to_string())) },
+        |mut state: Vec<u8>, evidence: u8| -> (out: (Vec<u8>, Result<u8, String>))
+            ensures out.0@ == state@.push(9u8), out.1 == Ok::<u8,String>(evidence),
+        { state.push(9); (state, Ok(evidence)) },
+    );
+    expect_continuity_bool(trace.len() == 1 && trace[0] == 1);
+    let exact = match result { Err(error) => source_identifiers::equal_text(error.as_str(), "原读取错误\0é"), Ok(_) => false };
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn continuity_validation_failure_keeps_its_full_original_error() {
+    let (trace, result) = policy::with_source_continuity(
+        Vec::<u8>::new(), (), (), 7u8,
+        |mut state: Vec<u8>, _previous: (), _candidate: (), paths: u8| -> (out: (Vec<u8>, Result<u8, String>))
+            ensures out.0@ == state@.push(1u8), out.1 == Ok::<u8,String>(paths),
+        { state.push(1); (state, Ok(paths)) },
+        |mut state: Vec<u8>, evidence: u8| -> (out: (Vec<u8>, Result<u8, String>))
+            ensures out.0@ == state@.push(evidence),
+                match out.1 { Err(error) => error@ == "原判定错误\0é"@, Ok(_) => false },
+        { state.push(evidence); (state, Err("原判定错误\0é".to_string())) },
+    );
+    expect_continuity_bool(trace.len() == 2 && trace[0] == 1 && trace[1] == 7);
+    let exact = match result { Err(error) => source_identifiers::equal_text(error.as_str(), "原判定错误\0é"), Ok(_) => false };
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn combined_source_plan_keeps_base_errors_before_affected_file_errors() {
+    let registry = source_verifier::sources::source_registry(vec![source_verifier::sources::SourceFile {
+        path: "x".to_string(), verification: None,
+    }], Some(true));
+    let nodes = vec!["file:x".to_string()];
+    let empty = source_verifier::sources::continuity::Continuity::empty();
+    let result = policy::validate_source_plan(&registry, Err("原基线错误\0é"),
+        &nodes, &Vec::new(), &Vec::new(), &empty);
+    expect_continuity_bool(result.is_err());
+    let exact = match result { Err(error) => source_identifiers::equal_text(error.path, "原基线错误\0é"), Ok(_) => false };
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn combined_source_plan_rejects_unknown_after_a_successful_inventory() {
+    let registry = source_verifier::sources::source_registry(vec![source_verifier::sources::SourceFile {
+        path: "x".to_string(), verification: None,
+    }], Some(true));
+    let nodes = vec!["file:x".to_string()];
+    let empty = source_verifier::sources::continuity::Continuity::empty();
+    proof {
+        reveal_with_fuel(source_verifier::sources::classifications_error, 3);
+        reveal_with_fuel(source_verifier::sources::selected_plan_error, 3);
+        reveal(source_verifier::sources::file_plan_error);
+        reveal_strlit("file:"); reveal_strlit("x"); reveal_strlit("file:x");
+        assert("file:x"@ =~= "file:"@ + "x"@);
+        assert(source_verifier::sources::node_affected("file:"@, "x"@, nodes@)) by {
+            assert(nodes[0]@ == "file:"@ + "x"@);
+        }
+    }
+    let result = policy::validate_source_plan(&registry, Ok(Some(&registry)),
+        &nodes, &Vec::new(), &Vec::new(), &empty);
+    expect_continuity_bool(result.is_err());
+    let exact = match result { Err(error) => source_identifiers::equal_text(error.message,
+        "E_VERUS_COVERAGE: affected file lacks explicit verification classification: "), Ok(_) => false };
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn combined_source_plan_accepts_the_complete_empty_initial_inventory() {
+    let registry = source_verifier::sources::source_registry(Vec::new(), Some(true));
+    let empty = source_verifier::sources::continuity::Continuity::empty();
+    let result = policy::validate_source_plan(&registry, Ok(None),
+        &Vec::new(), &Vec::new(), &Vec::new(), &empty);
+    expect_continuity_bool(result.is_ok());
+}
+
+} // verus!
