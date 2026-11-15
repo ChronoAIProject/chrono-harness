@@ -2682,6 +2682,16 @@ impl Inventory {
                         .unwrap_or(self.policy.max_nodes_per_round)
                 || began.elapsed().as_millis() >= self.policy.max_millis_per_round as u128
             {
+                tracing::debug!(
+                    event_id = "retention.round.retirement-deferred",
+                    output_id = %id,
+                    nodes,
+                    node_limit = self.round_node_limit.get().unwrap_or(self.policy.max_nodes_per_round),
+                    metadata_bytes_left = self.round_metadata.get(),
+                    elapsed_micros = began.elapsed().as_micros() as u64,
+                    max_millis_per_round = self.policy.max_millis_per_round,
+                    "retirement was not admitted within the owning round budget"
+                );
                 break;
             }
             let i = l

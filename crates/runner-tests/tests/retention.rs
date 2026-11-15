@@ -125,7 +125,12 @@ fn explicit_quota_observes_more_members_than_one_address_budget() {
     if !isolated_capability_test("explicit_quota_observes_more_members_than_one_address_budget") {
         return;
     }
-    let d = host(32, 2);
+    let mut d = host(32, 2);
+    d.disable_cleanup(true);
+    eprintln!(
+        "retention fixture originals (explicit_quota_observes_more_members_than_one_address_budget): {}",
+        d.path().display()
+    );
     let path = d.path().join(POLICY_PATH);
     let mut policy: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     policy["keep_seconds"] = json!(3600);
@@ -160,7 +165,10 @@ fn explicit_quota_observes_more_members_than_one_address_budget() {
             .unwrap()
             .unwrap();
     fs::write(&live, b"active producer").unwrap();
-    let round = owner.maintain_explicit().unwrap();
+    use chrono_diagnostics::logging::{Level, Logger};
+    let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
+    let round = logger.run(|| owner.maintain_explicit()).unwrap();
+    logger.finish().expect("explicit quota diagnostics");
     assert_eq!(
         round["terminal_quotas"]["fixture"]["scope_complete"], true,
         "{round}"
@@ -177,6 +185,7 @@ fn explicit_quota_observes_more_members_than_one_address_budget() {
     );
     assert_eq!(fs::read(&live).unwrap(), b"active producer");
     publication.complete(json!({"status":"passed"})).unwrap();
+    d.disable_cleanup(false);
 }
 
 #[test]
