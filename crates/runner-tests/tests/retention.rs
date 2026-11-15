@@ -223,6 +223,59 @@ fn unknown_quota_member_preserves_other_outputs_until_its_scope_is_known() {
     }
     fs::write(record, original).unwrap();
 }
+
+#[test]
+fn retired_metadata_does_not_exclude_a_populated_parent_address() {
+    if !isolated_capability_test("retired_metadata_does_not_exclude_a_populated_parent_address") {
+        return;
+    }
+    let h = host(256, 16);
+    let policy_path = h.path().join(POLICY_PATH);
+    let mut policy: Value = serde_json::from_slice(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["metadata_keep_seconds"] = json!(0);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let owner = inventory(h.path());
+    let obsolete = ".chrono-harness/state/fixtures/obsolete";
+    fs::write(h.path().join(obsolete), b"rebuildable").unwrap();
+    let publication = owner.begin("fixture", obsolete, json!(null)).unwrap();
+    let id = publication.id().to_owned();
+    publication.complete(json!({"exit": 0})).unwrap();
+    let sibling = ".chrono-harness/state/fixtures/current";
+    fs::write(h.path().join(sibling), b"current original").unwrap();
+    let current = owner.begin("fixture", sibling, json!(null)).unwrap();
+    let mut parent_address = h
+        .path()
+        .join(".chrono-harness/state/output-retention-v1/paths");
+    for component in ".chrono-harness/state/fixtures".split('/') {
+        parent_address.push(chrono_harness::sha256(component.as_bytes()));
+    }
+    // A sibling reader shares this parent. Cleanup can retire obsolete leaf
+    // metadata without requesting an exclusive lease on this populated parent.
+    let parent_reader = chrono_harness::ownership::DirectoryLease::acquire(
+        &parent_address,
+        false,
+        None,
+    )
+    .unwrap()
+    .unwrap();
+    let round = owner.maintain_explicit().unwrap();
+    assert!(!h.path().join(obsolete).exists(), "{round}");
+    assert!(
+        !h.path()
+            .join(".chrono-harness/state/output-retention-v1/objects")
+            .join(id)
+            .exists(),
+        "obsolete metadata must retire while its populated parent is shared: {round}"
+    );
+    assert!(parent_address.join("address.json").is_file());
+    assert_eq!(
+        fs::read(h.path().join(sibling)).unwrap(),
+        b"current original"
+    );
+    parent_reader.stable().unwrap();
+    drop(parent_reader);
+    current.complete(json!({"exit": 0})).unwrap();
+}
 #[cfg(not(verus_keep_ghost))]
 fn maintenance(root: &Path) -> Value {
     let round = inventory(root).maintain().unwrap();
