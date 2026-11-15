@@ -25,6 +25,196 @@ use vstd::vpanic as panic;
 
 verus! {
 
+fn snapshot_schema_literals_differ()
+    ensures
+        "chrono-input-snapshot/v1"@ != "chrono-input-snapshot/v2"@,
+        "chrono-input-snapshot/v1"@ != "chrono-input-snapshot/v3"@,
+        "chrono-input-snapshot/v2"@ != "chrono-input-snapshot/v3"@,
+{
+    proof {
+        reveal_strlit("chrono-input-snapshot/v1");
+        reveal_strlit("chrono-input-snapshot/v2");
+        reveal_strlit("chrono-input-snapshot/v3");
+        assert("chrono-input-snapshot/v1"@[23] != "chrono-input-snapshot/v2"@[23]);
+        assert("chrono-input-snapshot/v1"@[23] != "chrono-input-snapshot/v3"@[23]);
+        assert("chrono-input-snapshot/v2"@[23] != "chrono-input-snapshot/v3"@[23]);
+    }
+}
+
+fn expect_snapshot_error(result: Result<(), &str>, expected: &str)
+    requires match result { Err(message) => message@ == expected@, _ => false },
+{
+    match result {
+        Err(message) => {
+            let exact = source_identifiers::equal_text(message, expected);
+            expect_continuity_bool(exact);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_header_accepts_only_the_three_complete_schemas() {
+    snapshot_schema_literals_differ();
+    let one = policy::admit_snapshot_header(Some("chrono-input-snapshot/v1"), false, false);
+    let two = policy::admit_snapshot_header(Some("chrono-input-snapshot/v2"), false, false);
+    let three = policy::admit_snapshot_header(Some("chrono-input-snapshot/v3"), false, false);
+    expect_continuity_bool(one.is_ok() && two.is_ok() && three.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_v3_defers_all_selector_presence_cases_to_its_binding_validator() {
+    snapshot_schema_literals_differ();
+    let absent = policy::admit_snapshot_header(Some("chrono-input-snapshot/v3"), false, false);
+    let effective = policy::admit_snapshot_header(Some("chrono-input-snapshot/v3"), true, false);
+    let selection = policy::admit_snapshot_header(Some("chrono-input-snapshot/v3"), false, true);
+    let both = policy::admit_snapshot_header(Some("chrono-input-snapshot/v3"), true, true);
+    expect_continuity_bool(absent.is_ok() && effective.is_ok() && selection.is_ok() && both.is_ok());
+}
+
+fn legacy_snapshot_rejects_either_selector_field(schema: &str)
+    requires schema@ == "chrono-input-snapshot/v1"@ || schema@ == "chrono-input-snapshot/v2"@,
+{
+    snapshot_schema_literals_differ();
+    let effective = policy::admit_snapshot_header(Some(schema), true, false);
+    let selection = policy::admit_snapshot_header(Some(schema), false, true);
+    let both = policy::admit_snapshot_header(Some(schema), true, true);
+    expect_snapshot_error(effective, "E_INPUT_SNAPSHOT: selection binding requires snapshot v3");
+    expect_snapshot_error(selection, "E_INPUT_SNAPSHOT: selection binding requires snapshot v3");
+    expect_snapshot_error(both, "E_INPUT_SNAPSHOT: selection binding requires snapshot v3");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_v1_and_v2_reject_present_selector_fields() {
+    legacy_snapshot_rejects_either_selector_field("chrono-input-snapshot/v1");
+    legacy_snapshot_rejects_either_selector_field("chrono-input-snapshot/v2");
+}
+
+fn unknown_snapshot_schema_keeps_priority(schema: Option<&str>, effective: bool, selection: bool)
+    requires match schema {
+        None => true,
+        Some(value) => value@ != "chrono-input-snapshot/v1"@
+            && value@ != "chrono-input-snapshot/v2"@ && value@ != "chrono-input-snapshot/v3"@,
+    },
+{
+    let actual = policy::admit_snapshot_header(schema, effective, selection);
+    expect_snapshot_error(actual, "E_INPUT_SNAPSHOT: unsupported snapshot schema");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn snapshot_unknown_and_missing_schemas_fail_before_selector_fields() {
+    proof {
+        reveal_strlit(""); reveal_strlit("chrono-input-snapshot/v0");
+        reveal_strlit("chrono-input-snapshot/v4"); reveal_strlit("chrono-input-snapshot/v3\0");
+        reveal_strlit("Chrono-input-snapshot/v3"); reveal_strlit("chrono-input-snapshot/v3é");
+        reveal_strlit("chrono-input-snapshot/v1"); reveal_strlit("chrono-input-snapshot/v2");
+        reveal_strlit("chrono-input-snapshot/v3");
+        assert(""@.len() == 0);
+        assert("chrono-input-snapshot/v1"@.len() == 24);
+        assert("chrono-input-snapshot/v2"@.len() == 24);
+        assert("chrono-input-snapshot/v3"@.len() == 24);
+        assert("chrono-input-snapshot/v0"@[23] != "chrono-input-snapshot/v1"@[23]);
+        assert("chrono-input-snapshot/v0"@[23] != "chrono-input-snapshot/v2"@[23]);
+        assert("chrono-input-snapshot/v0"@[23] != "chrono-input-snapshot/v3"@[23]);
+        assert("chrono-input-snapshot/v4"@[23] != "chrono-input-snapshot/v1"@[23]);
+        assert("chrono-input-snapshot/v4"@[23] != "chrono-input-snapshot/v2"@[23]);
+        assert("chrono-input-snapshot/v4"@[23] != "chrono-input-snapshot/v3"@[23]);
+        assert("chrono-input-snapshot/v3\0"@.len() == 25);
+        assert("Chrono-input-snapshot/v3"@[0] != "chrono-input-snapshot/v1"@[0]);
+        assert("Chrono-input-snapshot/v3"@[0] != "chrono-input-snapshot/v2"@[0]);
+        assert("Chrono-input-snapshot/v3"@[0] != "chrono-input-snapshot/v3"@[0]);
+        assert("chrono-input-snapshot/v3é"@.len() == 25);
+    }
+    unknown_snapshot_schema_keeps_priority(None, false, false);
+    unknown_snapshot_schema_keeps_priority(None, true, true);
+    unknown_snapshot_schema_keeps_priority(Some(""), true, true);
+    unknown_snapshot_schema_keeps_priority(Some("chrono-input-snapshot/v0"), true, false);
+    unknown_snapshot_schema_keeps_priority(Some("chrono-input-snapshot/v4"), false, true);
+    unknown_snapshot_schema_keeps_priority(Some("chrono-input-snapshot/v3\0"), true, true);
+    unknown_snapshot_schema_keeps_priority(Some("Chrono-input-snapshot/v3"), true, true);
+    unknown_snapshot_schema_keeps_priority(Some("chrono-input-snapshot/v3é"), true, true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn absent_retained_input_requires_snapshot_v2_or_v3() {
+    snapshot_schema_literals_differ();
+    let absent: policy::Retained<Vec<u8>> = policy::Retained::Absent;
+    let one = policy::admit_snapshot_retained(Some("chrono-input-snapshot/v1"), &absent);
+    let missing = policy::admit_snapshot_retained(None, &absent);
+    let two = policy::admit_snapshot_retained(Some("chrono-input-snapshot/v2"), &absent);
+    let three = policy::admit_snapshot_retained(Some("chrono-input-snapshot/v3"), &absent);
+    expect_snapshot_error(one, "E_INPUT_SNAPSHOT: absence requires snapshot v2");
+    expect_snapshot_error(missing, "E_INPUT_SNAPSHOT: absence requires snapshot v2");
+    expect_continuity_bool(two.is_ok() && three.is_ok());
+}
+
+fn present_retained_input_has_no_additional_schema_restriction(schema: Option<&str>, length: u64) {
+    let bytes = policy::Retained::Bytes(vec![0u8, 255u8]);
+    let blob: policy::Retained<Vec<u8>> = policy::Retained::Blob {
+        path: ".chrono-harness/state/blob", digest: "original digest", length,
+    };
+    let bytes_ok = policy::admit_snapshot_retained(schema, &bytes);
+    let blob_ok = policy::admit_snapshot_retained(schema, &blob);
+    expect_continuity_bool(bytes_ok.is_ok() && blob_ok.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn bytes_and_blob_keep_the_callers_schema_and_content_obligations() {
+    present_retained_input_has_no_additional_schema_restriction(None, 0);
+    present_retained_input_has_no_additional_schema_restriction(Some("chrono-input-snapshot/v1"), 1);
+    present_retained_input_has_no_additional_schema_restriction(Some("chrono-input-snapshot/v2"), u64::MAX);
+    present_retained_input_has_no_additional_schema_restriction(Some("chrono-input-snapshot/v3"), 0);
+    present_retained_input_has_no_additional_schema_restriction(Some("unknown\0é"), u64::MAX);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn direct_snapshot_versions_two_three_and_four_select_v2() {
+    let two = policy::select_snapshot_schema(Some(2), false);
+    let three = policy::select_snapshot_schema(Some(3), false);
+    let four = policy::select_snapshot_schema(Some(4), false);
+    let two_ok = source_identifiers::equal_text(two, "chrono-input-snapshot/v2");
+    let three_ok = source_identifiers::equal_text(three, "chrono-input-snapshot/v2");
+    let four_ok = source_identifiers::equal_text(four, "chrono-input-snapshot/v2");
+    expect_continuity_bool(two_ok && three_ok && four_ok);
+}
+
+fn direct_unknown_snapshot_version_selects_v1(version: u64)
+    requires version != 2, version != 3, version != 4,
+{
+    let actual = policy::select_snapshot_schema(Some(version), false);
+    let exact = source_identifiers::equal_text(actual, "chrono-input-snapshot/v1");
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn direct_snapshot_missing_zero_one_five_and_maximum_select_v1() {
+    let missing = policy::select_snapshot_schema(None, false);
+    let missing_ok = source_identifiers::equal_text(missing, "chrono-input-snapshot/v1");
+    expect_continuity_bool(missing_ok);
+    direct_unknown_snapshot_version_selects_v1(0);
+    direct_unknown_snapshot_version_selects_v1(1);
+    direct_unknown_snapshot_version_selects_v1(5);
+    direct_unknown_snapshot_version_selects_v1(u64::MAX);
+}
+
+fn selected_snapshot_ignores_any_direct_version(version: Option<u64>) {
+    let actual = policy::select_snapshot_schema(version, true);
+    let exact = source_identifiers::equal_text(actual, "chrono-input-snapshot/v3");
+    expect_continuity_bool(exact);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn selected_snapshot_uses_v3_for_missing_known_and_boundary_versions() {
+    selected_snapshot_ignores_any_direct_version(None);
+    selected_snapshot_ignores_any_direct_version(Some(0));
+    selected_snapshot_ignores_any_direct_version(Some(1));
+    selected_snapshot_ignores_any_direct_version(Some(2));
+    selected_snapshot_ignores_any_direct_version(Some(3));
+    selected_snapshot_ignores_any_direct_version(Some(4));
+    selected_snapshot_ignores_any_direct_version(Some(5));
+    selected_snapshot_ignores_any_direct_version(Some(u64::MAX));
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn registered_action_references_require_the_real_tool_with_no_profile_fallback() {
     let missing = policy::action_tool_allowed(true, false, false);
