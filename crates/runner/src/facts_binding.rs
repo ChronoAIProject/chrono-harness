@@ -117,8 +117,6 @@ pub struct Reader {
 struct BlobReceipt {
     process: usize,
     range: std::ops::Range<usize>,
-    // Batch ranges also belong to the original metadata receipt and identity.
-    metadata_process: Option<usize>,
 }
 #[cfg(not(verus_keep_ghost))]
 struct BlobObject {
@@ -191,7 +189,6 @@ pub fn acquire_registry_blobs(
                 receipt: BlobReceipt {
                     process,
                     range: 0..original.len(),
-                    metadata_process: None,
                 },
                 bytes: original,
             });
@@ -201,7 +198,7 @@ pub fn acquire_registry_blobs(
             .iter()
             .map(|path| format!("{oid}:{path}\n"))
             .collect::<String>();
-        let (metadata_process, metadata) = git(&["cat-file", "--batch-check"], input.as_bytes())?;
+        let (_, metadata) = git(&["cat-file", "--batch-check"], input.as_bytes())?;
         let parse = || -> Result<Vec<BlobObject>, String> {
             let text = std::str::from_utf8(&metadata).map_err(|_| "non UTF-8 batch metadata")?;
             let rows = text
@@ -263,7 +260,6 @@ pub fn acquire_registry_blobs(
                     receipt: BlobReceipt {
                         process,
                         range: 0..original.len(),
-                        metadata_process: Some(metadata_process),
                     },
                     bytes: original,
                 });
@@ -297,7 +293,6 @@ pub fn acquire_registry_blobs(
                     receipt: BlobReceipt {
                         process,
                         range: offset..stop,
-                        metadata_process: Some(metadata_process),
                     },
                     bytes: content.to_vec(),
                 });
@@ -796,11 +791,6 @@ impl Reader {
             self.unchanged(true).map_err(|e| self.error(&e))?;
             let processes = self.processes.borrow();
             let bytes = processes[receipt.process].stdout_bytes[receipt.range].to_vec();
-            if let Some(metadata_process) = receipt.metadata_process {
-                // Both originals remain owned by this Reader; framing and
-                // content identity were validated before this range was cached.
-                debug_assert!(metadata_process < receipt.process);
-            }
             self.check_root(root)?;
             self.unchanged(true).map_err(|e| self.error(&e))?;
             return Ok(bytes);
@@ -814,7 +804,6 @@ impl Reader {
             BlobReceipt {
                 process: index,
                 range: 0..bytes.len(),
-                metadata_process: None,
             },
         );
         Ok(bytes)
