@@ -1,6 +1,23 @@
 use vstd::prelude::*;
 
 verus! {
+    trait ResultKind {
+        spec fn byte_result() -> bool;
+    }
+
+    impl ResultKind for &dyn Fn(u8) -> u8 {
+        open spec fn byte_result() -> bool { true }
+    }
+
+    impl ResultKind for &dyn Fn(u8) -> bool {
+        open spec fn byte_result() -> bool { false }
+    }
+
+    proof fn distinct_output_types() {
+        assert(<&dyn Fn(u8) -> u8 as ResultKind>::byte_result());
+        assert(!<&dyn Fn(u8) -> bool as ResultKind>::byte_result());
+    }
+
     pub fn invoke_shared(observer: &dyn Fn(u8) -> u8, value: u8) -> (result: u8)
         requires
             observer.requires((value,)),

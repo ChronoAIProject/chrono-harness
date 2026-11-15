@@ -537,8 +537,8 @@ Rust 原始签名、强制转换、执行及 ghost 借用检查和实际编译�
 
 | `investigate.verus-source.*-check` | 预期 |
 | --- | --- |
-| `dyn-callables-check` | 共享调用采用明确前后置条件，可变调用保留 Result 两分支及原返回合同，具体闭包可转换为动态回调；严格整 crate 证明并编译 |
-| `dyn-callable-assertion-check` | 调用没有结果约束时，不能证明任意指定返回值，须实际 assertion failed |
+| `dyn-callables-check` | 共享调用采用明确前后置条件，可变调用保留 Result 两分支及原返回合同，具体闭包可转换为动态回调；不同 Output 可有不同规格；严格整 crate 证明并编译 |
+| `dyn-callable-assertion-check` | 不同 Output 的两项相反规格不能导出任意调用结果，须实际 assertion failed |
 | `dyn-callable-precondition-check` | 未提供动态调用前置条件时，须实际拒绝调用 |
 | `dyn-callable-output-check` | 不同 Output 的动态类型不能互换，须 Rust 类型错误 |
 | `dyn-callable-borrow-check` | 同一动态回调不能同时借出两个可变引用，须 Rust 借用错误 |

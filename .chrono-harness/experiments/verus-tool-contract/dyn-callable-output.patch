@@ -13,10 +13,11 @@
              for pred in preds.iter() {
                  match pred.skip_binder() {
                      ExistentialPredicate::Trait(_) => {}
-@@ -1322,8 +1328,17 @@
+@@ -1321,6 +1327,18 @@
+                         // these markers add no VIR facts. Rust keeps the original dyn
                          // predicates for type, borrow, and executable-code checking.
                          // trait_conflicts also sees the same abstract principal type.
-                     }
++                    }
 +                    ExistentialPredicate::Projection(projection)
 +                        if is_callable
 +                            && Some(projection.def_id) == tcx.lang_items().fn_once_output() =>
@@ -24,15 +25,14 @@
 +                        if output.is_some() {
 +                            unsupported_err!(span, "dyn callable with duplicate Output");
 +                        }
-+                        output = Some(t_rec(&projection.term.expect_ty())?.0);
-+                    }
-                     ExistentialPredicate::Projection(_) => {
--                        unsupported_err!(span, "dyn with more than one trait");
-+                        unsupported_err!(span, "dyn with associated types other than callable Output");
++                        let TermKind::Ty(output_ty) = projection.term.kind() else {
++                            unsupported_err!(span, "dyn callable with non-type Output");
++                        };
++                        output = Some(t_rec(&output_ty)?.0);
                      }
-                     ExistentialPredicate::AutoTrait(_) => {
-                         unsupported_err!(span, "dyn with auto-traits");
-@@ -1352,7 +1367,10 @@
+                     ExistentialPredicate::Projection(_) => {
+                         unsupported_err!(span, "dyn with more than one trait");
+@@ -1352,7 +1370,10 @@
                          None,
                          span,
                      )?;
