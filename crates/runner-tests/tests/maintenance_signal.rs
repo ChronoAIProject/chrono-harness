@@ -315,7 +315,9 @@ use std::{fs, os::unix::net::UnixDatagram, time::Duration};
 
 #[cfg(not(verus_keep_ghost))]
 fn host() -> (tempfile::TempDir, std::path::PathBuf) {
-    let host = tempfile::tempdir().unwrap();
+    // Physical, short roots also satisfy the Darwin Unix socket path limit.
+    let temporary_root = fs::canonicalize("/tmp").unwrap();
+    let host = tempfile::tempdir_in(temporary_root).unwrap();
     let root = host.path();
     fs::create_dir_all(root.join(".chrono-harness/state/m")).unwrap();
     let policy = Policy {
