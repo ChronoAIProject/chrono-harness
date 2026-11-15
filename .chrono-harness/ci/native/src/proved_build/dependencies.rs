@@ -26,6 +26,7 @@ pub struct Config {
 #[serde(deny_unknown_fields)]
 pub struct ComponentConfig {
     pub checksum: String,
+    pub archive: String,
     pub patch: String,
     pub source: String,
     pub receipt: String,
@@ -684,16 +685,10 @@ pub fn validate_component(
     Ok(())
 }
 
-fn component(
+pub fn component_archive(
     root: &Path,
-    build: &BuildConfig,
     config: &ComponentConfig,
-    externs: &BTreeMap<String, String>,
-    search: &[String],
-    environment: &bindings::Environment,
-    stdout: &mut (impl Write + Send),
-    stderr: &mut (impl Write + Send),
-) -> Result<Component, BuildFailure> {
+) -> Result<(PathBuf, cargo::Identity), String> {
     let checksum = profile::read(root, &config.checksum, b".chrono-harness/ci/")?;
     let text = std::str::from_utf8(&checksum).map_err(|e| e.to_string())?;
     let (expected, archive) = text
@@ -705,6 +700,20 @@ fn component(
     if archive_id.sha256 != expected {
         return Err("E_VERUS_DEPENDENCIES: cached Verus archive checksum differs".into());
     }
+    Ok((archive, archive_id))
+}
+
+fn component(
+    root: &Path,
+    build: &BuildConfig,
+    config: &ComponentConfig,
+    externs: &BTreeMap<String, String>,
+    search: &[String],
+    environment: &bindings::Environment,
+    stdout: &mut (impl Write + Send),
+    stderr: &mut (impl Write + Send),
+) -> Result<Component, BuildFailure> {
+    let (archive, archive_id) = component_archive(root, config)?;
     let patch = profile::path(root, &config.patch, b".chrono-harness/experiments/")?;
     let source = profile::path(root, &config.source, b"")?;
     let inputs = chrono_harness::wire::digest(&(

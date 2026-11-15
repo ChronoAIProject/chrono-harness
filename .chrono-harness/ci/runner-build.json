@@ -128,6 +128,7 @@
     },
     "component": {
       "checksum": ".chrono-harness/ci/verus-macos-arm64.sha256",
+      "archive": ".chrono-harness/bin/verus.zip",
       "patch": ".chrono-harness/experiments/verus-tool-contract/vstd.patch",
       "source": "crates/runner/src/json_value_specs.rs",
       "receipt": "crates/runner/target/.chrono-runner-component.json",

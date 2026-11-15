@@ -108,6 +108,13 @@ Rust 生产者执行登记的前置、SDK 选择和构建，保存原报告及�
 
 Verus 下载、摘要校验和失败原件见[固定执行入口](verus.md#固定执行入口)，缓存复用见[Verus 固定下载包](ci-cache.md#verus-archive)。
 
+runner 依赖组件从 `runner-build.json` 的 `dependencies.component.archive` 读取共享启动
+已安装的 `.chrono-harness/bin/verus.zip`，按原校验文件的完整 SHA-256 核字节后再解包。
+校验文件第二列仍服务下载操作，不决定依赖构建器的输入地址；缓存缺失不应导致重复下载。
+安装包缺失、被替换或声明越出 bin 范围均须失败。实现与宿主构建配置一起修改，
+由原未过滤 Rust bootstrap 测试、声明的完整证明根、canonical 及真实 CI 分别验收，
+不以局部行为测试代替生产资格；额外验证与完整生命周期成本未知。
+
 本宿主只维护当前采用的安装 profile。薄 shell 入口必须明确传入 `HOST CONFIG`；普通构建的 Rust 前端使用相同参数，不另设 `bootstrap` 子命令。
 旧的全工具 `bootstrap.json` 与未被执行计划调用的 `host.bootstrap` 操作已退役。
 detector、缓存和各单元仍消费各自显式登记的 profile，不因默认安装而取得额外工具。
