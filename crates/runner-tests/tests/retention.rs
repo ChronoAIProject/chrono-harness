@@ -247,12 +247,16 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
     let owner = inventory(h.path());
     let obsolete = ".chrono-harness/state/fixtures/obsolete";
     fs::write(h.path().join(obsolete), b"rebuildable").unwrap();
-    let publication = owner.begin("fixture", obsolete, json!(null)).unwrap();
+    let publication = inventory(h.path())
+        .begin("fixture", obsolete, json!(null))
+        .unwrap();
     let id = publication.id().to_owned();
     publication.complete(json!({"exit": 0})).unwrap();
     let sibling = ".chrono-harness/state/fixtures/current";
     fs::write(h.path().join(sibling), b"current original").unwrap();
-    let current = owner.begin("fixture", sibling, json!(null)).unwrap();
+    let current = inventory(h.path())
+        .begin("fixture", sibling, json!(null))
+        .unwrap();
     let mut parent_address = h
         .path()
         .join(".chrono-harness/state/output-retention-v1/paths");
