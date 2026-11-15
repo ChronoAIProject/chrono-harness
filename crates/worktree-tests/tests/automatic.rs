@@ -623,6 +623,117 @@ impl EnrollmentOriginalsFixture {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn ordinary_handoff_keeps_each_sealed_reports_inputs_out_of_the_callers_relation_budget() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = EnrollmentOriginalsFixture::imported();
+    let policy_path = h.root.join(POLICY_PATH);
+    let previous_policy = fs::read(&policy_path).unwrap();
+    let mut policy = json(&previous_policy).unwrap();
+    policy["max_related_outputs"] = value!(8);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.migrate_policy(&previous_policy, None).unwrap();
+    let role = format!(
+        "worktree-enrollment:{}",
+        sha256(h.target.to_str().unwrap().as_bytes())
+    );
+    let mut receipts = Vec::new();
+    let mut reports = Vec::new();
+    let mut originals = Vec::new();
+    for index in 0..6 {
+        let path = format!(".chrono-harness/state/ordinary-pending-{index}.json");
+        let report_path = format!(".chrono-harness/state/ordinary-final-{index}.json");
+        let bytes = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-managed-use-result/v1","report_path":report_path
+        }))
+        .unwrap();
+        let receipt = value!({"path":path,"sha256":sha256(&bytes)});
+        let report_bytes = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-report/v1","report_path":report_path,
+            "status":"used","managed_use_receipt":receipt
+        }))
+        .unwrap();
+        for (path, bytes) in [(&path, bytes), (&report_path, report_bytes)] {
+            fs::write(h.root.join(path), &bytes).unwrap();
+            inventory
+                .begin("lifecycle-original", path, value!(null))
+                .unwrap()
+                .complete_sealed(value!({"status":"used"}))
+                .unwrap();
+            originals.push((path.clone(), bytes));
+        }
+        receipts.push(receipt);
+        reports.push(report_path);
+    }
+    inventory
+        .reference_paths("actual-final-report-readers", &reports)
+        .unwrap();
+    let mut paths = vec![h.original.clone()];
+    paths.extend(receipts.iter().map(|r| r["path"].as_str().unwrap().into()));
+    inventory.reference_paths(&role, &paths).unwrap();
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    ledger["entries"][0]["enrollment"]["completed_uses"] = value!(receipts);
+    fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+    // The final report's reader and the pending domain role are independent.
+    // A partial report must keep its own receipt while sealed siblings settle.
+    fs::write(h.root.join(&reports[5]), b"{\"status\":").unwrap();
+    let invoke = || {
+        let output = chrono_worktree::run(&[
+            "use".into(),
+            "--host-root".into(),
+            h.root.to_str().unwrap().into(),
+            "--path".into(),
+            h.target.to_str().unwrap().into(),
+            "--operation".into(),
+            "not-a-registered-consumer".into(),
+        ]);
+        assert_ne!(
+            output.exit_code, 0,
+            "an absent checkout cannot execute work"
+        );
+        let report = json(output.stdout.as_bytes()).unwrap();
+        assert!(report["result_handoff_error"].is_null(), "{report}");
+        assert!(
+            !report
+                .to_string()
+                .contains("caller handoff dependency capacity")
+        );
+        report
+    };
+    let report = invoke();
+    let current = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    assert_eq!(
+        current["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipts[5]]),
+        "historical inputs belong to their sealed reports, not this caller: {report}"
+    );
+    assert_eq!(current["entries"][0]["status"], "active");
+    assert!(current["entries"][0]["terminal"].is_null());
+    assert_eq!(fs::read(h.root.join(&reports[5])).unwrap(), b"{\"status\":");
+    fs::write(h.root.join(&reports[5]), &originals[11].1).unwrap();
+    let report = invoke();
+    assert!(json(&fs::read(&ledger_path).unwrap()).unwrap()["entries"][0]
+        ["enrollment"]["completed_uses"].is_null(), "{report}");
+    inventory.maintain().unwrap();
+    for (path, bytes) in &originals {
+        assert_eq!(
+            fs::read(h.root.join(path)).unwrap(),
+            *bytes,
+            "actual report readers must retain the original bytes"
+        );
+    }
+    assert_eq!(
+        json(&fs::read(&policy_path).unwrap()).unwrap()["max_related_outputs"],
+        8
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
