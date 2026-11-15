@@ -17,7 +17,7 @@ fn require_frontier_expectation(actual: bool)
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn current_root_keeps_its_direct_original_boundary() {
-    let actual = policy::finalized_expansion(true, None, "parent", 0, 1);
+    let actual = policy::original_expansion(true, true, None, "parent", 0, 1);
     match actual {
         policy::FinalizedExpansion::RootFrontier => {},
         _ => require_frontier_expectation(false),
@@ -26,7 +26,7 @@ fn current_root_keeps_its_direct_original_boundary() {
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn discovered_rootless_parent_can_retire_without_expanding_all_originals() {
-    let actual = policy::finalized_expansion(false, Some("leaf"), "parent", 0, 0);
+    let actual = policy::original_expansion(false, true, Some("leaf"), "parent", 0, 0);
     match actual {
         policy::FinalizedExpansion::RetireFrontier => {},
         _ => require_frontier_expectation(false),
@@ -77,6 +77,130 @@ fn tree(root: &Path, name: &str) -> String {
     let path = format!(".chrono-harness/state/fixtures/{name}");
     fs::create_dir(root.join(&path)).unwrap();
     path
+}
+
+#[test]
+#[cfg(all(unix, not(verus_keep_ghost)))]
+fn publishing_recovery_root_preserves_326_originals_with_256_descriptors() {
+    if !isolated_capability_test(
+        "retention_frontier::publishing_recovery_root_preserves_326_originals_with_256_descriptors",
+    ) {
+        return;
+    }
+    let h = host(256, 16);
+    let parent_path = tree(h.path(), "interrupted-parent");
+    fs::write(
+        h.path().join(&parent_path).join("failure"),
+        b"parent failure",
+    )
+    .unwrap();
+    let parent = inventory(h.path())
+        .begin("fixture", &parent_path, json!(null))
+        .unwrap();
+    let parent_id = parent.id().to_owned();
+    let mut children = Vec::new();
+    for n in 0..326 {
+        let path = format!(".chrono-harness/state/fixtures/original-{n}");
+        fs::write(h.path().join(&path), b"required original").unwrap();
+        let child = inventory(h.path())
+            .begin("fixture", &path, json!(null))
+            .unwrap();
+        let id = child.id().to_owned();
+        child.complete_sealed(json!({"exit": 7})).unwrap();
+        children.push((id, path));
+    }
+    let paths: Vec<_> = children.iter().map(|(_, path)| path.clone()).collect();
+    inventory(h.path())
+        .dependencies_paths(&parent_path, &paths)
+        .unwrap();
+    inventory(h.path())
+        .reference("recovery:interrupted-parent", &[parent_id.clone()])
+        .unwrap();
+    drop(parent);
+    let parent_record = retention_state::object_path(h.path(), &parent_id);
+    let before = fs::read(&parent_record).unwrap();
+    let declared: Value = serde_json::from_slice(&before).unwrap();
+    assert_eq!(declared["output"]["phase"], "publishing");
+    assert_eq!(
+        declared["output"]["references"].as_array().unwrap().len(),
+        326
+    );
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    assert_eq!(
+        unsafe { libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) },
+        0
+    );
+    limit.rlim_cur = limit.rlim_cur.min(256);
+    assert_eq!(unsafe { libc::setrlimit(libc::RLIMIT_NOFILE, &limit) }, 0);
+    let verification = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let leaf = inventory(h.path())
+            .maintain_originals(&[children[0].0.clone()])
+            .unwrap();
+        assert!(
+            leaf["accounting_errors"].as_array().unwrap().is_empty(),
+            "{leaf}"
+        );
+        assert_eq!(leaf["removed_logical_bytes"], 0, "{leaf}");
+        assert_eq!(fs::read(&parent_record).unwrap(), before);
+        // Selecting the unfinished producer still accounts its own bytes, while
+        // the actual recovery root keeps publication and every dependency.
+        for _ in 0..8 {
+            let own = inventory(h.path())
+                .maintain_originals(&[parent_id.clone()])
+                .unwrap();
+            assert!(
+                own["accounting_errors"].as_array().unwrap().is_empty(),
+                "{own}"
+            );
+            let state: Value = serde_json::from_slice(&fs::read(&parent_record).unwrap()).unwrap();
+            assert_eq!(state["output"]["phase"], "sealing");
+            assert_eq!(state["output"]["outcome"]["completion"], "not-established");
+            if state["output"]["manifest"]["sealed"] == true {
+                break;
+            }
+        }
+        let accounted: Value = serde_json::from_slice(&fs::read(&parent_record).unwrap()).unwrap();
+        assert_eq!(accounted["output"]["phase"], "sealing");
+        assert_eq!(accounted["output"]["manifest"]["sealed"], true);
+        assert_eq!(
+            accounted["output"]["outcome"]["completion"],
+            "not-established"
+        );
+        assert_eq!(
+            accounted["output"]["references"],
+            declared["output"]["references"]
+        );
+        assert_eq!(
+            fs::read(h.path().join(&parent_path).join("failure")).unwrap(),
+            b"parent failure"
+        );
+        for (_, path) in &children {
+            assert_eq!(fs::read(h.path().join(path)).unwrap(), b"required original");
+        }
+        // A missing declared original must remain an error, even though the
+        // protected publisher's complete width no longer consumes descriptors.
+        fs::remove_file(retention_state::object_path(h.path(), &children[325].0)).unwrap();
+        let missing = inventory(h.path())
+            .maintain_originals(&[children[0].0.clone()])
+            .unwrap();
+        assert!(
+            !missing["accounting_errors"].as_array().unwrap().is_empty(),
+            "{missing}"
+        );
+        for (_, path) in &children {
+            assert_eq!(fs::read(h.path().join(path)).unwrap(), b"required original");
+        }
+    }));
+    if let Err(failure) = verification {
+        eprintln!(
+            "retained publishing-recovery fixture: {}",
+            h.keep().display()
+        );
+        std::panic::resume_unwind(failure);
+    }
 }
 
 #[test]
