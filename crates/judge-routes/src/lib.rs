@@ -723,13 +723,13 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
             "E_RECEIPT_MISMATCH: plan/method/tool/argv/cwd/input/environment/output".into(),
         );
     }
-    let decoded = serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
-        chrono_harness::verified_verifier::proof_stdout(
-            &op.method.output_contract,
+    let decoded = match &op.method.output_contract {
+        None => None,
+        Some(_) => serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
             &p.stdout_bytes,
-        ),
-    )
-    .ok();
+        )
+        .ok(),
+    };
     chrono_harness::verified_verifier::admit_observed_output(
         &op.method.output_contract,
         &decoded,

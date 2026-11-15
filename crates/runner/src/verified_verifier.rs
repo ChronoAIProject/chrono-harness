@@ -203,13 +203,6 @@ pub fn validate_contract(contract: &Option<OutputContract>) -> (out: Result<(), 
     }
 }
 
-/// 普通操作不解析其业务输出；只向解码接口传空输入。
-pub fn proof_stdout<'a>(contract: &Option<OutputContract>, raw: &'a [u8]) -> (out: &'a [u8])
-    ensures out@ == if contract.is_some() { raw@ } else { Seq::<u8>::empty() },
-{
-    match contract { None => &[], Some(_) => raw }
-}
-
 fn append_bytes(bytes: &mut Vec<u8>, suffix: &[u8])
     ensures bytes@ == old(bytes)@ + suffix@,
 {
@@ -586,7 +579,10 @@ pub fn bind_operation_output<I: sources::CandidateSourceRead + CompilerReportRea
         || process.exit != 0 || process.failed {
         return Err("E_VERUS_RESULT: original operation, arguments or process rejected".to_string());
     }
-    let decoded = io.decode(proof_stdout(method.output_contract, process.stdout));
+    let decoded = match method.output_contract {
+        None => None,
+        Some(_) => io.decode(process.stdout),
+    };
     match admit_observed_output(method.output_contract, &decoded, &args,
         process.exit, process.failed, process.dependency, method.output_limit_bytes, process.artifact) {
         Err(error) => { return Err(error); },
