@@ -69,24 +69,35 @@ pub fn admission_handoff<S, H, R, P>(initial: S, handoff: H, reload: R, protect:
     }
 }
 
+pub open spec fn enrollment_write_result<S, W, A>(initial: S,
+    write: W, after: A, out: (S, Result<(), String>)) -> bool
+    where W: FnOnce(S) -> (S, Result<(), String>),
+        A: FnOnce(S) -> (S, Result<(), String>),
+{
+    exists|written: S, writing: Result<(), String>|
+        #[trigger] write.ensures((initial,), (written, writing))
+        && match writing {
+            Err(error) => out == (written, Err::<(), String>(error)),
+            Ok(()) => after.ensures((written,), out),
+        }
+}
+
 pub open spec fn enrollment_record_result<S, B, W, A>(initial: S, grows: bool,
     before: B, write: W, after: A, out: (S, Result<(), String>)) -> bool
     where B: FnOnce(S) -> (S, Result<(), String>),
         W: FnOnce(S) -> (S, Result<(), String>),
         A: FnOnce(S) -> (S, Result<(), String>),
 {
-    exists|prepared: S, preparation: Result<(), String>|
-        (if grows { #[trigger] before.ensures((initial,), (prepared, preparation)) }
-            else { prepared == initial && preparation == Ok::<(), String>(()) })
-        && match preparation {
-            Err(error) => out == (prepared, Err::<(), String>(error)),
-            Ok(()) => exists|written: S, writing: Result<(), String>|
-                #[trigger] write.ensures((prepared,), (written, writing))
-                && match writing {
-                    Err(error) => out == (written, Err::<(), String>(error)),
-                    Ok(()) => after.ensures((written,), out),
-                },
-        }
+    if grows {
+        exists|prepared: S, preparation: Result<(), String>|
+            #[trigger] before.ensures((initial,), (prepared, preparation))
+            && match preparation {
+                Err(error) => out == (prepared, Err::<(), String>(error)),
+                Ok(()) => enrollment_write_result(prepared, write, after, out),
+            }
+    } else {
+        enrollment_write_result(initial, write, after, out)
+    }
 }
 
 /// 新引用先保护；收窄沿用旧保护，写入成功后才发布当前引用。
@@ -105,19 +116,29 @@ pub fn publish_enrollment_record<S, B, W, A>(initial: S, grows: bool,
     let ghost preparation_result = preparation;
     assert(if grows { before.ensures((initial,), (prepared, preparation_result)) }
         else { prepared == initial && preparation_result == Ok::<(), String>(()) });
-    match preparation { Err(error) => return (state, Err(error)), Ok(()) => (), }
+    match preparation {
+        Err(error) => {
+            let out = (state, Err(error));
+            assert(enrollment_record_result(initial, grows, before, write, after, out));
+            return out;
+        },
+        Ok(()) => (),
+    }
     let (state, writing) = write(state);
     let ghost written = state;
     let ghost writing_result = writing;
     assert(write.ensures((prepared,), (written, writing_result)));
-    match writing {
+    let out = match writing {
         Err(error) => (state, Err(error)),
         Ok(()) => {
             let out = after(state);
             assert(after.ensures((written,), out));
             out
         },
-    }
+    };
+    assert(enrollment_write_result(prepared, write, after, out));
+    assert(enrollment_record_result(initial, grows, before, write, after, out));
+    out
 }
 
 /// Only explicit maintenance with the original exclusion probes a missing cache.
