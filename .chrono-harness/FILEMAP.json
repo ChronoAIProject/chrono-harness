@@ -2,14 +2,6 @@
   "schema_version": 2,
   "status": "proposed",
   "require_new_file_classification": true,
-  "reference_syntax": [
-    {"file":".chrono-harness/ci/bootstrap-native.sh","before":"--manifest-path \"$task_root/","after":"--manifest-path \"$task_root/","trailing":"","suffix_before":"","suffix_after":"","base":2},
-    {"file":".chrono-harness/ci/bootstrap-native-tests.sh","before":"'<--manifest-path>' \"<$task_main/","after":"'<--manifest-path>' \"<$task_main/","trailing":">","suffix_before":"","suffix_after":"","base":2},
-    {"file":"crates/host-bootstrap-tests/tests/owner.rs","before":"let mut layout: Value =\n            serde_json::from_slice(include_bytes!(\"","after":"let mut layout: Value = serde_json::from_slice(include_bytes!(\n            \"","trailing":"","suffix_before":"))\n                .unwrap();","suffix_after":"\n        ))\n        .unwrap();","base":0},
-    {"file":"crates/host-release-tests/tests/support/frontend.rs","before":".arg(Path::new(env!(\"CARGO_MANIFEST_DIR\")).join(\"","after":".arg(\n                Path::new(env!(\"CARGO_MANIFEST_DIR\"))\n                    .join(\"","trailing":"","suffix_before":"))","suffix_after":"),\n            )","base":1},
-    {"file":"crates/host-release-tests/tests/support/frontend.rs","before":"Path::new(env!(\"CARGO_MANIFEST_DIR\"))\n            .join(\"","after":"Path::new(env!(\"CARGO_MANIFEST_DIR\"))\n            .join(\"","trailing":"","suffix_before":"","suffix_after":"","base":1},
-    {"file":"crates/host-release-tests/tests/support/execution.rs","before":"Path::new(env!(\"CARGO_MANIFEST_DIR\"))\n            .join(\"","after":"Path::new(env!(\"CARGO_MANIFEST_DIR\"))\n            .join(\"","trailing":"","suffix_before":"","suffix_after":"","base":1}
-  ],
   "cost_models": {
     "unmeasured": {
       "cpu_ms": null,
