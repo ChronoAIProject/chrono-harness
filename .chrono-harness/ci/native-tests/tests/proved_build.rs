@@ -862,15 +862,25 @@ fn component_archive_uses_the_installation_without_a_download_cache() {
     let (temp, config) = component_archive_fixture();
     let root = temp.path();
     write(&root.join(&config.archive), b"fixed Verus package");
-    assert!(!root.join(".chrono-harness/cache/verus/package.zip").exists());
+    assert!(
+        !root
+            .join(".chrono-harness/cache/verus/package.zip")
+            .exists()
+    );
     let (path, identity) = proved_build::dependencies::component_archive(root, &config).unwrap();
     assert_eq!(path, root.join(&config.archive));
     assert_eq!(identity.path, path.to_str().unwrap());
-    assert_eq!(identity.sha256, chrono_harness::sha256(b"fixed Verus package"));
+    assert_eq!(
+        identity.sha256,
+        chrono_harness::sha256(b"fixed Verus package")
+    );
     assert_eq!(identity.length, b"fixed Verus package".len() as u64);
 }
 
-fn component_archive_fixture() -> (tempfile::TempDir, proved_build::dependencies::ComponentConfig) {
+fn component_archive_fixture() -> (
+    tempfile::TempDir,
+    proved_build::dependencies::ComponentConfig,
+) {
     let temp = tempfile::tempdir().unwrap();
     let config = proved_build::dependencies::ComponentConfig {
         checksum: ".chrono-harness/ci/verus.sha256".into(),
@@ -896,7 +906,10 @@ fn component_archive_fixture() -> (tempfile::TempDir, proved_build::dependencies
 #[test]
 fn component_archive_rejects_a_replaced_installation_with_a_valid_download_cache() {
     let (temp, config) = component_archive_fixture();
-    write(&temp.path().join(&config.archive), b"replaced installed package");
+    write(
+        &temp.path().join(&config.archive),
+        b"replaced installed package",
+    );
     write(
         &temp.path().join(".chrono-harness/cache/verus/package.zip"),
         b"fixed Verus package",
