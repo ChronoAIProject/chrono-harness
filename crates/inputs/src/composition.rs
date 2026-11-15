@@ -10,7 +10,6 @@ use chrono_harness::{
 };
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
-#[cfg(not(verus_keep_ghost))]
 use std::collections::BTreeSet;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
@@ -147,6 +146,189 @@ pub fn admit_imported_input(absent: bool, presence: Option<&str>,
         Err("digest/presence mismatch".to_string())
     } else { Ok(()) }
 }
+pub struct CompositionSources<S, O> {
+    pub state: S,
+    pub originals: Vec<O>,
+    pub seen: BTreeSet<String>,
+}
+
+impl<S, O> CompositionSources<S, O> {
+    pub fn new(state: S) -> (out: Self)
+        ensures out.state == state, out.originals@ == Seq::<O>::empty(),
+            out.seen@ == Set::<String>::empty(),
+    {
+        Self { state, originals: Vec::new(), seen: BTreeSet::new() }
+    }
+}
+
+pub open spec fn composition_source_step_result<S, X, T, O, H, I, M>(
+    initial: CompositionSources<S, O>, row: &X, hash: &H, import: &I, merge: &M,
+    out: (CompositionSources<S, O>, Result<(), String>)) -> bool
+    where H: Fn(S, &X) -> (S, Result<String, String>),
+        I: Fn(S, &X) -> (S, Result<(T, O), String>),
+        M: Fn(S, T) -> (S, Result<(), String>),
+{
+    exists|hashed: S, digest: Result<String, String>|
+        #[trigger] hash.ensures((initial.state, row), (hashed, digest))
+        && match digest {
+            Err(error) => out.0.state == hashed
+                && out.0.originals@ == initial.originals@
+                && out.0.seen@ == initial.seen@
+                && out.1 == Err::<(), String>(error),
+            Ok(key) => if initial.seen@.contains(key) {
+                out.0.state == hashed && out.0.originals@ == initial.originals@
+                    && out.0.seen@ == initial.seen@
+                    && match out.1 {
+                        Err(error) => error@ == "E_COMPOSE_ORIGINAL: duplicate source"@,
+                        _ => false,
+                    }
+            } else {
+                out.0.seen@ == initial.seen@.insert(key)
+                    && exists|imported: S, importing: Result<(T, O), String>|
+                        #[trigger] import.ensures((hashed, row), (imported, importing))
+                        && match importing {
+                            Err(error) => out.0.state == imported
+                                && out.0.originals@ == initial.originals@
+                                && out.1 == Err::<(), String>(error),
+                            Ok((part, original)) => out.0.originals@
+                                == initial.originals@.push(original)
+                                && merge.ensures((imported, part), (out.0.state, out.1)),
+                        }
+            },
+        }
+}
+
+/// 按原顺序计算摘要、拒绝重复、导入、记录原件，再合并；保留每阶段首错与状态。
+pub fn compose_source_step<S, X, T, O, H, I, M>(
+    progress: CompositionSources<S, O>, row: &X, hash: &H, import: &I, merge: &M,
+) -> (out: (CompositionSources<S, O>, Result<(), String>))
+    where H: Fn(S, &X) -> (S, Result<String, String>),
+        I: Fn(S, &X) -> (S, Result<(T, O), String>),
+        M: Fn(S, T) -> (S, Result<(), String>),
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        forall|state: S, row: &X| hash.requires((state, row)),
+        forall|state: S, row: &X| import.requires((state, row)),
+        forall|state: S, part: T| merge.requires((state, part)),
+    ensures composition_source_step_result(progress, row, hash, import, merge, out),
+{
+    let ghost initial = progress;
+    let CompositionSources { state, mut originals, mut seen } = progress;
+    let (state, digest) = hash(state, row);
+    let ghost hashed = state;
+    let ghost hashing = digest;
+    assert(hash.ensures((initial.state, row), (hashed, hashing)));
+    let key = match digest {
+        Err(error) => return (CompositionSources { state, originals, seen }, Err(error)),
+        Ok(key) => key,
+    };
+    let ghost identity = key;
+    if !seen.insert(key) {
+        assert(seen@ =~= initial.seen@);
+        return (CompositionSources { state, originals, seen },
+            Err("E_COMPOSE_ORIGINAL: duplicate source".to_string()));
+    }
+    let (state, importing) = import(state, row);
+    let ghost imported = state;
+    let ghost import_result = importing;
+    assert(import.ensures((hashed, row), (imported, import_result)));
+    let (part, original) = match importing {
+        Err(error) => return (CompositionSources { state, originals, seen }, Err(error)),
+        Ok(value) => value,
+    };
+    originals.push(original);
+    let (state, result) = merge(state, part);
+    assert(merge.ensures((imported, part), (state, result)));
+    (CompositionSources { state, originals, seen }, result)
+}
+
+pub open spec fn composition_sources_prefix<S, X, T, O, H, I, M>(
+    rows: Seq<X>, states: Seq<CompositionSources<S, O>>,
+    initial: CompositionSources<S, O>, hash: &H, import: &I, merge: &M) -> bool
+    where H: Fn(S, &X) -> (S, Result<String, String>),
+        I: Fn(S, &X) -> (S, Result<(T, O), String>),
+        M: Fn(S, T) -> (S, Result<(), String>),
+{
+    0 < states.len() <= rows.len() + 1 && states[0] == initial
+        && forall|i: int| 0 <= i < states.len() - 1 ==>
+            #[trigger] composition_source_step_result(states[i], &rows[i], hash, import, merge,
+                (states[i + 1], Ok::<(), String>(())))
+}
+
+/// 完整遍历实际来源库存；只在全部来源成功后返回成功，首错不消费后续来源。
+pub fn compose_sources<S, X, T, O, H, I, M>(
+    progress: CompositionSources<S, O>, rows: &[X], hash: &H, import: &I, merge: &M,
+) -> (out: (CompositionSources<S, O>, Result<(), String>))
+    where H: Fn(S, &X) -> (S, Result<String, String>),
+        I: Fn(S, &X) -> (S, Result<(T, O), String>),
+        M: Fn(S, T) -> (S, Result<(), String>),
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+        forall|state: S, row: &X| hash.requires((state, row)),
+        forall|state: S, row: &X| import.requires((state, row)),
+        forall|state: S, part: T| merge.requires((state, part)),
+    ensures exists|states: Seq<CompositionSources<S, O>>|
+        #[trigger] composition_sources_prefix(rows@, states, progress, hash, import, merge)
+        && match out.1 {
+            Ok(()) => states.len() == rows.len() + 1 && out.0 == states.last(),
+            Err(error) => states.len() <= rows.len()
+                && composition_source_step_result(states.last(), &rows@[states.len() - 1],
+                    hash, import, merge, (out.0, Err::<(), String>(error))),
+        },
+{
+    let ghost initial = progress;
+    let mut current = progress;
+    let ghost states = seq![initial];
+    let mut i = 0usize;
+    while i < rows.len()
+        invariant i <= rows.len(), states.len() == i + 1, states.last() == current,
+            composition_sources_prefix(rows@, states, initial, hash, import, merge),
+            vstd::laws_cmp::obeys_cmp::<String>(),
+            forall|state: S, row: &X| hash.requires((state, row)),
+            forall|state: S, row: &X| import.requires((state, row)),
+            forall|state: S, part: T| merge.requires((state, part)),
+        decreases rows.len() - i,
+    {
+        let ghost before = current;
+        let (next, result) = compose_source_step(current, &rows[i], hash, import, merge);
+        let ghost original = result;
+        assert(composition_source_step_result(before, &rows@[i as int], hash, import, merge,
+            (next, original)));
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(states.len() <= rows.len());
+                assert(composition_sources_prefix(rows@, states, progress, hash, import, merge));
+                assert(composition_source_step_result(states.last(), &rows@[states.len() - 1],
+                    hash, import, merge, (out.0, Err::<(), String>(error))));
+                assert(out.1 == Err::<(), String>(error));
+                return out;
+            },
+            Ok(value) => {
+                assert(value == ());
+                assert(original == Ok::<(), String>(value));
+                assert(original == Ok::<(), String>(()));
+                assert(before == states.last());
+                assert(composition_source_step_result(states.last(), &rows@[i as int],
+                    hash, import, merge, (next, Ok::<(), String>(()))) );
+                proof {
+                    let previous = states;
+                    states = states.push(next);
+                    assert forall|j: int| 0 <= j < states.len() - 1 implies
+                        #[trigger] composition_source_step_result(states[j], &rows@[j],
+                            hash, import, merge, (states[j + 1], Ok::<(), String>(()))) by {
+                        if j < previous.len() - 1 {
+                            assert(composition_source_step_result(previous[j], &rows@[j],
+                                hash, import, merge, (previous[j + 1], Ok::<(), String>(()))) );
+                        }
+                    }
+                }
+                current = next;
+            },
+        }
+        i += 1;
+    }
+    (current, Ok(()))
+}
+
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -351,42 +533,57 @@ pub fn compose(
     } else {
         None
     };
-    let mut pair = value!({});
-    let mut originals = Vec::new();
-    let mut seen = BTreeSet::new();
-    for source in &manifest.sources {
-        if !seen.insert(wire::digest(
-            &serde_json::to_value(source).map_err(|e| e.to_string())?,
-        )?) {
-            return Err("E_COMPOSE_ORIGINAL: duplicate source".into());
-        }
-        let (part, original) = import_source(root, source, config, base, candidate, &old, &new)?;
-        originals.push(original);
-        for name in ["base", "candidate"] {
-            let Some(snapshot) = part.get(name) else {
-                continue;
-            };
-            if pair.get(name).is_none() {
-                pair[name] = snapshot.clone();
-                pair[name]["files"] = value!({});
-            }
-            if pair[name]["environment"] != snapshot["environment"] {
-                return Err(format!(
-                    "E_COMPOSE_ENVIRONMENT: {name} conflicting originals"
-                ));
-            }
-            for (id, file) in snapshot["files"].as_object().ok_or("snapshot files")? {
-                let observed = file.clone();
-                if pair[name]["files"]
-                    .get(id)
-                    .is_some_and(|prior| prior != &observed)
-                {
-                    return Err(format!("E_COMPOSE_CONFLICT: {name} overlapping input {id}"));
+    let (composition, composed) = compose_sources(
+        CompositionSources::new(value!({})),
+        &manifest.sources,
+        &|pair, source| {
+            let digest = serde_json::to_value(source)
+                .map_err(|error| error.to_string())
+                .and_then(|value| wire::digest(&value));
+            (pair, digest)
+        },
+        &|pair, source| {
+            (
+                pair,
+                import_source(root, source, config, base, candidate, &old, &new),
+            )
+        },
+        &|mut pair, part: Value| {
+            let merged = (|| {
+                for name in ["base", "candidate"] {
+                    let Some(snapshot) = part.get(name) else {
+                        continue;
+                    };
+                    if pair.get(name).is_none() {
+                        pair[name] = snapshot.clone();
+                        pair[name]["files"] = value!({});
+                    }
+                    if pair[name]["environment"] != snapshot["environment"] {
+                        return Err(format!(
+                            "E_COMPOSE_ENVIRONMENT: {name} conflicting originals"
+                        ));
+                    }
+                    for (id, file) in snapshot["files"].as_object().ok_or("snapshot files")? {
+                        let observed = file.clone();
+                        if pair[name]["files"]
+                            .get(id)
+                            .is_some_and(|prior| prior != &observed)
+                        {
+                            return Err(format!(
+                                "E_COMPOSE_CONFLICT: {name} overlapping input {id}"
+                            ));
+                        }
+                        pair[name]["files"][id] = observed;
+                    }
                 }
-                pair[name]["files"][id] = observed;
-            }
-        }
-    }
+                Ok(())
+            })();
+            (pair, merged)
+        },
+    );
+    composed?;
+    let pair = composition.state;
+    let originals = composition.originals;
     for (name, r) in [("base", &old), ("candidate", &new)] {
         if pair.get(name).is_none() {
             return Err(format!(

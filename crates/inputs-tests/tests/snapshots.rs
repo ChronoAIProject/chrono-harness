@@ -1441,3 +1441,270 @@ fn compose_genuine_captures_retains_originals_and_rejects_conflicts_and_missing_
         );
     }
 }
+
+verus! {
+struct CompositionSourceFixture {
+    digest: String,
+    id: u64,
+    failure: u8,
+}
+
+type CompositionSourceTrace = Vec<(u64, u8)>;
+
+fn fixture_source_hash(mut trace: CompositionSourceTrace, row: &CompositionSourceFixture)
+    -> (out: (CompositionSourceTrace, Result<String, String>))
+    ensures out.0@ == trace@.push((row.id, 1u8)),
+        if row.failure == 1 { match out.1 {
+            Err(error) => error@ == "hash 原错\0\n"@, _ => false,
+        } } else { out.1 == Ok::<String, String>(row.digest) },
+{
+    trace.push((row.id, 1));
+    let result = if row.failure == 1 { Err("hash 原错\0\n".to_string()) }
+        else { Ok(row.digest.clone()) };
+    (trace, result)
+}
+
+fn fixture_source_import(mut trace: CompositionSourceTrace, row: &CompositionSourceFixture)
+    -> (out: (CompositionSourceTrace, Result<((u64, bool), u64), String>))
+    ensures out.0@ == trace@.push((row.id, 2u8)),
+        if row.failure == 2 { match out.1 {
+            Err(error) => error@ == "import 原错\0\n"@, _ => false,
+        } } else { out.1 == Ok::<((u64, bool), u64), String>(((row.id, row.failure == 3), row.id)) },
+{
+    trace.push((row.id, 2));
+    let result = if row.failure == 2 { Err("import 原错\0\n".to_string()) }
+        else { Ok(((row.id, row.failure == 3), row.id)) };
+    (trace, result)
+}
+
+fn fixture_source_merge(mut trace: CompositionSourceTrace, part: (u64, bool))
+    -> (out: (CompositionSourceTrace, Result<(), String>))
+    ensures out.0@ == trace@.push((part.0, 3u8)),
+        if part.1 { match out.1 {
+            Err(error) => error@ == "merge 原错\0\n"@, _ => false,
+        } } else { out.1 == Ok::<(), String>(()) },
+{
+    trace.push((part.0, 3));
+    (trace, if part.1 { Err("merge 原错\0\n".to_string()) } else { Ok(()) })
+}
+
+spec fn fixture_source_step_expected(
+    initial: policy::composition::CompositionSources<CompositionSourceTrace, u64>,
+    row: &CompositionSourceFixture,
+    out: (policy::composition::CompositionSources<CompositionSourceTrace, u64>, Result<(), String>),
+) -> bool {
+    let duplicate = initial.seen@.contains(row.digest);
+    let stops_before_import = row.failure == 1 || duplicate;
+    let stops_before_merge = stops_before_import || row.failure == 2;
+    out.0.state@ == if stops_before_import { initial.state@.push((row.id, 1u8)) }
+        else if stops_before_merge { initial.state@.push((row.id, 1u8)).push((row.id, 2u8)) }
+        else { initial.state@.push((row.id, 1u8)).push((row.id, 2u8)).push((row.id, 3u8)) }
+    && out.0.originals@ == if stops_before_merge { initial.originals@ }
+        else { initial.originals@.push(row.id) }
+    && out.0.seen@ == if row.failure == 1 { initial.seen@ }
+        else { initial.seen@.insert(row.digest) }
+    && if row.failure == 1 { match out.1 {
+        Err(error) => error@ == "hash 原错\0\n"@, _ => false,
+    } } else if duplicate { match out.1 {
+        Err(error) => error@ == "E_COMPOSE_ORIGINAL: duplicate source"@, _ => false,
+    } } else if row.failure == 2 { match out.1 {
+        Err(error) => error@ == "import 原错\0\n"@, _ => false,
+    } } else if row.failure == 3 { match out.1 {
+        Err(error) => error@ == "merge 原错\0\n"@, _ => false,
+    } } else { out.1 == Ok::<(), String>(()) }
+}
+
+proof fn fixture_source_step_bound(
+    initial: policy::composition::CompositionSources<CompositionSourceTrace, u64>,
+    row: &CompositionSourceFixture,
+    out: (policy::composition::CompositionSources<CompositionSourceTrace, u64>, Result<(), String>),
+)
+    requires policy::composition::composition_source_step_result(initial, row,
+        &fixture_source_hash, &fixture_source_import, &fixture_source_merge, out),
+    ensures fixture_source_step_expected(initial, row, out),
+{
+    if initial.seen@.contains(row.digest) {
+        assert(initial.seen@.insert(row.digest) =~= initial.seen@);
+    }
+}
+
+fn composition_source_trace(expected: &[(u64, u8)], actual: &[(u64, u8)])
+    requires actual@ == expected@,
+{
+    let same_length = actual.len() == expected.len();
+    assert(same_length);
+    if !same_length { panic!(); }
+    let mut i = 0;
+    while i < actual.len()
+        invariant i <= actual.len(), actual@ == expected@,
+        decreases actual.len() - i,
+    {
+        let same = actual[i].0 == expected[i].0 && actual[i].1 == expected[i].1;
+        assert(same);
+        if !same { panic!(); }
+        i += 1;
+    }
+}
+
+fn composition_sources_case(failure: u8, duplicate: bool)
+    requires failure <= 3, vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    use policy::composition::*;
+    let first = "来源\0\n".to_string();
+    let second = if duplicate { first.clone() } else { "不同来源\0\n".to_string() };
+    let last = "后续完整来源\0\n".to_string();
+    proof {
+        reveal_strlit("来源\0\n"); reveal_strlit("不同来源\0\n");
+        reveal_strlit("后续完整来源\0\n");
+        assert("来源\0\n"@.len() != "不同来源\0\n"@.len());
+        assert("来源\0\n"@.len() != "后续完整来源\0\n"@.len());
+        assert("不同来源\0\n"@.len() != "后续完整来源\0\n"@.len());
+        assert((first == second) == duplicate);
+        assert(first != last && second != last);
+    }
+    let rows = vec![
+        CompositionSourceFixture { digest: first, id: 11, failure: 0 },
+        CompositionSourceFixture { digest: second, id: 29, failure },
+        CompositionSourceFixture { digest: last, id: 47, failure: 0 },
+    ];
+    let initial = CompositionSources::new(Vec::new());
+    let ghost original = initial;
+    let (progress, result) = compose_sources(initial, rows.as_slice(),
+        &fixture_source_hash, &fixture_source_import, &fixture_source_merge);
+    let ghost outcome = result;
+    proof {
+        let states = choose|states: Seq<CompositionSources<CompositionSourceTrace, u64>>|
+            #[trigger] composition_sources_prefix(rows@, states, original,
+                &fixture_source_hash, &fixture_source_import, &fixture_source_merge)
+            && match outcome {
+                Ok(()) => states.len() == rows.len() + 1 && progress == states.last(),
+                Err(error) => states.len() <= rows.len()
+                    && composition_source_step_result(states.last(), &rows@[states.len() - 1],
+                        &fixture_source_hash, &fixture_source_import, &fixture_source_merge,
+                        (progress, Err::<(), String>(error))),
+            };
+        if states.len() == 1 {
+            match outcome {
+                Ok(()) => { assert(false); },
+                Err(error) => {
+                    fixture_source_step_bound(original, &rows@[0], (progress, Err::<(), String>(error)));
+                    assert(false);
+                },
+            }
+        }
+        assert(states.len() >= 2);
+        fixture_source_step_bound(original, &rows@[0], (states[1], Ok::<(), String>(()))) ;
+        assert(states[1].state@ == seq![(11u64, 1u8), (11u64, 2u8), (11u64, 3u8)]);
+        assert(states[1].originals@ == seq![11u64]);
+        assert(states[1].seen@ == Set::<String>::empty().insert(rows@[0].digest));
+        assert(states[1].seen@.contains(rows@[1].digest) == duplicate);
+        if states.len() >= 3 {
+            fixture_source_step_bound(states[1], &rows@[1], (states[2], Ok::<(), String>(()))) ;
+            assert(failure == 0 && !duplicate);
+            assert(!states[2].seen@.contains(rows@[2].digest));
+        }
+        match outcome {
+            Ok(()) => {
+                assert(states.len() == 4);
+                fixture_source_step_bound(states[2], &rows@[2], (progress, Ok::<(), String>(()))) ;
+            },
+            Err(error) => {
+                if states.len() == 3 {
+                    fixture_source_step_bound(states[2], &rows@[2], (progress, Err::<(), String>(error)));
+                    assert(false);
+                }
+                assert(states.len() == 2);
+                fixture_source_step_bound(states[1], &rows@[1], (progress, Err::<(), String>(error)));
+            },
+        }
+    }
+    if failure == 1 || duplicate {
+        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1)], progress.state.as_slice());
+    } else if failure == 2 {
+        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2)], progress.state.as_slice());
+    } else if failure == 0 {
+        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3),
+            (47, 1), (47, 2), (47, 3)], progress.state.as_slice());
+    } else {
+        composition_source_trace(&[(11, 1), (11, 2), (11, 3), (29, 1), (29, 2), (29, 3)], progress.state.as_slice());
+    }
+    let expected_originals = if failure == 1 || duplicate || failure == 2 { 1usize }
+        else if failure == 0 { 3usize } else { 2usize };
+    let original_count_matches = progress.originals.len() == expected_originals;
+    assert(original_count_matches);
+    if !original_count_matches { panic!(); }
+    let first_original_matches = progress.originals[0] == 11;
+    assert(first_original_matches);
+    if !first_original_matches { panic!(); }
+    if expected_originals >= 2 {
+        let second_original_matches = progress.originals[1] == 29;
+        assert(second_original_matches);
+        if !second_original_matches { panic!(); }
+    }
+    if expected_originals == 3 {
+        let last_original_matches = progress.originals[2] == 47;
+        assert(last_original_matches);
+        if !last_original_matches { panic!(); }
+    }
+    let expected_error = if failure == 1 { "hash 原错\0\n" }
+        else if duplicate { "E_COMPOSE_ORIGINAL: duplicate source" }
+        else if failure == 2 { "import 原错\0\n" }
+        else if failure == 3 { "merge 原错\0\n" }
+        else { "" };
+    composition_result(result, failure == 0 && !duplicate, expected_error);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_sources_preserve_order_originals_and_every_first_failure()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    composition_sources_case(0, false);
+    composition_sources_case(1, false);
+    composition_sources_case(2, false);
+    composition_sources_case(3, false);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_sources_reject_duplicate_before_import_and_keep_hash_error_priority()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    composition_sources_case(0, true);
+    composition_sources_case(1, true);
+    composition_sources_case(2, true);
+    composition_sources_case(3, true);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_sources_empty_inventory_keeps_exact_initial_state()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    use policy::composition::*;
+    let mut trace = Vec::new();
+    trace.push((u64::MAX, u8::MAX));
+    let initial = CompositionSources::<CompositionSourceTrace, u64>::new(trace);
+    let ghost original = initial;
+    let rows: Vec<CompositionSourceFixture> = Vec::new();
+    let (progress, result) = compose_sources(initial, rows.as_slice(),
+        &fixture_source_hash, &fixture_source_import, &fixture_source_merge);
+    let ghost outcome = result;
+    proof {
+        let states = choose|states: Seq<CompositionSources<CompositionSourceTrace, u64>>|
+            #[trigger] composition_sources_prefix(rows@, states, original,
+                &fixture_source_hash, &fixture_source_import, &fixture_source_merge)
+            && match outcome {
+                Ok(()) => states.len() == rows.len() + 1 && progress == states.last(),
+                Err(error) => states.len() <= rows.len()
+                    && composition_source_step_result(states.last(), &rows@[states.len() - 1],
+                        &fixture_source_hash, &fixture_source_import, &fixture_source_merge,
+                        (progress, Err::<(), String>(error))),
+            };
+        assert(states.len() == 1 && progress == original);
+    }
+    composition_source_trace(&[(u64::MAX, u8::MAX)], progress.state.as_slice());
+    let no_originals = progress.originals.len() == 0;
+    assert(no_originals);
+    if !no_originals { panic!(); }
+    composition_result(result, true, "");
+}
+
+}
