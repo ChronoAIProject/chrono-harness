@@ -5322,6 +5322,8 @@
             "serde_expected",
             "--test",
             "serde_unexpected",
+            "--test",
+            "serde_errors",
             "--",
             "--test-threads=1"
           ]

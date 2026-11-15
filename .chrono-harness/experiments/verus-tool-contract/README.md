@@ -249,5 +249,24 @@ Unicode／NUL 文本截断和含 255 字节的截断拒绝。浮点用例只核�
 声明位于同一真实 vstd 的 `serde_specs`，没有 `external_body`；全部变体和字段直接
 来自原类型。字段预期用标准模式匹配，不要求外部枚举没有生成的 Verus 字段访问器。
 
+## Serde 错误构造的外部 trait
+
+真实派生通过 `serde::de::Error` 构造错误，Serializer 后续接口也要求
+`serde::ser::Error`。固定 Serde std 配置的两 trait 都有 `Sized + StdError` 父约束；
+de 提供八种方法，ser 提供 `custom`，不能漏掉真实父约束或替换成自造错误类型。
+`serde-errors.patch` 由同一外部工具所有者维护，顺序应用在 `serde-unexpected.patch` 后。
+
+先登记五项 Rust／Verus 预期：九种真实接口原参数及结果转交、两个正确的本地实现、
+不能无依据断言两次结果相等或不同，以及两个错误本地实现必须都被拒绝。
+结果保持不透明，不增加消息文字、结果身份、分配或格式化成功保证；借用、动态
+Expected、完整字段及静态候选列表保持原签名。负例必须实际收到 `assertion failed`，
+方法／类型未支持不算预期拒绝。
+
+原完整回归入口增加 `serde_errors` 库存，继续使用同一 Serde、完整库存、严格参数、
+两证明线程和单测试线程。**外部接口合同与宿主验证登记同时修改。** 新增成本未知；
+先核原失败，再声明实际标准库父 trait 和 Serde 方法，重建 vstd 并核完整根。
+标准库父 trait 在现有 `std_specs::core` 所有者处声明，不把其未声明方法列为已支持，
+也不为仓内 impl 或适配器增加外部函数豁免。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
