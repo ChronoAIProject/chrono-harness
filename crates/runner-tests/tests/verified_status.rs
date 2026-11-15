@@ -3300,6 +3300,12 @@ fn git_tree_insert_preserves_other_paths_and_rejects_every_duplicate(a: &str, b:
 
     // 重新构造及 clone 都有独立存储；重复按全文判断，不按地址或条目字段判断。
     let same_path = policy::TreePath::from_text(a);
+    proof {
+        assert(tree@.contains_key(first));
+        assert(first@ == same_path@);
+        assert(exists|stored: policy::TreePath| (#[trigger] tree@.contains_key(stored))
+            && stored@ == same_path@);
+    }
     let out = policy::insert_git_tree_entry(&mut tree, same_path, "100755", "第二\0", "commit");
     expect_tree_duplicate(out);
     expect_status_true(tree.len() == 2);
