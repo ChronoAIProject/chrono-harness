@@ -3651,17 +3651,16 @@ impl Manager {
                         .ok_or("cleanup report path")?
                         .to_owned();
                     let b = crate::recovery::state_bytes(&root, &path)?;
-                    let cache_outcome = result["age_outcome"] == "reusable-source-preserved"
-                        || (cache
-                            && result["age_outcome"]
-                                != "expired-checkout-verified-absent-source-branches-retained");
-                    let stage = crate::verified_lifecycle::cleanup_result(
-                        // A terminal handoff already establishes completion.
-                        // Its successful cache-only age result retains the
-                        // checkout; it must not leave the handoff pending.
-                        cache_outcome && e.status != "terminal",
-                        result["status"].as_str().unwrap_or(""),
-                        result["worktree_removal"].as_str().unwrap_or(""),
+                    let crate::verified_lifecycle::CleanupOutcome {
+                        cache: cache_outcome,
+                        cleaned,
+                        stage,
+                    } = crate::verified_lifecycle::observed_cleanup_result(
+                        cache,
+                        e.status.as_str(),
+                        result["age_outcome"].as_str(),
+                        result["status"].as_str(),
+                        result["worktree_removal"].as_str(),
                     );
                     if cache_outcome {
                         if let Some(a) = self.ledger.entries[i]
@@ -3673,7 +3672,7 @@ impl Manager {
                                 path: path.clone(),
                                 sha256: sha256(&b),
                             });
-                            if result["status"] == "cleaned" {
+                            if cleaned {
                                 a.completed_at = Some(
                                     std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)
@@ -3719,7 +3718,7 @@ impl Manager {
                         }
                         _ => {}
                     }
-                    if result["status"] != "cleaned" {
+                    if !cleaned {
                         failures.push(format!("{}: {}", e.path.display(), result["error"]));
                     }
                     self.progress(
