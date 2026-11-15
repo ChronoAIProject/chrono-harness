@@ -21,11 +21,20 @@ verus! {
 fn imported_policy_source_preserves_explicit_field_and_only_uses_absent_field_source() {
     let policy = "policy";
     let source = "source";
-    require_absence_expectation(absence_policy::imported_policy_source_commit(true, Some(policy), Some(source)) == Some(policy));
-    require_absence_expectation(absence_policy::imported_policy_source_commit(true, Some(policy), None) == Some(policy));
+    require_selected_source(absence_policy::imported_policy_source_commit(true, Some(policy), Some(source)), policy);
+    require_selected_source(absence_policy::imported_policy_source_commit(true, Some(policy), None), policy);
     require_absence_expectation(absence_policy::imported_policy_source_commit(true, None, Some(source)).is_none());
-    require_absence_expectation(absence_policy::imported_policy_source_commit(false, None, Some(source)) == Some(source));
+    require_selected_source(absence_policy::imported_policy_source_commit(false, None, Some(source)), source);
     require_absence_expectation(absence_policy::imported_policy_source_commit(false, None, None).is_none());
+}
+
+fn require_selected_source(actual: Option<&str>, expected: &str)
+    requires match actual { Some(actual) => actual@ == expected@, None => false },
+{
+    match actual {
+        Some(actual) => require_absence_expectation(absence_identifiers::equal_text(actual, expected)),
+        None => require_absence_expectation(false),
+    }
 }
 
 fn require_capacity_fixture_exit(code: i32)
