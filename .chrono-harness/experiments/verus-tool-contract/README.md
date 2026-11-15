@@ -528,6 +528,13 @@ Rust 原始签名、强制转换、执行及 ghost 借用检查和实际编译�
 
 五份独立生产输入先固定预期，再沿 native bootstrap 执行：
 
+`dyn-callable-output.patch` 顺序应用在 `dyn-standard-markers.patch` 后。
+动态类型显式保存 FnOnce 的 Output，类型相等、访问、递归检查、冲突模型和 SMT
+身份都消费它；普通 trait 参数不混入 Output。Fn／FnMut 的继承链复用原 FnOnce
+返回类型模型，转换使用具体 Self 的关联类型，不补充动态调用的前后置条件。
+普通关联类型仍拒绝。VIR 格式已变，旧 vstd 不能充当本工具的输入；先构建工具，
+再沿现有 `vstd-refresh` 失效并重新验证同源 vstd，其他缓存继续复用。
+
 | `investigate.verus-source.*-check` | 预期 |
 | --- | --- |
 | `dyn-callables-check` | 共享调用采用明确前后置条件，可变调用保留 Result 两分支及原返回合同，具体闭包可转换为动态回调；严格整 crate 证明并编译 |
