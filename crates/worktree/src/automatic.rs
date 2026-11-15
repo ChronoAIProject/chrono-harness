@@ -1945,6 +1945,7 @@ impl Manager {
             scope,
             exclusive_namespace,
             wait,
+            false,
         )?
         else {
             return Ok(None);
@@ -1963,11 +1964,22 @@ impl Manager {
         scope: &Path,
         exclusive_namespace: bool,
         wait: bool,
+        recover_published_results: bool,
     ) -> Result<Option<Self>, String> {
         let Some(inputs) = PolicyInputs::load(r, root, config_path, bytes)? else {
             return Ok(None);
         };
-        Self::from_inputs(r, inputs, token, scope, exclusive_namespace, wait, true).map(Some)
+        Self::from_inputs(
+            r,
+            inputs,
+            token,
+            scope,
+            exclusive_namespace,
+            wait,
+            true,
+            recover_published_results,
+        )
+        .map(Some)
     }
     fn from_inputs(
         r: &mut Runner,
@@ -1977,6 +1989,7 @@ impl Manager {
         exclusive_namespace: bool,
         wait: bool,
         protect: bool,
+        recover_published_results: bool,
     ) -> Result<Self, String> {
         let scope = absolute(scope, true)?;
         let policy = &inputs.policy;
@@ -2154,7 +2167,7 @@ impl Manager {
             }
             absolute(&e.path, true)?;
         }
-        let manager = Self {
+        let mut manager = Self {
             inputs,
             ledger,
             directory,
@@ -2163,6 +2176,9 @@ impl Manager {
             _namespace: namespace,
             _gate: gate,
         };
+        if recover_published_results {
+            manager.reconcile_published_results()?;
+        }
         if protect {
             manager.protect_originals()?;
         }
@@ -2244,13 +2260,15 @@ impl Manager {
         if let Some(inventory) = chrono_harness::retained_artifacts::retention::Inventory::adopted(
             &self.inputs.policy.coordinator_root,
         )? {
-            inventory.reference_paths(
-                &self.original_role()?,
-                &self
-                    .original_paths(&self.ledger)?
-                    .into_iter()
-                    .collect::<Vec<_>>(),
-            )?;
+            let paths = self
+                .original_paths(&self.ledger)?
+                .into_iter()
+                .collect::<Vec<_>>();
+            let role = self.original_role()?;
+            // A prior handoff can have committed its shrink before its role
+            // update. Remove those stale members before admitting new paths.
+            inventory.prune_reference_paths(&role, &paths)?;
+            inventory.reference_paths(&role, &paths)?;
         }
         Ok(())
     }
@@ -2258,7 +2276,6 @@ impl Manager {
     /// A full original accepting this receipt ends only its interim ledger
     /// reference. The report's own consumers and dependency edges remain.
     fn reconcile_published_results(&mut self) -> Result<(), String> {
-        let mut changed = false;
         for i in 0..self.ledger.entries.len() {
             for (field, binding) in [
                 ("completed_uses", "managed_use_receipt"),
@@ -2270,10 +2287,13 @@ impl Manager {
                 let receipts: Vec<Receipt> =
                     serde_json::from_value(self.ledger.entries[i].enrollment[field].clone())
                         .map_err(|e| format!("invalid pending result handoff: {e}"))?;
-                let mut pending = Vec::new();
                 for receipt in receipts {
+                    let _receipt_input = chrono_harness::retained_artifacts::retention::read_guard(
+                        &self.inputs.policy.coordinator_root,
+                        &receipt.path,
+                    )?;
                     let original = json(&self.receipt(&receipt)?)?;
-                    let accepted = if let Some(path) = original["report_path"].as_str() {
+                    if let Some(path) = original["report_path"].as_str() {
                         let physical =
                             no_symlink_parents(&self.inputs.policy.coordinator_root, path)?;
                         let _input = chrono_harness::retained_artifacts::retention::read_guard(
@@ -2301,37 +2321,30 @@ impl Manager {
                                             &self.inputs.policy.coordinator_root,
                                             &report,
                                         )?;
+                                        let pending = self.ledger.entries[i].enrollment[field]
+                                            .as_array_mut()
+                                            .ok_or("pending result handoffs")?;
+                                        pending.retain(|value| *value != value!(receipt));
+                                        if pending.is_empty() {
+                                            self.ledger.entries[i]
+                                                .enrollment
+                                                .as_object_mut()
+                                                .ok_or("enrollment object")?
+                                                .remove(field);
+                                        }
+                                        // Keep both read capabilities through the atomic
+                                        // handoff. No existing role member is released
+                                        // before the smaller ledger is durable.
+                                        self.save_result_handoff()?;
                                     }
-                                    matches
-                                } else {
-                                    false
                                 }
                             }
-                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => false,
+                            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (),
                             Err(e) => return Err(e.to_string()),
-                        }
-                    } else {
-                        false
-                    };
-                    if accepted {
-                        changed = true;
-                    } else {
-                        pending.push(receipt);
+                        };
                     }
                 }
-                if pending.is_empty() {
-                    self.ledger.entries[i]
-                        .enrollment
-                        .as_object_mut()
-                        .ok_or("enrollment object")?
-                        .remove(field);
-                } else {
-                    self.ledger.entries[i].enrollment[field] = value!(pending);
-                }
             }
-        }
-        if changed {
-            self.save()?;
         }
         Ok(())
     }
@@ -2537,7 +2550,7 @@ impl Manager {
         self.inputs.registry_digest = registry_digest;
         Ok(())
     }
-    fn save(&self) -> Result<(), String> {
+    fn update_path(&self) -> Result<PathBuf, String> {
         if self.inputs.policy.schema == "chrono-worktree-automatic-cleanup/v2"
             && self._gate.lease.is_none()
         {
@@ -2553,7 +2566,25 @@ impl Manager {
         }
         self._namespace.stable()?;
         self._gate.stable()?;
-        let path = no_symlink_parents(&self.record_directory, "ledger.json")?;
+        no_symlink_parents(&self.record_directory, "ledger.json")
+    }
+    fn save_result_handoff(&self) -> Result<(), String> {
+        let path = self.update_path()?;
+        let previous: Ledger = decode(&fs::read(&path).map_err(|e| e.to_string())?)?;
+        if !self
+            .original_paths(&self.ledger)?
+            .is_subset(&self.original_paths(&previous)?)
+        {
+            return Err("result handoff cannot introduce recovery inputs".into());
+        }
+        // The existing role is deliberately unchanged on either side of this
+        // write. A failed or interrupted write preserves the old recovery roots;
+        // the next open prunes only what the durable ledger no longer consumes.
+        write_json(&path, &self.ledger, false)?;
+        Ok(())
+    }
+    fn save(&self) -> Result<(), String> {
+        let path = self.update_path()?;
         let inventory = chrono_harness::retained_artifacts::retention::Inventory::adopted(
             &self.inputs.policy.coordinator_root,
         )?;
@@ -4619,6 +4650,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 operation == "deploy-owner",
                 true,
                 !handoff,
+                false,
             )?;
             manager.restore_absent_policy(r)?;
             if !matches!(operation.as_str(), "maintain" | "import") {

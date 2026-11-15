@@ -623,6 +623,136 @@ impl EnrollmentOriginalsFixture {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = EnrollmentOriginalsFixture::imported();
+    let policy_path = h.root.join(POLICY_PATH);
+    let previous_policy = fs::read(&policy_path).unwrap();
+    let mut policy = json(&previous_policy).unwrap();
+    policy["max_related_outputs"] = value!(4);
+    fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.migrate_policy(&previous_policy, None).unwrap();
+    let role = format!(
+        "worktree-enrollment:{}",
+        sha256(h.target.to_str().unwrap().as_bytes())
+    );
+    let mut receipts = Vec::new();
+    let mut parents = Vec::new();
+    let mut parent_bytes = Vec::new();
+    for n in 0..4 {
+        let path = format!(".chrono-harness/state/pending-use-{n}.json");
+        let parent = format!(".chrono-harness/state/final-use-{n}.json");
+        let raw = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-managed-use-result/v1","report_path":parent
+        }))
+        .unwrap();
+        let receipt = value!({"path":path,"sha256":sha256(&raw)});
+        fs::write(h.root.join(&path), raw).unwrap();
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .begin("lifecycle-original", &path, value!(null))
+            .unwrap()
+            .complete(value!({"status":"used"}))
+            .unwrap();
+        let raw = serde_json::to_vec(&value!({
+            "schema":"chrono-worktree-report/v1","report_path":parent,
+            "status":"used","managed_use_receipt":receipt
+        }))
+        .unwrap();
+        fs::write(h.root.join(&parent), &raw).unwrap();
+        Inventory::adopted(&h.root)
+            .unwrap()
+            .unwrap()
+            .begin("lifecycle-original", &parent, value!(null))
+            .unwrap()
+            .complete(value!({"status":"used"}))
+            .unwrap();
+        receipts.push(receipt);
+        parents.push(parent);
+        parent_bytes.push(raw);
+    }
+    inventory
+        .reference_paths("actual-final-report-reader", &parents)
+        .unwrap();
+    let mut old_paths = vec![h.original.clone()];
+    old_paths.extend(
+        receipts[..3]
+            .iter()
+            .map(|r| r["path"].as_str().unwrap().to_owned()),
+    );
+    inventory.reference_paths(&role, &old_paths).unwrap();
+    // A joined result was committed after the role reached its limit. The
+    // next invocation must accept sealed parents before protecting all paths.
+    let ledger_path = h.record.join("ledger.json");
+    let mut ledger = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    ledger["entries"][0]["enrollment"]["completed_uses"] = value!(receipts);
+    fs::write(&ledger_path, serde_json::to_vec(&ledger).unwrap()).unwrap();
+    // A partial parent remains pending even while the other handoffs settle.
+    fs::write(h.root.join(&parents[3]), b"{\"status\":").unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let before = fs::read(&ledger_path).unwrap();
+        let old_role = fs::read(retention_state::role_path(&h.root, &role)).unwrap();
+        let permissions = fs::metadata(&h.record).unwrap().permissions();
+        fs::set_permissions(&h.record, fs::Permissions::from_mode(0o500)).unwrap();
+        let (_code, failed) = h.invoke("maintain", false);
+        fs::set_permissions(&h.record, permissions).unwrap();
+        assert!(failed.to_string().contains("Permission denied"), "{failed}");
+        assert_eq!(
+            fs::read(&ledger_path).unwrap(),
+            before,
+            "failed ledger publication must leave the original recovery inputs"
+        );
+        assert_eq!(
+            fs::read(retention_state::role_path(&h.root, &role)).unwrap(),
+            old_role,
+            "a failed handoff must not release the old role"
+        );
+    }
+    let (_code, maintained) = h.invoke("maintain", false);
+    let current = json(&fs::read(&ledger_path).unwrap()).unwrap();
+    assert_eq!(
+        current["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipts[3]]),
+        "sealed report handoffs must not deadlock behind capacity: {maintained}"
+    );
+    let snapshot = retention_state::snapshot(&h.root);
+    assert_eq!(snapshot["roots"][&role].as_array().unwrap().len(), 2);
+    assert!(
+        !maintained
+            .to_string()
+            .contains("related retention graph capacity")
+    );
+    for receipt in &receipts {
+        assert!(
+            h.root.join(receipt["path"].as_str().unwrap()).exists(),
+            "actual report readers must keep their inputs"
+        );
+    }
+    let (_code, _) = h.invoke("maintain", false);
+    assert_eq!(
+        json(&fs::read(&ledger_path).unwrap()).unwrap()["entries"][0]["enrollment"]["completed_uses"],
+        value!([receipts[3]]),
+        "partial originals must survive retries"
+    );
+    fs::write(h.root.join(&parents[3]), &parent_bytes[3]).unwrap();
+    let (_code, maintained) = h.invoke("maintain", false);
+    assert!(json(&fs::read(&ledger_path).unwrap()).unwrap()["entries"][0]["enrollment"]["completed_uses"].is_null(),
+        "restored sealed parent must finish its own handoff: {maintained}");
+    assert_eq!(
+        json(&fs::read(&policy_path).unwrap()).unwrap()["max_related_outputs"],
+        4
+    );
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn absent_import_restores_adopted_caller_policy_without_reinterpreting_target_inputs() {
     if !chrono_git_boundary::isolated_git() {
         return;
