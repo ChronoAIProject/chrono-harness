@@ -12,6 +12,9 @@
 的保全关系明确以返回条目的完整值触发。这些触发项只指导求解器使用既有事实，
 不改变判定条件或运行时操作。生产根、原独立预期根和原未过滤行为测试仍分别验收。
 
+快照导出 `parent_result` 的父路径和目录创建结果也以实际回调的后置条件作为触发项，
+保留原错误和完整状态关系，不改变控制流、接口或外部假设。
+
 包含 nested-item 支持的当前工具已通过正式 core 构建，但完整 runner 和
 owner-publication 独立预期根仍触发 `VerusErasureCtxt` 内部错误。Serde 派生的
 实际失败与上游 [#1923](https://github.com/verus-lang/verus/issues/1923)、

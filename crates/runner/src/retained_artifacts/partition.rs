@@ -1394,7 +1394,8 @@ impl Inventory {
                         // 从叶进入时，反向路径上的原件已先于父报告被读到。
                         // 将它们与后续读到的原件一起保留，只退役选中的报告。
                         for previous in observed.keys() {
-                            if verified::preserve_frontier_original(previous.as_str(), id.as_str()) {
+                            if verified::preserve_frontier_original(previous.as_str(), id.as_str())
+                            {
                                 retained_dependencies.insert(previous.clone());
                             }
                         }
