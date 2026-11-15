@@ -479,6 +479,13 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 未绑定或未验证的端点仍走原读取，不取得缓存资格。批量获取减少 Git 进程和相同大型
 CI 环境的重复回执；原环境、流、执行参数和所有检查义务继续保留，原预算不变。
 
+**产品与宿主登记同时修改：** `source_binding.rs` 的实际批量调用经过
+`observe_candidate_bytes`，在现有 CI 集合根中证明同一生产者、固定端点和完整路径输入
+直接转交给读取器，原结果直接返回。FILEMAP 因此登记为 program，并沿现有项目依赖选择
+专属测试。该证明只覆盖请求与结果的转发关系；JSON、Git、IO 和摘要仍受各自接口合同及
+未完成义务约束，不能据此声称整文件已获证明。复用原证明操作，未新增测试过滤或预算；
+完整验证与运行成本尚未测量。
+
 源码比较逐字节核对非引用内容。仅支持现役 Rust `#[path]`、`include_bytes!`、Cargo `path`、
 以 `CARGO_MANIFEST_DIR` 为基准的两种 join 写法；宿主特定形式只读当前固定 FILEMAP 的
 `reference_syntax` 声明，不再内置本仓 shell 变量。
@@ -2784,7 +2791,7 @@ routes 原比较继续保留原结果合同；统一入口另从相同原 stdout
 | `DependencyRead::read` | routes 的 UTF-8 解码、`Path::join`、`File::open`、`Read::take`／`read_to_end`；返回指定原输出的字节或原 IO 错误，读取不超过请求上限 |
 | `CandidateSourceRead::text` | judge-ci 的标准 UTF-8 解码；Verus 另核完整字节往返，不仅依赖解码成功 |
 | `CandidateSourceRead::mode` | 同一固定请求树的完整路径查询和原模式字段投影；文件模式准入仍由 Verus 比较 |
-| `CandidateSourceRead::blob` | 现役 request-bound `Reader::blob(host_root, candidate, path)` 的固定 Git 字节观察；其现有运输和外层实现仍有未证明义务 |
+| `CandidateSourceRead::blobs` | 现役 request-bound `Reader::blobs(host_root, candidate, paths)` 按完整输入顺序取得固定 Git 字节；转发关系在现有 CI 集合根中证明，其现有运输和外层实现仍有未证明义务 |
 | `CandidateSourceRead::digest` | 现役 SHA-256 接口返回实际 blob 的十六进制摘要；Verus 核格式和完整 checksum，不证明密码学算法 |
 | `CompilerReportRead::decode`／`decoded` | judge-ci 的固定 serde_json 类型化解码；只关联点名原字节与完整字段，不作成功判断或从其他报告补齐字段 |
 | FILEMAP／回执编解码 | 固定 serde／serde_json 的字段解码及原字节编码；不授予外层仓内判断 `external_body` 例外 |

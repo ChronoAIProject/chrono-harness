@@ -78,7 +78,6 @@ use std::path::Path;
 mod collect;
 #[cfg(not(verus_keep_ghost))]
 pub use collect::{UnitOriginals, unit_originals};
-#[cfg(not(verus_keep_ghost))]
 mod source_binding;
 #[cfg(not(verus_keep_ghost))]
 mod units;
