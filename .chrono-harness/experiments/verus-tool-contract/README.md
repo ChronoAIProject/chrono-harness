@@ -92,7 +92,7 @@ crate 别名。上游逐项翻译器已经接受 `ExternCrate`，语句翻译器
 补丁还在上游原 Rust 测试项目增加一个明确测试目标，核执行块与证明块的别名成功，
 并要求匿名 const 内故意错误的函数仍被拒绝。测试驱动与断言均使用原 Rust 方法。
 登记的 `investigate.verus-source.regression-check` 委托 native bootstrap 消费
-`bootstrap-verus-source-regression.json`，只执行这个目标的完整库存，保持单测试线程；
+`bootstrap-verus-source-regression.json`，执行下文登记目标的完整库存，保持单测试线程；
 每个证明仍用两个线程及原严格选项。原 Cargo 配置负责已构建工具、同源 vstd 与 Z3，
 不另造启动器、测试框架或下载路径。
 严格选项由上游测试宏传递；两线程参数通过其现有 `VERUS_EXTRA_ARGS` 接口传给

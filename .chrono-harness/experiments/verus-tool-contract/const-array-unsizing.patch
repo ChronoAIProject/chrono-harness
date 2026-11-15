@@ -3,7 +3,7 @@
 @@ -2280,16 +2280,12 @@
                                      );
                                  }
- 
+
 -                                // TODO(mut_refs): likely needs Place considerations
 -                                let fun = vir::fun!(CrateId::Vstd => "array"; "array_as_slice");
 -
@@ -33,7 +33,7 @@
 +    /// Lowered to vstd::array::spec_array_as_slice by AST simplification.
 +    ArrayToSlice,
  }
- 
+
  /// Which builtin source name does this come from
 --- a/source/vir/src/ast_simplify.rs
 +++ b/source/vir/src/ast_simplify.rs
@@ -159,6 +159,24 @@
                  UnaryOp::IntToReal => 1,
                  UnaryOp::RealToInt => 1,
                  UnaryOp::FloatToBits => 1,
+--- a/source/vir/src/interpreter.rs
++++ b/source/vir/src/interpreter.rs
+@@ -1367,6 +1367,7 @@
+                         | MutRefCurrent
+                         | MutRefFuture(_)
+                         | MutRefFinal(_) => ok,
++                        ArrayToSlice => panic!("slice coercion not simplified"),
+                         MustBeFinalized | UnaryOp::MustBeElaborated => {
+                             panic!("Found MustBeFinalized op {:?} after calling finalize_exp", exp)
+                         }
+@@ -1498,6 +1499,7 @@
+                         | MutRefCurrent
+                         | MutRefFuture(_)
+                         | MutRefFinal(_) => ok,
++                        ArrayToSlice => panic!("slice coercion not simplified"),
+                     }
+                 }
+                 // !(!(e_inner)) == e_inner
 --- /dev/null
 +++ b/source/rust_verify_test/tests/const_array_unsizing.rs
 @@ -0,0 +1,66 @@
