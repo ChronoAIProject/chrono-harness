@@ -98,10 +98,10 @@ index 70addaa..56f7c88 100644
                              reach_function(ctxt, state, &fn_array_update());
 diff --git a/source/rust_verify_test/tests/literal_patterns.rs b/source/rust_verify_test/tests/literal_patterns.rs
 new file mode 100644
-index 0000000..56df6b3
+index 0000000..6b68886
 --- /dev/null
 +++ b/source/rust_verify_test/tests/literal_patterns.rs
-@@ -0,0 +1,181 @@
+@@ -0,0 +1,197 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
@@ -250,8 +250,11 @@ index 0000000..56df6b3
 +        broadcast use vstd::string::group_string_axioms;
 +
 +        fn nested_or(s: Option<&str>) -> (r: bool)
-+            ensures r <==> s is Some
-+                && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b']),
++            ensures
++                r ==> (s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])),
++                (s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])) ==> r,
 +        {
 +            let r = match s {
 +                Some("a" | "b") => true,
@@ -259,15 +262,23 @@ index 0000000..56df6b3
 +            };
 +            proof {
 +                if r {
-+                    assert(s->Some_0@ =~= seq!['a'] || s->Some_0@ =~= seq!['b']);
++                    assert(s is Some);
++                    if s->Some_0@[0] == 'a' {
++                        assert(s->Some_0@ =~= seq!['a']);
++                    } else {
++                        assert(s->Some_0@ =~= seq!['b']);
++                    }
 +                }
 +            }
 +            r
 +        }
 +
 +        fn nested_guard(s: Option<&str>, enabled: bool) -> (r: bool)
-+            ensures r <==> enabled && s is Some
-+                && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b']),
++            ensures
++                r ==> (enabled && s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])),
++                (enabled && s is Some
++                    && (s->Some_0@ == seq!['a'] || s->Some_0@ == seq!['b'])) ==> r,
 +        {
 +            let r = match s {
 +                Some("a") if enabled => true,
@@ -276,7 +287,12 @@ index 0000000..56df6b3
 +            };
 +            proof {
 +                if r {
-+                    assert(s->Some_0@ =~= seq!['a'] || s->Some_0@ =~= seq!['b']);
++                    assert(s is Some);
++                    if s->Some_0@[0] == 'a' {
++                        assert(s->Some_0@ =~= seq!['a']);
++                    } else {
++                        assert(s->Some_0@ =~= seq!['b']);
++                    }
 +                }
 +            }
 +            r
