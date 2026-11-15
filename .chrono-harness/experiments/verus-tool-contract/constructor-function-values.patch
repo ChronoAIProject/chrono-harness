@@ -136,3 +136,206 @@ new file mode 100644
 +        assert_one_fails(err);
 +    }
 +}
+diff --git a/source/rust_verify/src/rust_to_vir_func.rs b/source/rust_verify/src/rust_to_vir_func.rs
+--- a/source/rust_verify/src/rust_to_vir_func.rs
++++ b/source/rust_verify/src/rust_to_vir_func.rs
+@@ -1648,14 +1648,15 @@
+     is_static: bool,
+ }
+
+-pub(crate) struct ForeignFunctionInfo {
++// Fully translated functions, including native declarations and datatype constructors.
++pub(crate) struct TranslatedFunctionInfo {
+     pub function_stub: vir::ast::FunctionStub,
+     pub function_full: vir::ast::Function,
+ }
+
+ pub(crate) enum FunctionOrConstInfo<'tcx> {
+     Function(FunctionInfo<'tcx>),
+-    ForeignFunction(ForeignFunctionInfo),
++    TranslatedFunction(TranslatedFunctionInfo),
+     Const(ConstInfo),
+ }
+
+@@ -1666,7 +1667,7 @@
+                 (&f.function, f.function_for_autospec.as_ref(), f.autoderive_aux_function.as_ref())
+             }
+             FunctionOrConstInfo::Const(f) => (&f.function, f.function_for_autospec.as_ref(), None),
+-            FunctionOrConstInfo::ForeignFunction(f) => (&f.function_stub, None, None),
++            FunctionOrConstInfo::TranslatedFunction(f) => (&f.function_stub, None, None),
+         };
+         std::iter::once(f).chain(opt_f.into_iter()).chain(opt_aux.into_iter())
+     }
+@@ -2360,8 +2361,8 @@
+         FunctionOrConstInfo::Const(const_info) => {
+             finish_const_or_static(ctxt, const_info, functions)
+         }
+-        FunctionOrConstInfo::ForeignFunction(foreign_function_info) => {
+-            functions.push((foreign_function_info.function_full.clone(), ErasureInfo::new()));
++        FunctionOrConstInfo::TranslatedFunction(info) => {
++            functions.push((info.function_full.clone(), ErasureInfo::new()));
+             Ok(())
+         }
+     }
+@@ -3746,7 +3747,7 @@
+     let function = ctxt.spanned_new(span, func);
+     state.insert_fun_warn_config(ctxt, &function.x.name, id);
+
+-    infos.push(FunctionOrConstInfo::ForeignFunction(ForeignFunctionInfo {
++    infos.push(FunctionOrConstInfo::TranslatedFunction(TranslatedFunctionInfo {
+         function_full: function.clone(),
+         function_stub: vir::ast_util::function_to_stub(&function),
+     }));
+diff --git a/source/rust_verify/src/rust_to_vir.rs b/source/rust_verify/src/rust_to_vir.rs
+--- a/source/rust_verify/src/rust_to_vir.rs
++++ b/source/rust_verify/src/rust_to_vir.rs
+@@ -753,6 +753,8 @@
+     crate::rust_to_vir_adts::setup_type_invariants(&mut vir, &function_stubs)
+         .map_err(|e| (vec![e], None))?;
+
++    crate::rust_to_vir_ctor::register_constructor_functions(&ctxt, &vir, &mut infos);
++
+     let mut fun_warn_configs: HashMap<Fun, Option<WarningConfig>> = HashMap::new();
+     for krate in imported {
+         for function in &krate.functions {
+@@ -786,7 +788,7 @@
+                     .insert(info.def_id, Some(info.function.x.name.clone()));
+                 assert!(f.is_none());
+             }
+-            FunctionOrConstInfo::ForeignFunction(_) => {}
++            FunctionOrConstInfo::TranslatedFunction(_) => {}
+         }
+     }
+     for def_id in no_erasure_needed.iter() {
+diff --git a/source/rust_verify/src/rust_to_vir_expr.rs b/source/rust_verify/src/rust_to_vir_expr.rs
+--- a/source/rust_verify/src/rust_to_vir_expr.rs
++++ b/source/rust_verify/src/rust_to_vir_expr.rs
+@@ -3313,11 +3313,12 @@
+                     }
+                 },
+                 (_, Some((ctor, ctor_kind))) => {
+-                    if ctor_kind != CtorKind::Const {
+-                        unsupported_err!(
+-                            expr.span,
+-                            "using a datatype constructor as a function value"
+-                        );
++                    if ctor_kind == CtorKind::Fn {
++                        let (_, ctor_id) = ctor.variant_def.ctor.expect("function constructor");
++                        let fun = Arc::new(FunX {
++                            path: bctx.ctxt.def_id_to_vir_path(ctor_id),
++                        });
++                        return mk_expr(ExprX::ExecFnByName(fun));
+                     }
+                     Ok(ExprOrPlace::Expr(expr_tuple_datatype_ctor_to_vir(
+                         bctx,
+diff --git a/source/rust_verify/src/rust_to_vir_ctor.rs b/source/rust_verify/src/rust_to_vir_ctor.rs
+--- a/source/rust_verify/src/rust_to_vir_ctor.rs
++++ b/source/rust_verify/src/rust_to_vir_ctor.rs
+@@ -4,6 +4,107 @@
+ use rustc_span::Span;
+ use rustc_span::def_id::DefId;
+ use vir::ast::VirErr;
++
++/// Tuple constructors are ordinary, total functions with an exact constructor body.
++/// Reuse the existing FnDef contracts and normal body verification, not an opaque
++/// declaration. Erased fields, opaque types and custom invariants remain unsupported.
++pub(crate) fn register_constructor_functions<'tcx>(
++    ctxt: &crate::context::Context<'tcx>,
++    krate: &vir::ast::KrateX,
++    infos: &mut Vec<crate::rust_to_vir_func::FunctionOrConstInfo<'tcx>>,
++) {
++    use crate::rust_to_vir_func::{FunctionOrConstInfo, TranslatedFunctionInfo};
++    use std::sync::Arc;
++    use vir::ast::*;
++    use vir::ast_util::{air_unique_var, function_to_stub, ident_binder};
++
++    for datatype in &krate.datatypes {
++        if datatype.x.proxy.is_some()
++            || datatype.x.mode != Mode::Exec
++            || datatype.x.user_defined_invariant_fn.is_some()
++            || matches!(datatype.x.transparency, DatatypeTransparency::Never)
++        {
++            continue;
++        }
++        let Dt::Path(path) = &datatype.x.name else { continue };
++        let def_id = ctxt.name_def_id_map.borrow().get(path).copied();
++        let Some(def_id) = def_id else { continue };
++        let adt = ctxt.tcx.adt_def(def_id);
++        if adt.is_union() {
++            continue;
++        }
++        for (variant_def, variant) in adt.variants().iter().zip(datatype.x.variants.iter()) {
++            let Some((CtorKind::Fn, ctor_id)) = variant_def.ctor else { continue };
++            if variant.fields.iter().any(|field| field.a.1 != Mode::Exec) {
++                continue;
++            }
++            let span = ctxt.tcx.def_span(ctor_id);
++            let typ_params: Idents = Arc::new(
++                datatype.x.typ_params.iter().map(|(name, _)| name.clone()).collect(),
++            );
++            let typ_args = Arc::new(
++                typ_params.iter().map(|name| Arc::new(TypX::TypParam(name.clone()))).collect(),
++            );
++            let result_typ = Arc::new(TypX::Datatype(
++                datatype.x.name.clone(), typ_args, Arc::new(vec![]),
++            ));
++            let mut params = Vec::new();
++            let mut fields = Vec::new();
++            for (index, field) in variant.fields.iter().enumerate() {
++                let name = air_unique_var(&format!("constructor_arg_{index}"));
++                let typ = field.a.0.clone();
++                params.push(ctxt.spanned_new(span, ParamX {
++                    name: name.clone(), typ: typ.clone(), mode: Mode::Exec,
++                    unwrapped_info: None, user_mut: false,
++                }));
++                let value = ctxt.spanned_typed_new(span, &typ, ExprX::Var(name));
++                fields.push(ident_binder(&field.name, &value));
++            }
++            let body = ctxt.spanned_typed_new(span, &result_typ, ExprX::Ctor(
++                datatype.x.name.clone(), variant.name.clone(), Arc::new(fields), None,
++            ));
++            let ret = ctxt.spanned_new(span, ParamX {
++                name: air_unique_var(vir::def::RETURN_VALUE), typ: result_typ,
++                mode: Mode::Exec, unwrapped_info: None, user_mut: false,
++            });
++            let visibility = crate::rust_to_vir_base::mk_visibility(ctxt, ctor_id);
++            let function = ctxt.spanned_new(span, FunctionX {
++                name: Arc::new(FunX { path: ctxt.def_id_to_vir_path(ctor_id) }),
++                proxy: None,
++                kind: FunctionKind::Static,
++                body_visibility: BodyVisibility::Visibility(visibility.clone()),
++                visibility,
++                opaqueness: Opaqueness::Opaque,
++                owning_module: datatype.x.owning_module.clone(),
++                mode: Mode::Exec,
++                typ_params,
++                typ_bounds: datatype.x.typ_bounds.clone(),
++                params: Arc::new(params),
++                outer_ret: ret.clone(),
++                inner_ret: ret,
++                require: Arc::new(vec![]),
++                ensure: (Arc::new(vec![]), Arc::new(vec![])),
++                returns: Some(body.clone()),
++                decrease: Arc::new(vec![]),
++                decrease_when: None,
++                decrease_by: None,
++                fndef_axioms: None,
++                mask_spec: None,
++                atomic_update: None,
++                unwind_spec: None,
++                item_kind: ItemKind::Function,
++                attrs: Default::default(),
++                body: Some(body),
++                return_opaque_type_eqs: Arc::new(vec![]),
++                extra_dependencies: vec![],
++                hidden: Arc::new(vec![]),
++            });
++            infos.push(FunctionOrConstInfo::TranslatedFunction(TranslatedFunctionInfo {
++                function_stub: function_to_stub(&function), function_full: function,
++            }));
++        }
++    }
++}
+
+ #[derive(PartialEq, Eq, Debug)]
+ pub(crate) enum AdtKind {
