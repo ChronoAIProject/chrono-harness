@@ -29,6 +29,156 @@ mod probe;
 
 verus! {
 
+type PublicationTrace = Vec<(u8, usize, String)>;
+
+fn publication_event(mut trace: PublicationTrace, event: u8, inventory: usize, raw: &str)
+    -> (out: PublicationTrace)
+    ensures out@.len() == trace@.len() + 1, out@.drop_last() == trace@,
+        out@.last().0 == event, out@.last().1 == inventory, out@.last().2@ == raw@,
+{
+    let ghost previous = trace@;
+    trace.push((event, inventory, raw.to_string()));
+    assert(trace@.drop_last() =~= previous);
+    trace
+}
+
+fn publication_case(has_originals: bool, failure: u8, payload: &str, raw_error: &str,
+    inventory: usize)
+    requires failure <= 8,
+{
+    let validate = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 1, 0, ""), out.0),
+            match out.1 {
+                Err(error) => failure == 1 && error@ == raw_error@,
+                Ok(()) => failure != 1,
+            },
+    {
+        (publication_event(trace, 1, 0, ""),
+            if failure == 1 { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let encode = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<String, String>))
+        ensures publication_event.ensures((trace, 2, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 2 && error@ == raw_error@,
+                Ok(raw) => !(0 < failure <= 2) && raw@ == payload@,
+            },
+    {
+        (publication_event(trace, 2, 0, ""),
+            if 0 < failure && failure <= 2 { Err(raw_error.to_string()) }
+            else { Ok(payload.to_string()) })
+    };
+    let publish = |trace: PublicationTrace, raw: &String|
+        -> (out: (PublicationTrace, Result<bool, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 3, out.0@.last().1 == 0, out.0@.last().2@ == raw@,
+            match out.1 {
+                Err(error) => 0 < failure <= 3 && error@ == raw_error@,
+                Ok(published) => !(0 < failure <= 3) && published == (failure != 4),
+            },
+    {
+        (publication_event(trace, 3, 0, raw.as_str()),
+            if 0 < failure && failure <= 3 { Err(raw_error.to_string()) }
+            else { Ok(failure != 4) })
+    };
+    let adopt = |trace: PublicationTrace| -> (out: (PublicationTrace, Result<usize, String>))
+        ensures publication_event.ensures((trace, 4, 0, ""), out.0),
+            match out.1 {
+                Err(error) => 0 < failure <= 5 && error@ == raw_error@,
+                Ok(value) => !(0 < failure <= 5) && value == inventory,
+            },
+    {
+        (publication_event(trace, 4, 0, ""),
+            if 0 < failure && failure <= 5 { Err(raw_error.to_string()) }
+            else { Ok(inventory) })
+    };
+    let confirm = |trace: PublicationTrace, actual: &usize, raw: &String|
+        -> (out: (PublicationTrace, Result<bool, String>))
+        ensures out.0@.len() == trace@.len() + 1, out.0@.drop_last() == trace@,
+            out.0@.last().0 == 5, out.0@.last().1 == *actual, out.0@.last().2@ == raw@,
+            match out.1 {
+                Err(error) => 0 < failure <= 6 && error@ == raw_error@,
+                Ok(confirmed) => !(0 < failure <= 6) && confirmed == (failure != 7),
+            },
+    {
+        (publication_event(trace, 5, *actual, raw.as_str()),
+            if 0 < failure && failure <= 6 { Err(raw_error.to_string()) }
+            else { Ok(failure != 7) })
+    };
+    let bind = |trace: PublicationTrace, actual: usize|
+        -> (out: (PublicationTrace, Result<(), String>))
+        ensures publication_event.ensures((trace, 6, actual, ""), out.0),
+            match out.1 {
+                Err(error) => failure > 0 && error@ == raw_error@,
+                Ok(()) => failure == 0,
+            },
+    {
+        (publication_event(trace, 6, actual, ""),
+            if failure > 0 { Err(raw_error.to_string()) } else { Ok(()) })
+    };
+    let initial = publication_event(Vec::new(), 99, inventory, payload);
+    let (trace, result) = policy::publish_cache_plan(initial, has_originals,
+        validate, encode, publish, adopt, confirm, bind);
+    let calls = if !has_originals { 0usize }
+        else if failure == 1 { 1usize }
+        else if failure == 2 { 2usize }
+        else if failure == 3 || failure == 4 { 3usize }
+        else if failure == 5 { 4usize }
+        else if failure == 6 || failure == 7 { 5usize }
+        else { 6usize };
+    expect_cache_true(trace.len() == calls + 1);
+    expect_cache_true(trace[0].0 == 99 && trace[0].1 == inventory);
+    expect_restore_text(trace[0].2.as_str(), payload);
+    if calls > 0 { expect_cache_true(trace[1].0 == 1); }
+    if calls > 1 { expect_cache_true(trace[2].0 == 2); }
+    if calls > 2 {
+        expect_cache_true(trace[3].0 == 3);
+        expect_restore_text(trace[3].2.as_str(), payload);
+    }
+    if calls > 3 { expect_cache_true(trace[4].0 == 4); }
+    if calls > 4 {
+        expect_cache_true(trace[5].0 == 5 && trace[5].1 == inventory);
+        expect_restore_text(trace[5].2.as_str(), payload);
+    }
+    if calls > 5 { expect_cache_true(trace[6].0 == 6 && trace[6].1 == inventory); }
+    match result {
+        Ok(published) => {
+            expect_cache_true(!has_originals || failure == 0);
+            expect_cache_true(published == has_originals);
+        },
+        Err(error) => {
+            expect_cache_true(has_originals && failure > 0);
+            let expected = if failure == 4 {
+                "E_CACHE_ATTEMPT: cache-plan scope must be adopted"
+            } else if failure == 7 {
+                "E_CACHE_ATTEMPT: plan publication unfinished; original attempt retained; no redispatch"
+            } else { raw_error };
+            expect_restore_text(error.as_str(), expected);
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_skips_absent_originals_and_preserves_complete_success() {
+    publication_case(false, 0, "", "", 0);
+    publication_case(false, 1, "raw/λ\0\n", "first/λ\0\n", usize::MAX);
+    publication_case(false, 8, "unused", "last", 17);
+    publication_case(true, 0, "", "", 0);
+    publication_case(true, 0, "raw/λ\0\n", "unused", usize::MAX);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn publication_stops_at_every_original_error_and_false_observation() {
+    let mut failure = 1u8;
+    while failure <= 8
+        invariant 1 <= failure <= 9,
+        decreases 9 - failure,
+    {
+        publication_case(true, failure, "raw/λ\0\n", "original/λ\0\n", usize::MAX);
+        publication_case(true, failure, "", "", 0);
+        failure += 1;
+    }
+}
+
 proof fn recovery_utf8_concat(left: Seq<char>, right: Seq<char>)
     ensures vstd::utf8::encode_utf8(left + right)
         == vstd::utf8::encode_utf8(left) + vstd::utf8::encode_utf8(right),
