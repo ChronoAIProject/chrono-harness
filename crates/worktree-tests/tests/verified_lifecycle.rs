@@ -230,6 +230,23 @@ fn qualified_expiry_releases_reusable_outputs_without_finishing_work() {
     expect(policy::reusable_release(false, true, u64::MAX, None));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn retained_reference_recovery_queries_only_permitted_advances() {
+    match policy::retained_reference_ancestor_required(true, false) {
+        Ok(query) => expect(!query),
+        Err(_) => expect(false),
+    }
+    match policy::retained_reference_ancestor_required(true, true) {
+        Ok(query) => expect(!query),
+        Err(_) => expect(false),
+    }
+    match policy::retained_reference_ancestor_required(false, true) {
+        Ok(query) => expect(query),
+        Err(_) => expect(false),
+    }
+    expect(policy::retained_reference_ancestor_required(false, false).is_err());
+}
+
 pub(crate) fn expect_stage(actual: policy::CleanupStage, expected: policy::CleanupStage)
     requires actual == expected,
 {

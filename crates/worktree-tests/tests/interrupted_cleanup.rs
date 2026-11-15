@@ -997,6 +997,18 @@ fn public_participating_check_preserves_zero_and_nonzero_stderr_results() {
                 target.to_str().unwrap().to_owned(),
             ),
         ]);
+        let activation = serde_json::to_string(
+            &chrono_harness::maintenance_signal::RequestContext::new(&target, &h.root).unwrap(),
+        )
+        .unwrap();
+        environment.insert(
+            chrono_harness::maintenance_signal::CONTEXT_ENV.to_owned(),
+            activation.clone(),
+        );
+        assert_eq!(
+            process["environment"][chrono_harness::maintenance_signal::CONTEXT_ENV],
+            sha256(activation.as_bytes())
+        );
         if let Some(source) = source {
             environment.insert("CHRONO_CHECK_SOURCE".to_owned(), source.to_owned());
             assert_eq!(
