@@ -760,6 +760,41 @@ fn fresh_checkout_and_needed_evidence_are_preserved_by_ordinary_use() {
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
+fn finished_aged_checkout_completes_terminal_handoff_before_age_reuse() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    let h = Host::new("payload");
+    policy(&h, 1, 3600, "evidence-retain");
+    let target = h.parent.join("finished-aged");
+    start(&h, "finished-aged", &target);
+    let head = git(&target, &["rev-parse", "HEAD"]);
+    output(&target);
+    fs::create_dir_all(target.join(".chrono-harness/state")).unwrap();
+    let original = target.join(".chrono-harness/state/needed-original");
+    fs::write(&original, b"needed original\0\xff").unwrap();
+    older_than(&target, 1);
+    let (code, finished, error) = h.auto(
+        "finish",
+        &["--path", target.to_str().unwrap(), "--artifacts-only"],
+    );
+    assert_eq!(code, 0, "{finished} {error}");
+    let terminal = entry(&h, &target)["terminal"].clone();
+    let receipt = h.root.join(terminal["receipt"]["path"].as_str().unwrap());
+    let terminal_bytes = fs::read(&receipt).unwrap();
+    let (code, maintained, error) = h.auto("maintain", &[]);
+    assert_eq!(code, 0, "{maintained} {error}");
+    let current = entry(&h, &target);
+    assert_eq!(current["status"], "retained", "{current}");
+    assert_eq!(current["terminal"], terminal);
+    assert_eq!(fs::read(receipt).unwrap(), terminal_bytes);
+    assert!(!target.join("output λ").exists(), "{maintained}");
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(original).unwrap(), b"needed original\0\xff");
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
 fn interrupted_age_disposal_reentry_preserves_original_unknown_result() {
     if !chrono_git_boundary::isolated_git() {
         return;
