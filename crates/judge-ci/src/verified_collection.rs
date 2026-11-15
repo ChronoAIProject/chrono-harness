@@ -12,9 +12,13 @@ use chrono_harness::verified_identifiers as identifiers;
 use identifiers::equal_text;
 
 #[cfg(not(verus_keep_ghost))]
-pub use chrono_judge_registration::inputs::select_snapshot_schema;
+pub use chrono_judge_registration::inputs::{
+    admit_snapshot_header, admit_snapshot_retained, select_snapshot_schema,
+};
 #[cfg(verus_keep_ghost)]
-pub use source_registration::inputs::select_snapshot_schema;
+pub use source_registration::inputs::{
+    admit_snapshot_header, admit_snapshot_retained, select_snapshot_schema,
+};
 
 #[cfg(verus_keep_ghost)]
 #[path = "../../runner/src/verified_status.rs"]

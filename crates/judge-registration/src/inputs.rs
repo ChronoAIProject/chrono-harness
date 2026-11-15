@@ -41,6 +41,55 @@ pub const SNAPSHOT_SCHEMA: &'static str = "chrono-input-snapshot/v1";
 pub const SNAPSHOT_SCHEMA_V2: &'static str = "chrono-input-snapshot/v2";
 pub const SNAPSHOT_SCHEMA_V3: &'static str = "chrono-input-snapshot/v3";
 
+pub open spec fn snapshot_format_version(schema: Option<&str>) -> int {
+    match schema {
+        Some(value) => {
+            if value@ == "chrono-input-snapshot/v1"@ { 1 }
+            else if value@ == "chrono-input-snapshot/v2"@ { 2 }
+            else if value@ == "chrono-input-snapshot/v3"@ { 3 }
+            else { 0 }
+        },
+        None => 0,
+    }
+}
+
+fn classify_snapshot_schema(schema: Option<&str>) -> (version: u8)
+    ensures version as int == snapshot_format_version(schema),
+{
+    match schema {
+        Some(value) => {
+            if identifiers::equal_text(value, SNAPSHOT_SCHEMA) { 1 }
+            else if identifiers::equal_text(value, SNAPSHOT_SCHEMA_V2) { 2 }
+            else if identifiers::equal_text(value, SNAPSHOT_SCHEMA_V3) { 3 }
+            else { 0 }
+        },
+        None => 0,
+    }
+}
+
+/// 先拒绝未知 schema；只有 v3 可以携带 selector 字段。
+pub fn admit_snapshot_header(schema: Option<&str>, effective: bool, selection: bool)
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => snapshot_format_version(schema) != 0
+            && (snapshot_format_version(schema) == 3 || (!effective && !selection)),
+        Err(message) => {
+            (snapshot_format_version(schema) == 0
+                && message@ == "E_INPUT_SNAPSHOT: unsupported snapshot schema"@)
+            || (snapshot_format_version(schema) != 0 && snapshot_format_version(schema) != 3
+                && (effective || selection)
+                && message@ == "E_INPUT_SNAPSHOT: selection binding requires snapshot v3"@)
+        },
+    },
+{
+    let version = classify_snapshot_schema(schema);
+    if version == 0 { return Err("E_INPUT_SNAPSHOT: unsupported snapshot schema"); }
+    if version != 3 && (effective || selection) {
+        return Err("E_INPUT_SNAPSHOT: selection binding requires snapshot v3");
+    }
+    Ok(())
+}
+
 /// 选择器优先使用 v3；直接配置仅在版本 2、3、4 时使用 v2。
 pub fn select_snapshot_schema(version: Option<u64>, selected: bool) -> (schema: &'static str)
     ensures schema@ == if selected { "chrono-input-snapshot/v3"@ }
@@ -66,6 +115,31 @@ pub enum Retained<'a, B = Vec<u8>> {
         digest: &'a str,
         length: u64,
     },
+}
+
+/// 只检查缺失表示与版本的相容性；其余表示保留原内容校验义务。
+pub fn admit_snapshot_retained<B>(schema: Option<&str>, retained: &Retained<B>)
+    -> (out: Result<(), &'static str>)
+    ensures match out {
+        Ok(()) => match *retained {
+            Retained::Absent => snapshot_format_version(schema) == 2 || snapshot_format_version(schema) == 3,
+            _ => true,
+        },
+        Err(message) => matches!(*retained, Retained::Absent)
+            && snapshot_format_version(schema) != 2 && snapshot_format_version(schema) != 3
+            && message@ == "E_INPUT_SNAPSHOT: absence requires snapshot v2"@,
+    },
+{
+    match *retained {
+        Retained::Absent => {
+            let version = classify_snapshot_schema(schema);
+            if version != 2 && version != 3 {
+                return Err("E_INPUT_SNAPSHOT: absence requires snapshot v2");
+            }
+            Ok(())
+        },
+        _ => Ok(()),
+    }
 }
 
 /// 同一 JSON 的原观察；缺键与非对应类型分别保留。
@@ -395,12 +469,12 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         &["effective_config_path", "selection"],
     )
     .map_err(|e| format!("E_INPUT_SNAPSHOT: {e}"))?;
-    if value["schema"] != SNAPSHOT_SCHEMA
-        && value["schema"] != SNAPSHOT_SCHEMA_V2
-        && value["schema"] != SNAPSHOT_SCHEMA_V3
-    {
-        return Err("E_INPUT_SNAPSHOT: unsupported snapshot schema".into());
-    }
+    admit_snapshot_header(
+        value["schema"].as_str(),
+        value.get("effective_config_path").is_some(),
+        value.get("selection").is_some(),
+    )
+    .map_err(str::to_string)?;
     if value["schema"] == SNAPSHOT_SCHEMA_V3 {
         let effective = value["effective_config_path"]
             .as_str()
@@ -434,8 +508,6 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
                     .ok_or("E_INPUT_SNAPSHOT: selector registry path must be a string")?,
             )?;
         }
-    } else if value.get("effective_config_path").is_some() || value.get("selection").is_some() {
-        return Err("E_INPUT_SNAPSHOT: selection binding requires snapshot v3".into());
     }
     facts::full_oid(
         value["commit"]
@@ -466,12 +538,8 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
         if id.is_empty() {
             return Err("E_INPUT_SNAPSHOT: empty file ID".into());
         }
-        if matches!(retained_shape(file)?, Retained::Absent)
-            && value["schema"] != SNAPSHOT_SCHEMA_V2
-            && value["schema"] != SNAPSHOT_SCHEMA_V3
-        {
-            return Err("E_INPUT_SNAPSHOT: absence requires snapshot v2".into());
-        }
+        admit_snapshot_retained(value["schema"].as_str(), &retained_shape(file)?)
+            .map_err(str::to_string)?;
     }
     Ok(())
 }
