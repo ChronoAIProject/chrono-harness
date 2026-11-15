@@ -621,4 +621,106 @@ fn reference_declarations_validate_actual_prefixes_and_explicit_bases() {
     expect_continuity_bool(wrong_base.is_err() && empty.is_err() && unknown_base.is_err());
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn object_shape_rejects_nonobjects_before_inspecting_fields() {
+    let result = policy::validate_object_fields(None::<u64>, &["missing"], &[], &["unexpected"]);
+    match result {
+        Err(policy::ObjectFieldError::ExpectedObject) => {},
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+fn object_shape_keeps_the_exact_successful_value(value: u64) {
+    let required = ["blob", "sha256"];
+    let optional = ["length", "blob"];
+    let keys = ["sha256", "length", "blob"];
+    let result = policy::validate_object_fields(Some(value), &required, &optional, &keys);
+    match result {
+        Ok(actual) => expect_continuity_bool(actual == value),
+        Err(_) => { expect_continuity_bool(false); },
+    }
+    let empty = policy::validate_object_fields(Some(value), &[], &[], &[]);
+    match empty {
+        Ok(actual) => expect_continuity_bool(actual == value),
+        Err(_) => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn object_shape_accepts_only_complete_known_fields_and_preserves_values() {
+    object_shape_keeps_the_exact_successful_value(0);
+    object_shape_keeps_the_exact_successful_value(u64::MAX);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn object_shape_reports_the_first_required_field_without_any_keys() {
+    let required = ["first", "second"];
+    let keys: [&str; 0] = [];
+    proof { assert(required@[0]@ == "first"@); }
+    let result = policy::validate_object_fields(Some(7u64), &required, &[], &keys);
+    match result {
+        Err(policy::ObjectFieldError::Missing(name)) => {
+            let first = source_identifiers::equal_text(name, "first");
+            expect_continuity_bool(first);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn object_shape_missing_required_precedes_an_unknown_key() {
+    proof {
+        reveal_strlit("required"); reveal_strlit("unknown");
+        assert("required"@[0] != "unknown"@[0]);
+    }
+    let result = policy::validate_object_fields(Some(1u64), &["required"], &[], &["unknown"]);
+    match result {
+        Err(policy::ObjectFieldError::Missing(name)) => {
+            let same = source_identifiers::equal_text(name, "required");
+            expect_continuity_bool(same);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn object_shape_reports_the_first_unknown_key_after_all_required_fields() {
+    proof {
+        reveal_strlit("known"); reveal_strlit("first"); reveal_strlit("second");
+        assert("known"@[0] != "first"@[0]);
+        assert("known"@[0] != "second"@[0]);
+    }
+    let result = policy::validate_object_fields(
+        Some(9u64), &["known"], &[], &["known", "first", "second"],
+    );
+    match result {
+        Err(policy::ObjectFieldError::Unknown(name)) => {
+            let same = source_identifiers::equal_text(name, "first");
+            expect_continuity_bool(same);
+        },
+        _ => { expect_continuity_bool(false); },
+    }
+}
+
+fn object_shape_errors_preserve_the_complete_field_name(name: &str) {
+    let missing = policy::object_error_parts(policy::ObjectFieldError::Missing(name));
+    let prefix = source_identifiers::equal_text(missing[0], "missing field ");
+    let field = source_identifiers::equal_text(missing[1], name);
+    expect_continuity_bool(prefix && field);
+    let unknown = policy::object_error_parts(policy::ObjectFieldError::Unknown(name));
+    let prefix = source_identifiers::equal_text(unknown[0], "unknown field ");
+    let field = source_identifiers::equal_text(unknown[1], name);
+    expect_continuity_bool(prefix && field);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn object_shape_error_messages_keep_empty_unicode_nul_and_newline_names() {
+    object_shape_errors_preserve_the_complete_field_name("");
+    object_shape_errors_preserve_the_complete_field_name("字段\0original\nname");
+    let expected = policy::object_error_parts(policy::ObjectFieldError::ExpectedObject);
+    let prefix = source_identifiers::equal_text(expected[0], "expected object");
+    let suffix = source_identifiers::equal_text(expected[1], "");
+    expect_continuity_bool(prefix && suffix);
+}
+
 } // verus!
