@@ -1,19 +1,5 @@
 //! 原件交接的请求边界、精确成员与局部释放；IO 仍归保留所有者。
-#[cfg(not(verus_keep_ghost))]
-pub use crate::retained_artifacts::retention::partition::{
-    metadata_only_retirement, metadata_path_ready, objects_reference, preserve_frontier_original,
-};
-#[cfg(verus_keep_ghost)]
-pub use accounting::partition::{
-    metadata_only_retirement, metadata_path_ready, objects_reference, output_edge_matches,
-    output_reference_trace, preserve_frontier_original,
-};
-#[cfg(verus_keep_ghost)]
-#[path = "retention.rs"]
-pub mod accounting;
-#[cfg(verus_keep_ghost)]
-#[path = "retention_command.rs"]
-pub(crate) mod commands;
+use std::collections::BTreeSet;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -25,6 +11,115 @@ mod identifiers;
 use crate::verified_identifiers as identifiers;
 
 verus! {
+pub open spec fn output_edge_matches(row: (&str, &[String]), source: Seq<char>,
+    target: Seq<char>) -> bool
+{
+    row.0@ == source && exists|i: int| 0 <= i < row.1@.len()
+        && (#[trigger] row.1@[i])@ == target
+}
+
+pub open spec fn output_reference_trace<'a, T, F>(outputs: &'a [T], observe: F,
+    source: Seq<char>, target: Seq<char>, found: bool,
+    trace: Seq<(&'a str, &'a [String])>) -> bool
+    where F: Fn(&'a T) -> (&'a str, &'a [String]),
+{
+    trace.len() <= outputs.len()
+        && (forall|i: int| 0 <= i < trace.len() ==>
+            #[trigger] observe.ensures((&outputs@[i],), trace[i]))
+        && if found {
+            trace.len() > 0 && output_edge_matches(trace.last(), source, target)
+                && forall|i: int| 0 <= i < trace.len() - 1 ==>
+                    !output_edge_matches(#[trigger] trace[i], source, target)
+        } else {
+            trace.len() == outputs.len() && forall|i: int| 0 <= i < trace.len() ==>
+                !output_edge_matches(#[trigger] trace[i], source, target)
+        }
+}
+
+/// 借用实际记录；只有同一来源的完整引用匹配才提前返回，不分配投影库存。
+pub fn objects_reference<'a, T, F>(outputs: &'a [T], source: &str, target: &str,
+    observe: F) -> (found: bool)
+    where F: Fn(&'a T) -> (&'a str, &'a [String]),
+    requires forall|row: &'a T| observe.requires((row,)),
+    ensures exists|trace: Seq<(&'a str, &'a [String])>| output_reference_trace(
+        outputs, observe, source@, target@, found, trace),
+{
+    let ghost mut trace: Seq<(&'a str, &'a [String])> = Seq::empty();
+    let mut index = 0;
+    while index < outputs.len()
+        invariant index <= outputs.len(), trace.len() == index,
+            forall|row: &'a T| observe.requires((row,)),
+            forall|i: int| 0 <= i < trace.len() ==>
+                #[trigger] observe.ensures((&outputs@[i],), trace[i]),
+            forall|i: int| 0 <= i < trace.len() ==>
+                !output_edge_matches(#[trigger] trace[i], source@, target@),
+        decreases outputs.len() - index,
+    {
+        let row = observe(&outputs[index]);
+        proof { trace = trace.push(row); }
+        if identifiers::equal_text(row.0, source) && contains(row.1, target) {
+            assert(output_edge_matches(row, source@, target@));
+            assert(output_reference_trace(outputs, observe, source@, target@, true, trace));
+            return true;
+        }
+        index += 1;
+    }
+    assert(output_reference_trace(outputs, observe, source@, target@, false, trace));
+    false
+}
+
+/// 选择父报告退役时，已观察的其他原件继续受保护。
+pub fn preserve_frontier_original(id: &str, retiring: &str) -> (retain: bool)
+    ensures retain == (id@ != retiring@),
+{
+    !identifiers::equal_text(id, retiring)
+}
+
+/// 只有退役条件已满足且每个剩余引用均已载入时，才尝试共同持有物理路径。
+pub fn metadata_path_ready(metadata_only: bool, references: &[String],
+    loaded: &BTreeSet<String>) -> (ready: bool)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures ready == (metadata_only && forall|i: int| 0 <= i < references@.len()
+        ==> loaded@.contains(#[trigger] references@[i])),
+{
+    if !metadata_only { return false; }
+    let mut index = 0;
+    while index < references.len()
+        invariant
+            vstd::laws_cmp::obeys_cmp::<String>(),
+            0 <= index <= references@.len(),
+            forall|i: int| 0 <= i < index
+                ==> loaded@.contains(#[trigger] references@[i]),
+        decreases references@.len() - index,
+    {
+        if !loaded.contains(&references[index]) { return false; }
+        index += 1;
+    }
+    true
+}
+
+/// Sealed recovery accounting alone never establishes domain completion.
+pub fn accounting_releases(completing: bool, sealed: bool) -> (released: bool)
+    ensures released == (completing && sealed),
+{
+    completing && sealed
+}
+
+/// Empty retiring reports may advance pending metadata without physical path
+/// exclusion. Retiring the final address still requires that exclusion.
+pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
+    entries_empty: bool, pending_references: bool) -> (metadata_only: bool)
+    ensures metadata_only == (retiring && disposing && sealed && entries_empty
+        && pending_references),
+{
+    retiring && disposing && sealed && entries_empty && pending_references
+}
+
+pub fn within_bound(length: u64, limit: u64) -> (fits: bool)
+    ensures fits == (length <= limit),
+{
+    length <= limit
+}
 
 pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
     match text { Some(value) => Some(value@), None => None }

@@ -10,7 +10,6 @@ use super::{append_bytes, equal_bytes};
 pub mod continuity;
 
 /// 只解码实际存在的布尔字段；缺失由 Serde 保留为 None，启用选择归 Verus。
-#[cfg(not(verus_keep_ghost))]
 fn deserialize_classification_policy<'de, D>(deserializer: D) -> Result<Option<bool>, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -19,7 +18,6 @@ where
 }
 
 /// JSON 适配只保留原数组和可选布尔值，不选择是否启用分类。
-#[cfg(not(verus_keep_ghost))]
 #[derive(serde::Deserialize)]
 struct DecodedSourceRegistry {
     files: Vec<SourceFile>,
@@ -27,7 +25,6 @@ struct DecodedSourceRegistry {
     require_new_file_classification: Option<bool>,
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl From<DecodedSourceRegistry> for SourceRegistry {
     fn from(decoded: DecodedSourceRegistry) -> Self {
         source_registry(decoded.files, decoded.require_new_file_classification)
@@ -35,6 +32,38 @@ impl From<DecodedSourceRegistry> for SourceRegistry {
 }
 
 verus! {
+
+pub open spec fn source_plan_error(
+    registry: &SourceRegistry,
+    previous: Result<Option<&SourceRegistry>, &str>, nodes: Seq<String>,
+    methods: Seq<super::ProofInvocation>, scopes: Seq<SourceMethodScope>,
+    evidence: &continuity::Continuity,
+) -> Option<(Seq<char>, Seq<char>)> {
+    match registry_classification_error(registry, previous, evidence) {
+        Some(error) => Some(error),
+        None => selected_plan_error(registry.files.entries@, nodes, methods, scopes,
+            matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0),
+    }
+}
+
+/// 库存先验，原错误优先；两个门使用同一固定库存、影响输入和连续性证据。
+pub fn validate_source_plan<'a>(
+    registry: &'a SourceRegistry,
+    previous: Result<Option<&SourceRegistry>, &'a str>, nodes: &Vec<String>,
+    methods: &Vec<super::ProofInvocation>, scopes: &Vec<SourceMethodScope>,
+    evidence: &continuity::Continuity,
+) -> (out: Result<(), CoverageError<'a>>)
+    ensures match out {
+        Ok(()) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence).is_none(),
+        Err(error) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence) == Some(error.view()),
+    },
+{
+    match validate_file_classifications(registry, previous, evidence) {
+        Err(error) => Err(error),
+        Ok(()) => validate_selected_roots(&registry.files, nodes, methods, scopes, evidence),
+    }
+}
+
 
 /// 仅获取指定路径的原字节；准入、路径选择和长度判断由下方实现负责。
 pub trait DependencyRead {
@@ -68,14 +97,18 @@ pub fn observe_dependency<I: DependencyRead>(
         },
 {
     if contract.is_none() { return None; }
-    if exit != 0 || process_failed || !super::canonical_verifier_arguments(args) {
+    if exit != 0 || process_failed {
         return Some(Err("E_VERUS_SOURCES: original compiler process was not successful".to_string()));
     }
+    let parsed = match super::parse_verifier_arguments(args) {
+        Some(parsed) => parsed,
+        None => { return Some(Err("E_VERUS_SOURCES: original compiler process was not successful".to_string())); },
+    };
     if limit == 0 || limit > 67_108_864 {
         return Some(Err("E_VERUS_SOURCES: invalid dependency observation bound".to_string()));
     }
     let mut path = Vec::new();
-    append_bytes(&mut path, args[10].as_str().as_bytes());
+    append_bytes(&mut path, args[parsed.output].as_str().as_bytes());
     append_bytes(&mut path, &[46u8, 100u8]);
     let read = io.read(path.as_slice(), limit as u64 + 1);
     match read {
@@ -580,14 +613,14 @@ pub struct SourceBinding {
     pub length: u64,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(from = "DecodedSourceRegistry"))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(from = "DecodedSourceRegistry")]
 pub struct SourceRegistry {
     pub files: SourceFiles,
 }
 
 /// 分类开关与它约束的库存一同交给证明计划，调用方不能只转交文件数组而丢失政策。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct SourceFiles {
     pub entries: Vec<SourceFile>,
     pub require_new_file_classification: Option<bool>,
@@ -599,31 +632,31 @@ pub fn source_registry(entries: Vec<SourceFile>, policy: Option<bool>) -> (regis
     SourceRegistry { files: SourceFiles { entries, require_new_file_classification: policy } }
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[derive(Debug, serde::Deserialize)]
 pub struct SourceFile {
     pub path: String,
-    #[cfg_attr(not(verus_keep_ghost), serde(default))]
+    #[serde(default)]
     pub verification: Option<SourceVerification>,
 }
 
 /// 缺少声明仍是未知覆盖；数据声明不授予任何仓内函数受信例外。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(rename_all = "kebab-case"))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum SourceRole {
     Program,
     Specification,
     Data,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceVerification {
     pub role: SourceRole,
     pub roots: Vec<SourceProofRoot>,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SourceProofRoot {
     pub path: String,
     pub operation: String,
@@ -773,10 +806,10 @@ pub open spec fn regular_mode(mode: Seq<char>) -> bool {
 pub open spec fn admission_matches(
     admission: &SourceAdmission, args: Seq<String>, dependency: Seq<u8>, files: Seq<SourceFile>,
 ) -> bool {
-    super::verifier_arguments(args)
+    super::source_only_invocation(args)
         && source_metadata_admitted(admission.compiled@, admission.candidate@,
-            vstd::utf8::encode_utf8(args[8]@))
-        && dependency_content_matches(dependency, vstd::utf8::encode_utf8(args[10]@), admission.compiled@)
+            vstd::utf8::encode_utf8(args[super::invocation_source(args)]@))
+        && dependency_content_matches(dependency, vstd::utf8::encode_utf8(args[super::invocation_output(args)]@), admission.compiled@)
         && admission.candidate.len() == admission.modes.len()
         && (forall|i: int| 0 <= i < admission.candidate.len() ==>
             registered_source(files, (#[trigger] admission.candidate[i]).path@)
@@ -800,8 +833,14 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
 {
     // 组合入口先核合同与观察的有无；此层不复制合同或按名称推断操作。
     if observed.is_none() { return Ok(None); }
-    if !super::canonical_verifier_arguments(args) {
-        return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string());
+    let parsed = match super::parse_verifier_arguments(args) {
+        Some(parsed) => parsed,
+        None => { return Err("E_VERUS_SOURCES: verifier arguments differ from the registered invocation".to_string()); },
+    };
+    // 当前接口只有候选 blob 与 checksum；不能把库、宏、生成物或 VIR 当成源码。
+    match super::require_registered_input_evidence(args) {
+        Ok(()) => {},
+        Err(error) => { return Err(error); },
     }
     let bytes = match observed {
         Some(Ok(bytes)) => bytes,
@@ -811,7 +850,7 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         Ok(value) => value,
         Err(error) => { return Err(error.clone()); },
     };
-    let output = args[10].as_str();
+    let output = args[parsed.output].as_str();
     let paths = match compiler_dependency_paths(bytes.as_slice(), output.as_bytes()) {
         Some(paths) => paths,
         None => { return Err("E_VERUS_SOURCES: invalid compiler dependency target".to_string()); },
@@ -889,7 +928,7 @@ pub fn bind_compiler_sources<I: CandidateSourceRead>(
         candidate.push(SourceBinding { path: normalized, sha256: digest, length });
         i += 1;
     }
-    if !admit_source_metadata(&compiled, &candidate, args[8].as_str().as_bytes())
+    if !admit_source_metadata(&compiled, &candidate, args[parsed.source].as_str().as_bytes())
         || !matches_dependency_content(bytes.as_slice(), output.as_bytes(), &compiled) {
         return Err("E_VERUS_SOURCES: fixed source metadata or compiler checksums differ".to_string());
     }
@@ -1402,7 +1441,7 @@ pub open spec fn root_planned(root: &SourceProofRoot, methods: Seq<super::ProofI
         && methods[i].output_contract.is_some()
         && super::valid_contract(methods[i].output_contract)
         && super::verifier_arguments(methods[i].argv@)
-        && methods[i].argv[8]@ == root.path@
+        && methods[i].argv[super::invocation_source(methods[i].argv@)]@ == root.path@
 }
 
 fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -> (planned: bool)
@@ -1418,14 +1457,17 @@ fn planned_root(root: &SourceProofRoot, methods: &Vec<super::ProofInvocation>) -
                 && methods[i].output_contract.is_some()
                 && super::valid_contract(methods[i].output_contract)
                 && super::verifier_arguments(methods[i].argv@)
-                && methods[i].argv[8]@ == root.path@;
+                && methods[i].argv[super::invocation_source(methods[i].argv@)]@ == root.path@;
             assert(witness == index as int);
         }
     }
     let method = &methods[index];
-    if method.output_contract.is_none() || super::validate_contract(method.output_contract).is_err()
-        || !super::canonical_verifier_arguments(method.argv) { return false; }
-    super::equal_text(method.argv[8].as_str(), root.path.as_str())
+    if method.output_contract.is_none() || super::validate_contract(method.output_contract).is_err() { return false; }
+    let parsed = match super::parse_verifier_arguments(method.argv) {
+        Some(parsed) => parsed,
+        None => { return false; },
+    };
+    super::equal_text(method.argv[parsed.source].as_str(), root.path.as_str())
 }
 
 pub open spec fn file_plan_error(

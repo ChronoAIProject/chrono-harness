@@ -12,6 +12,11 @@ use std::{
     },
     time::{Duration, Instant},
 };
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
 const TREE_FD: i32 = 198;
 const CONTEXT_FD: i32 = 199;
 // V6 distinguishes kernel exit from reaping. Coupled nested engines must
@@ -20,7 +25,10 @@ const MAGIC: u64 = 0x4348524f4e4f5036;
 const OBSERVER_FD: i32 = 200;
 // Private copies must not alias the fixed inherited transport descriptors.
 pub(crate) const PRIVATE_FD_MIN: i32 = 202;
+
+verus! {
 const CAPACITY: usize = 4096;
+}
 
 #[repr(i32)]
 enum LaunchStage {

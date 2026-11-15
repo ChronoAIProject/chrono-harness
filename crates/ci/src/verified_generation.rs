@@ -1,0 +1,2186 @@
+//! Preparation must return its durable plan before any projection effect is dispatched.
+#![allow(unexpected_cfgs)]
+#[path = "generation.rs"]
+pub mod generation;
+
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+#[path = "../../identifiers/src/lib.rs"]
+pub(crate) mod identifiers;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+
+verus! {
+pub enum StateCommand<'a> {
+    Status { root: &'a str, path: &'a str },
+    Resume { root: &'a str, path: &'a str },
+    Maintain { root: &'a str },
+}
+
+pub enum StateArgumentError { Malformed, MissingRoot, Unexpected }
+
+impl StateArgumentError {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::Malformed => out@ == "generation state requires unique --host-root and optional --operation-path"@,
+            Self::MissingRoot => out@ == "--host-root required"@,
+            Self::Unexpected => out@ == "unexpected generation state options"@,
+        },
+    {
+        match self {
+            Self::Malformed => "generation state requires unique --host-root and optional --operation-path",
+            Self::MissingRoot => "--host-root required",
+            Self::Unexpected => "unexpected generation state options",
+        }
+    }
+}
+
+pub open spec fn state_option_key(key: Seq<char>) -> bool {
+    key == "--host-root"@ || key == "--operation-path"@
+}
+
+pub open spec fn state_option_shape(args: Seq<String>) -> bool {
+    args.len() == 1
+        || (args.len() == 3 && state_option_key(args[1]@))
+        || (args.len() == 5 && state_option_key(args[1]@)
+            && state_option_key(args[3]@) && args[1]@ != args[3]@)
+}
+
+pub open spec fn state_root(args: Seq<String>) -> Option<Seq<char>> {
+    if args.len() >= 3 && args[1]@ == "--host-root"@ { Some(args[2]@) }
+    else if args.len() >= 5 && args[3]@ == "--host-root"@ { Some(args[4]@) }
+    else { None }
+}
+
+pub open spec fn state_path(args: Seq<String>) -> Option<Seq<char>> {
+    if args.len() >= 3 && args[1]@ == "--operation-path"@ { Some(args[2]@) }
+    else if args.len() >= 5 && args[3]@ == "--operation-path"@ { Some(args[4]@) }
+    else { None }
+}
+
+pub open spec fn state_argument_error(args: Seq<String>) -> Option<StateArgumentError> {
+    if args.len() == 0 { Some(StateArgumentError::Unexpected) }
+    else if !state_option_shape(args) { Some(StateArgumentError::Malformed) }
+    else if state_root(args).is_none() { Some(StateArgumentError::MissingRoot) }
+    else if (args[0]@ == "generation-maintain"@ && state_path(args).is_none())
+        || ((args[0]@ == "generation-status"@ || args[0]@ == "generation-resume"@)
+            && state_path(args).is_some()) { None }
+    else { Some(StateArgumentError::Unexpected) }
+}
+
+pub open spec fn state_command_result(args: Seq<String>, out: Result<StateCommand, StateArgumentError>) -> bool {
+    match out {
+        Err(error) => state_argument_error(args) == Some(error),
+        Ok(command) => state_argument_error(args).is_none() && args.len() > 0 && match command {
+            StateCommand::Status { root, path } => args[0]@ == "generation-status"@
+                && state_root(args) == Some(root@) && state_path(args) == Some(path@),
+            StateCommand::Resume { root, path } => args[0]@ == "generation-resume"@
+                && state_root(args) == Some(root@) && state_path(args) == Some(path@),
+            StateCommand::Maintain { root } => args[0]@ == "generation-maintain"@
+                && state_root(args) == Some(root@) && state_path(args).is_none(),
+        },
+    }
+}
+
+/// Two distinct option keys bound the complete grammar to at most two pairs.
+pub fn parse_state_command<'a>(args: &'a [String]) -> (out: Result<StateCommand<'a>, StateArgumentError>)
+    ensures state_command_result(args@, out),
+{
+    proof {
+        reveal_strlit("--host-root");
+        reveal_strlit("--operation-path");
+        reveal_strlit("generation-maintain");
+        reveal_strlit("generation-status");
+        reveal_strlit("generation-resume");
+        assert("--host-root"@.len() != "--operation-path"@.len());
+        assert("generation-maintain"@.len() != "generation-status"@.len());
+        assert("generation-maintain"@.len() != "generation-resume"@.len());
+        assert("generation-status"@[11] != "generation-resume"@[11]);
+    }
+    if args.len() == 0 { return Err(StateArgumentError::Unexpected); }
+    if args.len() == 1 { return Err(StateArgumentError::MissingRoot); }
+    if args.len() != 3 && args.len() != 5 { return Err(StateArgumentError::Malformed); }
+    let command = args[0].as_str();
+    let first = args[1].as_str();
+    if args.len() == 3 {
+        if identifiers::equal_text(first, "--operation-path") {
+            return Err(StateArgumentError::MissingRoot);
+        }
+        if !identifiers::equal_text(first, "--host-root") {
+            return Err(StateArgumentError::Malformed);
+        }
+        if identifiers::equal_text(command, "generation-maintain") {
+            return Ok(StateCommand::Maintain { root: args[2].as_str() });
+        }
+        return Err(StateArgumentError::Unexpected);
+    }
+    let second = args[3].as_str();
+    let (root, path) = if identifiers::equal_text(first, "--host-root")
+        && identifiers::equal_text(second, "--operation-path") {
+        (args[2].as_str(), args[4].as_str())
+    } else if identifiers::equal_text(first, "--operation-path")
+        && identifiers::equal_text(second, "--host-root") {
+        (args[4].as_str(), args[2].as_str())
+    } else { return Err(StateArgumentError::Malformed); };
+    if identifiers::equal_text(command, "generation-status") {
+        Ok(StateCommand::Status { root, path })
+    } else if identifiers::equal_text(command, "generation-resume") {
+        Ok(StateCommand::Resume { root, path })
+    } else { Err(StateArgumentError::Unexpected) }
+}
+
+pub enum TargetAdmission { Overlap, Drift, Append }
+
+/// Existing output conflicts take precedence over verification drift.
+pub fn target_admission(overlapping: bool, verify: bool, same: bool) -> (out: TargetAdmission)
+    ensures
+        (out is Overlap) == overlapping,
+        (out is Drift) == (!overlapping && verify && !same),
+        (out is Append) == (!overlapping && (!verify || same)),
+{
+    if overlapping { TargetAdmission::Overlap }
+    else if verify && !same { TargetAdmission::Drift }
+    else { TargetAdmission::Append }
+}
+
+pub open spec fn inventory_collision(
+    adopting: bool, actual: Option<&Vec<u8>>, expected: &Vec<u8>,
+) -> bool {
+    adopting && match actual { Some(bytes) => bytes@ != expected@, None => false }
+}
+
+pub fn inventory_adoption_collision(
+    adopting: bool, actual: Option<&Vec<u8>>, expected: &Vec<u8>,
+) -> (collision: bool)
+    ensures collision == inventory_collision(adopting, actual, expected),
+{
+    if !adopting { return false; }
+    match actual {
+        Some(bytes) => !identifiers::equal_bytes(bytes.as_slice(), expected.as_slice()),
+        None => false,
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), derive(Clone, Debug, serde::Serialize, serde::Deserialize))]
+pub struct Object {
+    pub identity: String,
+    pub sha256: String,
+    pub bytes: u64,
+}
+
+pub open spec fn borrowed_object<'a>(object: &'a Option<Object>) -> Option<&'a Object> {
+    match object { Some(object) => Some(object), None => None }
+}
+
+pub open spec fn same_object_spec(first: Option<&Object>, second: Option<&Object>) -> bool {
+    match (first, second) {
+        (None, None) => true,
+        (Some(left), Some(right)) => left.identity@ == right.identity@
+            && left.sha256@ == right.sha256@ && left.bytes == right.bytes,
+        _ => false,
+    }
+}
+
+/// A missing original and an observed file never identify the same object.
+pub fn same_object(first: Option<&Object>, second: Option<&Object>) -> (same: bool)
+    ensures same == same_object_spec(first, second),
+{
+    match (first, second) {
+        (None, None) => true,
+        (Some(left), Some(right)) => identifiers::equal_text(&left.identity, &right.identity)
+            && identifiers::equal_text(&left.sha256, &right.sha256) && left.bytes == right.bytes,
+        _ => false,
+    }
+}
+
+pub type OriginalBytes = (Option<Object>, Option<Vec<u8>>);
+
+pub open spec fn original_snapshot(
+    before: String, bytes: Vec<u8>, digest: String, out: Result<OriginalBytes, String>,
+) -> bool {
+    match out {
+        Ok((Some(object), Some(saved))) => object.identity@ == before@
+            && object.sha256@ == digest@ && object.bytes == bytes@.len()
+            && saved@ == bytes@,
+        _ => false,
+    }
+}
+
+pub open spec fn original_bytes_result<S, Identity, Hash, Changed>(
+    initial: S, before: String, bytes: Vec<u8>, limit: u64,
+    identity: Identity, hash: Hash, changed: Changed,
+    out: (S, Result<OriginalBytes, String>),
+) -> bool
+    where Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+{
+    if bytes@.len() > limit {
+        out.0 == initial && match out.1 {
+            Err(error) => error@ == "generation original exceeds byte limit"@,
+            _ => false,
+        }
+    } else {
+        exists|state: S, observed: Result<String, String>|
+            #[trigger] identity.ensures((initial,), (state, observed)) && match observed {
+                Err(error) => out == (state, Err::<OriginalBytes, String>(error)),
+                Ok(actual) => if before@ != actual@ {
+                    match out.1 {
+                        Err(error) => changed.ensures((state,), (out.0, error)),
+                        _ => false,
+                    }
+                } else {
+                    exists|next: S, digest: String|
+                        #[trigger] hash.ensures((state, &bytes), (next, digest))
+                        && out.0 == next && original_snapshot(before, bytes, digest, out.1)
+                },
+            }
+    }
+}
+
+fn finish_original_bytes<S, Identity, Hash, Changed>(
+    state: S, before: String, bytes: Vec<u8>, limit: u64,
+    identity: Identity, hash: Hash, changed: Changed,
+) -> (out: (S, Result<OriginalBytes, String>))
+    where Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+    requires forall|state: S| #[trigger] identity.requires((state,)),
+        forall|state: S, bytes: &Vec<u8>| #[trigger] hash.requires((state, bytes)),
+        forall|state: S| #[trigger] changed.requires((state,)),
+    ensures original_bytes_result(state, before, bytes, limit, identity, hash, changed, out),
+{
+    if bytes.len() as u128 > limit as u128 {
+        return (state, Err("generation original exceeds byte limit".to_owned()));
+    }
+    let ghost initial = state;
+    let ghost original_bytes = bytes;
+    let ghost original_before = before;
+    let (state, observed) = identity(state);
+    let ghost after_identity = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(actual) => {
+            if !identifiers::equal_text(&before, &actual) {
+                let (state, error) = changed(state);
+                (state, Err(error))
+            } else {
+                let (state, digest) = hash(state, &bytes);
+                let object = Object { identity: before, sha256: digest, bytes: bytes.len() as u64 };
+                (state, Ok((Some(object), Some(bytes))))
+            }
+        },
+    };
+    assert(identity.ensures((initial,), (after_identity, original)));
+    assert(original_bytes_result(initial, original_before, original_bytes, limit,
+        identity, hash, changed, out));
+    out
+}
+
+pub open spec fn original_read_result<S, Read, Identity, Hash, Changed>(
+    initial: S, before: String, limit: u64,
+    read: Read, identity: Identity, hash: Hash, changed: Changed,
+    out: (S, Result<OriginalBytes, String>),
+) -> bool
+    where Read: FnOnce(S) -> (S, Result<Vec<u8>, String>),
+          Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+{
+    exists|state: S, observed: Result<Vec<u8>, String>|
+        #[trigger] read.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<OriginalBytes, String>(error)),
+            Ok(bytes) => original_bytes_result(state, before, bytes, limit, identity, hash, changed, out),
+        }
+}
+
+/// Read first, reject oversized bytes before rechecking identity, then hash and retain the exact bytes.
+pub fn read_present_original<S, Read, Identity, Hash, Changed>(
+    state: S, before: String, limit: u64,
+    read: Read, identity: Identity, hash: Hash, changed: Changed,
+) -> (out: (S, Result<OriginalBytes, String>))
+    where Read: FnOnce(S) -> (S, Result<Vec<u8>, String>),
+          Identity: FnOnce(S) -> (S, Result<String, String>),
+          Hash: FnOnce(S, &Vec<u8>) -> (S, String),
+          Changed: FnOnce(S) -> (S, String),
+    requires read.requires((state,)),
+        forall|state: S| #[trigger] identity.requires((state,)),
+        forall|state: S, bytes: &Vec<u8>| #[trigger] hash.requires((state, bytes)),
+        forall|state: S| #[trigger] changed.requires((state,)),
+    ensures original_read_result(state, before, limit, read, identity, hash, changed, out),
+{
+    let ghost initial = state;
+    let (state, observed) = read(state);
+    let ghost after_read = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(bytes) => finish_original_bytes(state, before, bytes, limit, identity, hash, changed),
+    };
+    assert(read.ensures((initial,), (after_read, original)));
+    out
+}
+
+pub enum Effects { NotStarted, Unknown, Complete }
+
+impl Effects {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::NotStarted => out@ == "not-started"@,
+            Self::Unknown => out@ == "unknown"@,
+            Self::Complete => out@ == "complete"@,
+        },
+    {
+        match self {
+            Self::NotStarted => "not-started",
+            Self::Unknown => "unknown",
+            Self::Complete => "complete",
+        }
+    }
+
+    pub fn can_release(&self) -> (release: bool)
+        ensures release == !(self is Unknown),
+    {
+        match self { Self::Unknown => false, _ => true }
+    }
+}
+
+/// The original evaluation and its effect knowledge are produced together.
+pub struct Evaluation<T, E> {
+    pub result: Result<T, E>,
+    pub effects: Effects,
+}
+
+pub open spec fn text_is(actual: Option<&str>, expected: &str) -> bool {
+    match actual { Some(text) => text@ == expected@, None => false }
+}
+
+pub fn reported_unknown(effects: Option<&str>) -> (unknown: bool)
+    ensures unknown == text_is(effects, "unknown"),
+{
+    text_matches(effects, "unknown")
+}
+
+pub fn sealed_record(count: usize, phase: Option<&str>, sealed: Option<bool>) -> (ready: bool)
+    ensures ready == (count == 1 && text_is(phase, "released") && sealed == Some(true)),
+{
+    if count != 1 { return false; }
+    match phase {
+        Some(text) => identifiers::equal_text(text, "released") && sealed == Some(true),
+        None => false,
+    }
+}
+
+pub open spec fn recovery_reference_spec(
+    recorded_id: Option<&str>, attached_id: Option<&str>, attached_path: Option<&str>, path: &str,
+) -> bool {
+    match (recorded_id, attached_id, attached_path) {
+        (Some(recorded), Some(attached), Some(actual_path)) =>
+            recorded@ == attached@ && actual_path@ == path@,
+        _ => false,
+    }
+}
+
+pub fn recovery_reference_matches(
+    recorded_id: Option<&str>, attached_id: Option<&str>, attached_path: Option<&str>, path: &str,
+) -> (bound: bool)
+    ensures bound == recovery_reference_spec(recorded_id, attached_id, attached_path, path),
+{
+    match (recorded_id, attached_id, attached_path) {
+        (Some(recorded), Some(attached), Some(actual_path)) =>
+            identifiers::equal_text(recorded, attached) && identifiers::equal_text(actual_path, path),
+        _ => false,
+    }
+}
+
+pub fn intent_address_matches(schema: Option<&str>, attempt: Option<&str>, path: &str) -> (bound: bool)
+    ensures bound == (text_is(schema, "chrono-ci-generation-intent/v1") && text_is(attempt, path)),
+{
+    match (schema, attempt) {
+        (Some(schema), Some(attempt)) =>
+            identifiers::equal_text(schema, "chrono-ci-generation-intent/v1")
+                && identifiers::equal_text(attempt, path),
+        _ => false,
+    }
+}
+
+pub fn result_address_matches(
+    schema: Option<&str>, attempt: Option<&str>, intent_sha256: Option<&str>,
+    path: &str, digest: &str, exit_is_null: bool,
+) -> (bound: bool)
+    ensures bound == (text_is(schema, "chrono-ci-generation-result/v1")
+        && text_is(attempt, path) && text_is(intent_sha256, digest) && exit_is_null),
+{
+    match (schema, attempt, intent_sha256) {
+        (Some(schema), Some(attempt), Some(intent_sha256)) =>
+            identifiers::equal_text(schema, "chrono-ci-generation-result/v1")
+                && identifiers::equal_text(attempt, path)
+                && identifiers::equal_text(intent_sha256, digest) && exit_is_null,
+        _ => false,
+    }
+}
+
+pub struct OriginalBinding<'a> {
+    pub intent_schema: Option<&'a str>,
+    pub intent_attempt: Option<&'a str>,
+    pub intent_host: Option<&'a str>,
+    pub result_schema: Option<&'a str>,
+    pub result_attempt: Option<&'a str>,
+    pub result_intent_sha256: Option<&'a str>,
+    pub result_exit_is_null: bool,
+}
+
+pub open spec fn rejected_original_binding(result: Result<(), String>) -> bool {
+    match result { Err(error) => error@ == "generation original result/intent binding mismatch"@, _ => false }
+}
+
+pub open spec fn original_binding_host(fields: &OriginalBinding, actual: String) -> bool {
+    match fields.intent_host { Some(host) => host@ == actual@, None => false }
+}
+
+pub open spec fn original_binding_digest_result(fields: &OriginalBinding, path: &str, digest: Seq<char>,
+    result: Result<(), String>) -> bool
+{
+    let bound = text_is(fields.result_schema, "chrono-ci-generation-result/v1")
+        && text_is(fields.result_attempt, path)
+        && (match fields.result_intent_sha256 { Some(actual) => actual@ == digest, None => false })
+        && fields.result_exit_is_null;
+    match result { Ok(()) => bound, Err(_) => !bound && rejected_original_binding(result) }
+}
+
+pub open spec fn original_binding_equality_result<S, H>(
+    initial: S, fields: &OriginalBinding, path: &str, intent: &Vec<u8>, equal: bool, hash: H,
+    out: (S, Result<(), String>),
+) -> bool
+    where H: Fn(S, &Vec<u8>) -> (S, String),
+{
+    if !equal { out.0 == initial && rejected_original_binding(out.1) }
+    else {
+        exists|next: S, digest: String|
+            #[trigger] hash.ensures((initial, intent), (next, digest))
+                && out.0 == next && original_binding_digest_result(fields, path, digest@, out.1)
+    }
+}
+
+pub open spec fn original_binding_result<S, I, C, H>(
+    initial: S, fields: &OriginalBinding, path: &str, intent: &Vec<u8>, identify: I, equal: C, hash: H,
+    out: (S, Result<(), String>),
+) -> bool
+    where I: Fn(S) -> (S, Result<String, String>), C: Fn(S) -> (S, bool), H: Fn(S, &Vec<u8>) -> (S, String),
+{
+    if !text_is(fields.intent_schema, "chrono-ci-generation-intent/v1") || !text_is(fields.intent_attempt, path) {
+        out.0 == initial && rejected_original_binding(out.1)
+    } else {
+        exists|state: S, actual: Result<String, String>|
+            #[trigger] identify.ensures((initial,), (state, actual)) && match actual {
+                Err(error) => out == (state, Err::<(), String>(error)),
+                Ok(actual) => if !original_binding_host(fields, actual) {
+                    out.0 == state && rejected_original_binding(out.1)
+                } else {
+                    exists|next: S, matched: bool|
+                        #[trigger] equal.ensures((state,), (next, matched))
+                            && original_binding_equality_result(next, fields, path, intent, matched, hash, out)
+                },
+            }
+    }
+}
+
+/// Validate the original address before identity IO, and hash the actual intent only after host/result binding.
+pub fn bind_generation_originals<S, I, C, H>(
+    state: S, fields: &OriginalBinding, path: &str, intent: &Vec<u8>, identify: I, equal: C, hash: H,
+) -> (out: (S, Result<(), String>))
+    where I: Fn(S) -> (S, Result<String, String>), C: Fn(S) -> (S, bool), H: Fn(S, &Vec<u8>) -> (S, String),
+    requires (forall|state: S| #[trigger] identify.requires((state,))),
+        (forall|state: S| #[trigger] equal.requires((state,))),
+        (forall|state: S, bytes: &Vec<u8>| #[trigger] hash.requires((state, bytes))),
+    ensures original_binding_result(state, fields, path, intent, identify, equal, hash, out),
+{
+    if !intent_address_matches(fields.intent_schema, fields.intent_attempt, path) {
+        return (state, Err("generation original result/intent binding mismatch".to_owned()));
+    }
+    let ghost initial = state;
+    let (state, actual) = identify(state);
+    let ghost after_identify = state;
+    let ghost original_identity = actual;
+    let out = match actual {
+        Err(error) => (state, Err(error)),
+        Ok(actual) => {
+            if !text_matches(fields.intent_host, &actual) {
+                (state, Err("generation original result/intent binding mismatch".to_owned()))
+            } else {
+                let (state, matched) = equal(state);
+                let ghost after_equal = state;
+                let out = if !matched {
+                    (state, Err("generation original result/intent binding mismatch".to_owned()))
+                } else {
+                    let (state, digest) = hash(state, intent);
+                    let ghost after_hash = state;
+                    let ghost original_digest = digest;
+                    let out = if result_address_matches(fields.result_schema, fields.result_attempt,
+                        fields.result_intent_sha256, path, &digest, fields.result_exit_is_null) {
+                        (state, Ok(()))
+                    } else { (state, Err("generation original result/intent binding mismatch".to_owned())) };
+                    assert(hash.ensures((after_equal, intent), (after_hash, original_digest)));
+                    out
+                };
+                assert(original_binding_equality_result(after_equal, fields, path, intent, matched, hash, out));
+                assert(equal.ensures((after_identify,), (after_equal, matched)));
+                out
+            }
+        },
+    };
+    assert(identify.ensures((initial,), (after_identify, original_identity)));
+    assert(original_binding_result(initial, fields, path, intent, identify, equal, hash, out));
+    out
+}
+
+fn text_matches(actual: Option<&str>, expected: &str) -> (same: bool)
+    ensures same == text_is(actual, expected),
+{
+    match actual { Some(text) => identifiers::equal_text(text, expected), None => false }
+}
+
+pub struct BoundOriginalIo<V, O, M, H, C> {
+    pub validate: V,
+    pub observe: O,
+    pub missing: M,
+    pub hash: H,
+    pub changed: C,
+}
+
+pub open spec fn bound_original_callable<S, E, V, O, M, H, C>(io: &BoundOriginalIo<V, O, M, H, C>) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    (forall|state: S| #[trigger] io.validate.requires((state,)))
+        && (forall|state: S| #[trigger] io.observe.requires((state,)))
+        && (forall|state: S| #[trigger] io.missing.requires((state,)))
+        && (forall|state: S, bytes: &Vec<u8>| #[trigger] io.hash.requires((state, bytes)))
+        && (forall|state: S| #[trigger] io.changed.requires((state,)))
+}
+
+pub open spec fn bound_hashed_result<S, E, V, O, M, H, C>(
+    initial: S, bytes: Vec<u8>, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>, out: (S, Result<Vec<u8>, E>),
+) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    exists|state: S, digest: String|
+        #[trigger] io.hash.ensures((initial, &bytes), (state, digest)) && if digest@ == expected@ {
+            out == (state, Ok::<Vec<u8>, E>(bytes))
+        } else { match out.1 {
+            Err(error) => io.changed.ensures((state,), (out.0, error)),
+            _ => false,
+        } }
+}
+
+fn finish_bound_original<S, E, V, O, M, H, C>(
+    state: S, bytes: Vec<u8>, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>,
+) -> (out: (S, Result<Vec<u8>, E>))
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+    requires bound_original_callable(io),
+    ensures bound_hashed_result(state, bytes, expected, io, out),
+{
+    let ghost initial = state;
+    let ghost original_bytes = bytes;
+    let (state, digest) = (io.hash)(state, &bytes);
+    let ghost after_hash = state;
+    let ghost original_digest = digest;
+    let out = if identifiers::equal_text(&digest, expected) { (state, Ok(bytes)) }
+    else {
+        let (state, error) = (io.changed)(state);
+        let ghost after_changed = state;
+        let ghost original_error = error;
+        assert(io.changed.ensures((after_hash,), (after_changed, original_error)));
+        (state, Err(error))
+    };
+    assert(io.hash.ensures((initial, &original_bytes), (after_hash, original_digest)));
+    assert(bound_hashed_result(initial, original_bytes, expected, io, out));
+    out
+}
+
+pub open spec fn bound_observed_result<S, E, V, O, M, H, C>(
+    initial: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>, out: (S, Result<Vec<u8>, E>),
+) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Vec<u8>>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<Vec<u8>, E>(error)),
+            Ok(None) => match out.1 {
+                Err(error) => io.missing.ensures((state,), (out.0, error)),
+                _ => false,
+            },
+            Ok(Some(bytes)) => bound_hashed_result(state, bytes, expected, io, out),
+        }
+}
+
+fn observe_bound_original<S, E, V, O, M, H, C>(
+    state: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>,
+) -> (out: (S, Result<Vec<u8>, E>))
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+    requires bound_original_callable(io),
+    ensures bound_observed_result(state, expected, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(None) => {
+            let (state, error) = (io.missing)(state);
+            let ghost after_missing = state;
+            let ghost original_error = error;
+            assert(io.missing.ensures((after_observe,), (after_missing, original_error)));
+            (state, Err(error))
+        },
+        Ok(Some(bytes)) => finish_bound_original(state, bytes, expected, io),
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    assert(bound_observed_result(initial, expected, io, out));
+    out
+}
+
+pub open spec fn bound_original_result<S, E, V, O, M, H, C>(
+    initial: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>, out: (S, Result<Vec<u8>, E>),
+) -> bool
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+{
+    exists|state: S, validated: Result<(), E>|
+        #[trigger] io.validate.ensures((initial,), (state, validated)) && match validated {
+            Err(error) => out == (state, Err::<Vec<u8>, E>(error)),
+            Ok(()) => bound_observed_result(state, expected, io, out),
+        }
+}
+
+/// Validate the requested path before observing bytes, and return only the same bytes whose digest matches.
+pub fn read_bound_original<S, E, V, O, M, H, C>(
+    state: S, expected: &str, io: &BoundOriginalIo<V, O, M, H, C>,
+) -> (out: (S, Result<Vec<u8>, E>))
+    where V: Fn(S) -> (S, Result<(), E>),
+          O: Fn(S) -> (S, Result<Option<Vec<u8>>, E>),
+          M: Fn(S) -> (S, E), H: Fn(S, &Vec<u8>) -> (S, String), C: Fn(S) -> (S, E),
+    requires bound_original_callable(io),
+    ensures bound_original_result(state, expected, io, out),
+{
+    let ghost initial = state;
+    let (state, validated) = (io.validate)(state);
+    let ghost after_validate = state;
+    let ghost original = validated;
+    let out = match validated {
+        Err(error) => (state, Err(error)),
+        Ok(success) => { assert(success == ()); observe_bound_original(state, expected, io) },
+    };
+    assert(io.validate.ensures((initial,), (after_validate, original)));
+    assert(bound_original_result(initial, expected, io, out));
+    out
+}
+
+pub struct InputOriginal<'a> {
+    pub name: Option<&'a str>,
+    pub digest: Option<&'a str>,
+    pub bytes: Option<u64>,
+}
+
+pub open spec fn original_error_is(result: Result<(), String>, message: &str) -> bool {
+    match result { Err(error) => error@ == message@, _ => false }
+}
+
+pub open spec fn input_original_read_result(expected: Option<u64>, observed: Result<Vec<u8>, String>,
+    result: Result<(), String>) -> bool
+{
+    match observed {
+        Err(error) => result == Err::<(), String>(error),
+        Ok(bytes) => if expected == Some(bytes@.len() as u64) { result == Ok::<(), String>(()) }
+            else { original_error_is(result, "generation input original length changed") },
+    }
+}
+
+pub open spec fn input_original_result<S, R>(initial: S, fields: &InputOriginal, read: R,
+    out: (S, Result<(), String>)) -> bool
+    where R: Fn(S, &str, &str) -> (S, Result<Vec<u8>, String>),
+{
+    match fields.name {
+        None => out == (initial, Ok::<(), String>(())),
+        Some(name) => match fields.digest {
+            None => out.0 == initial && original_error_is(out.1, "generation input digest missing"),
+            Some(digest) => exists|state: S, observed: Result<Vec<u8>, String>|
+                #[trigger] read.ensures((initial, name, digest), (state, observed))
+                    && out.0 == state && input_original_read_result(fields.bytes, observed, out.1),
+        },
+    }
+}
+
+/// An unnamed input has no byte original; named inputs require a digest and the original byte length.
+pub fn check_input_original<S, R>(state: S, fields: &InputOriginal, read: R)
+    -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str, &str) -> (S, Result<Vec<u8>, String>),
+    requires forall|state: S, name: &str, digest: &str| #[trigger] read.requires((state, name, digest)),
+    ensures input_original_result(state, fields, read, out),
+{
+    let name = match fields.name { None => return (state, Ok(())), Some(name) => name };
+    let digest = match fields.digest {
+        None => return (state, Err("generation input digest missing".to_owned())), Some(digest) => digest,
+    };
+    let ghost initial = state;
+    let (state, observed) = read(state, name, digest);
+    let ghost after_read = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(bytes) => if fields.bytes == Some(bytes.len() as u64) { (state, Ok(())) }
+            else { (state, Err("generation input original length changed".to_owned())) },
+    };
+    assert(read.ensures((initial, name, digest), (after_read, original)));
+    assert(input_original_result(initial, fields, read, out));
+    out
+}
+
+pub struct TargetOriginal<'a> {
+    pub name: Option<&'a str>,
+    pub digest: Option<&'a str>,
+    pub previous: Option<&'a str>,
+    pub previous_digest: Option<&'a str>,
+}
+
+pub open spec fn previous_original_result<S, R>(initial: S, fields: &TargetOriginal, read: &R,
+    out: (S, Result<(), String>)) -> bool
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+{
+    match fields.previous {
+        None => out == (initial, Ok::<(), String>(())),
+        Some(name) => match fields.previous_digest {
+            None => out.0 == initial && original_error_is(out.1, "generation prior output digest missing"),
+            Some(digest) => read.ensures((initial, name, digest), out),
+        },
+    }
+}
+
+fn check_previous_original<S, R>(state: S, fields: &TargetOriginal, read: &R)
+    -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+    requires forall|state: S, name: &str, digest: &str| #[trigger] read.requires((state, name, digest)),
+    ensures previous_original_result(state, fields, read, out),
+{
+    let name = match fields.previous { None => return (state, Ok(())), Some(name) => name };
+    let digest = match fields.previous_digest {
+        None => return (state, Err("generation prior output digest missing".to_owned())), Some(digest) => digest,
+    };
+    let ghost initial = state;
+    let out = read(state, name, digest);
+    assert(read.ensures((initial, name, digest), out));
+    out
+}
+
+pub open spec fn target_original_result<S, R>(initial: S, fields: &TargetOriginal, read: &R,
+    out: (S, Result<(), String>)) -> bool
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+{
+    match fields.name {
+        None => out.0 == initial && original_error_is(out.1, "generation output original missing"),
+        Some(name) => match fields.digest {
+            None => out.0 == initial && original_error_is(out.1, "generation output digest missing"),
+            Some(digest) => exists|state: S, observed: Result<(), String>|
+                #[trigger] read.ensures((initial, name, digest), (state, observed)) && match observed {
+                    Err(error) => out == (state, Err::<(), String>(error)),
+                    Ok(()) => previous_original_result(state, fields, read, out),
+                },
+        },
+    }
+}
+
+/// Check the new original first and consult an optional previous original only after it succeeds.
+pub fn check_target_original<S, R>(state: S, fields: &TargetOriginal, read: &R)
+    -> (out: (S, Result<(), String>))
+    where R: Fn(S, &str, &str) -> (S, Result<(), String>),
+    requires forall|state: S, name: &str, digest: &str| #[trigger] read.requires((state, name, digest)),
+    ensures target_original_result(state, fields, read, out),
+{
+    let name = match fields.name {
+        None => return (state, Err("generation output original missing".to_owned())), Some(name) => name,
+    };
+    let digest = match fields.digest {
+        None => return (state, Err("generation output digest missing".to_owned())), Some(digest) => digest,
+    };
+    let ghost initial = state;
+    let (state, observed) = read(state, name, digest);
+    let ghost after_read = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => { assert(success == ()); check_previous_original(state, fields, read) },
+    };
+    assert(read.ensures((initial, name, digest), (after_read, original)));
+    assert(target_original_result(initial, fields, read, out));
+    out
+}
+
+pub open spec fn original_rows_prefix<S, T, C>(initial: S, rows: &Vec<T>, states: Seq<S>, check: C) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    1 <= states.len() <= rows@.len() + 1 && states.first() == initial
+        && forall|index: int| 0 <= index < states.len() - 1 ==>
+            #[trigger] check.ensures((states[index], &rows@[index]), (states[index + 1], Ok::<(), String>(())))
+}
+
+pub open spec fn original_rows_terminal<S, T, C>(rows: &Vec<T>, states: Seq<S>, check: C,
+    out: (S, Result<(), String>)) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    match out.1 {
+        Ok(()) => states.len() == rows@.len() + 1 && out.0 == states.last(),
+        Err(error) => states.len() <= rows@.len()
+            && check.ensures((states.last(), &rows@[states.len() - 1]), (out.0, Err::<(), String>(error))),
+    }
+}
+
+pub open spec fn original_array_result<S, T, C>(initial: S, rows: &Vec<T>, check: C,
+    out: (S, Result<(), String>)) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    exists|states: Seq<S>| original_rows_prefix(initial, rows, states, check)
+        && original_rows_terminal(rows, states, check, out)
+}
+
+pub open spec fn original_rows_result<S, T, C>(initial: S, rows: Option<&Vec<T>>, malformed: &str, check: C,
+    out: (S, Result<(), String>)) -> bool
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+{
+    match rows {
+        None => out.0 == initial && original_error_is(out.1, malformed),
+        Some(rows) => original_array_result(initial, rows, check, out),
+    }
+}
+
+proof fn original_rows_witness<S, T, C>(initial: S, items: &Vec<T>, states: Seq<S>, check: C,
+    out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires original_rows_prefix(initial, items, states, check),
+        original_rows_terminal(items, states, check, out),
+    ensures original_array_result(initial, items, check, out),
+{
+    assert(exists|history: Seq<S>| original_rows_prefix(initial, items, history, check)
+        && original_rows_terminal(items, history, check, out));
+}
+
+fn check_original_array<S, T, C>(initial: S, items: &Vec<T>, check: C)
+    -> (out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+    ensures original_array_result(initial, items, check, out),
+{
+    let mut state = initial;
+    let mut index = 0usize;
+    let ghost states = seq![initial];
+    while index < items.len()
+        invariant index <= items@.len(), states.len() == index as int + 1,
+            states.last() == state, original_rows_prefix(initial, items, states, check),
+            forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+        decreases items.len() - index,
+    {
+        let ghost before = state;
+        let (next, result) = check(state, &items[index]);
+        let ghost original = result;
+        assert(check.ensures((before, &items@[index as int]), (next, original)));
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(original == out.1);
+                assert(states.len() <= items@.len());
+                assert(check.ensures((states.last(), &items@[states.len() - 1]), out));
+                assert(original_rows_terminal(items, states, check, out));
+                proof { original_rows_witness(initial, items, states, check, out); }
+                return out;
+            },
+            Ok(success) => {
+                assert(success == ());
+                proof {
+                    let old_states = states;
+                    states = states.push(next);
+                    assert forall|position: int| 0 <= position < states.len() - 1 implies
+                        #[trigger] check.ensures((states[position], &items@[position]),
+                            (states[position + 1], Ok::<(), String>(()))) by {
+                        if position < index {
+                            assert(check.ensures((old_states[position], &items@[position]),
+                                (old_states[position + 1], Ok::<(), String>(()))) );
+                        } else { assert(position == index); }
+                    }
+                }
+                state = next;
+                index += 1;
+            },
+        }
+    }
+    let out = (state, Ok(()));
+    assert(original_rows_terminal(items, states, check, out));
+    proof { original_rows_witness(initial, items, states, check, out); }
+    out
+}
+
+/// Reject a malformed array, otherwise inspect each complete borrowed row once and stop at its first error.
+pub fn check_original_rows<S, T, C>(initial: S, rows: Option<&Vec<T>>, malformed: &str, check: C)
+    -> (out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+    ensures original_rows_result(initial, rows, malformed, check, out),
+{
+    match rows {
+        None => (initial, Err(malformed.to_owned())),
+        Some(items) => check_original_array(initial, items, check),
+    }
+}
+
+/// A plan schema must match before its target array or any target original can be accepted.
+pub fn check_plan_original_rows<S, T, C>(initial: S, schema: Option<&str>, rows: Option<&Vec<T>>, check: C)
+    -> (out: (S, Result<(), String>))
+    where C: Fn(S, &T) -> (S, Result<(), String>),
+    requires forall|state: S, row: &T| #[trigger] check.requires((state, row)),
+    ensures if !text_is(schema, "chrono-ci-generation-plan/v1") {
+        out.0 == initial && original_error_is(out.1, "generation plan schema mismatch")
+    } else { original_rows_result(initial, rows, "generation target originals malformed", check, out) },
+{
+    if !text_matches(schema, "chrono-ci-generation-plan/v1") {
+        return (initial, Err("generation plan schema mismatch".to_owned()));
+    }
+    check_original_rows(initial, rows, "generation target originals malformed", check)
+}
+
+pub open spec fn directory_steps_finite<S, P, E, N, D>(next: N, sync: D, rank: spec_fn(S) -> nat) -> bool
+    where N: Fn(S) -> (S, Option<P>), D: Fn(S, P) -> (S, Result<(), E>),
+{
+    (forall|before: S, after: S, path: P|
+        #[trigger] next.ensures((before,), (after, Some(path))) ==> rank(after) < rank(before))
+        && (forall|before: S, path: P, after: S, result: Result<(), E>|
+            #[trigger] sync.ensures((before, path), (after, result)) ==> rank(after) <= rank(before))
+}
+
+pub open spec fn directory_prefix<S, P, E, N, C, D>(
+    initial: S, root: P, states: Seq<S>, steps: Seq<(S, P)>, next: N, same: C, sync: D,
+) -> bool
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+{
+    states.len() == steps.len() + 1 && states.first() == initial
+        && forall|i: int| #![trigger steps[i]] 0 <= i < steps.len() ==>
+            next.ensures((states[i],), (steps[i].0, Some(steps[i].1)))
+                && same.ensures((&steps[i].1, &root), false)
+                && sync.ensures((steps[i].0, steps[i].1), (states[i + 1], Ok::<(), E>(())))
+}
+
+pub open spec fn directory_terminal<S, P, E, N, C, D>(
+    before: S, root: P, following: (S, Option<P>), next: N, same: C, sync: D,
+    out: (S, Result<(), E>),
+) -> bool
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+{
+    next.ensures((before,), following) && match following.1 {
+        None => sync.ensures((following.0, root), out),
+        Some(path) => (same.ensures((&path, &root), true) && sync.ensures((following.0, root), out))
+            || (same.ensures((&path, &root), false) && match out.1 {
+                Err(error) => sync.ensures((following.0, path), (out.0, Err::<(), E>(error))),
+                Ok(()) => false,
+            }),
+    }
+}
+
+pub open spec fn directory_result<S, P, E, N, C, D>(
+    initial: S, root: P, next: N, same: C, sync: D, out: (S, Result<(), E>),
+) -> bool
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+{
+    exists|states: Seq<S>, steps: Seq<(S, P)>, following: (S, Option<P>)|
+        directory_prefix(initial, root, states, steps, next, same, sync)
+            && directory_terminal(states.last(), root, following, next, same, sync, out)
+}
+
+/// Stream ancestors in order; sync the original root once at the boundary and preserve the first error.
+pub fn sync_ancestor_directories<S, P, E, N, C, D>(
+    initial: S, root: P, next: N, same: C, sync: D,
+) -> (out: (S, Result<(), E>))
+    where N: Fn(S) -> (S, Option<P>), C: Fn(&P, &P) -> bool,
+          D: Fn(S, P) -> (S, Result<(), E>),
+    requires
+        forall|state: S| #[trigger] next.requires((state,)),
+        forall|path: &P, root: &P| #[trigger] same.requires((path, root)),
+        forall|state: S, path: P| #[trigger] sync.requires((state, path)),
+        exists|rank: spec_fn(S) -> nat| directory_steps_finite(next, sync, rank),
+    ensures directory_result(initial, root, next, same, sync, out),
+{
+    let ghost rank = choose|rank: spec_fn(S) -> nat| directory_steps_finite(next, sync, rank);
+    let mut state = initial;
+    let ghost states = seq![initial];
+    let ghost steps: Seq<(S, P)> = Seq::empty();
+    loop
+        invariant
+            directory_prefix(initial, root, states, steps, next, same, sync),
+            states.last() == state,
+            directory_steps_finite(next, sync, rank),
+            forall|state: S| #[trigger] next.requires((state,)),
+            forall|path: &P, root: &P| #[trigger] same.requires((path, root)),
+            forall|state: S, path: P| #[trigger] sync.requires((state, path)),
+        decreases rank(state),
+    {
+        let ghost before = state;
+        let following = next(state);
+        let ghost original_next = following;
+        let (after_next, path) = following;
+        assert(next.ensures((before,), original_next));
+        let path = match path {
+            None => {
+                let out = sync(after_next, root);
+                assert(directory_terminal(before, root, original_next, next, same, sync, out));
+                assert(directory_result(initial, root, next, same, sync, out));
+                return out;
+            },
+            Some(path) => path,
+        };
+        if same(&path, &root) {
+            let out = sync(after_next, root);
+            assert(directory_terminal(before, root, original_next, next, same, sync, out));
+            assert(directory_result(initial, root, next, same, sync, out));
+            return out;
+        }
+        let ghost step = (after_next, path);
+        let synced = sync(after_next, path);
+        let ghost original_sync = synced;
+        let (after_sync, result) = synced;
+        assert(original_sync == (after_sync, result));
+        assert(sync.ensures((step.0, step.1), original_sync));
+        match result {
+            Err(error) => {
+                let out = (after_sync, Err(error));
+                assert(directory_terminal(before, root, original_next, next, same, sync, out));
+                assert(directory_result(initial, root, next, same, sync, out));
+                return out;
+            },
+            Ok(success) => {
+                assert(success == ());
+                assert(original_sync == (after_sync, Ok::<(), E>(success)));
+            },
+        }
+        assert(next.ensures((before,), (step.0, Some(step.1))));
+        assert(same.ensures((&step.1, &root), false));
+        assert(sync.ensures((step.0, step.1), (after_sync, Ok::<(), E>(()))));
+        proof {
+            let old_states = states;
+            let old_steps = steps;
+            states = states.push(after_sync);
+            steps = steps.push(step);
+            assert forall|i: int| 0 <= i < steps.len() implies
+                #[trigger] next.ensures((states[i],), (steps[i].0, Some(steps[i].1)))
+                    && same.ensures((&steps[i].1, &root), false)
+                    && sync.ensures((steps[i].0, steps[i].1), (states[i + 1], Ok::<(), E>(()))) by {
+                if i < old_steps.len() {
+                    assert(next.ensures((old_states[i],), (old_steps[i].0, Some(old_steps[i].1))));
+                } else {
+                    assert(i == old_steps.len());
+                    assert(states[i] == before);
+                    assert(steps[i] == step);
+                }
+            }
+            assert(directory_prefix(initial, root, states, steps, next, same, sync));
+        }
+        assert(rank(after_sync) < rank(before));
+        state = after_sync;
+    }
+}
+
+pub open spec fn staging_parent_result<S, H, P, E, Parent, Create, Sync>(
+    initial: S, stage: H, parent: Parent, create: Create, sync: Sync,
+    out: (S, Result<(H, P), E>),
+) -> bool
+    where Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+{
+    exists|state: S, observed: Result<P, E>|
+        #[trigger] parent.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<(H, P), E>(error)),
+            Ok(path) => exists|next: S, created: Result<(), E>|
+                #[trigger] create.ensures((state, &path), (next, created)) && match created {
+                    Err(error) => out == (next, Err::<(H, P), E>(error)),
+                    Ok(()) => exists|last: S, synced: Result<(), E>|
+                        #[trigger] sync.ensures((next, &path), (last, synced)) && match synced {
+                            Err(error) => out == (last, Err::<(H, P), E>(error)),
+                            Ok(()) => out == (last, Ok::<(H, P), E>((stage, path))),
+                        },
+                },
+        }
+}
+
+fn prepare_staging_parent<S, H, P, E, Parent, Create, Sync>(
+    state: S, stage: H, parent: Parent, create: Create, sync: Sync,
+) -> (out: (S, Result<(H, P), E>))
+    where Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+    requires parent.requires((state,)),
+        forall|state: S, path: &P| #[trigger] create.requires((state, path)),
+        forall|state: S, path: &P| #[trigger] sync.requires((state, path)),
+    ensures staging_parent_result(state, stage, parent, create, sync, out),
+{
+    let ghost initial = state;
+    let ghost original_stage = stage;
+    let (state, observed) = parent(state);
+    let ghost after_parent = state;
+    let ghost original_parent = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(path) => {
+            let ghost original_path = path;
+            let (state, created) = create(state, &path);
+            let ghost after_create = state;
+            let ghost original_create = created;
+            let out = match created {
+                Err(error) => (state, Err(error)),
+                Ok(success) => {
+                    assert(success == ());
+                    let (state, synced) = sync(state, &path);
+                    let ghost after_sync = state;
+                    let ghost original_sync = synced;
+                    let out = match synced {
+                        Err(error) => (state, Err(error)),
+                        Ok(success) => { assert(success == ()); (state, Ok((stage, path))) },
+                    };
+                    assert(sync.ensures((after_create, &original_path), (after_sync, original_sync)));
+                    out
+                },
+            };
+            assert(create.ensures((after_parent, &original_path), (after_create, original_create)));
+            out
+        },
+    };
+    assert(parent.ensures((initial,), (after_parent, original_parent)));
+    assert(staging_parent_result(initial, original_stage, parent, create, sync, out));
+    out
+}
+
+pub open spec fn staging_identity_result<S, H, V, P, E, Identity, Receipt, Parent, Create, Sync>(
+    initial: S, stage: H, identity: Identity, receipt: Receipt, parent: Parent, create: Create, sync: Sync,
+    out: (S, Result<(H, P), E>),
+) -> bool
+    where Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+{
+    exists|state: S, observed: Result<V, E>|
+        #[trigger] identity.ensures((initial, &stage), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<(H, P), E>(error)),
+            Ok(value) => exists|next: S, recorded: Result<(), E>|
+                #[trigger] receipt.ensures((state, &stage, value), (next, recorded)) && match recorded {
+                    Err(error) => out == (next, Err::<(H, P), E>(error)),
+                    Ok(()) => staging_parent_result(next, stage, parent, create, sync, out),
+                },
+        }
+}
+
+fn retain_staging_identity<S, H, V, P, E, Identity, Receipt, Parent, Create, Sync>(
+    state: S, stage: H, identity: Identity, receipt: Receipt, parent: Parent, create: Create, sync: Sync,
+) -> (out: (S, Result<(H, P), E>))
+    where Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+    requires forall|state: S, stage: &H| #[trigger] identity.requires((state, stage)),
+        forall|state: S, stage: &H, value: V| #[trigger] receipt.requires((state, stage, value)),
+        forall|state: S| #[trigger] parent.requires((state,)),
+        forall|state: S, path: &P| #[trigger] create.requires((state, path)),
+        forall|state: S, path: &P| #[trigger] sync.requires((state, path)),
+    ensures staging_identity_result(state, stage, identity, receipt, parent, create, sync, out),
+{
+    let ghost initial = state;
+    let ghost original_stage = stage;
+    let (state, observed) = identity(state, &stage);
+    let ghost after_identity = state;
+    let ghost original_identity = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(value) => {
+            let ghost original_value = value;
+            let (state, recorded) = receipt(state, &stage, value);
+            let ghost after_receipt = state;
+            let ghost original_receipt = recorded;
+            let out = match recorded {
+                Err(error) => (state, Err(error)),
+                Ok(success) => {
+                    assert(success == ());
+                    prepare_staging_parent(state, stage, parent, create, sync)
+                },
+            };
+            assert(receipt.ensures((after_identity, &original_stage, original_value), (after_receipt, original_receipt)));
+            out
+        },
+    };
+    assert(identity.ensures((initial, &original_stage), (after_identity, original_identity)));
+    assert(staging_identity_result(initial, original_stage, identity, receipt, parent, create, sync, out));
+    out
+}
+
+pub open spec fn staging_result<S, H, V, P, E, Write, Identity, Receipt, Parent, Create, Sync>(
+    initial: S, stage: H, write: Write, identity: Identity, receipt: Receipt,
+    parent: Parent, create: Create, sync: Sync, out: (S, Result<(H, P), E>),
+) -> bool
+    where Write: FnOnce(S, &H) -> (S, Result<(), E>),
+          Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+{
+    exists|state: S, observed: Result<(), E>|
+        #[trigger] write.ensures((initial, &stage), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<(H, P), E>(error)),
+            Ok(()) => staging_identity_result(state, stage, identity, receipt, parent, create, sync, out),
+        }
+}
+
+/// Preserve the first error and exact handles through the six original staging operations.
+pub fn stage_target<S, H, V, P, E, Write, Identity, Receipt, Parent, Create, Sync>(
+    state: S, stage: H, write: Write, identity: Identity, receipt: Receipt,
+    parent: Parent, create: Create, sync: Sync,
+) -> (out: (S, Result<(H, P), E>))
+    where Write: FnOnce(S, &H) -> (S, Result<(), E>),
+          Identity: FnOnce(S, &H) -> (S, Result<V, E>),
+          Receipt: FnOnce(S, &H, V) -> (S, Result<(), E>),
+          Parent: FnOnce(S) -> (S, Result<P, E>),
+          Create: FnOnce(S, &P) -> (S, Result<(), E>),
+          Sync: FnOnce(S, &P) -> (S, Result<(), E>),
+    requires write.requires((state, &stage)),
+        forall|state: S, stage: &H| #[trigger] identity.requires((state, stage)),
+        forall|state: S, stage: &H, value: V| #[trigger] receipt.requires((state, stage, value)),
+        forall|state: S| #[trigger] parent.requires((state,)),
+        forall|state: S, path: &P| #[trigger] create.requires((state, path)),
+        forall|state: S, path: &P| #[trigger] sync.requires((state, path)),
+    ensures staging_result(state, stage, write, identity, receipt, parent, create, sync, out),
+{
+    let ghost initial = state;
+    let ghost original_stage = stage;
+    let (state, observed) = write(state, &stage);
+    let ghost after_write = state;
+    let ghost original_write = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            retain_staging_identity(state, stage, identity, receipt, parent, create, sync)
+        },
+    };
+    assert(write.ensures((initial, &original_stage), (after_write, original_write)));
+    assert(staging_result(initial, original_stage, write, identity, receipt, parent, create, sync, out));
+    out
+}
+
+pub enum TargetMismatch { Prepared, Rename, Published }
+
+impl TargetMismatch {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::Prepared => out@ == "generation output changed after preparation"@,
+            Self::Rename => out@ == "generation output changed before rename"@,
+            Self::Published => out@ == "generation output differs after publication"@,
+        },
+    {
+        match self {
+            Self::Prepared => "generation output changed after preparation",
+            Self::Rename => "generation output changed before rename",
+            Self::Published => "generation output differs after publication",
+        }
+    }
+}
+
+pub struct TargetIo<O, W, N, R, D, F, M> {
+    pub observe: O,
+    pub stage: W,
+    pub create: N,
+    pub replace: R,
+    pub sync: D,
+    pub effect: F,
+    pub mismatch: M,
+}
+
+pub open spec fn target_callable<S, P, E, O, W, N, R, D, F, M>(io: &TargetIo<O, W, N, R, D, F, M>) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    (forall|s: S| #[trigger] io.observe.requires((s,)))
+        && (forall|s: S| #[trigger] io.stage.requires((s,)))
+        && (forall|s: S, parent: &P| #[trigger] io.create.requires((s, parent)))
+        && (forall|s: S, parent: &P| #[trigger] io.replace.requires((s, parent)))
+        && (forall|s: S, parent: P| #[trigger] io.sync.requires((s, parent)))
+        && (forall|s: S, object: Option<Object>| #[trigger] io.effect.requires((s, object)))
+        && (forall|s: S, reason: TargetMismatch| #[trigger] io.mismatch.requires((s, reason)))
+}
+
+pub open spec fn published_digest(object: Option<&Object>, digest: &str) -> bool {
+    match object { Some(object) => object.sha256@ == digest@, None => false }
+}
+
+pub open spec fn target_effect_result<S, E>(observed: (S, Result<(), E>), out: (S, Result<bool, E>)) -> bool {
+    out.0 == observed.0 && match observed.1 {
+        Err(error) => out.1 == Err::<bool, E>(error),
+        Ok(()) => out.1 == Ok::<bool, E>(true),
+    }
+}
+
+pub open spec fn target_final_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>, out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Object>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(object) => if !published_digest(borrowed_object(&object), digest) {
+                match out.1 {
+                    Err(error) => io.mismatch.ensures((state, TargetMismatch::Published), (out.0, error)),
+                    _ => false,
+                }
+            } else {
+                exists|effect: (S, Result<(), E>)|
+                    #[trigger] io.effect.ensures((state, object), effect) && target_effect_result(effect, out)
+            },
+        }
+}
+
+fn finish_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_final_result(state, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(object) => {
+            let valid = match object.as_ref() {
+                Some(object) => identifiers::equal_text(&object.sha256, digest),
+                None => false,
+            };
+            if !valid {
+                let (state, error) = (io.mismatch)(state, TargetMismatch::Published);
+                (state, Err(error))
+            } else {
+                let effect = (io.effect)(state, object);
+                let ghost original_effect = effect;
+                let (state, result) = effect;
+                let out = (state, match result { Err(error) => Err(error), Ok(()) => Ok(true) });
+                assert(target_effect_result(original_effect, out));
+                out
+            }
+        },
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    out
+}
+
+pub open spec fn target_publication_step<S, P, E, N, R>(
+    initial: S, parent: P, missing: bool, create: N, replace: R,
+    observed: (S, Result<(), E>),
+) -> bool
+    where N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+{
+    if missing { create.ensures((initial, &parent), observed) }
+    else { replace.ensures((initial, &parent), observed) }
+}
+
+pub open spec fn target_publish_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, parent: P, missing: bool, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+    out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, published: Result<(), E>|
+        #[trigger] target_publication_step(initial, parent, missing, io.create, io.replace,
+            (state, published))
+        && match published {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(()) => exists|next: S, synced: Result<(), E>|
+                #[trigger] io.sync.ensures((state, parent), (next, synced)) && match synced {
+                    Err(error) => out == (next, Err::<bool, E>(error)),
+                    Ok(()) => target_final_result(next, digest, io, out),
+                },
+        }
+}
+
+fn publish_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, parent: P, missing: bool, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_publish_result(state, parent, missing, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, published) = if missing { (io.create)(state, &parent) } else { (io.replace)(state, &parent) };
+    let ghost after_publish = state;
+    let ghost original_publish = published;
+    assert(if missing { io.create.ensures((initial, &parent), (after_publish, original_publish)) }
+        else { io.replace.ensures((initial, &parent), (after_publish, original_publish)) });
+    assert(target_publication_step(initial, parent, missing, io.create, io.replace,
+        (after_publish, original_publish)));
+    let out = match published {
+        Err(error) => {
+            let out = (state, Err(error));
+            assert(target_publish_result(initial, parent, missing, digest, io, out));
+            out
+        },
+        Ok(()) => {
+            let (state, synced) = (io.sync)(state, parent);
+            let ghost after_sync = state;
+            let ghost original_sync = synced;
+            let out = match synced {
+                Err(error) => (state, Err(error)),
+                Ok(()) => finish_target(state, digest, io),
+            };
+            assert(io.sync.ensures((after_publish, parent), (after_sync, original_sync)));
+            assert(exists|next: S, synced: Result<(), E>|
+                #[trigger] io.sync.ensures((after_publish, parent), (next, synced)) && match synced {
+                    Err(error) => out == (next, Err::<bool, E>(error)),
+                    Ok(()) => target_final_result(next, digest, io, out),
+                });
+            assert(target_publish_result(initial, parent, missing, digest, io, out));
+            out
+        },
+    };
+    assert(target_publish_result(initial, parent, missing, digest, io, out));
+    out
+}
+
+pub open spec fn target_staged_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, parent: P, before: Option<&Object>, digest: &str,
+    io: &TargetIo<O, W, N, R, D, F, M>, out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Object>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(object) => if !same_object_spec(borrowed_object(&object), before) {
+                match out.1 {
+                    Err(error) => io.mismatch.ensures((state, TargetMismatch::Rename), (out.0, error)),
+                    _ => false,
+                }
+            } else { target_publish_result(state, parent, before.is_none(), digest, io, out) },
+        }
+}
+
+fn install_staged_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, parent: P, before: Option<&Object>, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_staged_result(state, parent, before, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(object) => {
+            if !same_object(object.as_ref(), before) {
+                let (state, error) = (io.mismatch)(state, TargetMismatch::Rename);
+                (state, Err(error))
+            } else { publish_target(state, parent, before.is_none(), digest, io) }
+        },
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    out
+}
+
+pub open spec fn target_installation_result<S, P, E, O, W, N, R, D, F, M>(
+    initial: S, before: Option<&Object>, write: bool, digest: &str,
+    io: &TargetIo<O, W, N, R, D, F, M>, out: (S, Result<bool, E>),
+) -> bool
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+{
+    exists|state: S, observed: Result<Option<Object>, E>|
+        #[trigger] io.observe.ensures((initial,), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<bool, E>(error)),
+            Ok(object) => if !same_object_spec(borrowed_object(&object), before) {
+                match out.1 {
+                    Err(error) => io.mismatch.ensures((state, TargetMismatch::Prepared), (out.0, error)),
+                    _ => false,
+                }
+            } else if !write { out == (state, Ok::<bool, E>(false)) }
+            else {
+                exists|next: S, staged: Result<P, E>|
+                    #[trigger] io.stage.ensures((state,), (next, staged)) && match staged {
+                        Err(error) => out == (next, Err::<bool, E>(error)),
+                        Ok(parent) => target_staged_result(next, parent, before, digest, io, out),
+                    }
+            },
+        }
+}
+
+/// Recheck even unchanged targets; stage, recheck, publish, sync and record in that order.
+pub fn install_target<S, P, E, O, W, N, R, D, F, M>(
+    state: S, before: Option<&Object>, write: bool, digest: &str, io: &TargetIo<O, W, N, R, D, F, M>,
+) -> (out: (S, Result<bool, E>))
+    where O: Fn(S) -> (S, Result<Option<Object>, E>), W: Fn(S) -> (S, Result<P, E>),
+          N: Fn(S, &P) -> (S, Result<(), E>), R: Fn(S, &P) -> (S, Result<(), E>),
+          D: Fn(S, P) -> (S, Result<(), E>), F: Fn(S, Option<Object>) -> (S, Result<(), E>),
+          M: Fn(S, TargetMismatch) -> (S, E),
+    requires target_callable(io),
+    ensures target_installation_result(state, before, write, digest, io, out),
+{
+    let ghost initial = state;
+    let (state, observed) = (io.observe)(state);
+    let ghost after_observe = state;
+    let ghost original = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(object) => {
+            if !same_object(object.as_ref(), before) {
+                let (state, error) = (io.mismatch)(state, TargetMismatch::Prepared);
+                (state, Err(error))
+            } else if !write { (state, Ok(false)) }
+            else {
+                let (state, staged) = (io.stage)(state);
+                let ghost after_stage = state;
+                let ghost original_stage = staged;
+                let out = match staged {
+                    Err(error) => (state, Err(error)),
+                    Ok(parent) => install_staged_target(state, parent, before, digest, io),
+                };
+                assert(io.stage.ensures((after_observe,), (after_stage, original_stage)));
+                out
+            }
+        },
+    };
+    assert(io.observe.ensures((initial,), (after_observe, original)));
+    out
+}
+
+pub open spec fn installed_prefix<S, E, Apply>(
+    initial: S, states: Seq<S>, changed: Seq<bool>, apply: Apply,
+) -> bool
+    where Apply: Fn(S, usize) -> (S, Result<bool, E>),
+{
+    states.len() == changed.len() + 1 && states.first() == initial
+        && forall|index: int| #![trigger changed[index]] 0 <= index < changed.len() ==>
+            apply.ensures((states[index], index as usize),
+                (states[index + 1], Ok::<bool, E>(changed[index])))
+}
+
+pub open spec fn installation_result<S, E, Apply>(
+    initial: S, count: usize, apply: Apply, out: (S, Result<bool, E>),
+) -> bool
+    where Apply: Fn(S, usize) -> (S, Result<bool, E>),
+{
+    exists|states: Seq<S>, changed: Seq<bool>|
+        installed_prefix(initial, states, changed, apply) && changed.len() <= count
+        && match out.1 {
+            Ok(any_changed) => changed.len() == count && out.0 == states.last()
+                && any_changed == changed.contains(true),
+            Err(error) => changed.len() < count
+                && apply.ensures((states.last(), changed.len() as usize),
+                    (out.0, Err::<bool, E>(error))),
+        }
+}
+
+/// Inspect every target in order, including unchanged ones, and stop at the first error.
+/// Only ghost sequences retain the call history; runtime state is moved through each call.
+pub fn install_targets<S, E, Apply>(initial: S, count: usize, apply: Apply)
+    -> (out: (S, Result<bool, E>))
+    where Apply: Fn(S, usize) -> (S, Result<bool, E>),
+    requires forall|state: S, index: usize| index < count ==>
+        #[trigger] apply.requires((state, index)),
+    ensures installation_result(initial, count, apply, out),
+{
+    let mut state = initial;
+    let mut index = 0usize;
+    let mut any_changed = false;
+    let ghost states = seq![initial];
+    let ghost changed: Seq<bool> = Seq::empty();
+    while index < count
+        invariant index <= count,
+            states.len() == index as int + 1,
+            changed.len() == index,
+            states.last() == state,
+            any_changed == changed.contains(true),
+            installed_prefix(initial, states, changed, apply),
+            forall|state: S, index: usize| index < count ==>
+                #[trigger] apply.requires((state, index)),
+        decreases count - index,
+    {
+        let ghost before = state;
+        let observed = apply(state, index);
+        let ghost original = observed;
+        let (next, result) = observed;
+        assert(apply.ensures((before, index), original));
+        match result {
+            Err(error) => {
+                let out = (next, Err(error));
+                assert(installation_result(initial, count, apply, out));
+                return out;
+            },
+            Ok(wrote) => {
+                assert(original == (next, Ok::<bool, E>(wrote)));
+                proof {
+                    let old_states = states;
+                    let old_changed = changed;
+                    states = states.push(next);
+                    changed = changed.push(wrote);
+                    assert forall|position: int| 0 <= position < changed.len() implies
+                        #[trigger] apply.ensures((states[position], position as usize),
+                            (states[position + 1], Ok::<bool, E>(changed[position]))) by {
+                        if position < old_changed.len() {
+                            assert(apply.ensures((old_states[position], position as usize),
+                                (old_states[position + 1], Ok::<bool, E>(old_changed[position]))));
+                        } else {
+                            assert(position == index);
+                            assert(states[position] == before);
+                            assert(states[position + 1] == next);
+                        }
+                    }
+                    vstd::seq_lib::lemma_seq_contains_after_push(old_changed, wrote, true);
+                    assert(changed.contains(true) == (old_changed.contains(true) || wrote));
+                }
+                any_changed = any_changed || wrote;
+            },
+        }
+        state = next;
+        index += 1;
+    }
+    let out = (state, Ok(any_changed));
+    assert(installation_result(initial, count, apply, out));
+    out
+}
+
+pub enum ReturnCheckpoint { Observed, Published }
+
+impl ReturnCheckpoint {
+    pub fn label(&self) -> (out: &'static str)
+        ensures match self {
+            Self::Observed => out@ == "evaluated"@,
+            Self::Published => out@ == "result"@,
+        },
+    {
+        match self { Self::Observed => "evaluated", Self::Published => "result" }
+    }
+}
+
+pub struct ReturnIo<O, P, Z, R, N> {
+    pub observe: O,
+    pub publish: P,
+    pub seal: Z,
+    pub release: R,
+    pub notify: N,
+}
+
+pub open spec fn return_callable<S, H, T, E, O, P, Z, R, N>(io: &ReturnIo<O, P, Z, R, N>) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    (forall|state: S, evaluated: &Result<T, E>| #[trigger] io.observe.requires((state, evaluated)))
+        && (forall|state: S, publication: &H, evaluated: &Result<T, E>| #[trigger] io.publish.requires((state, publication, evaluated)))
+        && (forall|state: S, publication: H, evaluated: &Result<T, E>| #[trigger] io.seal.requires((state, publication, evaluated)))
+        && (forall|state: S, evaluated: &Result<T, E>| #[trigger] io.release.requires((state, evaluated)))
+        && (forall|state: S, point: ReturnCheckpoint| #[trigger] io.notify.requires((state, point)))
+}
+
+pub open spec fn return_sealed_result<S, H, T, E, O, P, Z, R, N>(
+    initial: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+    out: (S, Result<T, E>),
+) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    exists|state: S, sealed: Result<(), E>|
+        #[trigger] io.seal.ensures((initial, publication, &evaluated), (state, sealed)) && match sealed {
+            Err(error) => out == (state, Err::<T, E>(error)),
+            Ok(()) => if effects is Unknown { out == (state, evaluated) }
+                else { exists|next: S, released: Result<(), E>|
+                    #[trigger] io.release.ensures((state, &evaluated), (next, released)) && match released {
+                        Err(error) => out == (next, Err::<T, E>(error)),
+                        Ok(()) => out == (next, evaluated),
+                    }
+                },
+        }
+}
+
+fn seal_generation_return<S, H, T, E, O, P, Z, R, N>(
+    state: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+) -> (out: (S, Result<T, E>))
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+    requires return_callable(io),
+    ensures return_sealed_result(state, publication, evaluated, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original = evaluated;
+    let ghost original_publication = publication;
+    let (state, sealed) = (io.seal)(state, publication, &evaluated);
+    let ghost after_seal = state;
+    let ghost original_seal = sealed;
+    let out = match sealed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            if effects.can_release() {
+                let (state, released) = (io.release)(state, &evaluated);
+                let ghost after_release = state;
+                let ghost original_release = released;
+                let out = match released {
+                    Err(error) => (state, Err(error)),
+                    Ok(success) => { assert(success == ()); (state, evaluated) },
+                };
+                assert(io.release.ensures((after_seal, &original), (after_release, original_release)));
+                out
+            } else { (state, evaluated) }
+        },
+    };
+    assert(io.seal.ensures((initial, original_publication, &original), (after_seal, original_seal)));
+    assert(return_sealed_result(initial, original_publication, original, effects, io, out));
+    out
+}
+
+pub open spec fn return_published_result<S, H, T, E, O, P, Z, R, N>(
+    initial: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+    out: (S, Result<T, E>),
+) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    exists|state: S, published: Result<(), E>|
+        #[trigger] io.publish.ensures((initial, &publication, &evaluated), (state, published)) && match published {
+            Err(error) => out == (state, Err::<T, E>(error)),
+            Ok(()) => exists|next: S|
+                #[trigger] io.notify.ensures((state, ReturnCheckpoint::Published), next)
+                    && return_sealed_result(next, publication, evaluated, effects, io, out),
+        }
+}
+
+fn publish_generation_return<S, H, T, E, O, P, Z, R, N>(
+    state: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+) -> (out: (S, Result<T, E>))
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+    requires return_callable(io),
+    ensures return_published_result(state, publication, evaluated, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original = evaluated;
+    let ghost original_publication = publication;
+    let (state, published) = (io.publish)(state, &publication, &evaluated);
+    let ghost after_publish = state;
+    let ghost original_publish = published;
+    let out = match published {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            let state = (io.notify)(state, ReturnCheckpoint::Published);
+            let ghost after_notify = state;
+            assert(io.notify.ensures((after_publish, ReturnCheckpoint::Published), after_notify));
+            seal_generation_return(state, publication, evaluated, effects, io)
+        },
+    };
+    assert(io.publish.ensures((initial, &original_publication, &original), (after_publish, original_publish)));
+    assert(return_published_result(initial, original_publication, original, effects, io, out));
+    out
+}
+
+pub open spec fn generation_return_result<S, H, T, E, O, P, Z, R, N>(
+    initial: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+    out: (S, Result<T, E>),
+) -> bool
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+{
+    exists|state: S, observed: Result<(), E>|
+        #[trigger] io.observe.ensures((initial, &evaluated), (state, observed)) && match observed {
+            Err(error) => out == (state, Err::<T, E>(error)),
+            Ok(()) => exists|next: S|
+                #[trigger] io.notify.ensures((state, ReturnCheckpoint::Observed), next)
+                    && return_published_result(next, publication, evaluated, effects, io, out),
+        }
+}
+
+/// Observe, publish and seal the exact returned evaluation before conditionally releasing recovery.
+pub fn finish_generation_return<S, H, T, E, O, P, Z, R, N>(
+    state: S, publication: H, evaluated: Result<T, E>, effects: &Effects, io: &ReturnIo<O, P, Z, R, N>,
+) -> (out: (S, Result<T, E>))
+    where O: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          P: Fn(S, &H, &Result<T, E>) -> (S, Result<(), E>),
+          Z: Fn(S, H, &Result<T, E>) -> (S, Result<(), E>),
+          R: Fn(S, &Result<T, E>) -> (S, Result<(), E>),
+          N: Fn(S, ReturnCheckpoint) -> S,
+    requires return_callable(io),
+    ensures generation_return_result(state, publication, evaluated, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original = evaluated;
+    let ghost original_publication = publication;
+    let (state, observed) = (io.observe)(state, &evaluated);
+    let ghost after_observe = state;
+    let ghost original_observe = observed;
+    let out = match observed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            let state = (io.notify)(state, ReturnCheckpoint::Observed);
+            let ghost after_notify = state;
+            assert(io.notify.ensures((after_observe, ReturnCheckpoint::Observed), after_notify));
+            publish_generation_return(state, publication, evaluated, effects, io)
+        },
+    };
+    assert(io.observe.ensures((initial, &original), (after_observe, original_observe)));
+    assert(generation_return_result(initial, original_publication, original, effects, io, out));
+    out
+}
+
+pub struct ResumeIo<P, W, C, Z, R, Q> {
+    pub probe: P,
+    pub write: W,
+    pub check: C,
+    pub seal: Z,
+    pub release: R,
+    pub status: Q,
+}
+
+pub open spec fn resume_callable<S, H, X, V, E, P, W, C, Z, R, Q>(io: &ResumeIo<P, W, C, Z, R, Q>) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    (forall|state: S| #[trigger] io.probe.requires((state,)))
+        && (forall|state: S, publication: &H, expected: &X| #[trigger] io.write.requires((state, publication, expected)))
+        && (forall|state: S, expected: &X| #[trigger] io.check.requires((state, expected)))
+        && (forall|state: S, publication: H, expected: &X| #[trigger] io.seal.requires((state, publication, expected)))
+        && (forall|state: S| #[trigger] io.release.requires((state,)))
+        && (forall|state: S| #[trigger] io.status.requires((state,)))
+}
+
+pub open spec fn resume_sealed_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    exists|state: S, sealed: Result<(), E>|
+        #[trigger] io.seal.ensures((initial, publication, expected), (state, sealed)) && match sealed {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(()) => if text_is(effects, "unknown") { io.status.ensures((state,), out) }
+                else { exists|next: S, released: Result<(), E>|
+                    #[trigger] io.release.ensures((state,), (next, released)) && match released {
+                        Err(error) => out == (next, Err::<V, E>(error)),
+                        Ok(()) => io.status.ensures((next,), out),
+                    }
+                },
+        }
+}
+
+fn seal_generation_resume<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures resume_sealed_result(state, publication, expected, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    let (state, sealed) = (io.seal)(state, publication, expected);
+    let ghost after_seal = state;
+    let ghost original_seal = sealed;
+    let out = match sealed {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            if reported_unknown(effects) {
+                let out = (io.status)(state);
+                assert(io.status.ensures((after_seal,), out));
+                out
+            } else {
+                let (state, released) = (io.release)(state);
+                let ghost after_release = state;
+                let ghost original_release = released;
+                let out = match released {
+                    Err(error) => (state, Err(error)),
+                    Ok(success) => {
+                        assert(success == ());
+                        let out = (io.status)(state);
+                        assert(io.status.ensures((after_release,), out));
+                        out
+                    },
+                };
+                assert(io.release.ensures((after_seal,), (after_release, original_release)));
+                out
+            }
+        },
+    };
+    assert(io.seal.ensures((initial, original_publication, expected), (after_seal, original_seal)));
+    assert(resume_sealed_result(initial, original_publication, expected, effects, io, out));
+    out
+}
+
+pub open spec fn resume_checked_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    exists|state: S, checked: Result<(), E>|
+        #[trigger] io.check.ensures((initial, expected), (state, checked)) && match checked {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(()) => resume_sealed_result(state, publication, expected, effects, io, out),
+        }
+}
+
+fn check_generation_resume<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures resume_checked_result(state, publication, expected, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    let (state, checked) = (io.check)(state, expected);
+    let ghost after_check = state;
+    let ghost original_check = checked;
+    let out = match checked {
+        Err(error) => (state, Err(error)),
+        Ok(success) => {
+            assert(success == ());
+            seal_generation_resume(state, publication, expected, effects, io)
+        },
+    };
+    assert(io.check.ensures((initial, expected), (after_check, original_check)));
+    assert(resume_checked_result(initial, original_publication, expected, effects, io, out));
+    out
+}
+
+pub open spec fn resume_published_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, present: bool, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    if present { resume_checked_result(initial, publication, expected, effects, io, out) }
+    else { exists|state: S, written: Result<(), E>|
+        #[trigger] io.write.ensures((initial, &publication, expected), (state, written)) && match written {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(()) => resume_checked_result(state, publication, expected, effects, io, out),
+        }
+    }
+}
+
+fn publish_generation_resume<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, present: bool, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures resume_published_result(state, publication, expected, present, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    if present { check_generation_resume(state, publication, expected, effects, io) }
+    else {
+        let (state, written) = (io.write)(state, &publication, expected);
+        let ghost after_write = state;
+        let ghost original_write = written;
+        let out = match written {
+            Err(error) => (state, Err(error)),
+            Ok(success) => {
+                assert(success == ());
+                check_generation_resume(state, publication, expected, effects, io)
+            },
+        };
+        assert(io.write.ensures((initial, &original_publication, expected), (after_write, original_write)));
+        assert(resume_published_result(initial, original_publication, expected, present, effects, io, out));
+        out
+    }
+}
+
+pub open spec fn generation_resume_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    initial: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+    out: (S, Result<V, E>),
+) -> bool
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+{
+    exists|state: S, probed: Result<bool, E>|
+        #[trigger] io.probe.ensures((initial,), (state, probed)) && match probed {
+            Err(error) => out == (state, Err::<V, E>(error)),
+            Ok(present) => resume_published_result(state, publication, expected, present, effects, io, out),
+        }
+}
+
+/// Resume only the original result publication, preserving every first error and original handle.
+pub fn resume_generation_result<S, H, X, V, E, P, W, C, Z, R, Q>(
+    state: S, publication: H, expected: &X, effects: Option<&str>, io: &ResumeIo<P, W, C, Z, R, Q>,
+) -> (out: (S, Result<V, E>))
+    where P: Fn(S) -> (S, Result<bool, E>),
+          W: Fn(S, &H, &X) -> (S, Result<(), E>),
+          C: Fn(S, &X) -> (S, Result<(), E>),
+          Z: Fn(S, H, &X) -> (S, Result<(), E>),
+          R: Fn(S) -> (S, Result<(), E>),
+          Q: Fn(S) -> (S, Result<V, E>),
+    requires resume_callable(io),
+    ensures generation_resume_result(state, publication, expected, effects, io, out),
+{
+    let ghost initial = state;
+    let ghost original_publication = publication;
+    let (state, probed) = (io.probe)(state);
+    let ghost after_probe = state;
+    let ghost original_probe = probed;
+    let out = match probed {
+        Err(error) => (state, Err(error)),
+        Ok(present) => publish_generation_resume(state, publication, expected, present, effects, io),
+    };
+    assert(io.probe.ensures((initial,), (after_probe, original_probe)));
+    assert(generation_resume_result(initial, original_publication, expected, effects, io, out));
+    out
+}
+
+pub open spec fn evaluation<S, P, T, E, Prepare, Apply>(
+    initial: S, prepare: Prepare, apply: Apply, out: (S, Evaluation<T, E>),
+) -> bool
+    where Prepare: FnOnce(S) -> (S, Result<P, E>),
+          Apply: FnOnce(S, P) -> (S, Result<T, E>),
+{
+    exists|state: S, prepared: Result<P, E>|
+        #[trigger] prepare.ensures((initial,), (state, prepared))
+        && match prepared {
+            Err(error) => out.0 == state && out.1.result == Err::<T, E>(error)
+                && out.1.effects is NotStarted,
+            Ok(plan) => exists|next: S, result: Result<T, E>|
+                #[trigger] apply.ensures((state, plan), (next, result))
+                && out.0 == next && out.1.result == result
+                && match result {
+                    Ok(_) => out.1.effects is Complete,
+                    Err(_) => out.1.effects is Unknown,
+                },
+        }
+}
+
+pub fn prepare_then_apply<S, P, T, E, Prepare, Apply>(
+    initial: S, prepare: Prepare, apply: Apply,
+) -> (out: (S, Evaluation<T, E>))
+    where Prepare: FnOnce(S) -> (S, Result<P, E>),
+          Apply: FnOnce(S, P) -> (S, Result<T, E>),
+    requires prepare.requires((initial,)),
+        forall|state: S, plan: P| apply.requires((state, plan)),
+    ensures evaluation(initial, prepare, apply, out),
+{
+    let ghost before = initial;
+    let (state, prepared) = prepare(initial);
+    let ghost middle = state;
+    let ghost original = prepared;
+    let out = match prepared {
+        Err(error) => (state, Evaluation { result: Err(error), effects: Effects::NotStarted }),
+        Ok(plan) => {
+            let (next, result) = apply(state, plan);
+            let effects = match &result {
+                Ok(_) => Effects::Complete,
+                Err(_) => Effects::Unknown,
+            };
+            (next, Evaluation { result, effects })
+        },
+    };
+    assert(prepare.ensures((before,), (middle, original)));
+    out
+}
+}

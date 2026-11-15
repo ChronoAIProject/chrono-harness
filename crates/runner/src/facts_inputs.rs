@@ -5,6 +5,10 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
 
 pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> {
     let Some(guard) = config["facts_git"].get("guard") else {
@@ -46,16 +50,29 @@ pub(crate) fn declaration(config: &Value) -> Result<Option<Vec<Value>>, String> 
     Ok(Some(selected))
 }
 
-struct JsonGuardReferences<'a>(&'a [Value]);
+verus! {
+
+#[doc(hidden)]
+pub struct JsonGuardReferences<'a>(pub &'a [Value]);
 
 impl verified_git_binding::BindingReferenceRows for JsonGuardReferences<'_> {
+    open spec fn count(&self) -> nat { self.0@.len() }
+
+    open spec fn id_at(&self, index: int) -> Option<&str> {
+        if 0 <= index < self.0@.len() {
+            crate::json_value_specs::field_text(&self.0@[index], "id"@)
+        } else { None }
+    }
+
     fn len(&self) -> usize {
         self.0.len()
     }
     fn id(&self, index: usize) -> Option<&str> {
-        self.0[index]["id"].as_str()
+        crate::json_fields::field_text(&self.0[index], "id")
     }
 }
+
+} // verus!
 
 fn guard_error(error: verified_git_binding::GitGuardError<'_>) -> String {
     format!("{}{}{}", error.prefix, error.id, error.suffix)

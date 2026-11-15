@@ -1,0 +1,100 @@
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -3,6 +3,13 @@
+ use std::borrow::Cow;
+
+ verus! {
++
++#[verifier::external_trait_specification]
++pub trait ExExpected {
++    type ExternalTraitSpecificationFor: serde::de::Expected;
++
++    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> Result<(), core::fmt::Error>;
++}
+
+ // This opaque boundary does not promise decoded text, allocation, or ownership.
+ pub assume_specification<'a>[serde::__private229::from_utf8_lossy](
+diff --git a/source/rust_verify_test/tests/serde_expected.rs b/source/rust_verify_test/tests/serde_expected.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/serde_expected.rs
+@@ -0,0 +1,78 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_expected_checks_external_calls_and_local_implementations
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct Text;
++
++        impl serde::de::Expected for Text {
++            fn fmt(&self, f: &mut core::fmt::Formatter<'_>)
++                -> Result<(), core::fmt::Error>
++            {
++                f.write_str("λ\0中")
++            }
++        }
++
++        fn forward<T: serde::de::Expected>(value: &T, f: &mut core::fmt::Formatter<'_>)
++            -> Result<(), core::fmt::Error>
++        {
++            value.fmt(f)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_expected_does_not_assume_success
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong<T: serde::de::Expected>(value: &T, f: &mut core::fmt::Formatter<'_>) {
++            let result = value.fmt(f);
++            assert(result is Ok); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_expected_does_not_assume_failure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong<T: serde::de::Expected>(value: &T, f: &mut core::fmt::Formatter<'_>) {
++            let result = value.fmt(f);
++            assert(result is Err); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_expected_rejects_wrong_local_implementation
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct Wrong;
++
++        impl serde::de::Expected for Wrong {
++            fn fmt(&self, f: &mut core::fmt::Formatter<'_>)
++                -> Result<(), core::fmt::Error>
++            {
++                assert(false); // FAILS
++                f.write_str("invalid")
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

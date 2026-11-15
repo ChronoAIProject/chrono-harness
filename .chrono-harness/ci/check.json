@@ -2,9 +2,7 @@
   "schema": "chrono-ci-check/v3",
   "judge": {
     "program": ".chrono-harness/bin/chrono-judge-ci",
-    "args": [
-
-    ],
+    "args": [],
     "timeout_seconds": 2400,
     "output_limit_bytes": 8388608
   },
@@ -15,6 +13,7 @@
     "artifacts": [
       ".chrono-harness/bin/",
       ".chrono-harness/state/",
+      "examples/ci-host-job-gating/.chrono-harness/state/",
       "crates/runner/target/",
       "crates/runner-tests/target/",
       "crates/instructions/target/",
@@ -81,7 +80,8 @@
       "runner": {
         "tests": [
           "test:identifiers-tests",
-          "test:runner-tests"
+          "test:runner-tests",
+          "test:runner-tool-contract-consume"
         ],
         "report_path": ".chrono-harness/state/units/runner/check.json"
       },
@@ -240,6 +240,26 @@
       "worktree.inventory": [
         "worktree",
         "worktree-adoption"
+      ],
+      "investigate.ci-generation-dependency.runner": [
+        "ci",
+        "host-bootstrap",
+        "judge-ci",
+        "judge-projects",
+        "judge-registration",
+        "judge-routes",
+        "runner"
+      ],
+      "prepare.ci-generation-dependency.runner": [
+        "ci",
+        "host-bootstrap",
+        "judge-ci",
+        "judge-projects",
+        "judge-registration",
+        "judge-routes",
+        "judge-workflow",
+        "runner",
+        "worktree"
       ]
     },
     "facts_config": ".chrono-harness/config.json",

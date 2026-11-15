@@ -1,72 +1,10 @@
-#![allow(unexpected_cfgs)]
-#[cfg(verus_keep_ghost)]
-use super::source_verifier::sources::{self as source_policy, continuity as source_continuity};
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::{
-    verified_verifier::sources::{self as source_policy, continuity as source_continuity},
-    verus,
-};
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-
-pub open spec fn declared_reference_valid(form: &source_continuity::ReferenceSyntax) -> bool {
-    source_policy::canonical_source_path(vstd::utf8::encode_utf8(form.file@))
-        && vstd::utf8::encode_utf8(form.before@).len() > 0
-        && vstd::utf8::encode_utf8(form.after@).len() > 0
-        && (vstd::utf8::encode_utf8(form.before@).last() == 34
-            || (form.base == 2 && vstd::utf8::encode_utf8(form.before@).last() == 47))
-        && (vstd::utf8::encode_utf8(form.after@).last() == 34
-            || (form.base == 2 && vstd::utf8::encode_utf8(form.after@).last() == 47))
-        && form.base <= 2
-}
-
-pub open spec fn reference_declarations_valid(forms: Seq<source_continuity::ReferenceSyntax>) -> bool {
-    forms.len() <= 250 && forall|i: int| 0 <= i < forms.len() ==> declared_reference_valid(#[trigger] &forms[i])
-}
-
-/// 声明数量、文件身份、开引号和基准必须完整有效；缺失不推测 shell 变量含义。
-pub fn validate_reference_syntax(forms: &Vec<source_continuity::ReferenceSyntax>) -> (out: std::result::Result<(), String>)
-    ensures out.is_ok() == reference_declarations_valid(forms@),
-        match out { Err(error) => error@ == "E_SOURCE_CONTINUITY: invalid reference syntax declaration"@, Ok(()) => true },
-{
-    if forms.len() > 250 {
-        return Err("E_SOURCE_CONTINUITY: invalid reference syntax declaration".to_string());
-    }
-    let mut i = 0;
-    while i < forms.len()
-        invariant 0 <= i <= forms.len() <= 250,
-            forall|j: int| 0 <= j < i ==> declared_reference_valid(#[trigger] &forms[j]),
-        decreases forms.len() - i,
-    {
-        let form = &forms[i];
-        let before = form.before.as_str().as_bytes();
-        let after = form.after.as_str().as_bytes();
-        if !source_policy::canonical_source_name(form.file.as_str())
-            || before.len() == 0 || after.len() == 0
-            || (before[before.len() - 1] != 34 && !(form.base == 2 && before[before.len() - 1] == 47))
-            || (after[after.len() - 1] != 34 && !(form.base == 2 && after[after.len() - 1] == 47))
-            || form.base > 2 {
-            return Err("E_SOURCE_CONTINUITY: invalid reference syntax declaration".to_string());
-        }
-        i += 1;
-    }
-    Ok(())
-}
-
-} // verus!
-
-// Strict SPEC §3 structure. Reference/activation policy is evaluated separately.
-#[cfg(not(verus_keep_ghost))]
+//! Strict SPEC §3 structure. Reference/activation policy is evaluated separately.
+use chrono_harness::verified_verifier::sources::continuity as source_continuity;
 use chrono_harness::{relative_path, wire};
-#[cfg(not(verus_keep_ghost))]
 use serde_json::{Map, Value};
-#[cfg(not(verus_keep_ghost))]
+pub use source_continuity::validate_reference_syntax;
 use std::collections::BTreeSet;
-#[cfg(not(verus_keep_ghost))]
 type Result<T = ()> = std::result::Result<T, String>;
-#[cfg(not(verus_keep_ghost))]
 pub fn object<'a>(
     v: &'a Value,
     required: &[&str],
@@ -85,17 +23,14 @@ pub fn object<'a>(
     }
     Ok(o)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn string(v: &Value) -> Result<&str> {
     v.as_str()
         .filter(|s| !s.is_empty())
         .ok_or("expected nonempty string".into())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn array(v: &Value) -> Result<&Vec<Value>> {
     v.as_array().ok_or("expected array".into())
 }
-#[cfg(not(verus_keep_ghost))]
 fn strings(v: &Value) -> Result {
     for s in array(v)? {
         if !s.is_string() {
@@ -104,7 +39,6 @@ fn strings(v: &Value) -> Result {
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn nonempty_strings(v: &Value) -> Result {
     for s in array(v)? {
         if string(s).is_err() {
@@ -113,7 +47,6 @@ fn nonempty_strings(v: &Value) -> Result {
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn unique(v: &Value, key: Option<&str>) -> Result {
     let mut seen = BTreeSet::new();
     for row in array(v)? {
@@ -124,7 +57,6 @@ fn unique(v: &Value, key: Option<&str>) -> Result {
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn choice(v: &Value, choices: &[&str]) -> Result {
     let s = string(v)?;
     if !choices.contains(&s) {
@@ -132,13 +64,11 @@ fn choice(v: &Value, choices: &[&str]) -> Result {
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn path(v: &Value) -> Result {
     let p = string(v)?;
     relative_path(p)?;
     canonical_path(p)
 }
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn state_path(v: &Value, context: &str) -> Result {
     let p = string(v)?;
     if !chrono_harness::verified_paths::valid_host_state_path(p.as_bytes()) {
@@ -147,21 +77,18 @@ pub(crate) fn state_path(v: &Value, context: &str) -> Result {
     }
     canonical_path(p)
 }
-#[cfg(not(verus_keep_ghost))]
 fn canonical_path(p: &str) -> Result {
     if p.split('/').any(|c| c.is_empty() || c == ".") {
         return Err(format!("noncanonical path {p}"));
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn paths(v: &Value) -> Result {
     for p in array(v)? {
         path(p)?;
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn hash(v: &Value) -> Result {
     if v.is_null() || v.as_str().is_some_and(wire::is_digest) {
         Ok(())
@@ -169,7 +96,6 @@ fn hash(v: &Value) -> Result {
         Err("invalid SHA-256".into())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 fn number(v: &Value) -> Result {
     if v.as_f64().is_some_and(|n| n >= 0.0) {
         Ok(())
@@ -177,7 +103,6 @@ fn number(v: &Value) -> Result {
         Err("expected nonnegative number".into())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 fn boolean(v: &Value) -> Result {
     if v.is_boolean() {
         Ok(())
@@ -185,11 +110,9 @@ fn boolean(v: &Value) -> Result {
         Err("expected bool".into())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 fn common(v: &Value, fields: &[&str]) -> Result {
     common_versions(v, fields, &[1])
 }
-#[cfg(not(verus_keep_ghost))]
 fn common_versions(v: &Value, fields: &[&str], versions: &[u64]) -> Result {
     let mut required = vec!["schema_version", "status"];
     required.extend(fields);
@@ -202,20 +125,26 @@ fn common_versions(v: &Value, fields: &[&str], versions: &[u64]) -> Result {
     }
     choice(&v["status"], &["active", "proposed"])
 }
-#[cfg(not(verus_keep_ghost))]
 fn action(v: &Value) -> Result {
-    object(v, &["operation", "tool", "argv"], &["output_contract"])?;
+    object(
+        v,
+        &["operation", "tool", "argv"],
+        &["output_contract", "nested_proof"],
+    )?;
     string(&v["operation"])?;
     string(&v["tool"])?;
     strings(&v["argv"])?;
-    output_contract(&v["output_contract"])
+    output_contract(&v["output_contract"])?;
+    if let Some(proof) = v.get("nested_proof") {
+        let _: chrono_harness::nested_proof::Declaration =
+            serde_json::from_value(proof.clone()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn output_contract(v: &Value) -> Result {
     let contract = serde_json::from_value(v.clone()).map_err(|e| e.to_string())?;
     chrono_harness::verified_verifier::validate_contract(&contract)
 }
-#[cfg(not(verus_keep_ghost))]
 fn actions(v: &Value) -> Result {
     let o = v.as_object().ok_or("actions must be an object")?;
     if o.is_empty() {
@@ -229,7 +158,6 @@ fn actions(v: &Value) -> Result {
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn edge(v: &Value, from: bool) -> Result {
     object(
         v,
@@ -256,7 +184,6 @@ fn edge(v: &Value, from: bool) -> Result {
     string(&v["to"])?;
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn config(v: &Value) -> Result {
     let mut fields = vec![
         "enforcement",
@@ -434,7 +361,6 @@ pub fn config(v: &Value) -> Result {
     Ok(())
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn validate_execution_units(v: &Value) -> Result {
     chrono_harness::units::report_paths(&serde_json::json!({"execution_units":v}), None)?;
     let fields = object(
@@ -497,7 +423,6 @@ fn validate_execution_units(v: &Value) -> Result {
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn projects(v: &Value) -> Result {
     common_versions(v, &["owners", "projects", "scripts"], &[1, 2])?;
     let languages = v["schema_version"] == 2;
@@ -571,7 +496,6 @@ pub fn projects(v: &Value) -> Result {
     crate::execution::test_bindings(v)?;
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn filemap(v: &Value) -> Result {
     let mut plan_operations = Vec::new();
     if v["schema_version"] == 2 {
@@ -718,7 +642,6 @@ pub fn filemap(v: &Value) -> Result {
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn judges(v: &Value) -> Result {
     common(v, &["migration_validator", "judges"])?;
     string(&v["migration_validator"])?;
@@ -735,7 +658,6 @@ pub fn judges(v: &Value) -> Result {
     chrono_harness::full::schedule(&b)?;
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn workflow(v: &Value) -> Result {
     let fields = [
         "target_branch",

@@ -1,64 +1,42 @@
-#![allow(unexpected_cfgs)]
-#[cfg(verus_keep_ghost)]
-use super::source_verifier;
+//! Registration owns full-format schema, snapshot and affected-reference admissibility.
 pub use schema::validate_reference_syntax;
-// Registration owns full-format schema, snapshot and affected-reference admissibility.
-#[cfg(not(verus_keep_ghost))]
 pub mod consumption;
-#[cfg(not(verus_keep_ghost))]
 pub mod execution;
-#[cfg(not(verus_keep_ghost))]
 mod input_coverage;
-#[cfg(not(verus_keep_ghost))]
 pub mod inputs;
-#[cfg(not(verus_keep_ghost))]
 mod registrations;
-#[cfg(not(verus_keep_ghost))]
 mod transition;
 #[allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_consumption;
 #[allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_input_coverage;
 #[allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_nodes;
 #[allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_readiness;
 #[allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_scheduling;
-#[cfg(not(verus_keep_ghost))]
 pub use transition::{
     ambiguity_repaired, downstream_validator, interpret, interpret_scheduling_with_reader,
     interpret_with_reader, replacements, retirement_declaration, retirement_requests, reused_tools,
     validate_retained_view, validate_test_retirement, views, views_for_collection_inputs_with,
     views_with_reader,
 };
-#[cfg(not(verus_keep_ghost))]
 pub use verified_nodes::NodeKind;
-#[cfg(not(verus_keep_ghost))]
 pub mod initial;
 mod schema;
-#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     facts, json, no_symlink_parents, sha256,
     wire::{self, Finding, Request, Response, Status},
 };
-#[cfg(not(verus_keep_ghost))]
 pub use registrations::{NodeDefinition, NodeView, Registrations};
-#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
-#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::Path,
 };
 /// Validate the explicit projects document without requiring a full-governance host.
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_projects(projects: &Value) -> std::result::Result<(), String> {
     schema::projects(projects)
 }
@@ -66,7 +44,6 @@ pub fn validate_projects(projects: &Value) -> std::result::Result<(), String> {
 /// Project explicitly scoped edges for one effective direct policy. Retained
 /// registry bytes remain source data; all graph consumers use this projection.
 /// Unqualified legacy FILEMAP documents keep their existing interpretation.
-#[cfg(not(verus_keep_ghost))]
 pub fn select_filemap(filemap: &Value, config: Option<&str>) -> std::result::Result<Value, String> {
     let Some(table) = filemap.get("configuration_edges") else {
         return Ok(filemap.clone());
@@ -93,13 +70,10 @@ pub fn select_filemap(filemap: &Value, config: Option<&str>) -> std::result::Res
     Ok(selected)
 }
 
-#[cfg(not(verus_keep_ghost))]
 type Result<T> = std::result::Result<T, String>;
-#[cfg(not(verus_keep_ghost))]
 fn read(path: &Path) -> Result<Value> {
     json(&fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?)
 }
-#[cfg(not(verus_keep_ghost))]
 fn issue(
     r: &mut Response,
     code: &str,
@@ -120,7 +94,6 @@ fn issue(
         },
     );
 }
-#[cfg(not(verus_keep_ghost))]
 fn rows(v: &Value, key: &str, id: &str) -> BTreeMap<String, Value> {
     v[key]
         .as_array()
@@ -129,7 +102,6 @@ fn rows(v: &Value, key: &str, id: &str) -> BTreeMap<String, Value> {
         .filter_map(|r| r[id].as_str().map(|s| (s.into(), r.clone())))
         .collect()
 }
-#[cfg(not(verus_keep_ghost))]
 fn strings(v: &Value) -> BTreeSet<String> {
     v.as_array()
         .into_iter()
@@ -139,7 +111,6 @@ fn strings(v: &Value) -> BTreeSet<String> {
         .collect()
 }
 /// Classify observed untracked paths using an already schema-validated host configuration.
-#[cfg(not(verus_keep_ghost))]
 pub fn nonartifact_paths(config: &Value, paths: &[String]) -> Vec<String> {
     let artifacts = facts::artifact_directories(config).expect("validated artifact declarations");
     paths
@@ -148,7 +119,6 @@ pub fn nonartifact_paths(config: &Value, paths: &[String]) -> Vec<String> {
         .cloned()
         .collect()
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn judge(req: &Request) -> Response {
     let mut r = req.response(Status::Pass);
     let reader = facts::Reader::for_request(req);
@@ -164,7 +134,6 @@ pub fn judge(req: &Request) -> Response {
     }
     r
 }
-#[cfg(not(verus_keep_ghost))]
 fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<()> {
     req.validate()?;
     let root = &req.candidate.root;
@@ -447,7 +416,6 @@ fn evaluate(req: &Request, r: &mut Response, reader: &facts::Reader) -> Result<(
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn readiness(
     req: &Request,
     old: &Registrations,
@@ -585,7 +553,6 @@ fn readiness(
 /// Validate only the explicit closure whitelist. The registration owns the
 /// node inventory, but it never discovers additional dependencies from the
 /// filesystem, commands, language or directory layout.
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn input_closure_findings(n: &Registrations) -> Vec<Finding> {
     let mut findings = Vec::new();
     let mut issue = |code: &str, message: String, reference: String| {
@@ -694,7 +661,6 @@ pub(crate) fn input_closure_findings(n: &Registrations) -> Vec<Finding> {
     findings
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn references(
     reader: &facts::Reader,
     root: &Path,
@@ -1160,7 +1126,6 @@ fn references(
 
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 fn strings_ids(v: &Value) -> BTreeSet<String> {
     v.as_array()
         .into_iter()

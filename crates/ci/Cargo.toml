@@ -8,6 +8,9 @@ publish = false
 test = false
 doctest = false
 
+[features]
+generation-test = []
+
 [[bin]]
 name = "chrono-ci"
 path = "src/main.rs"

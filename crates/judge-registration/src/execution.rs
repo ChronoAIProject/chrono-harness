@@ -190,6 +190,8 @@ pub struct Method {
     pub argv: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_contract: Option<chrono_harness::verified_verifier::OutputContract>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nested_proof: Option<chrono_harness::nested_proof::Declaration>,
 }
 /// A test identity is opaque; its owner and terminal action are explicit registration.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -282,6 +284,31 @@ pub fn test_bindings(projects: &Value) -> Result<BTreeMap<String, Vec<TestBindin
     }
     Ok(out)
 }
+/// Decode one current action identically for planning and immutable snapshots.
+pub fn method(owner: String, action: &Value) -> Result<Method, String> {
+    let mut fields = action.as_object().ok_or("action object required")?.clone();
+    if fields.contains_key("owner") {
+        return Err("action owner belongs to its containing registration".into());
+    }
+    fields.insert("owner".into(), Value::String(owner));
+    let method: Method =
+        serde_json::from_value(Value::Object(fields)).map_err(|e| e.to_string())?;
+    chrono_harness::verified_verifier::validate_contract(&method.output_contract)?;
+    if let Some(proof) = &method.nested_proof {
+        if method.output_contract.is_some()
+            || proof.output_contract.is_none()
+            || !chrono_harness::verified_limits::valid_execution_bounds(
+                proof.timeout_seconds,
+                proof.output_limit_bytes,
+            )
+            || !chrono_harness::verified_verifier::canonical_verifier_arguments(&proof.argv)
+        {
+            return Err("E_VERUS_NESTED: invalid or duplicate proof declaration".into());
+        }
+        chrono_harness::verified_verifier::validate_contract(&proof.output_contract)?;
+    }
+    Ok(method)
+}
 /// Retain duplicates for the routes policy to reject; never overwrite a method.
 pub fn methods(projects: &Value) -> Result<BTreeMap<String, Vec<Method>>, String> {
     let mut out: BTreeMap<String, Vec<Method>> = BTreeMap::new();
@@ -295,18 +322,13 @@ pub fn methods(projects: &Value) -> Result<BTreeMap<String, Vec<Method>>, String
                 .ok_or("actions missing")?
                 .values()
             {
-                let operation = action["operation"].as_str().ok_or("operation missing")?;
-                let method = Method {
-                    owner: format!("{prefix}:{}", row["id"].as_str().ok_or("owner missing")?),
-                    operation: operation.into(),
-                    tool: action["tool"].as_str().ok_or("tool missing")?.into(),
-                    argv: serde_json::from_value(action["argv"].clone())
-                        .map_err(|e| e.to_string())?,
-                    output_contract: serde_json::from_value(action["output_contract"].clone())
-                        .map_err(|e| e.to_string())?,
-                };
-                chrono_harness::verified_verifier::validate_contract(&method.output_contract)?;
-                out.entry(operation.into()).or_default().push(method);
+                let method = method(
+                    format!("{prefix}:{}", row["id"].as_str().ok_or("owner missing")?),
+                    action,
+                )?;
+                out.entry(method.operation.clone())
+                    .or_default()
+                    .push(method);
             }
         }
     }

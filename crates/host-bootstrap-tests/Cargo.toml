@@ -5,6 +5,9 @@ edition = "2024"
 publish = false
 autotests = false
 
+[package.metadata.verus]
+verify = true
+
 [[test]]
 name = "download"
 path = "tests/download.rs"

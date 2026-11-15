@@ -1,66 +1,16 @@
-#![allow(unexpected_cfgs)]
-#[cfg(verus_keep_ghost)]
-use super::source_verifier::{ProofInvocation, sources};
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::{
-    verified_verifier::{ProofInvocation, sources},
-    verus,
-};
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-
-pub open spec fn source_plan_error(
-    registry: &sources::SourceRegistry,
-    previous: Result<Option<&sources::SourceRegistry>, &str>, nodes: Seq<String>,
-    methods: Seq<ProofInvocation>, scopes: Seq<sources::SourceMethodScope>,
-    evidence: &sources::continuity::Continuity,
-) -> Option<(Seq<char>, Seq<char>)> {
-    match sources::registry_classification_error(registry, previous, evidence) {
-        Some(error) => Some(error),
-        None => sources::selected_plan_error(registry.files.entries@, nodes, methods, scopes,
-            matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0),
-    }
-}
-
-/// 库存先验，原错误优先；两个门使用同一固定库存、影响输入和连续性证据。
-pub fn validate_source_plan<'a>(
-    registry: &'a sources::SourceRegistry,
-    previous: Result<Option<&sources::SourceRegistry>, &'a str>, nodes: &Vec<String>,
-    methods: &Vec<ProofInvocation>, scopes: &Vec<sources::SourceMethodScope>,
-    evidence: &sources::continuity::Continuity,
-) -> (out: Result<(), sources::CoverageError<'a>>)
-    ensures match out {
-        Ok(()) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence).is_none(),
-        Err(error) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence) == Some(error.view()),
-    },
-{
-    match sources::validate_file_classifications(registry, previous, evidence) {
-        Err(error) => Err(error),
-        Ok(()) => sources::validate_selected_roots(&registry.files, nodes, methods, scopes, evidence),
-    }
-}
-
-} // verus!
-
-// Routes owns method planning and comparison with runner-produced observations.
-#[cfg(not(verus_keep_ghost))]
+//! Routes owns method planning and comparison with runner-produced observations.
+pub use chrono_harness::verified_verifier::sources::validate_source_plan;
 use chrono_harness::{
     ProcessResult, facts,
     observation::{self, Tool},
     wire::{self, Finding, Request, Response, Status},
 };
-#[cfg(not(verus_keep_ghost))]
 use chrono_judge_registration::{
     Registrations,
     execution::{Method, Plan, Scheduling},
 };
-#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
-#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
-#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -70,7 +20,6 @@ use std::{
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct Operation {
     pub method: Method,
     pub predecessors: BTreeSet<String>,
@@ -79,7 +28,6 @@ pub struct Operation {
 }
 
 /// 只借用现役计划字段；证明资格由同源 Verus 内核判断。
-#[cfg(not(verus_keep_ghost))]
 pub fn proof_invocations(
     operations: &[Operation],
 ) -> Vec<chrono_harness::verified_verifier::ProofInvocation<'_>> {
@@ -88,8 +36,18 @@ pub fn proof_invocations(
         .map(
             |operation| chrono_harness::verified_verifier::ProofInvocation {
                 operation: &operation.method.operation,
-                argv: &operation.method.argv,
-                output_contract: &operation.method.output_contract,
+                argv: operation
+                    .method
+                    .nested_proof
+                    .as_ref()
+                    .map(|p| &p.argv)
+                    .unwrap_or(&operation.method.argv),
+                output_contract: operation
+                    .method
+                    .nested_proof
+                    .as_ref()
+                    .map(|p| &p.output_contract)
+                    .unwrap_or(&operation.method.output_contract),
                 output_limit_bytes: operation.output_limit_bytes,
             },
         )
@@ -97,7 +55,6 @@ pub fn proof_invocations(
 }
 
 /// JSON 和显式影响集合仅作投影；缺证明、参数或根不符由 Verus 拒绝。
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_proof_plan(
     registry: &chrono_harness::verified_verifier::sources::SourceRegistry,
     previous: Result<Option<&chrono_harness::verified_verifier::sources::SourceRegistry>, &str>,
@@ -109,13 +66,22 @@ pub fn validate_proof_plan(
     let scopes = methods
         .values()
         .flatten()
-        .map(
-            |method| chrono_harness::verified_verifier::sources::SourceMethodScope {
-                operation: &method.operation,
-                owner: &method.owner,
-                tool: &method.tool,
-            },
-        )
+        .flat_map(|method| {
+            std::iter::once(
+                chrono_harness::verified_verifier::sources::SourceMethodScope {
+                    operation: &method.operation,
+                    owner: &method.owner,
+                    tool: &method.tool,
+                },
+            )
+            .chain(method.nested_proof.as_ref().map(|proof| {
+                chrono_harness::verified_verifier::sources::SourceMethodScope {
+                    operation: &method.operation,
+                    owner: &method.owner,
+                    tool: &proof.tool,
+                }
+            }))
+        })
         .collect();
     validate_source_plan(
         registry,
@@ -129,7 +95,6 @@ pub fn validate_proof_plan(
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct Execution {
     pub schema: String,
     pub identity: String,
@@ -142,7 +107,6 @@ pub struct Execution {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub scheduling: Option<Scheduling>,
 }
-#[cfg(not(verus_keep_ghost))]
 impl Execution {
     fn digest(&self) -> Result<String, String> {
         let mut value = serde_json::to_value(self).map_err(|e| e.to_string())?;
@@ -187,19 +151,16 @@ impl Execution {
         Ok(self)
     }
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn binding(req: &Request, inputs: &Value) -> Value {
     json!({"base":req.base.commit,"base_tree":req.base.tree,"candidate":req.candidate.commit,"candidate_tree":req.candidate.tree,"registry":req.registries.digest,"context":req.context.sha256,"inputs":inputs,"entry":req.observations["entry"],"run":req.observations["run"],"operation_state":req.observations["report_path"].as_str().map(|path| operation_state_path(path, &req.observations["run"]))})
 }
 /// Keep operation originals beside the report selected by the existing owner.
-#[cfg(not(verus_keep_ghost))]
 pub fn operation_state_path(report_path: &str, run: &Value) -> String {
     format!(
         "{report_path}.operations-{}",
         wire::digest(run).expect("JSON run identity serializes")
     )
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn expand(argv: &[String], binding: &Value) -> Vec<String> {
     argv.iter()
         .map(|a| match a.as_str() {
@@ -210,7 +171,6 @@ pub fn expand(argv: &[String], binding: &Value) -> Vec<String> {
         .collect()
 }
 /// Merge explicit sequences into a DAG before observing tools or launching any command.
-#[cfg(not(verus_keep_ghost))]
 pub fn order(
     selected: &BTreeSet<String>,
     plans: &BTreeMap<String, Plan>,
@@ -238,6 +198,14 @@ pub fn order(
                 .ok_or_else(|| format!("E_ROUTE_MISSING: {id}"))?;
             if defs.len() != 1 || id == "validate.delta" {
                 return Err(format!("E_ROUTE_AMBIGUOUS: {id}"));
+            }
+            if defs[0].nested_proof.as_ref().is_some_and(|proof| {
+                proof.timeout_seconds != bounds.timeout_seconds
+                    || proof.output_limit_bytes != bounds.output_limit_bytes
+            }) {
+                return Err(format!(
+                    "E_PLAN_BOUNDS: nested proof must use selected operation bounds: {id}"
+                ));
             }
             let op = operations.entry(id.clone()).or_insert_with(|| Operation {
                 method: defs[0].clone(),
@@ -270,7 +238,6 @@ pub fn order(
     }
     Ok((chosen, ordered))
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn prepare(
     root: &Path,
     binding: Value,
@@ -297,7 +264,6 @@ pub fn prepare(
     )
 }
 /// Registered full/scoped callers share one preparation owner and process engine.
-#[cfg(not(verus_keep_ghost))]
 pub fn prepare_scheduled(
     root: &Path,
     binding: Value,
@@ -325,7 +291,6 @@ pub fn prepare_scheduled(
         scheduling,
     )
 }
-#[cfg(not(verus_keep_ghost))]
 fn prepare_inner(
     root: &Path,
     binding: Value,
@@ -413,12 +378,10 @@ fn prepare_inner(
     Ok(plan)
 }
 /// Pure validation of successful retained observations, shared with full consumers.
-#[cfg(not(verus_keep_ghost))]
 pub fn process_success(p: &ProcessResult) -> Result<(), String> {
     observation::process_success(p)
 }
 /// Construct the current global declaration graph without observing any business executable.
-#[cfg(not(verus_keep_ghost))]
 pub fn prepare_collection(
     root: &Path,
     binding: Value,
@@ -446,7 +409,6 @@ pub fn prepare_collection(
     plan.identity = plan.digest()?;
     Ok(plan)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_retained_tool(
     tool: &Tool,
     program: &str,
@@ -457,7 +419,6 @@ pub fn validate_retained_tool(
 ) -> Result<(), String> {
     validate_tool_inner(tool, program, argv, env, root, expected, false)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_tool(
     tool: &Tool,
     program: &str,
@@ -468,7 +429,6 @@ pub fn validate_tool(
 ) -> Result<(), String> {
     validate_tool_inner(tool, program, argv, env, root, expected, true)
 }
-#[cfg(not(verus_keep_ghost))]
 fn validate_tool_inner(
     tool: &Tool,
     program: &str,
@@ -508,7 +468,6 @@ fn validate_tool_inner(
     }
     Ok(())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_invocation(
     root: &Path,
     entry: &Value,
@@ -517,7 +476,6 @@ pub fn validate_invocation(
 ) -> Result<(), String> {
     chrono_harness::resolve_invocation(root, entry, template, binding).map(|_| ())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
     let mut expected: Vec<String> =
         serde_json::from_value(r.config()["canonical_check"]["argv"].clone())
@@ -554,7 +512,6 @@ pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
 /// The full route owns this check so projects receives an already ordered,
 /// contribution-sized plan and cannot make a selector hide a global cycle or
 /// replacement obligation.
-#[cfg(not(verus_keep_ghost))]
 fn unit_selection(
     req: &Request,
     selected: &BTreeSet<String>,
@@ -574,7 +531,6 @@ fn unit_selection(
 }
 
 /// Validate the explicit assignment independently of invocation or SDK acquisition.
-#[cfg(not(verus_keep_ghost))]
 pub fn validate_unit_assignments(
     block: &Value,
     plans: &BTreeMap<String, Plan>,
@@ -612,7 +568,6 @@ pub fn validate_unit_assignments(
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct Receipt {
     pub plan: String,
     pub operation: String,
@@ -621,14 +576,14 @@ pub struct Receipt {
     pub compiler_dependency: Option<Result<Vec<u8>, String>>,
     pub compiler_artifact:
         Option<Result<chrono_harness::verified_verifier::CompiledArtifact, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub nested_proof: Option<Result<chrono_harness::nested_proof::Original, String>>,
     pub digest: String,
 }
 
 /// UTF-8 路径、File::open、Read::take 和 read_to_end 的字节获取适配；
 /// 不选择操作、不准入路径、不解释依赖内容，也不分类领域状态。
-#[cfg(not(verus_keep_ghost))]
 struct DependencyIo<'a>(&'a Path);
-#[cfg(not(verus_keep_ghost))]
 impl chrono_harness::verified_verifier::sources::DependencyRead for DependencyIo<'_> {
     fn read(&self, path: &[u8], limit: u64) -> Result<Vec<u8>, String> {
         std::str::from_utf8(path)
@@ -644,7 +599,6 @@ impl chrono_harness::verified_verifier::sources::DependencyRead for DependencyIo
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl chrono_harness::verified_verifier::ArtifactRead for DependencyIo<'_> {
     fn identity(&self, path: &[u8]) -> Result<(Vec<u8>, u64), String> {
         std::str::from_utf8(path)
@@ -655,13 +609,20 @@ impl chrono_harness::verified_verifier::ArtifactRead for DependencyIo<'_> {
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl Receipt {
     pub fn new(plan: &Execution, op: &Operation, process: ProcessResult) -> Result<Self, String> {
         let mut receipt = Self {
             plan: plan.identity.clone(),
             operation: op.method.operation.clone(),
             method: wire::digest(&op.method)?,
+            nested_proof: op.method.nested_proof.as_ref().map(|_| {
+                chrono_harness::nested_proof::read_original(
+                    &plan.root,
+                    &op.method.operation,
+                    &process.stdout_bytes,
+                    op.output_limit_bytes,
+                )
+            }),
             compiler_dependency: chrono_harness::verified_verifier::sources::observe_dependency(
                 &op.method.output_contract,
                 &op.method.argv,
@@ -690,7 +651,6 @@ impl Receipt {
     }
 }
 /// Compare actual producer observations, never populate missing observations from a plan.
-#[cfg(not(verus_keep_ghost))]
 pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> Result<(), String> {
     plan.validate()?;
     let r = receipt.ok_or("E_ROUTE_MISSING: missing execution receipt")?;
@@ -723,6 +683,34 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
             "E_RECEIPT_MISMATCH: plan/method/tool/argv/cwd/input/environment/output".into(),
         );
     }
+    match (&op.method.nested_proof, &r.nested_proof) {
+        (None, None) => {}
+        (Some(selected), Some(Ok(original))) => {
+            original.validate(&plan.root, &op.method.operation, selected)?;
+            let child = &original.process;
+            let decoded =
+                serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
+                    &child.stdout_bytes,
+                )
+                .ok();
+            chrono_harness::verified_verifier::admit_observed_output(
+                &selected.output_contract,
+                &decoded,
+                &original.resolved_argv,
+                child.exit_code,
+                child.failure.is_some(),
+                &original.compiler_dependency,
+                selected.output_limit_bytes,
+                &original.compiler_artifact,
+            )?;
+        }
+        (_, Some(Err(error))) => return Err(error.clone()),
+        _ => {
+            return Err(
+                "E_VERUS_NESTED: selected child proof original is missing or unexpected".into(),
+            );
+        }
+    }
     let decoded = serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
         chrono_harness::verified_verifier::proof_stdout(
             &op.method.output_contract,
@@ -741,7 +729,6 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
         &r.compiler_artifact,
     )
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {
     r.test_bindings()
         .into_iter()
@@ -751,7 +738,6 @@ pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {
         })
         .collect()
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
     let reader = facts::Reader::for_request(req);
@@ -782,7 +768,6 @@ pub fn judge(req: &Request) -> Response {
     response
 }
 /// Shared global obligations; callers select a transport scope only after this succeeds.
-#[cfg(not(verus_keep_ghost))]
 pub fn global_selection(
     old: &Registrations,
     r: &Registrations,
@@ -803,7 +788,6 @@ pub fn global_selection(
     }
     Ok(selected)
 }
-#[cfg(not(verus_keep_ghost))]
 fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
     req.validate()?;
     let (old, r, view) = chrono_judge_registration::views_with_reader(req, reader)?;
@@ -841,7 +825,7 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
         serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?;
     let affected = impact.closure.reached.keys().cloned().collect::<Vec<_>>();
-    let continuity = chrono_harness::verified_verifier::sources::continuity::observe(
+    let continuity = chrono_harness::facts::source_continuity::observe(
         reader,
         &req.candidate.root,
         Some((

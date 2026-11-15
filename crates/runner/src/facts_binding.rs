@@ -1,108 +1,23 @@
 //! Candidate-owned Git binding. Does not infer Git's delegated input closure.
-use std::collections::BTreeMap;
+use crate::verified_status::ordered_acquired_blobs;
+use crate::{
+    CommandSpec, ProcessResult, facts, no_symlink_parents, resolve_program, run_process_observed,
+    sha256, verified_git_binding, wire,
+};
+use serde_json::{Value, json as value};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    fs,
+    path::{Path, PathBuf},
+};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
-verus! {
-pub open spec fn acquired_rows_prefix(
-    paths: Seq<String>, bytes: Map<String, Vec<u8>>, rows: Seq<(String, Vec<u8>)>, count: int,
-) -> bool {
-    0 <= count <= paths.len() && rows.len() == count
-        && (forall|j: int| 0 <= j < count ==>
-            bytes.contains_key(#[trigger] paths[j])
-            && rows[j].0@ == paths[j]@
-            && rows[j].1@ == bytes[paths[j]]@)
-}
-
-proof fn acquired_rows_append(
-    paths: Seq<String>, bytes: Map<String, Vec<u8>>, rows: Seq<(String, Vec<u8>)>,
-    count: int, row: (String, Vec<u8>),
-)
-    requires acquired_rows_prefix(paths, bytes, rows, count), count < paths.len(),
-        bytes.contains_key(paths[count]), row.0@ == paths[count]@,
-        row.1@ == bytes[paths[count]]@,
-    ensures acquired_rows_prefix(paths, bytes, rows.push(row), count + 1),
-{
-    let next = rows.push(row);
-    assert(0 <= count + 1 <= paths.len());
-    assert(next.len() == count + 1);
-    assert forall|j: int| 0 <= j < count + 1 implies
-        bytes.contains_key(#[trigger] paths[j])
-        && next[j].0@ == paths[j]@
-        && next[j].1@ == bytes[paths[j]]@ by {
-        if j < count { assert(next[j] == rows[j]); }
-        else { assert(j == count); }
-    }
-    assert(acquired_rows_prefix(paths, bytes, next, count + 1));
-}
-
-/// 按原请求顺序重建实际取得的字节，保留重复路径；缺少任一条时拒绝。
-pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>>)
-    -> (out: Option<Vec<(String, Vec<u8>)>>)
-    requires vstd::laws_cmp::obeys_cmp::<String>(),
-    ensures match out {
-        Some(rows) => acquired_rows_prefix(paths@, bytes@, rows@, paths.len() as int),
-        None => exists|i: int| 0 <= i < paths.len() && !bytes@.contains_key(paths@[i]),
-    },
-{
-    broadcast use vstd::std_specs::btree::group_btree_axioms;
-    let mut rows: Vec<(String, Vec<u8>)> = Vec::new();
-    let mut i = 0;
-    while i < paths.len()
-        invariant vstd::laws_cmp::obeys_cmp::<String>(),
-            0 <= i <= paths.len(), acquired_rows_prefix(paths@, bytes@, rows@, i as int),
-        decreases paths.len() - i,
-    {
-        let path = &paths[i];
-        let content = match bytes.get::<String>(path) {
-            Some(content) => {
-                proof {
-                    vstd::std_specs::btree::axiom_maps_deref_key_to_value(bytes@, path, *content);
-                    assert(bytes@.contains_key(paths@[i as int]));
-                    assert(*content == bytes@[paths@[i as int]]);
-                }
-                content
-            },
-            None => {
-                proof {
-                    vstd::std_specs::btree::axiom_contains_deref_key(bytes@, path);
-                    assert(!bytes@.contains_key(paths@[i as int]));
-                }
-                return None;
-            },
-        };
-        let name = paths[i].clone();
-        let copied = content.clone();
-        let ghost before = rows@;
-        proof { acquired_rows_append(paths@, bytes@, before, i as int, (name, copied)); }
-        rows.push((name, copied));
-        i += 1;
-    }
-    Some(rows)
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
-use crate::{
-    CommandSpec, ProcessResult, facts, no_symlink_parents, resolve_program, run_process_observed,
-    sha256, verified_git_binding, wire,
-};
-#[cfg(not(verus_keep_ghost))]
-use serde_json::{Value, json as value};
-#[cfg(not(verus_keep_ghost))]
-use std::{
-    cell::RefCell,
-    collections::BTreeSet,
-    fs,
-    path::{Path, PathBuf},
-};
-
-#[cfg(not(verus_keep_ghost))]
 pub const OBSERVATION_SCHEMA: &str = "chrono-git-facts/v2";
 
-#[cfg(not(verus_keep_ghost))]
 pub struct Reader {
     bound: Option<Bound>,
     processes: RefCell<Vec<ProcessResult>>,
@@ -113,7 +28,6 @@ pub struct Reader {
     verified_oids: RefCell<BTreeSet<String>>,
 }
 #[derive(Clone)]
-#[cfg(not(verus_keep_ghost))]
 struct BlobReceipt {
     process: usize,
     range: std::ops::Range<usize>,
@@ -121,12 +35,10 @@ struct BlobReceipt {
     object: Option<(usize, BlobObject)>,
 }
 #[derive(Clone)]
-#[cfg(not(verus_keep_ghost))]
 struct BlobObject {
     oid: String,
     length: usize,
 }
-#[cfg(not(verus_keep_ghost))]
 impl BlobObject {
     fn header(&self) -> String {
         format!("{} blob {}\n", self.oid, self.length)
@@ -156,7 +68,6 @@ impl BlobObject {
 }
 /// One successful registered blob and its original acquisition coordinates.
 /// Callers retain the processes; no synthetic process receipt is produced here.
-#[cfg(not(verus_keep_ghost))]
 pub struct RegistryBlob {
     pub path: String,
     pub bytes: Vec<u8>,
@@ -165,7 +76,6 @@ pub struct RegistryBlob {
 /// Acquire only explicit immutable registry paths through the caller's bounded
 /// Git transport. Metadata partitions requests under the same output limit.
 /// The callback returns its retained process index and exact stdout bytes.
-#[cfg(not(verus_keep_ghost))]
 pub fn acquire_registry_blobs(
     oid: &str,
     paths: &[String],
@@ -325,7 +235,6 @@ pub fn acquire_registry_blobs(
 /// Read one explicitly declared immutable input. Metadata remains diagnostic
 /// traffic; only the object's exact stdout receives the declared data bound.
 /// Both original processes are retained by the caller, including failures.
-#[cfg(not(verus_keep_ghost))]
 pub fn acquire_immutable_input(
     oid: &str,
     path: &str,
@@ -376,12 +285,10 @@ pub fn acquire_immutable_input(
 
 /// Original binding observations when construction fails, without decoding diagnostics.
 #[derive(Debug)]
-#[cfg(not(verus_keep_ghost))]
 pub struct OpenFailure {
     pub message: String,
     pub observation: Value,
 }
-#[cfg(not(verus_keep_ghost))]
 struct Bound {
     root: PathBuf,
     config_path: String,
@@ -392,28 +299,37 @@ struct Bound {
     guard: Option<crate::facts_inputs::Guard>,
     selection: Option<crate::facts_configs::Selection>,
 }
-#[cfg(not(verus_keep_ghost))]
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
     verified_git_binding::required_binding_text(v[key].as_str(), key)
         .map_err(|missing| format!("{}{}", missing.prefix, missing.field))
 }
 
-#[cfg(not(verus_keep_ghost))]
-struct JsonBindingReferences<'a>(&'a [Value]);
+verus! {
 
-#[cfg(not(verus_keep_ghost))]
+#[doc(hidden)]
+pub struct JsonBindingReferences<'a>(pub &'a [Value]);
+
 impl verified_git_binding::BindingReferenceRows for JsonBindingReferences<'_> {
+    open spec fn count(&self) -> nat { self.0@.len() }
+
+    open spec fn id_at(&self, index: int) -> Option<&str> {
+        if 0 <= index < self.0@.len() {
+            crate::json_value_specs::field_text(&self.0@[index], "id"@)
+        } else { None }
+    }
+
     fn len(&self) -> usize {
         self.0.len()
     }
 
     fn id(&self, index: usize) -> Option<&str> {
-        self.0[index]["id"].as_str()
+        crate::json_fields::field_text(&self.0[index], "id")
     }
 }
 
+} // verus!
+
 /// Validate the new link without interpreting any historical config as v3.
-#[cfg(not(verus_keep_ghost))]
 pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
     if !matches!(config["schema_version"].as_u64(), Some(3 | 4)) {
         return Err("facts_git requires config schema_version 3 or 4".into());
@@ -475,7 +391,6 @@ pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
     Ok((tool, input))
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl Reader {
     pub fn legacy() -> Self {
         Self {
@@ -1038,5 +953,181 @@ impl Reader {
         .map(str::to_string)
         .collect();
         self.invoke(root, argv, input, literal_inventory)
+    }
+}
+
+/// 固定源码连续性的获取适配；完整程序义务沿 runner 根保留。
+pub mod source_continuity {
+    use crate::verified_verifier::sources::continuity::*;
+
+    /// 以下仅为固定 Reader、Serde 和树迭代的接口适配；准入不在这里产生。
+    pub struct FixedRead<'a> {
+        pub reader: &'a crate::facts::Reader,
+        pub root: &'a std::path::Path,
+        pub base: &'a str,
+        pub candidate: &'a str,
+    }
+
+    impl Read for FixedRead<'_> {
+        fn blob(&self, base: bool, path: &str) -> Result<Vec<u8>, String> {
+            self.reader.blob(
+                self.root,
+                select_endpoint(base, self.base, self.candidate),
+                path,
+            )
+        }
+    }
+
+    #[derive(serde::Deserialize)]
+    struct DecodedFile {
+        path: String,
+        owner: serde_json::Value,
+        surface: serde_json::Value,
+        cost: serde_json::Value,
+        edges: serde_json::Value,
+        symlink: Option<serde_json::Value>,
+        projection: Option<serde_json::Value>,
+        verification: Option<crate::verified_verifier::sources::SourceVerification>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct DecodedFiles {
+        files: Vec<DecodedFile>,
+        #[serde(default)]
+        reference_syntax: Vec<ReferenceSyntax>,
+    }
+    #[derive(serde::Deserialize)]
+    struct DecodedProjects {
+        projects: Vec<ProjectRoot>,
+    }
+
+    pub fn observe_endpoint(
+        reader: &crate::facts::Reader,
+        root: &std::path::Path,
+        oid: &str,
+        filemap: &serde_json::Value,
+        projects: &serde_json::Value,
+        outputs: Vec<String>,
+    ) -> Result<Endpoint, String> {
+        let files: DecodedFiles =
+            serde_json::from_value(filemap.clone()).map_err(|e| e.to_string())?;
+        let projects: DecodedProjects =
+            serde_json::from_value(projects.clone()).map_err(|e| e.to_string())?;
+        let rows = files
+            .files
+            .into_iter()
+            .map(|row| {
+                Ok(FileObservation {
+                    path: row.path,
+                    mode: String::new(),
+                    kind: String::new(),
+                    registered: false,
+                    classified: row.verification.is_some(),
+                    metadata: serde_json::to_vec(&(
+                        row.owner,
+                        row.surface,
+                        row.cost,
+                        row.edges,
+                        row.symlink,
+                        row.projection,
+                    ))
+                    .map_err(|e| e.to_string())?,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?;
+        let tree = reader
+            .tree(root, oid)?
+            .into_iter()
+            .map(|(path, entry)| FileObservation {
+                path: path.as_str().to_owned(),
+                mode: entry.mode,
+                kind: entry.kind,
+                registered: false,
+                classified: false,
+                metadata: Vec::new(),
+            })
+            .collect();
+        Ok(with_reference_syntax(
+            assemble(projects.projects, rows, tree, outputs),
+            files.reference_syntax,
+        ))
+    }
+
+    /// 固定 Reader 的输入适配：只预取实际比较需要的两端路径，随后由原判断消费缓存。
+    /// 批量传输失败保留原错误；这里不产生连续性或证明资格。
+    pub fn acquire_sources(
+        base: &Endpoint,
+        current: &Endpoint,
+        paths: &Vec<String>,
+        mut acquire: impl FnMut(bool, &[String]) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let mut previous = Vec::new();
+        let mut candidate = Vec::new();
+        for path in paths {
+            let Some(origin) = relocate(path.as_bytes(), &current.projects, &base.projects) else {
+                continue;
+            };
+            let (Some(a), Some(b)) = (
+                find_file(&base.files, &origin),
+                find_file(&current.files, path.as_bytes()),
+            ) else {
+                continue;
+            };
+            let old = &base.files[a];
+            let new = &current.files[b];
+            if needs_source(old, new, base, current) {
+                previous.push(old.path.clone());
+                candidate.push(new.path.clone());
+            }
+        }
+        if !previous.is_empty() {
+            acquire(true, &previous)?;
+            acquire(false, &candidate)?;
+        }
+        Ok(())
+    }
+
+    /// 所有调用方使用此固定两端接口；完整计划与分类库存共用它的同一结果。
+    pub fn observe(
+        reader: &crate::facts::Reader,
+        root: &std::path::Path,
+        previous: Option<(&str, &serde_json::Value, &serde_json::Value, Vec<String>)>,
+        candidate: (&str, &serde_json::Value, &serde_json::Value, Vec<String>),
+        paths: &Vec<String>,
+    ) -> Result<Continuity, String> {
+        // 空选择没有连续性义务；不为无使用方的证据读取登记或 Git 树。
+        if paths.is_empty() {
+            return Ok(Continuity::empty());
+        }
+        let base = previous
+            .as_ref()
+            .map(|(oid, files, projects, outputs)| {
+                observe_endpoint(reader, root, oid, files, projects, outputs.clone())
+            })
+            .transpose()?;
+        let current = observe_endpoint(
+            reader,
+            root,
+            candidate.0,
+            candidate.1,
+            candidate.2,
+            candidate.3,
+        )?;
+        let io = FixedRead {
+            reader,
+            root,
+            base: previous.map(|row| row.0).unwrap_or(candidate.0),
+            candidate: candidate.0,
+        };
+        if let Some(base) = &base {
+            if reader.can_reuse_oid(io.base) && reader.can_reuse_oid(io.candidate) {
+                acquire_sources(base, &current, paths, |base, paths| {
+                    reader
+                        .blobs(root, select_endpoint(base, io.base, io.candidate), paths)
+                        .map(|_| ())
+                })?;
+            }
+        }
+        assess_optional(base.as_ref(), &current, paths, &io)
     }
 }

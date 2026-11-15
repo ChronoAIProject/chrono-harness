@@ -7,12 +7,57 @@ use vstd::prelude::*;
 
 verus! {
 
+pub open spec fn declared_reference_valid(form: &ReferenceSyntax) -> bool {
+    super::canonical_source_path(vstd::utf8::encode_utf8(form.file@))
+        && vstd::utf8::encode_utf8(form.before@).len() > 0
+        && vstd::utf8::encode_utf8(form.after@).len() > 0
+        && (vstd::utf8::encode_utf8(form.before@).last() == 34
+            || (form.base == 2 && vstd::utf8::encode_utf8(form.before@).last() == 47))
+        && (vstd::utf8::encode_utf8(form.after@).last() == 34
+            || (form.base == 2 && vstd::utf8::encode_utf8(form.after@).last() == 47))
+        && form.base <= 2
+}
+
+pub open spec fn reference_declarations_valid(forms: Seq<ReferenceSyntax>) -> bool {
+    forms.len() <= 250 && forall|i: int| 0 <= i < forms.len() ==> declared_reference_valid(#[trigger] &forms[i])
+}
+
+/// 声明数量、文件身份、开引号和基准必须完整有效；缺失不推测 shell 变量含义。
+pub fn validate_reference_syntax(forms: &Vec<ReferenceSyntax>) -> (out: std::result::Result<(), String>)
+    ensures out.is_ok() == reference_declarations_valid(forms@),
+        match out { Err(error) => error@ == "E_SOURCE_CONTINUITY: invalid reference syntax declaration"@, Ok(()) => true },
+{
+    if forms.len() > 250 {
+        return Err("E_SOURCE_CONTINUITY: invalid reference syntax declaration".to_string());
+    }
+    let mut i = 0;
+    while i < forms.len()
+        invariant 0 <= i <= forms.len() <= 250,
+            forall|j: int| 0 <= j < i ==> declared_reference_valid(#[trigger] &forms[j]),
+        decreases forms.len() - i,
+    {
+        let form = &forms[i];
+        let before = form.before.as_str().as_bytes();
+        let after = form.after.as_str().as_bytes();
+        if !super::canonical_source_name(form.file.as_str())
+            || before.len() == 0 || after.len() == 0
+            || (before[before.len() - 1] != 34 && !(form.base == 2 && before[before.len() - 1] == 47))
+            || (after[after.len() - 1] != 34 && !(form.base == 2 && after[after.len() - 1] == 47))
+            || form.base > 2 {
+            return Err("E_SOURCE_CONTINUITY: invalid reference syntax declaration".to_string());
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
+
 /// 来自同一固定 projects 库存的原 ID 和根；不从目录发现项目。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
+#[derive(Debug, serde::Deserialize)]
 pub struct ProjectRoot {
     pub id: String,
     // projects 允许无源码根的登记；空值只记录缺失，不能参与搬迁匹配。
-    #[cfg_attr(not(verus_keep_ghost), serde(default))]
+    #[serde(default)]
     pub root: String,
 }
 
@@ -30,8 +75,8 @@ pub struct FileObservation {
 
 /// 宿主显式声明的单文件引用语法；只改变两端的确切包围字节，目标仍须对应。
 /// base: 0 为源码目录，1 为项目根，2 为仓库根。
-#[cfg_attr(not(verus_keep_ghost), derive(Debug, serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(deny_unknown_fields))]
+#[derive(Debug, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ReferenceSyntax {
     pub file: String,
     pub before: String,
@@ -748,7 +793,7 @@ pub fn select_endpoint<'a>(base: bool, previous: &'a str, current: &'a str) -> (
     ensures out@ == if base { previous@ } else { current@ },
 { if base { previous } else { current } }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct Record {
     previous: String,
     current: String,
@@ -757,11 +802,11 @@ pub struct Record {
     manifest: bool,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct Origin { previous: String, current: String }
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct Assessment { origin: Option<Origin>, record: Option<Record> }
-#[cfg_attr(not(verus_keep_ghost), derive(Debug))]
+#[derive(Debug)]
 pub struct Continuity { observations: Vec<Assessment> }
 
 #[cfg(verus_keep_ghost)]
@@ -1062,181 +1107,3 @@ pub fn with_reference_syntax(endpoint: Endpoint, reference_syntax: Vec<Reference
 }
 
 } // verus!
-
-/// 以下仅为固定 Reader、Serde 和树迭代的接口适配；准入不在这里产生。
-#[cfg(not(verus_keep_ghost))]
-pub struct FixedRead<'a> {
-    pub reader: &'a crate::facts::Reader,
-    pub root: &'a std::path::Path,
-    pub base: &'a str,
-    pub candidate: &'a str,
-}
-
-#[cfg(not(verus_keep_ghost))]
-impl Read for FixedRead<'_> {
-    fn blob(&self, base: bool, path: &str) -> Result<Vec<u8>, String> {
-        self.reader.blob(
-            self.root,
-            select_endpoint(base, self.base, self.candidate),
-            path,
-        )
-    }
-}
-
-#[cfg(not(verus_keep_ghost))]
-#[derive(serde::Deserialize)]
-struct DecodedFile {
-    path: String,
-    owner: serde_json::Value,
-    surface: serde_json::Value,
-    cost: serde_json::Value,
-    edges: serde_json::Value,
-    symlink: Option<serde_json::Value>,
-    projection: Option<serde_json::Value>,
-    verification: Option<super::SourceVerification>,
-}
-
-#[cfg(not(verus_keep_ghost))]
-#[derive(serde::Deserialize)]
-struct DecodedFiles {
-    files: Vec<DecodedFile>,
-    #[serde(default)]
-    reference_syntax: Vec<ReferenceSyntax>,
-}
-#[cfg(not(verus_keep_ghost))]
-#[derive(serde::Deserialize)]
-struct DecodedProjects {
-    projects: Vec<ProjectRoot>,
-}
-
-#[cfg(not(verus_keep_ghost))]
-pub fn observe_endpoint(
-    reader: &crate::facts::Reader,
-    root: &std::path::Path,
-    oid: &str,
-    filemap: &serde_json::Value,
-    projects: &serde_json::Value,
-    outputs: Vec<String>,
-) -> Result<Endpoint, String> {
-    let files: DecodedFiles = serde_json::from_value(filemap.clone()).map_err(|e| e.to_string())?;
-    let projects: DecodedProjects =
-        serde_json::from_value(projects.clone()).map_err(|e| e.to_string())?;
-    let rows = files
-        .files
-        .into_iter()
-        .map(|row| {
-            Ok(FileObservation {
-                path: row.path,
-                mode: String::new(),
-                kind: String::new(),
-                registered: false,
-                classified: row.verification.is_some(),
-                metadata: serde_json::to_vec(&(
-                    row.owner,
-                    row.surface,
-                    row.cost,
-                    row.edges,
-                    row.symlink,
-                    row.projection,
-                ))
-                .map_err(|e| e.to_string())?,
-            })
-        })
-        .collect::<Result<Vec<_>, String>>()?;
-    let tree = reader
-        .tree(root, oid)?
-        .into_iter()
-        .map(|(path, entry)| FileObservation {
-            path: path.as_str().to_owned(),
-            mode: entry.mode,
-            kind: entry.kind,
-            registered: false,
-            classified: false,
-            metadata: Vec::new(),
-        })
-        .collect();
-    Ok(with_reference_syntax(
-        assemble(projects.projects, rows, tree, outputs),
-        files.reference_syntax,
-    ))
-}
-
-/// 固定 Reader 的输入适配：只预取实际比较需要的两端路径，随后由原判断消费缓存。
-/// 批量传输失败保留原错误；这里不产生连续性或证明资格。
-#[cfg(not(verus_keep_ghost))]
-pub fn acquire_sources(
-    base: &Endpoint,
-    current: &Endpoint,
-    paths: &Vec<String>,
-    mut acquire: impl FnMut(bool, &[String]) -> Result<(), String>,
-) -> Result<(), String> {
-    let mut previous = Vec::new();
-    let mut candidate = Vec::new();
-    for path in paths {
-        let Some(origin) = relocate(path.as_bytes(), &current.projects, &base.projects) else {
-            continue;
-        };
-        let (Some(a), Some(b)) = (
-            find_file(&base.files, &origin),
-            find_file(&current.files, path.as_bytes()),
-        ) else {
-            continue;
-        };
-        let old = &base.files[a];
-        let new = &current.files[b];
-        if needs_source(old, new, base, current) {
-            previous.push(old.path.clone());
-            candidate.push(new.path.clone());
-        }
-    }
-    if !previous.is_empty() {
-        acquire(true, &previous)?;
-        acquire(false, &candidate)?;
-    }
-    Ok(())
-}
-
-/// 所有调用方使用此固定两端接口；完整计划与分类库存共用它的同一结果。
-#[cfg(not(verus_keep_ghost))]
-pub fn observe(
-    reader: &crate::facts::Reader,
-    root: &std::path::Path,
-    previous: Option<(&str, &serde_json::Value, &serde_json::Value, Vec<String>)>,
-    candidate: (&str, &serde_json::Value, &serde_json::Value, Vec<String>),
-    paths: &Vec<String>,
-) -> Result<Continuity, String> {
-    // 空选择没有连续性义务；不为无使用方的证据读取登记或 Git 树。
-    if paths.is_empty() {
-        return Ok(Continuity::empty());
-    }
-    let base = previous
-        .as_ref()
-        .map(|(oid, files, projects, outputs)| {
-            observe_endpoint(reader, root, oid, files, projects, outputs.clone())
-        })
-        .transpose()?;
-    let current = observe_endpoint(
-        reader,
-        root,
-        candidate.0,
-        candidate.1,
-        candidate.2,
-        candidate.3,
-    )?;
-    let io = FixedRead {
-        reader,
-        root,
-        base: previous.map(|row| row.0).unwrap_or(candidate.0),
-        candidate: candidate.0,
-    };
-    if let Some(base) = &base {
-        if reader.can_reuse_oid(io.base) && reader.can_reuse_oid(io.candidate) {
-            acquire_sources(base, &current, paths, |base, paths| {
-                reader
-                    .blobs(root, select_endpoint(base, io.base, io.candidate), paths)
-                    .map(|_| ())
-            })?;
-        }
-    }
-    assess_optional(base.as_ref(), &current, paths, &io)
-}

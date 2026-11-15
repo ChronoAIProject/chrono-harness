@@ -2472,6 +2472,8 @@ fn recovery_removal_case(
                         }
                     } else {
                         exists|removed: Result<(), String>|
+                            #![trigger directory.ensures((observed,), (trace, removed))]
+                            #![trigger file.ensures((observed,), (trace, removed))]
                             (if is_directory {
                                 directory.ensures((observed,), (trace, removed))
                             } else { file.ensures((observed,), (trace, removed)) })

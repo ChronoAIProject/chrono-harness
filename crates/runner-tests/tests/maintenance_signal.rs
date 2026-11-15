@@ -1,11 +1,13 @@
 #![cfg(unix)]
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
-use super::policy::artifact_disposal as disposal;
+use super::policy as footprint_policy;
 #[cfg(verus_keep_ghost)]
-use super::policy::maintenance_signal as signal;
+use super::policy::maintenance_signal as send_policy;
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::artifact_disposal as disposal;
+use chrono_harness::maintenance_signal::verified_send as send_policy;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_limits as footprint_policy;
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -17,17 +19,17 @@ use vstd::vpanic as panic;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn observing_a_socket_requires_both_the_observer_and_socket_kind() {
-    if !disposal::observable_socket(true, true)
-        || disposal::observable_socket(false, true)
-        || disposal::observable_socket(true, false)
-        || disposal::observable_socket(false, false) { panic!(); }
+    if !footprint_policy::observable_socket(true, true)
+        || footprint_policy::observable_socket(false, true)
+        || footprint_policy::observable_socket(true, false)
+        || footprint_policy::observable_socket(false, false) { panic!(); }
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn hint_length_keeps_the_original_nonempty_64_byte_boundary() {
-    if signal::valid_hint_length(0) || !signal::valid_hint_length(1)
-        || !signal::valid_hint_length(64) || signal::valid_hint_length(65)
-        || signal::valid_hint_length(usize::MAX) { panic!(); }
+    if send_policy::valid_hint_length(0) || !send_policy::valid_hint_length(1)
+        || !send_policy::valid_hint_length(64) || send_policy::valid_hint_length(65)
+        || send_policy::valid_hint_length(usize::MAX) { panic!(); }
 }
 
 fn expect_hint(actual: bool)
@@ -73,7 +75,7 @@ fn hint_send_case<'a>(payload: &'a str, bytes: usize, failure: u8, sent: usize) 
         trace.push((2, socket, false));
         (trace, if failure == 3 { Err(payload.to_string()) } else { Ok(sent) })
     };
-    let (trace, result) = signal::send_hint(Vec::new(), bytes, open, nonblocking, send);
+    let (trace, result) = send_policy::send_hint(Vec::new(), bytes, open, nonblocking, send);
     if bytes == 0 || bytes > 64 {
         expect_hint(trace.len() == 0);
         match result {
@@ -136,7 +138,7 @@ fn hint_send_requires_the_exact_observed_length() {
 
 fn policy_case<'a>(schema: &'a str, directory: &'a str, socket: &'a str,
     idle: Option<u64>, timer: u64, failure: u8, payload: &'a str, fields: bool)
-    requires fields == signal::maintenance_policy_fields(schema, directory, socket, idle, timer),
+    requires fields == send_policy::maintenance_policy_fields(schema, directory, socket, idle, timer),
 {
     let directory_check = |mut trace: Vec<(u8, &'a str)>, path: &'a str|
         -> (out: (Vec<(u8, &'a str)>, Result<(), String>))
@@ -158,7 +160,7 @@ fn policy_case<'a>(schema: &'a str, directory: &'a str, socket: &'a str,
         trace.push((1, path));
         (trace, if failure == 2 { Err(payload.to_string()) } else { Ok(()) })
     };
-    let (trace, result) = signal::validate_policy(Vec::new(), schema, directory, socket,
+    let (trace, result) = send_policy::validate_policy(Vec::new(), schema, directory, socket,
         idle, timer, directory_check, socket_check);
     expect_hint(trace.len() == if failure == 1 { 1 } else { 2 });
     expect_hint(trace[0].0 == 0);
@@ -194,8 +196,8 @@ fn policy_checks_keep_path_order_and_the_first_complete_error() {
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn policy_fields_keep_exact_schema_path_and_timer_boundaries() {
     proof {
-        reveal(signal::maintenance_location);
-        reveal(signal::maintenance_policy_fields);
+        reveal(send_policy::maintenance_location);
+        reveal(send_policy::maintenance_policy_fields);
         reveal_strlit("chrono-unified-maintenance/v1");
         reveal_strlit("chrono-unified-maintenance/v1\n");
         reveal_strlit("Chrono-unified-maintenance/v1");
@@ -249,10 +251,10 @@ fn policy_fields_keep_exact_schema_path_and_timer_boundaries() {
         assert(".chrono-harness/state/m".spec_bytes().last() == 109u8);
         assert(".chrono-harness/state/λ//".spec_bytes().last() == 47u8);
         assert(".chrono-harness/state/λ".spec_bytes().last() == 187u8);
-        assert(signal::maintenance_location(".chrono-harness/state/", true));
-        assert(signal::maintenance_location(".chrono-harness/state/m", false));
-        assert(signal::maintenance_location(".chrono-harness/state/λ//", true));
-        assert(signal::maintenance_location(".chrono-harness/state/λ", false));
+        assert(send_policy::maintenance_location(".chrono-harness/state/", true));
+        assert(send_policy::maintenance_location(".chrono-harness/state/m", false));
+        assert(send_policy::maintenance_location(".chrono-harness/state/λ//", true));
+        assert(send_policy::maintenance_location(".chrono-harness/state/λ", false));
     }
     policy_case("chrono-unified-maintenance/v1", ".chrono-harness/state/", ".chrono-harness/state/m",
         None, 1, 0, "", true);
@@ -303,8 +305,8 @@ proof fn unicode_policy_path_bytes()
     assert("λ//".spec_bytes() =~= seq![206u8, 187, 47, 47]);
     assert(".chrono-harness/state/λ"@ =~= ".chrono-harness/state/"@ + "λ"@);
     assert(".chrono-harness/state/λ//"@ =~= ".chrono-harness/state/"@ + "λ//"@);
-    signal::identifiers::encode_concat(".chrono-harness/state/"@, "λ"@);
-    signal::identifiers::encode_concat(".chrono-harness/state/"@, "λ//"@);
+    send_policy::identifiers::encode_concat(".chrono-harness/state/"@, "λ"@);
+    send_policy::identifiers::encode_concat(".chrono-harness/state/"@, "λ//"@);
 }
 }
 

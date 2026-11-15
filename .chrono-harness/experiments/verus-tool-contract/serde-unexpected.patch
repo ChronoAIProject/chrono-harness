@@ -1,0 +1,185 @@
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -3,6 +3,9 @@
+ use std::borrow::Cow;
+
+ verus! {
++
++#[verifier::external_type_specification]
++pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
+
+ #[verifier::external_trait_specification]
+ pub trait ExExpected {
+diff --git a/source/rust_verify_test/tests/serde_unexpected.rs b/source/rust_verify_test/tests/serde_unexpected.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/serde_unexpected.rs
+@@ -0,0 +1,167 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_unexpected_preserves_scalar_fields_and_float_variant
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::Unexpected;
++
++        fn scalars(flag: bool, unsigned: u64, signed: i64, character: char, float: f64) {
++            let value = Unexpected::Bool(flag);
++            match value {
++                Unexpected::Bool(actual) => assert(actual == flag),
++                _ => assert(false),
++            }
++            let value = Unexpected::Unsigned(unsigned);
++            match value {
++                Unexpected::Unsigned(actual) => assert(actual == unsigned),
++                _ => assert(false),
++            }
++            let value = Unexpected::Signed(signed);
++            match value {
++                Unexpected::Signed(actual) => assert(actual == signed),
++                _ => assert(false),
++            }
++            let value = Unexpected::Char(character);
++            match value {
++                Unexpected::Char(actual) => assert(actual == character),
++                _ => assert(false),
++            }
++            let value = Unexpected::Float(float);
++            assert(value is Float);
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_unexpected_preserves_complete_borrowed_fields
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::Unexpected;
++
++        fn text<'a>(input: &'a str) -> (result: Unexpected<'a>)
++            ensures match result {
++                Unexpected::Str(actual) => actual@ == input@,
++                _ => false,
++            },
++        {
++            Unexpected::Str(input)
++        }
++
++        fn other<'a>(input: &'a str) -> (result: Unexpected<'a>)
++            ensures match result {
++                Unexpected::Other(actual) => actual@ == input@,
++                _ => false,
++            },
++        {
++            Unexpected::Other(input)
++        }
++
++        fn bytes<'a>(input: &'a [u8]) -> (result: Unexpected<'a>)
++            ensures match result {
++                Unexpected::Bytes(actual) => actual@ == input@,
++                _ => false,
++            },
++        {
++            Unexpected::Bytes(input)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_unexpected_preserves_all_unit_variants
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::Unexpected;
++
++        fn variants() {
++            assert(Unexpected::Unit is Unit);
++            assert(Unexpected::Option is Option);
++            assert(Unexpected::NewtypeStruct is NewtypeStruct);
++            assert(Unexpected::Seq is Seq);
++            assert(Unexpected::Map is Map);
++            assert(Unexpected::Enum is Enum);
++            assert(Unexpected::UnitVariant is UnitVariant);
++            assert(Unexpected::NewtypeVariant is NewtypeVariant);
++            assert(Unexpected::TupleVariant is TupleVariant);
++            assert(Unexpected::StructVariant is StructVariant);
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_unexpected_rejects_changed_variant
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::Unexpected;
++
++        fn wrong() {
++            let value = Unexpected::Unsigned(42);
++            assert(value is Signed); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_unexpected_rejects_changed_scalar
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::Unexpected;
++
++        fn wrong() {
++            let value = Unexpected::Unsigned(42);
++            match value {
++                Unexpected::Unsigned(actual) => assert(actual == 43), // FAILS
++                _ => {},
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_unexpected_rejects_truncated_text
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::Unexpected;
++
++        fn wrong() {
++            let value = Unexpected::Str("λ\0中");
++            match value {
++                Unexpected::Str(actual) => assert(actual@ == "λ"@), // FAILS
++                _ => {},
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_unexpected_rejects_truncated_bytes
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::Unexpected;
++
++        fn wrong() {
++            let bytes = [0u8, 255u8, 1u8];
++            let value = Unexpected::Bytes(&bytes);
++            match value {
++                Unexpected::Bytes(actual) => assert(actual@ == seq![0u8, 255u8]), // FAILS
++                _ => {},
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

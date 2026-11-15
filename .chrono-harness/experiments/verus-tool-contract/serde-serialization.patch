@@ -1,0 +1,609 @@
+diff --git a/source/rust_verify/src/rust_to_vir_func.rs b/source/rust_verify/src/rust_to_vir_func.rs
+--- a/source/rust_verify/src/rust_to_vir_func.rs
++++ b/source/rust_verify/src/rust_to_vir_func.rs
+@@ -28,7 +28,7 @@
+ use rustc_mir_build_verus::verus::BodyErasure;
+ use rustc_span::Span;
+ use rustc_span::def_id::DefId;
+-use rustc_span::symbol::Ident;
++use rustc_span::symbol::{Ident, kw};
+ use std::collections::{HashMap, HashSet};
+ use std::sync::Arc;
+ use std::vec;
+@@ -3393,8 +3393,11 @@
+         (Mode::Exec, Mode::Exec, Mode::Exec)
+     } else {
+         match mode_opt {
+-            // Anonymous constants are evaluated in executable Rust contexts.
+-            None if matches!(ctxt.tcx.def_kind(id), rustc_hir::def::DefKind::AnonConst) => {
++            // Anonymous expressions and placeholder const items have no named spec value.
++            None
++                if matches!(ctxt.tcx.def_kind(id), rustc_hir::def::DefKind::AnonConst)
++                    || ctxt.tcx.opt_item_name(id) == Some(kw::Underscore) =>
++            {
+                 (Mode::Exec, Mode::Exec, Mode::Exec)
+             }
+             // By default, a named const is dual-use as spec and exec,
+diff --git a/source/vir/src/ast_to_sst_func.rs b/source/vir/src/ast_to_sst_func.rs
+--- a/source/vir/src/ast_to_sst_func.rs
++++ b/source/vir/src/ast_to_sst_func.rs
+@@ -131,7 +131,15 @@
+     state.view_as_spec = true;
+     // Use expr_to_pure_exp_skip_checks here
+     // because spec precondition checking is performed as a separate query
+-    let body_exp = expr_to_pure_exp_skip_checks(&ctx, &mut state, &body)?;
++    let body_exp = expr_to_pure_exp_skip_checks(&ctx, &mut state, &body).map_err(|error| {
++        error.secondary_label(
++            &function.span,
++            format!(
++                "in specification body of {}",
++                crate::ast_util::fun_as_friendly_rust_name(&function.x.name),
++            ),
++        )
++    })?;
+     let body_exp = state.finalize_exp(ctx, &body_exp)?;
+     state.finalize()?;
+
+diff --git a/source/rust_verify_test/tests/consts.rs b/source/rust_verify_test/tests/consts.rs
+--- a/source/rust_verify_test/tests/consts.rs
++++ b/source/rust_verify_test/tests/consts.rs
+@@ -2,6 +2,49 @@
+ #[macro_use]
+ mod common;
+ use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] placeholder_const_checks_executable_initialization
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        const _: () = {
++            let mut value: u8 = 6;
++            value += 1;
++        };
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] placeholder_const_checks_initializer_precondition
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        verus! {
++            const fn under_ten(value: u8) -> u8
++                requires value < 10,
++            { value }
++        }
++        const _: u8 = under_ten(10);
++    } => Err(err) => {
++        assert_eq!(err.errors.len(), 1);
++        assert!(relevant_error_span(&err.errors[0].spans).text.iter()
++            .any(|line| line.text.contains("under_ten(10)")));
++        assert_vir_error_msg(err, "precondition not satisfied");
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] named_const_keeps_pure_specification_requirement
++    ["--no-cheating", "--no-external-by-default"] => code! {
++        use vstd::prelude::*;
++        const NAMED: u8 = {
++            let mut value: u8 = 6;
++            value += 1;
++            value
++        };
++        verus! {
++            proof fn consume() { assert(NAMED == 7); }
++        }
++    } => Err(err) => assert_vir_error_msg(err, "pattern cannot have mode exec")
++}
+
+ test_verify_one_file! {
+     #[test] test_const_eval1 verus_code!{
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -1,8 +1,280 @@
+ //! External interfaces used by the actual Serde 1.0.229 derive expansion.
+ use crate::prelude::*;
+ use std::borrow::Cow;
++use core::fmt::Display;
++use serde::ser::{Serialize, Serializer, SerializeSeq, SerializeTuple, SerializeTupleStruct,
++    SerializeTupleVariant, SerializeMap, SerializeStruct, SerializeStructVariant};
+
+ verus! {
++
++#[verifier::external_trait_specification]
++pub trait ExSerialize {
++    type ExternalTraitSpecificationFor: serde::ser::Serialize;
++
++    #[verifier::impls_cannot_extend_spec]
++    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
++    where
++        S: Serializer;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializer: Sized {
++    type ExternalTraitSpecificationFor: serde::ser::Serializer;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    type SerializeSeq: SerializeSeq<Ok = Self::Ok, Error = Self::Error>;
++
++    type SerializeTuple: SerializeTuple<Ok = Self::Ok, Error = Self::Error>;
++
++    type SerializeTupleStruct: SerializeTupleStruct<Ok = Self::Ok, Error = Self::Error>;
++
++    type SerializeTupleVariant: SerializeTupleVariant<Ok = Self::Ok, Error = Self::Error>;
++
++    type SerializeMap: SerializeMap<Ok = Self::Ok, Error = Self::Error>;
++
++    type SerializeStruct: SerializeStruct<Ok = Self::Ok, Error = Self::Error>;
++
++    type SerializeStructVariant: SerializeStructVariant<Ok = Self::Ok, Error = Self::Error>;
++
++    fn serialize_bool(self, v: bool) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_i8(self, v: i8) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_i16(self, v: i16) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_i32(self, v: i32) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_i64(self, v: i64) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_i128(self, v: i128) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_u8(self, v: u8) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_u16(self, v: u16) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_u32(self, v: u32) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_u64(self, v: u64) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_u128(self, v: u128) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_f32(self, v: f32) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_f64(self, v: f64) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_char(self, v: char) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_str(self, v: &str) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_bytes(self, v: &[u8]) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_none(self) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_some<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn serialize_unit(self) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_unit_struct(self, name: &'static str) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_unit_variant(
++        self,
++        name: &'static str,
++        variant_index: u32,
++        variant: &'static str,
++    ) -> Result<Self::Ok, Self::Error>;
++
++    fn serialize_newtype_struct<T>(
++        self,
++        name: &'static str,
++        value: &T,
++    ) -> Result<Self::Ok, Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn serialize_newtype_variant<T>(
++        self,
++        name: &'static str,
++        variant_index: u32,
++        variant: &'static str,
++        value: &T,
++    ) -> Result<Self::Ok, Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn serialize_seq(self, len: Option<usize>) -> Result<Self::SerializeSeq, Self::Error>;
++
++    fn serialize_tuple(self, len: usize) -> Result<Self::SerializeTuple, Self::Error>;
++
++    fn serialize_tuple_struct(
++        self,
++        name: &'static str,
++        len: usize,
++    ) -> Result<Self::SerializeTupleStruct, Self::Error>;
++
++    fn serialize_tuple_variant(
++        self,
++        name: &'static str,
++        variant_index: u32,
++        variant: &'static str,
++        len: usize,
++    ) -> Result<Self::SerializeTupleVariant, Self::Error>;
++
++    fn serialize_map(self, len: Option<usize>) -> Result<Self::SerializeMap, Self::Error>;
++
++    fn serialize_struct(
++        self,
++        name: &'static str,
++        len: usize,
++    ) -> Result<Self::SerializeStruct, Self::Error>;
++
++    fn serialize_struct_variant(
++        self,
++        name: &'static str,
++        variant_index: u32,
++        variant: &'static str,
++        len: usize,
++    ) -> Result<Self::SerializeStructVariant, Self::Error>;
++
++    fn collect_seq<I>(self, iter: I) -> Result<Self::Ok, Self::Error>
++    where
++        I: IntoIterator,
++        <I as IntoIterator>::Item: Serialize;
++
++    fn collect_map<K, V, I>(self, iter: I) -> Result<Self::Ok, Self::Error>
++    where
++        K: Serialize,
++        V: Serialize,
++        I: IntoIterator<Item = (K, V)>;
++
++    fn collect_str<T>(self, value: &T) -> Result<Self::Ok, Self::Error>
++    where
++        T: ?Sized + Display;
++
++    fn is_human_readable(&self) -> bool;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeSeq {
++    type ExternalTraitSpecificationFor: serde::ser::SerializeSeq;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn end(self) -> Result<Self::Ok, Self::Error>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeTuple {
++    type ExternalTraitSpecificationFor: serde::ser::SerializeTuple;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    fn serialize_element<T>(&mut self, value: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn end(self) -> Result<Self::Ok, Self::Error>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeTupleStruct {
++    type ExternalTraitSpecificationFor: serde::ser::SerializeTupleStruct;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn end(self) -> Result<Self::Ok, Self::Error>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeTupleVariant {
++    type ExternalTraitSpecificationFor: serde::ser::SerializeTupleVariant;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    fn serialize_field<T>(&mut self, value: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn end(self) -> Result<Self::Ok, Self::Error>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeMap {
++    type ExternalTraitSpecificationFor: serde::ser::SerializeMap;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    fn serialize_key<T>(&mut self, key: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn serialize_value<T>(&mut self, value: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn serialize_entry<K, V>(&mut self, key: &K, value: &V) -> Result<(), Self::Error>
++    where
++        K: ?Sized + Serialize,
++        V: ?Sized + Serialize;
++
++    fn end(self) -> Result<Self::Ok, Self::Error>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeStruct {
++    type ExternalTraitSpecificationFor: serde::ser::SerializeStruct;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn skip_field(&mut self, key: &'static str) -> Result<(), Self::Error>;
++
++    fn end(self) -> Result<Self::Ok, Self::Error>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSerializeStructVariant {
++    type ExternalTraitSpecificationFor: serde::ser::SerializeStructVariant;
++
++    type Ok;
++
++    type Error: serde::ser::Error;
++
++    fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<(), Self::Error>
++    where
++        T: ?Sized + Serialize;
++
++    fn skip_field(&mut self, key: &'static str) -> Result<(), Self::Error>;
++
++    fn end(self) -> Result<Self::Ok, Self::Error>;
++}
+
+ #[verifier::external_type_specification]
+ pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
+diff --git a/source/rust_verify_test/tests/serde_serialization.rs b/source/rust_verify_test/tests/serde_serialization.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/serde_serialization.rs
+@@ -0,0 +1,221 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_serialize_forbids_impl_postconditions_on_recursive_exec_interface
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct Value;
++
++        impl serde::Serialize for Value {
++            fn serialize<S: serde::Serializer>(&self, serializer: S) -> (result: Result<S::Ok, S::Error>)
++                ensures result is Ok,
++            {
++                serializer.serialize_unit()
++            }
++        }
++    } => Err(err) => assert_vir_error_msg(err,
++        "trait method implementation cannot declare `ensures` clauses because the trait declaration is marked `impls_cannot_extend_spec`")
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_serializer_forwards_scalar_and_named_arguments
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::Serializer;
++
++        fn boolean<S: Serializer>(s: S, value: bool) -> Result<S::Ok, S::Error> {
++            s.serialize_bool(value)
++        }
++
++        fn signed<S: Serializer>(s: S, value: i128) -> Result<S::Ok, S::Error> {
++            s.serialize_i128(value)
++        }
++
++        fn unsigned<S: Serializer>(s: S, value: u128) -> Result<S::Ok, S::Error> {
++            s.serialize_u128(value)
++        }
++
++        fn float<S: Serializer>(s: S, value: f64) -> Result<S::Ok, S::Error> {
++            s.serialize_f64(value)
++        }
++
++        fn character<S: Serializer>(s: S, value: char) -> Result<S::Ok, S::Error> {
++            s.serialize_char(value)
++        }
++
++        fn text<S: Serializer>(s: S, value: &str) -> Result<S::Ok, S::Error> {
++            s.serialize_str(value)
++        }
++
++        fn bytes<S: Serializer>(s: S, value: &[u8]) -> Result<S::Ok, S::Error> {
++            s.serialize_bytes(value)
++        }
++
++        fn some<S: Serializer, T: ?Sized + serde::Serialize>(s: S, value: &T)
++            -> Result<S::Ok, S::Error>
++        {
++            s.serialize_some(value)
++        }
++
++        fn unit<S: Serializer>(s: S, name: &'static str, index: u32, variant: &'static str)
++            -> Result<S::Ok, S::Error>
++        {
++            s.serialize_unit_variant(name, index, variant)
++        }
++
++        fn named<S: Serializer, T: ?Sized + serde::Serialize>(
++            s: S, name: &'static str, index: u32, variant: &'static str, value: &T,
++        ) -> Result<S::Ok, S::Error> {
++            s.serialize_newtype_variant(name, index, variant, value)
++        }
++
++        fn readable<S: Serializer>(s: &S) -> bool { s.is_human_readable() }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_serializer_keeps_all_seven_compound_types_and_errors
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::Serializer;
++        use serde::ser::{SerializeSeq, SerializeTuple, SerializeTupleStruct,
++            SerializeTupleVariant, SerializeMap, SerializeStruct, SerializeStructVariant};
++
++        fn seq<S: Serializer, T: ?Sized + serde::Serialize>(s: S, len: Option<usize>, value: &T)
++            -> Result<S::Ok, S::Error>
++        {
++            let mut state = s.serialize_seq(len)?;
++            state.serialize_element(value)?;
++            state.end()
++        }
++
++        fn tuple<S: Serializer, T: ?Sized + serde::Serialize>(s: S, len: usize, value: &T)
++            -> Result<S::Ok, S::Error>
++        {
++            let mut state = s.serialize_tuple(len)?;
++            state.serialize_element(value)?;
++            state.end()
++        }
++
++        fn tuple_struct<S: Serializer, T: ?Sized + serde::Serialize>(
++            s: S, name: &'static str, len: usize, value: &T,
++        ) -> Result<S::Ok, S::Error> {
++            let mut state = s.serialize_tuple_struct(name, len)?;
++            state.serialize_field(value)?;
++            state.end()
++        }
++
++        fn tuple_variant<S: Serializer, T: ?Sized + serde::Serialize>(
++            s: S, name: &'static str, index: u32, variant: &'static str, len: usize, value: &T,
++        ) -> Result<S::Ok, S::Error> {
++            let mut state = s.serialize_tuple_variant(name, index, variant, len)?;
++            state.serialize_field(value)?;
++            state.end()
++        }
++
++        fn map<S: Serializer, K: ?Sized + serde::Serialize, V: ?Sized + serde::Serialize>(
++            s: S, len: Option<usize>, key: &K, value: &V,
++        ) -> Result<S::Ok, S::Error> {
++            let mut state = s.serialize_map(len)?;
++            state.serialize_entry(key, value)?;
++            state.end()
++        }
++
++        fn record<S: Serializer, T: ?Sized + serde::Serialize>(
++            s: S, name: &'static str, len: usize, key: &'static str, value: &T,
++        ) -> Result<S::Ok, S::Error> {
++            let mut state = s.serialize_struct(name, len)?;
++            state.serialize_field(key, value)?;
++            state.skip_field(key)?;
++            state.end()
++        }
++
++        fn record_variant<S: Serializer, T: ?Sized + serde::Serialize>(
++            s: S, name: &'static str, index: u32, variant: &'static str,
++            len: usize, key: &'static str, value: &T,
++        ) -> Result<S::Ok, S::Error> {
++            let mut state = s.serialize_struct_variant(name, index, variant, len)?;
++            state.serialize_field(key, value)?;
++            state.skip_field(key)?;
++            state.end()
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_serialize_checks_local_implementation_and_real_derives
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct Value { flag: bool }
++
++        impl serde::Serialize for Value {
++            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++                serializer.serialize_bool(self.flag)
++            }
++        }
++
++        #[derive(serde::Serialize)]
++        struct Record { count: u64, flag: bool }
++
++        #[derive(serde::Serialize)]
++        enum Choice { Unit, Tuple(u64), Record { flag: bool } }
++
++        fn forward<S: serde::Serializer>(value: &Record, serializer: S) -> Result<S::Ok, S::Error> {
++            serde::Serialize::serialize(value, serializer)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_serializer_does_not_assume_success
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong<S: serde::Serializer>(serializer: S, value: bool) {
++            let result = serializer.serialize_bool(value);
++            assert(result is Ok); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_serializer_does_not_assume_failure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong<S: serde::Serializer>(serializer: S, value: bool) {
++            let result = serializer.serialize_bool(value);
++            assert(result is Err); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_serialize_rejects_wrong_local_implementation
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct Wrong;
++
++        impl serde::Serialize for Wrong {
++            fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
++                assert(false); // FAILS
++                serializer.serialize_unit()
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

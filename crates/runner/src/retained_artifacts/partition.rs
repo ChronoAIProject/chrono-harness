@@ -2,135 +2,15 @@
 //! mutable inventory. Multi-record exclusion is limited to actual graph edges.
 //! These synchronous mutations have no descendant owner. Their local leases
 //! end on return even while an unrelated fork holds incidental fd copies.
-#![allow(unexpected_cfgs)]
-#[cfg(verus_keep_ghost)]
-use super::super::contains;
-#[cfg(verus_keep_ghost)]
-use super::identifiers;
-#[cfg(not(verus_keep_ghost))]
-use crate::verified_identifiers as identifiers;
-#[cfg(not(verus_keep_ghost))]
-use crate::verified_release::contains;
-#[cfg(verus_keep_ghost)]
-use std::collections::BTreeSet;
-#[cfg(not(verus_keep_ghost))]
-use verus_builtin_macros::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-pub open spec fn output_edge_matches(row: (&str, &[String]), source: Seq<char>,
-    target: Seq<char>) -> bool
-{
-    row.0@ == source && exists|i: int| 0 <= i < row.1@.len()
-        && (#[trigger] row.1@[i])@ == target
-}
-
-pub open spec fn output_reference_trace<'a, T, F>(outputs: &'a [T], observe: F,
-    source: Seq<char>, target: Seq<char>, found: bool,
-    trace: Seq<(&'a str, &'a [String])>) -> bool
-    where F: Fn(&'a T) -> (&'a str, &'a [String]),
-{
-    trace.len() <= outputs.len()
-        && (forall|i: int| 0 <= i < trace.len() ==>
-            #[trigger] observe.ensures((&outputs@[i],), trace[i]))
-        && if found {
-            trace.len() > 0 && output_edge_matches(trace.last(), source, target)
-                && forall|i: int| 0 <= i < trace.len() - 1 ==>
-                    !output_edge_matches(#[trigger] trace[i], source, target)
-        } else {
-            trace.len() == outputs.len() && forall|i: int| 0 <= i < trace.len() ==>
-                !output_edge_matches(#[trigger] trace[i], source, target)
-        }
-}
-
-/// 借用实际记录；只有同一来源的完整引用匹配才提前返回，不分配投影库存。
-pub fn objects_reference<'a, T, F>(outputs: &'a [T], source: &str, target: &str,
-    observe: F) -> (found: bool)
-    where F: Fn(&'a T) -> (&'a str, &'a [String]),
-    requires forall|row: &'a T| observe.requires((row,)),
-    ensures exists|trace: Seq<(&'a str, &'a [String])>| output_reference_trace(
-        outputs, observe, source@, target@, found, trace),
-{
-    let ghost mut trace: Seq<(&'a str, &'a [String])> = Seq::empty();
-    let mut index = 0;
-    while index < outputs.len()
-        invariant index <= outputs.len(), trace.len() == index,
-            forall|row: &'a T| observe.requires((row,)),
-            forall|i: int| 0 <= i < trace.len() ==>
-                #[trigger] observe.ensures((&outputs@[i],), trace[i]),
-            forall|i: int| 0 <= i < trace.len() ==>
-                !output_edge_matches(#[trigger] trace[i], source@, target@),
-        decreases outputs.len() - index,
-    {
-        let row = observe(&outputs[index]);
-        proof { trace = trace.push(row); }
-        if identifiers::equal_text(row.0, source) && contains(row.1, target) {
-            assert(output_edge_matches(row, source@, target@));
-            assert(output_reference_trace(outputs, observe, source@, target@, true, trace));
-            return true;
-        }
-        index += 1;
-    }
-    assert(output_reference_trace(outputs, observe, source@, target@, false, trace));
-    false
-}
-
-/// 选择父报告退役时，已观察的其他原件继续受保护。
-pub fn preserve_frontier_original(id: &str, retiring: &str) -> (retain: bool)
-    ensures retain == (id@ != retiring@),
-{
-    !identifiers::equal_text(id, retiring)
-}
-
-/// Only pending metadata edges of an already empty retiring report can advance
-/// without physical path exclusion. Final address retirement still needs it.
-pub fn metadata_only_retirement(retiring: bool, disposing: bool, sealed: bool,
-    entries_empty: bool, pending_references: bool) -> (metadata_only: bool)
-    ensures metadata_only == (retiring && disposing && sealed && entries_empty
-        && pending_references),
-{
-    retiring && disposing && sealed && entries_empty && pending_references
-}
-
-/// 只有退役条件已满足且每个剩余引用均已载入时，才尝试共同持有物理路径。
-pub fn metadata_path_ready(metadata_only: bool, references: &[String],
-    loaded: &BTreeSet<String>) -> (ready: bool)
-    requires vstd::laws_cmp::obeys_cmp::<String>(),
-    ensures ready == (metadata_only && forall|i: int| 0 <= i < references@.len()
-        ==> loaded@.contains(#[trigger] references@[i])),
-{
-    if !metadata_only { return false; }
-    let mut index = 0;
-    while index < references.len()
-        invariant
-            vstd::laws_cmp::obeys_cmp::<String>(),
-            0 <= index <= references@.len(),
-            forall|i: int| 0 <= i < index
-                ==> loaded@.contains(#[trigger] references@[i]),
-        decreases references@.len() - index,
-    {
-        if !loaded.contains(&references[index]) { return false; }
-        index += 1;
-    }
-    true
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
 use super::*;
-#[cfg(not(verus_keep_ghost))]
 use crate::ownership::DirectoryLease;
-#[cfg(not(verus_keep_ghost))]
 use crate::verified_release as verified;
 
 // A sweep observes independently bounded rounds. These counts describe actual
 // observations, not a deduplicated inventory or a new source of deletion rights.
-#[cfg(not(verus_keep_ghost))]
 struct SweepReport {
     value: Value,
 }
-#[cfg(not(verus_keep_ghost))]
 impl SweepReport {
     fn new(policy: &Policy) -> Self {
         Self {
@@ -238,7 +118,6 @@ impl SweepReport {
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Object {
@@ -259,7 +138,6 @@ pub(super) struct Object {
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Role {
     observation: Option<ObservationOrder>,
     schema: String,
@@ -274,7 +152,6 @@ struct Role {
 /// One actual request, qualified by its enrolled producer output rather than a clock.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 pub struct ObservationToken {
     pub role: String,
     pub epoch: String,
@@ -282,7 +159,6 @@ pub struct ObservationToken {
     pub attempt: u64,
     pub original: OriginalIdentity,
 }
-#[cfg(not(verus_keep_ghost))]
 impl ObservationToken {
     pub fn binding(&self) -> verified::ObservationBinding<'_> {
         verified::ObservationBinding {
@@ -298,7 +174,6 @@ impl ObservationToken {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct ObservationOrder {
     epoch: String,
     issued: u64,
@@ -307,12 +182,10 @@ struct ObservationOrder {
 }
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-#[cfg(not(verus_keep_ghost))]
 struct Address {
     path: String,
     output: Option<String>,
 }
-#[cfg(not(verus_keep_ghost))]
 pub(super) struct Gate {
     leases: Vec<DirectoryLease>,
     objects: RefCell<BTreeMap<String, Object>>,
@@ -325,7 +198,6 @@ pub(super) struct Gate {
     retained_dependencies: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
-#[cfg(not(verus_keep_ghost))]
 impl Gate {
     pub(super) fn excludes_path(&self, path: &str) -> bool {
         self.exclusive_paths.contains(path)
@@ -359,7 +231,6 @@ impl Gate {
         Ok(())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 impl Inventory {
     /// Keep the consumer excluded, visiting only one member at a time. Install
     /// every requested member before releasing obsolete ones; failures retain
@@ -1827,7 +1698,8 @@ impl Inventory {
                         // 从叶进入时，反向路径上的原件已先于父报告被读到。
                         // 将它们与后续读到的原件一起保留，只退役选中的报告。
                         for previous in observed.keys() {
-                            if preserve_frontier_original(previous.as_str(), id.as_str()) {
+                            if verified::preserve_frontier_original(previous.as_str(), id.as_str())
+                            {
                                 retained_dependencies.insert(previous.clone());
                             }
                         }
@@ -1870,6 +1742,31 @@ impl Inventory {
                 observed.insert(id, record);
                 continue;
             }
+            // An unfinished live producer already protects its direct reports.
+            // Discover only that frontier, as for a durable current root; walking
+            // every child's independent inputs would invent one global related
+            // component and can exceed the bound before observing this owner.
+            if discover_under_lease && !finalized(&record) {
+                if let Some(output) = &record.output {
+                    if matches!(output.phase.as_str(), "publishing" | "sealing")
+                        && !output.lease_id.is_empty()
+                        && Lease::acquire(
+                            &self.directory.join(&output.lease),
+                            Some(&output.lease_id),
+                            false,
+                            true,
+                            None,
+                        )?
+                        .is_none()
+                    {
+                        retained_dependencies.insert(id.clone());
+                        selected.extend(output.references.iter().cloned());
+                        retained_dependencies.extend(output.references.iter().cloned());
+                        observed.insert(id, record);
+                        continue;
+                    }
+                }
+            }
             if verified::defer_finalized_original(discover_under_lease, finalized(&record)) {
                 wanted_roles.extend(record.roles.iter().cloned());
                 observed.insert(id.clone(), record);
@@ -1895,7 +1792,7 @@ impl Inventory {
                         retained_dependencies.contains(&r.id),
                         retiring_report.is_some(),
                     ) && !r.output.as_ref().is_some_and(|output| {
-                        metadata_only_retirement(
+                        verified::metadata_only_retirement(
                             retiring_report.as_ref() == Some(&r.id),
                             output.phase == "disposing",
                             output.manifest.sealed,
@@ -1918,8 +1815,8 @@ impl Inventory {
             // now so their detachment and final retirement share one component.
             for record in observed.values().filter(|record| {
                 record.output.as_ref().is_some_and(|output| {
-                    metadata_path_ready(
-                        metadata_only_retirement(
+                    verified::metadata_path_ready(
+                        verified::metadata_only_retirement(
                             retiring_report.as_ref() == Some(&record.id),
                             output.phase == "disposing",
                             output.manifest.sealed,
@@ -2434,7 +2331,7 @@ impl Inventory {
         for record in objects.values_mut() {
             record.incoming.retain(|source| {
                 !before.contains_key(source)
-                    || objects_reference(&ledger.outputs, source, &record.id, |output| {
+                    || verified::objects_reference(&ledger.outputs, source, &record.id, |output| {
                         (output.id.as_str(), output.references.as_slice())
                     })
             });
@@ -2467,7 +2364,6 @@ impl Inventory {
         Ok(())
     }
 }
-#[cfg(not(verus_keep_ghost))]
 fn finalized(record: &Object) -> bool {
     verified::original_finalized(
         record.retired_leases.len(),

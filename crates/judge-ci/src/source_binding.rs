@@ -1,22 +1,5 @@
 //! 固定请求的只读获取适配。仓内准入与失败状态由 Verus 所有者产生。
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-/// 固定生产者、端点和完整路径输入只转发一次，原观察结果直接交还调用方。
-pub fn observe_candidate_bytes<P, C, N, R, F>(producer: P, candidate: C, paths: N, observe: F)
-    -> (out: R)
-    where F: FnOnce(P, C, N) -> R,
-    requires forall|p: P, c: C, n: N| observe.requires((p, c, n)),
-    ensures observe.ensures((producer, candidate, paths), out),
-{
-    observe(producer, candidate, paths)
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
+use crate::verified_collection::observe_candidate_bytes;
 use chrono_harness::{
     Request,
     facts::Reader,
@@ -25,19 +8,15 @@ use chrono_harness::{
         sources::{CandidateSourceRead, SourceRegistry},
     },
 };
-#[cfg(not(verus_keep_ghost))]
 use chrono_judge_routes::{Operation, Receipt};
-#[cfg(not(verus_keep_ghost))]
 use std::collections::BTreeMap;
 
-#[cfg(not(verus_keep_ghost))]
 pub(super) struct CandidateIo<'a> {
     pub reader: &'a Reader,
     pub request: &'a Request,
     pub tree: &'a BTreeMap<String, (String, String)>,
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl CandidateSourceRead for CandidateIo<'_> {
     fn text(&self, path: &[u8]) -> Result<String, String> {
         std::str::from_utf8(path)
@@ -63,7 +42,6 @@ impl CandidateSourceRead for CandidateIo<'_> {
     }
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl CompilerReportRead for CandidateIo<'_> {
     fn decode(&self, bytes: &[u8]) -> Option<CompilerReport> {
         serde_json::from_slice(bytes).ok()
@@ -71,12 +49,10 @@ impl CompilerReportRead for CandidateIo<'_> {
 }
 
 /// 只借用现役计划及同一原回执的字段；选择、比较和准入都由 Verus 所有者执行。
-#[cfg(not(verus_keep_ghost))]
 pub(super) fn invocations(operations: &[Operation]) -> Vec<ProofInvocation<'_>> {
     chrono_judge_routes::proof_invocations(operations)
 }
 
-#[cfg(not(verus_keep_ghost))]
 pub(super) fn bind_output(
     state: &str,
     operation: &str,
@@ -85,19 +61,57 @@ pub(super) fn bind_output(
     registry: &Result<SourceRegistry, String>,
     io: &CandidateIo<'_>,
 ) -> Result<Option<ProofAdmission>, String> {
+    let nested = original
+        .and_then(|r| r.nested_proof.as_ref())
+        .map(|r| r.as_ref())
+        .transpose()?;
+    if let Some(child) = nested {
+        child.validate(&io.request.host_root, operation, &child.declaration)?;
+        for method in methods.iter().filter(|m| m.operation == operation) {
+            if method.argv != &child.declaration.argv
+                || method.output_contract != &child.declaration.output_contract
+            {
+                return Err("E_VERUS_NESTED: child declaration differs from selected proof".into());
+            }
+        }
+    }
+    let resolved = methods
+        .iter()
+        .map(|method| ProofInvocation {
+            operation: method.operation,
+            argv: nested
+                .filter(|_| method.operation == operation)
+                .map(|child| &child.resolved_argv)
+                .unwrap_or(method.argv),
+            output_contract: method.output_contract,
+            output_limit_bytes: method.output_limit_bytes,
+        })
+        .collect();
     chrono_harness::verified_verifier::bind_operation_output(
         state,
         operation,
-        methods,
-        original.map(|receipt| ProofProcess {
-            operation: &receipt.operation,
-            argv: &receipt.process.argv,
-            stdout: &receipt.process.stdout_bytes,
-            exit: receipt.process.exit_code,
-            failed: receipt.process.failure.is_some(),
-            dependency: &receipt.compiler_dependency,
-            artifact: &receipt.compiler_artifact,
-        }),
+        &resolved,
+        nested
+            .map(|child| ProofProcess {
+                operation: &child.operation,
+                argv: &child.process.argv,
+                stdout: &child.process.stdout_bytes,
+                exit: child.process.exit_code,
+                failed: child.process.failure.is_some(),
+                dependency: &child.compiler_dependency,
+                artifact: &child.compiler_artifact,
+            })
+            .or_else(|| {
+                original.map(|receipt| ProofProcess {
+                    operation: &receipt.operation,
+                    argv: &receipt.process.argv,
+                    stdout: &receipt.process.stdout_bytes,
+                    exit: receipt.process.exit_code,
+                    failed: receipt.process.failure.is_some(),
+                    dependency: &receipt.compiler_dependency,
+                    artifact: &receipt.compiler_artifact,
+                })
+            }),
         registry,
         io,
         |message, path| format!("{message}{path}"),

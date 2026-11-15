@@ -1,42 +1,16 @@
 //! Immutable Git facts. Admissibility belongs to the consuming judge.
-#[cfg(not(verus_keep_ghost))]
-use verus_builtin_macros::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-/// 只按实际端点资格选择一条读取路径，完整输入和原结果保持对应。
-pub fn select_fixed_source_read<S, R, F, B>(reusable: bool, inputs: S, fallback: F, batch: B)
-    -> (out: R)
-    where F: FnOnce(S) -> R, B: FnOnce(S) -> R,
-    requires reusable ==> batch.requires((inputs,)),
-        !reusable ==> fallback.requires((inputs,)),
-    ensures if reusable { batch.ensures((inputs,), out) }
-        else { fallback.ensures((inputs,), out) },
-{
-    if reusable { batch(inputs) } else { fallback(inputs) }
-}
-}
-
-#[cfg(not(verus_keep_ghost))]
 pub use crate::facts_binding::{
     OpenFailure, Reader, RegistryBlob, acquire_immutable_input, acquire_registry_blobs,
-    declaration as git_declaration,
+    declaration as git_declaration, source_continuity,
 };
-#[cfg(not(verus_keep_ghost))]
 pub use crate::facts_configs::Identity as ConfigIdentity;
-#[cfg(not(verus_keep_ghost))]
 pub use crate::verified_identifiers::full_oid;
-#[cfg(not(verus_keep_ghost))]
-pub use crate::verified_status::{Tree, TreeEntry as Entry, TreePath};
-#[cfg(not(verus_keep_ghost))]
+pub use crate::verified_status::{Tree, TreeEntry as Entry, TreePath, select_fixed_source_read};
 use crate::{
     json, no_symlink_parents, relative_path,
     wire::{Checkout, Delta, IndexFlag},
 };
-#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
-#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
@@ -44,10 +18,8 @@ use std::{
     process::Command,
 };
 
-#[cfg(not(verus_keep_ghost))]
 pub use crate::checkout::{changes as checkout_changes, tree as parse_tree};
 /// Inventory uses literal, case-sensitive registered directory prefixes.
-#[cfg(not(verus_keep_ghost))]
 pub const LITERAL_PATHSPEC_CONTROLS: [&str; 4] = [
     "GIT_LITERAL_PATHSPECS",
     "GIT_GLOB_PATHSPECS",
@@ -56,7 +28,6 @@ pub const LITERAL_PATHSPEC_CONTROLS: [&str; 4] = [
 ];
 /// Do not normalize a declaration into a broader exclusion. Callers retain
 /// schema validation and classify any paths that the inventory returns.
-#[cfg(not(verus_keep_ghost))]
 pub fn artifact_exclusions(artifacts: &[&str]) -> Vec<String> {
     crate::verified_paths::literal_artifact_directories(artifacts)
         .into_iter()
@@ -65,17 +36,14 @@ pub fn artifact_exclusions(artifacts: &[&str]) -> Vec<String> {
 }
 /// Read explicit host declarations; ownership and schema admission stay with
 /// registration. This never discovers output directories or dependency edges.
-#[cfg(not(verus_keep_ghost))]
 pub fn artifact_directories(config: &Value) -> Result<Vec<&str>, String> {
     let rows = config["artifacts"].as_array().map(Vec::as_slice);
     crate::verified_paths::collect_artifact_declarations(rows, |artifact| artifact["path"].as_str())
         .map_err(|error| error.message().to_owned())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     git_inventory(root, args, false)
 }
-#[cfg(not(verus_keep_ghost))]
 pub(crate) fn git_inventory(
     root: &Path,
     args: &[&str],
@@ -106,40 +74,32 @@ pub(crate) fn git_inventory(
     }
     Ok(o.stdout)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn utf8(b: Vec<u8>) -> Result<String, String> {
     crate::verified_status::git_output_text(String::from_utf8(b).ok())
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn verify_oid(root: &Path, oid: &str) -> Result<String, String> {
     Reader::legacy().verify_oid(root, oid)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn blob(root: &Path, oid: &str, path: &str) -> Result<Vec<u8>, String> {
     Reader::legacy().blob(root, oid, path)
 }
 /// Read original commit headers, including parents hidden by a shallow boundary.
-#[cfg(not(verus_keep_ghost))]
 pub fn parents(root: &Path, oid: &str) -> Result<Vec<String>, String> {
     Reader::legacy().parents(root, oid)
 }
 /// Parse physical commit headers, without revision-walk shallow semantics.
-#[cfg(not(verus_keep_ghost))]
 pub fn commit_parents(bytes: &[u8]) -> Result<Vec<String>, String> {
     crate::verified_identifiers::parse_commit_parents(bytes, |record| {
         std::str::from_utf8(record).ok()
     })
     .map_err(crate::verified_identifiers::CommitParentError::into_message)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn tree(root: &Path, oid: &str) -> Result<Tree, String> {
     Reader::legacy().tree(root, oid)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn delta(a: &Tree, b: &Tree) -> Vec<Delta> {
     crate::verified_status::delta_for_trees(a, b)
 }
-#[cfg(not(verus_keep_ghost))]
 fn paths(raw: Vec<u8>) -> Result<Vec<String>, String> {
     let records = crate::verified_status::git_nul_records(&raw);
     let decoded = records
@@ -148,11 +108,9 @@ fn paths(raw: Vec<u8>) -> Result<Vec<String>, String> {
         .collect();
     crate::verified_status::parse_git_text_rows(decoded)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn checkout(root: &Path, candidate: &str) -> Result<Checkout, String> {
     Reader::legacy().checkout(root, candidate)
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn registry_paths(config: &Value, path: &str) -> Result<Vec<String>, String> {
     let paths = [
         config["registries"]["judges"].as_str(),
@@ -163,7 +121,6 @@ pub fn registry_paths(config: &Value, path: &str) -> Result<Vec<String>, String>
     crate::verified_status::collect_registry_paths(path, &paths)
         .map_err(|error| error.render(|invalid| format!("invalid relative path: {invalid:?}")))
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn registry_values(
     root: &Path,
     oid: &str,
@@ -172,23 +129,19 @@ pub fn registry_values(
     Reader::legacy().registry_values(root, oid, path)
 }
 /// Original bytes and parsed values from one registry read, without a global cache.
-#[cfg(not(verus_keep_ghost))]
 pub type RegistrySnapshot = crate::verified_status::RegistrySnapshot<Value>;
-#[cfg(not(verus_keep_ghost))]
 pub fn registry_snapshot(root: &Path, oid: &str, path: &str) -> Result<RegistrySnapshot, String> {
     Reader::legacy().registry_snapshot(root, oid, path)
 }
 /// Assemble one fixed registry snapshot through the caller's blob reader.
 /// The caller binds acquisition to its immutable endpoint and retains any
 /// process observations; this helper performs no disk or Git acquisition.
-#[cfg(not(verus_keep_ghost))]
 pub fn registry_snapshot_with(
     path: &str,
     read: impl FnMut(&str) -> Result<Vec<u8>, String>,
 ) -> Result<RegistrySnapshot, String> {
     registry_snapshot_with_target(path, None, read)
 }
-#[cfg(not(verus_keep_ghost))]
 fn registry_snapshot_with_target<F>(
     path: &str,
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
@@ -223,14 +176,12 @@ where
 }
 /// Resolve the entry and selector before acquiring their explicit registry list.
 /// The reader must return the requested paths in order with their original bytes.
-#[cfg(not(verus_keep_ghost))]
 pub fn registry_snapshot_with_batches(
     path: &str,
     read: impl FnMut(&[String]) -> Result<Vec<(String, Vec<u8>)>, String>,
 ) -> Result<RegistrySnapshot, String> {
     registry_snapshot_with_batches_target(path, None, read)
 }
-#[cfg(not(verus_keep_ghost))]
 fn registry_snapshot_with_batches_target(
     path: &str,
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
@@ -260,7 +211,6 @@ fn registry_snapshot_with_batches_target(
         result,
     )
 }
-#[cfg(not(verus_keep_ghost))]
 fn registry_snapshot_start(
     path: &str,
     target: Option<crate::facts_configs::RegistryTarget<'_>>,
@@ -284,7 +234,6 @@ fn registry_snapshot_start(
     );
     Ok((snapshot, paths))
 }
-#[cfg(not(verus_keep_ghost))]
 pub fn registry_digest(
     base: &BTreeMap<String, Value>,
     candidate: &BTreeMap<String, Value>,
@@ -295,7 +244,6 @@ pub fn registry_digest(
 /// Resolve the effective policy identity from a fixed registry map while
 /// retaining the caller's entry path.  Consumers use this after snapshot
 /// acquisition to bind views and provenance to the same selector decision.
-#[cfg(not(verus_keep_ghost))]
 pub fn registry_identity(
     values: &BTreeMap<String, Value>,
     path: &str,
@@ -303,7 +251,6 @@ pub fn registry_identity(
     crate::facts_configs::identity(values, path)
 }
 
-#[cfg(not(verus_keep_ghost))]
 impl Reader {
     pub fn verify_oid(&self, root: &Path, oid: &str) -> Result<String, String> {
         crate::verified_status::verify_oid(

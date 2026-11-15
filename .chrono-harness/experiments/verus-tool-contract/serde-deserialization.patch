@@ -1,0 +1,741 @@
+diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
+--- a/source/vstd/serde_specs.rs
++++ b/source/vstd/serde_specs.rs
+@@ -5,6 +5,8 @@
+ use serde::ser::{Serialize, Serializer, SerializeSeq, SerializeTuple, SerializeTupleStruct,
+     SerializeTupleVariant, SerializeMap, SerializeStruct, SerializeStructVariant};
+
++use serde::de::{Deserialize, DeserializeSeed, Deserializer, Visitor, SeqAccess, MapAccess, EnumAccess, VariantAccess};
++
+ verus! {
+
+ #[verifier::external_trait_specification]
+@@ -276,8 +278,424 @@
+     fn end(self) -> Result<Self::Ok, Self::Error>;
+ }
+
++#[verifier::external_trait_specification]
++pub trait ExDeserialize<'de>: Sized {
++    type ExternalTraitSpecificationFor: serde::de::Deserialize<'de>;
++
++    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
++    where
++        D: Deserializer<'de>;
++
++    fn deserialize_in_place<D>(deserializer: D, place: &mut Self) -> Result<(), D::Error>
++    where
++        D: Deserializer<'de>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExDeserializeSeed<'de>: Sized {
++    type ExternalTraitSpecificationFor: serde::de::DeserializeSeed<'de>;
++
++    type Value;
++
++    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
++    where
++        D: Deserializer<'de>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExDeserializer<'de>: Sized {
++    type ExternalTraitSpecificationFor: serde::de::Deserializer<'de>;
++
++    type Error: serde::de::Error;
++
++    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_i128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_u128<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_str<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_string<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_bytes<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_byte_buf<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_unit<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_unit_struct<V>(
++        self,
++        name: &'static str,
++        visitor: V,
++    ) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_newtype_struct<V>(
++        self,
++        name: &'static str,
++        visitor: V,
++    ) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_tuple<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_tuple_struct<V>(
++        self,
++        name: &'static str,
++        len: usize,
++        visitor: V,
++    ) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_map<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_struct<V>(
++        self,
++        name: &'static str,
++        fields: &'static [&'static str],
++        visitor: V,
++    ) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_enum<V>(
++        self,
++        name: &'static str,
++        variants: &'static [&'static str],
++        visitor: V,
++    ) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_identifier<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn is_human_readable(&self) -> bool;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExVisitor<'de>: Sized {
++    type ExternalTraitSpecificationFor: serde::de::Visitor<'de>;
++
++    type Value;
++
++    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result;
++
++    fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_i8<E>(self, v: i8) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_i16<E>(self, v: i16) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_i128<E>(self, v: i128) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_u8<E>(self, v: u8) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_u16<E>(self, v: u16) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_u128<E>(self, v: u128) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_f32<E>(self, v: f32) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_char<E>(self, v: char) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_borrowed_str<E>(self, v: &'de str) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_string<E>(self, v: String) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_borrowed_bytes<E>(self, v: &'de [u8]) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    fn visit_none<E>(self) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    #[verifier::impls_cannot_extend_spec]
++    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
++    where
++        D: Deserializer<'de>;
++
++    fn visit_unit<E>(self) -> Result<Self::Value, E>
++    where
++        E: serde::de::Error;
++
++    #[verifier::impls_cannot_extend_spec]
++    fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
++    where
++        D: Deserializer<'de>;
++
++    #[verifier::impls_cannot_extend_spec]
++    fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
++    where
++        A: SeqAccess<'de>;
++
++    #[verifier::impls_cannot_extend_spec]
++    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
++    where
++        A: MapAccess<'de>;
++
++    #[verifier::impls_cannot_extend_spec]
++    fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
++    where
++        A: EnumAccess<'de>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExSeqAccess<'de> {
++    type ExternalTraitSpecificationFor: serde::de::SeqAccess<'de>;
++
++    type Error: serde::de::Error;
++
++    fn next_element_seed<T>(&mut self, seed: T) -> Result<Option<T::Value>, Self::Error>
++    where
++        T: DeserializeSeed<'de>;
++
++    fn next_element<T>(&mut self) -> Result<Option<T>, Self::Error>
++    where
++        T: Deserialize<'de>;
++
++    fn size_hint(&self) -> Option<usize>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExMapAccess<'de> {
++    type ExternalTraitSpecificationFor: serde::de::MapAccess<'de>;
++
++    type Error: serde::de::Error;
++
++    fn next_key_seed<K>(&mut self, seed: K) -> Result<Option<K::Value>, Self::Error>
++    where
++        K: DeserializeSeed<'de>;
++
++    fn next_value_seed<V>(&mut self, seed: V) -> Result<V::Value, Self::Error>
++    where
++        V: DeserializeSeed<'de>;
++
++    fn next_entry_seed<K, V>(
++        &mut self,
++        kseed: K,
++        vseed: V,
++    ) -> Result<Option<(K::Value, V::Value)>, Self::Error>
++    where
++        K: DeserializeSeed<'de>,
++        V: DeserializeSeed<'de>;
++
++    fn next_key<K>(&mut self) -> Result<Option<K>, Self::Error>
++    where
++        K: Deserialize<'de>;
++
++    fn next_value<V>(&mut self) -> Result<V, Self::Error>
++    where
++        V: Deserialize<'de>;
++
++    fn next_entry<K, V>(&mut self) -> Result<Option<(K, V)>, Self::Error>
++    where
++        K: Deserialize<'de>,
++        V: Deserialize<'de>;
++
++    fn size_hint(&self) -> Option<usize>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExEnumAccess<'de>: Sized {
++    type ExternalTraitSpecificationFor: serde::de::EnumAccess<'de>;
++
++    type Error: serde::de::Error;
++
++    type Variant: VariantAccess<'de, Error = Self::Error>;
++
++    fn variant_seed<V>(self, seed: V) -> Result<(V::Value, Self::Variant), Self::Error>
++    where
++        V: DeserializeSeed<'de>;
++
++    fn variant<V>(self) -> Result<(V, Self::Variant), Self::Error>
++    where
++        V: Deserialize<'de>;
++}
++
++#[verifier::external_trait_specification]
++pub trait ExVariantAccess<'de>: Sized {
++    type ExternalTraitSpecificationFor: serde::de::VariantAccess<'de>;
++
++    type Error: serde::de::Error;
++
++    fn unit_variant(self) -> Result<(), Self::Error>;
++
++    fn newtype_variant_seed<T>(self, seed: T) -> Result<T::Value, Self::Error>
++    where
++        T: DeserializeSeed<'de>;
++
++    fn newtype_variant<T>(self) -> Result<T, Self::Error>
++    where
++        T: Deserialize<'de>;
++
++    fn tuple_variant<V>(self, len: usize, visitor: V) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++
++    fn struct_variant<V>(
++        self,
++        fields: &'static [&'static str],
++        visitor: V,
++    ) -> Result<V::Value, Self::Error>
++    where
++        V: Visitor<'de>;
++}
++
+ #[verifier::external_type_specification]
+ pub struct ExUnexpected<'a>(serde::de::Unexpected<'a>);
++
++#[verifier::external_type_specification]
++pub struct ExIgnoredAny(serde::de::IgnoredAny);
++
++// Missing Option fields can succeed; neither result variant is promised here.
++pub assume_specification<'de, V, E>[serde::__private229::de::missing_field](
++    field: &'static str,
++) -> Result<V, E>
++where
++    V: Deserialize<'de>,
++    E: serde::de::Error,
++;
+
+ #[verifier::external_trait_specification]
+ pub trait ExSerializeError: Sized + core::error::Error {
+diff --git a/source/rust_verify_test/tests/serde_deserialization.rs b/source/rust_verify_test/tests/serde_deserialization.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/serde_deserialization.rs
+@@ -0,0 +1,299 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_missing_field_and_ignored_any_keep_original_parameters_and_results
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer, Error, IgnoredAny};
++
++        fn missing<'de, T: Deserialize<'de>, E: Error>(field: &'static str) -> Result<T, E> {
++            serde::__private229::de::missing_field(field)
++        }
++        fn ignored<'de, D: Deserializer<'de>>(d: D) -> Result<IgnoredAny, D::Error> {
++            IgnoredAny::deserialize(d)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_missing_field_does_not_assume_success
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Error};
++        fn wrong<'de, T: Deserialize<'de>, E: Error>(field: &'static str) {
++            let result: Result<T, E> = serde::__private229::de::missing_field(field);
++            assert(result is Ok); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_missing_field_does_not_assume_failure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Error};
++        fn wrong<'de, T: Deserialize<'de>, E: Error>(field: &'static str) {
++            let result: Result<T, E> = serde::__private229::de::missing_field(field);
++            assert(result is Err); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_visitor_forbids_impl_postconditions_on_recursive_exec_interface
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer, Visitor};
++        struct Wrong;
++        impl<'de> Visitor<'de> for Wrong {
++            type Value = bool;
++            fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
++                f.write_str("boolean")
++            }
++            fn visit_some<D: Deserializer<'de>>(self, d: D) -> (result: Result<bool, D::Error>)
++                ensures result is Ok,
++            {
++                bool::deserialize(d)
++            }
++        }
++    } => Err(err) => assert_vir_error_msg(err,
++        "trait method implementation cannot declare `ensures` clauses because the trait declaration is marked `impls_cannot_extend_spec`")
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_deserializer_forwards_scalars_text_and_named_arguments
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserializer, Visitor};
++
++        fn any<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_any(v) }
++        fn boolean<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_bool(v) }
++        fn signed<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_i128(v) }
++        fn unsigned<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_u128(v) }
++        fn float<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_f64(v) }
++        fn text<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_str(v) }
++        fn owned_text<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_string(v) }
++        fn bytes<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_bytes(v) }
++        fn owned_bytes<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_byte_buf(v) }
++        fn optional<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_option(v) }
++        fn unit<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_unit(v) }
++        fn unit_struct<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, name: &'static str, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_unit_struct(name, v) }
++        fn newtype<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, name: &'static str, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_newtype_struct(name, v) }
++        fn sequence<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_seq(v) }
++        fn tuple<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, len: usize, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_tuple(len, v) }
++        fn tuple_struct<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, name: &'static str, len: usize, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_tuple_struct(name, len, v) }
++        fn map<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_map(v) }
++        fn record<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, name: &'static str, fields: &'static [&'static str], v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_struct(name, fields, v) }
++        fn choice<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, name: &'static str, variants: &'static [&'static str], v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_enum(name, variants, v) }
++        fn identifier<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_identifier(v) }
++        fn ignored<'de, D: Deserializer<'de>, V: Visitor<'de>>(d: D, v: V)
++            -> Result<V::Value, D::Error> { d.deserialize_ignored_any(v) }
++        fn readable<'de, D: Deserializer<'de>>(d: &D) -> bool { d.is_human_readable() }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_access_keeps_seed_values_and_original_error_types
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, DeserializeSeed, Deserializer, Visitor,
++            SeqAccess, MapAccess, EnumAccess, VariantAccess};
++
++        fn seed<'de, S: DeserializeSeed<'de>, D: Deserializer<'de>>(s: S, d: D)
++            -> Result<S::Value, D::Error> { s.deserialize(d) }
++        fn element_seed<'de, A: SeqAccess<'de>, T: DeserializeSeed<'de>>(a: &mut A, s: T)
++            -> Result<Option<T::Value>, A::Error> { a.next_element_seed(s) }
++        fn element<'de, A: SeqAccess<'de>, T: Deserialize<'de>>(a: &mut A)
++            -> Result<Option<T>, A::Error> { a.next_element() }
++        fn seq_hint<'de, A: SeqAccess<'de>>(a: &A) -> Option<usize> { a.size_hint() }
++        fn key_seed<'de, A: MapAccess<'de>, K: DeserializeSeed<'de>>(a: &mut A, k: K)
++            -> Result<Option<K::Value>, A::Error> { a.next_key_seed(k) }
++        fn value_seed<'de, A: MapAccess<'de>, V: DeserializeSeed<'de>>(a: &mut A, v: V)
++            -> Result<V::Value, A::Error> { a.next_value_seed(v) }
++        fn entry_seed<'de, A: MapAccess<'de>, K: DeserializeSeed<'de>, V: DeserializeSeed<'de>>(a: &mut A, k: K, v: V)
++            -> Result<Option<(K::Value, V::Value)>, A::Error> { a.next_entry_seed(k, v) }
++        fn key<'de, A: MapAccess<'de>, K: Deserialize<'de>>(a: &mut A)
++            -> Result<Option<K>, A::Error> { a.next_key() }
++        fn value<'de, A: MapAccess<'de>, V: Deserialize<'de>>(a: &mut A)
++            -> Result<V, A::Error> { a.next_value() }
++        fn entry<'de, A: MapAccess<'de>, K: Deserialize<'de>, V: Deserialize<'de>>(a: &mut A)
++            -> Result<Option<(K, V)>, A::Error> { a.next_entry() }
++        fn map_hint<'de, A: MapAccess<'de>>(a: &A) -> Option<usize> { a.size_hint() }
++        fn variant_seed<'de, A: EnumAccess<'de>, V: DeserializeSeed<'de>>(a: A, v: V)
++            -> Result<(V::Value, A::Variant), A::Error> { a.variant_seed(v) }
++        fn variant<'de, A: EnumAccess<'de>, V: Deserialize<'de>>(a: A)
++            -> Result<(V, A::Variant), A::Error> { a.variant() }
++        fn unit<'de, A: VariantAccess<'de>>(a: A) -> Result<(), A::Error> { a.unit_variant() }
++        fn newtype_seed<'de, A: VariantAccess<'de>, T: DeserializeSeed<'de>>(a: A, s: T)
++            -> Result<T::Value, A::Error> { a.newtype_variant_seed(s) }
++        fn newtype<'de, A: VariantAccess<'de>, T: Deserialize<'de>>(a: A)
++            -> Result<T, A::Error> { a.newtype_variant() }
++        fn tuple<'de, A: VariantAccess<'de>, V: Visitor<'de>>(a: A, len: usize, v: V)
++            -> Result<V::Value, A::Error> { a.tuple_variant(len, v) }
++        fn record<'de, A: VariantAccess<'de>, V: Visitor<'de>>(a: A, fields: &'static [&'static str], v: V)
++            -> Result<V::Value, A::Error> { a.struct_variant(fields, v) }
++        fn in_place<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D, place: &mut T)
++            -> Result<(), D::Error> { T::deserialize_in_place(d, place) }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_visitor_forwards_borrowed_owned_and_compound_arguments
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Error, Deserializer, Visitor, SeqAccess, MapAccess, EnumAccess};
++
++        fn boolean<'de, V: Visitor<'de>, E: Error>(v: V, b: bool) -> Result<V::Value, E> { v.visit_bool(b) }
++        fn signed<'de, V: Visitor<'de>, E: Error>(v: V, n: i128) -> Result<V::Value, E> { v.visit_i128(n) }
++        fn unsigned<'de, V: Visitor<'de>, E: Error>(v: V, n: u128) -> Result<V::Value, E> { v.visit_u128(n) }
++        fn float<'de, V: Visitor<'de>, E: Error>(v: V, n: f64) -> Result<V::Value, E> { v.visit_f64(n) }
++        fn character<'de, V: Visitor<'de>, E: Error>(v: V, c: char) -> Result<V::Value, E> { v.visit_char(c) }
++        fn text<'de, V: Visitor<'de>, E: Error>(v: V, s: &str) -> Result<V::Value, E> { v.visit_str(s) }
++        fn borrowed_text<'de, V: Visitor<'de>, E: Error>(v: V, s: &'de str) -> Result<V::Value, E> { v.visit_borrowed_str(s) }
++        fn owned_text<'de, V: Visitor<'de>, E: Error>(v: V, s: String) -> Result<V::Value, E> { v.visit_string(s) }
++        fn bytes<'de, V: Visitor<'de>, E: Error>(v: V, s: &[u8]) -> Result<V::Value, E> { v.visit_bytes(s) }
++        fn borrowed_bytes<'de, V: Visitor<'de>, E: Error>(v: V, s: &'de [u8]) -> Result<V::Value, E> { v.visit_borrowed_bytes(s) }
++        fn owned_bytes<'de, V: Visitor<'de>, E: Error>(v: V, s: Vec<u8>) -> Result<V::Value, E> { v.visit_byte_buf(s) }
++        fn none<'de, V: Visitor<'de>, E: Error>(v: V) -> Result<V::Value, E> { v.visit_none() }
++        fn unit<'de, V: Visitor<'de>, E: Error>(v: V) -> Result<V::Value, E> { v.visit_unit() }
++        fn some<'de, V: Visitor<'de>, D: Deserializer<'de>>(v: V, d: D) -> Result<V::Value, D::Error> { v.visit_some(d) }
++        fn newtype<'de, V: Visitor<'de>, D: Deserializer<'de>>(v: V, d: D) -> Result<V::Value, D::Error> { v.visit_newtype_struct(d) }
++        fn sequence<'de, V: Visitor<'de>, A: SeqAccess<'de>>(v: V, a: A) -> Result<V::Value, A::Error> { v.visit_seq(a) }
++        fn map<'de, V: Visitor<'de>, A: MapAccess<'de>>(v: V, a: A) -> Result<V::Value, A::Error> { v.visit_map(a) }
++        fn choice<'de, V: Visitor<'de>, A: EnumAccess<'de>>(v: V, a: A) -> Result<V::Value, A::Error> { v.visit_enum(a) }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_deserialize_checks_local_implementation_and_real_derives
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer, Visitor, Error};
++
++        struct Flag { value: bool }
++        struct FlagVisitor;
++        impl<'de> Visitor<'de> for FlagVisitor {
++            type Value = Flag;
++            fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
++                f.write_str("boolean")
++            }
++            fn visit_bool<E: Error>(self, value: bool) -> Result<Flag, E> {
++                Ok(Flag { value })
++            }
++        }
++        impl<'de> Deserialize<'de> for Flag {
++            fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
++                d.deserialize_bool(FlagVisitor)
++            }
++        }
++        #[derive(serde::Deserialize)]
++        struct Record { count: u64, flag: bool }
++        #[derive(serde::Deserialize)]
++        enum Choice { Unit, Tuple(u64), Record { flag: bool } }
++        fn forward<'de, D: Deserializer<'de>>(d: D) -> Result<Record, D::Error> {
++            Record::deserialize(d)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_deserialize_does_not_assume_success
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer};
++        fn wrong<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) {
++            let result = T::deserialize(d);
++            assert(result is Ok); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_deserialize_does_not_assume_failure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer};
++        fn wrong<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) {
++            let result = T::deserialize(d);
++            assert(result is Err); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_deserialize_rejects_wrong_local_implementation
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer};
++        struct Wrong;
++        impl<'de> Deserialize<'de> for Wrong {
++            fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
++                assert(false); // FAILS
++                match bool::deserialize(d) {
++                    Ok(_) => Ok(Wrong),
++                    Err(error) => Err(error),
++                }
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] serde_visitor_rejects_wrong_local_implementation
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Visitor, Error};
++        struct Wrong;
++        impl<'de> Visitor<'de> for Wrong {
++            type Value = bool;
++            fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
++                f.write_str("boolean")
++            }
++            fn visit_bool<E: Error>(self, value: bool) -> Result<bool, E> {
++                assert(false); // FAILS
++                Ok(value)
++            }
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

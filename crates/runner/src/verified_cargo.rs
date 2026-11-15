@@ -7,33 +7,33 @@ use vstd::prelude::*;
 
 verus! {
 
-#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(untagged))]
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
 pub enum Record { Proof(super::CompilerReport), Cargo(Cargo) }
 
-#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
-#[cfg_attr(not(verus_keep_ghost), serde(tag = "reason"))]
+#[derive(serde::Deserialize)]
+#[serde(tag = "reason")]
 pub enum Cargo {
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "compiler-artifact"))]
+    #[serde(rename = "compiler-artifact")]
     Artifact(Artifact),
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "compiler-message"))]
+    #[serde(rename = "compiler-message")]
     Message { message: Message },
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "build-script-executed"))]
+    #[serde(rename = "build-script-executed")]
     Script { package_id: String, linked_libs: Vec<String>, linked_paths: Vec<String>,
         cfgs: Vec<String>, env: Vec<(String, String)>, out_dir: String },
-    #[cfg_attr(not(verus_keep_ghost), serde(rename = "build-finished"))]
+    #[serde(rename = "build-finished")]
     Finished { success: bool },
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(serde::Deserialize))]
+#[derive(serde::Deserialize)]
 pub struct Message { pub level: String }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, serde::Deserialize, serde::Serialize))]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct Target {
     pub name: String, pub src_path: String, pub kind: Vec<String>, pub crate_types: Vec<String>,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, serde::Deserialize, serde::Serialize))]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct Artifact {
     pub package_id: String,
     pub manifest_path: String,
@@ -43,7 +43,7 @@ pub struct Artifact {
     pub fresh: bool,
 }
 
-#[cfg_attr(not(verus_keep_ghost), derive(Clone, serde::Deserialize, serde::Serialize))]
+#[derive(Clone, serde::Deserialize, serde::Serialize)]
 pub struct Identity { pub path: String, pub sha256: String, pub length: u64 }
 
 pub fn bounded_original(regular: bool, bytes: u64) -> (valid: bool)
@@ -291,6 +291,23 @@ pub open spec fn dependency_name(name: Seq<u8>, prefix: Seq<u8>) -> bool {
 pub fn retain_attempt(succeeded: bool, cache_rejected: bool) -> (retain: bool)
     ensures retain == (!succeeded || cache_rejected),
 { !succeeded || cache_rejected }
+
+/// 普通 Cargo 依赖生产流：0=尚无根、1=唯一根、2=成功终态。
+/// 事件为 note/非根产物/根产物/成功终态；其它事件均拒绝。
+pub fn dependency_step(phase: u8, event: u8) -> (next: Option<u8>)
+    ensures next == (
+        if phase > 1 { None }
+        else if event <= 1 { Some(phase) }
+        else if event == 2 && phase == 0 { Some(1u8) }
+        else if event == 3 && phase == 1 { Some(2u8) }
+        else { None }),
+{
+    if phase > 1 { None }
+    else if event <= 1 { Some(phase) }
+    else if event == 2 && phase == 0 { Some(1u8) }
+    else if event == 3 && phase == 1 { Some(2u8) }
+    else { None }
+}
 
 pub fn selected_dependency(name: &[u8], prefix: &[u8]) -> (selected: bool)
     ensures selected == dependency_name(name@, prefix@),

@@ -1830,13 +1830,15 @@ fn expand_edge(
             ==> old(d)@[#[trigger] old(q)@[i] as int] <= old(d)@[old(q)@[front as int] as int] + 1,
         processed(g@, old(d)@, old(q)@, front as int, slot as int),
     ensures
-        queue_state(g@, _root, d@, p@, q@), q.len() <= g.len(), front < q.len(),
-        (d@, p@, q@) == discovery(g@, old(q)@[front as int], slot as int,
+        queue_state(g@, _root, final(d)@, final(p)@, final(q)@),
+        final(q).len() <= g.len(), front < final(q).len(),
+        (final(d)@, final(p)@, final(q)@) == discovery(g@, old(q)@[front as int], slot as int,
             old(d)@, old(p)@, old(q)@),
-        q@[front as int] == old(q)@[front as int],
-        forall|i: int| 0 <= i < q.len()
-            ==> d@[#[trigger] q@[i] as int] <= d@[q@[front as int] as int] + 1,
-        processed(g@, d@, q@, front as int, slot as int + 1),
+        final(q)@[front as int] == old(q)@[front as int],
+        forall|i: int| 0 <= i < final(q).len()
+            ==> final(d)@[#[trigger] final(q)@[i] as int]
+                <= final(d)@[final(q)@[front as int] as int] + 1,
+        processed(g@, final(d)@, final(q)@, front as int, slot as int + 1),
 {
     let n = g.len();
     let node = q[front];
@@ -3072,10 +3074,10 @@ impl CauseSet {
     }
 
     pub fn insert(&mut self, name: &str) -> (added: bool)
-        ensures self.keys().to_set() == old(self).keys().to_set().insert(name.spec_bytes()),
+        ensures final(self).keys().to_set() == old(self).keys().to_set().insert(name.spec_bytes()),
             added == !old(self).keys().to_set().contains(name.spec_bytes()),
-            self.keys().len() == old(self).keys().len() + if added { 1int } else { 0int },
-            !added ==> self.view() == old(self).view(),
+            final(self).keys().len() == old(self).keys().len() + if added { 1int } else { 0int },
+            !added ==> final(self).view() == old(self).view(),
     {
         proof { use_type_invariant(&*self); reveal(cause_keys); reveal(ordered_causes); }
         let ghost before = self.names@;
@@ -3191,14 +3193,14 @@ pub open spec fn edge_causes(rows: Map<Edge, CauseSet>, edge: Edge) -> Set<Seq<u
 pub fn merge_traversed_causes(
     rows: &mut BTreeMap<Edge, CauseSet>, outgoing: &[&Edge], cause: &str,
 )
-    ensures rows@.dom() == old(rows)@.dom() + outgoing_members(outgoing@),
-        forall|edge: Edge| #[trigger] edge_causes(rows@, edge)
+    ensures final(rows)@.dom() == old(rows)@.dom() + outgoing_members(outgoing@),
+        forall|edge: Edge| #[trigger] edge_causes(final(rows)@, edge)
             == edge_causes(old(rows)@, edge) + if outgoing_members(outgoing@).contains(edge) {
                 Set::empty().insert(cause.spec_bytes())
             } else { Set::empty() },
         forall|edge: Edge| old(rows)@.contains_key(edge)
             && !outgoing_members(outgoing@).contains(edge)
-            ==> rows@[edge].view() == old(rows)@[edge].view(),
+            ==> (#[trigger] final(rows)@[edge].view()) == old(rows)@[edge].view(),
 {
     proof { edge_obeys_cmp(); }
     broadcast use vstd::std_specs::btree::axiom_maps_deref_key_to_value;
@@ -3518,9 +3520,10 @@ impl<'t, 'a> Iterator for SeedPropagations<'t, 'a> {
     type Item = SeedPropagation<'t, 'a>;
 
     fn next(&mut self) -> (out: Option<Self::Item>)
-        ensures self.seed_values() == old(self).seed_values(), self.graph() == old(self).graph(),
+        ensures final(self).seed_values() == old(self).seed_values(),
+            final(self).graph() == old(self).graph(),
             out.is_none() <==> old(self).cursor() == old(self).seed_values().len(),
-            self.cursor() == old(self).cursor() + if out.is_some() { 1int } else { 0int },
+            final(self).cursor() == old(self).cursor() + if out.is_some() { 1int } else { 0int },
             out matches Some(item) ==> seed_propagation_matches(
                 item, old(self).graph(), old(self).seed_values(), old(self).cursor() as int),
     {

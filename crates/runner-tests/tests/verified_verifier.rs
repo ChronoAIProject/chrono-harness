@@ -267,13 +267,17 @@ fn report(verification: Verification) -> (out: Option<CompilerReport>)
 }
 
 fn arguments() -> (out: Vec<String>)
-    ensures policy::verifier_arguments(out@),
+    ensures out.len() == 12, policy::verifier_arguments(out@), policy::source_only_invocation(out@),
         out[7]@ == "--emit=link=out,dep-info=out.d"@,
         out[8]@ == "root"@, out[10]@ == "out"@,
 {
     proof {
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info=");
         reveal_strlit("out"); reveal_strlit(".d"); reveal_strlit("root");
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("out"@)));
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("root"@)));
         reveal_strlit("--emit=link=out,dep-info=out.d");
         assert("--emit=link=out,dep-info=out.d"@ =~=
             "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
@@ -283,6 +287,395 @@ fn arguments() -> (out: Vec<String>)
         "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
         "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
         "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()]
+}
+
+// AT 的实际测试根必须保留 test harness；extern 搜索语法不提供来源资格。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn test_harness_and_extern_search_preserve_the_full_input_gate() {
+    proof {
+        reveal_strlit("--test"); reveal_strlit("--extern"); reveal_strlit("dep");
+        reveal_strlit("out"); reveal_strlit("root");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+        reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
+        reveal_strlit("all=deps"); reveal_strlit("all=");
+        vstd::utf8::is_ascii_chars_encode_utf8("dep"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("all=deps"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("all="@);
+        assert(vstd::utf8::encode_utf8("all=deps"@).subrange(0, 4)
+            =~= vstd::utf8::encode_utf8("all="@));
+        assert(vstd::utf8::encode_utf8("all=deps"@).skip(4) =~= seq![100u8,101,112,115]);
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        assert(policy::invocation_identifier(vstd::utf8::encode_utf8("dep"@)));
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("out"@)));
+        assert(policy::invocation_value(vstd::utf8::encode_utf8("root"@)));
+        assert("--emit=link=out,dep-info=out.d"@ =~=
+            "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
+    }
+    let args = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--test".to_string(), "--extern".to_string(), "dep".to_string(),
+        "-L".to_string(), "all=deps".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        invocation_token_literals();
+        assert(policy::invocation_kind("--test"@) == policy::InvocationKind::TestHarness);
+        assert(policy::extension_value_valid(args@, 7, 12));
+        assert(policy::extension_value_valid(args@, 8, 12));
+        assert(policy::extension_value_valid(args@, 10, 12));
+        assert(policy::fresh_extension(args@, 7));
+        assert(policy::fresh_extension(args@, 8));
+        assert(policy::fresh_extension(args@, 10));
+        reveal_with_fuel(policy::invocation_extensions, 5);
+        reveal_with_fuel(policy::interpreted_option_sequence, 5);
+        assert(policy::verifier_arguments(args@));
+    }
+    let parsed = policy::parse_verifier_arguments(&args);
+    expect_verifier_true(parsed.is_some());
+    let parsed = parsed.unwrap();
+    expect_verifier_true(parsed.source == 13 && parsed.output == 15 && parsed.options.len() == 3);
+    let unqualified = policy::require_registered_input_evidence(&args);
+    expect_verifier_true(unqualified.is_err());
+    let failed = policy::admit_output(&contract(), &report(verification()), &args, 7, false);
+    expect_verifier_true(failed.is_err());
+    let parent_zero = policy::admit_output(&contract(), &report(verification()), &args, 0, false);
+    expect_verifier_true(parent_zero.is_err());
+}
+
+// J 的独立预期先于实现登记：扩展值不能改变真实根／输出，语法识别不授予依赖资格。
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn cargo_binary_environment_keys_allow_hyphens_without_changing_import_names() {
+    let mut args = vec!["".to_string(), "".to_string(), "".to_string(),
+        "".to_string(), "".to_string(), "".to_string(), "".to_string(),
+        "--env-set".to_string(), "A-b=x".to_string()];
+    proof {
+        invocation_token_literals();
+        reveal_strlit("A-b=x");
+        vstd::utf8::is_ascii_chars_encode_utf8("A-b=x"@);
+        reveal_with_fuel(policy::sources::next_byte, 8);
+        assert(vstd::utf8::encode_utf8("A-b=x"@).take(3) =~= seq![65u8,45,98]);
+        assert(vstd::utf8::encode_utf8("A-b=x"@).skip(4) =~= seq![120u8]);
+    }
+    let environment = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(environment);
+    args[7] = "--import".to_string();
+    let import = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(!import);
+    args[7] = "--env-set".to_string();
+    args[8] = "-A=x".to_string();
+    proof {
+        reveal_strlit("-A=x");
+        vstd::utf8::is_ascii_chars_encode_utf8("-A=x"@);
+        assert(vstd::utf8::encode_utf8("-A=x"@).take(2) =~= seq![45u8,65]);
+    }
+    let flag_name = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(!flag_name);
+    args[8] = "A=".to_string();
+    proof {
+        reveal_strlit("A=");
+        vstd::utf8::is_ascii_chars_encode_utf8("A="@);
+        assert(vstd::utf8::encode_utf8("A="@).skip(2) =~= Seq::<u8>::empty());
+    }
+    let missing_value = policy::valid_extension_value(&args, 7, 9);
+    expect_verifier_true(!missing_value);
+}
+
+proof fn invocation_token_literals()
+    ensures
+        policy::invocation_kind("--edition=2024"@) == policy::InvocationKind::Edition,
+        policy::invocation_kind("--edition=2021"@) == policy::InvocationKind::Edition,
+        policy::invocation_kind("--test"@) == policy::InvocationKind::TestHarness,
+        policy::invocation_kind("--crate-name"@) == policy::InvocationKind::CrateName,
+        policy::invocation_kind("-Zunstable-options"@) == policy::InvocationKind::Unstable,
+        policy::invocation_kind("--env-set"@) == policy::InvocationKind::Environment,
+        policy::invocation_kind("-L"@) == policy::InvocationKind::Search,
+        policy::invocation_kind("--extern"@) == policy::InvocationKind::Extern,
+        policy::invocation_kind("--import"@) == policy::InvocationKind::Import,
+        policy::invocation_kind("--export"@) == policy::InvocationKind::Export,
+{
+    reveal_strlit("--test");
+    reveal_strlit("--edition=2024"); reveal_strlit("--edition=2021"); reveal_strlit("--crate-name");
+    reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
+    reveal_strlit("-L"); reveal_strlit("--extern");
+    reveal_strlit("--import"); reveal_strlit("--export");
+    assert("--test"@.len() == 6);
+    assert("--edition=2024"@.len() == 14);
+    assert("--edition=2021"@.len() == 14);
+    assert("--test"@ != "--edition=2024"@);
+    assert("--test"@ != "--edition=2021"@);
+    assert("--crate-name"@.len() != "--edition=2024"@.len());
+    assert("-Zunstable-options"@.len() != "--edition=2024"@.len());
+    assert("-Zunstable-options"@.len() != "--crate-name"@.len());
+    assert("--env-set"@.len() == 9);
+    assert("-L"@.len() == 2);
+    assert("--extern"@[2] != "--import"@[2]);
+    assert("--extern"@[4] != "--export"@[4]);
+    assert("--import"@[2] != "--export"@[2]);
+    reveal(policy::invocation_kind);
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn named_inputs_are_interpreted_without_granting_unqualified_proof() {
+    let args = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--edition=2024".to_string(), "--crate-name".to_string(), "consumer".to_string(),
+        "-Zunstable-options".to_string(), "--env-set".to_string(), "CARGO_PKG_VERSION=0.1.0".to_string(),
+        "-L".to_string(), "dependency=deps".to_string(),
+        "--extern".to_string(), "other=other.rlib".to_string(),
+        "--extern".to_string(), "producer=producer.rlib".to_string(),
+        "--import".to_string(), "producer=producer.vir".to_string(),
+        "--export".to_string(), "consumer.vir".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        invocation_token_literals();
+        reveal_with_fuel(policy::invocation_extensions, 16);
+        reveal_with_fuel(policy::interpreted_option_sequence, 16);
+        reveal_with_fuel(policy::sources::next_byte, 32);
+        reveal_strlit("--edition=2024"); reveal_strlit("--crate-name");
+        reveal_strlit("-Zunstable-options"); reveal_strlit("--env-set");
+        reveal_strlit("-L"); reveal_strlit("--extern"); reveal_strlit("--import"); reveal_strlit("--export");
+        reveal_strlit("consumer"); reveal_strlit("CARGO_PKG_VERSION=0.1.0");
+        reveal_strlit("dependency=deps"); reveal_strlit("other=other.rlib");
+        reveal_strlit("producer=producer.rlib"); reveal_strlit("producer=producer.vir");
+        reveal_strlit("consumer.vir"); reveal_strlit("root"); reveal_strlit("out");
+        reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+        reveal_strlit("dependency=");
+        vstd::utf8::is_ascii_chars_encode_utf8("consumer"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("CARGO_PKG_VERSION=0.1.0"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("dependency=deps"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("dependency="@);
+        vstd::utf8::is_ascii_chars_encode_utf8("other=other.rlib"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("producer=producer.rlib"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("producer=producer.vir"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("consumer.vir"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
+        assert("--emit=link=out,dep-info=out.d"@ =~=
+            "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
+        assert(policy::invocation_kind(args[10]@) == policy::InvocationKind::Unstable);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("CARGO_PKG_VERSION=0.1.0"@), 0, 61) == 17);
+        assert(vstd::utf8::encode_utf8("CARGO_PKG_VERSION=0.1.0"@).take(17)
+            =~= seq![67u8,65,82,71,79,95,80,75,71,95,86,69,82,83,73,79,78]);
+        assert(vstd::utf8::encode_utf8("CARGO_PKG_VERSION=0.1.0"@).skip(18)
+            =~= seq![48u8,46,49,46,48]);
+        assert(vstd::utf8::encode_utf8("dependency=deps"@).subrange(0, 11)
+            =~= vstd::utf8::encode_utf8("dependency="@));
+        assert(vstd::utf8::encode_utf8("dependency=deps"@).skip(11)
+            =~= seq![100u8, 101, 112, 115]);
+        assert(policy::extension_value_valid(args@, 7, 23));
+        assert(policy::extension_value_valid(args@, 8, 23));
+        assert(policy::extension_value_valid(args@, 10, 23));
+        assert(policy::extension_value_valid(args@, 11, 23));
+        assert(policy::extension_value_valid(args@, 13, 23));
+        assert(policy::extension_value_valid(args@, 15, 23));
+        assert(policy::extension_value_valid(args@, 17, 23));
+        assert(policy::extension_value_valid(args@, 19, 23));
+        assert(policy::extension_value_valid(args@, 21, 23));
+        assert(policy::fresh_extension(args@, 7));
+        assert(policy::fresh_extension(args@, 8));
+        assert(policy::fresh_extension(args@, 10));
+        assert(policy::fresh_extension(args@, 11));
+        assert(policy::fresh_extension(args@, 13));
+        assert(policy::fresh_extension(args@, 15));
+        assert(policy::fresh_extension(args@, 17));
+        assert(policy::fresh_extension(args@, 19));
+        assert(policy::fresh_extension(args@, 21));
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("producer=producer.rlib"@), 0, 61) == 8);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("producer=producer.vir"@), 0, 61) == 8);
+        assert(vstd::utf8::encode_utf8("producer=producer.rlib"@).take(8)
+            =~= vstd::utf8::encode_utf8("producer=producer.vir"@).take(8));
+        assert(policy::same_input_name(vstd::utf8::encode_utf8(args[18]@),
+            vstd::utf8::encode_utf8(args[20]@)));
+        assert(policy::import_has_extern(args@, 19, 23));
+        assert(policy::verifier_arguments(args@));
+    }
+    let parsed = policy::parse_verifier_arguments(&args);
+    expect_verifier_true(parsed.is_some());
+    let parsed = parsed.unwrap();
+    expect_verifier_true(parsed.source == 24 && parsed.output == 26 && parsed.emit == 23);
+    let source = identifiers::equal_text(args[parsed.source].as_str(), "root");
+    let output = identifiers::equal_text(args[parsed.output].as_str(), "out");
+    expect_verifier_true(source && output);
+    expect_verifier_true(parsed.options.len() == 9);
+    expect_verifier_true(matches!(parsed.options[0].kind, policy::InvocationKind::Edition));
+    expect_verifier_true(matches!(parsed.options[1].kind, policy::InvocationKind::CrateName));
+    expect_verifier_true(matches!(parsed.options[2].kind, policy::InvocationKind::Unstable));
+    expect_verifier_true(matches!(parsed.options[3].kind, policy::InvocationKind::Environment));
+    expect_verifier_true(matches!(parsed.options[4].kind, policy::InvocationKind::Search));
+    expect_verifier_true(matches!(parsed.options[5].kind, policy::InvocationKind::Extern));
+    expect_verifier_true(matches!(parsed.options[6].kind, policy::InvocationKind::Extern));
+    expect_verifier_true(matches!(parsed.options[7].kind, policy::InvocationKind::Import));
+    expect_verifier_true(matches!(parsed.options[8].kind, policy::InvocationKind::Export));
+    let export = identifiers::equal_text(args[parsed.options[8].value].as_str(), "consumer.vir");
+    let env = identifiers::equal_text(args[parsed.options[3].value].as_str(), "CARGO_PKG_VERSION=0.1.0");
+    expect_verifier_true(export && env);
+    let admitted = policy::admit_output(&contract(), &report(verification()), &args, 0, false);
+    expect_verifier_true(admitted.is_err());
+    let failed = policy::admit_output(&contract(), &report(verification()), &args, 1, false);
+    expect_verifier_true(failed.is_err());
+    let process_error = identifiers::equal_text(failed.unwrap_err().as_str(),
+        "E_VERUS_RESULT: process or verifier arguments rejected");
+    let qualification_error = identifiers::equal_text(admitted.unwrap_err().as_str(),
+        "E_VERUS_QUALIFICATION: compiler context and dependency/VIR producer evidence unavailable");
+    expect_verifier_true(process_error && qualification_error);
+    let mut conflicting = args;
+    conflicting[18] = "other=wrong.rlib".to_string();
+    proof {
+        reveal_strlit("other=wrong.rlib"); reveal_strlit("other=other.rlib");
+        vstd::utf8::is_ascii_chars_encode_utf8("other=wrong.rlib"@);
+        reveal_with_fuel(policy::sources::next_byte, 6);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("other=wrong.rlib"@), 0, 61) == 5);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("other=other.rlib"@), 0, 61) == 5);
+        assert(vstd::utf8::encode_utf8("other=wrong.rlib"@).take(5)
+            =~= vstd::utf8::encode_utf8("other=other.rlib"@).take(5));
+        assert(policy::conflicting_extension(conflicting@, 15, 17));
+        assert(!policy::fresh_extension(conflicting@, 17));
+        reveal_with_fuel(policy::invocation_extensions, 16);
+        assert(!policy::verifier_arguments(conflicting@));
+    }
+    let duplicate_name = policy::parse_verifier_arguments(&conflicting);
+    expect_verifier_true(duplicate_name.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn semantic_parser_rejects_unknown_conflicting_and_unpaired_inputs() {
+    proof {
+        reveal_strlit("--unknown"); reveal_strlit("--extern");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+        reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
+        reveal_strlit("out");
+        assert("--emit=link=out,dep-info=out.d"@ =~=
+            "--emit=link="@ + "out"@ + ",dep-info="@ + "out"@ + ".d"@);
+        assert("--unknown"@ != "--emit=link=out,dep-info=out.d"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("--extern"@);
+    }
+    let mut unknown = arguments(); unknown[7] = "--unknown".to_string();
+    let rejected = policy::parse_verifier_arguments(&unknown);
+    expect_verifier_true(rejected.is_none());
+    let mut flag_root = arguments(); flag_root[8] = "--extern".to_string();
+    let rejected_root = policy::parse_verifier_arguments(&flag_root);
+    expect_verifier_true(rejected_root.is_none());
+    // 重复单值选项即使取值相同也不能造成两个解释；import 必须点名 extern。
+    proof {
+        invocation_token_literals();
+        reveal_with_fuel(policy::invocation_extensions, 6);
+        reveal_with_fuel(policy::sources::next_byte, 12);
+        reveal_strlit("--crate-name"); reveal_strlit("--import"); reveal_strlit("--extern");
+        reveal_strlit("one"); reveal_strlit("two"); reveal_strlit("missing=producer.vir");
+        reveal_strlit("root"); reveal_strlit("out");
+        reveal_strlit("--emit=link=out,dep-info=out.d");
+        vstd::utf8::is_ascii_chars_encode_utf8("one"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("two"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("missing=producer.vir"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("root"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("out"@);
+    }
+    let prefix = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--crate-name".to_string(), "one".to_string(),
+        "--crate-name".to_string(), "two".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        reveal_with_fuel(policy::invocation_extensions, 6);
+        assert(policy::conflicting_extension(prefix@, 7, 9));
+        assert(!policy::fresh_extension(prefix@, 9));
+        assert(!policy::invocation_extensions(prefix@, 9, 11));
+        assert(!policy::invocation_extensions(prefix@, 7, 11));
+        assert(!policy::verifier_arguments(prefix@));
+    }
+    let duplicate = policy::parse_verifier_arguments(&prefix);
+    expect_verifier_true(duplicate.is_none());
+    let orphan = vec!["--crate-type=lib".to_string(), "--no-cheating".to_string(),
+        "--no-external-by-default".to_string(), "--num-threads".to_string(),
+        "2".to_string(), "--output-json".to_string(), "--compile".to_string(),
+        "--import".to_string(), "missing=producer.vir".to_string(),
+        "--emit=link=out,dep-info=out.d".to_string(), "root".to_string(),
+        "-o".to_string(), "out".to_string(), "-Zchecksum-hash-algorithm=sha256".to_string()];
+    proof {
+        reveal_strlit("--import"); reveal_strlit("--extern");
+        reveal_strlit("missing=producer.vir");
+        assert(forall|j: int| 7 <= j < 9 ==> orphan[j]@ != "--extern"@) by {
+            assert forall|j: int| 7 <= j < 9 implies orphan[j]@ != "--extern"@ by {
+                if j == 7 { assert(orphan[j]@ == "--import"@); }
+                else { assert(j == 8); assert(orphan[j]@ == "missing=producer.vir"@); }
+            }
+        }
+        assert(!policy::import_has_extern(orphan@, 7, 9));
+        assert(!policy::invocation_extensions(orphan@, 7, 9));
+        assert(!policy::verifier_arguments(orphan@));
+    }
+    let unpaired = policy::parse_verifier_arguments(&orphan);
+    expect_verifier_true(unpaired.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn named_argument_identity_and_payload_boundaries_are_independent() {
+    proof {
+        reveal_with_fuel(policy::sources::next_byte, 8);
+        reveal_strlit("a=x=y"); reveal_strlit("a=路径"); reveal_strlit("a=");
+        reveal_strlit("=x"); reveal_strlit("a=x"); reveal_strlit("ab=x");
+        reveal_strlit("a=\0x");
+        vstd::utf8::is_ascii_chars_encode_utf8("a=x=y"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a="@);
+        vstd::utf8::is_ascii_chars_encode_utf8("=x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a=x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("ab=x"@);
+        vstd::utf8::is_ascii_chars_encode_utf8("a=\0x"@);
+        assert('路' as u32 == 36335 && '径' as u32 == 24452);
+        assert(vstd::utf8::encode_scalar(97) == seq![97u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(61) == seq![61u8]) by (compute);
+        assert(vstd::utf8::encode_scalar(36335) == seq![232u8,183,175]) by (compute);
+        assert(vstd::utf8::encode_scalar(24452) == seq![229u8,190,132]) by (compute);
+        reveal_with_fuel(vstd::utf8::encode_utf8, 5);
+        assert(vstd::utf8::encode_utf8("a=路径"@) =~= seq![97u8,61,232,183,175,229,190,132]);
+        assert(vstd::utf8::encode_utf8("a=x=y"@) =~= seq![97u8,61,120,61,121]);
+        assert(vstd::utf8::encode_utf8("a="@) =~= seq![97u8,61]);
+        assert(vstd::utf8::encode_utf8("=x"@) =~= seq![61u8,120]);
+        assert(vstd::utf8::encode_utf8("a=x"@) =~= seq![97u8,61,120]);
+        assert(vstd::utf8::encode_utf8("ab=x"@) =~= seq![97u8,98,61,120]);
+        assert(vstd::utf8::encode_utf8("a=\0x"@) =~= seq![97u8,61,0,120]);
+        assert(policy::named_invocation_value(vstd::utf8::encode_utf8("a=x=y"@)));
+        assert(policy::named_invocation_value(vstd::utf8::encode_utf8("a=路径"@)));
+        assert(!policy::named_invocation_value(vstd::utf8::encode_utf8("a="@)));
+        assert(!policy::named_invocation_value(vstd::utf8::encode_utf8("=x"@)));
+        assert(!policy::named_invocation_value(vstd::utf8::encode_utf8("a=\0x"@)));
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("a=x"@), 0, 61) == 1);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("a=x=y"@), 0, 61) == 1);
+        assert(policy::sources::next_byte(vstd::utf8::encode_utf8("ab=x"@), 0, 61) == 2);
+        assert(vstd::utf8::encode_utf8("a=x"@).take(1) =~= seq![97u8]);
+        assert(vstd::utf8::encode_utf8("a=x=y"@).take(1) =~= seq![97u8]);
+        assert(vstd::utf8::encode_utf8("ab=x"@).take(2) =~= seq![97u8, 98]);
+        assert(policy::same_input_name(vstd::utf8::encode_utf8("a=x"@), vstd::utf8::encode_utf8("a=x=y"@)));
+        assert(!policy::same_input_name(vstd::utf8::encode_utf8("a=x"@), vstd::utf8::encode_utf8("ab=x"@)));
+    }
+    let equals_in_payload = policy::valid_named_invocation_value("a=x=y".as_bytes());
+    let unicode_payload = policy::valid_named_invocation_value("a=路径".as_bytes());
+    let empty_payload = policy::valid_named_invocation_value("a=".as_bytes());
+    let empty_name = policy::valid_named_invocation_value("=x".as_bytes());
+    let control_payload = policy::valid_named_invocation_value("a=\0x".as_bytes());
+    let same_name = policy::same_invocation_input_name("a=x".as_bytes(), "a=x=y".as_bytes());
+    let prefix_name = policy::same_invocation_input_name("a=x".as_bytes(), "ab=x".as_bytes());
+    expect_verifier_true(equals_in_payload && unicode_payload && same_name);
+    expect_verifier_true(!empty_payload && !empty_name && !control_payload && !prefix_name);
+}
+
+/// 任何报告、rlib、dep-info（包括失败 producer 遗留的产物）均不能补出未观察的资格。
+fn any_unqualified_explicit_input_rejects_even_a_success_report(
+    args: &Vec<String>, dependency: &Option<Result<Vec<u8>, String>>,
+    artifact: &Option<Result<policy::CompiledArtifact, String>>,
+)
+    requires policy::verifier_arguments(args@), !policy::source_only_invocation(args@),
+{
+    let rejected = policy::admit_observed_output(&contract(), &report(verification()),
+        args, 0, false, dependency, 1024, artifact);
+    expect_verifier_true(rejected.is_err());
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
@@ -369,6 +762,7 @@ fn extra_filtered_or_rebound_verifier_arguments_are_rejected() {
     proof {
         reveal_strlit("--compile"); reveal_strlit("--verify-function=one");
         reveal_strlit("out"); reveal_strlit("other");
+        reveal_strlit("-Zchecksum-hash-algorithm=sha256");
         reveal_strlit("--no-cheating"); reveal_strlit("--no-verify");
         reveal_strlit("--emit=link="); reveal_strlit(",dep-info="); reveal_strlit(".d");
         reveal_strlit("--emit=link=out,dep-info=out.d");
@@ -478,7 +872,7 @@ fn any_accepted_compiler_receipt_has_the_same_library(
     if accepted.is_ok() {
         assert(exit == 0 && !failed);
         assert(artifact.is_some() && artifact.unwrap().is_ok());
-        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[10]@));
+        assert(artifact.unwrap().unwrap().path@ == vstd::utf8::encode_utf8(args[policy::invocation_output(args@)]@));
         assert(artifact.unwrap().unwrap().length > 0);
         assert(policy::identifiers::digest_format(artifact.unwrap().unwrap().sha256@));
     }
@@ -709,6 +1103,10 @@ fn any_unified_proof_has_a_unique_method_and_complete_original_evidence<I>(
         assert(proof.report.verification.verified > 0);
         assert(proof.report.verification.is_verifying_entire_crate);
         assert(proof.sources.candidate.len() > 0);
+        assert(policy::invocation_matches(&proof.invocation, methods[index].argv@));
+        assert(proof.artifact.path@ == original.unwrap().artifact.unwrap().unwrap().path@);
+        assert(proof.artifact.sha256@ == original.unwrap().artifact.unwrap().unwrap().sha256@);
+        assert(proof.artifact.length == original.unwrap().artifact.unwrap().unwrap().length);
     }
 }
 
@@ -1100,6 +1498,7 @@ fn changing_one_root_preserves_other_roots_scope_but_source_changes_require_both
         reveal_strlit("file:"); reveal_strlit("file"); reveal_strlit("file:file");
         reveal_strlit("r"); reveal_strlit("R"); reveal_strlit("file:r"); reveal_strlit("file:R");
         reveal_strlit("proof"); reveal_strlit("other");
+        vstd::utf8::is_ascii_chars_encode_utf8("r"@);
         assert("file:file"@ =~= "file:"@ + "file"@);
         assert("file:r"@ =~= "file:"@ + "r"@);
         assert("file:R"@ =~= "file:"@ + "R"@);
@@ -1830,6 +2229,30 @@ fn first_file_error_and_later_roots_are_not_skipped() {
     let path = identifiers::equal_text(error.path, "source");
     expect_verifier_true(path);
 }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn nested_resolution_preserves_the_source_only_domain() {
+    let declared = arguments();
+    let resolved = arguments();
+    proof { reveal_with_fuel(policy::interpreted_option_sequence, 2); }
+    let admitted = policy::nested::validate_resolution(&declared, &resolved);
+    expect_verifier_true(admitted.is_ok());
+    let qualified = policy::require_registered_input_evidence(&resolved);
+    expect_verifier_true(qualified.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn nested_resolution_cannot_remove_a_strict_parameter() {
+    let declared = arguments();
+    let mut changed = arguments();
+    changed[2] = "--external-by-default".to_string();
+    proof {
+        reveal_strlit("--external-by-default"); reveal_strlit("--no-external-by-default");
+        assert("--external-by-default"@[2] != "--no-external-by-default"@[2]);
+    }
+    let rejected = policy::nested::validate_resolution(&declared, &changed);
+    expect_verifier_true(rejected.is_err());
+}
 }
 #[cfg(not(verus_keep_ghost))]
 struct BoundSources;
@@ -2128,10 +2551,15 @@ fn continuity_acquires_only_comparable_unknown_sources_in_two_complete_requests(
     let mut expected = vec![65, 0, 65];
     expected.extend(6..65);
     let mut calls = Vec::new();
-    c::acquire_sources(&base, &current, &paths, |base, paths| {
-        calls.push((base, paths.to_vec()));
-        Ok(())
-    })
+    chrono_harness::facts::source_continuity::acquire_sources(
+        &base,
+        &current,
+        &paths,
+        |base, paths| {
+            calls.push((base, paths.to_vec()));
+            Ok(())
+        },
+    )
     .unwrap();
     assert_eq!(
         calls,
@@ -2156,13 +2584,19 @@ fn continuity_acquires_only_comparable_unknown_sources_in_two_complete_requests(
         registered: true,
         classified: false,
     });
-    c::acquire_sources(&base, &current, &vec!["new/0.rs".into()], |_, _| {
-        panic!("a copy must not trigger source acquisition")
-    })
+    chrono_harness::facts::source_continuity::acquire_sources(
+        &base,
+        &current,
+        &vec!["new/0.rs".into()],
+        |_, _| panic!("a copy must not trigger source acquisition"),
+    )
     .unwrap();
-    c::acquire_sources(&base, &current, &Vec::new(), |_, _| {
-        panic!("an empty selection must not trigger source acquisition")
-    })
+    chrono_harness::facts::source_continuity::acquire_sources(
+        &base,
+        &current,
+        &Vec::new(),
+        |_, _| panic!("an empty selection must not trigger source acquisition"),
+    )
     .unwrap();
 }
 
@@ -2175,14 +2609,19 @@ fn continuity_batch_preserves_acquisition_errors_and_stops_after_failure() {
     let paths = vec!["new/0.rs".into()];
     for failed_base in [true, false] {
         let mut calls = Vec::new();
-        let error = c::acquire_sources(&base, &current, &paths, |base, paths| {
-            calls.push((base, paths.to_vec()));
-            if base == failed_base {
-                Err("original acquisition error".into())
-            } else {
-                Ok(())
-            }
-        })
+        let error = chrono_harness::facts::source_continuity::acquire_sources(
+            &base,
+            &current,
+            &paths,
+            |base, paths| {
+                calls.push((base, paths.to_vec()));
+                if base == failed_base {
+                    Err("original acquisition error".into())
+                } else {
+                    Ok(())
+                }
+            },
+        )
         .unwrap_err();
         assert_eq!(error, "original acquisition error");
         assert_eq!(calls.len(), if failed_base { 1 } else { 2 });

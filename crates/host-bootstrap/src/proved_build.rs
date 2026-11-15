@@ -14,6 +14,8 @@ use verifier::{
     sources::{self, SourceBinding},
 };
 
+pub mod dependencies;
+
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Library {
@@ -48,6 +50,7 @@ pub struct Config {
     pub output_contract: OutputContract,
     pub library: Library,
     pub binary: Binary,
+    pub dependencies: Option<dependencies::Config>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -191,7 +194,9 @@ fn bind_dependency(
         };
         let observed = identity(&absolute)?;
         for (index, expected) in required.iter().enumerate() {
-            if &absolute == expected {
+            if fs::canonicalize(&absolute).map_err(|e| e.to_string())?
+                == fs::canonicalize(expected).map_err(|e| e.to_string())?
+            {
                 seen[index] = true;
             }
         }
@@ -234,7 +239,27 @@ pub fn build(
     stdout: &mut (impl Write + Send),
     stderr: &mut (impl Write + Send),
 ) -> Result<(), BuildFailure> {
-    build_attempt(root, declaration, inherited, stdout, stderr, true)
+    build_attempt(root, declaration, inherited, stdout, stderr, true, None)
+}
+
+/// 依赖准备和严格消费共用原构建所有者的执行、原件及保留路径。
+pub fn dependencies(
+    root: &Path,
+    declaration: &str,
+    consumer: &str,
+    inherited: &Environment,
+    stdout: &mut (impl Write + Send),
+    stderr: &mut (impl Write + Send),
+) -> Result<(), BuildFailure> {
+    build_attempt(
+        root,
+        declaration,
+        inherited,
+        stdout,
+        stderr,
+        false,
+        Some(consumer),
+    )
 }
 
 fn build_attempt(
@@ -244,6 +269,7 @@ fn build_attempt(
     stdout: &mut (impl Write + Send),
     stderr: &mut (impl Write + Send),
     can_recover: bool,
+    dependency_consumer: Option<&str>,
 ) -> Result<(), BuildFailure> {
     let parent = profile::path(
         root,
@@ -255,21 +281,55 @@ fn build_attempt(
         .prefix("build-")
         .tempdir_in(parent)
         .map_err(|e| e.to_string())?;
-    let result = run_attempt(
-        root,
-        declaration,
-        inherited,
-        stdout,
-        stderr,
-        can_recover,
-        temporary.path(),
-    );
+    // 子进程原流属于同一目录生产者，启动前建立保护，完成后只封存一次。
+    let early_publication = if dependency_consumer.is_some() {
+        let publication = retention::begin_adopted(
+            root,
+            "check-original",
+            temporary.path(),
+            serde_json::json!({"owner":"runner dependency producer","status":"in-progress"}),
+        )?;
+        if let Some(publication) = &publication {
+            let relative = temporary
+                .path()
+                .strip_prefix(root)
+                .map_err(|e| e.to_string())?
+                .to_str()
+                .ok_or("non UTF-8 original directory")?;
+            publication.protect_consumer(&format!("runner-dependencies:{relative}"))?;
+        }
+        publication
+    } else {
+        None
+    };
+    let result = if let Some(consumer) = dependency_consumer {
+        dependencies::run(
+            root,
+            declaration,
+            consumer,
+            inherited,
+            stdout,
+            stderr,
+            temporary.path(),
+            early_publication.as_ref(),
+        )
+    } else {
+        run_attempt(
+            root,
+            declaration,
+            inherited,
+            stdout,
+            stderr,
+            can_recover,
+            temporary.path(),
+        )
+    };
     let rejected = temporary
         .path()
         .join("cache-rejected.json")
         .try_exists()
         .unwrap_or(true);
-    if cargo::retain_attempt(result.is_ok(), rejected) {
+    if dependency_consumer.is_some() || cargo::retain_attempt(result.is_ok(), rejected) {
         let directory = temporary.keep();
         let retained = (|| -> Result<(), String> {
             let relative = directory
@@ -277,20 +337,33 @@ fn build_attempt(
                 .map_err(|e| e.to_string())?
                 .to_str()
                 .ok_or("non UTF-8 original directory")?;
-            let consumer = format!("proved-build-repair:{relative}");
+            let consumer = format!(
+                "{}:{relative}",
+                if dependency_consumer.is_some() {
+                    "runner-dependencies"
+                } else {
+                    "proved-build-repair"
+                }
+            );
             let outcome = serde_json::json!({"owner":"registered build caller", "consumer":consumer,
-                "status":if result.is_ok() {"recovered"} else {"failed"},
+                "status":if result.is_ok() { if dependency_consumer.is_some() {"observed"} else {"recovered"} } else {"failed"},
                 "retention":"release after diagnosis/acceptance; rebuildable originals reclaimed within seven days after consumers end"});
-            let declaration = if let Some(publication) =
-                retention::begin_adopted(root, "check-original", &directory, outcome.clone())?
-            {
+            let publication = match early_publication {
+                Some(publication) => Some(publication),
+                None => {
+                    retention::begin_adopted(root, "check-original", &directory, outcome.clone())?
+                }
+            };
+            let declaration = if let Some(publication) = publication {
                 let original = publication.protect_consumer(&consumer)?;
                 let declaration = retention::Consumer {
                     schema: "chrono-retention-consumer/v1".into(),
                     consumer: consumer.clone(),
-                    purpose:
+                    purpose: if dependency_consumer.is_some() {
+                        "strict runner/adapter/generation dependencies and diagnosis; caller releases after last actual consumer or diagnosis ends"
+                    } else {
                         "registered build caller diagnosis and acceptance; release when consumed"
-                            .into(),
+                    }.into(),
                     originals: vec![original],
                 };
                 publication.complete(outcome)?;
@@ -355,9 +428,26 @@ fn run_attempt(
         return Err("E_VERUS_BUILD: ambiguous registered cache recovery".into());
     }
     let recovery = recovery.pop().ok_or("missing registered cache recovery")?;
+    let mut tools = BTreeMap::new();
+    for name in [
+        "cargo-verus",
+        "verus",
+        "rust_verify",
+        "z3",
+        "libvstd.rlib",
+        "vstd.vir",
+    ] {
+        let file = verus.join(name);
+        tools.insert(file.clone(), file_identity(&file)?);
+    }
+    tools.insert(executable.clone(), file_identity(&executable)?);
     let rustflags = vec![
         "-Zbinary-dep-depinfo".to_owned(),
         "-Zchecksum-hash-algorithm=sha256".to_owned(),
+        format!(
+            "--cfg=chrono_verus_toolchain=\"{}\"",
+            chrono_harness::wire::digest(&tools)?
+        ),
         "--extern".to_owned(),
         format!("vstd={}", verus.join("libvstd.rlib").display()),
         "-L".to_owned(),
@@ -398,6 +488,7 @@ fn run_attempt(
             "-Zchecksum-hash-algorithm=sha256".into(),
         ],
         output_contract: None,
+        nested_proof: None,
     };
     let mut environment = inherited.clone();
     environment.insert(
@@ -405,19 +496,6 @@ fn run_attempt(
         config.rust_toolchain.clone().into(),
     );
     environment.insert("RUSTC_BOOTSTRAP".into(), "1".into());
-    let mut tools = BTreeMap::new();
-    for name in [
-        "cargo-verus",
-        "verus",
-        "rust_verify",
-        "z3",
-        "libvstd.rlib",
-        "vstd.vir",
-    ] {
-        let file = verus.join(name);
-        tools.insert(file.clone(), file_identity(&file)?);
-    }
-    tools.insert(executable.clone(), file_identity(&executable)?);
     let required = config
         .library
         .sources
@@ -597,6 +675,7 @@ fn run_attempt(
                                 stdout,
                                 stderr,
                                 false,
+                                None,
                             );
                         }
                     };
