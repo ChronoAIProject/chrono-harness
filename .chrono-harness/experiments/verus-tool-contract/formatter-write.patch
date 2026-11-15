@@ -1,3 +1,20 @@
+diff --git a/source/vstd/std_specs/fmt.rs b/source/vstd/std_specs/fmt.rs
+index 510c6d5..cf32c6c 100644
+--- a/source/vstd/std_specs/fmt.rs
++++ b/source/vstd/std_specs/fmt.rs
+@@ -15,6 +15,12 @@ pub struct ExFormatter<'a>(Formatter<'a>);
+ #[verifier::external_body]
+ pub struct ExArguments<'a>(Arguments<'a>);
+
++// The external writer decides both the result and the formatter's final state.
++pub assume_specification<'a>[ Formatter::<'a>::write_str ](
++    formatter: &mut Formatter<'a>, text: &str,
++) -> Result<(), Error>
++;
++
+ // Rust has a specially handled private module core::fmt::rt,
+ // for which we can't directly declare specifications because it is private.
+ // To work around this, declare our own rt module,
 diff --git a/source/rust_verify_test/tests/formatter_write.rs b/source/rust_verify_test/tests/formatter_write.rs
 new file mode 100644
 index 0000000..70b5634
