@@ -150,22 +150,54 @@ pub enum CleanupStage {
     Disposed,
 }
 
+pub open spec fn cleanup_stage(cache: bool, status: Seq<char>, removal: Seq<char>) -> CleanupStage {
+    if status != "cleaned"@ { CleanupStage::Failed }
+    else if cache { CleanupStage::CachesReleased }
+    else if removal == "verified-absent"@ || removal == "already-absent"@ {
+        CleanupStage::Disposed
+    } else { CleanupStage::Retained }
+}
+
 pub fn cleanup_result(cache: bool, status: &str, removal: &str) -> (stage: CleanupStage)
-    ensures
-        status@ != "cleaned"@ ==> stage == CleanupStage::Failed,
-        status@ == "cleaned"@ && cache ==> stage == CleanupStage::CachesReleased,
-        status@ == "cleaned"@ && !cache ==>
-            (stage == CleanupStage::Disposed <==>
-                removal@ == "verified-absent"@ || removal@ == "already-absent"@),
-        status@ == "cleaned"@ && !cache
-            && removal@ != "verified-absent"@ && removal@ != "already-absent"@
-            ==> stage == CleanupStage::Retained,
+    ensures stage == cleanup_stage(cache, status@, removal@),
 {
     if !equal_text(status, "cleaned") { CleanupStage::Failed }
     else if cache { CleanupStage::CachesReleased }
     else if equal_text(removal, "verified-absent") || equal_text(removal, "already-absent") {
         CleanupStage::Disposed
     } else { CleanupStage::Retained }
+}
+
+pub struct CleanupOutcome {
+    pub cache: bool,
+    pub cleaned: bool,
+    pub stage: CleanupStage,
+}
+
+pub open spec fn cleanup_field(value: Option<&str>) -> Seq<char> {
+    match value { Some(text) => text@, None => ""@ }
+}
+
+/// 原 JSON 观察只投影字段；缓存资格、成功与终态优先级由同一证明根决定。
+pub fn observed_cleanup_result(cache: bool, enrollment_status: &str,
+    age_outcome: Option<&str>, status: Option<&str>, removal: Option<&str>)
+    -> (out: CleanupOutcome)
+    ensures out.cache == (cleanup_field(age_outcome) == "reusable-source-preserved"@
+            || (cache && cleanup_field(age_outcome)
+                != "expired-checkout-verified-absent-source-branches-retained"@)),
+        out.cleaned == (cleanup_field(status) == "cleaned"@),
+        out.stage == cleanup_stage(out.cache && enrollment_status@ != "terminal"@,
+            cleanup_field(status), cleanup_field(removal)),
+{
+    let age = match age_outcome { Some(value) => value, None => "" };
+    let cache_outcome = equal_text(age, "reusable-source-preserved")
+        || (cache && !equal_text(age, "expired-checkout-verified-absent-source-branches-retained"));
+    let status = match status { Some(value) => value, None => "" };
+    let removal = match removal { Some(value) => value, None => "" };
+    let cleaned = equal_text(status, "cleaned");
+    let stage = cleanup_result(cache_outcome && !equal_text(enrollment_status, "terminal"),
+        status, removal);
+    CleanupOutcome { cache: cache_outcome, cleaned, stage }
 }
 
 pub fn select_cleanup(status: &str, cache_pending: bool, maintenance: bool, artifacts_only: bool) -> (selected: bool)

@@ -32,7 +32,7 @@ export CHRONO_LAUNCHER_COMPILER_EXIT=17
 invoke "$task_main" .chrono-harness/ci/bootstrap-core.json
 test "$task_status" -eq 17 || fail 'initial compiler exit was lost'
 task_probe=$(printf '%s\n' rustup '<run>' '<1.95.0>' '<cargo>' '<--version>')
-task_compile=$(printf '%s\n' rustup '<run>' '<1.95.0>' '<cargo>' '<run>' '<--locked>' '<--manifest-path>' "<$task_main/.chrono-harness/ci/native/Cargo.toml>" '<--target-dir>' "<$task_main/.chrono-harness/cache/host-bootstrap-native/target>" '<--bin>' '<chrono-host-bootstrap>' '<-->' "<$task_main>" '<.chrono-harness/ci/bootstrap-core.json>')
+task_compile=$(printf '%s\n' rustup '<run>' '<1.95.0>' '<cargo>' '<run>' '<--locked>' '<--manifest-path>' "<$task_main/crates/host-bootstrap/Cargo.toml>" '<--target-dir>' "<$task_main/.chrono-harness/cache/host-bootstrap-native/target>" '<--bin>' '<chrono-host-bootstrap>' '<-->' "<$task_main>" '<.chrono-harness/ci/bootstrap-core.json>')
 test "$(cat "$CHRONO_LAUNCHER_CALLS")" = "$task_probe
 $task_compile" || fail 'available toolchain installed components or changed compiler selection'
 

@@ -25,6 +25,46 @@ use vstd::vpanic as panic;
 
 verus! {
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn fixed_source_read_selects_only_the_eligible_path_and_preserves_inputs() {
+    let batched = policy::fixed_source_read::select_fixed_source_read(
+        true, (7u8, 9u8),
+        |_input: (u8, u8)| -> (u8, u8) requires false, { panic!() },
+        |input: (u8, u8)| -> (out: (u8, u8)) ensures out == input, { input },
+    );
+    expect_status_true(batched.0 == 7 && batched.1 == 9);
+    let fallback = policy::fixed_source_read::select_fixed_source_read(
+        false, (3u8, 5u8),
+        |input: (u8, u8)| -> (out: (u8, u8)) ensures out == input, { input },
+        |_input: (u8, u8)| -> (u8, u8) requires false, { panic!() },
+    );
+    expect_status_true(fallback.0 == 3 && fallback.1 == 5);
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn acquired_source_bytes_preserve_order_duplicates_empty_and_missing_paths() {
+    let mut bytes: std::collections::BTreeMap<String, Vec<u8>> = std::collections::BTreeMap::new();
+    bytes.insert("root".to_string(), vec![0u8, 255u8, 10u8]);
+    bytes.insert("other".to_string(), Vec::new());
+    let paths = vec!["root".to_string(), "other".to_string(), "root".to_string()];
+    let rows = policy::ordered_acquired_blobs(paths.as_slice(), &bytes).unwrap();
+    expect_status_true(rows.len() == 3);
+    expect_status_text(rows[0].0.as_str(), "root");
+    expect_status_text(rows[1].0.as_str(), "other");
+    expect_status_text(rows[2].0.as_str(), "root");
+    expect_status_true(scope_text::equal_bytes(rows[0].1.as_slice(), &[0u8, 255u8, 10u8]));
+    expect_status_true(rows[1].1.len() == 0);
+    expect_status_true(scope_text::equal_bytes(rows[2].1.as_slice(), &[0u8, 255u8, 10u8]));
+    let empty: Vec<String> = Vec::new();
+    let rows = policy::ordered_acquired_blobs(empty.as_slice(), &bytes).unwrap();
+    expect_status_true(rows.len() == 0);
+    let missing = vec!["missing".to_string()];
+    proof { reveal_strlit("root"); reveal_strlit("other"); reveal_strlit("missing"); }
+    let rejected = policy::ordered_acquired_blobs(missing.as_slice(), &bytes);
+    expect_status_true(rejected.is_none());
+}
+
 struct ExportFixture {
     trace: Vec<u8>,
     valid: bool,

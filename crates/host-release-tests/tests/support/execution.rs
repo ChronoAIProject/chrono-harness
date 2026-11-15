@@ -30,7 +30,7 @@ impl Fixture {
     pub fn new(behavior: &str, tracked: bool) -> Self {
         let mut host = recipe::Fixture::new();
         let state = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../.chrono-harness/state/release-test-failures");
+            .join("../../.chrono-harness/state/release-test-failures");
         fs::create_dir_all(&state).unwrap();
         let case = tempfile::Builder::new()
             .prefix("rust-release-")
