@@ -1,11 +1,9 @@
-//! 借用 JSON 和完整文本树集合的外部接口合同；不包含仓内选择或状态逻辑。
+//! 借用 JSON 和标准文本比较的外部接口合同；不包含仓内选择或状态逻辑。
 #![allow(unexpected_cfgs)]
 
 #[cfg(verus_keep_ghost)]
 use crate::vstd::{self, prelude::*};
 use serde_json::{Map as JsonMap, Value};
-#[cfg(verus_keep_ghost)]
-use std::collections::{BTreeMap, BTreeSet};
 use verus_builtin_macros::verus;
 
 verus! {
@@ -71,22 +69,14 @@ pub assume_specification[ JsonMap::<String, Value>::len ](
 ) -> (out: usize)
     ensures members(map).dom().finite(), out == members(map).len();
 
-// 固定 vstd 的通用树集合合同以 obeys_cmp 为前提，且借用键模型未解释
-// String -> str。以下仅补固定 Rust 标准文本键的接口模型；不假设仓内状态。
+// 标准 String／str 的比较与 Borrow 顺序合同。成员查询和插入效果由
+// vstd 已有集合合同及仓内证明得出，不假设某个 map／set 的成员或状态。
 pub broadcast axiom fn standard_string_key_order()
-    ensures #[trigger] vstd::laws_cmp::obeys_cmp::<String>();
+    ensures
+        #[trigger] vstd::laws_cmp::obeys_cmp::<String>(),
+        #[trigger] vstd::std_specs::cmp::borrowed_key_ordering_matches::<String, str>();
 
 pub broadcast axiom fn standard_str_key_order()
     ensures #[trigger] vstd::laws_cmp::obeys_cmp::<&str>();
-
-pub broadcast axiom fn string_map_borrow(map: &BTreeMap<String, Value>, key: &str)
-    ensures
-        #[trigger] vstd::std_specs::btree::contains_borrowed_key(map@, key)
-            <==> exists|stored: String| #[trigger] map@.contains_key(stored) && stored@ == key@;
-
-pub broadcast axiom fn str_set_membership<'a>(set: &BTreeSet<&'a str>, text: &'a str)
-    ensures
-        #[trigger] set@.contains(text)
-            <==> set@.map(|stored: &str| stored@).contains(text@);
 
 } // verus!

@@ -8,6 +8,8 @@ use vstd::prelude::*;
 // 与生产适配器同源；仓内分支不进入工具库的受信边界。
 #[path = "../../../crates/runner/src/json_fields.rs"]
 mod json_fields;
+#[path = "../../../crates/runner/src/verified_collections.rs"]
+mod collections;
 
 verus! {
 
@@ -65,32 +67,36 @@ pub fn borrowed_fulltext(map: &BTreeMap<String, Value>, key: &str) -> (out: bool
         #[trigger] map@.contains_key(stored) && stored@ == key@,
 {
     broadcast use json::standard_string_key_order;
-    proof {
-        json::string_map_borrow(map, key);
-    }
-    map.contains_key(key)
+    broadcast use json::standard_str_key_order;
+    collections::contains_string_key(map, key)
 }
 
 // 本实验自己证明插入的结果；没有把状态更新当成工具假设。
 pub fn fulltext_insert<'a>(set: &mut BTreeSet<&'a str>, text: &'a str) -> (fresh: bool)
     ensures
-        final(set)@ == old(set)@.insert(text),
-        fresh == !old(set)@.map(|stored: &str| stored@).contains(text@),
+        final(set).deep_view() == old(set).deep_view().insert(text@),
+        fresh == !old(set).deep_view().contains(text@),
+        !fresh ==> final(set)@ == old(set)@,
 {
     broadcast use json::standard_str_key_order;
-    proof {
-        json::str_set_membership(set, text);
-    }
-    set.insert(text)
+    collections::insert_str_key(set, text)
 }
 
 // 全文相等适用于不同存储及任意 Unicode、NUL、换行；不采用前缀身份。
 pub proof fn same_text_membership<'a>(set: &BTreeSet<&'a str>, left: &'a str, right: &'a str)
     requires left@ == right@,
-    ensures set@.contains(left) == set@.contains(right),
+    ensures set.deep_view().contains(left@) == set.deep_view().contains(right@),
 {
-    json::str_set_membership(set, left);
-    json::str_set_membership(set, right);
+}
+
+// 独立预期：不同存储的重复文字不替换已保存键，也不改变任何其他成员。
+pub fn duplicate_text_keeps_original_keys<'a>(set: &mut BTreeSet<&'a str>, left: &'a str,
+    right: &'a str)
+    requires left@ == right@, old(set).deep_view().contains(left@),
+    ensures final(set)@ == old(set)@,
+{
+    let fresh = fulltext_insert(set, right);
+    assert(!fresh);
 }
 
 } // verus!

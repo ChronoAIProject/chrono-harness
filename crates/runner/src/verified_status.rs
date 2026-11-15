@@ -30,33 +30,11 @@ pub mod scopes;
 #[path = "verified_export.rs"]
 pub mod snapshot_export;
 
-verus! {
+#[path = "verified_collections.rs"]
+pub mod collections;
+pub use collections::btree_map_compare_invariant;
 
-/// 标准迭代库存的严格顺序保证同一 map 内没有比较相等的两个不同键。
-/// 只取得借用迭代器，不遍历或复制库存。
-pub fn btree_map_compare_invariant<K: Ord, V>(map: &BTreeMap<K, V>)
-    requires vstd::laws_cmp::obeys_cmp::<K>(),
-    ensures vstd::std_specs::btree::btree_map_inv(map),
-{
-    let iterator = map.iter();
-    proof {
-        let rows = iterator.remaining();
-        let keys = rows.map_values(|row: (&K, &V)| *row.0);
-        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
-        reveal(vstd::laws_cmp::obeys_cmp_ord);
-        reveal(vstd::laws_cmp::obeys_partial_cmp_spec_properties);
-        assert forall|a: K, b: K| #![trigger map@.contains_key(a), map@.contains_key(b)]
-            map@.contains_key(a) && map@.contains_key(b) && a != b
-                implies !(a.cmp_spec(&b) is Equal) by {
-            assert(rows.unref().to_set().contains((a, map@[a])));
-            assert(rows.unref().to_set().contains((b, map@[b])));
-            let i = choose|i: int| 0 <= i < rows.len() && rows.unref()[i] == (a, map@[a]);
-            let j = choose|j: int| 0 <= j < rows.len() && rows.unref()[j] == (b, map@[b]);
-            if i < j { assert(keys[i].cmp_spec(&keys[j]) is Less); }
-            else if j < i { assert(keys[j].cmp_spec(&keys[i]) is Less); }
-        }
-    }
-}
+verus! {
 
 /// 只按实际端点资格选择一条读取路径，完整输入和原结果保持对应。
 pub fn select_fixed_source_read<S, R, F, B>(reusable: bool, inputs: S, fallback: F, batch: B)

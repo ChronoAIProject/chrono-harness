@@ -124,6 +124,30 @@ tree、index-stage 和 checkout-change 的插入规格分别描述新键插入�
 其编译器、后端、库、宏、vstd、Z3 及生产原件必须与实际构建实例匹配。
 当前 Rust 1.95.0 生成的依赖不能充当 Rust 1.99.1 的输入。
 
+## JSON 与全文集合的实际消费者
+
+`source-json-value-specs.patch` 在同一固定源码的 vstd 中引用宿主唯一的
+`crates/runner/src/json_value_specs.rs`；路径明确绑定上述缓存布局，不复制合同或建立链接。
+vstd 构建的 Serde JSON 输入来自前置 Cargo 原生产记录，与完整 runner 消费同一库。
+JSON 仅声明外部类型和公开借用接口；标准文本比较及 String→str 借用顺序属于外部合同。
+删除旧的 map 借用成员和 set 实体成员公理，不能把相同文字当成相同键实体。
+
+仓内 `verified_collections.rs` 从标准借用迭代器证明 map／set 的比较不变量，
+再沿 vstd 原 contains_key／insert 合同证明全文存在性、精确文字集合更新与 freshness；
+重复插入还须保持原实体库存。只构造迭代器，不新增遍历、复制或实际查询。
+原 status 的 map 不变量实现移至同一所有者，生产选择器及严格实验共用，原断言保留。
+
+`investigate.verus-source.json-check` 沿 native bootstrap 先准备真实依赖，再执行
+`investigate.verus-source.json-consume` 的完整原实验，以及
+`investigate.verus-source.runner` 的完整 `crates/runner/src/lib.rs` 根。
+两项保持严格参数、lifetime、两线程及原预算；普通业务边界仍由原未过滤 runner 测试承担。
+vstd 输入改变后先沿既有 vstd-refresh 精确重建，复用其余工具和下载缓存。
+独立实验须保留 JSON 缺键／非文本区别、任意全文和重复插入原键保留预期。
+完整来源、外部接口资格、JSON／IO 事务及正式候选采用仍须分别验收。
+
+**产品与宿主验证登记同时修改。** 影响包括真实选择器的集合适配、唯一外部合同、
+源码工具 vstd 输入及两个现役严格消费者；新增构建、证明及存储成本未知。
+
 ## 块内 crate 别名的工具修复
 
 `nested-extern-crate.patch` 是固定上游输入的明确补丁，归本实验的外部 Verus 工具

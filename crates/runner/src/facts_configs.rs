@@ -260,10 +260,8 @@ impl crate::verified_git_binding::RegistryMembership for CapturedRegistry<'_> {
 
     fn contains_path(&self, path: &str) -> bool {
         broadcast use crate::json_value_specs::standard_string_key_order;
-        proof {
-            crate::json_value_specs::string_map_borrow(self.0, path);
-        }
-        self.0.contains_key(path)
+        broadcast use crate::json_value_specs::standard_str_key_order;
+        crate::verified_status::collections::contains_string_key(self.0, path)
     }
 }
 
@@ -413,39 +411,12 @@ impl<'a> Default for SeenSelectorText<'a> {
 
 impl<'a> crate::verified_git_binding::SelectorSeen<'a> for SeenSelectorText<'a> {
     open spec fn seen(&self) -> Set<Seq<char>> {
-        self.0@.map(|text: &str| text@)
+        self.0.deep_view()
     }
 
     fn record(&mut self, text: &'a str) -> bool {
-        let ghost before = self.0@;
         broadcast use crate::json_value_specs::standard_str_key_order;
-        proof {
-            crate::json_value_specs::str_set_membership(&self.0, text);
-        }
-        let fresh = self.0.insert(text);
-        proof {
-            assert(self.0@ == before.insert(text));
-            assert(self.0@.map(|stored: &str| stored@)
-                =~= before.map(|stored: &str| stored@).insert(text@)) by {
-                assert forall|item: Seq<char>|
-                    self.0@.map(|stored: &str| stored@).contains(item)
-                    <==> before.map(|stored: &str| stored@).insert(text@).contains(item) by {
-                    if self.0@.map(|stored: &str| stored@).contains(item) {
-                        let stored = choose|stored: &str| self.0@.contains(stored) && item == stored@;
-                        if stored != text {
-                            assert(before.contains(stored));
-                            assert(before.map(|stored: &str| stored@).contains(item));
-                        }
-                    } else if before.map(|stored: &str| stored@).contains(item) {
-                        let stored = choose|stored: &str| before.contains(stored) && item == stored@;
-                        assert(self.0@.contains(stored));
-                    } else if item == text@ {
-                        assert(self.0@.contains(text));
-                    }
-                }
-            }
-        }
-        fresh
+        crate::verified_status::collections::insert_str_key(&mut self.0, text)
     }
 }
 
