@@ -691,14 +691,14 @@ pub fn component_archive(
 ) -> Result<(PathBuf, cargo::Identity), String> {
     let checksum = profile::read(root, &config.checksum, b".chrono-harness/ci/")?;
     let text = std::str::from_utf8(&checksum).map_err(|e| e.to_string())?;
-    let (expected, archive) = text
+    let (expected, _) = text
         .trim_end_matches('\n')
         .split_once("  ")
         .ok_or("invalid archive checksum record")?;
-    let archive = profile::path(root, archive, b".chrono-harness/cache/")?;
+    let archive = profile::path(root, &config.archive, b".chrono-harness/bin/")?;
     let archive_id = identity(&archive)?;
     if archive_id.sha256 != expected {
-        return Err("E_VERUS_DEPENDENCIES: cached Verus archive checksum differs".into());
+        return Err("E_VERUS_DEPENDENCIES: installed Verus archive checksum differs".into());
     }
     Ok((archive, archive_id))
 }
