@@ -319,7 +319,9 @@ impl Inventory {
         let lease = DirectoryLease::acquire_local(&directory, true, Some(Duration::from_secs(5)))?
             .ok_or("retention consumer metadata is busy")?;
         self.stable(&lease)?;
-        let mut role = self.read_role(consumer)?.unwrap_or(Role {
+        let current = self.read_role(consumer)?;
+        let fresh = current.is_none();
+        let mut role = current.unwrap_or(Role {
             observation: None,
             schema: "chrono-retained-role/v2".into(),
             directory_identity: identity(&directory)?,
@@ -329,6 +331,11 @@ impl Inventory {
             metadata_expires: now()?.saturating_add(self.policy.metadata_keep_seconds),
             summaries: vec![],
         });
+        // Empty and failed admissions still leave a typed, finitely retained
+        // declaration rather than an unknown directory in the consumer namespace.
+        if fresh {
+            self.write_metadata(&directory.join("record.json"), &role)?;
+        }
         let mut requested = BTreeMap::new();
         let mut next = BTreeSet::new();
         // Resolve and validate the complete explicit input before changing any
