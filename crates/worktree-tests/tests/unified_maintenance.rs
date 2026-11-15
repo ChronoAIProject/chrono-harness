@@ -869,6 +869,7 @@ fn activated_service_drains_busy_hints_without_resignalling_and_recovers_on_late
     os.set_nonblocking(true).unwrap();
     let target = h.parent.join("after-explicit-owner");
     assert_eq!(h.invoke("feature", "after-explicit-owner", &target).0, 0);
+    super::automatic::output(&target);
     assert_eq!(h.auto("finish", &["--path", target.to_str().unwrap()]).0, 0);
     let lease = h
         .root
@@ -900,7 +901,7 @@ fn activated_service_drains_busy_hints_without_resignalling_and_recovers_on_late
     );
     assert_eq!(before, after, "a competing service must not start a round");
     assert!(
-        target.join("output λ/cache").exists(),
+        target.join("output λ/data").exists(),
         "the current executor still excludes disposal"
     );
     explicit.stable().unwrap();
@@ -911,7 +912,7 @@ fn activated_service_drains_busy_hints_without_resignalling_and_recovers_on_late
             .unwrap();
     assert_eq!(recovered["status"], "maintenance-idle-exit");
     assert!(
-        !target.join("output λ/cache").exists(),
+        !target.join("output λ/data").exists(),
         "later event must recover authoritative pending work"
     );
     let rounds: Vec<Value> = fs::read_dir(&report_directory)
