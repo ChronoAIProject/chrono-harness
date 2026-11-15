@@ -4199,7 +4199,15 @@ impl Manager {
         self.ledger.entries[i].cleanup = Some(CleanupProgress {
             stage,
             detail: detail.into(),
-            report_path: report["report_path"].as_str().map(str::to_owned),
+            // A whole-round report is still being published while unrelated
+            // business completes. Progress consumes only the observation, not
+            // that publisher's path. Actual cleanup children retain their own
+            // sealed original when they return through this same boundary.
+            report_path: if report["operation"] == "maintain" {
+                None
+            } else {
+                report["report_path"].as_str().map(str::to_owned)
+            },
         });
         self.save()
     }

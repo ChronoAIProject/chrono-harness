@@ -925,9 +925,12 @@ fn checkout_migration_preserves_quiescent_cleanup_observations_and_cache_history
             }
         );
         assert_eq!(original["status"], "active");
-        let report = h
-            .root
-            .join(original["cleanup"]["report_path"].as_str().unwrap());
+        assert_eq!(original["cleanup"]["report_path"].is_null(), busy);
+        let report = h.root.join(if busy {
+            maintained["report_path"].as_str().unwrap()
+        } else {
+            original["cleanup"]["report_path"].as_str().unwrap()
+        });
         let report_bytes = fs::read(&report).unwrap();
         let cache_exists = target.join("output λ/cache").exists();
         assert_eq!(cache_exists, busy);

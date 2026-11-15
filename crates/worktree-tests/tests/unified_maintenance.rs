@@ -481,7 +481,9 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
             },
         )
     });
-    let reached = ready.recv_timeout(Duration::from_secs(5));
+    // The sender is dropped if maintenance ends before this boundary. Await
+    // that actual notification instead of imposing a second readiness timer.
+    let reached = ready.recv();
     drop(ready);
     let business = reached.as_ref().ok().map(|_| {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
