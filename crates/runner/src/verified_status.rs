@@ -45,31 +45,31 @@ pub fn select_fixed_source_read<S, R, F, B>(reusable: bool, inputs: S, fallback:
 }
 
 pub open spec fn acquired_rows_prefix(
-    paths: Seq<String>, bytes: Map<String, Vec<u8>>, rows: Seq<(String, Vec<u8>)>, count: int,
+    paths: Seq<String>, bytes: Map<Seq<char>, Seq<u8>>, rows: Seq<(String, Vec<u8>)>, count: int,
 ) -> bool {
     0 <= count <= paths.len() && rows.len() == count
         && (forall|j: int| 0 <= j < count ==>
-            bytes.contains_key(#[trigger] paths[j])
+            #[trigger] bytes.contains_key(paths[j]@)
             && rows[j].0@ == paths[j]@
-            && rows[j].1@ == bytes[paths[j]]@)
+            && rows[j].1@ == bytes[paths[j]@])
 }
 
 proof fn acquired_rows_append(
-    paths: Seq<String>, bytes: Map<String, Vec<u8>>, rows: Seq<(String, Vec<u8>)>,
+    paths: Seq<String>, bytes: Map<Seq<char>, Seq<u8>>, rows: Seq<(String, Vec<u8>)>,
     count: int, row: (String, Vec<u8>),
 )
     requires acquired_rows_prefix(paths, bytes, rows, count), count < paths.len(),
-        bytes.contains_key(paths[count]), row.0@ == paths[count]@,
-        row.1@ == bytes[paths[count]]@,
+        bytes.contains_key(paths[count]@), row.0@ == paths[count]@,
+        row.1@ == bytes[paths[count]@],
     ensures acquired_rows_prefix(paths, bytes, rows.push(row), count + 1),
 {
     let next = rows.push(row);
     assert(0 <= count + 1 <= paths.len());
     assert(next.len() == count + 1);
     assert forall|j: int| 0 <= j < count + 1 implies
-        bytes.contains_key(#[trigger] paths[j])
+        #[trigger] bytes.contains_key(paths[j]@)
         && next[j].0@ == paths[j]@
-        && next[j].1@ == bytes[paths[j]]@ by {
+        && next[j].1@ == bytes[paths[j]@] by {
         if j < count { assert(next[j] == rows[j]); }
         else { assert(j == count); }
     }
@@ -81,8 +81,8 @@ pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>
     -> (out: Option<Vec<(String, Vec<u8>)>>)
     requires vstd::laws_cmp::obeys_cmp::<String>(),
     ensures match out {
-        Some(rows) => acquired_rows_prefix(paths@, bytes@, rows@, paths.len() as int),
-        None => exists|i: int| 0 <= i < paths.len() && !bytes@.contains_key(paths@[i]),
+        Some(rows) => acquired_rows_prefix(paths@, bytes.deep_view(), rows@, paths.len() as int),
+        None => exists|i: int| 0 <= i < paths.len() && !bytes.deep_view().contains_key(paths@[i]@),
     },
 {
     broadcast use vstd::std_specs::btree::group_btree_axioms;
@@ -90,23 +90,25 @@ pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>
     let mut i = 0;
     while i < paths.len()
         invariant vstd::laws_cmp::obeys_cmp::<String>(),
-            0 <= i <= paths.len(), acquired_rows_prefix(paths@, bytes@, rows@, i as int),
+            0 <= i <= paths.len(), acquired_rows_prefix(paths@, bytes.deep_view(), rows@, i as int),
         decreases paths.len() - i,
     {
         let path = &paths[i];
         let content = match bytes.get::<String>(path) {
             Some(content) => {
                 proof {
-                    vstd::std_specs::btree::axiom_maps_deref_key_to_value(bytes@, path, *content);
-                    assert(bytes@.contains_key(paths@[i as int]));
-                    assert(*content == bytes@[paths@[i as int]]);
+                    vstd::std_specs::btree::lemma_btree_map_get_ensures_if_obeys_cmp_deep_eq(
+                        bytes, path, Some(content));
+                    assert(bytes.deep_view().contains_key(paths@[i as int]@));
+                    assert(content@ == bytes.deep_view()[paths@[i as int]@]);
                 }
                 content
             },
             None => {
                 proof {
-                    vstd::std_specs::btree::axiom_contains_deref_key(bytes@, path);
-                    assert(!bytes@.contains_key(paths@[i as int]));
+                    vstd::std_specs::btree::lemma_btree_map_get_ensures_if_obeys_cmp_deep_eq(
+                        bytes, path, None);
+                    assert(!bytes.deep_view().contains_key(paths@[i as int]@));
                 }
                 return None;
             },
@@ -114,7 +116,7 @@ pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>
         let name = paths[i].clone();
         let copied = content.clone();
         let ghost before = rows@;
-        proof { acquired_rows_append(paths@, bytes@, before, i as int, (name, copied)); }
+        proof { acquired_rows_append(paths@, bytes.deep_view(), before, i as int, (name, copied)); }
         rows.push((name, copied));
         i += 1;
     }

@@ -41,9 +41,10 @@ fn fixed_source_read_selects_only_the_eligible_path_and_preserves_inputs() {
     expect_status_true(fallback.0 == 3 && fallback.1 == 5);
 }
 
-#[cfg(not(verus_keep_ghost))]
-#[test]
-fn acquired_source_bytes_preserve_order_duplicates_empty_and_missing_paths() {
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn acquired_source_bytes_preserve_order_duplicates_empty_and_missing_paths()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
     let mut bytes: std::collections::BTreeMap<String, Vec<u8>> = std::collections::BTreeMap::new();
     bytes.insert("root".to_string(), vec![0u8, 255u8, 10u8]);
     bytes.insert("other".to_string(), Vec::new());

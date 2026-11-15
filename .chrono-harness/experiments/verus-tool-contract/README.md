@@ -81,6 +81,13 @@ Serde derive；完整根、严格参数、编译和 dep-info 保留。所选 Ser
 解析循环改为显式保持 domain 有限的不变量，从空库存和每次插入传递该性质；不改变
 生产控制流、规格结果或必要证明，也不增加版本分支。完整根仍按上述同一入口复验。
 
+同一固定 vstd 的 BTreeMap 借用查询使用实际比较和 Borrow 合同，不再提供旧的
+`axiom_maps_deref_key_to_value`／`axiom_contains_deref_key`。源码批量读取按完整
+字符串内容查询，不能要求两个独立分配的 String 具有同一实体；对应规格改用完整
+文本与原字节的 deep_view，复用现有 get 的 deep-equality 定理。返回顺序、重复、
+空值与缺失拒绝不变，原独立边界同时进入严格 Verus 和普通 Rust 验收。
+正式工具采用、完整根和调用绑定仍须分别取得实际结果。
+
 同一固定 vstd 的 Vec 与 BTreeMap 迭代器改用 `IteratorSpec::remaining`，不再提供旧的
 位置／完整库存二元 view。真实循环以剩余序列等于原库存的未消费后缀连接完整前缀规格；
 已有输出数量或状态轨迹给出消费位置，去重循环只增加被擦除的 ghost 计数。借用树库存
