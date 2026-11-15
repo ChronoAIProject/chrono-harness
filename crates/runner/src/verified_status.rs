@@ -4831,6 +4831,13 @@ proof fn entry_delta_projection(selected_path: Seq<char>, old_entry: Option<&Tre
     reveal_with_fuel(Seq::filter, 2);
 }
 
+proof fn delta_at_path_append(first: Seq<DeltaFields>, second: Seq<DeltaFields>, path: Seq<char>)
+    ensures delta_at_path(first + second, path)
+        == delta_at_path(first, path) + delta_at_path(second, path),
+{
+    Seq::<DeltaFields>::filter_distributes_over_add(first, second, delta_path_predicate(path));
+}
+
 pub open spec fn tree_merge_fields(a: Seq<(&TreePath, &TreeEntry)>,
     b: Seq<(&TreePath, &TreeEntry)>, i: int, j: int) -> Seq<DeltaFields>
     decreases a.len() - i + b.len() - j,
@@ -4884,8 +4891,7 @@ proof fn tree_merge_path_projection(a: Seq<(&TreePath, &TreeEntry)>,
     let rest = tree_merge_fields(a, b, ni, nj);
     assert(tree_merge_fields(a, b, i, j) == head + rest);
     entry_delta_projection(key@, old_entry, new_entry, path);
-    Seq::<DeltaFields>::filter_distributes_over_add(head, rest,
-        delta_path_predicate(path));
+    delta_at_path_append(head, rest, path);
     if path == key@ {
         rows_entry_before_head(a, ni, key);
         rows_entry_before_head(b, nj, key);
