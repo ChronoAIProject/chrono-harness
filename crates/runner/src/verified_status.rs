@@ -2365,8 +2365,8 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
         assert(vstd::laws_cmp::obeys_cmp::<&GitIndexStage>());
         vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
         all.unref().unique_seq_to_set();
-        assert forall|i: int, j: int| 0 <= i < j < all.len()
-            implies (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less by {
+        assert forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+            0 <= i < j < all.len() implies all[i].order_spec(all[j]) == Ordering::Less by {
             assert(<&GitIndexStage as OrdSpec>::cmp_spec(&all[i], &all[j]) is Less);
         }
     }
@@ -2378,8 +2378,8 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
             keys@ == all.take(keys.len() as int).unref(),
             all.unref().to_set() == stages@.dom(), all.len() == stages@.len(),
             vstd::std_specs::btree::increasing_seq(all),
-            forall|i: int, j: int| 0 <= i < j < all.len()
-                ==> (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less,
+            forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+                0 <= i < j < all.len() ==> all[i].order_spec(all[j]) == Ordering::Less,
         decreases stages@.len() - keys.len(),
     {
         match iterator.next() {
@@ -2968,8 +2968,8 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
         assert(vstd::laws_cmp::obeys_cmp::<&TreePath>());
         vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
         all.unref().unique_seq_to_set();
-        assert forall|i: int, j: int| 0 <= i < j < all.len()
-            implies (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less by {
+        assert forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+            0 <= i < j < all.len() implies all[i].order_spec(all[j]) == Ordering::Less by {
             assert(<&TreePath as OrdSpec>::cmp_spec(&all[i], &all[j]) is Less);
         }
     }
@@ -2981,8 +2981,8 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
             all.unref().to_set() == changes@.dom(),
             all.len() == changes@.len(),
             vstd::std_specs::btree::increasing_seq(all),
-            forall|i: int, j: int| 0 <= i < j < all.len()
-                ==> (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less,
+            forall|i: int, j: int| #![trigger all[i].order_spec(all[j])]
+                0 <= i < j < all.len() ==> all[i].order_spec(all[j]) == Ordering::Less,
             forall|i: int| 0 <= i < paths.len() ==> (#[trigger] paths@[i])@ == all[i]@,
         decreases changes@.len() - paths.len(),
     {
