@@ -206,9 +206,9 @@ pub fn original_finalized(retired: usize, output: Option<(bool, &str)>) -> (fina
     }
 }
 
-pub fn defer_finalized_original(discover_under_lease: bool, finalized: bool) -> (defer: bool)
-    ensures defer == (discover_under_lease && finalized),
-{ discover_under_lease && finalized }
+pub fn defer_declared_original(discover_under_lease: bool, declared: bool) -> (defer: bool)
+    ensures defer == (discover_under_lease && declared),
+{ discover_under_lease && declared }
 
 pub fn preserve_discovered_original(member: bool, retained: bool, retiring_frontier: bool)
     -> (preserve: bool)
@@ -246,20 +246,20 @@ pub enum FinalizedExpansion {
     Related,
 }
 
-/// 入向引用本身不是保留根。非初始根仍读取一层真实依赖，保留缺失依赖错误。
-pub fn finalized_expansion(rooted: bool, initial: Option<&str>, id: &str,
+/// 保留根不要求发布已完成；只有封存且无根的原件才可选择退役。
+pub fn original_expansion(rooted: bool, finalized: bool, initial: Option<&str>, id: &str,
     incoming: usize, roles: usize) -> (out: FinalizedExpansion)
     ensures match out {
         FinalizedExpansion::RetainOnly => rooted && recovery_text(initial) == Some(id@),
         FinalizedExpansion::RootFrontier => rooted && recovery_text(initial) != Some(id@),
-        FinalizedExpansion::RetireFrontier => !rooted && incoming == 0 && roles == 0,
-        FinalizedExpansion::Related => !rooted && (incoming != 0 || roles != 0),
+        FinalizedExpansion::RetireFrontier => !rooted && finalized && incoming == 0 && roles == 0,
+        FinalizedExpansion::Related => !rooted && (!finalized || incoming != 0 || roles != 0),
     },
 {
     let initial = same_recovery_text(initial, Some(id));
     if rooted {
         if initial { FinalizedExpansion::RetainOnly } else { FinalizedExpansion::RootFrontier }
-    } else if incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
+    } else if finalized && incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
     else { FinalizedExpansion::Related }
 }
 

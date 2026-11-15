@@ -430,10 +430,10 @@ fn finalized_requires_sealed_released_or_disposing_output_and_no_retired_leases(
     expect_true(!policy::original_finalized(0, Some((true, "released\0"))));
     expect_true(!policy::original_finalized(1, Some((true, "released"))));
     expect_true(!policy::original_finalized(usize::MAX, Some((true, "disposing"))));
-    expect_true(policy::defer_finalized_original(true, true));
-    expect_true(!policy::defer_finalized_original(false, true));
-    expect_true(!policy::defer_finalized_original(true, false));
-    expect_true(!policy::defer_finalized_original(false, false));
+    expect_true(policy::defer_declared_original(true, true));
+    expect_true(!policy::defer_declared_original(false, true));
+    expect_true(!policy::defer_declared_original(true, false));
+    expect_true(!policy::defer_declared_original(false, false));
 }
 
 fn expect_expansion(actual: policy::FinalizedExpansion, expected: u8)
@@ -462,16 +462,20 @@ fn only_actual_roots_stop_expansion_and_rootless_cycles_remain_related() {
         assert("initial"@.len() != "initial\0"@.len());
         assert("é"@[0] != "e\u{301}"@[0]);
     }
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial", 1, 1), 0);
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "parent", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(true, None, "parent", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 0), 2);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 1, 0), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", usize::MAX, 0), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 1), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "parent", 0, 0), 2);
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial\0", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(false, Some("é"), "e\u{301}", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "initial", 1, 1), 0);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(true, true, None, "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 0, 0), 2);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 1, 0), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", usize::MAX, 0), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 0, 1), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "parent", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "initial\0", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, true, Some("é"), "e\u{301}", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, false, Some("initial"), "initial", 0, 1), 0);
+    expect_expansion(policy::original_expansion(true, false, Some("initial"), "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, false, Some("initial"), "initial", 0, 0), 3);
+    expect_expansion(policy::original_expansion(false, false, Some("initial"), "parent", 1, 0), 3);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

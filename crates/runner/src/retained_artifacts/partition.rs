@@ -323,6 +323,7 @@ pub(super) struct Gate {
     partial_membership: bool,
     retiring_report: Option<String>,
     retained_dependencies: BTreeSet<String>,
+    maintenance_targets: BTreeSet<String>,
     unvisited_relations: BTreeSet<String>,
 }
 #[cfg(not(verus_keep_ghost))]
@@ -335,6 +336,9 @@ impl Gate {
     }
     pub(super) fn retained_dependencies(&self) -> &BTreeSet<String> {
         &self.retained_dependencies
+    }
+    pub(super) fn maintains_output(&self, id: &str) -> bool {
+        !self.retained_dependencies.contains(id) || self.maintenance_targets.contains(id)
     }
     fn measurements(&self, max_output_bytes: u64) -> BTreeMap<String, [u64; 8]> {
         self.objects
@@ -1193,6 +1197,7 @@ impl Inventory {
             partial_membership: false,
             retiring_report: None,
             retained_dependencies: BTreeSet::new(),
+            maintenance_targets: BTreeSet::new(),
             unvisited_relations: BTreeSet::new(),
         })
     }
@@ -1753,6 +1758,7 @@ impl Inventory {
         let mut report_frontier = false;
         let mut retiring_report = None;
         let mut retained_dependencies = BTreeSet::new();
+        let mut maintenance_targets = BTreeSet::new();
         // Nonblocking maintenance can hold each declaration while discovering
         // its edges. A busy metadata or path lease refuses the activity, so this
         // order never waits behind an ordinary publisher holding path locks.
@@ -1760,7 +1766,7 @@ impl Inventory {
         // members. Other waiting activities recheck their discovered closure
         // under the same path/role/object exclusion order below.
         loop {
-            if selected.len() > self.policy.max_related_outputs {
+            if selected.union(&retained_dependencies).count() > self.policy.max_related_outputs {
                 return Err("related retention graph capacity; originals preserved".into());
             }
             let next_role = wanted_roles
@@ -1810,8 +1816,9 @@ impl Inventory {
                         .collect::<Vec<_>>(),
                 );
                 let output = record.output.as_ref().unwrap();
-                match verified::finalized_expansion(
+                match verified::original_expansion(
                     protected,
+                    finalized(record),
                     initial.as_deref(),
                     &id,
                     record.incoming.len(),
@@ -1819,13 +1826,39 @@ impl Inventory {
                 ) {
                     verified::FinalizedExpansion::RetainOnly => {
                         retained_dependencies.insert(id.clone());
+                        if !finalized(record) {
+                            maintenance_targets.insert(id.clone());
+                        }
                     }
                     verified::FinalizedExpansion::RootFrontier => {
-                        // A discovered root protects this component. Read its
-                        // direct originals, retaining the remaining frontier
-                        // without expanding their independent dependencies.
+                        // The source and its current roots stay excluded. Check
+                        // every direct original one at a time; the durable edge
+                        // cannot change while this source is held. Their full
+                        // width must not become simultaneous descriptors.
                         retained_dependencies.insert(id.clone());
-                        selected.extend(output.references.iter().cloned());
+                        let mut related: BTreeSet<_> =
+                            selected.union(&retained_dependencies).cloned().collect();
+                        related.extend(output.references.iter().cloned());
+                        if related.len() > self.policy.max_related_outputs {
+                            return Err(
+                                "related retention graph capacity; originals preserved".into()
+                            );
+                        }
+                        let policy_sha256 = sha256(&self.policy_bytes);
+                        for target in &output.references {
+                            if observed.contains_key(target) {
+                                continue;
+                            }
+                            let directory = self.object_directory(target)?;
+                            let _original = DirectoryLease::acquire_local(&directory, true, None)?
+                                .ok_or_else(|| {
+                                    format!("retention output metadata is busy: {target}")
+                                })?;
+                            let original = self.read_object(target, &directory)?;
+                            if original.policy_sha256 != policy_sha256 {
+                                return Err("retention policy migration required; original record preserved".into());
+                            }
+                        }
                         retained_dependencies.extend(output.references.iter().cloned());
                     }
                     verified::FinalizedExpansion::RetireFrontier => {
@@ -1878,7 +1911,7 @@ impl Inventory {
                 observed.insert(id, record);
                 continue;
             }
-            if verified::defer_finalized_original(discover_under_lease, finalized(&record)) {
+            if verified::defer_declared_original(discover_under_lease, record.output.is_some()) {
                 wanted_roles.extend(record.roles.iter().cloned());
                 observed.insert(id.clone(), record);
                 deferred.defer(id);
@@ -2090,6 +2123,7 @@ impl Inventory {
             partial_membership: maintenance,
             retiring_report,
             retained_dependencies,
+            maintenance_targets,
             unvisited_relations,
         })
     }
