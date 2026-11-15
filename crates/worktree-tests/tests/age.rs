@@ -13,6 +13,14 @@ use vstd::prelude::*;
 use vstd::vpanic as panic;
 verus! {
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn age_preservation_is_skipped_only_without_disposal_and_with_retained_file() {
+    expect(!policy::age_preservation_required(false, true));
+    expect(policy::age_preservation_required(false, false));
+    expect(policy::age_preservation_required(true, false));
+    expect(policy::age_preservation_required(true, true));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn only_actual_unreleased_evidence_blocks_checkout_removal() {
     let needed = policy::retain_evidence(false, true);
     let absent = policy::retain_evidence(false, false);

@@ -44,9 +44,9 @@ pub use automatic_verification::{
 };
 
 #[cfg(not(verus_keep_ghost))]
-pub use crate::automatic::age::reusable_release;
+pub use crate::automatic::age::{age_preservation_required, reusable_release};
 #[cfg(verus_keep_ghost)]
-pub use automatic_verification::age::reusable_release;
+pub use automatic_verification::age::{age_preservation_required, reusable_release};
 
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::inventory::append_action_index;
@@ -183,6 +183,7 @@ pub fn observed_cleanup_result(cache: bool, enrollment_status: &str,
     age_outcome: Option<&str>, status: Option<&str>, removal: Option<&str>)
     -> (out: CleanupOutcome)
     ensures out.cache == (cleanup_field(age_outcome) == "reusable-source-preserved"@
+            || cleanup_field(age_outcome) == "no-disposable-output-retained-checkout"@
             || (cache && cleanup_field(age_outcome)
                 != "expired-checkout-verified-absent-source-branches-retained"@)),
         out.cleaned == (cleanup_field(status) == "cleaned"@),
@@ -191,6 +192,7 @@ pub fn observed_cleanup_result(cache: bool, enrollment_status: &str,
 {
     let age = match age_outcome { Some(value) => value, None => "" };
     let cache_outcome = equal_text(age, "reusable-source-preserved")
+        || equal_text(age, "no-disposable-output-retained-checkout")
         || (cache && !equal_text(age, "expired-checkout-verified-absent-source-branches-retained"));
     let status = match status { Some(value) => value, None => "" };
     let removal = match removal { Some(value) => value, None => "" };
