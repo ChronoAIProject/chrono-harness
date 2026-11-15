@@ -1,16 +1,33 @@
 //! Completeness declarations and retained endpoint bytes; a digest is not a closure proof.
+use super::schema::{self, ObjectFieldError, object_error_parts, validate_object_fields};
+#[cfg(verus_keep_ghost)]
+use super::{retained_paths as paths, source_verifier::identifiers};
+#[cfg(not(verus_keep_ghost))]
 use crate::Registrations;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     facts, file_identity, no_symlink_parents, relative_path, sha256,
     wire::{self, Request},
 };
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers as identifiers, verified_paths as paths, verus};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{collections::BTreeMap, path::Path};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+#[cfg(verus_keep_ghost)]
+use vstd::string::StringSliceAdditionalSpecFns;
 
+#[cfg(not(verus_keep_ghost))]
 pub const SNAPSHOT_SCHEMA: &str = "chrono-input-snapshot/v1";
+#[cfg(not(verus_keep_ghost))]
 pub const SNAPSHOT_SCHEMA_V2: &str = "chrono-input-snapshot/v2";
+#[cfg(not(verus_keep_ghost))]
 pub const SNAPSHOT_SCHEMA_V3: &str = "chrono-input-snapshot/v3";
 
+#[cfg(not(verus_keep_ghost))]
 pub fn snapshot_schema(config: &Value) -> &'static str {
     if matches!(config["schema_version"].as_u64(), Some(2 | 3 | 4)) {
         SNAPSHOT_SCHEMA_V2
@@ -18,6 +35,7 @@ pub fn snapshot_schema(config: &Value) -> &'static str {
         SNAPSHOT_SCHEMA
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn snapshot_schema_for(r: &Registrations) -> &'static str {
     if r.selection().is_some() {
         SNAPSHOT_SCHEMA_V3
@@ -26,57 +44,335 @@ pub fn snapshot_schema_for(r: &Registrations) -> &'static str {
     }
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub use chrono_harness::input_file::observe_file;
 
+verus! {
+
 /// Parse the retained representation without reading or repairing its contents.
-pub enum Retained<'a> {
+pub enum Retained<'a, B = Vec<u8>> {
     Absent,
-    Bytes(Vec<u8>),
+    Bytes(B),
     Blob {
         path: &'a str,
         digest: &'a str,
         length: u64,
     },
 }
-pub fn retained_shape(value: &Value) -> Result<Retained<'_>, String> {
-    if value.get("absent").is_some() {
-        crate::schema::object(value, &["absent"], &[]).map_err(|e| format!("E_INPUT_BLOB: {e}"))?;
-        return if value["absent"] == true {
-            Ok(Retained::Absent)
-        } else {
-            Err("E_INPUT_BLOB: absent must be true".into())
+
+/// 同一 JSON 的原观察；缺键与非对应类型分别保留。
+pub struct RetainedObservation<'a, B> {
+    pub object: bool,
+    pub keys: Vec<&'a str>,
+    pub absent: Option<Option<bool>>,
+    pub bytes: Option<B>,
+    pub blob: Option<Option<&'a str>>,
+    pub digest: Option<&'a str>,
+    pub length: Option<u64>,
+}
+
+pub enum RetainedError<'a> {
+    Fields(ObjectFieldError<'a>),
+    Representation,
+    Absent,
+    Bytes,
+    Path,
+    Digest,
+    Length,
+}
+
+#[verifier::inline]
+pub open spec fn retained_mode<B>(observed: RetainedObservation<B>) -> int {
+    if observed.absent.is_some() { 0 }
+    else if observed.bytes.is_some() && observed.blob.is_none() { 1 }
+    else if observed.bytes.is_none() && observed.blob.is_some() { 2 }
+    else { 3 }
+}
+
+#[verifier::inline]
+pub open spec fn retained_required(mode: int) -> Seq<&'static str> {
+    if mode == 0 { seq!["absent"] }
+    else if mode == 1 { seq!["bytes"] }
+    else { seq!["blob", "sha256", "length"] }
+}
+
+#[verifier::inline]
+pub open spec fn retained_fields_ok<B>(observed: RetainedObservation<B>) -> bool {
+    observed.object
+        && schema::required_fields_present(retained_required(retained_mode(observed)), observed.keys@)
+        && schema::known_fields_only(retained_required(retained_mode(observed)), seq![], observed.keys@)
+}
+
+#[verifier::inline]
+pub open spec fn retained_field_failure<B>(
+    observed: RetainedObservation<B>, error: ObjectFieldError,
+) -> bool {
+    match error {
+        ObjectFieldError::ExpectedObject => !observed.object,
+        ObjectFieldError::Missing(name) => observed.object && schema::first_missing_field(
+            retained_required(retained_mode(observed)), observed.keys@, name@,
+        ),
+        ObjectFieldError::Unknown(name) => observed.object
+            && schema::required_fields_present(retained_required(retained_mode(observed)), observed.keys@)
+            && schema::first_unknown_field(retained_required(retained_mode(observed)), seq![], observed.keys@, name@),
+    }
+}
+
+pub open spec fn retained_path_valid(path: Option<Option<&str>>) -> bool {
+    match path {
+        Some(Some(path)) => paths::host_state_path(path.spec_bytes()),
+        _ => false,
+    }
+}
+
+pub open spec fn retained_digest_valid(digest: Option<&str>) -> bool {
+    match digest {
+        Some(digest) => identifiers::digest_format(digest.spec_bytes()),
+        None => false,
+    }
+}
+
+pub open spec fn retained_selection<B>(
+    observed: RetainedObservation<B>, result: Result<Retained<B>, RetainedError>,
+) -> bool {
+    match result {
+        Ok(Retained::Absent) => retained_mode(observed) == 0 && retained_fields_ok(observed)
+            && observed.absent == Some(Some(true)),
+        Ok(Retained::Bytes(bytes)) => retained_mode(observed) == 1 && retained_fields_ok(observed)
+            && observed.bytes == Some(bytes),
+        Ok(Retained::Blob { path, digest, length }) => retained_mode(observed) == 2
+            && retained_fields_ok(observed) && retained_path_valid(observed.blob)
+            && retained_digest_valid(observed.digest)
+            && observed.blob == Some(Some(path)) && observed.digest == Some(digest)
+            && observed.length == Some(length),
+        Err(RetainedError::Representation) => retained_mode(observed) == 3,
+        Err(RetainedError::Fields(error)) => retained_mode(observed) != 3
+            && retained_field_failure(observed, error),
+        Err(RetainedError::Absent) => retained_mode(observed) == 0 && retained_fields_ok(observed)
+            && observed.absent != Some(Some(true)),
+        Err(RetainedError::Path) => retained_mode(observed) == 2 && retained_fields_ok(observed)
+            && !retained_path_valid(observed.blob),
+        Err(RetainedError::Digest) => retained_mode(observed) == 2 && retained_fields_ok(observed)
+            && retained_path_valid(observed.blob) && !retained_digest_valid(observed.digest),
+        Err(RetainedError::Length) => retained_mode(observed) == 2 && retained_fields_ok(observed)
+            && retained_path_valid(observed.blob) && retained_digest_valid(observed.digest)
+            && observed.length.is_none(),
+        Err(RetainedError::Bytes) => false,
+    }
+}
+
+/// absent 键优先；先结构，再逐项检查；字节解码另由下方同源驱动调用。
+pub fn select_retained<'a, B>(observed: RetainedObservation<'a, B>)
+    -> (out: Result<Retained<'a, B>, RetainedError<'a>>)
+    ensures retained_selection(observed, out),
+{
+    let object = if observed.object { Some(()) } else { None };
+    if observed.absent.is_some() {
+        let required = ["absent"];
+        proof {
+            assert(retained_mode(observed) == 0);
+            assert(required@ == retained_required(retained_mode(observed)));
+        }
+        match validate_object_fields(object, &required, &[], &observed.keys) {
+            Err(error) => {
+                proof { assert(retained_field_failure(observed, error)); }
+                return Err(RetainedError::Fields(error));
+            },
+            Ok(_) => {},
+        }
+        return match observed.absent {
+            Some(Some(true)) => Ok(Retained::Absent),
+            _ => Err(RetainedError::Absent),
         };
     }
-    let parse = || match (value.get("bytes"), value.get("blob")) {
+    match (observed.bytes, observed.blob) {
         (Some(bytes), None) => {
-            crate::schema::object(value, &["bytes"], &[])?;
-            let bytes =
-                serde_json::from_value(bytes.clone()).map_err(|_| "invalid retained byte array")?;
+            let required = ["bytes"];
+            proof {
+                assert(retained_mode(observed) == 1);
+                assert(required@ == retained_required(retained_mode(observed)));
+            }
+            match validate_object_fields(object, &required, &[], &observed.keys) {
+                Err(error) => {
+                    proof { assert(retained_field_failure(observed, error)); }
+                    return Err(RetainedError::Fields(error));
+                },
+                Ok(_) => {},
+            }
             Ok(Retained::Bytes(bytes))
-        }
+        },
         (None, Some(blob)) => {
-            crate::schema::object(value, &["blob", "sha256", "length"], &[])?;
-            let path = blob
-                .as_str()
-                .filter(|p| chrono_harness::verified_paths::valid_host_state_path(p.as_bytes()))
-                .ok_or("reference must be within host state")?;
-            let digest = value["sha256"]
-                .as_str()
-                .filter(|s| wire::is_digest(s))
-                .ok_or("invalid digest")?;
-            let length = value["length"].as_u64().ok_or("invalid length")?;
-            Ok(Retained::Blob {
-                path,
-                digest,
-                length,
-            })
-        }
-        _ => Err("expected exactly one bytes or blob representation".to_string()),
+            let required = ["blob", "sha256", "length"];
+            proof {
+                assert(retained_mode(observed) == 2);
+                assert(required@ == retained_required(retained_mode(observed)));
+            }
+            match validate_object_fields(object, &required, &[], &observed.keys) {
+                Err(error) => {
+                    proof { assert(retained_field_failure(observed, error)); }
+                    return Err(RetainedError::Fields(error));
+                },
+                Ok(_) => {},
+            }
+            let path = match blob {
+                Some(path) => {
+                    if !paths::valid_host_state_path(path.as_bytes()) { return Err(RetainedError::Path); }
+                    path
+                },
+                None => return Err(RetainedError::Path),
+            };
+            let digest = match observed.digest {
+                Some(digest) => {
+                    if !identifiers::valid_digest_text(digest) { return Err(RetainedError::Digest); }
+                    digest
+                },
+                None => return Err(RetainedError::Digest),
+            };
+            let length = match observed.length {
+                Some(length) => length,
+                None => return Err(RetainedError::Length),
+            };
+            Ok(Retained::Blob { path, digest, length })
+        },
+        _ => Err(RetainedError::Representation),
+    }
+}
+
+pub open spec fn retained_decoding<S, B, D>(
+    state: S, selected: Result<Retained<B>, RetainedError>, decode: D,
+    out: (S, Result<Retained, RetainedError>),
+) -> bool
+    where D: FnOnce(S, B) -> (S, Result<Vec<u8>, ()>),
+{
+    match selected {
+        Err(error) => out.0 == state && out.1 == Err::<Retained, RetainedError>(error),
+        Ok(Retained::Absent) => out.0 == state && out.1 == Ok::<Retained, RetainedError>(Retained::Absent),
+        Ok(Retained::Blob { path, digest, length }) =>
+            out.0 == state && out.1 == Ok::<Retained, RetainedError>(Retained::Blob { path, digest, length }),
+        Ok(Retained::Bytes(bytes)) => exists|decoded: (S, Result<Vec<u8>, ()>)|
+            decode.ensures((state, bytes), decoded) && out.0 == decoded.0
+            && match decoded.1 {
+                Ok(value) => out.1 == Ok::<Retained, RetainedError>(Retained::Bytes(value)),
+                Err(()) => out.1 == Err::<Retained, RetainedError>(RetainedError::Bytes),
+            },
+    }
+}
+
+/// 仅合格 bytes 调用一次原解码器；其它情况保留初态且零调用。
+pub fn parse_retained<'a, S, B, D>(state: S, observed: RetainedObservation<'a, B>, decode: D)
+    -> (out: (S, Result<Retained<'a>, RetainedError<'a>>))
+    where D: FnOnce(S, B) -> (S, Result<Vec<u8>, ()>),
+    requires forall|state: S, bytes: B| decode.requires((state, bytes)),
+    ensures exists|selected: Result<Retained<'a, B>, RetainedError<'a>>|
+        retained_selection(observed, selected) && retained_decoding(state, selected, decode, out),
+{
+    let ghost initial = state;
+    let selected = select_retained(observed);
+    let ghost selection = selected;
+    let out = match selected {
+        Err(error) => (state, Err(error)),
+        Ok(Retained::Absent) => (state, Ok(Retained::Absent)),
+        Ok(Retained::Blob { path, digest, length }) =>
+            (state, Ok(Retained::Blob { path, digest, length })),
+        Ok(Retained::Bytes(bytes)) => {
+            let ghost input = bytes;
+            let decoded = decode(state, bytes);
+            let ghost original = decoded;
+            let (state, result) = decoded;
+            let out = match result {
+                Ok(bytes) => (state, Ok(Retained::Bytes(bytes))),
+                Err(()) => (state, Err(RetainedError::Bytes)),
+            };
+            proof {
+                assert(decode.ensures((initial, input), original));
+                assert(retained_decoding(initial, selection, decode, out));
+            }
+            out
+        },
     };
-    parse().map_err(|e| format!("E_INPUT_BLOB: {e}"))
+    proof {
+        assert(retained_selection(observed, selection));
+        assert(retained_decoding(initial, selection, decode, out));
+        assert(exists|selected: Result<Retained<'a, B>, RetainedError<'a>>|
+            retained_selection(observed, selected) && retained_decoding(initial, selected, decode, out));
+    }
+    out
+}
+
+pub open spec fn retained_error_head(error: RetainedError) -> Seq<char> {
+    match error {
+        RetainedError::Fields(ObjectFieldError::ExpectedObject) => "expected object"@,
+        RetainedError::Fields(ObjectFieldError::Missing(_)) => "missing field "@,
+        RetainedError::Fields(ObjectFieldError::Unknown(_)) => "unknown field "@,
+        RetainedError::Representation => "expected exactly one bytes or blob representation"@,
+        RetainedError::Absent => "absent must be true"@,
+        RetainedError::Bytes => "invalid retained byte array"@,
+        RetainedError::Path => "reference must be within host state"@,
+        RetainedError::Digest => "invalid digest"@,
+        RetainedError::Length => "invalid length"@,
+    }
+}
+
+pub open spec fn retained_error_suffix(error: RetainedError) -> Seq<char> {
+    match error {
+        RetainedError::Fields(ObjectFieldError::Missing(name)) => name@,
+        RetainedError::Fields(ObjectFieldError::Unknown(name)) => name@,
+        _ => ""@,
+    }
+}
+
+pub open spec fn retained_error_message(error: RetainedError) -> Seq<char> {
+    "E_INPUT_BLOB: "@ + (retained_error_head(error) + retained_error_suffix(error))
+}
+
+impl<'a> RetainedError<'a> {
+    pub fn parts(self) -> (out: [&'a str; 3])
+        ensures out[0]@ == "E_INPUT_BLOB: "@,
+            out[1]@ == retained_error_head(self),
+            out[2]@ == retained_error_suffix(self),
+            out[0]@ + (out[1]@ + out[2]@) == retained_error_message(self),
+    {
+        let tail = match self {
+            Self::Fields(error) => object_error_parts(error),
+            Self::Representation => ["expected exactly one bytes or blob representation", ""],
+            Self::Absent => ["absent must be true", ""],
+            Self::Bytes => ["invalid retained byte array", ""],
+            Self::Path => ["reference must be within host state", ""],
+            Self::Digest => ["invalid digest", ""],
+            Self::Length => ["invalid length", ""],
+        };
+        ["E_INPUT_BLOB: ", tail[0], tail[1]]
+    }
+}
+
+} // verus!
+
+#[cfg(not(verus_keep_ghost))]
+pub fn retained_shape(value: &Value) -> Result<Retained<'_>, String> {
+    let observed = RetainedObservation {
+        object: value.is_object(),
+        keys: value
+            .as_object()
+            .into_iter()
+            .flat_map(|map| map.keys().map(String::as_str))
+            .collect(),
+        absent: value.get("absent").map(Value::as_bool),
+        bytes: value.get("bytes"),
+        blob: value.get("blob").map(Value::as_str),
+        digest: value["sha256"].as_str(),
+        length: value["length"].as_u64(),
+    };
+    let (_, parsed) = parse_retained((), observed, |(), bytes: &Value| {
+        (
+            (),
+            serde_json::from_value::<Vec<u8>>(bytes.clone()).map_err(|_| ()),
+        )
+    });
+    parsed.map_err(|error| error.parts().concat())
 }
 
 /// Snapshot format shared by the producer and consumer; endpoint policy is separate.
+#[cfg(not(verus_keep_ghost))]
 pub fn snapshot_shape(value: &Value) -> Result<(), String> {
     crate::schema::object(
         value,
@@ -172,6 +468,7 @@ pub fn snapshot_shape(value: &Value) -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn retained_identity(root: &Path, value: &Value) -> Result<Option<(String, u64)>, String> {
     match retained_shape(value)? {
         Retained::Absent => Ok(None),
@@ -190,6 +487,7 @@ fn retained_identity(root: &Path, value: &Value) -> Result<Option<(String, u64)>
         }
     }
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, String>, String> {
     let mut out = BTreeMap::new();
     let credentials = if config["schema_version"] == 4 {
@@ -249,6 +547,7 @@ pub fn environment(config: &Value, snapshot: &Value) -> Result<BTreeMap<String, 
 /// their FILEMAP prerequisites, shared operations and governance consumers.
 /// Collection starts with governance inputs; routes supplies its DELTA obligations
 /// after FILEMAP impact. No IO discovery or report-derived selection.
+#[cfg(not(verus_keep_ghost))]
 pub fn required_files(
     r: &Registrations,
     scope: Option<&chrono_harness::units::Scope>,
@@ -261,6 +560,7 @@ pub fn required_files(
     required_plan_files(r, selected.as_ref())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn assigned_plans(
     r: &Registrations,
     unit: &str,
@@ -273,6 +573,7 @@ fn assigned_plans(
     units::select(&units, &plans.keys().cloned().collect(), unit)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn required_plan_files(
     r: &Registrations,
     selected: Option<&std::collections::BTreeSet<String>>,
@@ -381,6 +682,7 @@ pub fn required_plan_files(
 
 /// Project routes' selected obligations through the existing explicit unit map.
 /// Retain the old assignments as well as candidate plans that existed at base.
+#[cfg(not(verus_keep_ghost))]
 pub fn collection_required_files(
     endpoint: &str,
     old: &Registrations,
@@ -410,6 +712,7 @@ pub fn collection_required_files(
     required_plan_files(r, Some(&plans))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn endpoint_required_files(
     endpoint: &str,
     old: &Registrations,
@@ -438,6 +741,7 @@ pub fn endpoint_required_files(
 
 /// Compare original per-unit evidence with the same projection of the current
 /// collection obligations, retaining exact environment and endpoint bindings.
+#[cfg(not(verus_keep_ghost))]
 pub fn project_effective(
     evidence: &Value,
     old: &Registrations,
@@ -467,6 +771,7 @@ pub fn project_effective(
     Ok(projected)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Result<Value, String> {
     validate_inner(
         req,
@@ -481,6 +786,7 @@ pub fn validate(req: &Request, old: &Registrations, new: &Registrations) -> Resu
 }
 /// Routes is the selection owner. It checks collection coverage before preparing
 /// the zero-business collection plan, without a registration/filemap cycle.
+#[cfg(not(verus_keep_ghost))]
 pub fn validate_collection(
     req: &Request,
     old: &Registrations,
@@ -499,6 +805,7 @@ pub fn validate_collection(
     }
     validate(req, old, new)
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn validate_retained_at(
     req: &Request,
     old: &Registrations,
@@ -509,6 +816,7 @@ pub fn validate_retained_at(
 ) -> Result<Value, String> {
     validate_inner(req, old, new, Some((artifacts, root, transport)), false)
 }
+#[cfg(not(verus_keep_ghost))]
 fn validate_inner(
     req: &Request,
     old: &Registrations,
@@ -691,6 +999,7 @@ fn validate_inner(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn effective_schema(old: &Registrations, new: &Registrations) -> &'static str {
     if matches!(old.config()["schema_version"].as_u64(), Some(2 | 3 | 4))
         || matches!(new.config()["schema_version"].as_u64(), Some(2 | 3 | 4))
@@ -703,6 +1012,7 @@ fn effective_schema(old: &Registrations, new: &Registrations) -> &'static str {
 
 /// Consume retained facts through the same environment semantics as validation.
 /// Null is supported only by the historical registration-only v1 contract.
+#[cfg(not(verus_keep_ghost))]
 pub fn effective_environments(
     evidence: &Value,
     old: &Registrations,

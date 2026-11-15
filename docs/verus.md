@@ -1,5 +1,32 @@
 # Verus 实施范围
 
+## 保留输入的表示解析
+
+`judge-registration/src/inputs.rs::retained_shape` 直接消费同源 Verus 的
+`select_retained`／`parse_retained`。存在 absent 键时优先处理；否则 bytes／blob 必须
+恰好存在一个。各形式先调用已证明的对象字段准入，保留必需字段及未知键的首错顺序；
+absent 只接受 true，blob 再按路径、摘要、长度检查，成功保留原路径、摘要和 u64 长度。
+路径与摘要直接调用现有已证明实现，不把仓内谓词登记成外部公理。
+
+只有字段合格的 bytes 才调用原解码器一次；其它成功或失败分支零调用且保留初态。
+解码成功保留同一字节向量，失败统一为原 byte-array 错误。类型化错误在 Verus 内
+产生 `E_INPUT_BLOB: `、原类别和完整字段名；固定 Rust 的 concat 只按序连接三片。
+独立 Verus 边界预期与普通 Rust 测试共用源码，核表示优先级、字段首错、解码调用与
+原结果、路径／摘要／长度顺序、零及 u64 上界和空串／Unicode／NUL／换行错误字段。
+沿原两项严格整 crate CI 根与原未过滤行为测试验收，不增加项目、依赖、证明入口、
+受信仓内函数、过滤、参数或预算。
+
+真实使用方是输入捕获、离线组合的 blob 导入和快照形状校验。适配层的明确外部接口
+限定为锁定 Serde JSON 的 `Value::as_object`／`is_object`、`Map::keys`、字段索引／get、
+`as_bool`／`as_str`／`as_u64`（缺键或类型不符保留对应 None）、`Value::clone` 和
+`from_value::<Vec<u8>>`（只接受实际可解码的 u8 数组，保持字节顺序）；固定 Rust 的
+Option／Result 转交、引用、String 借用、Vec 收集／切片和 concat。完整 JSON 字节到
+这些观察与解码的机械精化仍未完成；快照其它判断、内容读取、持久化事务及全仓覆盖
+仍有各自证明义务。入口在分类前收集全部 O(K) 个键引用，首错短路不表示没有读取
+后续键；不复制字段文本或 JSON 内容。bytes
+解码保留原内容复制，字段文本比较沿原对象准入。完整运行、构建、证明、CI、存储
+和维护成本未测。
+
 ## 登记对象的字段准入
 
 `registration::schema::object` 直接消费同源 Verus 的 `validate_object_fields`：先拒绝

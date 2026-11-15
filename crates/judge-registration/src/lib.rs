@@ -1,6 +1,9 @@
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
+use super::result_types::paths as retained_paths;
+#[cfg(verus_keep_ghost)]
 use super::source_verifier;
+pub use inputs::{Retained, RetainedError, RetainedObservation, parse_retained, select_retained};
 pub use schema::{
     ObjectFieldError, object_error_parts, validate_object_fields, validate_reference_syntax,
 };
@@ -11,7 +14,6 @@ pub mod consumption;
 pub mod execution;
 #[cfg(not(verus_keep_ghost))]
 mod input_coverage;
-#[cfg(not(verus_keep_ghost))]
 pub mod inputs;
 #[cfg(not(verus_keep_ghost))]
 mod registrations;
