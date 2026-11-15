@@ -1,0 +1,138 @@
+diff --git a/source/rust_verify_test/tests/fndef_types.rs b/source/rust_verify_test/tests/fndef_types.rs
+--- a/source/rust_verify_test/tests/fndef_types.rs
++++ b/source/rust_verify_test/tests/fndef_types.rs
+@@ -1419,27 +1419,31 @@
+ }
+
+ test_verify_one_file! {
+-    #[test] unit_struct_as_fn_not_supported verus_code! {
++    #[test] unit_struct_as_fn verus_code! {
+         struct A();
+
+         fn test()
+         {
+             let a = A;
+-        }
+-    } => Err(err) => assert_vir_error_msg(err, "using a datatype constructor as a function value")
+-}
+-
+-test_verify_one_file! {
+-    #[test] unit_struct_as_fn_not_supported_self_ctor verus_code! {
++            let value = a();
++            assert(value == A());
++        }
++    } => Ok(())
++}
++
++test_verify_one_file! {
++    #[test] unit_struct_as_fn_self_ctor verus_code! {
+         struct A();
+
+         impl A {
+             fn test()
+             {
+                 let a = Self;
+-            }
+-        }
+-    } => Err(err) => assert_vir_error_msg(err, "using a datatype constructor as a function value")
++                let value = a();
++                assert(value == A());
++            }
++        }
++    } => Ok(())
+ }
+
+ test_verify_one_file_with_options! {
+diff --git a/source/rust_verify_test/tests/constructor_function_values.rs b/source/rust_verify_test/tests/constructor_function_values.rs
+new file mode 100644
+--- /dev/null
++++ b/source/rust_verify_test/tests/constructor_function_values.rs
+@@ -0,0 +1,88 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] constructor_function_values_preserve_variants_fields_and_generics
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        struct Pair<T>(T, u64);
++        enum Choice<T> { Item(T, u64), Other(bool) }
++        fn test() {
++            let pair = Pair::<bool>;
++            let value = pair(true, 7);
++            assert(value.0 && value.1 == 7);
++            let item = Choice::Item::<bool>;
++            let value = item(false, 9);
++            assert(value == Choice::Item(false, 9));
++            let other = Choice::<u64>::Other;
++            let value = other(true);
++            assert(value == Choice::Other(true));
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] constructor_function_values_preserve_borrowed_arguments
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        struct Borrowed<'a, T>(&'a T, u64);
++        fn test(value: &bool) {
++            let make = Borrowed::<bool>;
++            let result = make(value, 13);
++            assert(*result.0 == *value && result.1 == 13);
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] constructor_function_values_supply_real_fn_contracts
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        enum Choice { Item(u64), Other }
++        fn apply<F: FnOnce(u64) -> Choice>(f: F, n: u64) -> (result: Choice)
++            requires call_requires(f, (n,)),
++            ensures call_ensures(f, (n,), result),
++        { f(n) }
++        fn test() {
++            let value = apply(Choice::Item, 17);
++            assert(value == Choice::Item(17));
++            assert(call_requires(Choice::Item, (29u64,)));
++            assert(forall |n: u64, result: Choice|
++                call_ensures(Choice::Item, (n,), result) ==> result == Choice::Item(n));
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] constructor_function_values_reject_changed_fields
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        struct Pair(u64, bool);
++        fn wrong() {
++            let make = Pair;
++            let value = make(23, true);
++            assert(value.0 == 24); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] constructor_function_values_reject_changed_variants
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        enum Choice { Item(u64), Other(u64) }
++        fn wrong() {
++            let make = Choice::Item;
++            let value = make(31);
++            assert(value == Choice::Other(31)); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

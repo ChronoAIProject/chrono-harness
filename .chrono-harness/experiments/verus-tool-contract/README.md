@@ -345,5 +345,18 @@ Deserialize／Error 约束和原 Result，不保证成功或失败。真实缺�
 不能把函数名当作恒失败合同。增加参数／结果转交及无依据成功／失败断言的三项独立预期，
 原真实派生和枚举 tuple 变体继续保留，未支持错误不算负例通过。
 
+## 构造器作为函数值
+
+真实枚举 Deserialize 派生把 tuple 变体构造器交给 Result::map。固定上游尚不支持这个
+合法函数值，不能以改写派生、去掉变体或不透明外部函数替代。`constructor-function-values.patch`
+顺序应用在 `serde-deserialization.patch` 后，先登记五项独立严格预期，核结构与枚举的
+完整字段、变体、泛型、借用、FnOnce 原合同及错误字段／变体的实际断言拒绝。
+同一回归入口追加 `constructor_function_values` 和原完整 `fndef_types` 库存。
+原两个零参数 tuple 结构用例随当前支持目标改为真正调用并核构造值，保留 Self 路径；
+其余原断言、真实派生、严格参数、线程及 ignored 不变。
+
+**外部工具与宿主验证登记同时修改。** 构建、证明和回归成本未知，沿已有固定源码、
+工具链与编译缓存复用；实际失败、实现及完整根须分别验收，不授予正式工具资格。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
