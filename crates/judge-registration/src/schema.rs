@@ -1,8 +1,202 @@
-//! Strict SPEC §3 structure. Reference/activation policy is evaluated separately.
-use chrono_harness::verified_verifier::sources::continuity as source_continuity;
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use super::source_verifier::identifiers;
+#[cfg(verus_keep_ghost)]
+use super::source_verifier::sources::{self as source_policy, continuity as source_continuity};
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{
+    verified_identifiers as identifiers,
+    verified_verifier::sources::{self as source_policy, continuity as source_continuity},
+    verus,
+};
+#[cfg(verus_keep_ghost)]
+use vstd::{assert_seqs_equal, prelude::*};
+
+verus! {
+
+pub enum ObjectFieldError<'a> {
+    ExpectedObject,
+    Missing(&'a str),
+    Unknown(&'a str),
+}
+
+pub open spec fn field_named(fields: Seq<&str>, name: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < fields.len() && #[trigger] fields[i]@ == name
+}
+
+pub open spec fn required_fields_present(required: Seq<&str>, keys: Seq<&str>) -> bool {
+    forall|i: int| 0 <= i < required.len() ==> field_named(keys, #[trigger] required[i]@)
+}
+
+pub open spec fn known_fields_only(required: Seq<&str>, optional: Seq<&str>, keys: Seq<&str>) -> bool {
+    forall|i: int| 0 <= i < keys.len() ==> (
+        field_named(required, #[trigger] keys[i]@) || field_named(optional, keys[i]@)
+    )
+}
+
+pub open spec fn first_missing_field(required: Seq<&str>, keys: Seq<&str>, name: Seq<char>) -> bool {
+    exists|i: int| 0 <= i < required.len() && required[i]@ == name
+        && !field_named(keys, required[i]@)
+        && forall|j: int| 0 <= j < i ==> field_named(keys, #[trigger] required[j]@)
+}
+
+pub open spec fn first_unknown_field(
+    required: Seq<&str>, optional: Seq<&str>, keys: Seq<&str>, name: Seq<char>,
+) -> bool {
+    exists|i: int| 0 <= i < keys.len() && keys[i]@ == name
+        && !field_named(required, keys[i]@) && !field_named(optional, keys[i]@)
+        && forall|j: int| 0 <= j < i ==> (
+            field_named(required, #[trigger] keys[j]@) || field_named(optional, keys[j]@)
+        )
+}
+
+fn field_list_contains(fields: &[&str], name: &str) -> (found: bool)
+    ensures found == field_named(fields@, name@),
+{
+    let mut i = 0;
+    while i < fields.len()
+        invariant 0 <= i <= fields.len(),
+            forall|j: int| 0 <= j < i ==> fields[j]@ != name@,
+        decreases fields.len() - i,
+    {
+        if identifiers::equal_text(fields[i], name) {
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+/// 返回同一个对象；缺字段按 required 顺序优先，未知字段按实际键顺序优先。
+pub fn validate_object_fields<'a, T>(
+    object: Option<T>, required: &[&'a str], optional: &[&str], keys: &[&'a str],
+) -> (out: std::result::Result<T, ObjectFieldError<'a>>)
+    ensures out.is_ok() == (object.is_some()
+        && required_fields_present(required@, keys@)
+        && known_fields_only(required@, optional@, keys@)),
+        match out {
+            Ok(value) => object == Some(value),
+            Err(ObjectFieldError::ExpectedObject) => object.is_none(),
+            Err(ObjectFieldError::Missing(name)) => object.is_some()
+                && first_missing_field(required@, keys@, name@),
+            Err(ObjectFieldError::Unknown(name)) => object.is_some()
+                && required_fields_present(required@, keys@)
+                && first_unknown_field(required@, optional@, keys@, name@),
+        },
+{
+    let value = match object {
+        Some(value) => value,
+        None => return Err(ObjectFieldError::ExpectedObject),
+    };
+    let mut i = 0;
+    while i < required.len()
+        invariant 0 <= i <= required.len(), object == Some(value),
+            forall|j: int| 0 <= j < i ==> field_named(keys@, #[trigger] required[j]@),
+        decreases required.len() - i,
+    {
+        if !field_list_contains(keys, required[i]) {
+            proof { assert(first_missing_field(required@, keys@, required[i as int]@)); }
+            return Err(ObjectFieldError::Missing(required[i]));
+        }
+        i += 1;
+    }
+    let mut j = 0;
+    while j < keys.len()
+        invariant 0 <= j <= keys.len(), object == Some(value),
+            required_fields_present(required@, keys@),
+            forall|k: int| 0 <= k < j ==> (
+                field_named(required@, #[trigger] keys[k]@) || field_named(optional@, keys[k]@)
+            ),
+        decreases keys.len() - j,
+    {
+        if !field_list_contains(required, keys[j]) && !field_list_contains(optional, keys[j]) {
+            proof { assert(first_unknown_field(required@, optional@, keys@, keys[j as int]@)); }
+            return Err(ObjectFieldError::Unknown(keys[j]));
+        }
+        j += 1;
+    }
+    Ok(value)
+}
+
+pub open spec fn object_error_message(error: ObjectFieldError) -> Seq<char> {
+    match error {
+        ObjectFieldError::ExpectedObject => "expected object"@,
+        ObjectFieldError::Missing(name) => "missing field "@ + name@,
+        ObjectFieldError::Unknown(name) => "unknown field "@ + name@,
+    }
+}
+
+/// 标准 concat 只连接两片；错误类别、前缀及完整字段名在此产生。
+pub fn object_error_parts<'a>(error: ObjectFieldError<'a>) -> (out: [&'a str; 2])
+    ensures out[0]@ + out[1]@ == object_error_message(error),
+        match error {
+            ObjectFieldError::ExpectedObject => out[0]@ == "expected object"@ && out[1]@ == ""@,
+            ObjectFieldError::Missing(name) => out[0]@ == "missing field "@ && out[1]@ == name@,
+            ObjectFieldError::Unknown(name) => out[0]@ == "unknown field "@ && out[1]@ == name@,
+        },
+{
+    match error {
+        ObjectFieldError::ExpectedObject => {
+            proof {
+                reveal_strlit("");
+                assert_seqs_equal!("expected object"@ + ""@, "expected object"@);
+            }
+            ["expected object", ""]
+        },
+        ObjectFieldError::Missing(name) => ["missing field ", name],
+        ObjectFieldError::Unknown(name) => ["unknown field ", name],
+    }
+}
+
+pub open spec fn declared_reference_valid(form: &source_continuity::ReferenceSyntax) -> bool {
+    source_policy::canonical_source_path(vstd::utf8::encode_utf8(form.file@))
+        && vstd::utf8::encode_utf8(form.before@).len() > 0
+        && vstd::utf8::encode_utf8(form.after@).len() > 0
+        && (vstd::utf8::encode_utf8(form.before@).last() == 34
+            || (form.base == 2 && vstd::utf8::encode_utf8(form.before@).last() == 47))
+        && (vstd::utf8::encode_utf8(form.after@).last() == 34
+            || (form.base == 2 && vstd::utf8::encode_utf8(form.after@).last() == 47))
+        && form.base <= 2
+}
+
+pub open spec fn reference_declarations_valid(forms: Seq<source_continuity::ReferenceSyntax>) -> bool {
+    forms.len() <= 250 && forall|i: int| 0 <= i < forms.len() ==> declared_reference_valid(#[trigger] &forms[i])
+}
+
+/// 声明数量、文件身份、开引号和基准必须完整有效；缺失不推测 shell 变量含义。
+pub fn validate_reference_syntax(forms: &Vec<source_continuity::ReferenceSyntax>) -> (out: std::result::Result<(), String>)
+    ensures out.is_ok() == reference_declarations_valid(forms@),
+        match out { Err(error) => error@ == "E_SOURCE_CONTINUITY: invalid reference syntax declaration"@, Ok(()) => true },
+{
+    if forms.len() > 250 {
+        return Err("E_SOURCE_CONTINUITY: invalid reference syntax declaration".to_string());
+    }
+    let mut i = 0;
+    while i < forms.len()
+        invariant 0 <= i <= forms.len() <= 250,
+            forall|j: int| 0 <= j < i ==> declared_reference_valid(#[trigger] &forms[j]),
+        decreases forms.len() - i,
+    {
+        let form = &forms[i];
+        let before = form.before.as_str().as_bytes();
+        let after = form.after.as_str().as_bytes();
+        if !source_policy::canonical_source_name(form.file.as_str())
+            || before.len() == 0 || after.len() == 0
+            || (before[before.len() - 1] != 34 && !(form.base == 2 && before[before.len() - 1] == 47))
+            || (after[after.len() - 1] != 34 && !(form.base == 2 && after[after.len() - 1] == 47))
+            || form.base > 2 {
+            return Err("E_SOURCE_CONTINUITY: invalid reference syntax declaration".to_string());
+        }
+        i += 1;
+    }
+    Ok(())
+}
+
+} // verus!
+
+// Strict SPEC §3 structure. Reference/activation policy is evaluated separately.
 use chrono_harness::{relative_path, wire};
 use serde_json::{Map, Value};
-pub use source_continuity::validate_reference_syntax;
 use std::collections::BTreeSet;
 type Result<T = ()> = std::result::Result<T, String>;
 pub fn object<'a>(
@@ -10,18 +204,13 @@ pub fn object<'a>(
     required: &[&str],
     optional: &[&str],
 ) -> Result<&'a Map<String, Value>> {
-    let o = v.as_object().ok_or("expected object")?;
-    for k in required {
-        if !o.contains_key(*k) {
-            return Err(format!("missing field {k}"));
-        }
-    }
-    for k in o.keys() {
-        if !required.contains(&k.as_str()) && !optional.contains(&k.as_str()) {
-            return Err(format!("unknown field {k}"));
-        }
-    }
-    Ok(o)
+    let object = v.as_object();
+    let keys: Vec<&str> = object
+        .into_iter()
+        .flat_map(|object| object.keys().map(String::as_str))
+        .collect();
+    validate_object_fields(object, required, optional, &keys)
+        .map_err(|error| object_error_parts(error).concat())
 }
 pub fn string(v: &Value) -> Result<&str> {
     v.as_str()
@@ -356,7 +545,7 @@ pub fn config(v: &Value) -> Result {
         }
     }
     if let Some(coverage) = v["input_closure"].get("coverage") {
-        crate::input_coverage::shape(coverage, &v["input_closure"])?;
+        super::input_coverage::shape(coverage, &v["input_closure"])?;
     }
     Ok(())
 }
@@ -493,7 +682,7 @@ pub fn projects(v: &Value) -> Result {
             }],
         )?;
     }
-    crate::execution::test_bindings(v)?;
+    super::execution::test_bindings(v)?;
     Ok(())
 }
 pub fn filemap(v: &Value) -> Result {
@@ -526,12 +715,12 @@ pub fn filemap(v: &Value) -> Result {
                 serde_json::from_value(declaration.clone()).map_err(|e| e.to_string())?;
             validate_reference_syntax(&syntax)?;
         }
-        let plans = crate::execution::plans(v)?;
+        let plans = super::execution::plans(v)?;
         for plan in plans.values() {
             plan_operations.extend(plan.operations.iter().cloned());
         }
         if let Some(policy) = v.get("execution_scheduling") {
-            let policy: crate::execution::Scheduling =
+            let policy: super::execution::Scheduling =
                 serde_json::from_value(policy.clone()).map_err(|e| e.to_string())?;
             policy.validate()?;
         }

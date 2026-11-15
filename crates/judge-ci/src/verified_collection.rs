@@ -18,13 +18,27 @@ pub mod result_types;
 pub use chrono_harness::verified_status as result_types;
 use result_types::{CheckResult, Status};
 
-#[cfg(verus_keep_ghost)]
-#[path = "../../runner/src/verified_verifier.rs"]
-pub mod source_verifier;
-#[cfg(not(verus_keep_ghost))]
 pub use chrono_harness::verified_verifier as source_verifier;
-pub use source_verifier::sources::continuity::validate_reference_syntax;
 pub use source_verifier::sources::validate_source_plan;
+
+#[cfg(verus_keep_ghost)]
+#[path = "../../judge-registration/src/lib.rs"]
+mod source_registration;
+#[cfg(not(verus_keep_ghost))]
+pub use chrono_judge_registration::{
+    ObjectFieldError, Retained, RetainedError, RetainedObservation, object_error_parts,
+    parse_retained, select_retained, validate_object_fields, validate_reference_syntax,
+};
+#[cfg(verus_keep_ghost)]
+pub use source_registration::inputs::{
+    retained_decoding, retained_error_head, retained_error_suffix, retained_field_failure,
+    retained_fields_ok, retained_mode, retained_selection,
+};
+#[cfg(verus_keep_ghost)]
+pub use source_registration::{
+    ObjectFieldError, Retained, RetainedError, RetainedObservation, object_error_parts,
+    parse_retained, select_retained, validate_object_fields, validate_reference_syntax,
+};
 
 verus! {
 

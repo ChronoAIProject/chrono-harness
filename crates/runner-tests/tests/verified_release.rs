@@ -12,11 +12,87 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as identifiers;
+#[cfg(verus_keep_ghost)]
+use policy::identifiers;
+
 #[cfg(verus_keep_ghost)]
 #[path = "support/retention_frontier.rs"]
 mod retention_frontier;
 
 verus! {
+
+fn skipped_disposal_checkpoint_preserves_state(tree: bool, remaining: usize)
+    requires !tree || remaining == 0,
+{
+    let persist = |calls: u8| -> (out: (u8, Result<(), &str>))
+        ensures out.0 == 1, out.1 == Err::<(), &str>("unexpected checkpoint"),
+    { (1, Err("unexpected checkpoint")) };
+    let (calls, result) = policy::checkpoint_disposal(0u8, tree, remaining, &persist);
+    expect_true(calls == 0 && result.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn disposal_checkpoint_skips_files_and_exhausted_tree_cursors() {
+    skipped_disposal_checkpoint_preserves_state(false, 0);
+    skipped_disposal_checkpoint_preserves_state(false, 1);
+    skipped_disposal_checkpoint_preserves_state(false, usize::MAX);
+    skipped_disposal_checkpoint_preserves_state(true, 0);
+}
+
+fn partial_tree_checkpoint_preserves_original_result(remaining: usize, error: &str)
+    requires remaining > 0,
+{
+    let persist = |calls: u8| -> (out: (u8, Result<(), &str>))
+        ensures out.0 == if calls == 0 { 1u8 } else { 2u8 },
+            out.1 == Err::<(), &str>(error),
+    { (if calls == 0 { 1 } else { 2 }, Err(error)) };
+    let (calls, result) = policy::checkpoint_disposal(0u8, true, remaining, &persist);
+    expect_true(calls == 1);
+    match result {
+        Err(actual) => {
+            let same = identifiers::equal_text(actual, error);
+            expect_true(same);
+        },
+        Ok(()) => { assert(false); panic!(); },
+    }
+    let persist_ok = |calls: u8| -> (out: (u8, Result<(), &str>))
+        ensures out.0 == if calls == 0 { 1u8 } else { 2u8 }, out.1.is_ok(),
+    { (if calls == 0 { 1 } else { 2 }, Ok(())) };
+    let (calls, result) = policy::checkpoint_disposal(0u8, true, remaining, &persist_ok);
+    expect_true(calls == 1 && result.is_ok());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn disposal_checkpoint_persists_partial_trees_once_and_preserves_complete_errors() {
+    partial_tree_checkpoint_preserves_original_result(1, "");
+    partial_tree_checkpoint_preserves_original_result(2, "checkpoint: 中\0original\nerror");
+    partial_tree_checkpoint_preserves_original_result(usize::MAX, "original IO failure");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn absent_disposal_recovery_retains_its_original_phase_classification() {
+    proof {
+        reveal_strlit("disposing"); reveal_strlit("released"); reveal_strlit("");
+        reveal_strlit("disposing\0tail");
+        assert("released"@.len() != "disposing"@.len());
+        assert(""@.len() != "disposing"@.len());
+        assert("disposing\0tail"@.len() != "disposing"@.len());
+    }
+    let partial = policy::absent_disposal_fact("disposing");
+    let same = identifiers::equal_text(partial, "absent-after-partial-disposal");
+    expect_true(same);
+    let released = policy::absent_disposal_fact("released");
+    let same = identifiers::equal_text(released, "already-absent-before-disposal");
+    expect_true(same);
+    let empty = policy::absent_disposal_fact("");
+    let same = identifiers::equal_text(empty, "already-absent-before-disposal");
+    expect_true(same);
+    let unknown = policy::absent_disposal_fact("disposing\0tail");
+    let same = identifiers::equal_text(unknown, "already-absent-before-disposal");
+    expect_true(same);
+}
 
 spec fn fixture_edge(rows: Seq<(String, Vec<String>)>, source: Seq<char>, target: Seq<char>) -> bool {
     exists|i: int, j: int| 0 <= i < rows.len() && 0 <= j < rows[i].1@.len()
@@ -350,10 +426,10 @@ fn finalized_requires_sealed_released_or_disposing_output_and_no_retired_leases(
     expect_true(!policy::original_finalized(0, Some((true, "released\0"))));
     expect_true(!policy::original_finalized(1, Some((true, "released"))));
     expect_true(!policy::original_finalized(usize::MAX, Some((true, "disposing"))));
-    expect_true(policy::defer_finalized_original(true, true));
-    expect_true(!policy::defer_finalized_original(false, true));
-    expect_true(!policy::defer_finalized_original(true, false));
-    expect_true(!policy::defer_finalized_original(false, false));
+    expect_true(policy::defer_declared_original(true, true));
+    expect_true(!policy::defer_declared_original(false, true));
+    expect_true(!policy::defer_declared_original(true, false));
+    expect_true(!policy::defer_declared_original(false, false));
 }
 
 fn expect_expansion(actual: policy::FinalizedExpansion, expected: u8)
@@ -382,16 +458,20 @@ fn only_actual_roots_stop_expansion_and_rootless_cycles_remain_related() {
         assert("initial"@.len() != "initial\0"@.len());
         assert("é"@[0] != "e\u{301}"@[0]);
     }
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial", 1, 1), 0);
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "parent", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(true, None, "parent", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 0), 2);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 1, 0), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", usize::MAX, 0), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "initial", 0, 1), 3);
-    expect_expansion(policy::finalized_expansion(false, Some("initial"), "parent", 0, 0), 2);
-    expect_expansion(policy::finalized_expansion(true, Some("initial"), "initial\0", 0, 1), 1);
-    expect_expansion(policy::finalized_expansion(false, Some("é"), "e\u{301}", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "initial", 1, 1), 0);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(true, true, None, "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 0, 0), 2);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 1, 0), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", usize::MAX, 0), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "initial", 0, 1), 3);
+    expect_expansion(policy::original_expansion(false, true, Some("initial"), "parent", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, true, Some("initial"), "initial\0", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, true, Some("é"), "e\u{301}", 0, 0), 2);
+    expect_expansion(policy::original_expansion(true, false, Some("initial"), "initial", 0, 1), 0);
+    expect_expansion(policy::original_expansion(true, false, Some("initial"), "parent", 0, 1), 1);
+    expect_expansion(policy::original_expansion(false, false, Some("initial"), "initial", 0, 0), 3);
+    expect_expansion(policy::original_expansion(false, false, Some("initial"), "parent", 1, 0), 3);
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]

@@ -1,5 +1,5 @@
 //! Initial inventory checks share reference policy without inventing prior history.
-use crate::{Registrations, Result, issue};
+use super::{Registrations, Result, issue};
 use chrono_harness::{
     facts,
     initial::{Profile, Request},
@@ -153,7 +153,7 @@ fn evaluate(req: &Request, response: &mut Response, reader: &facts::Reader) -> R
     {
         return Err("initial inventory rejects unsupported tree entries".into());
     }
-    crate::references(
+    super::references(
         reader,
         root,
         &req.candidate.commit,

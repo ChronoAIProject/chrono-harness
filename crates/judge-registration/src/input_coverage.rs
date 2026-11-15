@@ -1,5 +1,5 @@
 //! Explicit domain coverage; it validates declarations, never discovers reads.
-use crate::{NodeKind, Registrations, issue, schema};
+use super::{NodeKind, Registrations, issue, schema};
 use chrono_harness::wire::Response;
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
@@ -55,7 +55,7 @@ pub(crate) fn shape(coverage: &Value, closure: &Value) -> Result<(), String> {
         schema::string(&row["reason"])?;
         let state = schema::string(&row["state"])?;
         let ids = schema::array(&row["bindings"])?;
-        if !crate::verified_input_coverage::row_state_valid(state, ids.len(), closure_status) {
+        if !super::verified_input_coverage::row_state_valid(state, ids.len(), closure_status) {
             return Err(format!(
                 "invalid coverage state {state}: {consumer}/{domain}"
             ));
@@ -127,7 +127,7 @@ pub(crate) fn validate(registrations: &Registrations, response: &mut Response) {
         .map(|input| (input["id"].as_str().unwrap(), input))
         .collect();
     for (index, row) in coverage["rows"].as_array().unwrap().iter().enumerate() {
-        if !crate::verified_input_coverage::is_absent(row["state"].as_str().unwrap()) {
+        if !super::verified_input_coverage::is_absent(row["state"].as_str().unwrap()) {
             continue;
         }
         for id in row["bindings"].as_array().unwrap() {

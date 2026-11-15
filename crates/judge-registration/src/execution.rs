@@ -137,7 +137,7 @@ pub fn scheduling(
         .values()
         .flat_map(|p| p.operations.iter().cloned())
         .collect();
-    if !crate::verified_scheduling::claims_cover_operations(&participating, &policy.claims) {
+    if !super::verified_scheduling::claims_cover_operations(&participating, &policy.claims) {
         return Err(
             "E_SCHEDULING: claims must name every participating operation, including empty claims"
                 .into(),

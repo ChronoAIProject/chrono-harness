@@ -62,6 +62,11 @@ pub use automatic::inventory::worktree_action as inventory_worktree_action;
 #[doc(hidden)]
 #[cfg(not(verus_keep_ghost))]
 pub use automatic::write_inventory_record;
+
+#[doc(hidden)]
+#[cfg(feature = "producer-birth-test")]
+#[cfg(not(verus_keep_ghost))]
+pub use automatic::inventory::compact_retention_record as compact_inventory_retention_record;
 #[cfg(not(verus_keep_ghost))]
 pub use automatic::{RetainedArtifact, TemporaryHost};
 #[cfg(not(verus_keep_ghost))]

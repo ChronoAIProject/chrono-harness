@@ -6,7 +6,7 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 #[path = "../../../identifiers/src/lib.rs"]
-mod identifiers;
+pub(crate) mod identifiers;
 #[cfg(not(verus_keep_ghost))]
 use crate::verified_identifiers as identifiers;
 
@@ -119,6 +119,42 @@ pub fn within_bound(length: u64, limit: u64) -> (fits: bool)
     ensures fits == (length <= limit),
 {
     length <= limit
+}
+
+/// 中间树游标必须落盘；耗尽的游标交给现役终态／引用脱离保存。
+/// 选择和原结果转交归此函数，保存回调仍由保留声明的所有者执行。
+pub fn checkpoint_disposal<S, E, F>(state: S, tree: bool, remaining: usize, persist: &F)
+    -> (out: (S, Result<(), E>))
+    where F: Fn(S) -> (S, Result<(), E>),
+    requires persist.requires((state,)),
+    ensures if tree && remaining > 0 {
+        persist.ensures((state,), out)
+    } else {
+        out.0 == state && out.1 == Ok::<(), E>(())
+    },
+{
+    if tree && remaining > 0 {
+        let out = persist(state);
+        assert(persist.ensures((state,), out));
+        out
+    } else {
+        (state, Ok(()))
+    }
+}
+
+/// 根已缺失时仍按原持久阶段解释，不把省略的末项游标当作未执行删除。
+pub fn absent_disposal_fact(phase: &str) -> (fact: &'static str)
+    ensures fact@ == if phase@ == "disposing"@ {
+        "absent-after-partial-disposal"@
+    } else {
+        "already-absent-before-disposal"@
+    },
+{
+    if identifiers::equal_text(phase, "disposing") {
+        "absent-after-partial-disposal"
+    } else {
+        "already-absent-before-disposal"
+    }
 }
 
 pub open spec fn recovery_text(text: Option<&str>) -> Option<Seq<char>> {
@@ -265,9 +301,9 @@ pub fn original_finalized(retired: usize, output: Option<(bool, &str)>) -> (fina
     }
 }
 
-pub fn defer_finalized_original(discover_under_lease: bool, finalized: bool) -> (defer: bool)
-    ensures defer == (discover_under_lease && finalized),
-{ discover_under_lease && finalized }
+pub fn defer_declared_original(discover_under_lease: bool, declared: bool) -> (defer: bool)
+    ensures defer == (discover_under_lease && declared),
+{ discover_under_lease && declared }
 
 pub fn preserve_discovered_original(member: bool, retained: bool, retiring_frontier: bool)
     -> (preserve: bool)
@@ -305,20 +341,20 @@ pub enum FinalizedExpansion {
     Related,
 }
 
-/// 入向引用本身不是保留根。非初始根仍读取一层真实依赖，保留缺失依赖错误。
-pub fn finalized_expansion(rooted: bool, initial: Option<&str>, id: &str,
+/// 保留根不要求发布已完成；只有封存且无根的原件才可选择退役。
+pub fn original_expansion(rooted: bool, finalized: bool, initial: Option<&str>, id: &str,
     incoming: usize, roles: usize) -> (out: FinalizedExpansion)
     ensures match out {
         FinalizedExpansion::RetainOnly => rooted && recovery_text(initial) == Some(id@),
         FinalizedExpansion::RootFrontier => rooted && recovery_text(initial) != Some(id@),
-        FinalizedExpansion::RetireFrontier => !rooted && incoming == 0 && roles == 0,
-        FinalizedExpansion::Related => !rooted && (incoming != 0 || roles != 0),
+        FinalizedExpansion::RetireFrontier => !rooted && finalized && incoming == 0 && roles == 0,
+        FinalizedExpansion::Related => !rooted && (!finalized || incoming != 0 || roles != 0),
     },
 {
     let initial = same_recovery_text(initial, Some(id));
     if rooted {
         if initial { FinalizedExpansion::RetainOnly } else { FinalizedExpansion::RootFrontier }
-    } else if incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
+    } else if finalized && incoming == 0 && roles == 0 { FinalizedExpansion::RetireFrontier }
     else { FinalizedExpansion::Related }
 }
 

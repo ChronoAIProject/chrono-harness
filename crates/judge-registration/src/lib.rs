@@ -1,5 +1,13 @@
-//! Registration owns full-format schema, snapshot and affected-reference admissibility.
-pub use schema::validate_reference_syntax;
+#![allow(unexpected_cfgs)]
+#[cfg(verus_keep_ghost)]
+use chrono_harness::verified_paths as retained_paths;
+#[cfg(verus_keep_ghost)]
+use chrono_harness::verified_verifier as source_verifier;
+pub use inputs::{Retained, RetainedError, RetainedObservation, parse_retained, select_retained};
+pub use schema::{
+    ObjectFieldError, object_error_parts, validate_object_fields, validate_reference_syntax,
+};
+// Registration owns full-format schema, snapshot and affected-reference admissibility.
 pub mod consumption;
 pub mod execution;
 mod input_coverage;

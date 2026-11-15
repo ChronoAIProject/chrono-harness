@@ -1172,24 +1172,49 @@
         },
         "verify_collection": {
           "operation": "verify.ci-collection",
-          "tool": "verus",
+          "tool": "bootstrap-native",
           "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--emit=link=.chrono-harness/state/verify.ci-collection.rlib,dep-info=.chrono-harness/state/verify.ci-collection.rlib.d",
-            "crates/judge-ci/src/verified_collection.rs",
-            "-o",
-            ".chrono-harness/state/verify.ci-collection.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
+            ".",
+            ".chrono-harness/ci/runner-build.json",
+            "runner-dependencies",
+            "verify.ci-collection"
           ],
-          "output_contract": {
-            "version": "0.2026.05.05.d03e906",
-            "commit": "d03e9063f15af2b5d1668be45bb7ccd5e8544f4c"
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2024",
+              "--extern",
+              "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
+              "--extern",
+              "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
+              "--extern",
+              "serde",
+              "--extern",
+              "serde_json",
+              "--extern",
+              "time",
+              "--import",
+              "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
+              "--emit=link=.chrono-harness/state/verify.ci-collection.rlib,dep-info=.chrono-harness/state/verify.ci-collection.rlib.d",
+              "crates/judge-ci/src/verified_collection.rs",
+              "-o",
+              ".chrono-harness/state/verify.ci-collection.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.05.05.d03e906",
+              "commit": "d03e9063f15af2b5d1668be45bb7ccd5e8544f4c"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
           }
         },
         "verify_complete_affected_root": {
@@ -1303,24 +1328,49 @@
         },
         "verify_collection": {
           "operation": "verify.ci-collection-tests",
-          "tool": "verus",
+          "tool": "bootstrap-native",
           "argv": [
-            "--crate-type=lib",
-            "--no-cheating",
-            "--no-external-by-default",
-            "--num-threads",
-            "2",
-            "--output-json",
-            "--compile",
-            "--emit=link=.chrono-harness/state/verify.ci-collection-tests.rlib,dep-info=.chrono-harness/state/verify.ci-collection-tests.rlib.d",
-            "crates/judge-ci-tests/tests/verified_collection.rs",
-            "-o",
-            ".chrono-harness/state/verify.ci-collection-tests.rlib",
-            "-Zchecksum-hash-algorithm=sha256"
+            ".",
+            ".chrono-harness/ci/runner-build.json",
+            "runner-dependencies",
+            "verify.ci-collection-tests"
           ],
-          "output_contract": {
-            "version": "0.2026.05.05.d03e906",
-            "commit": "d03e9063f15af2b5d1668be45bb7ccd5e8544f4c"
+          "nested_proof": {
+            "tool": "verus-json-contract",
+            "executable": "$COMPONENT/verus",
+            "argv": [
+              "--crate-type=lib",
+              "--no-cheating",
+              "--no-external-by-default",
+              "--num-threads",
+              "2",
+              "--output-json",
+              "--compile",
+              "--edition=2024",
+              "--extern",
+              "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.rlib",
+              "--extern",
+              "verus_builtin_macros=$COMPONENT/libverus_builtin_macros.dylib",
+              "--extern",
+              "serde",
+              "--extern",
+              "serde_json",
+              "--extern",
+              "time",
+              "--import",
+              "chrono_harness=.chrono-harness/state/libci-generation-dependency-20261114-runner-adapters.vir",
+              "--emit=link=.chrono-harness/state/verify.ci-collection-tests.rlib,dep-info=.chrono-harness/state/verify.ci-collection-tests.rlib.d",
+              "crates/judge-ci-tests/tests/verified_collection.rs",
+              "-o",
+              ".chrono-harness/state/verify.ci-collection-tests.rlib",
+              "-Zchecksum-hash-algorithm=sha256"
+            ],
+            "output_contract": {
+              "version": "0.2026.05.05.d03e906",
+              "commit": "d03e9063f15af2b5d1668be45bb7ccd5e8544f4c"
+            },
+            "timeout_seconds": 900,
+            "output_limit_bytes": 1048576
           }
         }
       },
