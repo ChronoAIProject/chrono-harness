@@ -3,13 +3,45 @@ use super::*;
 
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub(super) struct PolicyBinding {
-    pub(super) policy_sha256: String,
+pub(super) struct PolicySource {
     pub(super) head: String,
     pub(super) inputs: BTreeMap<String, Option<String>>,
 }
 
+#[derive(Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub(super) struct PolicyBinding {
+    pub(super) policy_sha256: String,
+    pub(super) head: String,
+    pub(super) inputs: BTreeMap<String, Option<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) policy_source: Option<PolicySource>,
+}
+
 impl Manager {
+    fn committed_policy_source(&self, r: &mut Runner) -> Result<PolicySource, String> {
+        let inputs = BTreeMap::from([
+            (
+                self.inputs.config_path.clone(),
+                Some(sha256(&self.inputs.config_bytes)),
+            ),
+            (
+                self.inputs.policy_path.clone(),
+                Some(sha256(&self.inputs.policy_bytes)),
+            ),
+        ]);
+        if r.oid(&self.inputs.source_root, "HEAD")? != self.inputs.source_head
+            || self.target_policy_inputs(r, &self.inputs.source_root, &self.inputs.source_head)?
+                != inputs
+        {
+            return Err("cleanup policy source changed before adoption".into());
+        }
+        Ok(PolicySource {
+            head: self.inputs.source_head.clone(),
+            inputs,
+        })
+    }
+
     pub(super) fn policy_binding(&self, e: &Entry) -> Result<PolicyBinding, String> {
         let mut binding = PolicyBinding {
             policy_sha256: e.policy_sha256.clone(),
@@ -19,6 +51,7 @@ impl Manager {
                 .into(),
             inputs: serde_json::from_value(e.enrollment["policy_inputs"].clone())
                 .map_err(|_| "enrollment lacks original target policy input bindings")?,
+            policy_source: None,
         };
         for receipt in &e.policy_migrations {
             let report = json(&self.receipt(receipt)?)?;
@@ -33,6 +66,15 @@ impl Manager {
             binding = serde_json::from_value(report["next"].clone())
                 .map_err(|e| format!("invalid migrated policy binding: {e}"))?;
             facts::full_oid(&binding.head)?;
+            if let Some(source) = &binding.policy_source {
+                facts::full_oid(&source.head)?;
+                if source.inputs.keys().ne(binding.inputs.keys())
+                    || source.inputs.get(&self.inputs.policy_path)
+                        != Some(&Some(binding.policy_sha256.clone()))
+                {
+                    return Err("adopted cleanup source does not bind policy inputs".into());
+                }
+            }
         }
         Ok(binding)
     }
@@ -63,6 +105,19 @@ impl Manager {
             }
             retained.push(row);
         }
+        if let Some(source) = &binding.policy_source {
+            retained.extend(self.migration_inputs(
+                r,
+                target,
+                &PolicyBinding {
+                    policy_sha256: binding.policy_sha256.clone(),
+                    head: source.head.clone(),
+                    inputs: source.inputs.clone(),
+                    policy_source: None,
+                },
+                &format!("{phase}-policy-source"),
+            )?);
+        }
         Ok(retained)
     }
 
@@ -70,6 +125,7 @@ impl Manager {
         &mut self,
         r: &mut Runner,
         target: &Path,
+        adopt_cleanup_policy: bool,
         report: &mut Value,
     ) -> Result<(), String> {
         let target = absolute(target, false)?;
@@ -137,11 +193,6 @@ impl Manager {
             })
         });
         let previous = self.policy_binding(&e)?;
-        let next = PolicyBinding {
-            policy_sha256: sha256(&self.inputs.policy_bytes),
-            inputs: self.target_policy_inputs(r, &target, &head)?,
-            head: head.clone(),
-        };
         let adopted = BTreeMap::from([
             (
                 self.inputs.config_path.clone(),
@@ -152,7 +203,17 @@ impl Manager {
                 Some(sha256(&self.inputs.policy_bytes)),
             ),
         ]);
-        if next.inputs != adopted {
+        let next = PolicyBinding {
+            policy_sha256: sha256(&self.inputs.policy_bytes),
+            inputs: self.target_policy_inputs(r, &target, &head)?,
+            head: head.clone(),
+            policy_source: if adopt_cleanup_policy {
+                Some(self.committed_policy_source(r)?)
+            } else {
+                None
+            },
+        };
+        if !adopt_cleanup_policy && next.inputs != adopted {
             return Err(
                 "migration target must adopt its own committed policy/configuration".into(),
             );
@@ -177,8 +238,9 @@ impl Manager {
         for path in next.inputs.keys() {
             start::registered_policy(&target_regs, path, &self.inputs.policy.state_directory)?;
         }
-        let policy_changed =
-            previous.policy_sha256 != next.policy_sha256 || previous.inputs != next.inputs;
+        let policy_changed = previous.policy_sha256 != next.policy_sha256
+            || previous.inputs != next.inputs
+            || previous.policy_source != next.policy_source;
         if !policy_changed && !checkout_changed {
             self.check_entry(r, &e, &head, None)?;
             lease.stable()?;
@@ -212,6 +274,11 @@ impl Manager {
         self.check_attachment(r, &current, &head, None)?;
         if self.target_policy_inputs(r, &target, &head)? != next.inputs {
             return Err("migration target policy changed before adoption".into());
+        }
+        if let Some(source) = &next.policy_source {
+            if self.committed_policy_source(r)? != *source {
+                return Err("cleanup policy source changed before adoption".into());
+            }
         }
         lease.stable()?;
         if checkout_changed && e.report_handoff_pending() {

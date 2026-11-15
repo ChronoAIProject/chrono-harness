@@ -2350,6 +2350,19 @@ impl Manager {
     }
 
     fn adopt_live_policy(&mut self, r: &mut Runner) -> Result<(), String> {
+        if let Some(i) = self.current_entry(&self.scope) {
+            if self
+                .policy_binding(&self.ledger.entries[i])?
+                .policy_source
+                .is_some()
+            {
+                return self.restore_adopted_policy(r);
+            }
+        }
+        self.adopt_target_policy(r)
+    }
+
+    fn adopt_target_policy(&mut self, r: &mut Runner) -> Result<(), String> {
         if self.scope == self.inputs.source_root {
             return Ok(());
         }
@@ -2424,65 +2437,70 @@ impl Manager {
         // An import adopts the caller's policy while retaining the target's raw
         // input bindings. Those are separate sources until an explicit migration.
         let mut _original_guard = None;
-        match crate::verified_lifecycle::adopted_policy_source(
-            entry.enrollment["kind"].as_str().unwrap_or(""),
-            !entry.policy_migrations.is_empty(),
-            &binding.head,
-            &self.inputs.source_head,
-            &binding.policy_sha256,
-            &sha256(&self.inputs.policy_bytes),
-        ) {
-            crate::verified_lifecycle::AdoptedPolicySource::Current => return Ok(()),
-            crate::verified_lifecycle::AdoptedPolicySource::RetainedTarget => (),
-            crate::verified_lifecycle::AdoptedPolicySource::ImportedOriginal => {
-                let path = entry.enrollment["receipt"]["report_path"]
-                    .as_str()
-                    .ok_or("import enrollment lacks its original report path")?;
-                _original_guard =
-                    chrono_harness::retained_artifacts::retention::read_guard(&root, path)?;
-                let bytes = crate::recovery::state_bytes(&root, path)?;
-                let inventory =
-                    chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
-                        .ok_or("import policy restoration requires its published original")?;
-                let published =
-                    inventory.published_original(path, &sha256(&bytes), bytes.len() as u64)?;
-                let report = json(&bytes)?;
-                let fields = crate::verified_lifecycle::ImportedPolicyReceipt {
-                    schema: report["schema"].as_str(),
-                    operation: report["operation"].as_str(),
-                    status: report["status"].as_str(),
-                    source_root: report["source_root"].as_str(),
-                    report_path: report["report_path"].as_str(),
-                    config_path: report["config_path"].as_str(),
-                };
-                if !crate::verified_lifecycle::imported_policy_receipt_valid(
-                    &fields,
-                    published,
-                    root.to_str().ok_or("non-UTF8 coordinator root")?,
-                    path,
-                    &self.inputs.config_path,
-                ) {
-                    return Err("import policy original does not bind this adoption".into());
+        if let Some(source) = binding.policy_source.take() {
+            binding.head = source.head;
+            binding.inputs = source.inputs;
+        } else {
+            match crate::verified_lifecycle::adopted_policy_source(
+                entry.enrollment["kind"].as_str().unwrap_or(""),
+                !entry.policy_migrations.is_empty(),
+                &binding.head,
+                &self.inputs.source_head,
+                &binding.policy_sha256,
+                &sha256(&self.inputs.policy_bytes),
+            ) {
+                crate::verified_lifecycle::AdoptedPolicySource::Current => return Ok(()),
+                crate::verified_lifecycle::AdoptedPolicySource::RetainedTarget => (),
+                crate::verified_lifecycle::AdoptedPolicySource::ImportedOriginal => {
+                    let path = entry.enrollment["receipt"]["report_path"]
+                        .as_str()
+                        .ok_or("import enrollment lacks its original report path")?;
+                    _original_guard =
+                        chrono_harness::retained_artifacts::retention::read_guard(&root, path)?;
+                    let bytes = crate::recovery::state_bytes(&root, path)?;
+                    let inventory =
+                        chrono_harness::retained_artifacts::retention::Inventory::adopted(&root)?
+                            .ok_or("import policy restoration requires its published original")?;
+                    let published =
+                        inventory.published_original(path, &sha256(&bytes), bytes.len() as u64)?;
+                    let report = json(&bytes)?;
+                    let fields = crate::verified_lifecycle::ImportedPolicyReceipt {
+                        schema: report["schema"].as_str(),
+                        operation: report["operation"].as_str(),
+                        status: report["status"].as_str(),
+                        source_root: report["source_root"].as_str(),
+                        report_path: report["report_path"].as_str(),
+                        config_path: report["config_path"].as_str(),
+                    };
+                    if !crate::verified_lifecycle::imported_policy_receipt_valid(
+                        &fields,
+                        published,
+                        root.to_str().ok_or("non-UTF8 coordinator root")?,
+                        path,
+                        &self.inputs.config_path,
+                    ) {
+                        return Err("import policy original does not bind this adoption".into());
+                    }
+                    self.verify_inputs(&report)?;
+                    binding.head = crate::verified_lifecycle::imported_policy_source_commit(
+                        report.get("policy_source_commit").is_some(),
+                        report["policy_source_commit"].as_str(),
+                        report["source_commit"].as_str(),
+                    )
+                    .ok_or("import policy original lacks a valid fixed policy source commit")?
+                    .into();
+                    facts::full_oid(&binding.head)?;
+                    let config_sha256 = report["config_sha256"]
+                        .as_str()
+                        .ok_or("import policy original lacks its configuration digest")?;
+                    binding.inputs = BTreeMap::from([
+                        (self.inputs.config_path.clone(), Some(config_sha256.into())),
+                        (
+                            self.inputs.policy_path.clone(),
+                            Some(binding.policy_sha256.clone()),
+                        ),
+                    ]);
                 }
-                self.verify_inputs(&report)?;
-                binding.head = crate::verified_lifecycle::imported_policy_source_commit(
-                    report.get("policy_source_commit").is_some(),
-                    report["policy_source_commit"].as_str(),
-                    report["source_commit"].as_str(),
-                )
-                .ok_or("import policy original lacks a valid fixed policy source commit")?
-                .into();
-                facts::full_oid(&binding.head)?;
-                let config_sha256 = report["config_sha256"]
-                    .as_str()
-                    .ok_or("import policy original lacks its configuration digest")?;
-                binding.inputs = BTreeMap::from([
-                    (self.inputs.config_path.clone(), Some(config_sha256.into())),
-                    (
-                        self.inputs.policy_path.clone(),
-                        Some(binding.policy_sha256.clone()),
-                    ),
-                ]);
             }
         }
         let config_bytes = r.blob(&root, &binding.head, &self.inputs.config_path)?;
@@ -4523,8 +4541,19 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
             n += 1;
             continue;
         }
-        if ["--dispose-evidence", "--artifacts-only"].contains(&key.as_str()) {
-            if operation != "finish" || !flags.insert(key.as_str()) {
+        if [
+            "--dispose-evidence",
+            "--artifacts-only",
+            "--adopt-cleanup-policy",
+        ]
+        .contains(&key.as_str())
+        {
+            let valid = if key == "--adopt-cleanup-policy" {
+                operation == "migrate"
+            } else {
+                operation == "finish"
+            };
+            if !valid || !flags.insert(key.as_str()) {
                 return Err("invalid or repeated terminal flag".into());
             }
             n += 1;
@@ -4661,7 +4690,11 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 false,
             )?;
             manager.restore_absent_policy(r)?;
-            if !matches!(operation.as_str(), "maintain" | "import") {
+            if operation == "migrate" {
+                if !flags.contains("--adopt-cleanup-policy") {
+                    manager.adopt_target_policy(r)?;
+                }
+            } else if !matches!(operation.as_str(), "maintain" | "import") {
                 manager.adopt_live_policy(r)?;
             }
             let mut manager = if handoff {
@@ -4727,7 +4760,7 @@ pub(crate) fn dispatch(args: &[String]) -> Result<Value, String> {
                 }
                 "migrate" => {
                     let target = target.as_ref().unwrap();
-                    manager.migrate(r, target, report)?;
+                    manager.migrate(r, target, flags.contains("--adopt-cleanup-policy"), report)?;
                     if let Some(producer) = values.get("--partition-producer") {
                         manager.partition_producer(r, target, producer, report)?;
                     }
