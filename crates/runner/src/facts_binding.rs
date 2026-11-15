@@ -1,18 +1,64 @@
 //! Candidate-owned Git binding. Does not infer Git's delegated input closure.
+use std::collections::BTreeMap;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// 按原请求顺序重建实际取得的字节，保留重复路径；缺少任一条时拒绝。
+pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>>)
+    -> (out: Option<Vec<(String, Vec<u8>)>>)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures match out {
+        Some(rows) => rows.len() == paths.len()
+            && forall|i: int| 0 <= i < paths.len() ==>
+                bytes@.contains_key(paths@[i])
+                && (#[trigger] rows@[i]).0@ == paths@[i]@
+                && rows@[i].1@ == bytes@[paths@[i]]@,
+        None => exists|i: int| 0 <= i < paths.len() && !bytes@.contains_key(paths@[i]),
+    },
+{
+    let mut rows: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut i = 0;
+    while i < paths.len()
+        invariant 0 <= i <= paths.len(), rows.len() == i,
+            forall|j: int| 0 <= j < i ==>
+                bytes@.contains_key(paths@[j])
+                && (#[trigger] rows@[j]).0@ == paths@[j]@
+                && rows@[j].1@ == bytes@[paths@[j]]@,
+        decreases paths.len() - i,
+    {
+        let content = match bytes.get(&paths[i]) {
+            Some(content) => content,
+            None => { return None; },
+        };
+        rows.push((paths[i].clone(), content.clone()));
+        i += 1;
+    }
+    Some(rows)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{
     CommandSpec, ProcessResult, facts, no_symlink_parents, resolve_program, run_process_observed,
     sha256, verified_git_binding, wire,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json as value};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeSet,
     fs,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub const OBSERVATION_SCHEMA: &str = "chrono-git-facts/v2";
 
+#[cfg(not(verus_keep_ghost))]
 pub struct Reader {
     bound: Option<Bound>,
     processes: RefCell<Vec<ProcessResult>>,
@@ -23,6 +69,7 @@ pub struct Reader {
     verified_oids: RefCell<BTreeSet<String>>,
 }
 #[derive(Clone)]
+#[cfg(not(verus_keep_ghost))]
 struct BlobReceipt {
     process: usize,
     range: std::ops::Range<usize>,
@@ -30,10 +77,12 @@ struct BlobReceipt {
     object: Option<(usize, BlobObject)>,
 }
 #[derive(Clone)]
+#[cfg(not(verus_keep_ghost))]
 struct BlobObject {
     oid: String,
     length: usize,
 }
+#[cfg(not(verus_keep_ghost))]
 impl BlobObject {
     fn header(&self) -> String {
         format!("{} blob {}\n", self.oid, self.length)
@@ -63,6 +112,7 @@ impl BlobObject {
 }
 /// One successful registered blob and its original acquisition coordinates.
 /// Callers retain the processes; no synthetic process receipt is produced here.
+#[cfg(not(verus_keep_ghost))]
 pub struct RegistryBlob {
     pub path: String,
     pub bytes: Vec<u8>,
@@ -71,6 +121,7 @@ pub struct RegistryBlob {
 /// Acquire only explicit immutable registry paths through the caller's bounded
 /// Git transport. Metadata partitions requests under the same output limit.
 /// The callback returns its retained process index and exact stdout bytes.
+#[cfg(not(verus_keep_ghost))]
 pub fn acquire_registry_blobs(
     oid: &str,
     paths: &[String],
@@ -230,6 +281,7 @@ pub fn acquire_registry_blobs(
 /// Read one explicitly declared immutable input. Metadata remains diagnostic
 /// traffic; only the object's exact stdout receives the declared data bound.
 /// Both original processes are retained by the caller, including failures.
+#[cfg(not(verus_keep_ghost))]
 pub fn acquire_immutable_input(
     oid: &str,
     path: &str,
@@ -280,10 +332,12 @@ pub fn acquire_immutable_input(
 
 /// Original binding observations when construction fails, without decoding diagnostics.
 #[derive(Debug)]
+#[cfg(not(verus_keep_ghost))]
 pub struct OpenFailure {
     pub message: String,
     pub observation: Value,
 }
+#[cfg(not(verus_keep_ghost))]
 struct Bound {
     root: PathBuf,
     config_path: String,
@@ -294,13 +348,16 @@ struct Bound {
     guard: Option<crate::facts_inputs::Guard>,
     selection: Option<crate::facts_configs::Selection>,
 }
+#[cfg(not(verus_keep_ghost))]
 fn text<'a>(v: &'a Value, key: &str) -> Result<&'a str, String> {
     verified_git_binding::required_binding_text(v[key].as_str(), key)
         .map_err(|missing| format!("{}{}", missing.prefix, missing.field))
 }
 
+#[cfg(not(verus_keep_ghost))]
 struct JsonBindingReferences<'a>(&'a [Value]);
 
+#[cfg(not(verus_keep_ghost))]
 impl verified_git_binding::BindingReferenceRows for JsonBindingReferences<'_> {
     fn len(&self) -> usize {
         self.0.len()
@@ -312,6 +369,7 @@ impl verified_git_binding::BindingReferenceRows for JsonBindingReferences<'_> {
 }
 
 /// Validate the new link without interpreting any historical config as v3.
+#[cfg(not(verus_keep_ghost))]
 pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
     if !matches!(config["schema_version"].as_u64(), Some(3 | 4)) {
         return Err("facts_git requires config schema_version 3 or 4".into());
@@ -373,6 +431,7 @@ pub fn declaration(config: &Value) -> Result<(&Value, Option<&Value>), String> {
     Ok((tool, input))
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Reader {
     pub fn legacy() -> Self {
         Self {
@@ -811,15 +870,7 @@ impl Reader {
                 .insert((oid.into(), blob.path.clone()), blob.receipt);
             bytes.insert(blob.path, blob.bytes);
         }
-        Ok(paths
-            .iter()
-            .map(|path| {
-                (
-                    path.clone(),
-                    bytes.get(path).expect("acquired explicit registry").clone(),
-                )
-            })
-            .collect())
+        Ok(ordered_acquired_blobs(paths, &bytes).expect("acquired explicit registry"))
     }
     pub(crate) fn record_verified_oid(&self, oid: &str) {
         // Only verify_oid's existing successful commit/tree observations may

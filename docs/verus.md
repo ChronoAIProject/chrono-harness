@@ -544,6 +544,13 @@ CI 环境的重复回执；原环境、流、执行参数和所有检查义务�
 未完成义务约束，不能据此声称整文件已获证明。复用原证明操作，未新增测试过滤或预算；
 完整验证与运行成本尚未测量。
 
+同批为 `facts.rs`／`facts_binding.rs` 补 program 登记：既有 runner-status 根编译其实际
+`select_fixed_source_read` 和 `ordered_acquired_blobs`。前者证明只调用端点资格选中的读取器，
+向其交付完整输入并返回原结果；后者证明重建的每项路径、顺序、重复项和字节与实际获取 map
+对应，缺键时返回 None。独立预期覆盖两条互斥读取路径、二进制字节、空文件、重复路径、
+空请求和缺键，沿原未过滤测试执行。模式、缓存资格、去重集合、Git 获取、回执及环境检查
+仍有各自接口与未完成证明义务；本次有限证明不构成整文件覆盖。
+
 源码比较逐字节核对非引用内容。仅支持现役 Rust `#[path]`、`include_bytes!`、Cargo `path`、
 以 `CARGO_MANIFEST_DIR` 为基准的两种 join 写法；宿主特定形式只读当前固定 FILEMAP 的
 `reference_syntax` 声明，不再内置本仓 shell 变量。
