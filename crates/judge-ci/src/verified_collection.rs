@@ -40,9 +40,13 @@ pub use continuity_plan::validate_source_plan;
 #[path = "../../judge-registration/src/lib.rs"]
 mod source_registration;
 #[cfg(not(verus_keep_ghost))]
-pub use chrono_judge_registration::validate_reference_syntax;
+pub use chrono_judge_registration::{
+    ObjectFieldError, object_error_parts, validate_object_fields, validate_reference_syntax,
+};
 #[cfg(verus_keep_ghost)]
-pub use source_registration::validate_reference_syntax;
+pub use source_registration::{
+    ObjectFieldError, object_error_parts, validate_object_fields, validate_reference_syntax,
+};
 
 verus! {
 

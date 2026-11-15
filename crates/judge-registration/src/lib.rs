@@ -1,7 +1,9 @@
 #![allow(unexpected_cfgs)]
 #[cfg(verus_keep_ghost)]
 use super::source_verifier;
-pub use schema::validate_reference_syntax;
+pub use schema::{
+    ObjectFieldError, object_error_parts, validate_object_fields, validate_reference_syntax,
+};
 // Registration owns full-format schema, snapshot and affected-reference admissibility.
 #[cfg(not(verus_keep_ghost))]
 pub mod consumption;
