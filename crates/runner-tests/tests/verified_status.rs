@@ -19,6 +19,8 @@ use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::std_specs::cmp::OrdSpec;
 #[cfg(verus_keep_ghost)]
+use vstd::std_specs::iter::IteratorSpec;
+#[cfg(verus_keep_ghost)]
 use vstd::string::StringSliceAdditionalSpecFns;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
@@ -3432,7 +3434,9 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
 {
     proof { policy::tree_path_obeys_cmp(); }
     let mut iterator = tree.iter();
-    let ghost all = iterator@.1;
+    let ghost references = iterator.remaining();
+    let ghost all = references.unref();
+    let ghost consumed: int = 0;
     let ghost expected = choose|key: policy::TreePath| tree@.contains_key(key)
         && key@ == path@ && policy::tree_entry_fields(&tree@[key]) == ("100644"@,
             "0000000000000000000000000000000000000001"@, "blob"@);
@@ -3445,30 +3449,33 @@ fn expect_fixture_tree_member(tree: &policy::Tree, path: &str)
     let mut found = false;
     loop
         invariant
-            iterator@.1 == all, 0 <= iterator@.0 <= all.len(),
+            iterator.remaining() == references.subrange(consumed, references.len() as int),
+            all == references.unref(), 0 <= consumed <= all.len(), all.len() == tree@.len(),
             all.to_set() == tree@.kv_pairs(),
             0 <= expected_index < all.len(), all[expected_index].0@ == path@,
             policy::tree_entry_fields(&all[expected_index].1) == ("100644"@,
                 "0000000000000000000000000000000000000001"@, "blob"@),
             vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0)),
-            found == (exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@),
-        decreases all.len() - iterator@.0,
+            found == (exists|i: int| 0 <= i < consumed && (#[trigger] all[i]).0@ == path@),
+        decreases tree.len() - consumed,
     {
+        let ghost at = consumed;
         match iterator.next() {
             None => {
                 proof {
-                    assert(0 <= expected_index < iterator@.0);
-                    assert(exists|i: int| 0 <= i < iterator@.0 && (#[trigger] all[i]).0@ == path@);
+                    assert(0 <= expected_index < consumed);
+                    assert(exists|i: int| 0 <= i < consumed && (#[trigger] all[i]).0@ == path@);
                 }
                 expect_status_true(found); return;
             },
             Some((key, entry)) => {
+                proof { consumed = at + 1; }
                 if scope_text::equal_text(key.as_str(), path) {
                     // 所有同路径键属于实际唯一键；预期完整字段独立写在此处。
                     proof {
                         policy::tree_path_obeys_cmp();
                         let j = expected_index;
-                        let k = iterator@.0 - 1;
+                        let k = at;
                         let keys = all.map(|i: int, row: (policy::TreePath, policy::TreeEntry)| row.0);
                         vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
                         if j < k { assert(keys[j].cmp_spec(&keys[k]) is Less); }
