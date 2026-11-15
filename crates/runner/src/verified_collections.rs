@@ -40,6 +40,7 @@ pub fn btree_set_compare_invariant<K: Ord>(set: &BTreeSet<K>)
 {
     let iterator = set.iter();
     proof {
+        vstd::laws_cmp::lemma_ref_obeys_cmp_spec::<K>();
         let rows = iterator.remaining();
         vstd::std_specs::btree::axiom_increasing_seq_meaning(rows);
         reveal(vstd::laws_cmp::obeys_cmp_ord);
@@ -67,10 +68,16 @@ pub fn contains_string_key<V>(map: &BTreeMap<String, V>, key: &str) -> (out: boo
     proof {
         reveal(vstd::laws_cmp::obeys_cmp_ord);
         reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        assert(vstd::laws_cmp::obeys_cmp_deep_eq::<&str>());
         assert forall|stored: String| #[trigger] map@.contains_key(stored) implies
             (key.cmp_spec(<String as BorrowSpec<str>>::borrow_spec(&stored)) is Equal
                 <==> stored@ == key@) by {
             vstd::std_specs::borrow::axiom_string_borrow(&stored);
+            let borrowed = <String as BorrowSpec<str>>::borrow_spec(&stored);
+            assert(key.cmp_spec(borrowed)
+                == <&str as OrdSpec>::cmp_spec(&key, &borrowed));
+            assert(<&str as OrdSpec>::cmp_spec(&key, &borrowed) is Equal
+                <==> key@ == borrowed@);
         }
     }
     found
