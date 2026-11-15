@@ -276,7 +276,10 @@ fn retired_metadata_does_not_exclude_a_populated_parent_address() {
             .unwrap();
     use chrono_diagnostics::logging::{Level, Logger};
     let logger = Logger::new("retention-fixture", Level::DEBUG, std::io::stderr());
-    let round = logger.run(|| owner.maintain_explicit()).unwrap();
+    // 本例只核共享父路径下的退役，不依赖维护与元数据更新是否跨过秒边界。
+    let round = logger
+        .run(|| owner.maintain_originals_at(std::slice::from_ref(&id), u64::MAX))
+        .unwrap();
     logger.finish().expect("retired metadata diagnostics");
     assert!(!h.path().join(obsolete).exists(), "{round}");
     assert!(
