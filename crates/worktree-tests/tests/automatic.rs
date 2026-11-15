@@ -468,10 +468,12 @@ fn published_result_handoffs_recover_a_full_enrollment_without_raising_capacity(
     use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
     let h = EnrollmentOriginalsFixture::imported();
     let policy_path = h.root.join(POLICY_PATH);
-    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    let previous_policy = fs::read(&policy_path).unwrap();
+    let mut policy = json(&previous_policy).unwrap();
     policy["max_related_outputs"] = value!(4);
     fs::write(&policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
     let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+    inventory.migrate_policy(&previous_policy, None).unwrap();
     let role = format!(
         "worktree-enrollment:{}",
         sha256(h.target.to_str().unwrap().as_bytes())
