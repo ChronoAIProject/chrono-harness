@@ -181,26 +181,24 @@ pub fn acquire_registry_blobs(
             return Err(error("duplicate registered blob path"));
         }
     }
-    let pending = paths;
-    let mut bytes = BTreeMap::new();
-    let mut receipts = vec![];
+    let mut acquired = vec![];
     // The longest supported metadata header is 64 hex bytes, a blob
     // type, a 20-digit length and LF. Tiny declared limits remain usable.
-    if pending.len() < 3 || pending.len().saturating_mul(91) > limit {
-        for path in pending {
+    if paths.len() < 3 || paths.len().saturating_mul(91) > limit {
+        for path in paths {
             let (process, original) = git(&["show", &format!("{oid}:{path}")], &[])?;
-            receipts.push((
-                path.clone(),
-                BlobReceipt {
+            acquired.push(RegistryBlob {
+                path: path.clone(),
+                receipt: BlobReceipt {
                     process,
                     range: 0..original.len(),
                     object: None,
                 },
-            ));
-            bytes.insert(path.clone(), original);
+                bytes: original,
+            });
         }
     } else {
-        let input = pending
+        let input = paths
             .iter()
             .map(|path| format!("{oid}:{path}\n"))
             .collect::<String>();
@@ -212,7 +210,7 @@ pub fn acquire_registry_blobs(
                 .ok_or("missing batch metadata terminator")?
                 .split('\n')
                 .collect::<Vec<_>>();
-            if rows.len() != pending.len() {
+            if rows.len() != paths.len() {
                 return Err("batch metadata count mismatch".into());
             }
             rows.iter()
@@ -237,10 +235,10 @@ pub fn acquire_registry_blobs(
         };
         let objects = parse().map_err(|e| error(&e))?;
         let mut first = 0;
-        while first < pending.len() {
+        while first < paths.len() {
             let mut end = first;
             let mut length = 0usize;
-            while end < pending.len() {
+            while end < paths.len() {
                 let object = &objects[end];
                 let framed = object
                     .length
@@ -256,20 +254,20 @@ pub fn acquire_registry_blobs(
                 end += 1;
             }
             if end.saturating_sub(first) < 2 {
-                let path = &pending[first];
+                let path = &paths[first];
                 let (process, original) = git(&["show", &format!("{oid}:{path}")], &[])?;
                 if !objects[first].matches(&original) {
                     return Err(error("blob bytes differ from batch metadata"));
                 }
-                receipts.push((
-                    path.clone(),
-                    BlobReceipt {
+                acquired.push(RegistryBlob {
+                    path: path.clone(),
+                    receipt: BlobReceipt {
                         process,
                         range: 0..original.len(),
                         object: Some((metadata_process, objects[first].clone())),
                     },
-                ));
-                bytes.insert(path.clone(), original);
+                    bytes: original,
+                });
                 first += 1;
                 continue;
             }
@@ -295,15 +293,15 @@ pub fn acquire_registry_blobs(
                 if original.get(stop) != Some(&b'\n') || !object.matches(content) {
                     return Err(error("batch blob bytes/terminator mismatch"));
                 }
-                receipts.push((
-                    pending[i].clone(),
-                    BlobReceipt {
+                acquired.push(RegistryBlob {
+                    path: paths[i].clone(),
+                    receipt: BlobReceipt {
                         process,
                         range: offset..stop,
                         object: Some((metadata_process, object.clone())),
                     },
-                ));
-                bytes.insert(pending[i].clone(), content.to_vec());
+                    bytes: content.to_vec(),
+                });
                 offset = stop + 1;
             }
             if offset != original.len() {
@@ -312,14 +310,7 @@ pub fn acquire_registry_blobs(
             first = end;
         }
     }
-    Ok(receipts
-        .into_iter()
-        .map(|(path, receipt)| RegistryBlob {
-            bytes: bytes.remove(&path).expect("acquired explicit registry"),
-            path,
-            receipt,
-        })
-        .collect())
+    Ok(acquired)
 }
 
 /// Read one explicitly declared immutable input. Metadata remains diagnostic
