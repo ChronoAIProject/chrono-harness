@@ -191,8 +191,11 @@ mod cache_adoption;
 pub(crate) mod inventory;
 #[cfg(not(verus_keep_ghost))]
 pub(crate) mod inventory;
+#[cfg(verus_keep_ghost)]
+#[path = "automatic/migration.rs"]
+pub(crate) mod migration;
 #[cfg(not(verus_keep_ghost))]
-mod migration;
+pub(crate) mod migration;
 #[cfg(not(verus_keep_ghost))]
 mod owner_deployment;
 #[cfg(verus_keep_ghost)]

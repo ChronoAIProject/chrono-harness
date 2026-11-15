@@ -242,12 +242,17 @@ fn explicit_cleanup_adoption_keeps_target_source_and_uses_fixed_policy_until_mig
         v["artifacts"][0]["disposition"] = value!("retain");
     });
     commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
     let target = h.parent.join("old-policy");
     let (code, report, error) = h.invoke("integration", "old-policy", &target);
     assert_eq!(code, 0, "{report} {error}");
     let original = h.ledger()["entries"][0].clone();
     let head = git(&target, &["rev-parse", "HEAD"]);
     let policy_bytes = fs::read(target.join(CLEANUP)).unwrap();
+    assert_eq!(
+        json(&policy_bytes).unwrap()["artifacts"][0]["disposition"],
+        "retain"
+    );
     let source_bytes = fs::read(target.join("payload")).unwrap();
     cache(&target);
     edit(&h.root, CLEANUP, |v| {

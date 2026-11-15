@@ -1,6 +1,27 @@
 //! Explicit policy and checkout adoption preserve original enrollment evidence.
+#[cfg(verus_keep_ghost)]
+use super::super::identifiers::equal_text;
+#[cfg(not(verus_keep_ghost))]
+use chrono_harness::{verified_identifiers::equal_text, verus};
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+// The caller holds the original exclusive lease. Cleanup observations are
+// diagnostic history; actual unjoined work still prevents checkout adoption.
+pub fn checkout_migration_ready(status: &str, terminal: bool, uses_pending: bool,
+    handoff_pending: bool) -> (ready: bool)
+    ensures ready <==> (status@ == "active"@ && !terminal
+        && !uses_pending && !handoff_pending),
+{
+    equal_text(status, "active") && !terminal && !uses_pending && !handoff_pending
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use super::*;
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PolicySource {
@@ -8,6 +29,7 @@ pub(super) struct PolicySource {
     pub(super) inputs: BTreeMap<String, Option<String>>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub(super) struct PolicyBinding {
@@ -18,6 +40,7 @@ pub(super) struct PolicyBinding {
     pub(super) policy_source: Option<PolicySource>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 impl Manager {
     fn committed_policy_source(&self, r: &mut Runner) -> Result<PolicySource, String> {
         let inputs = BTreeMap::from([
