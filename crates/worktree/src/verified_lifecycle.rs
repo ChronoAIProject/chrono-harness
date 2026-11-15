@@ -79,7 +79,9 @@ pub use automatic_verification::producer::{
 #[cfg(not(verus_keep_ghost))]
 pub use crate::automatic::retirement::{retire_cache_history, retire_history};
 #[cfg(not(verus_keep_ghost))]
-pub use crate::recovery::{ImportedPolicyReceipt, imported_policy_receipt_valid};
+pub use crate::recovery::{
+    ImportedPolicyReceipt, imported_policy_receipt_valid, imported_policy_source_commit,
+};
 #[cfg(verus_keep_ghost)]
 pub use automatic_verification::retirement::{retire_cache_history, retire_history};
 #[cfg(verus_keep_ghost)]
@@ -88,7 +90,8 @@ pub use automatic_verification::retirement::{retire_cache_history, retire_histor
 mod recovery_verification;
 #[cfg(verus_keep_ghost)]
 pub use recovery_verification::{
-    ImportedPolicyReceipt, imported_policy_receipt_valid, required_text,
+    ImportedPolicyReceipt, imported_policy_receipt_valid, imported_policy_source_commit,
+    required_text,
 };
 
 #[cfg(not(verus_keep_ghost))]

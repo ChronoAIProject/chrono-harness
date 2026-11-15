@@ -10,6 +10,16 @@ use chrono_harness::verus;
 use vstd::prelude::*;
 
 verus! {
+
+/// 仅在专用字段缺失时消费原件已固定的调用提交。
+/// 恢复所有者继续核发布、完整 OID 和两份保留输入的摘要。
+pub fn imported_policy_source_commit<'a>(policy_field_present: bool,
+    policy_commit: Option<&'a str>, source_commit: Option<&'a str>) -> (source: Option<&'a str>)
+    ensures source == if policy_field_present { policy_commit } else { source_commit },
+{
+    if policy_field_present { policy_commit } else { source_commit }
+}
+
 pub struct ImportedPolicyReceipt<'a> {
     pub schema: Option<&'a str>,
     pub operation: Option<&'a str>,
