@@ -425,15 +425,23 @@
          _ => {}
 --- a/source/vir/src/prune.rs
 +++ b/source/vir/src/prune.rs
-@@ -293,7 +293,7 @@
+@@ -293,10 +293,15 @@
          | TypX::PointeeMetadata(_) => {
              reach_type(ctxt, state, &typ_to_reached_type(typ));
          }
 -        TypX::Dyn(trait_path, _, _) => {
-+        TypX::Dyn(trait_path, _, _, _) => {
++        TypX::Dyn(trait_path, _, output, _) => {
              reach_type(ctxt, state, &typ_to_reached_type(typ));
              reach_bound_trait(ctxt, state, trait_path);
              state.dyn_traits.insert(trait_path.clone());
++            if output.is_some() {
++                reach_assoc_type_decl(ctxt, state, &(
++                    crate::ast::ClosureKind::FnOnce.trait_path(), Arc::new("Output".to_owned()),
++                ));
++            }
+         }
+         TypX::Opaque { def_path, .. } => {
+             reach_opaque_type(ctxt, state, def_path);
 --- a/source/rust_verify_test/tests/traits_dyn.rs
 +++ b/source/rust_verify_test/tests/traits_dyn.rs
 @@ -635,12 +635,12 @@
@@ -453,3 +461,19 @@
  }
  
  test_verify_one_file! {
+--- a/source/rust_verify/src/verifier.rs
++++ b/source/rust_verify/src/verifier.rs
+@@ -1393,11 +1393,12 @@
+         // encountered below.
+         let mut bucket_context = vec![
+             CommandBatch::new("Fuel", ctx.fuel()),
+-            CommandBatch::new("Trait-Decls", vir::traits::trait_decls_to_air(ctx, &krate)),
+             CommandBatch::new(
+                 "Associated-Type-Decls",
+                 vir::assoc_types_to_air::assoc_type_decls_to_air(ctx, &krate.traits),
+             ),
++            // Dynamic callable typing uses the inherited FnOnce::Output projection.
++            CommandBatch::new("Trait-Decls", vir::traits::trait_decls_to_air(ctx, &krate)),
+             CommandBatch::new(
+                 "Datatypes",
+                 vir::datatype_to_air::datatypes_and_primitives_to_air(
