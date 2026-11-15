@@ -1,0 +1,53 @@
+diff --git a/source/rust_verify_test/tests/formatter_write.rs b/source/rust_verify_test/tests/formatter_write.rs
+new file mode 100644
+index 0000000..70b5634
+--- /dev/null
++++ b/source/rust_verify_test/tests/formatter_write.rs
+@@ -0,0 +1,47 @@
++#![feature(rustc_private)]
++#[macro_use]
++mod common;
++use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] formatter_write_str_accepts_original_text_and_result
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn forward(f: &mut core::fmt::Formatter<'_>, text: &str)
++            -> Result<(), core::fmt::Error>
++        {
++            f.write_str(text)
++        }
++    } => Ok(())
++}
++
++test_verify_one_file_with_options! {
++    #[test] formatter_write_str_does_not_assume_success
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong(f: &mut core::fmt::Formatter<'_>) {
++            let result = f.write_str("λ\0中");
++            assert(result is Ok); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}
++
++test_verify_one_file_with_options! {
++    #[test] formatter_write_str_does_not_assume_failure
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        fn wrong(f: &mut core::fmt::Formatter<'_>) {
++            let result = f.write_str("");
++            assert(result is Err); // FAILS
++        }
++    } => Err(err) => {
++        assert!(err.errors[0].message.contains("assertion failed"));
++        assert_one_fails(err);
++    }
++}

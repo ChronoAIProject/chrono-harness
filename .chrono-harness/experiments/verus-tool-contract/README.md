@@ -167,5 +167,28 @@ crate 别名。上游逐项翻译器已经接受 `ExternCrate`，语句翻译器
 编译和回归总成本仍未知。字面量模式翻译通过不代表 Serde trait、JSON、完整根、
 正式工具采用或本仓完整证明通过；实际结果继续由原报告负责。
 
+## Formatter 写入的外部接口
+
+完整 workflow 根的真实 Serde `Expected::fmt` 实现将完整预期文本交给
+`core::fmt::Formatter::write_str`，并返回该调用的原始 `Result`。固定 vstd 已声明
+`Formatter` 与 `fmt::Error`，但没有这个方法的合同。`formatter-write.patch` 由同一外部
+工具所有者维护，在现有 `std_specs::fmt` 补齐该标准库接口；不为仓内派生实现或适配器
+增加外部函数豁免。
+
+接口接受原 `&mut Formatter` 与完整 `&str`，返回标准库原 `Result<(), fmt::Error>`。
+返回结果与写入后的 formatter 状态保持不透明：调用方须处理两种结果，不能据合同
+声称成功、失败、输出内容或 formatter 状态不变。这里仅采用真实标准库调用边界，
+不建立格式化输出语义模型，也不声明完整 Serde 证明完成。
+
+先只登记三项 Rust／Verus 预期，观察原工具的未支持错误，再补方法声明并重建同源 vstd。
+成功预期直接转交文本和返回值，两个独立负例分别要求拒绝无依据的成功／失败断言；
+负例必须收到 `assertion failed`，方法未支持不算符合预期。
+同一 `investigate.verus-source.regression-check` 保留原全部目标，并增加上游 `std` 和
+`formatter_write` 的完整库存；线程、严格选项及无名称过滤的方法不变。
+新增构建、证明和回归成本未知，沿当前缓存及有限保留边界管理。
+
+**工具接口合同与宿主回归登记同时修改。** 源码只在该接口的自然所有者处增加标准库声明，
+完整 workflow 根、真实派生、其他外部合同及正式资格仍需各自验收。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
