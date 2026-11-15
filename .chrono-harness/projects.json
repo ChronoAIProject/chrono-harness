@@ -6096,6 +6096,15 @@
             ".chrono-harness/ci/bootstrap-cache.json"
           ]
         },
+        "pr": {
+          "operation": "host.bootstrap-pr",
+          "tool": "bash",
+          "argv": [
+            ".chrono-harness/ci/bootstrap-native.sh",
+            ".",
+            ".chrono-harness/ci/bootstrap-pr.json"
+          ]
+        },
         "shared-produce": {
           "operation": "host.bootstrap-shared-produce",
           "tool": "bash",
