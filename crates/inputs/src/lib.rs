@@ -9,6 +9,179 @@ pub mod identifiers;
 use vstd::prelude::*;
 
 verus! {
+#[derive(Clone, Copy)]
+pub enum InputKind { Capture, Compose, Pair }
+
+pub enum InputAction<'a> {
+    Version,
+    Help,
+    Command(InputCommand<'a>),
+}
+
+/// The validated command borrows its original argv; no second option inventory is built.
+pub struct InputCommand<'a> {
+    pub kind: InputKind,
+    pub arguments: &'a [String],
+}
+
+pub struct MissingInputOption<'a> {
+    pub key: &'a str,
+}
+
+pub open spec fn input_kind(text: Seq<char>) -> Option<InputKind> {
+    if text == "capture"@ { Some(InputKind::Capture) }
+    else if text == "compose"@ { Some(InputKind::Compose) }
+    else if text == "pair"@ { Some(InputKind::Pair) }
+    else { None }
+}
+
+pub open spec fn input_key_allowed(kind: InputKind, key: Seq<char>) -> bool {
+    key == "--host-root"@ || key == "--output"@ || match kind {
+        InputKind::Capture => key == "--config"@ || key == "--commit"@ || key == "--unit"@,
+        InputKind::Compose => key == "--config"@ || key == "--base"@ || key == "--candidate"@
+            || key == "--manifest"@ || key == "--receipt"@,
+        InputKind::Pair => key == "--base-snapshot"@ || key == "--candidate-snapshot"@
+            || key == "--base-root"@ || key == "--candidate-root"@,
+    }
+}
+
+fn allowed_input_key(kind: InputKind, key: &str) -> (allowed: bool)
+    ensures allowed == input_key_allowed(kind, key@),
+{
+    identifiers::equal_text(key, "--host-root") || identifiers::equal_text(key, "--output")
+        || match kind {
+            InputKind::Capture => identifiers::equal_text(key, "--config")
+                || identifiers::equal_text(key, "--commit") || identifiers::equal_text(key, "--unit"),
+            InputKind::Compose => identifiers::equal_text(key, "--config")
+                || identifiers::equal_text(key, "--base") || identifiers::equal_text(key, "--candidate")
+                || identifiers::equal_text(key, "--manifest") || identifiers::equal_text(key, "--receipt"),
+            InputKind::Pair => identifiers::equal_text(key, "--base-snapshot")
+                || identifiers::equal_text(key, "--candidate-snapshot")
+                || identifiers::equal_text(key, "--base-root") || identifiers::equal_text(key, "--candidate-root"),
+        }
+}
+
+pub open spec fn input_prefix_valid(args: Seq<String>, kind: InputKind, pairs: int) -> bool {
+    0 <= pairs <= (args.len() - 1) / 2 && forall|i: int| 0 <= i < pairs ==>
+        input_key_allowed(kind, (#[trigger] args[1 + 2 * i])@)
+        && forall|j: int| 0 <= j < i ==> (#[trigger] args[1 + 2 * j])@ != args[1 + 2 * i]@
+}
+
+pub open spec fn input_command_valid(command: InputCommand) -> bool {
+    let args = command.arguments@;
+    args.len() > 0 && args.len() % 2 == 1 && input_kind(args[0]@) == Some(command.kind)
+        && input_prefix_valid(args, command.kind, (args.len() - 1) / 2)
+}
+
+pub open spec fn input_command_result(args: Seq<String>) -> Option<Seq<char>> {
+    if args.len() == 0 { Some("E_USAGE: capture or pair required"@) }
+    else if args.len() == 1 && (args[0]@ == "--version"@ || args[0]@ == "--help"@) { None }
+    else { match input_kind(args[0]@) {
+        None => Some("E_USAGE: unknown command"@),
+        Some(kind) => if !input_prefix_valid(args, kind, (args.len() - 1) / 2) {
+            Some("E_USAGE: unknown or duplicate option"@)
+        } else if args.len() % 2 == 0 { Some("E_USAGE: option needs a value"@) }
+        else { None },
+    } }
+}
+
+/// Return the first matching complete key/value pair from the specified original prefix.
+fn find_input_option(args: &[String], pairs: usize, key: &str) -> (found: Option<usize>)
+    requires args.len() > 0, pairs <= (args.len() - 1) / 2,
+    ensures match found {
+        Some(i) => i < pairs && args@[1 + 2 * i]@ == key@
+            && forall|j: int| 0 <= j < i ==> (#[trigger] args@[1 + 2 * j])@ != key@,
+        None => forall|j: int| 0 <= j < pairs ==> (#[trigger] args@[1 + 2 * j])@ != key@,
+    },
+{
+    let mut i = 0;
+    while i < pairs
+        invariant args.len() > 0, pairs <= (args.len() - 1) / 2, i <= pairs,
+            forall|j: int| 0 <= j < i ==> (#[trigger] args@[1 + 2 * j])@ != key@,
+        decreases pairs - i,
+    {
+        if identifiers::equal_text(args[1 + 2 * i].as_str(), key) { return Some(i); }
+        i += 1;
+    }
+    None
+}
+
+impl<'a> InputCommand<'a> {
+    pub fn option(&self, key: &str) -> (value: Option<&'a str>)
+        requires input_command_valid(*self),
+        ensures match value {
+            Some(value) => exists|i: int| 0 <= i < (self.arguments@.len() - 1) / 2
+                && (#[trigger] self.arguments@[1 + 2 * i])@ == key@ && value@ == self.arguments@[2 + 2 * i]@,
+            None => forall|i: int| 0 <= i < (self.arguments@.len() - 1) / 2
+                ==> (#[trigger] self.arguments@[1 + 2 * i])@ != key@,
+        },
+    {
+        match find_input_option(self.arguments, (self.arguments.len() - 1) / 2, key) {
+            Some(i) => Some(self.arguments[2 + 2 * i].as_str()),
+            None => None,
+        }
+    }
+
+    pub fn required<'k>(&self, key: &'k str) -> (value: Result<&'a str, MissingInputOption<'k>>)
+        requires input_command_valid(*self),
+        ensures match value {
+            Ok(value) => exists|i: int| 0 <= i < (self.arguments@.len() - 1) / 2
+                && (#[trigger] self.arguments@[1 + 2 * i])@ == key@ && value@ == self.arguments@[2 + 2 * i]@,
+            Err(error) => error.key@ == key@
+                && forall|i: int| 0 <= i < (self.arguments@.len() - 1) / 2
+                    ==> (#[trigger] self.arguments@[1 + 2 * i])@ != key@,
+        },
+    {
+        match self.option(key) {
+            Some(value) => Ok(value),
+            None => Err(MissingInputOption { key }),
+        }
+    }
+}
+
+pub fn parse_input_command(args: &[String]) -> (out: Result<InputAction<'_>, String>)
+    ensures match out {
+        Err(error) => input_command_result(args@) == Some(error@),
+        Ok(action) => input_command_result(args@).is_none() && match action {
+            InputAction::Version => args@.len() == 1 && args@[0]@ == "--version"@,
+            InputAction::Help => args@.len() == 1 && args@[0]@ == "--help"@,
+            InputAction::Command(command) => input_command_valid(command) && command.arguments@ == args@,
+        },
+    },
+{
+    if args.len() == 0 { return Err("E_USAGE: capture or pair required".to_string()); }
+    let first = args[0].as_str();
+    if args.len() == 1 && identifiers::equal_text(first, "--version") { return Ok(InputAction::Version); }
+    if args.len() == 1 && identifiers::equal_text(first, "--help") { return Ok(InputAction::Help); }
+    let kind = if identifiers::equal_text(first, "capture") { InputKind::Capture }
+        else if identifiers::equal_text(first, "compose") { InputKind::Compose }
+        else if identifiers::equal_text(first, "pair") { InputKind::Pair }
+        else { return Err("E_USAGE: unknown command".to_string()); };
+    let pairs = (args.len() - 1) / 2;
+    let mut i = 0;
+    while i < pairs
+        invariant args.len() > 0, pairs == (args.len() - 1) / 2, i <= pairs,
+            input_kind(args@[0]@) == Some(kind), input_prefix_valid(args@, kind, i as int),
+        decreases pairs - i,
+    {
+        let key = args[1 + 2 * i].as_str();
+        if !allowed_input_key(kind, key) || find_input_option(args, i, key).is_some() {
+            assert(!input_prefix_valid(args@, kind, pairs as int));
+            return Err("E_USAGE: unknown or duplicate option".to_string());
+        }
+        proof {
+            assert forall|j: int| 0 <= j < i + 1 implies
+                input_key_allowed(kind, (#[trigger] args@[1 + 2 * j])@)
+                    && forall|k: int| 0 <= k < j ==> (#[trigger] args@[1 + 2 * k])@ != args@[1 + 2 * j]@ by {
+                if j < i { assert(input_key_allowed(kind, args@[1 + 2 * j]@)); }
+            }
+        }
+        i += 1;
+    }
+    if args.len() % 2 == 0 { return Err("E_USAGE: option needs a value".to_string()); }
+    Ok(InputAction::Command(InputCommand { kind, arguments: args }))
+}
+
 /// All current capture and composition paths use the same exact blob identity.
 pub fn blob_identity_matches(actual: &str, actual_length: u64,
     expected: &str, expected_length: u64) -> (matches: bool)
@@ -36,7 +209,6 @@ pub use composition::{Manifest as CompositionManifest, Source as CompositionSour
 use serde_json::{Value, json as value};
 #[cfg(not(verus_keep_ghost))]
 use std::{
-    collections::BTreeMap,
     fs,
     io::Write,
     path::{Path, PathBuf},
@@ -244,71 +416,30 @@ pub fn pair(
 }
 #[cfg(not(verus_keep_ghost))]
 pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
-    if args == ["--version"] {
-        return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION")));
-    }
-    if args == ["--help"] {
-        return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into());
-    }
-    let command = args.first().ok_or("E_USAGE: capture or pair required")?;
-    let allowed = match command.as_str() {
-        "capture" => vec!["--host-root", "--config", "--commit", "--output", "--unit"],
-        "compose" => vec![
-            "--host-root",
-            "--config",
-            "--base",
-            "--candidate",
-            "--manifest",
-            "--output",
-            "--receipt",
-        ],
-        "pair" => vec![
-            "--host-root",
-            "--base-snapshot",
-            "--candidate-snapshot",
-            "--output",
-            "--base-root",
-            "--candidate-root",
-        ],
-        _ => return Err("E_USAGE: unknown command".into()),
+    let command = match parse_input_command(args)? {
+        InputAction::Version => return Ok(format!("chrono-inputs {}\n", env!("CARGO_PKG_VERSION"))),
+        InputAction::Help => return Ok("chrono-inputs capture --host-root H --config P --commit OID --output P [--unit ID]\nchrono-inputs pair --host-root H --base-snapshot P --candidate-snapshot P --output P [--base-root H] [--candidate-root H]\nchrono-inputs compose --host-root H --config P --base OID --candidate OID --manifest P --output P --receipt P\nExplicit input transport only; snapshots are not governance verdicts.\n".into()),
+        InputAction::Command(command) => command,
     };
-    let mut options = BTreeMap::new();
-    let mut chunks = args[1..].chunks_exact(2);
-    for chunk in &mut chunks {
-        if !allowed.contains(&chunk[0].as_str())
-            || options
-                .insert(chunk[0].as_str(), chunk[1].as_str())
-                .is_some()
-        {
-            return Err("E_USAGE: unknown or duplicate option".into());
-        }
-    }
-    if !chunks.remainder().is_empty() {
-        return Err("E_USAGE: option needs a value".into());
-    }
     let required = |key: &str| {
-        options
-            .get(key)
-            .copied()
-            .ok_or_else(|| format!("E_USAGE: missing {key}"))
+        command
+            .required(key)
+            .map_err(|missing| format!("E_USAGE: missing {}", missing.key))
     };
     let root = fs::canonicalize(cwd.join(required("--host-root")?)).map_err(|e| e.to_string())?;
-    let result = if command == "capture" {
-        capture_selected(
+    let result = match command.kind {
+        InputKind::Capture => capture_selected(
             &root,
             required("--config")?,
             required("--commit")?,
             required("--output")?,
-            &options
-                .get("--unit")
+            &command
+                .option("--unit")
                 .map_or(chrono_harness::prepared::Selection::All, |unit| {
-                    chrono_harness::prepared::Selection::Unit {
-                        unit: (*unit).into(),
-                    }
+                    chrono_harness::prepared::Selection::Unit { unit: unit.into() }
                 }),
-        )?
-    } else if command == "compose" {
-        compose(
+        )?,
+        InputKind::Compose => compose(
             &root,
             required("--config")?,
             required("--base")?,
@@ -316,22 +447,23 @@ pub fn run(cwd: &Path, args: &[String]) -> Result<String, String> {
             required("--manifest")?,
             required("--output")?,
             required("--receipt")?,
-        )?
-    } else {
-        let location = |key: &str| -> Result<PathBuf, String> {
-            match options.get(key) {
-                Some(p) => fs::canonicalize(cwd.join(p)).map_err(|e| e.to_string()),
-                None => Ok(root.clone()),
-            }
-        };
-        pair(
-            &root,
-            &location("--base-root")?,
-            required("--base-snapshot")?,
-            &location("--candidate-root")?,
-            required("--candidate-snapshot")?,
-            required("--output")?,
-        )?
+        )?,
+        InputKind::Pair => {
+            let location = |key: &str| -> Result<PathBuf, String> {
+                match command.option(key) {
+                    Some(p) => fs::canonicalize(cwd.join(p)).map_err(|e| e.to_string()),
+                    None => Ok(root.clone()),
+                }
+            };
+            pair(
+                &root,
+                &location("--base-root")?,
+                required("--base-snapshot")?,
+                &location("--candidate-root")?,
+                required("--candidate-snapshot")?,
+                required("--output")?,
+            )?
+        }
     };
     Ok(serde_json::to_string_pretty(&result).map_err(|e| e.to_string())? + "\n")
 }
