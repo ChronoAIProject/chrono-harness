@@ -50,6 +50,117 @@ fn require_absence_expectation(actual: bool)
     if !actual { panic!(); }
 }
 
+fn handoff_trace_step(trace: Vec<u8>, stage: u8, result: Result<(), String>)
+    -> (out: (Vec<u8>, Result<(), String>))
+    ensures out.0@ == trace@.push(stage), out.1 == result,
+{
+    let mut trace = trace;
+    trace.push(stage);
+    (trace, result)
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn ordinary_admission_selects_only_complete_registered_operation_names() {
+    proof {
+        reveal_strlit("use"); reveal_strlit("check"); reveal_strlit("bootstrap");
+        reveal_strlit("status"); reveal_strlit("maintain"); reveal_strlit("migrate");
+        reveal_strlit("deploy-owner"); reveal_strlit("import");
+        reveal_strlit(""); reveal_strlit("use\0");
+    }
+    require_absence_expectation(absence_policy::ordinary_admission("use"));
+    require_absence_expectation(absence_policy::ordinary_admission("check"));
+    require_absence_expectation(absence_policy::ordinary_admission("bootstrap"));
+    require_absence_expectation(!absence_policy::ordinary_admission("status"));
+    require_absence_expectation(!absence_policy::ordinary_admission("maintain"));
+    require_absence_expectation(!absence_policy::ordinary_admission("migrate"));
+    require_absence_expectation(!absence_policy::ordinary_admission("deploy-owner"));
+    require_absence_expectation(!absence_policy::ordinary_admission("import"));
+    require_absence_expectation(!absence_policy::ordinary_admission(""));
+    require_absence_expectation(!absence_policy::ordinary_admission("use\0"));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn admission_handoff_orders_recovery_and_preserves_full_errors() {
+    broadcast use vstd::array::group_array_axioms;
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        |trace| handoff_trace_step(trace, 1, Ok(())),
+        |trace, error| handoff_trace_step(trace, 2, Err(error)),
+        |trace| handoff_trace_step(trace, 3, Ok(())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 3]));
+    require_absence_expectation(result.is_ok());
+
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        |trace| handoff_trace_step(trace, 1, Err("原交接错误\0完整".to_string())),
+        |trace, _error| handoff_trace_step(trace, 2, Ok(())),
+        |trace| handoff_trace_step(trace, 3, Ok(())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 2, 3]));
+    require_absence_expectation(result.is_ok());
+
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        |trace| handoff_trace_step(trace, 1, Err("原交接错误\0完整".to_string())),
+        |trace, error| handoff_trace_step(trace, 2, Err(error)),
+        |trace| handoff_trace_step(trace, 3, Ok(())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 2]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "原交接错误\0完整")),
+        Ok(()) => require_absence_expectation(false),
+    }
+
+    let (trace, result) = absence_policy::admission_handoff(Vec::<u8>::new(),
+        |trace| handoff_trace_step(trace, 1, Ok(())),
+        |trace, _error| handoff_trace_step(trace, 2, Ok(())),
+        |trace| handoff_trace_step(trace, 3, Err("必要保护失败\0完整".to_string())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 3]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "必要保护失败\0完整")),
+        Ok(()) => require_absence_expectation(false),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn enrollment_publication_skips_only_the_shrinking_preparation_and_stops_on_first_error() {
+    broadcast use vstd::array::group_array_axioms;
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), true,
+        |trace| handoff_trace_step(trace, 1, Ok(())),
+        |trace| handoff_trace_step(trace, 2, Ok(())),
+        |trace| handoff_trace_step(trace, 3, Ok(())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8, 2, 3]));
+    require_absence_expectation(result.is_ok());
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
+        |trace| handoff_trace_step(trace, 1, Err("不得执行".to_string())),
+        |trace| handoff_trace_step(trace, 2, Ok(())),
+        |trace| handoff_trace_step(trace, 3, Ok(())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![2u8, 3]));
+    require_absence_expectation(result.is_ok());
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), true,
+        |trace| handoff_trace_step(trace, 1, Err("新增引用保护失败\0原件".to_string())),
+        |trace| handoff_trace_step(trace, 2, Ok(())),
+        |trace| handoff_trace_step(trace, 3, Ok(())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![1u8]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "新增引用保护失败\0原件")),
+        Ok(()) => require_absence_expectation(false),
+    }
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
+        |trace| handoff_trace_step(trace, 1, Ok(())),
+        |trace| handoff_trace_step(trace, 2, Err("账本写入失败\0原件".to_string())),
+        |trace| handoff_trace_step(trace, 3, Ok(())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![2u8]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "账本写入失败\0原件")),
+        Ok(()) => require_absence_expectation(false),
+    }
+    let (trace, result) = absence_policy::publish_enrollment_record(Vec::<u8>::new(), false,
+        |trace| handoff_trace_step(trace, 1, Ok(())),
+        |trace| handoff_trace_step(trace, 2, Ok(())),
+        |trace| handoff_trace_step(trace, 3, Err("引用收窄失败\0原件".to_string())));
+    require_absence_expectation(absence_identifiers::equal_bytes(&trace, &vec![2u8, 3]));
+    match result {
+        Err(error) => require_absence_expectation(absence_identifiers::equal_text(&error, "引用收窄失败\0原件")),
+        Ok(()) => require_absence_expectation(false),
+    }
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn absent_cache_probe_requires_maintenance_pending_cache_and_the_original_exclusion() {
     require_absence_expectation(absence_policy::absence_probe_required(true, true, true));
@@ -3009,6 +3120,122 @@ fn managed_result_handoff_preserves_partial_reports_then_releases_the_interim_re
         "successful report handoff must not create permanent roots"
     );
     assert!(!target.exists());
+}
+
+#[test]
+#[cfg(not(verus_keep_ghost))]
+fn ordinary_use_hands_off_sealed_results_and_keeps_unqualified_results_pending() {
+    if !chrono_git_boundary::isolated_git() {
+        return;
+    }
+    use chrono_harness::retained_artifacts::retention::{Inventory, POLICY_PATH};
+    let h = Host::new("payload");
+    h.kernel_cleanup();
+    native_consumer(&h, "ordinary");
+    adopt_lifecycle_retention(&h);
+    let policy_path = h.root.join(POLICY_PATH);
+    let mut policy = json(&fs::read(&policy_path).unwrap()).unwrap();
+    policy["producers"]["lifecycle-original"] = value!([
+        ".chrono-harness/state/worktrees/",
+        ".chrono-harness/state/automatic-cleanup/"
+    ]);
+    fs::write(policy_path, serde_json::to_vec(&policy).unwrap()).unwrap();
+    commit(&h.root);
+    git(&h.root, &["push", "-q", "warehouse", "dev"]);
+    let target = h.parent.join("ordinary-result-handoff");
+    let (code, created, error) = h.invoke("integration", "ordinary-result-handoff", &target);
+    assert_eq!(code, 0, "{created} {error}");
+    let mut results = Vec::new();
+    for _ in 0..2 {
+        let (code, used, error) = h.auto(
+            "use",
+            &[
+                "--path",
+                target.to_str().unwrap(),
+                "--operation",
+                "use.consumer",
+            ],
+        );
+        assert_eq!(code, 0, "{used} {error}");
+        let inventory = Inventory::adopted(&h.root).unwrap().unwrap();
+        inventory
+            .reference_paths(
+                &format!("fixture-use-report:{}", results.len()),
+                &[used["report_path"].as_str().unwrap().into()],
+            )
+            .unwrap();
+        results.push(used);
+    }
+    let entry = h.ledger()["entries"][0].clone();
+    assert_eq!(
+        entry["enrollment"]["completed_uses"],
+        value!([results[1]["managed_use_receipt"]]),
+        "ordinary admission must hand off its predecessor without a maintenance round"
+    );
+    assert_eq!(entry["status"], "active");
+    assert!(entry["terminal"].is_null());
+    for used in &results {
+        let receipt = &used["managed_use_receipt"];
+        let bytes = fs::read(h.root.join(receipt["path"].as_str().unwrap())).unwrap();
+        assert_eq!(value!(sha256(&bytes)), receipt["sha256"]);
+        let process = h
+            .root
+            .join(used["managed_process_original"]["path"].as_str().unwrap());
+        assert_eq!(
+            fs::read(process.join("stdout")).unwrap(),
+            b"ordinary-work"
+        );
+    }
+    let second_report = h.root.join(results[1]["report_path"].as_str().unwrap());
+    let second_bytes = fs::read(&second_report).unwrap();
+    fs::write(&second_report, b"{\"status\":").unwrap();
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([results[1]["managed_use_receipt"], used["managed_use_receipt"]]),
+        "an incomplete predecessor report must stay pending while independent work proceeds"
+    );
+    assert_eq!(fs::read(&second_report).unwrap(), b"{\"status\":");
+    fs::write(&second_report, second_bytes).unwrap();
+    let receipt_path = h.root.join(
+        results[1]["managed_use_receipt"]["path"]
+            .as_str()
+            .unwrap(),
+    );
+    let receipt_bytes = fs::read(&receipt_path).unwrap();
+    fs::write(&receipt_path, b"changed original receipt").unwrap();
+    let third_receipt = used["managed_use_receipt"].clone();
+    let (code, used, error) = h.auto(
+        "use",
+        &[
+            "--path",
+            target.to_str().unwrap(),
+            "--operation",
+            "use.consumer",
+        ],
+    );
+    assert_eq!(code, 0, "{used} {error}");
+    assert_eq!(used["result_handoff_error"], "original lifecycle receipt changed");
+    assert_eq!(
+        h.ledger()["entries"][0]["enrollment"]["completed_uses"],
+        value!([
+            results[1]["managed_use_receipt"],
+            third_receipt,
+            used["managed_use_receipt"]
+        ]),
+        "a failed handoff must not publish a partial in-memory ledger or block independent use"
+    );
+    assert_eq!(fs::read(&receipt_path).unwrap(), b"changed original receipt");
+    fs::write(receipt_path, receipt_bytes).unwrap();
 }
 
 #[test]
