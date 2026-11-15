@@ -372,10 +372,18 @@ pub fn registry_snapshot_initial<V>(
             Map::empty().insert(entry_path, config).insert(effective_path, effective_config)
         },
 {
+    proof {
+        reveal(vstd::std_specs::btree::btree_map_insert_ensures);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_cmp_partial_ord);
+        assert(vstd::laws_cmp::obeys_cmp_deep_eq::<String>());
+    }
     let mut bytes = BTreeMap::new();
     let mut values = BTreeMap::new();
     bytes.insert(entry_path.clone(), original);
     values.insert(entry_path.clone(), config);
+    assert(bytes@ == Map::empty().insert(entry_path, original));
+    assert(values@ == Map::empty().insert(entry_path, config));
     if !identifiers::equal_text(entry_path.as_str(), effective_path.as_str()) {
         bytes.insert(effective_path.clone(), effective_bytes);
         values.insert(effective_path.clone(), effective_config);
@@ -2353,8 +2361,14 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
     let mut iterator = stages.keys();
     let ghost all = iterator.remaining();
     proof {
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&GitIndexStage>());
         vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
         all.unref().unique_seq_to_set();
+        assert forall|i: int, j: int| 0 <= i < j < all.len()
+            implies (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less by {
+            assert(<&GitIndexStage as OrdSpec>::cmp_spec(&all[i], &all[j]) is Less);
+        }
     }
     let mut keys: Vec<GitIndexStage<'a>> = Vec::new();
     loop
@@ -2364,6 +2378,8 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
             keys@ == all.take(keys.len() as int).unref(),
             all.unref().to_set() == stages@.dom(), all.len() == stages@.len(),
             vstd::std_specs::btree::increasing_seq(all),
+            forall|i: int, j: int| 0 <= i < j < all.len()
+                ==> (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less,
         decreases stages@.len() - keys.len(),
     {
         match iterator.next() {
@@ -2376,7 +2392,7 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
                     assert(keys@ == all.unref());
                     assert forall|i: int, j: int| 0 <= i < j < keys.len()
                         implies #[trigger] keys@[i].order_spec(&keys@[j]) == Ordering::Less by {
-                        assert(all[i].cmp_spec(&all[j]) == Ordering::Less);
+                        assert(all[i].order_spec(all[j]) == Ordering::Less);
                     }
                 }
                 return GitIndexStageLookup { keys };
@@ -2948,8 +2964,14 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
     let mut iterator = changes.keys();
     let ghost all = iterator.remaining();
     proof {
+        broadcast use vstd::laws_cmp::lemma_ref_obeys_cmp_spec;
+        assert(vstd::laws_cmp::obeys_cmp::<&TreePath>());
         vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
         all.unref().unique_seq_to_set();
+        assert forall|i: int, j: int| 0 <= i < j < all.len()
+            implies (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less by {
+            assert(<&TreePath as OrdSpec>::cmp_spec(&all[i], &all[j]) is Less);
+        }
     }
     let mut paths: Vec<String> = Vec::new();
     loop
@@ -2959,6 +2981,8 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
             all.unref().to_set() == changes@.dom(),
             all.len() == changes@.len(),
             vstd::std_specs::btree::increasing_seq(all),
+            forall|i: int, j: int| 0 <= i < j < all.len()
+                ==> (#[trigger] all[i]).order_spec(all[j]) == Ordering::Less,
             forall|i: int| 0 <= i < paths.len() ==> (#[trigger] paths@[i])@ == all[i]@,
         decreases changes@.len() - paths.len(),
     {
@@ -2981,6 +3005,8 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
                         }
                         if exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text {
                             let i = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text;
+                            assert(all.unref()[i] == *all[i]);
+                            assert(all.unref().contains(*all[i]));
                             assert(all.unref().to_set().contains(*all[i]));
                             assert(changes@.contains_key(*all[i]));
                         }
@@ -2988,8 +3014,7 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
                     assert forall|i: int, j: int| 0 <= i < j < paths.len()
                         implies identifiers::byte_lt(vstd::utf8::encode_utf8((#[trigger] paths@[i])@),
                             vstd::utf8::encode_utf8((#[trigger] paths@[j])@)) by {
-                        assert(all[i].cmp_spec(&all[j]) is Less);
-                        assert(all[i].order_spec(&all[j]) is Less);
+                        assert(all[i].order_spec(all[j]) is Less);
                     }
                 }
                 return paths;
