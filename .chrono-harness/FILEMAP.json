@@ -343,11 +343,11 @@
     {"path":"docs/workflow.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
     {"path":"crates/inputs/Cargo.toml","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs"}]},
     {"path":"crates/inputs/Cargo.lock","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs"}]},
-    {"path":"crates/inputs/src/lib.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"}]},
+    {"path":"crates/inputs/src/lib.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"}],"verification":{"role":"program","roots":[{"path":"crates/inputs/src/lib.rs","operation":"verify.inputs-blobs"},{"path":"crates/inputs-tests/tests/snapshots.rs","operation":"verify.inputs-blobs-tests"}]}},
     {"path":"crates/inputs/src/main.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"},{"kind":"compile","to":"project:inputs-tests"},{"kind":"compile","to":"project:judge-workflow-tests"},{"kind":"test-execution","to":"test:judge-workflow-tests"},{"kind":"test-execution","to":"test:workflow-units"},{"kind":"test-execution","to":"test:workflow-short"}]},
     {"path":"crates/inputs-tests/Cargo.toml","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/Cargo.lock","verification":{"role":"data","roots":[]},"owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:inputs-tests"}]},
-    {"path":"crates/inputs-tests/tests/snapshots.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
+    {"path":"crates/inputs-tests/tests/snapshots.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}],"verification":{"role":"program","roots":[{"path":"crates/inputs-tests/tests/snapshots.rs","operation":"verify.inputs-blobs-tests"}]}},
     {"path":"crates/inputs-tests/tests/support/git.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/support/record_filemap.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/support/zero.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
@@ -357,7 +357,7 @@
     {"path":"crates/inputs-tests/tests/fixtures/transition_checks.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/fixtures/historical_decoder.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
     {"path":"crates/inputs-tests/tests/support/decoder.rs","owner":"inputs-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs-tests"}]},
-    {"path":"docs/inputs.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[]},
+    {"path":"docs/inputs.md","owner":"repository","surface":"documentation","cost":"unmeasured","edges":[],"verification":{"role":"data","roots":[]}},
     {"path":"crates/distribution/Cargo.toml","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/Cargo.lock","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"build-input","to":"project:distribution"}]},
     {"path":"crates/distribution/src/lib.rs","owner":"distribution","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:distribution"}]},
@@ -445,7 +445,7 @@
     {"path":"crates/judge-workflow-tests/tests/full_short.rs","owner":"judge-workflow-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:judge-workflow-tests"}]},
     {"path":"crates/runner/src/retained_artifacts.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
     {"path":"crates/runner/src/scoped_report.rs","owner":"runner","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:runner"}]},
-    {"path":"crates/inputs/src/composition.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"}]},
+    {"path":"crates/inputs/src/composition.rs","owner":"inputs","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:inputs"}],"verification":{"role":"program","roots":[{"path":"crates/inputs/src/lib.rs","operation":"verify.inputs-blobs"},{"path":"crates/inputs-tests/tests/snapshots.rs","operation":"verify.inputs-blobs-tests"}]}},
     {"path":"crates/ci-tests/tests/gating.rs","owner":"ci-tests","surface":"test","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci-tests"}]},
     {"path":"crates/ci/src/gating.rs","owner":"ci","surface":"product","cost":"unmeasured","edges":[{"kind":"compile","to":"project:ci"}]},
     {"path":"examples/ci-host-job-gating/.chrono-harness/FILEMAP.json","owner":"repository","surface":"product","cost":"unmeasured","edges":[{"kind":"test-execution","to":"test:ci-tests"}]},
@@ -1490,6 +1490,8 @@
     },
     "test:inputs-tests": {
       "operations": [
+        "verify.inputs-blobs",
+        "verify.inputs-blobs-tests",
         "fmt.inputs",
         "fmt.inputs-tests",
         "test.inputs-tests"
@@ -1760,6 +1762,8 @@
         "resources": [],
         "outputs": []
       },
+      "verify.inputs-blobs": {"resources":[],"outputs":[".chrono-harness/state/"]},
+      "verify.inputs-blobs-tests": {"resources":[],"outputs":[".chrono-harness/state/"]},
       "fmt.inputs-tests": {
         "resources": [],
         "outputs": []

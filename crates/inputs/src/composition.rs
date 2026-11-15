@@ -1,12 +1,17 @@
 //! Offline composition of explicitly addressed original endpoint captures.
+#[cfg(not(verus_keep_ghost))]
 use super::*;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::{
     prepared::{ArtifactTransport, Original},
     retained_artifacts, sha256,
 };
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use std::collections::BTreeSet;
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Source {
@@ -16,12 +21,14 @@ pub struct Source {
     #[serde(default)]
     pub artifacts: Option<Value>,
 }
+#[cfg(not(verus_keep_ghost))]
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Manifest {
     pub schema: String,
     pub sources: Vec<Source>,
 }
+#[cfg(not(verus_keep_ghost))]
 fn bounded(root: &Path, path: &str) -> Result<Vec<u8>, String> {
     let p = no_symlink_parents(root, path)?;
     if fs::metadata(&p).map_err(|e| e.to_string())?.len() > 64 * 1024 * 1024 {
@@ -29,6 +36,7 @@ fn bounded(root: &Path, path: &str) -> Result<Vec<u8>, String> {
     }
     fs::read(p).map_err(|e| e.to_string())
 }
+#[cfg(not(verus_keep_ghost))]
 fn source_bytes(root: &Path, source: &Source) -> Result<Vec<u8>, String> {
     let raw = if let Some(a) = &source.artifacts {
         retained_artifacts::bytes(root, a, &source.pair.path, source.transport.as_ref())?
@@ -40,6 +48,7 @@ fn source_bytes(root: &Path, source: &Source) -> Result<Vec<u8>, String> {
     }
     Ok(raw)
 }
+#[cfg(not(verus_keep_ghost))]
 fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String> {
     let Retained::Blob {
         path,
@@ -64,16 +73,16 @@ fn import_blob(root: &Path, f: &Value, source: &Source) -> Result<Value, String>
         }
         return Ok(observed);
     };
-    let dir = state(root, ".chrono-harness/state/inputs/blobs")?;
+    let dir = state(root, BLOB_DIRECTORY)?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut tmp = tempfile::NamedTempFile::new_in(&dir).map_err(|e| e.to_string())?;
-    if retained_artifacts::copy_to(root, a, path, source.transport.as_ref(), &mut tmp)?
-        != (digest.into(), length)
-    {
+    let observed = retained_artifacts::copy_to(root, a, path, source.transport.as_ref(), &mut tmp)?;
+    if !blob_identity_matches(&observed.0, observed.1, digest, length) {
         return Err("E_COMPOSE_BLOB: original identity differs".into());
     }
-    store(root, tmp.path())
+    publish_blob(root, tmp, observed.0, observed.1)
 }
+#[cfg(not(verus_keep_ghost))]
 fn manifest(root: &Path, path: &str) -> Result<(Vec<u8>, Manifest), String> {
     let raw = bounded(root, path)?;
     let manifest: Manifest = chrono_harness::decode(&raw)?;
@@ -87,6 +96,7 @@ fn manifest(root: &Path, path: &str) -> Result<(Vec<u8>, Manifest), String> {
 }
 /// Import addressed capture data, never execute its historical producer/judges.
 /// A source is an original snapshot at either endpoint or an exact endpoint pair.
+#[cfg(not(verus_keep_ghost))]
 fn import_source(
     root: &Path,
     source: &Source,
@@ -165,6 +175,7 @@ fn import_source(
 }
 
 /// No live business inputs, SDK probes or inferred dependencies are consulted.
+#[cfg(not(verus_keep_ghost))]
 pub fn compose(
     root: &Path,
     config: &str,
