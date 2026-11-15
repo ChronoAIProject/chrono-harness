@@ -297,5 +297,12 @@ Serde Error 的真实参数包含 `&dyn Expected`。原工具的前置检查已�
 保留全部原测试、严格参数、线程和 ignored；真实完整 workflow 根继续复验。
 外部接口合同与宿主验证登记同时修改，新增证明、构建、CI 和存储成本未知。
 
+Serialize 的方法依赖 Serializer，后者的关联状态方法又依赖 Serialize，原循环检查
+因此拒绝完整声明。复用上游已在 Iterator 使用的 `impls_cannot_extend_spec`，只标记
+`Serialize::serialize`：允许该 exec 接口的递归依赖，同时禁止本地 impl 增加 ensures，
+防止通过调用后置条件制造不良定义；本地方法体和错误断言继续检查。其余方法不加此标记。
+增加第七项独立拒绝预期，并沿同一回归运行完整 `traits_extend_ensures` 库存，核原循环、
+spec／proof 限制及后置条件边界；不修改工具算法、Serde bounds 或原安全断言。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。

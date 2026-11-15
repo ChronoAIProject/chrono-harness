@@ -1,7 +1,7 @@
 diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 --- a/source/vstd/serde_specs.rs
 +++ b/source/vstd/serde_specs.rs
-@@ -1,8 +1,279 @@
+@@ -1,8 +1,280 @@
  //! External interfaces used by the actual Serde 1.0.229 derive expansion.
  use crate::prelude::*;
  use std::borrow::Cow;
@@ -15,6 +15,7 @@ diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 +pub trait ExSerialize {
 +    type ExternalTraitSpecificationFor: serde::ser::Serialize;
 +
++    #[verifier::impls_cannot_extend_spec]
 +    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 +    where
 +        S: Serializer;
@@ -285,11 +286,29 @@ diff --git a/source/rust_verify_test/tests/serde_serialization.rs b/source/rust_
 new file mode 100644
 --- /dev/null
 +++ b/source/rust_verify_test/tests/serde_serialization.rs
-@@ -0,0 +1,203 @@
+@@ -0,0 +1,221 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
 +use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_serialize_forbids_impl_postconditions_on_recursive_exec_interface
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++
++        struct Value;
++
++        impl serde::Serialize for Value {
++            fn serialize<S: serde::Serializer>(&self, serializer: S) -> (result: Result<S::Ok, S::Error>)
++                ensures result is Ok,
++            {
++                serializer.serialize_unit()
++            }
++        }
++    } => Err(err) => assert_vir_error_msg(err,
++        "trait method implementation cannot declare `ensures` clauses because the trait declaration is marked `impls_cannot_extend_spec`")
++}
 +
 +test_verify_one_file_with_options! {
 +    #[test] serde_serializer_forwards_scalar_and_named_arguments
