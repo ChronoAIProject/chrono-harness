@@ -1,5 +1,32 @@
 # Verus 实施范围
 
+## 输入快照的 schema 准入与缺失表示
+
+`judge-registration/src/inputs.rs::snapshot_shape` 在原对象字段准入后直接调用同源 Verus 的
+`admit_snapshot_header` 和 `admit_snapshot_retained`。前者只接受完整的 v1／v2／v3
+schema 字符串；未知或非字符串观察优先产生原 unsupported 错误；有效的 v1／v2
+携带任一 selector 字段时，产生原 requires-v3 错误。v3 的四种字段存在组合均交给
+原 selector 内容校验继续处理。后者按实际 `Retained` 变体判断：Absent 仅允许
+v2／v3，Bytes／Blob 的内容义务继续由原调用者处理。完整错误字符串由 Verus 产生。
+
+分类、首错和全部观察的结果合同由同一源码定义并证明，复用仓内已证明的完整文本
+比较。六组独立 Verus 预期同体普通运行，覆盖三种 schema、字段存在组合、缺值、
+空串、其它版本、大小写、NUL／Unicode 后缀、三种保留表示及长度零／u64 上界；
+泛化辅助函数还核任意未知文本和字段组合、任意 schema 与 Blob 长度的内容义务边界。
+沿现有两项严格整 crate CI 根及原未过滤消费测试验收。FILEMAP 已把这些文件、
+根和实际输入捕获／离线组合／登记消费边连接起来，没有新增证明入口或分类政策。
+
+明确外部观察仅沿用固定 Serde JSON 的字段索引、`Value::as_str`（缺值或非字符串
+得到 None）和 `Value::get`（字段存在时保留包含 null 在内的值），以及固定 Rust
+的 `Option::is_some` 和错误字符串 `ToString`。新准入没有把仓内函数当作外部公理。
+header 现在也在 v3／未知 schema 路径读取两个字段的存在性；这是只读观察。
+分类最多进行三次固定 schema 的完整文本比较，保留值只借用，没有新增集合、内容
+复制、文件 IO 或进程。构建、证明、CI 和完整生命周期成本未测。
+
+该局部证明覆盖观察到准入结果的对应。JSON 观察的完整机械精化、v3 selector 内容、
+其余 commit／路径／环境／文件判断和外层事务仍有自身证明义务；全仓覆盖门仍未完成。
+没有修改 Python、工具版本、证明过滤或预算。
+
 ## 输入快照的 schema 选择
 
 `judge-registration/src/inputs.rs::select_snapshot_schema` 直接拥有真实输入捕获、离线
