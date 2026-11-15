@@ -32,6 +32,32 @@ pub mod snapshot_export;
 
 verus! {
 
+/// 标准迭代库存的严格顺序保证同一 map 内没有比较相等的两个不同键。
+/// 只取得借用迭代器，不遍历或复制库存。
+pub fn btree_map_compare_invariant<K: Ord, V>(map: &BTreeMap<K, V>)
+    requires vstd::laws_cmp::obeys_cmp::<K>(),
+    ensures vstd::std_specs::btree::btree_map_inv(map),
+{
+    let iterator = map.iter();
+    proof {
+        let rows = iterator.remaining();
+        let keys = rows.map_values(|row: (&K, &V)| *row.0);
+        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
+        reveal(vstd::laws_cmp::obeys_cmp_ord);
+        reveal(vstd::laws_cmp::obeys_partial_cmp_spec_properties);
+        assert forall|a: K, b: K| #![trigger map@.contains_key(a), map@.contains_key(b)]
+            map@.contains_key(a) && map@.contains_key(b) && a != b
+                implies !(a.cmp_spec(&b) is Equal) by {
+            assert(rows.unref().to_set().contains((a, map@[a])));
+            assert(rows.unref().to_set().contains((b, map@[b])));
+            let i = choose|i: int| 0 <= i < rows.len() && rows.unref()[i] == (a, map@[a]);
+            let j = choose|j: int| 0 <= j < rows.len() && rows.unref()[j] == (b, map@[b]);
+            if i < j { assert(keys[i].cmp_spec(&keys[j]) is Less); }
+            else if j < i { assert(keys[j].cmp_spec(&keys[i]) is Less); }
+        }
+    }
+}
+
 /// 只按实际端点资格选择一条读取路径，完整输入和原结果保持对应。
 pub fn select_fixed_source_read<S, R, F, B>(reusable: bool, inputs: S, fallback: F, batch: B)
     -> (out: R)
@@ -86,10 +112,12 @@ pub fn ordered_acquired_blobs(paths: &[String], bytes: &BTreeMap<String, Vec<u8>
     },
 {
     broadcast use vstd::std_specs::btree::group_btree_axioms;
+    btree_map_compare_invariant(bytes);
     let mut rows: Vec<(String, Vec<u8>)> = Vec::new();
     let mut i = 0;
     while i < paths.len()
         invariant vstd::laws_cmp::obeys_cmp::<String>(),
+            vstd::std_specs::btree::btree_map_inv(bytes),
             0 <= i <= paths.len(), acquired_rows_prefix(paths@, bytes.deep_view(), rows@, i as int),
         decreases paths.len() - i,
     {
@@ -1709,13 +1737,27 @@ impl std::ops::Deref for TreePath {
 impl std::borrow::Borrow<str> for TreePath {
     fn borrow(&self) -> (out: &str)
         ensures ({ let text: &str = out; text@ == self@ && text.spec_bytes() == self.bytes() }),
-    { self.as_str() }
+    { <String as std::borrow::Borrow<str>>::borrow(&self.text) }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::borrow::BorrowSpecImpl<str> for TreePath {
+    open spec fn obeys_borrow_spec() -> bool { true }
+    open spec fn borrow_spec(&self) -> &str {
+        <String as vstd::std_specs::borrow::BorrowSpec<str>>::borrow_spec(&self.text)
+    }
 }
 
 impl std::borrow::Borrow<String> for TreePath {
     fn borrow(&self) -> (out: &String)
         ensures ({ let text: &String = out; *text == self.text }),
     { &self.text }
+}
+
+#[cfg(verus_keep_ghost)]
+impl vstd::std_specs::borrow::BorrowSpecImpl<String> for TreePath {
+    open spec fn obeys_borrow_spec() -> bool { true }
+    open spec fn borrow_spec(&self) -> &String { &self.text }
 }
 
 #[cfg(verus_keep_ghost)]
@@ -1831,29 +1873,30 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
 {
     proof { tree_path_obeys_cmp(); }
     let mut iterator = tree.iter();
-    let ghost all = vstd::std_specs::btree::into_iter(iterator);
+    let ghost all = iterator.remaining();
     let mut rows: Vec<(&TreePath, &TreeEntry)> = Vec::new();
     loop
         invariant
             rows.len() <= all.len(),
-            iterator.remaining().unref() == all.subrange(rows.len() as int, all.len() as int),
-            tree_rows_view(rows@) == all.take(rows.len() as int),
-            all.to_set() == tree@.kv_pairs(),
-            vstd::std_specs::btree::increasing_seq(all.map(|i: int, row: (TreePath, TreeEntry)| row.0)),
+            iterator.remaining() == all.subrange(rows.len() as int, all.len() as int),
+            rows@ == all.take(rows.len() as int),
+            all.unref().to_set() == tree@.kv_pairs(),
+            vstd::std_specs::btree::increasing_seq(all.map_values(|row: (&TreePath, &TreeEntry)| *row.0)),
         decreases all.len() - rows.len(),
     {
         match iterator.next() {
             None => {
                 proof {
                     tree_path_obeys_cmp();
-                    let keys = all.map(|i: int, row: (TreePath, TreeEntry)| row.0);
+                    let keys = all.map_values(|row: (&TreePath, &TreeEntry)| *row.0);
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
-                    assert(tree_rows_view(rows@) == all);
+                    assert(rows@ == all);
+                    assert(tree_rows_view(rows@) =~= all.unref());
                     assert forall|i: int, j: int| 0 <= i < j < rows.len()
                         implies identifiers::byte_lt((#[trigger] rows@[i]).0.bytes(),
                             (#[trigger] rows@[j]).0.bytes()) by {
-                        assert(keys[i] == all[i].0);
-                        assert(keys[j] == all[j].0);
+                        assert(keys[i] == *all[i].0);
+                        assert(keys[j] == *all[j].0);
                         assert(keys[i].cmp_spec(&keys[j]) is Less);
                         assert(all[i].0.order_spec(&all[j].0) is Less);
                         identifiers::byte_lt_strict(all[i].0.bytes(), all[j].0.bytes());
@@ -1863,13 +1906,13 @@ fn tree_rows(tree: &Tree) -> (rows: Vec<(&TreePath, &TreeEntry)>)
             }
             Some((key, value)) => {
                 rows.push((key, value));
-                proof { assert(tree_rows_view(rows@) =~= all.take(rows.len() as int)); }
+                proof { assert(rows@ =~= all.take(rows.len() as int)); }
             }
         }
     }
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug)]
 pub struct TreeEntry {
     pub mode: String,
     pub oid: String,
@@ -2016,25 +2059,12 @@ fn tree_keys_have_unique_text<V>(tree: &BTreeMap<TreePath, V>)
         tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@ ==> a == b,
 {
     proof { tree_path_obeys_cmp(); }
-    let iterator = tree.iter();
+    btree_map_compare_invariant(tree);
     proof {
-        let rows = vstd::std_specs::btree::into_iter(iterator);
-        let keys = rows.map(|i: int, row: (TreePath, V)| row.0);
-        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
         assert forall|a: TreePath, b: TreePath| #![trigger tree@.contains_key(a), tree@.contains_key(b)]
             tree@.contains_key(a) && tree@.contains_key(b) && a@ == b@
                 implies a == b by {
-            assert(rows.to_set().contains((a, tree@[a])));
-            assert(rows.to_set().contains((b, tree@[b])));
-            let i = choose|i: int| 0 <= i < rows.len() && rows[i] == (a, tree@[a]);
-            let j = choose|j: int| 0 <= j < rows.len() && rows[j] == (b, tree@[b]);
-            if i < j {
-                assert(keys[i].cmp_spec(&keys[j]) is Less);
-                assert(a.order_spec(&b) is Less);
-            } else if j < i {
-                assert(keys[j].cmp_spec(&keys[i]) is Less);
-                assert(b.order_spec(&a) is Less);
-            }
+            assert(a.order_spec(&b) is Equal);
         }
     }
 }
@@ -2326,19 +2356,18 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
 {
     proof { git_index_stage_obeys_cmp(); }
     let mut iterator = stages.keys();
-    let ghost all = vstd::std_specs::btree::into_iter_keys(iterator);
+    let ghost all = iterator.remaining();
     proof {
         vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
-        vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
-        all.unique_seq_to_set();
+        all.unref().unique_seq_to_set();
     }
     let mut keys: Vec<GitIndexStage<'a>> = Vec::new();
     loop
         invariant
             keys.len() <= all.len(),
-            iterator.remaining().unref() == all.subrange(keys.len() as int, all.len() as int),
-            keys@ == all.take(keys.len() as int),
-            all.to_set() == stages@.dom(), all.len() == stages@.len(),
+            iterator.remaining() == all.subrange(keys.len() as int, all.len() as int),
+            keys@ == all.take(keys.len() as int).unref(),
+            all.unref().to_set() == stages@.dom(), all.len() == stages@.len(),
             vstd::std_specs::btree::increasing_seq(all),
         decreases all.len() - keys.len(),
     {
@@ -2347,7 +2376,7 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
                 proof {
                     git_index_stage_obeys_cmp();
                     vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
-                    assert(keys@ == all);
+                    assert(keys@ == all.unref());
                     assert forall|i: int, j: int| 0 <= i < j < keys.len()
                         implies #[trigger] keys@[i].order_spec(&keys@[j]) == Ordering::Less by {
                         assert(all[i].cmp_spec(&all[j]) == Ordering::Less);
@@ -2357,7 +2386,7 @@ pub fn snapshot_git_index_stages<'a>(stages: &GitIndexStages<'a>) -> (out: GitIn
             },
             Some(key) => {
                 keys.push(GitIndexStage { path: key.path, stage: key.stage });
-                proof { assert(keys@ =~= all.take(keys.len() as int)); }
+                proof { assert(keys@ =~= all.take(keys.len() as int).unref()); }
             },
         }
     }
@@ -2369,26 +2398,13 @@ fn git_index_stage_keys_have_unique_text(stages: &GitIndexStages)
         stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b) ==> a == b,
 {
     proof { git_index_stage_obeys_cmp(); }
-    let iterator = stages.iter();
+    btree_map_compare_invariant(stages);
     proof {
-        let rows = vstd::std_specs::btree::into_iter(iterator);
-        let keys = rows.map(|i: int, row: (GitIndexStage, ())| row.0);
-        vstd::std_specs::btree::axiom_increasing_seq_meaning(keys);
         assert forall|a: GitIndexStage, b: GitIndexStage|
             #![trigger stages@.contains_key(a), stages@.contains_key(b)]
             stages@.contains_key(a) && stages@.contains_key(b) && a.same(&b)
                 implies a == b by {
-            assert(rows.to_set().contains((a, ())));
-            assert(rows.to_set().contains((b, ())));
-            let i = choose|i: int| 0 <= i < rows.len() && rows[i] == (a, ());
-            let j = choose|j: int| 0 <= j < rows.len() && rows[j] == (b, ());
-            if i < j {
-                assert(keys[i].cmp_spec(&keys[j]) is Less);
-                assert(a.order_spec(&b) is Less);
-            } else if j < i {
-                assert(keys[j].cmp_spec(&keys[i]) is Less);
-                assert(b.order_spec(&a) is Less);
-            }
+            assert(a.order_spec(&b) is Equal);
         }
     }
 }
@@ -2943,18 +2959,17 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
 {
     proof { tree_path_obeys_cmp(); }
     let mut iterator = changes.keys();
-    let ghost all = vstd::std_specs::btree::into_iter_keys(iterator);
+    let ghost all = iterator.remaining();
     proof {
         vstd::std_specs::btree::axiom_increasing_seq_meaning(iterator.remaining());
-        vstd::std_specs::btree::axiom_increasing_seq_meaning(all);
-        all.unique_seq_to_set();
+        all.unref().unique_seq_to_set();
     }
     let mut paths: Vec<String> = Vec::new();
     loop
         invariant
             paths.len() <= all.len(),
-            iterator.remaining().unref() == all.subrange(paths.len() as int, all.len() as int),
-            all.to_set() == changes@.dom(),
+            iterator.remaining() == all.subrange(paths.len() as int, all.len() as int),
+            all.unref().to_set() == changes@.dom(),
             all.len() == changes@.len(),
             vstd::std_specs::btree::increasing_seq(all),
             forall|i: int| 0 <= i < paths.len() ==> (#[trigger] paths@[i])@ == all[i]@,
@@ -2970,14 +2985,14 @@ pub fn checkout_changed_paths(changes: &CheckoutChanges) -> (paths: Vec<String>)
                         == (exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text) by {
                         if checkout_change_has_path(changes@, text) {
                             let key = choose|key: TreePath| (#[trigger] changes@.contains_key(key)) && key@ == text;
-                            assert(all.contains(key));
-                            let i = all.lemma_contains_to_index(key);
+                            assert(all.unref().contains(key));
+                            let i = all.unref().lemma_contains_to_index(key);
                             assert(paths@[i]@ == text);
                         }
                         if exists|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text {
                             let i = choose|i: int| 0 <= i < paths.len() && (#[trigger] paths@[i])@ == text;
-                            assert(all.to_set().contains(all[i]));
-                            assert(changes@.contains_key(all[i]));
+                            assert(all.unref().to_set().contains(*all[i]));
+                            assert(changes@.contains_key(*all[i]));
                         }
                     }
                     assert forall|i: int, j: int| 0 <= i < j < paths.len()
