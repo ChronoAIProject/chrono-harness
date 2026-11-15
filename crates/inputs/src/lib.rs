@@ -4,7 +4,7 @@
 use chrono_harness::{verified_identifiers as identifiers, verus};
 #[cfg(verus_keep_ghost)]
 #[path = "../../identifiers/src/lib.rs"]
-mod identifiers;
+pub mod identifiers;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -18,7 +18,7 @@ pub fn blob_identity_matches(actual: &str, actual_length: u64,
 }
 }
 
-mod composition;
+pub mod composition;
 #[cfg(not(verus_keep_ghost))]
 use chrono_harness::{copy_hashed, facts, file_identity, json, no_symlink_parents, wire};
 #[cfg(not(verus_keep_ghost))]
