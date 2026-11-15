@@ -2,9 +2,7 @@
   "schema": "chrono-bootstrap/v1",
   "projects": ".chrono-harness/projects.json",
   "rust_toolchain": "1.99.1",
-  "tools": {
-    "verus-source": ".chrono-harness/cache/bootstrap-owner-tooling/verus/source-6ae5f7b9/source/target-verus/release/verus"
-  },
+  "tools": {},
   "operations": [
     "investigate.verus-source.dependencies",
     "investigate.verus-source.execution"
