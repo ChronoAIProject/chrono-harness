@@ -78,7 +78,10 @@ fn main() -> ExitCode {
             let command = chrono_harness::CommandSpec {
                 program: program.to_str().unwrap().into(),
                 args: vec!["maintenance-hint".into()],
-                env: std::collections::BTreeMap::new(),
+                env: std::collections::BTreeMap::from([(
+                    chrono_harness::maintenance_signal::CONTEXT_ENV.into(),
+                    std::env::var(chrono_harness::maintenance_signal::CONTEXT_ENV).unwrap(),
+                )]),
                 timeout_seconds: 30,
                 output_limit_bytes: 4096,
             };

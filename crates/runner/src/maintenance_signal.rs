@@ -210,7 +210,6 @@ use serde_json::{Value, json};
 #[cfg(not(verus_keep_ghost))]
 use std::{
     cell::Cell,
-    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -266,17 +265,6 @@ impl RequestContext {
             }
         }
         Ok(())
-    }
-}
-
-/// Preserve an enclosing route across the existing process boundary. An
-/// explicitly admitted nested lifecycle command supplies its own route.
-#[cfg(not(verus_keep_ghost))]
-pub fn forward_context(declared: &mut BTreeMap<String, String>, inherited: Option<&str>) {
-    if let Some(context) = inherited {
-        declared
-            .entry(CONTEXT_ENV.into())
-            .or_insert_with(|| context.into());
     }
 }
 

@@ -509,15 +509,14 @@ fn destination_context_rejects_invalid_input_and_preserves_the_original_responsi
 
 #[test]
 #[cfg(not(verus_keep_ghost))]
-fn nested_commands_forward_the_route_and_an_explicit_new_owner_takes_precedence() {
-    use std::collections::BTreeMap;
-    let mut declared = BTreeMap::from([("PATH".into(), "declared-path".into())]);
-    signal::forward_context(&mut declared, Some("original route"));
-    assert_eq!(declared[signal::CONTEXT_ENV], "original route");
-    assert_eq!(declared["PATH"], "declared-path");
-    signal::forward_context(&mut declared, Some("unrelated enclosing route"));
-    assert_eq!(declared[signal::CONTEXT_ENV], "original route");
-    let mut absent = BTreeMap::new();
-    signal::forward_context(&mut absent, None);
-    assert!(absent.is_empty());
+fn an_unrelated_route_does_not_require_the_enclosing_hosts_to_remain_present() {
+    let (other, path) = host();
+    let socket = UnixDatagram::bind(&path).unwrap();
+    socket.set_nonblocking(true).unwrap();
+    let context = r#"{"source_root":"/absent-source","owner_root":"/absent-owner"}"#;
+    let receipt = signal::request_with_context(other.path(), "independent-host", Some(context));
+    assert_eq!(receipt["accepted"], true);
+    assert_eq!(receipt["socket"], serde_json::json!(path));
+    let mut bytes = [0; 64];
+    assert_eq!(socket.recv(&mut bytes).unwrap(), b"independent-host".len());
 }
