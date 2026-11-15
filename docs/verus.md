@@ -301,15 +301,35 @@ Display 与 `Option<String>` 的 Debug 编码；JSON 沿用 serde_json 的既有
 
 ## 受影响文件的分类门控
 
-本仓 FILEMAP 已启用 `require_new_file_classification: true`。当前候选只要影响某个已登记文件，
-该文件就必须显式声明 `program`、`specification` 或 `data`；缺少声明会由同源 Verus
-计划判定返回 `E_VERUS_COVERAGE`，因此修改旧文件新增仓内逻辑不能继续沿用 unknown
-分类绕过证明计划。未受影响的历史未分类文件仍保持 unknown，`program`／`specification`
-的完整证明根、真实生产调用绑定和全仓覆盖门仍分别按下文及 SPEC 保留未完成状态。
+本仓 FILEMAP 已启用 `require_new_file_classification: true`。本次同时修正产品判法与宿主政策：
+受影响 unknown 原先一律拒绝；候选现在仅允许经固定两端连续性核验的原源码保留 unknown。
+这不增加证明资格，也不改变最终形式化目标。新逻辑、错误引用、复制、无来源和歧义仍拒绝；
+原 proof-bearing 分类仍核历史，根、实际编译输入和证明原结果仍走原有完整计划。
+
+`verified_sources.rs` 的 `continuity` 模块只使用既有 projects 的项目 ID／根及固定 FILEMAP、
+完整 TreeEntry 库存与 Reader。它在 Verus 中联接登记和真实树条目，保留未登记树条目，
+核路径的唯一对应、类型、模式及登记元数据。搬迁还要求两端来源／目的不存在交叉留存。
+每个文件的原字节都由同一个固定 Reader 读取；读取错误保留全文及原次序。
+`assessment` 定义每条选择路径的完整返回结果，`assess` 保留全部判断或首个原读取错误。
+库存门和完整计划消费同一个不可手填的 `Continuity` 值，且不改变影响选择。
+
+源码比较逐字节核对非引用内容。仅支持现役 Rust `#[path]`、`include_bytes!`、Cargo `path`、
+以 `CARGO_MANIFEST_DIR` 为基准的两种 join 写法及 bootstrap 的两个仓库根参数锚点。
+每个锚点都核词法规范化和两端实际目标；文件／项目根／登记输出目录分开核对。
+目标只能保留原固定地址或沿原项目 ID 的实际根迁移，不能改指另一真实对象。
+不支持的改写保持未取得连续性，不按相似度或忽略任意空白取绿。源码 byte 同一不等于
+原文件全语义已证明；未知继续未知，真正编译与消费者行为仍由原未过滤检查验收。
+
+接口假设沿用固定 Reader 原字节与 Serde 的字段投影。新适配只解码原 `projects`／`files`，
+按原树迭代字段投影，序列化 owner、surface、cost、edges、symlink、projection 的原值；
+路径联接、准入、端点选择与状态选择均由 Verus 执行。固定基线和候选在四个现役计划入口
+明确传入；初始无基线由同源分支返回空连续性，不能伪造旧库存。观察适配自身及旧调用方
+外围源码仍不因本次局部证明获得整文件覆盖；实际验收以本次原证明和消费者结果为准。
+最坏路径匹配成本随显式项目数的平方和所选源码长度增长，完整构建、CI 和存储成本未知。
 
 本批的生产与独立预期根继续由 `crates/runner/src/verified_verifier.rs` 和
 `crates/runner-tests/tests/verified_verifier.rs` 整 crate 证明；真实 Rust 行为测试
-同时核受影响未分类拒绝、显式 `data` 准入、未受影响 unknown，以及未采用／明确关闭开关的外部宿主边界。
+同时核受影响未分类拒绝、显式 `data` 准入、未受影响 unknown、固定源码连续性，以及未采用／明确关闭开关的外部宿主边界。
 分类开关与它约束的文件库存通过同一类型传递，JSON 适配仅按原字段搬运；
 未采用开关的宿主不取得证明资格，已有证明声明仍须核验所选证明计划。
 这里明确采用各使用方 lockfile 固定的 Serde `Deserialize`、`serde(from)` 和
@@ -665,7 +685,7 @@ FILEMAP schema 2 可显式采用 `require_new_file_classification: true`。
 数据声明必须显式给出空 `roots: []`，program／specification 必须有有效根，并继续接受现有严格计划、
 编译源码、原证明及真实消费者的绑定检查。独立预期同为 Verus，并作为 Rust 测试运行。
 
-本宿主 FILEMAP 已采用该字段，新增登记行必须分类，已有分类不得删除。
+本宿主 FILEMAP 已采用该字段。新增登记行须分类或通过上文固定两端连续性核验保留原 unknown；已有分类不得删除。
 使用方必须先通过现役 bootstrap 安装能读取该字段的候选工具，再按正式生命周期入口采用；
 关联检出沿现役路径使用本树工具，共享状态仍由原物理协调者管理。旧工具拒绝新字段时，
 保留原失败并升级实际使用方，不能关闭字段或手换共享二进制来取得通过。
