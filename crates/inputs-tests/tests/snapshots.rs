@@ -3,15 +3,159 @@
 #[path = "../../inputs/src/lib.rs"]
 mod policy;
 #[cfg(not(verus_keep_ghost))]
+use chrono_harness::verified_identifiers as composition_text;
+#[cfg(not(verus_keep_ghost))]
 use chrono_harness::verus;
 #[cfg(not(verus_keep_ghost))]
 use chrono_inputs as policy;
+#[cfg(verus_keep_ghost)]
+use policy::identifiers as composition_text;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 #[cfg(verus_keep_ghost)]
 use vstd::vpanic as panic;
 
 verus! {
+fn composition_result(result: Result<(), String>, success: bool, expected: &str)
+    requires result.is_ok() == success,
+        match result { Err(error) => error@ == expected@, _ => true, },
+{
+    let matches = match result {
+        Ok(()) => success,
+        Err(error) => !success && composition_text::equal_text(error.as_str(), expected),
+    };
+    assert(matches);
+    if !matches { panic!(); }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_bounds_manifest_and_path_identity() {
+    use policy::composition::*;
+    proof {
+        reveal_strlit("chrono-input-composition/v1"); reveal_strlit("chrono-input-composition/v1\0");
+        reveal_strlit("原件\0\n"); reveal_strlit("原件\0\n ");
+        assert("chrono-input-composition/v1"@.len() != "chrono-input-composition/v1\0"@.len());
+        assert("原件\0\n"@.len() != "原件\0\n "@.len());
+    }
+    composition_result(admit_json_original(0), true, "");
+    composition_result(admit_json_original(64 * 1024 * 1024), true, "");
+    composition_result(admit_json_original(64 * 1024 * 1024 + 1), false,
+        "E_COMPOSE_BOUND: JSON original exceeds bound");
+    composition_result(admit_json_original(u64::MAX), false,
+        "E_COMPOSE_BOUND: JSON original exceeds bound");
+    composition_result(admit_manifest("chrono-input-composition/v1", 1), true, "");
+    composition_result(admit_manifest("chrono-input-composition/v1", 4096), true, "");
+    composition_result(admit_manifest("chrono-input-composition/v1", 0), false,
+        "E_COMPOSE_MANIFEST: schema/count");
+    composition_result(admit_manifest("chrono-input-composition/v1", 4097), false,
+        "E_COMPOSE_MANIFEST: schema/count");
+    composition_result(admit_manifest("chrono-input-composition/v1", usize::MAX), false,
+        "E_COMPOSE_MANIFEST: schema/count");
+    composition_result(admit_manifest("chrono-input-composition/v1\0", 1), false,
+        "E_COMPOSE_MANIFEST: schema/count");
+    composition_result(admit_output_paths("", ""), false, "E_COMPOSE_PATH: output/receipt collision");
+    composition_result(admit_output_paths("原件\0\n", "原件\0\n"), false,
+        "E_COMPOSE_PATH: output/receipt collision");
+    composition_result(admit_output_paths("原件\0\n", "原件\0\n "), true, "");
+    composition_result(admit_pair_digest("原件\0\n", "原件\0\n"), true, "");
+    composition_result(admit_pair_digest("原件\0\n ", "原件\0\n"), false,
+        "E_COMPOSE_ORIGINAL: pair digest differs");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_requires_exact_endpoints_and_both_pair_fields() {
+    use policy::composition::*;
+    proof { reveal_strlit("base"); reveal_strlit("candidate"); reveal_strlit("base\0");
+        assert("base\0"@.len() != "base"@.len());
+        assert("base\0"@.len() != "candidate"@.len()); }
+    composition_result(admit_single_endpoint(Some("base"), "base", "candidate"), true, "");
+    composition_result(admit_single_endpoint(Some("candidate"), "base", "candidate"), true, "");
+    composition_result(admit_single_endpoint(None, "base", "candidate"), false,
+        "E_COMPOSE_HEADER: snapshot outside fixed endpoints");
+    composition_result(admit_single_endpoint(Some("base\0"), "base", "candidate"), false,
+        "E_COMPOSE_HEADER: snapshot outside fixed endpoints");
+    composition_result(admit_single_endpoint(Some(""), "", ""), true, "");
+    composition_result(admit_pair_fields(Some(2), true, true), true, "");
+    composition_result(admit_pair_fields(None, true, true), false, "E_COMPOSE_PAIR: exact endpoints required");
+    composition_result(admit_pair_fields(Some(1), true, true), false, "E_COMPOSE_PAIR: exact endpoints required");
+    composition_result(admit_pair_fields(Some(3), true, true), false, "E_COMPOSE_PAIR: exact endpoints required");
+    composition_result(admit_pair_fields(Some(2), false, true), false, "E_COMPOSE_PAIR: exact endpoints required");
+    composition_result(admit_pair_fields(Some(2), true, false), false, "E_COMPOSE_PAIR: exact endpoints required");
+    composition_result(admit_pair_fields(Some(2), false, false), false, "E_COMPOSE_PAIR: exact endpoints required");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_header_binds_every_identity_and_selector_observation() {
+    use policy::composition::*;
+    proof { reveal_strlit("完整\0\n"); reveal_strlit("完整\0\n ");
+        assert("完整\0\n"@.len() != "完整\0\n "@.len()); }
+    composition_result(admit_snapshot_identity(Some("完整\0\n"), Some("完整\0\n"), Some("完整\0\n"),
+        "完整\0\n", "完整\0\n", "完整\0\n"), true, "");
+    composition_result(admit_snapshot_identity(None, Some("完整\0\n"), Some("完整\0\n"),
+        "完整\0\n", "完整\0\n", "完整\0\n"), false, "configuration/endpoint/selector mismatch");
+    composition_result(admit_snapshot_identity(Some("完整\0\n"), None, Some("完整\0\n"),
+        "完整\0\n", "完整\0\n", "完整\0\n"), false, "configuration/endpoint/selector mismatch");
+    composition_result(admit_snapshot_identity(Some("完整\0\n"), Some("完整\0\n"), None,
+        "完整\0\n", "完整\0\n", "完整\0\n"), false, "configuration/endpoint/selector mismatch");
+    composition_result(admit_snapshot_identity(Some("完整\0\n "), Some("完整\0\n"), Some("完整\0\n"),
+        "完整\0\n", "完整\0\n", "完整\0\n"), false, "configuration/endpoint/selector mismatch");
+    composition_result(admit_snapshot_identity(Some("完整\0\n"), Some("完整\0\n "), Some("完整\0\n"),
+        "完整\0\n", "完整\0\n", "完整\0\n"), false, "configuration/endpoint/selector mismatch");
+    composition_result(admit_snapshot_identity(Some("完整\0\n"), Some("完整\0\n"), Some("完整\0\n "),
+        "完整\0\n", "完整\0\n", "完整\0\n"), false, "configuration/endpoint/selector mismatch");
+    let mut header = SnapshotHeader { digest: Some("完整\0\n"), selection_present: false,
+        effective_present: false, effective: None };
+    composition_result(admit_snapshot_header(&header, "完整\0\n", false, false, ""), true, "");
+    header.selection_present = true;
+    composition_result(admit_snapshot_header(&header, "完整\0\n", false, true, ""), false,
+        "configuration/endpoint/selector mismatch");
+    header.selection_present = false; header.effective_present = true;
+    composition_result(admit_snapshot_header(&header, "完整\0\n", false, true, ""), false,
+        "configuration/endpoint/selector mismatch");
+    header.selection_present = true; header.effective = Some("完整\0\n");
+    composition_result(admit_snapshot_header(&header, "完整\0\n", true, true, "完整\0\n"), true, "");
+    composition_result(admit_snapshot_header(&header, "完整\0\n", true, false, "完整\0\n"), false,
+        "configuration/endpoint/selector mismatch");
+    header.effective = Some("完整\0\n ");
+    composition_result(admit_snapshot_header(&header, "完整\0\n", true, true, "完整\0\n"), false,
+        "configuration/endpoint/selector mismatch");
+    header.effective = None;
+    composition_result(admit_snapshot_header(&header, "完整\0\n", true, true, "完整\0\n"), false,
+        "configuration/endpoint/selector mismatch");
+    header.effective = Some("完整\0\n"); header.digest = None;
+    composition_result(admit_snapshot_header(&header, "完整\0\n", true, true, "完整\0\n"), false,
+        "configuration/endpoint/selector mismatch");
+    header.digest = Some("完整\0\n ");
+    composition_result(admit_snapshot_header(&header, "完整\0\n", true, true, "完整\0\n"), false,
+        "configuration/endpoint/selector mismatch");
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn composition_blob_identity_and_absence_keep_original_errors() {
+    use policy::composition::*;
+    proof { reveal_strlit("摘要\0"); reveal_strlit("摘要\0 "); reveal_strlit("absent"); reveal_strlit("Absent");
+        assert("摘要\0"@.len() != "摘要\0 "@.len());
+        assert("absent"@[0] != "Absent"@[0]); }
+    composition_result(admit_imported_blob(Some("摘要\0"), Some(u64::MAX), "摘要\0", u64::MAX), true, "");
+    composition_result(admit_imported_blob(Some("摘要\0"), Some(0), "摘要\0", 0), true, "");
+    composition_result(admit_imported_blob(Some("摘要\0 "), Some(0), "摘要\0", 0), false,
+        "E_COMPOSE_BLOB: original identity differs");
+    composition_result(admit_imported_blob(Some("摘要\0"), Some(1), "摘要\0", 0), false,
+        "E_COMPOSE_BLOB: original identity differs");
+    composition_result(admit_imported_blob(None, Some(0), "摘要\0", 0), false,
+        "E_COMPOSE_BLOB: original identity differs");
+    composition_result(admit_imported_blob(Some("摘要\0"), None, "摘要\0", 0), false,
+        "E_COMPOSE_BLOB: original identity differs");
+    composition_result(admit_imported_input(true, Some("absent"), false), true, "");
+    composition_result(admit_imported_input(true, Some("absent"), true), true, "");
+    composition_result(admit_imported_input(true, None, true), false, "unexpected absence");
+    composition_result(admit_imported_input(true, Some("Absent"), true), false, "unexpected absence");
+    composition_result(admit_imported_input(false, Some("absent"), true), false, "digest/presence mismatch");
+    composition_result(admit_imported_input(false, Some("absent"), false), false, "digest/presence mismatch");
+    composition_result(admit_imported_input(false, None, false), false, "digest/presence mismatch");
+    composition_result(admit_imported_input(false, None, true), true, "");
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn blob_identity_requires_both_exact_digest_and_length() {
     proof {
