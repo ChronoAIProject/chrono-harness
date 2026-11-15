@@ -62,7 +62,7 @@
          }
          vir::ast::TypX::Primitive(Primitive::Array, ts) => {
              assert!(ts.len() == 2);
-@@ -428,6 +432,41 @@
+@@ -428,6 +432,42 @@
          if !dyn_traits.contains(&t.x.name) {
              continue;
          }
@@ -72,12 +72,13 @@
 +            // chain on the same synthetic object, including that Output in its
 +            // identity, as in VIR's callable object impls.
 +            let base = vir_crate.traits.iter().find(|t| t.x.name == ClosureKind::FnOnce.trait_path()).unwrap();
-+            let (mut generic_params, generic_bounds) = gen_generics(state,
++            let (mut generic_params, mut generic_bounds) = gen_generics(state,
 +                &base.x.typ_params.iter().map(|(x, _)| x.clone()).collect(), &base.x.typ_bounds, None);
 +            let t_args: Vec<_> = generic_params.iter().map(|p| Box::new(TypX::TypParam(p.name.clone()))).collect();
 +            let output_name = state.typ_param("DynCallableOutput".to_owned(), None);
 +            generic_params.push(GenericParam { name: output_name.clone(), const_typ: None });
 +            let output = Box::new(TypX::TypParam(output_name));
++            generic_bounds.push(GenericBound { typ: output.clone(), bound_vars: vec![], bound: Bound::Sized });
 +            let output_assoc = state.typ_param("Output".to_owned(), None);
 +            let box_name = Id::new(IdKind::Builtin, 0, "Box".to_owned());
 +            let ts = generic_params.iter().map(|p| {
