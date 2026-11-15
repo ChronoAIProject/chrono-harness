@@ -1,5 +1,47 @@
 # Verus 实施范围
 
+## 清理原结果的缓存分类与终态优先级
+
+`worktree/src/verified_lifecycle.rs::observed_cleanup_result` 直接拥有维护原结果的
+缓存分类、`cleaned` 判断和清理阶段选择。`reusable-source-preserved` 始终属于缓存
+结果；已有缓存活动只有精确的到期整树退役观察才退出此类。缺失、非字符串和未知
+观察保持原合同。失败结果优先判为失败；已有 `terminal` 交接成功后，按实际移除
+观察进入 `disposed` 或 `retained`，缓存释放本身不产生新的任务完成权。
+
+真实维护入口只投影原 JSON 字段，消费同一返回值更新原缓存结果与清理状态，
+不再在适配器里组合缓存资格、终态排除或成功判断。复用原 `cleanup_result`，
+独立 Verus 预期同时普通运行，覆盖终态／未交接、复用／到期、实际缺失、失败
+优先级、缺字段、空串及 Unicode／NUL／换行的完整字面判断。原年龄清理回归保留。
+
+外部接口限定为固定 Serde 的字段索引与 `Value::as_str`：只投影原字符串，缺失或
+非字符串为 None；字符串观察沿固定 vstd 合同。原件读取、JSON 编解码、缓存尝试
+持久化、真实 fixture 驱动和完整维护事务仍有自身证明义务，不登记为外部公理。
+沿现有生命周期两项严格整 crate 根与原未过滤 worktree core／adoption 入口验收，
+没有新增依赖、受信函数、证明入口、过滤、线程或预算；全仓覆盖门仍未完成，
+完整构建、证明、CI、运行和存储成本未测。
+
+## 输入组合的清单、头部及内容准入
+
+`inputs/src/composition.rs` 在现有输入整 crate 根中直接拥有 JSON 原件的 64 MiB
+长度上限、清单 schema 与 1..=4096 数量、输出／收据全文路径冲突、来源摘要、单快照
+固定端点、端点对的恰好两个字段，以及快照头部身份和选择器准入。schema、commit、
+config_path 先核对，成功后才计算配置摘要，再核摘要和选择器，保留原首错顺序。
+blob 导入复用原 `blob_identity_matches`，摘要全文及 u64 长度都相同才通过；缺失
+状态与声明的 presence、原 JSON 摘要相等观察共同由同根判断，原错误文字不变。
+
+四组独立 Verus 预期与普通 Rust 运行共用一份源码，覆盖上下界、缺字段、不同端点、
+每项身份、选择器与有效配置字段的缺失／冲突、缺失状态、原错误以及 Unicode／NUL／
+换行的全文身份。生产与预期沿原 `verify.inputs-blobs`、`verify.inputs-blobs-tests`
+两项严格整 crate 根和原未过滤 inputs-tests 验收；公开 composition 模块供现役专属
+测试直接消费真实实现，不增加证明入口、依赖、过滤或预算。
+
+外部接口限定为固定 Serde 的字段索引、get、as_str、as_u64、as_object 及完整
+`Value`／`Option<&Value>` 相等观察，固定 Rust 的 Option、长度与错误格式化；这些
+接口只提供字段、完整 JSON 选择器／摘要相等和原文字，不决定组合准入。文件元数据
+和实际 IO、SHA-256／规范编码、snapshot_shape、登记加载、原件保管、外层来源遍历、
+合并与覆盖状态仍有各自证明义务，不登记为仓内外部公理。分类及本批准入证明不等于
+完整组合事务或全仓证明；完整构建、证明、CI、运行与存储成本未测。
+
 ## 保留依赖的完整引用查找
 
 `retained_artifacts/partition.rs::objects_reference` 直接拥有生产依赖修剪中的嵌套查找。
