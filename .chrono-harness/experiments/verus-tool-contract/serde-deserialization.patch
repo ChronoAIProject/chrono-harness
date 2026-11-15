@@ -10,7 +10,7 @@ diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
  verus! {
 
  #[verifier::external_trait_specification]
-@@ -274,6 +276,405 @@
+@@ -274,6 +276,410 @@
      fn skip_field(&mut self, key: &'static str) -> Result<(), Self::Error>;
 
      fn end(self) -> Result<Self::Ok, Self::Error>;
@@ -288,6 +288,7 @@ diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 +    where
 +        E: serde::de::Error;
 +
++    #[verifier::impls_cannot_extend_spec]
 +    fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
 +    where
 +        D: Deserializer<'de>;
@@ -296,18 +297,22 @@ diff --git a/source/vstd/serde_specs.rs b/source/vstd/serde_specs.rs
 +    where
 +        E: serde::de::Error;
 +
++    #[verifier::impls_cannot_extend_spec]
 +    fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
 +    where
 +        D: Deserializer<'de>;
 +
++    #[verifier::impls_cannot_extend_spec]
 +    fn visit_seq<A>(self, seq: A) -> Result<Self::Value, A::Error>
 +    where
 +        A: SeqAccess<'de>;
 +
++    #[verifier::impls_cannot_extend_spec]
 +    fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
 +    where
 +        A: MapAccess<'de>;
 +
++    #[verifier::impls_cannot_extend_spec]
 +    fn visit_enum<A>(self, data: A) -> Result<Self::Value, A::Error>
 +    where
 +        A: EnumAccess<'de>;
@@ -420,11 +425,32 @@ diff --git a/source/rust_verify_test/tests/serde_deserialization.rs b/source/rus
 new file mode 100644
 --- /dev/null
 +++ b/source/rust_verify_test/tests/serde_deserialization.rs
-@@ -0,0 +1,233 @@
+@@ -0,0 +1,254 @@
 +#![feature(rustc_private)]
 +#[macro_use]
 +mod common;
 +use common::*;
++
++test_verify_one_file_with_options! {
++    #[test] serde_visitor_forbids_impl_postconditions_on_recursive_exec_interface
++    ["--no-cheating", "--no-external-by-default"] => verus_code! {
++        use vstd::prelude::*;
++        use serde::de::{Deserialize, Deserializer, Visitor};
++        struct Wrong;
++        impl<'de> Visitor<'de> for Wrong {
++            type Value = bool;
++            fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
++                f.write_str("boolean")
++            }
++            fn visit_some<D: Deserializer<'de>>(self, d: D) -> (result: Result<bool, D::Error>)
++                ensures result is Ok,
++            {
++                bool::deserialize(d)
++            }
++        }
++    } => Err(err) => assert_vir_error_msg(err,
++        "trait method implementation cannot declare `ensures` clauses because the trait declaration is marked `impls_cannot_extend_spec`")
++}
 +
 +test_verify_one_file_with_options! {
 +    #[test] serde_deserializer_forwards_scalars_text_and_named_arguments

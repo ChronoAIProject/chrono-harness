@@ -333,5 +333,11 @@ Deserialize／Visitor 本地实现均须实际因 assertion failed 拒绝。未�
 **外部接口合同与宿主验证登记同时修改。** 新增构建、证明及回归成本未知，继续复用
 同一源码、依赖、工具链和编译缓存。完整根、正式资格及实际调用绑定仍须分别验收。
 
+真实 Visitor 与反序列化／容器访问接口互相引用。原工具实际拒绝这项规格循环后，
+复用既有 `impls_cannot_extend_spec`，只标记 Visitor 的 `visit_some`、`visit_newtype_struct`、
+`visit_seq`、`visit_map` 和 `visit_enum`，切断这五种递归 exec 接口的规格扩展。
+本地方法体继续检查，增加第九项拒绝本地后置条件的独立预期；原完整
+`traits_extend_ensures` 库存仍由同一入口验收，不修改循环判断或增加外部公理。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。
