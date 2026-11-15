@@ -449,10 +449,8 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
         .unwrap()
         .iter()
         .map(|entry| {
-            let held = fs::File::open(
-                h.root.join(entry["ownership"]["path"].as_str().unwrap()),
-            )
-            .unwrap();
+            let held =
+                fs::File::open(h.root.join(entry["ownership"]["path"].as_str().unwrap())).unwrap();
             held.lock_shared().unwrap();
             held
         })
@@ -472,8 +470,15 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
                     }
                 }
             },
-            || chrono_worktree::run(&["maintain".into(), "--host-root".into(),
-                root.to_str().unwrap().into(), "--config".into(), POLICY.into()]),
+            || {
+                chrono_worktree::run(&[
+                    "maintain".into(),
+                    "--host-root".into(),
+                    root.to_str().unwrap().into(),
+                    "--config".into(),
+                    POLICY.into(),
+                ])
+            },
         )
     });
     let reached = ready.recv_timeout(Duration::from_secs(5));
@@ -484,20 +489,35 @@ fn live_consumers_can_complete_before_the_maintenance_parent_is_published() {
                 assert_eq!(entry["cleanup"]["stage"], "waiting-for-consumers");
             }
             let main = h.auto("use", &["--operation", "use.consumer"]);
-            let other = h.auto("use", &["--path", linked.to_str().unwrap(),
-                "--operation", "use.consumer"]);
+            let other = h.auto(
+                "use",
+                &[
+                    "--path",
+                    linked.to_str().unwrap(),
+                    "--operation",
+                    "use.consumer",
+                ],
+            );
             (main, other)
         }))
     });
-    let released = if reached.is_ok() { release.send(()) } else { Ok(()) };
+    let released = if reached.is_ok() {
+        release.send(())
+    } else {
+        Ok(())
+    };
     drop(release);
     let joined = maintenance.join();
     reached.expect("the parent must remain unpublished after both live-consumer observations");
     released.expect("the maintenance parent remains at its original completion boundary");
-    let (main, other) = business.unwrap()
+    let (main, other) = business
+        .unwrap()
         .unwrap_or_else(|error| std::panic::resume_unwind(error));
     for (code, report, error) in [main, other] {
-        assert_eq!(code, 0, "business depends on an unpublished maintenance parent: {report} {error}");
+        assert_eq!(
+            code, 0,
+            "business depends on an unpublished maintenance parent: {report} {error}"
+        );
         assert_eq!(report["status"], "used");
         assert_eq!(report["managed_process"]["exit_code"], 0);
         assert_eq!(report["managed_process"]["owned_work_joined"], true);
