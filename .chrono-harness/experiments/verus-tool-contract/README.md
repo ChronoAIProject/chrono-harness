@@ -271,5 +271,17 @@ Expected、完整字段及静态候选列表保持原签名。负例必须实际
 及各方法实际泛型、借用和返回类型。所有方法均无额外 requires／ensures，本地
 impl 仍有完整证明义务；编译器的外部 trait 规格匹配也须通过，不能放宽来规避失败。
 
+## 已导入动态 trait 的最终检查
+
+Serde Error 的真实参数包含 `&dyn Expected`。原工具的前置检查已读取导入的 trait，
+最终动态兼容性检查却只查当前 crate，因而把 vstd 已声明的真实 Expected 误报为未声明。
+`imported-dyn-traits.patch` 顺序应用在 `serde-errors.patch` 后，由原 well-formed 所有者
+在最终检查中同时消费已导入和当前 trait 的已计算兼容性；不跳过检查、不猜允许结果。
+
+先增加三项严格 Rust／Verus 预期：动态调用保留原 Result，无依据的成功与失败断言
+均须实际因 assertion failed 拒绝。完整原 `traits_dyn` 和 `safe_api` 库存加入同一登记
+回归，保留不兼容合同、unsized blanket impl、未声明 trait 及原有安全边界；
+不改原断言、线程、严格选项或回归范围。工具判断与宿主验证登记同时修改，新增成本未知。
+
 只有实际消除原失败、完成严格整 crate 证明及独立预期、补齐正式资格载体，并通过
 适用 bootstrap、canonical、integration 与 dev 落地验收后，才可宣称相应交付完成。

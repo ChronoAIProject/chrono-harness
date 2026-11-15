@@ -5324,6 +5324,10 @@
             "serde_unexpected",
             "--test",
             "serde_errors",
+            "--test",
+            "traits_dyn",
+            "--test",
+            "safe_api",
             "--",
             "--test-threads=1"
           ]
